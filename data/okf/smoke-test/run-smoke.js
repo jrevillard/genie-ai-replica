@@ -435,13 +435,20 @@ async function ingestPhase(db) {
   }
 
   // ── repo for this phase (direct save; resurrect if soft-deleted) ──
+  // PROPERLY NAMED (design addendum D-V1/D-V2): the repository name derives
+  // from the BUNDLE's own identity (index.md title) — the registry entry,
+  // graph, and bundle are one named association, not an anonymous UUID.
   // version: 1 pins the bundle_version thread (repo.version → meta rows) —
   // the version-tag integrity contract (title + version on every concept).
+  const idxMatter = matter(fs.readFileSync(path.join(BUNDLE_DIR, 'index.md'), 'utf8'));
+  const bundleTitle = (idxMatter.data && idxMatter.data.title) || 'Kenya Government Services Knowledge Base';
+  const bundleOkfVersion = (idxMatter.data && idxMatter.data.okf_version) || '0.2';
+  const REPO_NAME = 'Kenya Government Services Knowledge Base (smoke)';
   const repos = db.collection('okf_repositories');
   try {
     const repoDoc = await repos.document(INGEST_REPO);
-    const patch = { deleted_at: null, name: 'Smoke Ingest 291', version: 1 };
-    if (repoDoc.deleted_at || repoDoc.version !== 1) {
+    const patch = { deleted_at: null, name: REPO_NAME, version: 1 };
+    if (repoDoc.deleted_at || repoDoc.version !== 1 || repoDoc.name !== REPO_NAME) {
       await repos.update(INGEST_REPO, patch);
     }
   } catch (err) {
@@ -449,15 +456,27 @@ async function ingestPhase(db) {
       await repos.save({
         _key: INGEST_REPO,
         repo_id: INGEST_REPO,
-        name: 'Smoke Ingest 291',
+        name: REPO_NAME,
         domain: 'smoke',
         graph_name: 'OKF_' + INGEST_REPO,
-        okf_version: '0.2',
+        okf_version: bundleOkfVersion,
         version: 1,
         lifecycle_state: 'register'
       });
     } else throw err;
   }
+  // The named association the smoke proves end-to-end:
+  console.log(
+    '  BUNDLE    : kenya-bundle.zip ("' +
+      bundleTitle +
+      '", OKF v' +
+      bundleOkfVersion +
+      ', ' +
+      EXPECTED_CONCEPTS +
+      ' concepts)'
+  );
+  console.log('  REPOSITORY: "' + REPO_NAME + '" repo_id=' + INGEST_REPO + ' domain=smoke version=1');
+  console.log('  GRAPH     : ' + OKF_GRAPH + ' (collections ' + OKF_GRAPH + '_SOURCE/_ENTITY/_HAS_SOURCE/_LINKS_TO)');
 
   // ── (i) scoped READ caller → 403 (ingest is an admin mutation) ──
   const zipB64 = fs.readFileSync(BUNDLE_ZIP).toString('base64');
@@ -566,6 +585,20 @@ async function ingestPhase(db) {
   withAcl.length === EXPECTED_CONCEPTS
     ? pass('files docs: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
     : fail('files docs labels/graph: ' + JSON.stringify(pending.map((f) => [f.graph_name, f.labels])));
+  if (withAcl.length > 0) {
+    // The named bundle→repo→graph association, per concept doc:
+    console.log(
+      '  ASSOCIATION: bundle "kenya-bundle.zip" → repo "' +
+        REPO_NAME +
+        '" → graph ' +
+        OKF_GRAPH +
+        ' (e.g. ' +
+        withAcl[0].file_name +
+        ' → labels ' +
+        JSON.stringify(withAcl[0].labels) +
+        ')'
+    );
+  }
 
   // ── (v) FACILITY A: the EXISTING single-document upload (admin UI path) ──
   const fd = new FormData();
@@ -702,7 +735,9 @@ async function ingestPhase(db) {
           bChunkRows.map((r) => r.n).join('+') +
           ' chunks in ' +
           OKF_GRAPH +
-          '_SOURCE — per-repo graph created)'
+          '_SOURCE — the properly named graph of repository "' +
+          REPO_NAME +
+          '")'
       )
     : fail('facility B chunks in ' + OKF_GRAPH + '_SOURCE: ' + JSON.stringify(bChunkRows));
   const bTotal = bChunkRows.reduce((a, r) => a + r.n, 0);

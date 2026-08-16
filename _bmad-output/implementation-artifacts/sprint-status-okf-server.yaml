@@ -41,12 +41,12 @@ development_status:
 
   epic-2.9: in-progress        # NEW 2026-08-13 — Write-side Orchestration (the trunk). Mostly ungated Node; 2.9.6 gated.
   2-6a-acl-label-preserve-fix: done                # UNGATED P0 — code-review APPROVED (2026-08-14, 4 low/nit findings non-blocking). 91 tests green, pipeline #6102 green.
-  2-9-1-ingest-service-ingest-endpoint: review        # G1 — the full async ingest sequence, returns 202
+  2-9-1-ingest-service-ingest-endpoint: done         # dev+review 2026-08-16: 10 review patches FIXED + FULL dual-facility live smoke exit 0 (zip bundle → per-repo OKF_{repo} graph, zero default-graph leakage); 2.9.5-zip + 2.9.6-graph-wiring PULLED FORWARD by steward directive (D24 lifted — !277 still draft)
   2-9-2-concepts-meta-upsert-writer: done           # dev-story 2026-08-14; code-review 2026-08-15: 21 findings FIXED (3783b92a1), red-green 8→134/134, live smoke green + gate OPEN
   2-9-3-links-to-edge-writer-within-repo: backlog  # G7,G22 — post-index, within-repo validated
-  2-9-4-ingestion-worker-redis-streams-dlq: backlog # G10 — drains Pending, concurrency 1 configurable, orphan sweeper
-  2-9-5-bundle-zip-format-unzip-dedup: backlog     # G11 — zip of .md, content-hash idempotent re-ingest
-  2-9-6-graph-name-wiring-retract-fix: backlog     # [BUMP] G5 — doc-repo payload + dataprep body-read + retractRepoGraph
+  2-9-4-ingestion-worker-redis-streams-dlq: backlog # G10 — drains Pending, concurrency 1 configurable, orphan sweeper (okf-service drain rights + per-file graph_name already live via 2.9.1)
+  2-9-5-bundle-zip-format-unzip-dedup: partial     # zip intake + server unzip + content-hash dedup LIVE via 2.9.1 pull-forward; remaining ACs (atomicity/compensation review) get this story's own pass
+  2-9-6-graph-name-wiring-retract-fix: partial     # UNGATED 2026-08-16 (D24 lifted): graphName payload wiring + unified retract fallback + lazy OKF_{repo} collections LIVE + smoke-asserted; remaining: retractRepoGraph cascade (repo-level delete) — keep story for the remainder
   2-9-7-okf-versions-mint-version-publish: backlog # G26 — repo-level bundle_version, immutable manifest (resolves PRD §13.2)
   2-9-8-okf-sources-writer-source-sync: backlog    # G32 — SHRUNK: source-sync deferred; now ingest-health backing only (fold into admin UI later)
   2-9-9-retention-ttl-sweep-deletion-reason: backlog # G27 — sweep + deletion_reason discriminator
@@ -72,6 +72,7 @@ development_status:
   4-5-versioning-provenance: backlog
   4-6-retention-ttl: backlog
   4-7-reserved-files-foi-audit-export: backlog
+  4-8-repository-clone-curated-forks: backlog      # NEW 2026-08-16 (design addendum D-V5) — clone repo (new repo_id+graph, cloned_from lineage) + curate via Epic 4
   epic-4-retrospective: optional
 
   epic-5: backlog            # Serving — REST ungated, MCP gated

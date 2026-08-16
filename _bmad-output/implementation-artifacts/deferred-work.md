@@ -430,7 +430,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of 2-9-2-concepts-meta-upsert-writer (2026-08-15)
 
 - Prettier (`npx prettier --check .`) fails on 8 files in components/okf-server outside the 2.9.2 diff: `services/repository-service.js` (touched by e1d1a3c03), five Story-2.3-era files, two runtime `logs/*.json`. Run `npx prettier --write .` + review churn.
-- Content-hash dedup semantics for `okf_concepts_meta`: skip-if-unchanged short-circuit on re-ingest, and whether `content_hash` should cover frontmatter (currently body-only). Owned by Stories 2.9.1 (orchestrator dedup) / 2.9.5 (content-hash idempotency) — decide there, do not patch ad hoc.
+- Content-hash dedup semantics for `okf_concepts_meta`: skip-if-unchanged short-circuit on re-ingest, and whether `content_hash` should cover frontmatter (currently body-only). 2.9.1 half RESOLVED 2026-08-16 (PRE-upsert getConceptMeta dedup, body-only hash stays the contract, smoke-asserted); remaining 2.9.5 half: whether content_hash should cover frontmatter.
 
 ## Deferred from: code review of 6-1-authn-authz-rbac (2026-08-16)
 

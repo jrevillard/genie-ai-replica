@@ -3,7 +3,7 @@ baseline_commit: d4d3c569c
 ---
 # Story 2.9.1: `ingestService` + `POST /api/okf/repos/:repo_id/ingest`
 
-Status: review
+Status: done
 
 Story key: `2-9-1-ingest-service-ingest-endpoint` | GitLab: #917 (`prd::okf-server`, `okf-server::epic-2.9`)
 Epic: 2.9 (Write-side Orchestration — the trunk) | Branch: `feat/okf-server`
@@ -114,7 +114,20 @@ glm-5.3[1m] (dev-story, 2026-08-16)
 - The endpoint accepts concepts[]/file_ids[]/discover per D-C; zip arrives with 2.9.5 calling ingestRepoConcepts directly.
 - Known gated limitation (D-I, live-confirmed): dataprep drops graphName (G5) — chunks land in default GRAPH until 2.9.6; every files doc is stamped graph_name=OKF_{repo} now so 2.9.6 needs zero orchestrator changes.
 
+### Fix-Pass Execution (2026-08-16 — code-review patches + steward-directed scope expansion)
+
+- **10/10 review patches applied** (commits `1f3e90fa1`, `d2cdc0c91`, `61aab3617`). Red first: the new review-fix tests against the pre-patch code = **27 failed / 62 passed** (exactly the findings); green after: **okf-server 239/239, doc-repo 426/426, overlay pytest 670/670** (10 new graph-wiring tests); ESLint/Prettier clean.
+- **Scope pulled forward by steward directive (same day, D24 lifted — "!277 still an open draft; apply the bump later; it is what it is"):**
+  - **2.9.5 zip intake** — `POST /ingest` accepts `{ zip: base64 }` (server-side adm-zip unzip, .md-only, junk filter, duplicate-entry rejection, entry cap, 25 MiB decompressed cap); `kenya-bundle.zip` fixture committed.
+  - **2.9.6 graph wiring (G5)** — dataprep `DocRepoIngestPayload`/`DocRepoRetractPayload` gain `graphName` (absent → env default = legacy behavior), the ingest pass-through honors it, the retract fallback is UNIFIED (`GRAPH`, was the divergent `genie_graph` — wrong-graph retract = silent no-op), and the loader lazily creates the 4 `OKF_{repo_id}_*` collections on first ingest. doc-repo retract sends the file's `graph_name`; `/:fileId/ingest` + `/:fileId/retract` allow `okf-service` (the 2.9.4 worker's identity).
+  - **Design addendum** `design-addendum-versioning-integrity-clone-2026-08-16.md` (D-V1 title/version-tag contract, D-V2 unique naming + registry, D-V3 input integrity, D-V4 re-crawl ⇒ new version, D-V5 clone & curate) + epics: Story 4.8 (clone) added, 2.9.7/4.5 annotated.
+  - **!277 conflict review** (requested): the bump MR does NOT touch `genieai_dataprep_microservice.py`; its 6 hunks in `genieai_dataprep_arangodb.py` (DB-init/contextual defaults/comments) do not overlap the graph plumbing — safe to have proceeded; a small mechanical merge is expected when it lands.
+- **Smoke iterations (honest history):** run 1 exit-masked by my `| tail` wrapper — ALL 2.9.1 product assertions green, but the 5-min user-token TTL < the ~10-min sequential drain → 10 authz 401s (drain file 6, re-ingest, matrix); run 2 `REAL_EXIT_CODE=1` — a stale hoisted service token (fixed: per-call `serviceToken()`) + unquoted hyphenated AQL collection name (fixed: backticks); **run 3 exit 0 — 28 PASS / 0 FAIL**; run 4 = final acceptance at `61aab3617` (adds the ownership-guard + title/bundle_version assertions).
+- **Live evidence (runs 3–4, local build, full kenya bundle):** phase-start cleanup retracts+deletes prior artifacts; **zip ingest 202 (total=6, parsed=6, enqueued=6, pii.clean=6)**; meta rows carry **title + bundle_version=1** + index_status=parsed + graph_name=OKF_{repo} + bad_concept exactly 2 conformance issues; 6 per-concept files docs at Pending with `t:smoke`/`r:`/`d:` ACL + caller label + graph_name; **facility A** (existing single-doc facility): multipart upload 201 → files doc Pending with NO graph_name/repo_id → Ingested → 2 chunks in the DEFAULT `GRAPH_SOURCE`; **facility B**: all 6 zip concepts drained Ingested sequentially (service token, no 429) → **18 chunks in `OKF_99999999-…_SOURCE` — the per-repo graph is created** → **isolation: ZERO OKF chunks in the default GRAPH_SOURCE**; ownership guard rejects `graph_name ≠ OKF_{repo_id}` with 400.
+
 ### File List
+
+Dev-complete (original):
 
 - components/okf-server/services/ingest-service.js — NEW (the orchestrator)
 - components/okf-server/services/service-token.js — NEW (client-credentials + authedAxios)
@@ -129,24 +142,34 @@ glm-5.3[1m] (dev-story, 2026-08-16)
 - configs/keycloak/genie-realm.yaml — okf-service role + service-account-okf-server user
 - docker-compose.yaml — KC_OKF_SERVER_CLIENT_ID/SECRET on okf-server
 - data/okf/smoke-test/run-smoke.js — ingest phase; mint-tokens.mjs — committed (2.9.1 usage)
-### Debug Log References
 
-### Completion Notes List
+Fix-pass + scope-pull additions (2026-08-16):
 
-### File List
+- components/okf-server/services/ingest-service.js — gray-matter serialization, parse isolation, pre-read dedup, ACL strip, slug uniquify, 30s enqueue timeout, not_found, parsed/success, zip intake (zipToRawInputs: duplicate-entry + zip-bomb guards)
+- components/okf-server/services/concept-meta-service.js — getConceptMeta (4e pre-read) + index_status indexed→parsed downgrade protection
+- components/okf-server/services/service-token.js — 401 → cache reset + single retry
+- components/okf-server/package.json — adm-zip dep
+- genie-ai-overlay/dataprep/genieai_dataprep_microservice.py — graphName on ingest+retract payloads, unified GRAPH retract fallback
+- genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py — _ensure_graph_collections (lazy per-repo collection creation)
+- genie-ai-overlay/tests/test_dataprep_graph_name.py — NEW (10 tests)
+- components/document-repository/src/routes/fileRoutes.js — okf-service on /:fileId/ingest + /:fileId/retract
+- components/document-repository/src/controllers/fileController.js — retract carries the file's graph_name
+- components/document-repository/src/__tests__/integration/fileRoutes.test.js — retract graphName contract tests
+- data/okf/smoke-test/kenya-bundle.zip — NEW fixture; run-smoke.js — dual-facility rewrite (authz first, service-token drains, zip ingest, per-repo graph + isolation + ownership-guard + title/bundle_version assertions)
+- _bmad-output/planning-artifacts/prds/prd-okf-server-2026-07-15/design-addendum-versioning-integrity-clone-2026-08-16.md — NEW; epics.md — Story 4.8 (clone) + 2.9.7/4.5 annotations
 
 ### Review Findings (2026-08-16, 3-layer adversarial review + live full-bundle smoke)
 
 > LIVE-CONFIRMED by the full-bundle smoke run: findings 1, 2, 7 fired on the real kenya bundle (bad_concept.md's colon-containing description produced PARSE_ERROR 400 mid-batch with partial writes). Fix ALL of the following, then re-run the FULL-BUNDLE smoke until exit 0 (see data/okf/smoke-test/run-smoke.js ingestPhase — already rewritten for the full bundle; it FAILS today for exactly these findings).
 
-- [ ] [Review][Patch] CRITICAL markdownFor YAML corruption (live-confirmed): replace the hand-rolled serializer with gray-matter's matter.stringify(body, frontmatter) — js-yaml handles quotes/colons/newlines/types. Affects both 4a parse input and the 4f enqueued .md [ingest-service.js markdownFor]
-- [ ] [Review][Patch] CRITICAL 4a parse not isolated: wrap parseConcept in try/catch -> enqueue_errors {stage:'parse'}, continue; the request stays 202 with per-concept errors (AC-2 contract) [ingest-service.js ~line 164]
-- [ ] [Review][Patch] HIGH 4e dedup dead + tautological + index_status downgrade: (a) orchestrator reads the PRE-upsert meta doc (add a getConceptMeta read or firstExample before 4b) and dedups on THAT content_hash + index_status; (b) writer protects index_status on full update exactly like pii_state (never downgrade indexed->parsed) [ingest-service.js 4e, concept-meta-service.js applyUpdate]
-- [ ] [Review][Patch] HIGH ACL-label injection: filter caller labels matching /^t:|^r:|^d:/i (strip + warn log) before appending — sole-injector invariant [ingest-service.js callerLabels]
-- [ ] [Review][Patch] MAJOR slugify collisions: in-batch duplicate detection; when slug empty (non-Latin) or colliding, suffix '-' + contentHash(body).slice(0,8) [ingest-service.js normalizeInputs/slugify]
-- [ ] [Review][Patch] MAJOR no enqueue timeout: authedAxios.post(..., {timeout: 30000}) in 4f; cap total request risk [ingest-service.js 4f]
-- [ ] [Review][Patch] MAJOR file_ids/discover silent drops: reconcile requested vs found -> summary.not_found[]; empty-body concepts rejected 400 at the route [ingest-service.js, repository-controller.js]
-- [ ] [Review][Patch] MAJOR stored-file branch incomplete shape: DELETE the raw.concept_id skip-branch (dead code per auditor) — ALWAYS parseConcept(markdownFor(raw)); discovery's frontmatter:{} then derives correctly [ingest-service.js ~161]
-- [ ] [Review][Patch] MINOR summary.parsed counter; NaN cap -> safe parse helper shared by controller+service; success=false when all enqueues failed (metric status 'error'); token 401 -> reset cache + retry once; discover === true strict check [ingest-service.js, repository-controller.js, service-token.js]
-- [ ] [Review][Patch] SMOKE re-run safety (live-proven accumulation): phase START must retract+delete prior INGEST_REPO files docs (doc-repo POST /api/files/:id/retract then DELETE, admin token) and remove prior okf_concepts_meta rows for the repo; also assert t:smoke + graph_name on files docs; note: drain via POST /api/files/:id/ingest works (proven: 4/4 Ingested sequentially) [run-smoke.js ingestPhase]
+- [x] [Review][Patch] CRITICAL markdownFor YAML corruption (live-confirmed): replace the hand-rolled serializer with gray-matter's matter.stringify(body, frontmatter) — js-yaml handles quotes/colons/newlines/types. Affects both 4a parse input and the 4f enqueued .md [ingest-service.js markdownFor]
+- [x] [Review][Patch] CRITICAL 4a parse not isolated: wrap parseConcept in try/catch -> enqueue_errors {stage:'parse'}, continue; the request stays 202 with per-concept errors (AC-2 contract) [ingest-service.js ~line 164]
+- [x] [Review][Patch] HIGH 4e dedup dead + tautological + index_status downgrade: (a) orchestrator reads the PRE-upsert meta doc (add a getConceptMeta read or firstExample before 4b) and dedups on THAT content_hash + index_status; (b) writer protects index_status on full update exactly like pii_state (never downgrade indexed->parsed) [ingest-service.js 4e, concept-meta-service.js applyUpdate]
+- [x] [Review][Patch] HIGH ACL-label injection: filter caller labels matching /^t:|^r:|^d:/i (strip + warn log) before appending — sole-injector invariant [ingest-service.js callerLabels]
+- [x] [Review][Patch] MAJOR slugify collisions: in-batch duplicate detection; when slug empty (non-Latin) or colliding, suffix '-' + contentHash(body).slice(0,8) [ingest-service.js normalizeInputs/slugify]
+- [x] [Review][Patch] MAJOR no enqueue timeout: authedAxios.post(..., {timeout: 30000}) in 4f; cap total request risk [ingest-service.js 4f]
+- [x] [Review][Patch] MAJOR file_ids/discover silent drops: reconcile requested vs found -> summary.not_found[]; empty-body concepts rejected 400 at the route [ingest-service.js, repository-controller.js]
+- [x] [Review][Patch] MAJOR stored-file branch incomplete shape: DELETE the raw.concept_id skip-branch (dead code per auditor) — ALWAYS parseConcept(markdownFor(raw)); discovery's frontmatter:{} then derives correctly [ingest-service.js ~161]
+- [x] [Review][Patch] MINOR summary.parsed counter; NaN cap -> safe parse helper shared by controller+service; success=false when all enqueues failed (metric status 'error'); token 401 -> reset cache + retry once; discover === true strict check [ingest-service.js, repository-controller.js, service-token.js]
+- [x] [Review][Patch] SMOKE re-run safety (live-proven accumulation): phase START must retract+delete prior INGEST_REPO files docs (doc-repo POST /api/files/:id/retract then DELETE, admin token) and remove prior okf_concepts_meta rows for the repo; also assert t:smoke + graph_name on files docs; note: drain via POST /api/files/:id/ingest works (proven: 4/4 Ingested sequentially) [run-smoke.js ingestPhase]
 - [x] [Review][Defer] mapRole dual-role precedence, double repo fetch, swagger doc wording, audit outcome fields — logged to deferred-work.md

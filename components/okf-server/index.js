@@ -57,7 +57,13 @@ if (require.main === module) {
   // db-connection-service retries transient failures.
   ensureCollections()
     .catch((err) => logger.error('OKF collection ensure failed (non-fatal)', { error: err.message }))
-    .finally(() => app.listen(PORT, () => logger.info(`OKF Server listening on port ${PORT}`)));
+    .finally(() => {
+      app.listen(PORT, () => logger.info(`OKF Server listening on port ${PORT}`));
+      // Story 2.9.4: the ingestion worker drains Pending OKF files docs
+      // (crawlWorker pattern). Opt-out via OKF_INGEST_WORKER_ENABLED=false.
+      const ingestWorker = require('./workers/ingestWorker');
+      ingestWorker.start();
+    });
 }
 
 module.exports = { createApp };

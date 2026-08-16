@@ -35,10 +35,15 @@
 //   8. ZIP ingest: POST kenya-bundle.zip → 202 with total=6/parsed=6/enqueued=6;
 //      6 meta rows parsed+graph-stamped; bad_concept carries 2 issues; PII clean;
 //      6 per-concept files docs at Pending with t:/r:/d: ACL labels + graph_name.
-//   9. concepts[] re-ingest is idempotent (meta rows NOT duplicated).
+//   9. The 2.9.4 INGESTION WORKER drains the OKF bundle's Pending docs (no
+//      manual kicks) and transitions every meta row parsed→indexed with
+//      last_good_index_at stamped; facility A stays manual (worker ignores
+//      non-OKF docs — repo_id filter).
 //  10. Facility A: single-doc upload (existing route) → Ingested → chunks in
 //      the DEFAULT GRAPH. Facility B: zip bundle drains → chunks in
 //      OKF_{repo_id}_SOURCE and NOT in the default graph (the split, 2.9.6).
+//      Re-ingest of unchanged+indexed concepts → skipped_dedup=N, enqueued=0
+//      (the 4e dedup rule fires LIVE), meta rows stay indexed (no downgrade).
 //  11. Bundle retraction VERIFIED: retracting one concept physically removes
 //      its chunks from OKF_{repo_id}_SOURCE (right graph, real delete — never
 //      a silent 200) and leaves the other concepts' chunks untouched.
@@ -645,7 +650,82 @@ async function ingestPhase(db) {
       : fail('facility A files doc: ' + JSON.stringify(singleDoc));
   }
 
-  // ── (vi) concepts[] re-ingest: idempotency + the explicit-input surface ──
+  // ── (vi) DRAIN — the 2.9.4 INGESTION WORKER owns the OKF files ──
+  // Facility A stays manual (its per-file kick is the existing UI action AND
+  // proves the worker's repo_id filter leaves non-OKF docs alone); the OKF
+  // bundle's Pending docs are drained BY THE WORKER (no manual kicks — this
+  // is exactly what it does in production).
+  console.log(
+    '  draining: facility A (manual kick) + ' + pending.length + ' OKF concepts (WORKER-paced — the slow part)...'
+  );
+  const statuses = {};
+  const kickA = await call('POST', DOCREPO + '/api/files/' + singleFileId + '/ingest', await serviceToken());
+  if (kickA.status !== 200) {
+    fail('facility A kick -> ' + kickA.status + ' ' + JSON.stringify(kickA.body).slice(0, 120));
+    statuses[singleFileId] = 'kick-failed';
+  }
+  // Poll EVERYTHING to terminal — the worker kicks the OKF docs one by one
+  // (crawlWorker pattern: one job per poll interval; dataprep single-flight).
+  const drainList = [{ file_id: singleFileId, file_name: SINGLE_DOC_NAME }].concat(pending).filter((x) => x.file_id);
+  const drainIds = JSON.stringify(drainList.map((d) => d.file_id));
+  for (let i = 0; i < 80; i++) {
+    await new Promise((r) => setTimeout(r, 15000));
+    const rows = await aqlAll(
+      'FOR x IN files FILTER x.file_id IN ' + drainIds + " RETURN KEEP(x, ['file_id','dataprep','chunk_count'])"
+    );
+    let allTerminal = true;
+    for (const d of drainList) {
+      if (statuses[d.file_id]) continue;
+      const row = rows.find((r) => r.file_id === d.file_id);
+      const st = row && row.dataprep && row.dataprep.status;
+      if (st === 'Ingested' || st === 'Ingestion Error' || st === 'Killed') {
+        statuses[d.file_id] = st + ':' + (row.chunk_count || 0);
+        console.log('    ' + d.file_name + ' -> ' + statuses[d.file_id]);
+      } else {
+        allTerminal = false;
+      }
+    }
+    if (allTerminal && Object.keys(statuses).length === drainList.length) break;
+  }
+  for (const d of drainList) {
+    if (!statuses[d.file_id]) {
+      statuses[d.file_id] = 'timeout';
+      fail(
+        'drain ' + d.file_name + ' never reached a terminal state (worker interval 15s — is OKF_INGEST_WORKER_ENABLED?)'
+      );
+    } else if (statuses[d.file_id].split(':')[0] !== 'Ingested') {
+      fail('drain ' + d.file_name + ' ended "' + statuses[d.file_id] + '"');
+    }
+  }
+  const singleIngested = singleFileId && statuses[singleFileId] && statuses[singleFileId].split(':')[0] === 'Ingested';
+  singleIngested
+    ? pass('facility A: single doc Ingested (existing pipeline, manual kick)')
+    : fail('facility A drain failed');
+  const okfIds = pending.map((p) => p.file_id);
+  const okfIngested = okfIds.filter((k) => statuses[k] && statuses[k].split(':')[0] === 'Ingested');
+  okfIngested.length === EXPECTED_CONCEPTS
+    ? pass('facility B: WORKER drained all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (no manual kicks)')
+    : fail('facility B worker drain: ' + okfIngested.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
+
+  // ── (vii) WORKER TRANSITIONS — the worker-EXCLUSIVE meta states ──
+  const metaAfter = await aqlAll(
+    "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
+      INGEST_REPO +
+      "' RETURN KEEP(d, ['concept_id','index_status','last_good_index_at'])"
+  );
+  const allIndexed = metaAfter.length === EXPECTED_CONCEPTS && metaAfter.every((m) => m.index_status === 'indexed');
+  allIndexed
+    ? pass('worker transition: all ' + EXPECTED_CONCEPTS + ' meta rows index_status=indexed (parsed→indexed)')
+    : fail('worker transition: ' + JSON.stringify(metaAfter.map((m) => [m.concept_id, m.index_status])));
+  const allStamped = metaAfter.every((m) => typeof m.last_good_index_at === 'string' && m.last_good_index_at);
+  allStamped
+    ? pass('worker transition: last_good_index_at stamped on every concept')
+    : fail('worker transition: missing last_good_index_at: ' + JSON.stringify(metaAfter));
+
+  // ── (viii) re-ingest AFTER indexing — the 4e DEDUP rule fires LIVE ──
+  // Unchanged content + now-indexed ⇒ skipped_dedup, no new Pending docs.
+  // Called via the service module (in-container — immune to the 5-min user
+  // token TTL; the HTTP surface is asserted by the earlier zip ingest + 403).
   const bundleFiles = fs
     .readdirSync(BUNDLE_DIR)
     .filter((f) => f.endsWith('.md'))
@@ -654,64 +734,33 @@ async function ingestPhase(db) {
     const { data, content } = matter(fs.readFileSync(path.join(BUNDLE_DIR, f), 'utf8'));
     return { path: f, frontmatter: data, body: content.trim() };
   });
-  const countQuery = "RETURN LENGTH(FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN 1)";
-  const beforeCount = (await aqlAll(countQuery))[0];
-  const r2 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, { concepts });
-  if (r2.status !== 202) {
-    fail('re-ingest 202 expected, got ' + r2.status);
-  } else {
-    const afterCount = (await aqlAll(countQuery))[0];
-    afterCount === beforeCount && beforeCount === EXPECTED_CONCEPTS
-      ? pass('re-ingest (concepts[]): meta rows NOT duplicated (writer idempotency)')
-      : fail('re-ingest meta rows: before=' + beforeCount + ' after=' + afterCount);
-    r2.body.created === 0 && r2.body.updated === EXPECTED_CONCEPTS
-      ? pass('re-ingest (concepts[]): summary updated=' + EXPECTED_CONCEPTS + ' (dedup rule intact pre-2.9.4)')
-      : fail('re-ingest summary: ' + JSON.stringify(r2.body).slice(0, 140));
-  }
-
-  // ── (vii) DRAIN — sequential (dataprep single-flight), SERVICE token ──
-  // Facility A first (its per-file kick is the existing UI action), then the
-  // OKF bundle's per-concept Pending docs (what the 2.9.4 worker will own).
-  console.log(
-    '  draining sequentially (facility A single doc + ' + pending.length + ' OKF concepts — the slow part)...'
+  const ingestService = require('./services/ingest-service');
+  const filesCountQuery = "RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN 1)";
+  const filesBefore = (await aqlAll(filesCountQuery))[0];
+  const r2 = await ingestService.ingestRepoConcepts(
+    INGEST_REPO,
+    { concepts, labels: ['Service Directory'] },
+    { sub: 'smoke-run', source_ip: null }
   );
-  const drainList = [{ file_id: singleFileId, file_name: SINGLE_DOC_NAME }].concat(pending).filter((x) => x.file_id);
-  const statuses = {};
-  for (const f of drainList) {
-    const kick = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/ingest', await serviceToken());
-    if (kick.status !== 200) {
-      fail('drain kick ' + f.file_name + ' -> ' + kick.status + ' ' + JSON.stringify(kick.body).slice(0, 120));
-      statuses[f.file_id] = 'kick-failed';
-      continue;
-    }
-    // Poll to terminal (Ingested | Ingestion Error | Killed), 8 min cap each.
-    let st = null;
-    for (let i = 0; i < 96; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      const row = (
-        await aqlAll(
-          "FOR x IN files FILTER x.file_id == '" + f.file_id + "' RETURN KEEP(x, ['dataprep','chunk_count'])"
-        )
-      )[0];
-      st = row && row.dataprep && row.dataprep.status;
-      if (st === 'Ingested' || st === 'Ingestion Error' || st === 'Killed') {
-        statuses[f.file_id] = st + ':' + (row.chunk_count || 0);
-        break;
-      }
-    }
-    if (!statuses[f.file_id]) statuses[f.file_id] = 'timeout:' + st;
-    console.log('    ' + f.file_name + ' -> ' + statuses[f.file_id]);
-    if (statuses[f.file_id].split(':')[0] !== 'Ingested') {
-      fail('drain ' + f.file_name + ' ended "' + statuses[f.file_id] + '"');
-    }
-  }
-  const singleIngested = singleFileId && statuses[singleFileId] && statuses[singleFileId].split(':')[0] === 'Ingested';
-  singleIngested ? pass('facility A: single doc Ingested (existing pipeline)') : fail('facility A drain failed');
-  const okfIds = pending.map((p) => p.file_id);
-  const okfIngested = okfIds.filter((k) => statuses[k] && statuses[k].split(':')[0] === 'Ingested');
-  okfIngested.length === EXPECTED_CONCEPTS
-    ? pass('facility B drain: all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (sequential, no 429 race)')
-    : fail('facility B drain: ' + okfIngested.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
+  r2.skipped_dedup === EXPECTED_CONCEPTS && r2.enqueued === 0
+    ? pass('DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' + EXPECTED_CONCEPTS + ', enqueued=0')
+    : fail(
+        'dedup summary: ' +
+          JSON.stringify({ skipped_dedup: r2.skipped_dedup, enqueued: r2.enqueued, errors: r2.enqueue_errors })
+      );
+  r2.created === 0 && r2.updated === EXPECTED_CONCEPTS
+    ? pass('re-ingest: meta rows updated in place (created=0, updated=' + EXPECTED_CONCEPTS + ' — no duplicates)')
+    : fail('re-ingest summary: ' + JSON.stringify({ created: r2.created, updated: r2.updated }));
+  const metaPostDedup = await aqlAll(
+    "FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN KEEP(d, ['index_status'])"
+  );
+  metaPostDedup.every((m) => m.index_status === 'indexed')
+    ? pass('re-ingest: index_status stays indexed (writer protection — never downgraded by 4b)')
+    : fail('index_status downgraded after re-ingest: ' + JSON.stringify(metaPostDedup));
+  const filesAfter = (await aqlAll(filesCountQuery))[0];
+  filesAfter === filesBefore
+    ? pass('re-ingest: ZERO new files docs (dedup enqueued nothing)')
+    : fail('re-ingest created files docs: before=' + filesBefore + ' after=' + filesAfter);
 
   // ── (viii) CHUNKS — the physical proof, per facility/graph ──
   // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph

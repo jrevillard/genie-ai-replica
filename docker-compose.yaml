@@ -563,6 +563,12 @@ services:
       # go unauthenticated and doc-repo rejects them (loud one-time warning).
       - KC_OKF_SERVER_CLIENT_ID=${KC_OKF_SERVER_CLIENT_ID:-okf-server}
       - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
+      # Story 2.9.4: the ingestion worker (crawlWorker pattern — poll loop over
+      # Pending OKF files docs; sequential by design, dataprep is single-flight).
+      - OKF_INGEST_WORKER_ENABLED=${OKF_INGEST_WORKER_ENABLED:-true}
+      - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
+      - OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=${OKF_INGEST_WORKER_SWEEP_INTERVAL_MS:-3600000}
+      - OKF_INGEST_CONCURRENCY=${OKF_INGEST_CONCURRENCY:-1}
     networks:
       - genieai_network
     deploy:

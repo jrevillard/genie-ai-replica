@@ -554,6 +554,14 @@ KC_DATAPREP_CLIENT_ID=dataprep-service-client
 # okf_scopes (e.g. ["okf:tenant:repo-id:admin"]) via the Keycloak admin API.
 KC_OKF_SERVER_CLIENT_SECRET=
 
+# --- OKF ingestion worker (Story 2.9.4; crawlWorker pattern) ---
+# Drains the orchestrator's per-concept Pending files docs (sequential — dataprep
+# is single-flight). OKF_INGEST_WORKER_ENABLED=false disables the worker entirely.
+# OKF_INGEST_WORKER_ENABLED=true
+# OKF_INGEST_WORKER_INTERVAL_MS=15000
+# OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
+# OKF_INGEST_CONCURRENCY=1
+
 # Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 

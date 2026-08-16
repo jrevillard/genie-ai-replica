@@ -45,9 +45,17 @@ roles:
       description: Service account role for Dataprep ingestion pipeline
     - name: tools-admin
       description: OKF steward/admin role required by okf-server for repository and concept mutations (Story 2.2)
+    - name: okf-service
+      description: Service-account role for the okf-server client (Story 2.9.1) — allows the orchestrator's doc-repo storage calls (ingest-bundle)
 
-# Default admin user
+# okf-server client service account (auto-created by Keycloak on client creation;
+# declared here so config-cli assigns the okf-service realm role — Story 2.9.1).
 users:
+  - username: service-account-okf-server
+    enabled: true
+    serviceAccountClientId: okf-server
+    realmRoles:
+      - okf-service
   - username: $(env:GENIE_ADMIN_USERNAME)
     enabled: true
     email: $(env:GENIE_ADMIN_EMAIL)

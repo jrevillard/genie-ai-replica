@@ -769,7 +769,7 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/ingest-bundle', authorizeRole(['Admin']), fileController.bundleIngest);
+router.post('/ingest-bundle', authorizeRole(['Admin', 'okf-service']), fileController.bundleIngest);
 
 /**
  * @swagger

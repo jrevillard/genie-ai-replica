@@ -253,3 +253,61 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     ingestSpy.mockRestore();
   });
 });
+
+// ─── Story 2.9.1: defer_kick (per-concept enqueues must not race the lock) ────
+
+describe('defer_kick (Story 2.9.1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const repoId = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+  const validBody = {
+    bundle: Buffer.from('# Test OKF concept\nHello world').toString('base64'),
+    graph_name: `OKF_${repoId}`,
+    repo_id: repoId,
+    originalFileName: 'concept.md'
+  };
+
+  it('DEFAULT (no flag) still fires the ingestion kick (legacy behavior)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'kick-default',
+      file_name: 'concept.md',
+      storage_path: '/uploads/kick-default.md'
+    });
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockResolvedValue({ success: true });
+
+    await request(app).post('/api/files/ingest-bundle').send(validBody);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(ingestSpy).toHaveBeenCalledWith('kick-default');
+    ingestSpy.mockRestore();
+  });
+
+  it('defer_kick: true stores the Pending doc WITHOUT kicking (the 2.9.4 worker owns draining)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'no-kick',
+      file_name: 'concept.md',
+      storage_path: '/uploads/no-kick.md'
+    });
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockResolvedValue({ success: true });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, defer_kick: true });
+
+    expect(res.status).toBe(202);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(ingestSpy).not.toHaveBeenCalled();
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
+    ingestSpy.mockRestore();
+  });
+
+  it('rejects a non-boolean defer_kick with 400', async () => {
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, defer_kick: 'yes' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+});

@@ -558,6 +558,11 @@ services:
       # Story 6.1 (RFC 8707): activate audience binding by setting e.g. okf-server.
       # Empty default = off (deployments without the audience mapper keep working).
       - OKF_AUDIENCE=${OKF_AUDIENCE:-}
+      # Story 2.9.1: service-account credentials for okf-server → doc-repo HTTP
+      # (the okf-server Keycloak client provisioned by Story 6.1). Empty = calls
+      # go unauthenticated and doc-repo rejects them (loud one-time warning).
+      - KC_OKF_SERVER_CLIENT_ID=${KC_OKF_SERVER_CLIENT_ID:-okf-server}
+      - KC_OKF_SERVER_CLIENT_SECRET=${KC_OKF_SERVER_CLIENT_SECRET:-}
     networks:
       - genieai_network
     deploy:

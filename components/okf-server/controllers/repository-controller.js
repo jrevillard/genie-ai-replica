@@ -5,6 +5,7 @@
 
 const repoService = require('../services/repository-service');
 const piiService = require('../services/pii-service');
+const ingestService = require('../services/ingest-service');
 const auditService = require('../services/audit-service');
 const { createSchema, updateSchema } = require('../validators/repository-validator');
 
@@ -111,6 +112,46 @@ async function getRepo(req, res, next) {
   }
 }
 
+/**
+ * Story 2.9.1 — trigger the write-side ingest sequence (ADR-021 4a–4f).
+ * Body mirrors pii-scan's shapes: explicit concepts[] (the 2.9.5 unzip and
+ * the 7.2 producer call the service directly), file_ids[], or discover:true —
+ * plus optional hierarchy labels (appended AFTER the orchestrator's ACL set).
+ * Gate order: requireRepoScope (route) → getById existence+authz (404 foreign,
+ * anti-enumeration) → orchestrate → 202 with the summary.
+ */
+async function ingestRepo(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const body = req.body || {};
+    const { concepts, file_ids, discover, labels } = body;
+    if (!Array.isArray(concepts) || concepts.length === 0) {
+      if (!Array.isArray(file_ids) || file_ids.length === 0) {
+        if (!discover) {
+          throw new ValidationError(['body must contain concepts[], file_ids[], or discover:true']);
+        }
+      }
+    }
+    if (concepts && concepts.length > parseInt(process.env.OKF_INGEST_MAX_CONCEPTS || '200', 10)) {
+      const cap = process.env.OKF_INGEST_MAX_CONCEPTS || 200;
+      return res.status(400).json({
+        error: 'TOO_MANY_CONCEPTS',
+        message: `body contains ${concepts.length} concepts; the cap is ${cap} (OKF_INGEST_MAX_CONCEPTS)`
+      });
+    }
+    // Repo-existence + authorization gate (mirrors every other mutating route).
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const summary = await ingestService.ingestRepoConcepts(
+      repo_id,
+      { concepts, file_ids, discover, labels },
+      actorFrom(req)
+    );
+    res.status(202).json({ success: true, ...summary });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function updateRepo(req, res, next) {
   try {
     const patch = validate(updateSchema, req.body);
@@ -196,4 +237,4 @@ async function piiScan(req, res, next) {
   }
 }
 
-module.exports = { createRepo, listRepos, getRepo, updateRepo, deleteRepo, piiScan, ValidationError };
+module.exports = { createRepo, listRepos, getRepo, updateRepo, deleteRepo, piiScan, ingestRepo, ValidationError };

@@ -230,9 +230,9 @@ describe('fetchFileBytes + discovery (code-review #1/#8)', () => {
 
   it('discoverRepoFiles keeps only scannable text files + sorts newest-first', async () => {
     mockDb._stores.files = {
-      a: { file_id: 'a', okf_repo_id: 'r1', file_type: 'text/markdown', uploaded_date: '2026-08-01T00:00:00Z' },
-      b: { file_id: 'b', okf_repo_id: 'r1', file_type: 'application/zip', uploaded_date: '2026-08-02T00:00:00Z' },
-      c: { file_id: 'c', okf_repo_id: 'r1', file_type: 'text/plain', uploaded_date: '2026-08-03T00:00:00Z' }
+      a: { file_id: 'a', repo_id: 'r1', file_type: 'text/markdown', uploaded_date: '2026-08-01T00:00:00Z' },
+      b: { file_id: 'b', repo_id: 'r1', file_type: 'application/zip', uploaded_date: '2026-08-02T00:00:00Z' },
+      c: { file_id: 'c', repo_id: 'r1', file_type: 'text/plain', uploaded_date: '2026-08-03T00:00:00Z' }
     };
     // The service uses db.query (aql) for discovery — program the mock.
     mockDb.query.mockResolvedValue({
@@ -307,5 +307,30 @@ describe('pii-client retry + payload validation (code-review #2/#17)', () => {
     const out = await p;
     expect(out.state).toBe('error');
     expect(out.error).toBe('UNKNOWN');
+  });
+});
+
+// ─── Story 2.9.1 T2: discovery reads the field doc-repo actually stamps ───────
+
+describe('discoverRepoFiles — repo_id field (doc-repo stamps repo_id, not okf_repo_id)', () => {
+  beforeEach(() => mockDb._reset());
+
+  test('queries the files collection on the repo_id field (the doc-repo stamp)', async () => {
+    mockDb.query.mockResolvedValue({ all: async () => [] });
+    await piiService.discoverRepoFiles('r1');
+    expect(mockDb.query).toHaveBeenCalledTimes(1);
+    const arg = mockDb.query.mock.calls[0][0];
+    const q = String(arg.query);
+    expect(q).toContain('FILTER f.repo_id ==');
+    expect(q).not.toContain('okf_repo_id');
+  });
+
+  test('getRepoDocumentReferences queries repo_id too', async () => {
+    mockDb.query.mockResolvedValue({ all: async () => ['f1'] });
+    const refs = await piiService.getRepoDocumentReferences('r1');
+    expect(refs).toHaveLength(1);
+    const q = String(mockDb.query.mock.calls[0][0].query);
+    expect(q).toContain('FILTER f.repo_id ==');
+    expect(q).not.toContain('okf_repo_id');
   });
 });

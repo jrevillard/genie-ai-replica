@@ -286,3 +286,115 @@ describe('getRepo denial audit (AC7 review fix)', () => {
     expect(writeAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'authz.denied.repo' }));
   });
 });
+
+// ─── Story 2.9.1: POST /api/okf/repos/:repo_id/ingest ─────────────────────────
+
+jest.mock('../services/ingest-service', () => ({
+  ingestRepoConcepts: jest.fn()
+}));
+const ingestService = require('../services/ingest-service');
+
+describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  const ingestBody = (extra = {}) => ({ concepts: [{ frontmatter: { title: 'Alpha' }, body: '# Alpha' }], ...extra });
+
+  test('admin scope + valid body → 202 with the orchestrator summary', async () => {
+    authScoped([`okf:t1:repoA:admin`]);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA', version: 1 });
+    ingestService.ingestRepoConcepts.mockResolvedValue({
+      repo_id: 'repoA',
+      total: 1,
+      created: 1,
+      updated: 0,
+      skipped_dedup: 0,
+      pii: { clean: 1, hit: 0, error: 0 },
+      enqueued: 1,
+      enqueue_errors: []
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send(ingestBody());
+    expect(res.status).toBe(202);
+    expect(res.body).toMatchObject({ repo_id: 'repoA', enqueued: 1 });
+    expect(repoService.getById).toHaveBeenCalledWith('repoA', expect.anything()); // existence+authz gate BEFORE ingest
+    expect(ingestService.ingestRepoConcepts).toHaveBeenCalledWith(
+      'repoA',
+      expect.objectContaining({ concepts: expect.any(Array) }),
+      expect.objectContaining({ sub: 'steward-1' })
+    );
+  });
+
+  test('repo-scope gate: read ≠ admin → 403 FORBIDDEN_SCOPE', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send(ingestBody());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    expect(ingestService.ingestRepoConcepts).not.toHaveBeenCalled();
+  });
+
+  test('foreign repo → 403 at requireRepoScope (scoped caller, route layer) / 404 via getById (super-admin)', async () => {
+    // Layered: a scoped caller on a foreign repo is stopped by the route's
+    // requireRepoScope (403, scope never matches repoB)…
+    authScoped(['okf:t1:repoA:admin']);
+    let res = await request(createApp())
+      .post('/api/okf/repos/repoB/ingest')
+      .set('Authorization', TOKEN)
+      .send(ingestBody());
+    expect(res.status).toBe(403);
+    expect(ingestService.ingestRepoConcepts).not.toHaveBeenCalled();
+    // …while a super-admin hitting a nonexistent repo is stopped by the
+    // controller's getById gate (404, anti-enumeration — same as pii-scan).
+    authScoped([], ['tools-admin']);
+    repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
+    res = await request(createApp()).post('/api/okf/repos/repoB/ingest').set('Authorization', TOKEN).send(ingestBody());
+    expect(res.status).toBe(404);
+    expect(ingestService.ingestRepoConcepts).not.toHaveBeenCalled();
+  });
+
+  test('400 VALIDATION_ERROR when no concepts/file_ids/discover', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    const res = await request(createApp()).post('/api/okf/repos/repoA/ingest').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  test('TOO_MANY_CONCEPTS (4e cap) surfaces as 400', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    ingestService.ingestRepoConcepts.mockRejectedValue(
+      Object.assign(new Error('too many'), { code: 'TOO_MANY_CONCEPTS', status: 400 })
+    );
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send(ingestBody());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('TOO_MANY_CONCEPTS');
+  });
+
+  test('tools-admin (no scopes) passes via super-role — operator regression', async () => {
+    authScoped([], ['tools-admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    ingestService.ingestRepoConcepts.mockResolvedValue({
+      repo_id: 'repoA',
+      total: 0,
+      enqueued: 0,
+      enqueue_errors: [],
+      pii: { clean: 0, hit: 0, error: 0 }
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send({ discover: true });
+    expect(res.status).toBe(202);
+  });
+});

@@ -1058,7 +1058,7 @@ class FileController {
   // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
-      const { bundle, graph_name, repo_id, originalFileName, labels } = req.body;
+      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick } = req.body;
 
       // Joi validation
       const schema = Joi.object({
@@ -1071,9 +1071,14 @@ class FileController {
         // Selected knowledge-hierarchy labels ride on the files doc (same as
         // the single-upload path) and flow to dataprep as file_labels, where
         // they scope chunk labeling (see dataprep _finalize_chunk_labels).
-        labels: Joi.array().items(Joi.string().max(200)).default([])
+        labels: Joi.array().items(Joi.string().max(200)).default([]),
+        // Story 2.9.1: when true, store + ClamAV-scan + create the Pending
+        // files doc but do NOT kick dataprep — the OKF ingestionWorker (2.9.4)
+        // owns draining. Per-concept orchestrator enqueues use this so they
+        // never race dataprep's single-ingest lock (429).
+        defer_kick: Joi.boolean().default(false)
       });
-      const { error, value } = schema.validate({ bundle, graph_name, repo_id, originalFileName, labels });
+      const { error, value } = schema.validate({ bundle, graph_name, repo_id, originalFileName, labels, defer_kick });
       if (error) {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
       }
@@ -1100,11 +1105,15 @@ class FileController {
       // Fire-and-forget ingestion kick (does not block the 202). dataprep.status
       // transitions Pending → Ingesting via _ingestFileById; a failure is
       // logged and surfaces via the files doc status, never a silent drop.
-      setImmediate(() => {
-        this._ingestFileById(result.file_id).catch((ingestErr) => {
-          logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
+      // SKIPPED when defer_kick (Story 2.9.1): the doc stays 'Pending' for the
+      // 2.9.4 worker to drain (per-concept enqueues would race the 429 lock).
+      if (!value.defer_kick) {
+        setImmediate(() => {
+          this._ingestFileById(result.file_id).catch((ingestErr) => {
+            logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
+          });
         });
-      });
+      }
 
       return res.status(202).json({
         success: true,

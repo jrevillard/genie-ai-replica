@@ -148,6 +148,9 @@ async function main() {
   //   OKF_SMOKE_TOKEN_ADMIN    — genie-admin (wildcard attribute + tools-admin)
   // The phase is SKIPPED (with a notice) when no tokens are provided so the
   // control-plane phases stay runnable standalone.
+  // 8 (Story 2.9.1): HTTP ingest via the orchestrator (needs tokens; skips standalone).
+  await ingestPhase(db);
+
   await authzPhase(db);
 
   if (failures > 0) {

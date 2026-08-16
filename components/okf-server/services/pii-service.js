@@ -290,7 +290,7 @@ async function getRepoDocumentReferences(repo_id) {
   const db = await getDb();
   const cursor = await db.query(aql`
     FOR f IN ${db.collection(FILES)}
-      FILTER f.okf_repo_id == ${repo_id}
+      FILTER f.repo_id == ${repo_id}
       SORT f.uploaded_date DESC
       RETURN f.file_id
   `);
@@ -307,7 +307,7 @@ async function getRepoDocumentReferences(repo_id) {
 const SCANNABLE_FILE_TYPES = ['text/markdown', 'text/plain', 'text/html', 'text/x-markdown'];
 
 /**
- * Discover the repo's uploaded plain-text files (by okf_repo_id) and return
+ * Discover the repo's uploaded plain-text files (by repo_id — the field doc-repo stamps) and return
  * them as scan inputs. Binary/zips are skipped with a clear rejection — a
  * bundle zip is unzipped in Story 2.9.5, not scanned as raw bytes.
  * @returns {Promise<Array<{concept_id, frontmatter, body, file_id, file_type}>>}
@@ -316,7 +316,7 @@ async function discoverRepoFiles(repo_id) {
   const db = await getDb();
   const cursor = await db.query(aql`
     FOR f IN ${db.collection(FILES)}
-      FILTER f.okf_repo_id == ${repo_id}
+      FILTER f.repo_id == ${repo_id}
       SORT f.uploaded_date DESC
       RETURN KEEP(f, ['file_id', 'file_name', 'file_type'])
   `);
@@ -340,10 +340,10 @@ async function discoverRepoFiles(repo_id) {
  * res.data.data.base64 (verified fileController.viewFile). */
 async function fetchFileBytes(fileId) {
   const config = require('../config');
-  const axios = require('axios');
+  const { authedAxios } = require('./service-token');
   let res;
   try {
-    res = await axios.get(`${config.documentRepository.url}/api/files/${fileId}/view`);
+    res = await authedAxios.get(`${config.documentRepository.url}/api/files/${fileId}/view`, { timeout: 30000 });
   } catch (err) {
     const status = err.response && err.response.status;
     logger.warn('Doc-repo view fetch FAILED (fail-closed)', { file_id: fileId, status });

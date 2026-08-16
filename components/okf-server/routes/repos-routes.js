@@ -26,4 +26,8 @@ router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo
 // PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery.
 router.post('/:repo_id/pii-scan', requireRepoScope('repo_id', 'admin'), ctrl.piiScan);
 
+// Write-side ingest trigger (Story 2.9.1 — ADR-021): parse→meta→conformance→
+// PII→dedup→enqueue per concept; 202 once enqueued (never blocks on dataprep).
+router.post('/:repo_id/ingest', requireRepoScope('repo_id', 'admin'), ctrl.ingestRepo);
+
 module.exports = router;

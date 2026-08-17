@@ -218,6 +218,8 @@
         _deploy_files_default:
           - src: "{{ compose_file }}"
             dest: "{{ deploy_dir }}/{{ compose_file }}"
+          - src: "configs/searxng/settings.yml"
+            dest: "{{ deploy_dir }}/configs/searxng/settings.yml"
         _deploy_files_obs: "{{ [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}] if enable_observability | default('0') == '1' else [] }}"
         _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh', 'mode': '0755'}] if certbot_replicas | default('0') != '0' else [] }}"
 

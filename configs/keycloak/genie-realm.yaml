@@ -43,6 +43,10 @@ roles:
             - view-identity-providers
     - name: dataprep-service
       description: Service account role for Dataprep ingestion pipeline
+    - name: tools-admin
+      description: Administrator role for server-side tools and feeds
+    - name: tools-reader
+      description: Read-only access to tools configuration and analytics
 
 # Default admin user
 users:

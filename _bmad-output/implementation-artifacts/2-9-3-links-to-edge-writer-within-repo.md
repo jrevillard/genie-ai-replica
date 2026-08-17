@@ -5,7 +5,7 @@ baseline_commit: 194f6bd
 
 Status: ready-for-dev
 
-Story key: `2-9-3-links-to-edge-writer-within-repo` | GitLab: #964
+Story key: `2-9-3-links-to-edge-writer-within-repo` | GitLab: #963
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
 FRs: **FR-7** (structural concept→concept links), FR-11 (citation pinning) | Gaps: **G7, G22** | ADRs: okf-021 (write path), okf-022 (D4), okf-028 (edges)
 

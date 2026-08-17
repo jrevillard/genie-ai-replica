@@ -61,7 +61,7 @@ development_status:
   2-5-re-graft-the-dataprep: done
   2-6-re-graft-the-chatqna-highest-coupling-last: done
   2-7-re-audit-build-patches-add-enforcement: done
-  2-8-sweep-import-time-breaks-re-baseline-the-mocked-suite: done
+  2-8-sweep-import-time-breaks-re-baseline-the-mocked-suite: backlog
   epic-2-retrospective: optional
 
   # Epic 3: Verification & parity proof

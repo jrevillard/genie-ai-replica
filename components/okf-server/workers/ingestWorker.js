@@ -176,7 +176,11 @@ async function _processOneJob() {
     span.setAttribute('okf.ingest.worker.duration_ms', durationMs);
 
     // 3. Transition the meta row (worker-exclusive states; D-G).
-    const conceptId = conceptIdFromFileName(job.originalFileName || job.file_name);
+    // REVIEW FIX (2026-08-17, run-14): `originalFileName` is NEVER persisted on
+// files docs (doc-repo folds it into `file_name`) — reading it first made the
+// transition target the WRONG concept_id (undefined→job.file_name is correct,
+// but the precedence hid it). file_name is the persisted truth, always.
+const conceptId = conceptIdFromFileName(job.file_name);
     const finish = (outcome, extra) => {
       recordJob(outcome);
       auditService

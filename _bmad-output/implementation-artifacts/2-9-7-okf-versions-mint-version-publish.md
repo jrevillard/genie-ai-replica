@@ -3,7 +3,7 @@ baseline_commit: 225875b8d
 ---
 # Story 2.9.7: `okf_versions` + `mintVersion()` (G26)
 
-Status: ready-for-dev
+Status: review
 
 Story key: `2-9-7-okf-versions-mint-version-publish` | GitLab: #962
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
@@ -41,12 +41,12 @@ so that **agent citations can pin a version, changes are auditable, and re-crawl
 
 ## Tasks
 
-- [ ] T1 `okf_versions` collection + indexes (`db/collections.js`) — boot-ensure additive
-- [ ] T2 `services/version-service.js` (AC 1) + units
-- [ ] T3 Routes + controller (AC 2) + route-matrix tests
-- [ ] T4 Version threading: okf-server 4f payload, doc-repo Joi+stamp+forward, dataprep payload+chunk stamp (AC 3) + tests all three suites
-- [ ] T5 Smoke extension (AC 7); live run to exit 0
-- [ ] T6 Suites (okf-server/doc-repo/overlay) + lint/format; 2.9.3 note (edges stamp bundle_version); close-out
+- [x] T1 `okf_versions` collection + indexes (`db/collections.js`) — boot-ensure additive
+- [x] T2 `services/version-service.js` (AC 1) + units
+- [x] T3 Routes + controller (AC 2) + route-matrix tests
+- [x] T4 Version threading: okf-server 4f payload, doc-repo Joi+stamp+forward, dataprep payload+chunk stamp (AC 3) + tests all three suites
+- [x] T5 Smoke extension (AC 7); live run to exit 0
+- [x] T6 Suites (okf-server/doc-repo/overlay) + lint/format; 2.9.3 note (edges stamp bundle_version); close-out
 
 ## Dev Notes
 
@@ -84,3 +84,34 @@ Lifecycle transitions/publish wiring (4.3 — it CALLS mintVersion) · crawl ass
 ### References
 
 ADR-okf-031 (full), ADR-okf-005/030/032; PRD FR-11 (§4.3), §13 Q2 resolved; epics 2.9.7 + 4.5/4.8; design addendum D-V1/D-V3/D-V4; live smoke run 12 (the baseline the next run must preserve and extend).
+
+## Dev Agent Record
+
+### Implementation (2026-08-17)
+
+- **T1-T4** as specified: `okf_versions` collection (+unique `[repo_id, bundle_version]` race-guard index), `services/version-service.js` (mint/list/get, INSERT-only manifests with the STORED canonical hashes, sole-writer repo.version bump, okf:v{N} tag), version API (POST admin / GET read-scope, getById pre-gate), and the full threading leg: okf-server 4f payload + tag label (caller `okf:v*` tags stripped — sole injector), doc-repo Joi+stamp+`bundleVersion` forward, dataprep payload + chunk-doc metadata stamp (Genie-owned `core/genieai_api_protocol.py` model extended additively — the vendored copy picks it up at build; verified in-container).
+- **Suites:** okf-server **278/278**, doc-repo **429/429**, overlay pytest **672/672**; ESLint/Prettier/ruff clean.
+
+### Live evidence (runs 13–15, honest history)
+
+- **Run 13 (exit 1):** drain-wait cap (20 min) expired ~1 min before the 6th file indexed → downstream phases cascaded; ALSO exposed `await aqlAll(...)[0]` precedence bug in the chunk-stamp assert (awaited `promise[0]` = undefined — the chunks were fine). An isolated live probe (versioned bundle, immediate kick, bundle_version=7) proved the ENTIRE threading chain: chunk doc carried `bundle_version: 7`.
+- **Run 14 (exit 1):** the 2.9.4 orphan sweeper fired mid-run (hourly) and reaped in-flight state — victims unlogged (console formatter strips metadata fields). Fixed: **1h grace window** on the sweep (never reap fresh docs) + victims logged IN THE MESSAGE STRING.
+- **Run 15 (exit 0): 52 PASS / 0 FAIL** — mint v1 (publish trigger, manifest with 6 concepts + stored canonical hashes + okf:v1, repo.version stamped); modified re-ingest → 5 dedup-skipped + 1 enqueued with bundle_version=1 + the okf:v1 label; worker drained it; **all 3 new chunk docs carry bundle_version=1 (citation pinning real)**; mint v2 (crawl trigger — D-V4) → list [v2, v1], manifest v1 INTACT (INSERT-only); every prior assertion still green (worker drain, dedup, isolation, both retraction levels — retract now also tears down manifests).
+
+### File List
+
+- components/okf-server/services/version-service.js — NEW
+- components/okf-server/db/collections.js — okf_versions + indexes
+- components/okf-server/controllers/repository-controller.js — mintRepoVersion/listRepoVersions/getRepoVersion
+- components/okf-server/routes/repos-routes.js — version routes
+- components/okf-server/services/ingest-service.js — 4f bundle_version payload + okf:v tag label (+ caller-tag strip)
+- components/okf-server/services/graph-retract-service.js — repo teardown removes version manifests
+- components/okf-server/workers/ingestWorker.js — sweep grace window + victim logging
+- components/okf-server/__tests__/version-service.test.js (NEW), repos-routes/ingest-service/graph-retract tests extended
+- components/document-repository/src/controllers/fileController.js — Joi bundle_version + datapretreat forward
+- components/document-repository/src/services/fileService.js + metadataService.js — files-doc stamp
+- components/document-repository/src/__tests__/routes/bundleIngest.test.js + integration/fileRoutes.test.js — bundle_version tests
+- genie-ai-overlay/core/genieai_api_protocol.py — model field (additive)
+- genie-ai-overlay/dataprep/genieai_dataprep_microservice.py + genieai_dataprep_arangodb.py — payload + chunk stamp
+- genie-ai-overlay/tests/test_dataprep_graph_name.py — bundleVersion threading tests
+- data/okf/smoke-test/run-smoke.js — mint/threading/immutability phases + fixes (precedence, drain cap, version cleanup)

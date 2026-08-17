@@ -1,0 +1,11 @@
+{
+  "DW-186": {
+    "answered_at": "2026-08-13",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Refactor all 10 direct-call routes to use Controller\u2192Service pattern for consistency; large refactor touching 10 route files + creating 10 new controllers",
+    "key": "2",
+    "label": "Standardize to Controller\u2192Service",
+    "resolution": ""
+  }
+}

@@ -10,7 +10,7 @@
 # importing all existing models from the original OPEA api protocol
 
 from api_protocol import *  # noqa: F403
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, NonNegativeFloat, PositiveInt
 
 
 class RetrievalRequestArangoDB(RetrievalRequest):
@@ -61,17 +61,22 @@ class ChatCompletionRequest(BaseModel):
     logit_bias: dict[str, float] | None = None
     logprobs: bool | None = False
     top_logprobs: int | None = 0
-    max_tokens: int | None = None  # None = let vLLM decide based on max_model_len
-    n: int | None = 1
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.max_tokens | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_max_tokens_rejects_zero_and_negative  # noqa: E501
+    max_tokens: PositiveInt | None = None  # None = let vLLM decide based on max_model_len
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.n | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_n_rejects_zero_and_negative  # noqa: E501
+    n: PositiveInt | None = 1
     presence_penalty: float | None = 0.0
     response_format: ResponseFormat | None = None
-    seed: int | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.seed | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_seed_rejects_zero_and_negative  # noqa: E501
+    seed: PositiveInt | None = None
     service_tier: str | None = None
     stop: Union[str, list[str], None] = Field(default_factory=list)
     stream: bool | None = False
     stream_options: StreamOptions | None = Field(default=None)  # changed from default_factory=StreamOptions
-    temperature: float | None = 0.01  # vllm default 0.7
-    top_p: float | None = None  # openai default 1.0, but tgi needs `top_p` must be > 0.0 and < 1.0, set None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.temperature | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_temperature_accepts_zero_rejects_negative  # noqa: E501
+    temperature: NonNegativeFloat | None = 0.01  # vllm default 0.7
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.top_p | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_top_p_accepts_zero_rejects_negative  # noqa: E501
+    top_p: NonNegativeFloat | None = None  # openai default 1.0, but tgi needs `top_p` must be >= 0.0 and < 1.0, set None
     tools: list[ChatCompletionToolsParam] | None = None
     tool_choice: Union[Literal["none"], ChatCompletionNamedToolChoiceParam] | None = "none"
     parallel_tool_calls: bool | None = True
@@ -86,22 +91,26 @@ class ChatCompletionRequest(BaseModel):
     # Ordered by official OpenAI API documentation
     # default values are same with
     # https://platform.openai.com/docs/api-reference/completions/create
-    best_of: int | None = 1
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.best_of | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_best_of_rejects_zero_and_negative  # noqa: E501
+    best_of: PositiveInt | None = 1
     suffix: str | None = None
 
     # vllm reference: https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/openai/protocol.py#L130
-    repetition_penalty: float | None = 1.0
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.repetition_penalty | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_repetition_penalty_accepts_zero_rejects_negative  # noqa: E501
+    repetition_penalty: NonNegativeFloat | None = 1.0
 
     # tgi reference: https://huggingface.github.io/text-generation-inference/#/Text%20Generation%20Inference/generate
     # some tgi parameters in use
     # default values are same with
     # https://github.com/huggingface/text-generation-inference/blob/main/router/src/lib.rs#L190
     # max_new_tokens: Optional[int] = 100 # Priority use openai
-    top_k: int | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.top_k | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_top_k_rejects_zero_and_negative  # noqa: E501
+    top_k: PositiveInt | None = None
     # top_p: Optional[float] = None # Priority use openai
     typical_p: float | None = None
     # repetition_penalty: Optional[float] = None
-    timeout: int | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.timeout | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_timeout_rejects_zero_and_negative  # noqa: E501
+    timeout: PositiveInt | None = None
 
     # doc: begin-chat-completion-extra-params
     echo: bool | None = Field(
@@ -162,22 +171,27 @@ class ChatCompletionRequest(BaseModel):
 
     # retrieval
     search_type: str = "similarity_score_threshold"  # "similarity"
-    k: int | None = None
-    fetch_k: int | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.k | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_k_rejects_zero_and_negative  # noqa: E501
+    k: PositiveInt | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.fetch_k | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_fetch_k_rejects_zero_and_negative  # noqa: E501
+    fetch_k: PositiveInt | None = None
     search_start: str | None = None
     enable_traversal: str | None = None
     traversal_max_depth: int | None = None
     traversal_max_returned: int | None = None
     traversal_score_threshold: float | None = None
     distance_threshold: float | None = None
-    lambda_mult: float | None = None
-    score_threshold: float | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.lambda_mult | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_lambda_mult_accepts_zero_rejects_negative  # noqa: E501
+    lambda_mult: NonNegativeFloat | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.score_threshold | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_score_threshold_accepts_zero_rejects_negative  # noqa: E501
+    score_threshold: NonNegativeFloat | None = None
     retrieved_docs: Union[list[RetrievalResponseData], list[dict[str, Any]]] = Field(default_factory=list)
     index_name: str | None = None
 
     # reranking
     reranking_strategy: str | None = None
-    top_n: int | None = None
+    # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.top_n | disposition: re-graft-to-new-API | reason: mirror v1.5 PositiveInt type | test: tests/test_core.py::TestChatCompletionRequest::test_top_n_rejects_zero_and_negative  # noqa: E501
+    top_n: PositiveInt | None = None
     reranking_threshold: float | None = None
     reranked_docs: Union[list[RerankingResponseData], list[dict[str, Any]]] = Field(default_factory=list)
 

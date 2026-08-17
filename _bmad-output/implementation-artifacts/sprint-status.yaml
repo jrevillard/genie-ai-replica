@@ -1,0 +1,83 @@
+# generated: 2026-08-10
+# last_updated: 2026-08-12
+
+# project: genie-ai
+# project_key: opea-1.5-upgrade
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-08-10
+last_updated: 2026-08-12
+
+project: genie-ai
+project_key: opea-1.5-upgrade
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Upgrade foundation — provable-parity groundwork
+  epic-1: done
+  1-1-lock-the-v1-3-rag-parity-baseline: done
+  1-3-run-the-schedule-kwargs-forwarding-spike-blocking-gate: done
+  1-4-land-the-pre-rebase-cleanup-as-its-own-v1-3-commit: done
+  1-5-write-contract-tests-green-on-v1-3-prove-red-on-a-bare-v1-5-bump: done
+  epic-1-retrospective: optional
+
+  # Epic 2: OPEA 1.5 overlay rebase (behavior-preserving)
+  epic-2: backlog
+  2-1-re-graft-the-core-overlay-layer: done
+  2-2-migrate-dependencies-python-3-11: done
+  2-3-re-graft-the-retriever-bump-langchain-arangodb: done
+  2-4-re-graft-the-reranker: done
+  2-5-re-graft-the-dataprep: done
+  2-6-re-graft-the-chatqna-highest-coupling-last: done
+  2-7-re-audit-build-patches-add-enforcement: done
+  2-8-sweep-import-time-breaks-re-baseline-the-mocked-suite: done
+  epic-2-retrospective: optional
+
+  # Epic 3: Verification & parity proof
+  epic-3: backlog
+  3-1-run-the-rag-parity-evaluation-vs-the-locked-baseline: backlog
+  3-2-produce-the-cve-baseline-diff-evidence: backlog
+  3-3-confirm-the-full-test-suites-green: backlog
+  3-4-confirm-the-targeted-upstream-improvements-land: backlog
+  3-5-complete-the-evidence-ledger-verify-evidence-gate: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Operational readiness & rollout
+  epic-4: backlog
+  4-1-fix-the-latent-dataprep-retriever-bugs: backlog
+  4-2-pin-the-ai-stack-image-tags-no-latest-no-split-brain: backlog
+  4-3-canary-on-release-el-salvador-with-required-shadow-comparison: backlog
+  4-4-rehearse-rollback-whole-set-revert-backward-read-retention: backlog
+  4-5-update-docs-env-and-the-upgrade-matrix: backlog
+  epic-4-retrospective: optional

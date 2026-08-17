@@ -3,6 +3,7 @@
 import pytest
 
 from core.constants import (
+    MCPFuncType,
     MegaServiceEndpoint,
     MicroServiceEndpoint,
     ServiceRoleType,
@@ -40,15 +41,57 @@ class TestServiceRoleType:
 # ---------------------------------------------------------------------------
 class TestServiceType:
     def test_member_count(self):
-        assert len(ServiceType) == 25
+        assert len(ServiceType) == 30
 
     def test_key_services_exist(self):
         expected = ["EMBEDDING", "RETRIEVER", "RERANK", "LLM", "DATAPREP", "GUARDRAIL", "TRANSLATOR"]
         for name in expected:
             assert hasattr(ServiceType, name), f"Missing ServiceType.{name}"
 
+    def test_all_v15_members_present(self):
+        expected = [
+            "GATEWAY",
+            "EMBEDDING",
+            "RETRIEVER",
+            "RERANK",
+            "LLM",
+            "ASR",
+            "TTS",
+            "GUARDRAIL",
+            "VECTORSTORE",
+            "DATAPREP",
+            "UNDEFINED",
+            "RAGAS",
+            "LVM",
+            "KNOWLEDGE_GRAPH",
+            "WEB_RETRIEVER",
+            "IMAGE2VIDEO",
+            "TEXT2IMAGE",
+            "ANIMATION",
+            "IMAGE2IMAGE",
+            "TEXT2SQL",
+            "TEXT2GRAPH",
+            "TEXT2CYPHER",
+            "TEXT2KG",
+            "STRUCT2GRAPH",
+            "LANGUAGE_DETECTION",
+            "PROMPT_TEMPLATE",
+            "PROMPT_REGISTRY",
+            "TEXT2QUERY",
+            "ARB_POST_HEARING_ASSISTANT",
+        ]
+        for name in expected:
+            assert hasattr(ServiceType, name), f"Missing ServiceType.{name}"
+
     def test_translator_is_last(self):
-        assert ServiceType.TRANSLATOR.value == 24
+        assert ServiceType.TRANSLATOR.value == 29
+
+    def test_new_v15_member_values(self):
+        assert ServiceType.LANGUAGE_DETECTION.value == 24
+        assert ServiceType.PROMPT_TEMPLATE.value == 25
+        assert ServiceType.PROMPT_REGISTRY.value == 26
+        assert ServiceType.TEXT2QUERY.value == 27
+        assert ServiceType.ARB_POST_HEARING_ASSISTANT.value == 28
 
     def test_all_values_unique(self):
         values = [m.value for m in ServiceType]
@@ -57,6 +100,22 @@ class TestServiceType:
     def test_values_are_sequential_ints(self):
         values = sorted(m.value for m in ServiceType)
         assert values == list(range(len(ServiceType)))
+
+
+# ---------------------------------------------------------------------------
+# Constants: MCPFuncType (new in v1.5)
+# ---------------------------------------------------------------------------
+class TestMCPFuncType:
+    def test_has_three_members(self):
+        assert len(MCPFuncType) == 3
+
+    def test_members_present(self):
+        for name in ["TOOL", "RESOURCE", "PROMPT"]:
+            assert hasattr(MCPFuncType, name), f"Missing MCPFuncType.{name}"
+
+    def test_values_are_auto_ints(self):
+        values = [m.value for m in MCPFuncType]
+        assert values == [1, 2, 3]
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +413,113 @@ class TestChatCompletionRequest:
 
         with pytest.raises(ValidationError):
             ChatCompletionRequest()
+
+    def test_k_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", k=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", k=-5)
+
+    def test_fetch_k_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", fetch_k=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", fetch_k=-5)
+
+    def test_lambda_mult_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", lambda_mult=0).lambda_mult == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", lambda_mult=-1)
+
+    def test_score_threshold_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", score_threshold=0).score_threshold == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", score_threshold=-0.1)
+
+    def test_max_tokens_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", max_tokens=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", max_tokens=-5)
+
+    def test_n_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", n=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", n=-5)
+
+    def test_seed_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", seed=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", seed=-5)
+
+    def test_temperature_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", temperature=0).temperature == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", temperature=-0.1)
+
+    def test_top_p_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", top_p=0).top_p == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_p=-0.1)
+
+    def test_best_of_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", best_of=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", best_of=-5)
+
+    def test_repetition_penalty_accepts_zero_rejects_negative(self):
+        from pydantic import ValidationError
+
+        assert ChatCompletionRequest(messages="hi", repetition_penalty=0).repetition_penalty == 0
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", repetition_penalty=-0.1)
+
+    def test_top_k_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_k=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_k=-5)
+
+    def test_timeout_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", timeout=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", timeout=-5)
+
+    def test_top_n_rejects_zero_and_negative(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_n=0)
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest(messages="hi", top_n=-5)
 
 
 # ---------------------------------------------------------------------------

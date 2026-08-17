@@ -1,56 +1,65 @@
 installation:
-  version: 6.8.0
+  version: 6.11.0
   installDate: 2026-04-26T21:02:35.766Z
-  lastUpdated: 2026-05-29T05:27:18.403Z
+  lastUpdated: 2026-08-17T07:38:48.481Z
 modules:
   - name: core
-    version: 6.8.0
+    version: 6.11.0
     installDate: 2026-04-26T21:02:35.007Z
-    lastUpdated: 2026-05-29T05:27:18.398Z
+    lastUpdated: 2026-08-17T07:38:48.458Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmm
-    version: 6.8.0
-    installDate: 2026-05-20T11:11:05.186Z
-    lastUpdated: 2026-05-29T05:27:18.398Z
+    version: 6.11.0
+    installDate: 2026-08-11T13:29:37.337Z
+    lastUpdated: 2026-08-17T07:38:48.459Z
     source: built-in
     npmPackage: null
     repoUrl: null
-  - name: tea
-    version: v1.19.0
-    installDate: 2026-05-20T11:11:05.265Z
-    lastUpdated: 2026-05-29T05:27:18.399Z
+  - name: bmb
+    version: v2.2.1
+    installDate: 2026-08-11T13:29:37.534Z
+    lastUpdated: 2026-08-17T07:38:48.462Z
     source: external
-    npmPackage: bmad-method-test-architecture-enterprise
-    repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
+    npmPackage: bmad-builder
+    repoUrl: https://github.com/bmad-code-org/bmad-builder
     channel: stable
-    sha: 8734d51f24071ddbcb3617390b5fcddb4128ef77
+    sha: 38df19573f493c5025c7efce331debe8498832c1
   - name: cis
-    version: v0.2.1
-    installDate: 2026-05-20T11:11:05.276Z
-    lastUpdated: 2026-05-29T05:27:18.400Z
+    version: v0.3.1
+    installDate: 2026-08-11T13:29:37.351Z
+    lastUpdated: 2026-08-17T07:38:48.467Z
     source: external
     npmPackage: bmad-creative-intelligence-suite
     repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
     channel: stable
-    sha: 07a8dd03d196a762f21c241d985293fe5b0f90e7
-  - name: wds
-    version: v0.4.3
-    installDate: 2026-05-20T11:11:05.348Z
-    lastUpdated: 2026-05-29T05:27:18.401Z
+    sha: 0e4ff9233a792db1a1cd00f22a482f338168cdc3
+  - name: tea
+    version: v1.23.1
+    installDate: 2026-08-11T13:29:37.489Z
+    lastUpdated: 2026-08-17T07:38:48.471Z
     source: external
-    npmPackage: bmad-wds
-    repoUrl: https://github.com/bmad-code-org/bmad-method-wds-expansion
+    npmPackage: bmad-method-test-architecture-enterprise
+    repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
     channel: stable
-    sha: cc16f09fcfab26d35635af1491f36a38a8431c8d
+    sha: 691bcf48e2e23fb241ad1fbef09ef14fb479798c
+  - name: bmad-loop
+    version: v0.10.0
+    installDate: 2026-08-11T13:29:37.503Z
+    lastUpdated: 2026-08-17T07:38:48.476Z
+    source: external
+    npmPackage: null
+    repoUrl: https://github.com/bmad-code-org/bmad-loop
+    channel: stable
+    sha: 8d33e927d42158e034ba28043d1ce4c9ee237716
   - name: bmad-issue-tracking
-    version: 2.2.0
+    version: main
     installDate: 2026-05-13T06:37:29.616Z
-    lastUpdated: 2026-05-29T05:27:18.403Z
+    lastUpdated: 2026-08-17T07:38:48.481Z
     source: custom
     npmPackage: null
-    repoUrl: null
+    repoUrl: https://github.com/jrevillard/bmad-issue-tracking
     channel: next
 ides:
   - claude-code

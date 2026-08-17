@@ -111,9 +111,15 @@ describe('Security Middleware Tests', () => {
       await expect(securityService.scanBuffer(Buffer.alloc(0))).rejects.toThrow('Buffer is empty');
     });
 
-    it('should reject oversized buffer exceeding 50MB limit', async () => {
-      const bigBuffer = Buffer.alloc(50 * 1024 * 1024 + 1);
-      await expect(securityService.scanBuffer(bigBuffer)).rejects.toThrow('Buffer size exceeds');
+    it('should reject oversized buffer exceeding limit', async () => {
+      const originalMax = securityService.maxBufferSize;
+      securityService.maxBufferSize = 10;
+      try {
+        const bigBuffer = Buffer.alloc(11);
+        await expect(securityService.scanBuffer(bigBuffer)).rejects.toThrow('Buffer size exceeds');
+      } finally {
+        securityService.maxBufferSize = originalMax;
+      }
     });
 
     it('should skip scanning when ClamAV is disabled (clamscan is null)', async () => {

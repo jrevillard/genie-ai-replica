@@ -287,6 +287,43 @@ describe('QueryService', () => {
       expect(result.pagination.pages).toBe(3);
       expect(result.pagination.currentPage).toBe(1);
     });
+
+    // DW-134: totalCount=0 → pages=0, currentPage=1, empty results
+    it('should handle totalCount=0 with pages=0', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([0]));
+      const result = await queryService.searchQueries({}, 10, 0);
+      expect(result.pagination.total).toBe(0);
+      expect(result.pagination.pages).toBe(0);
+      expect(result.pagination.currentPage).toBe(1);
+      expect(result.queries).toEqual([]);
+    });
+
+    // DW-134: totalCount=limit → pages=1 (exact boundary)
+    it('should handle totalCount equal to limit with pages=1', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([10]));
+      const result = await queryService.searchQueries({}, 10, 0);
+      expect(result.pagination.total).toBe(10);
+      expect(result.pagination.pages).toBe(1);
+      expect(result.pagination.currentPage).toBe(1);
+    });
+
+    // DW-134: offset beyond totalCount → empty results
+    it('should return empty results when offset exceeds totalCount', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([5]));
+      const result = await queryService.searchQueries({}, 10, 100);
+      expect(result.queries).toEqual([]);
+      expect(result.pagination.total).toBe(5);
+      expect(result.pagination.currentPage).toBe(11); // floor(100/10) + 1
+    });
+
+    // DW-134: limit=1 → pages=totalCount
+    it('should return pages=totalCount when limit=1', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])).mockResolvedValueOnce(createMockCursor([7]));
+      const result = await queryService.searchQueries({}, 1, 0);
+      expect(result.pagination.total).toBe(7);
+      expect(result.pagination.pages).toBe(7);
+      expect(result.pagination.limit).toBe(1);
+    });
   });
 
   describe('setQueryCategory', () => {
@@ -898,12 +935,24 @@ describe('QueryService', () => {
     });
 
     it('should return conversations grouped with messages', async () => {
-      const result = await queryService.getConversationsForQuery('query-1');
+      const result = await queryService.getConversationsForQuery('query-1', 'user-1');
       expect(result).toHaveLength(2);
       expect(result[0].conversation._key).toBe('conv-1');
       expect(result[0].messages).toHaveLength(2);
       expect(result[1].conversation._key).toBe('conv-2');
       expect(result[1].messages).toHaveLength(1);
+      expect(queryService.chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('query-1', 'user-1');
+    });
+
+    it('should return empty array when query not found', async () => {
+      queryService.chatHistoryService.findMessagesForQuery.mockResolvedValue(null);
+      const result = await queryService.getConversationsForQuery('missing', 'user-1');
+      expect(result).toEqual([]);
+    });
+
+    it('should throw Access denied when caller does not own the query', async () => {
+      queryService.chatHistoryService.findMessagesForQuery.mockResolvedValue({ forbidden: true });
+      await expect(queryService.getConversationsForQuery('query-1', 'other-user')).rejects.toThrow('Access denied');
     });
 
     it('should throw when chatHistoryService is not set', async () => {
@@ -913,7 +962,7 @@ describe('QueryService', () => {
 
     it('should handle empty results', async () => {
       queryService.chatHistoryService.findMessagesForQuery.mockResolvedValueOnce([]);
-      const result = await queryService.getConversationsForQuery('query-1');
+      const result = await queryService.getConversationsForQuery('query-1', 'user-1');
       expect(result).toEqual([]);
     });
 
@@ -924,7 +973,7 @@ describe('QueryService', () => {
           message: null
         }
       ]);
-      const result = await queryService.getConversationsForQuery('query-1');
+      const result = await queryService.getConversationsForQuery('query-1', 'user-1');
       expect(result[0].messages).toHaveLength(0);
     });
   });

@@ -7,7 +7,7 @@
 | Backend (`gov-chat-backend`) | Jest | `jest.config.js` | `__tests__/` |
 | Frontend (`gov-chat-frontend`) | Jest | `jest.config.js` | `src/__tests__/` |
 | Document Repository | Jest | `jest.config.js` | `__tests__/` |
-| OPEA Services (`genie-ai-overlay`) | pytest | `pytest.ini` | `tests/` |
+| OPEA Services (`genie-ai-overlay`) | pytest | `pytest.ini` | `tests/` (mocked), `contracts/` (real `comps`) |
 | Mobile (`genie_ai_mobile`) | flutter_test | `pubspec.yaml` | `test/` |
 | E2E | Playwright | `playwright.config.js` | `tests/e2e/` |
 | Config Validation | Jest | `tests/config-validator/jest.config.js` | `tests/config-validator/` |
@@ -27,6 +27,10 @@ cd components/document-repository && npm test              # Document repository
 
 cd genie-ai-overlay && pytest                              # All OPEA tests
 cd genie-ai-overlay && pytest tests/test_retriever.py      # Specific test file
+cd genie-ai-overlay && pytest contracts/                   # Contract tests vs REAL comps (dev venv; in-image tests skip)
+# In-image contract run (real vendored comps, per module image):
+docker run --rm -v "$PWD/genie-ai-overlay/contracts":/contracts:ro \
+  --entrypoint sh <module-image> -c "cd /contracts && python -m pytest -p no:cacheprovider"
 
 # E2E tests (from project root)
 npm run test:e2e                                          # Playwright E2E suite
@@ -65,3 +69,4 @@ All test runners produce JUnit XML reports as CI artifacts. Pipeline blocks MR o
 - **Shared fixtures**: `genie-ai-overlay/tests/conftest.py` provides pytest fixtures for all OPEA services
 - **Mock infrastructure**: Fixtures mock the `comps` library (vendored at build time), ArangoDB, and external model endpoints
 - **Tracing tests**: `test_tracing_with_span.py`, `test_*_tracing.py` validate OTel span emission
+- **Contract suite (`contracts/`, real `comps`)**: runs INSIDE the built image against the real vendored `comps` — deliberately a SIBLING of `tests/`, because `tests/conftest.py` stubs `comps` in `sys.modules` (a parent conftest would contaminate any nested dir, and `pytest.ini` `testpaths = tests` would collect it into the mocked run). See `genie-ai-overlay/contracts/README.md`.

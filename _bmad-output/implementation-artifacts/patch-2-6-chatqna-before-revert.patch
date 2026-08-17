@@ -1,0 +1,229 @@
+.../chatqna/Dockerfile-chatqna_genie-ai            | 10 ++---
+ genie-ai-overlay/chatqna/genieai_chatqna.py        | 52 +++++++++++++++-------
+ genie-ai-overlay/contracts/_harness.py             | 23 ++++++----
+ .../contracts/test_contract_harness.py             |  7 ++-
+ .../contracts/test_contract_orchestrator_wire.py   | 29 +++++++-----
+ 5 files changed, 81 insertions(+), 40 deletions(-)
+
+--- Changes ---
+
+genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
+  @@ -1,7 +1,7 @@
+  -ARG OPEA_VERSION="v1.3"
+  +ARG OPEA_VERSION="v1.5"
+   FROM alpine/git:v2.52.0 AS opea_example_base
+   
+   ARG OPEA_REPO_URL
+  @@ -11,16 +11,16 @@ WORKDIR /src
+  -# This stage builds the missing 'opea/comps-base:v1.3' functionality from source.
+  +# This stage builds the missing 'opea/comps-base:v1.5' functionality from source.
+   ARG OPEA_COMPS_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+  -ARG OPEA_VERSION="v1.3" # Re-declare ARG for this stage
+  +ARG OPEA_VERSION="v1.5" # Re-declare ARG for this stage
+   FROM python:3.11-slim AS comps_base_builder
+   
+   # Install git so we can clone
+   RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
+   
+   ARG OPEA_COMPS_REPO_URL="https://github.com/opea-project/GenAIComps.git"
+  -ARG OPEA_VERSION="v1.3"
+  +ARG OPEA_VERSION="v1.5"
+   
+   # Clone the GenAIComps repo
+   WORKDIR /src/GenAIComps
+  @@ -45,7 +45,7 @@ WORKDIR /home/user
+  -ARG OPEA_VERSION="v1.3"
+  +ARG OPEA_VERSION="v1.5"
+   
+   # Switch back to root to create /app and install packages
+   USER root
+  +5 -5
+
+genie-ai-overlay/chatqna/genieai_chatqna.py
+  @@ -824,10 +824,17 @@ def get_tokenizer():
+  +    # Extract the bundled genie_params dict (bundled at the schedule() call site)
+  +    # with backward-compat fallback to individual kwargs (the mocked suite passes
+  +    # them flat, and older call sites may too).
+  +    _gp = kwargs.get("genie_params") or {}
+  +
+  +    def _gp_or_kw(field, default=None):
+  +        return _gp.get(field) if field in _gp else kwargs.get(field, default)
+   
+       if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
+           original_text = inputs["text"]
+  -        original_language = kwargs.get("original_language", "auto")
+  +        original_language = _gp_or_kw("original_language", "auto")
+   
+           if original_language and original_language.strip().upper() == "EN":
+               target_language = "English"
+  @@ -874,7 +881,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+  -        retriever_parameters = kwargs.get("retriever_parameters")
+  +        retriever_parameters = _gp_or_kw("retriever_parameters")
+           if retriever_parameters:
+               # inputs.update(retriever_parameters.model_dump())
+               safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
+  @@ -894,7 +901,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+  -        retrieval_context = kwargs.get("retrieval_context", {})
+  +        retrieval_context = _gp_or_kw("retrieval_context", {})
+           # Build filter labels (category singular/plural + service). Extracted to
+           # _build_filter_labels for testability.
+           _filter_labels = _build_filter_labels(retrieval_context)
+  @@ -905,7 +912,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+  -        reranker_parameters = kwargs.get("reranker_parameters")
+  +        reranker_parameters = _gp_or_kw("reranker_parameters")
+           if reranker_parameters:
+               inputs.update(reranker_parameters.model_dump())
+           if logflag:
+  @@ -917,10 +924,11 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+  -        # Get the full translated history *string* from kwargs
+  -        translated_history_string = kwargs.get("full_chat_history_string", "")
+  +        # Get the full translated history *string* from genie_params (bundled
+  +        # at schedule()) with backward-compat fallback to the flat kwarg.
+  +        translated_history_string = _gp_or_kw("full_chat_history_string", "")
+   
+  -        user_details = kwargs.get("user_details", {})
+  +        user_details = _gp_or_kw("user_details", {})
+   
+           user_context_string = ""
+   
+  @@ -936,7 +944,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+  -        original_language = kwargs.get("original_language")
+  +        original_language = _gp_or_kw("original_language")
+           if original_language and original_language.strip() == "EN":
+               system_instructions = (
+                   "\n\nMANDATORY: You MUST respond ONLY in English. "
+  @@ -1028,6 +1036,13 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
+  +    # Extract the bundled genie_params dict (bundled at the schedule() call site)
+  +    # with backward-compat fallback to individual kwargs.
+  +    _gp = kwargs.get("genie_params") or {}
+  +
+  +    def _gp_or_kw(field, default=None):
+  +        return _gp.get(field) if field in _gp else kwargs.get(field, default)
+  +
+       next_data = {}
+   
+       if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
+  @@ -1260,7 +1275,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
+  -            reranker_parameters = kwargs.get("reranker_parameters")
+  +            reranker_parameters = _gp_or_kw("reranker_parameters")
+               top_n = reranker_parameters.top_n if reranker_parameters else 1
+               original_docs = inputs.get("documents", [])
+   
+  @@ -2430,12 +2445,19 @@ class ChatQnAService:
+  -                    retriever_parameters=retriever_parameters,
+  -                    reranker_parameters=reranker_parameters,
+  -                    full_chat_history_string=translated_history_string,
+  -                    retrieval_context=retrieval_context,
+  -                    original_language=original_language,
+  -                    user_details=user_details,
+  +                    # Bundle the 6 GENIE custom kwargs into a single dict so the
+  +                    # orchestrator forwards ONE argument through schedule() instead
+  +                    # of six. The align_inputs/align_outputs handlers unpack from
+  +                    # genie_params with a fallback to individual kwargs (backward
+  +                    # compat for the mocked suite that still passes them flat).
+  +                    genie_params={
+  +                        "retriever_parameters": retriever_parameters,
+  +                        "reranker_parameters": reranker_parameters,
+  +                        "full_chat_history_string": translated_history_string,
+  +                        "retrieval_context": retrieval_context,
+  +                        "original_language": original_language,
+  +                        "user_details": user_details,
+  +                    },
+                   )
+                   _rag_duration = time.time() - _rag_start
+   
+  +37 -15
+
+genie-ai-overlay/contracts/_harness.py
+  @@ -31,7 +31,11 @@ import os
+  -# The six GENIE custom kwargs the orchestrator must forward to the handlers.
+  +# The six GENIE custom fields bundled into a single ``genie_params`` dict at the
+  +# schedule() call site. The orchestrator forwards ONE argument (genie_params)
+  +# through schedule() instead of six kwargs; the handlers unpack from the dict.
+  +# Listed here for assertions — the contract test asserts the full dict lands on
+  +# the handlers with the exact values sent.
+   GENIE_KWARGS = (
+       "retriever_parameters",
+       "reranker_parameters",
+  @@ -41,14 +45,17 @@ GENIE_KWARGS = (
+  -# Reference values the wire test sends — the handler must receive EXACTLY these.
+  +# Reference values the wire test sends — the handler must receive EXACTLY these
+  +# inside the genie_params dict (one kwarg at the schedule() call site).
+   WIRE_KWARGS = {
+  -    "retriever_parameters": {"k": 3, "fetch_k": 5},
+  -    "reranker_parameters": {"top_n": 3},
+  -    "full_chat_history_string": "previous turn",
+  -    "retrieval_context": {"categoryLabels": ["Tomato"]},
+  -    "original_language": "es",
+  -    "user_details": {"role": "citizen", "locale": "es"},
+  +    "genie_params": {
+  +        "retriever_parameters": {"k": 3, "fetch_k": 5},
+  +        "reranker_parameters": {"top_n": 3},
+  +        "full_chat_history_string": "previous turn",
+  +        "retrieval_context": {"categoryLabels": ["Tomato"]},
+  +        "original_language": "es",
+  +        "user_details": {"role": "citizen", "locale": "es"},
+  +    }
+   }
+   
+   
+  +15 -8
+
+genie-ai-overlay/contracts/test_contract_harness.py
+  @@ -181,6 +181,9 @@ def test_fake_session_returns_matched_payload():
+  -    # The 6 GENIE kwargs + exact wire values are the forwarding contract.
+  +    # The 6 GENIE fields are bundled into a single genie_params dict at the
+  +    # schedule() call site (one kwarg instead of six). The wire values live
+  +    # under WIRE_KWARGS["genie_params"] — the dict's keys must match GENIE_KWARGS.
+       assert len(_harness.GENIE_KWARGS) == 6
+  -    assert set(_harness.WIRE_KWARGS) == set(_harness.GENIE_KWARGS)
+  +    assert "genie_params" in _harness.WIRE_KWARGS
+  +    assert set(_harness.WIRE_KWARGS["genie_params"]) == set(_harness.GENIE_KWARGS)
+  +5 -2
+
+genie-ai-overlay/contracts/test_contract_orchestrator_wire.py
+  @@ -76,7 +76,12 @@ def _build_graph(comps):
+  -    """All 6 GENIE kwargs reach align_inputs/align_outputs with exact values."""
+  +    """genie_params dict (6 fields) reaches align_inputs/align_outputs with exact values.
+  +
+  +    The bundling (one dict instead of 6 kwargs at the schedule() call site)
+  +    makes the kwargs-drop failure class trivial to guard: one dict assertion
+  +    catches any of the 6 fields being silently dropped.
+  +    """
+       graph, _ = _build_graph(comps)
+       captured: dict[str, list[dict]] = {}
+   
+  @@ -111,22 +116,26 @@ def test_orchestrator_wire_kwargs_reach_handlers(comps, fake_http):
+  -    # The LLM-node input path (align_inputs) must have received all 6 kwargs
+  -    # with the exact values sent — on EVERY hop, not just the last one.
+  +    # The bundled genie_params dict must have arrived on EVERY hop (not just the
+  +    # last one — a drop on an intermediate hop is the failure class).
+  +    expected_gp = _harness.WIRE_KWARGS["genie_params"]
+       assert captured.get("align_inputs"), "align_inputs handler never invoked"
+       for hop, kwargs_snapshot in enumerate(captured["align_inputs"]):
+  -        for kwarg, expected in _harness.WIRE_KWARGS.items():
+  -            assert kwarg in kwargs_snapshot, f"{kwarg} dropped at align_inputs hop {hop}"
+  -            assert kwargs_snapshot[kwarg] == expected, (
+  -                f"{kwarg} value mutated at hop {hop}: got {kwargs_snapshot[kwarg]!r}, expected {expected!r}"
+  +        assert "genie_params" in kwargs_snapshot, f"genie_params dropped at align_inputs hop {hop}"
+  +        actual_gp = kwargs_snapshot["genie_params"]
+  +        for field, expected in expected_gp.items():
+  +            assert field in actual_gp, f"genie_params.{field} missing at align_inputs hop {hop}"
+  +            assert actual_gp[field] == expected, (
+  +                f"genie_params.{field} mutated at hop {hop}: got {actual_gp[field]!r}, expected {expected!r}"
+               )
+   
+       # The non-streaming completion path (align_outputs, orchestrator.py:384)
+  -    # also receives the kwargs — assert at least the two params dicts ride through.
+  +    # also receives genie_params — assert the two params dicts ride through.
+       assert captured.get("align_outputs"), "align_outputs handler never invoked"
+  -    for kwarg in ("retriever_parameters", "reranker_parameters"):
+  +    for field in ("retriever_parameters", "reranker_parameters"):
+           for hop, kwargs_snapshot in enumerate(captured["align_outputs"]):
+  -            assert kwarg in kwargs_snapshot, f"{kwarg} dropped at align_outputs hop {hop}"
+  +            assert "genie_params" in kwargs_snapshot, f"genie_params dropped at align_outputs hop {hop}"
+  +            assert field in kwargs_snapshot["genie_params"], f"genie_params.{field} missing at align_outputs hop {hop}"
+   
+   
+   def test_orchestrator_all_services_registered(comps):
+  +19 -10

@@ -1,6 +1,7 @@
 const AdminDashboardService = require('../services/admin-dashboard-service');
 const LogsService = require('../services/logs-service');
 const { logger, triggerLogRollover } = require('../shared-lib');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 const adminController = {
   async getSystemHealth(req, res) {
@@ -275,13 +276,11 @@ const adminController = {
       const adminDashboardService = new AdminDashboardService();
       await adminDashboardService.init();
       logger.info('Controller: Searching users');
-      const rawLimit = parseInt(req.query.limit || 20);
-      const rawOffset = parseInt(req.query.offset || 0);
       const options = {
         term: req.query.term || '',
         field: req.query.field || 'all',
-        limit: isNaN(rawLimit) ? 20 : rawLimit,
-        offset: isNaN(rawOffset) ? 0 : rawOffset
+        limit: parsePositiveInt(req.query.limit, 20, { min: 1, max: 100 }),
+        offset: parsePositiveInt(req.query.offset, 0, { min: 0 })
       };
       logger.debug(`User search options: ${JSON.stringify(options)}`);
       const searchResults = await adminDashboardService.searchUsers(options);

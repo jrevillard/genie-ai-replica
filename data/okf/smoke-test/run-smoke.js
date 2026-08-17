@@ -992,7 +992,7 @@ async function ingestPhase(db) {
   const conceptEntities = await aqlAll(
     'FOR v IN `' +
       OKF_GRAPH +
-      "_ENTITY` FILTER STARTS_WITH(v._key, 'c_') RETURN KEEP(v, ['concept_id','bundle_version'])"
+      "_ENTITY` FILTER STARTS_WITH(v._key, 'c_') RETURN KEEP(v, ['_key','concept_id','bundle_version'])"
   );
   conceptEntities.length >= EXPECTED_CONCEPTS
     ? pass(
@@ -1003,11 +1003,11 @@ async function ingestPhase(db) {
           ' c_ nodes)'
       )
     : fail('concept entity count: ' + conceptEntities.length + ' < ' + EXPECTED_CONCEPTS);
-  // G22 (NON-tautological): every concept edge must resolve to a concept ENTITY
-  // vertex in THIS repo — a cross-repo/missing target would point at a `_to`
-  // whose concept_id is absent from the c_ vertex set.
-  const conceptIds = new Set(conceptEntities.map((v) => v.concept_id));
-  const dangling = myEdges.filter((e) => !conceptIds.has(String(e._to).split('/').pop().replace(/^c_/, '')));
+  // G22 (NON-tautological): every concept edge's `_to` must equal an EXISTING
+  // concept ENTITY vertex `_id` in this repo — a cross-repo/dangling target
+  // would reference a vertex id absent from the set.
+  const vertexIds = new Set(conceptEntities.map((v) => OKF_GRAPH + '_ENTITY/' + v._key));
+  const dangling = myEdges.filter((e) => !vertexIds.has(String(e._to)));
   dangling.length === 0
     ? pass('edges: ZERO cross-repo / dangling concept edges (every _to resolves to a repo concept vertex — G22 held)')
     : fail('cross-repo/dangling edges: ' + JSON.stringify(dangling.slice(0, 3)));

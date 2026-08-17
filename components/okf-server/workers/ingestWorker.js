@@ -245,18 +245,27 @@ async function _processOneJob() {
  * Sweep orphans (test hook): OKF files docs whose okf_concepts_meta row is
  * gone (e.g. a partial bundle retract removed meta but left the files doc) —
  * retract via doc-repo (graph-aware since the G5 fix) and remove the doc.
+ *
+ * SAFETY (live-caught run 14): a GRACE WINDOW (default 1h) skips fresh docs —
+ * an in-flight ingest/write sequence must never be reaped mid-run, and the
+ * meta-row check is only trustworthy once the writer has had time to settle.
+ * Victims are logged IN THE MESSAGE STRING (the console log formatter strips
+ * structured metadata fields — a silent sweep is unauditable).
  */
 async function _sweepOnce() {
   const db = await getDb();
+  const graceMs = safeInt('OKF_INGEST_WORKER_SWEEP_GRACE_MS', 3600000);
   const orphans = await (
     await db.query(aql`
     FOR f IN files
       FILTER f.repo_id != null AND f.dataprep.status != 'Pending'
+      FILTER DATE_TIMESTAMP(f.uploaded_date) < DATE_NOW() - ${graceMs}
       FILTER LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == f.repo_id AND m.concept_id == SUBSTRING(f.originalFileName, 0, LENGTH(f.originalFileName) - 3) LIMIT 1 RETURN 1) == 0
       LIMIT 10
       RETURN KEEP(f, ['file_id', 'file_name', 'repo_id'])
   `)
   ).all();
+  const victims = [];
   let cleaned = 0;
   for (const f of orphans) {
     try {
@@ -264,16 +273,17 @@ async function _sweepOnce() {
     } catch (err) {
       const status = err && err.response && err.response.status;
       if (status !== 404 && status !== 500) {
-        logger.warn('Ingest worker sweep: retract failed', { file_id: f.file_id, error: err.message });
+        logger.warn(`Ingest worker sweep: retract failed for ${f.file_id} (${err.message})`);
         continue;
       }
       // already retracted / nothing to retract — still remove the doc below
     }
     await db.query(aql`FOR x IN files FILTER x.file_id == ${f.file_id} REMOVE x IN files`);
+    victims.push(f.file_name || f.file_id);
     cleaned += 1;
   }
-  if (cleaned > 0) logger.info('Ingest worker sweep cleaned orphans', { cleaned });
-  return { cleaned };
+  if (cleaned > 0) logger.info(`Ingest worker sweep cleaned ${cleaned} orphan(s): ${victims.join(', ')}`);
+  return { cleaned, victims };
 }
 
 /** One drain cycle (guarded against overlap — the timer never stacks). */

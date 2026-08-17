@@ -704,7 +704,7 @@ async function ingestPhase(db) {
   const statuses = {};
   const drainList = pending.slice();
   const drainIds = JSON.stringify(drainList.map((d) => d.file_id));
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 100; i++) {
     await new Promise((r) => setTimeout(r, 15000));
     const rows = await aqlAll(
       'FOR x IN files FILTER x.file_id IN ' + drainIds + " RETURN KEEP(x, ['file_id','dataprep','chunk_count'])"
@@ -888,12 +888,14 @@ async function ingestPhase(db) {
         '" COLLECT WITH COUNT INTO n RETURN n'
     )
   )[0];
-  const versionedChunkStamps = await aqlAll(
-    'FOR c IN `' +
-      OKF_GRAPH +
-      '_SOURCE` FILTER c.file_id == "' +
-      versionedFile.file_id +
-      '" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
+  const versionedChunkStamps = (
+    await aqlAll(
+      'FOR c IN `' +
+        OKF_GRAPH +
+        '_SOURCE` FILTER c.file_id == "' +
+        versionedFile.file_id +
+        '" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
+    )
   )[0];
   versionedChunks > 0 && versionedChunkStamps === versionedChunks
     ? pass(

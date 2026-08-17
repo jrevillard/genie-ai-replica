@@ -189,10 +189,10 @@ describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
 });
 
 describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
-  test('retracts + removes OKF files docs whose meta row is gone', async () => {
+  test('retracts + removes OKF files docs whose meta row is gone (victims logged)', async () => {
     programQueries([{ file_id: 'orf1', file_name: 'z.md', repo_id: REPO }], []);
     const res = await worker._sweepOnce();
-    expect(res).toEqual({ cleaned: 1 });
+    expect(res).toEqual({ cleaned: 1, victims: ['z.md'] });
     expect(authedAxios.post).toHaveBeenCalledWith(
       `http://document-repository:3001/api/files/orf1/retract`,
       {},
@@ -203,7 +203,7 @@ describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
   test('no orphans → no-op', async () => {
     programQueries([]);
     const res = await worker._sweepOnce();
-    expect(res).toEqual({ cleaned: 0 });
+    expect(res).toEqual({ cleaned: 0, victims: [] });
     expect(authedAxios.post).not.toHaveBeenCalled();
   });
 
@@ -211,7 +211,7 @@ describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
     programQueries([{ file_id: 'orf2', file_name: 'z.md', repo_id: REPO }], []);
     authedAxios.post.mockRejectedValue(Object.assign(new Error('503'), { response: { status: 503 } }));
     const res = await worker._sweepOnce();
-    expect(res).toEqual({ cleaned: 0 });
+    expect(res).toEqual({ cleaned: 0, victims: [] });
   });
 });
 

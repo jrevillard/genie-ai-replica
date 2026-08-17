@@ -3,7 +3,7 @@ baseline_commit: 194f6bd
 ---
 # Story 2.9.3: `_LINKS_TO` edge writer (within-repo validated) (G7, G22)
 
-Status: ready-for-dev
+Status: review
 
 Story key: `2-9-3-links-to-edge-writer-within-repo` | GitLab: #963
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
@@ -32,11 +32,11 @@ so that **traversal works and cross-repo links are never materialized** (G22).
 
 ## Tasks
 
-- [ ] T1 `services/edge-service.js` (AC 1) + unit tests
-- [ ] T2 4b links persistence (AC 2) + buildMetaDoc test
-- [ ] T3 Worker post-Ingested hook (AC 3) + unit test
-- [ ] T4 Smoke edge assertions (AC 5); live run to exit 0
-- [ ] T5 Suites (okf-server/doc-repo/overlay) + lint/format; close-out (sprint/#964/push)
+- [x] T1 `services/edge-service.js` (AC 1) + unit tests
+- [x] T2 4b links persistence (AC 2) + buildMetaDoc test
+- [x] T3 Worker post-Ingested hook (AC 3) + unit test
+- [x] T4 Smoke edge assertions (AC 5); live run to exit 0
+- [x] T5 Suites (okf-server/doc-repo/overlay) + lint/format; close-out (sprint/#964/push)
 
 ## Dev Notes
 

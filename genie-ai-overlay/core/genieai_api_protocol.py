@@ -200,6 +200,9 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         file_type: str | None = None,
         file_labels: list[str] | None = None,
         upload_date: str | None = None,
+        source_type: str | None = "file",
+        feed_id: str | None = None,
+        expires_at: int | None = None,
         files: Union[UploadFile, list[UploadFile]] | None = None,
         link_list: str | None = None,
         chunk_size: int | None = 1500,
@@ -247,3 +250,6 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self.file_type = file_type
         self.upload_date = upload_date
         self.file_labels = file_labels
+        self.source_type = source_type
+        self.feed_id = feed_id
+        self.expires_at = expires_at

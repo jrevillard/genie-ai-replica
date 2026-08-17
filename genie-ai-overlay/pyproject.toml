@@ -30,6 +30,7 @@ test = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
+    "feedparser>=6.0.11",
 ]
 
 # Overlay services are Docker-deployed, not pip-installed.

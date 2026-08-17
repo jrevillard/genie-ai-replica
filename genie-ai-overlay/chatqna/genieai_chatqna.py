@@ -1183,7 +1183,27 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # handle template
             received_prompt = data.get("initial_query", inputs.get("text", ""))
 
-            if str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
+            # FR17, FR19: Web search trigger & fusion
+            try:
+                max_score = (
+                    max([(d.get("metadata") or {}).get("score", 0.0) for d in retrieved_docs])
+                    if retrieved_docs
+                    else 0.0
+                )
+                if max_score < 0.70:
+                    logger.info("Triggering web search fallback due to low RAG confidence (%.2f < 0.70)", max_score)
+                    from workflows.tools.fusion import ResultFusionEngine
+                    from workflows.tools.web_search import SearxngBackend
+
+                    backend = SearxngBackend()
+                    web_results = backend.search_sync(received_prompt, num_results=3)
+
+                    fusion = ResultFusionEngine()
+                    retrieved_docs = fusion.fuse(retrieved_docs, web_results, tool_id="web_search")
+            except Exception as e:
+                logger.error("Web search integration failed: %s", e)
+
+            if not retrieved_docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
                 abstention_instructions = (
                     CHATQNA_ABSTENTION_INSTRUCTIONS
                     if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
@@ -1194,6 +1214,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                     )
                 )
                 received_prompt += abstention_instructions
+            else:
+                received_prompt += "".join(f"\n[Retrieved Document]: {doc.get('text', '')}" for doc in retrieved_docs)
 
             prompt = received_prompt
 
@@ -1292,6 +1314,26 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         #         prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
         # else:
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
+
+        # FR17, FR19: Web search trigger & fusion
+        try:
+            max_score = (
+                max([d.get("score", 0.0) for d in reranked_docs_with_scores]) if reranked_docs_with_scores else 0.0
+            )
+            if max_score < 0.70:
+                logger.info("Triggering web search fallback due to low RAG confidence (%.2f < 0.70)", max_score)
+                from workflows.tools.fusion import ResultFusionEngine
+                from workflows.tools.web_search import SearxngBackend
+
+                backend = SearxngBackend()
+                web_results = backend.search_sync(initial_query, num_results=3)
+
+                fusion = ResultFusionEngine()
+                reranked_docs_with_scores = fusion.fuse(reranked_docs_with_scores, web_results, tool_id="web_search")
+                # Update docs list for prompt
+                docs = [doc.get("text", "") for doc in reranked_docs_with_scores]
+        except Exception as e:
+            logger.error("Web search integration failed: %s", e)
 
         if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
             abstention_instructions = (
@@ -1571,6 +1613,21 @@ class ChatQnAService:
             logger.debug(f"display docs count: {len(display_docs)}, scores: {[d.get('score') for d in display_docs]}")
 
         for item in display_docs:
+            if item.get("is_tool_result"):
+                score = _calibrate_reranker_score(item.get("score", 0.0))
+                source_documents_formatted.append(
+                    {
+                        "document_id": item.get("id"),
+                        "document_name": item.get("tool_title", "Tool Result"),
+                        "url": item.get("tool_url", ""),
+                        "categoryLabels": [],
+                        "serviceLabels": [],
+                        "score": score,
+                    }
+                )
+                scores.append(score)
+                continue
+
             doc_id_by_orchestrator = item.get("id", "N/A")
             if doc_id_by_orchestrator not in file_id_pairs:
                 logger.warning(f"Warning: Document ID {doc_id_by_orchestrator} not found in file_id_pairs mapping.")

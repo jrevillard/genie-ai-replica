@@ -1,0 +1,24 @@
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "genie-ai-searxng-secret" # In production, this should be an env var
+search:
+  safe_search: 1 # 0=None, 1=Moderate, 2=Strict
+  autocomplete: ""
+  default_lang: "en-US"
+  formats:
+    - html
+    - json
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    timeout: 3.0
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: d
+    timeout: 3.0
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: w
+    timeout: 3.0

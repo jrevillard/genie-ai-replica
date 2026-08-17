@@ -739,6 +739,7 @@ build:frontend:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
@@ -762,6 +763,7 @@ scan:frontend:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
@@ -785,6 +787,7 @@ promote:frontend:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-frontend/**/*", ".gitlab-ci.yml"]
@@ -808,6 +811,7 @@ build:backend:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -831,6 +835,7 @@ scan:backend:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -854,6 +859,7 @@ promote:backend:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -877,6 +883,7 @@ build:db-migrations:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
@@ -900,6 +907,7 @@ scan:db-migrations:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
@@ -923,6 +931,7 @@ promote:db-migrations:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/gov-chat-backend/migrations/**/*", ".gitlab-ci.yml"]
@@ -946,6 +955,7 @@ build:document-repository:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -969,6 +979,7 @@ scan:document-repository:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -992,6 +1003,7 @@ promote:document-repository:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["components/document-repository/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
@@ -1015,6 +1027,7 @@ build:nginx:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
@@ -1038,6 +1051,7 @@ scan:nginx:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
@@ -1061,6 +1075,7 @@ promote:nginx:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/nginx/**/*", ".gitlab-ci.yml"]
@@ -1084,6 +1099,7 @@ build:kong-config:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
@@ -1107,6 +1123,7 @@ scan:kong-config:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
@@ -1130,6 +1147,7 @@ promote:kong-config:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["api-gateway-solution/new-config/**/*", ".gitlab-ci.yml"]
@@ -1153,6 +1171,7 @@ build:chatqna-server:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1176,6 +1195,7 @@ scan:chatqna-server:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1199,6 +1219,7 @@ promote:chatqna-server:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/chatqna/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1222,6 +1243,7 @@ build:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1264,6 +1286,7 @@ smoke:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1288,6 +1311,7 @@ scan:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1311,6 +1335,7 @@ promote:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1334,6 +1359,7 @@ build:retriever-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1357,6 +1383,7 @@ scan:retriever-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1380,6 +1407,7 @@ promote:retriever-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1403,6 +1431,7 @@ build:reranker:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1426,6 +1455,7 @@ scan:reranker:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1449,6 +1479,7 @@ promote:reranker:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1472,6 +1503,7 @@ build:embedding:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1495,6 +1527,7 @@ scan:embedding:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1518,6 +1551,7 @@ promote:embedding:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/embedding/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1541,6 +1575,7 @@ build:textgen:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1564,6 +1599,7 @@ scan:textgen:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1587,6 +1623,7 @@ promote:textgen:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/textgen/**/*", "genie-ai-overlay/core/**/*", "configs/ssl/**/*", ".gitlab-ci.yml"]
@@ -1610,6 +1647,7 @@ build:postgres-init:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
@@ -1633,6 +1671,7 @@ scan:postgres-init:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
@@ -1656,6 +1695,7 @@ promote:postgres-init:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/postgres/**/*", ".gitlab-ci.yml"]
@@ -1679,6 +1719,7 @@ build:keycloak:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1702,6 +1743,7 @@ scan:keycloak:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1725,6 +1767,7 @@ promote:keycloak:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1748,6 +1791,7 @@ build:keycloak-config:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1771,6 +1815,7 @@ scan:keycloak-config:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1794,6 +1839,7 @@ promote:keycloak-config:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["configs/keycloak/**/*", ".gitlab-ci.yml"]
@@ -1817,6 +1863,7 @@ build:tempo-proxy:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
@@ -1840,6 +1887,7 @@ scan:tempo-proxy:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
@@ -1863,6 +1911,7 @@ promote:tempo-proxy:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["tools/tempo-proxy/**/*", ".gitlab-ci.yml"]
@@ -2346,6 +2395,7 @@ verify:dataprep-lock:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/requirements.in", "genie-ai-overlay/dataprep/requirements.lock", "genie-ai-overlay/dataprep/scripts/*", ".gitlab-ci.yml"]

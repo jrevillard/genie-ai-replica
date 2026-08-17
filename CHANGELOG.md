@@ -7,28 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **Contextual Retrieval enabled by default:** Each ingested chunk now gets an LLM-generated document-context prefix that improves embedding quality (the document subject propagates through the vector). Adds one vLLM call per chunk at ingest time. Set `CONTEXTUAL_RETRIEVAL_ENABLED=false` to restore the previous behavior.
-
 ### Changed
 
 - **OPEA upgrade from v1.3 to v1.5:** All four OPEA overlay images (chatqna, dataprep, retriever, reranker) now build from OPEA v1.5. The upgrade absorbs 7.5 months of upstream bug fixes and dependency CVEs while preserving GENIE's RAG behavior (retrieval, reranking, labeling, contextual retrieval). Rollback: redeploy the previous v1.3-based image tags.
 - **Python 3.11:** Replaces Python 3.10 in all OPEA overlay images (matching OPEA v1.5's base). The dataprep image switched from CUDA/Ubuntu to `python:3.11-slim` (dataprep has no GPU assignment).
-- **Hash-pinned dependency locks:** All OPEA services (dataprep, retriever, reranker) now install from `requirements-cpu.txt` files compiled with `uv pip compile --generate-hashes`, verified by `--require-hashes` at build time. Builds are deterministic and supply-chain-pinned (every wheel's SHA256 is verified).
 - **Mobile client ID placeholders:** `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` in the `env` template changed from ITU-specific values to generic institutional placeholders (`genie-mobile-<institution>`, `com.<institution>.genieai`). Existing deployments unaffected.
 
 ### Fixed
 
-- **Query endpoint ownership validation:** Query-related endpoints now enforce userId ownership. A user can no longer access query data belonging to another user — the endpoint returns 404 for non-existent queries, 403 for queries owned by another user. (#DW-103)
-- **Backend input validation:** API endpoints now validate `limit` and `offset` query parameters with proper bounds checking (min/max constraints). Invalid values (negative, non-numeric) return the default instead of silently producing unexpected queries. (#DW-75, #DW-99, #DW-114, #DW-115)
+- **Query endpoint ownership validation:** Query-related endpoints now enforce userId ownership. A user can no longer access query data belonging to another user — the endpoint returns 404 for non-existent queries, 403 for queries owned by another user.
+- **Backend input validation:** API endpoints now validate `limit` and `offset` query parameters with proper bounds checking (min/max constraints). Invalid values (negative, non-numeric) return the default instead of silently producing unexpected queries.
 - **Analytics filters error handling:** The `filters` query parameter on the analytics endpoint now returns a proper 400 error with `INVALID_FILTERS_JSON` code when malformed JSON is provided, instead of crashing with an unhandled exception.
 - **Reranker index bounds:** Reranker now handles out-of-range TEI indices defensively — a buggy TEI response that returns fewer scores than documents no longer crashes with `IndexError`; the affected entry is skipped and the partial result is preserved.
 - **Docling device auto-detection:** When `DOCLING_DEVICE=cuda` is requested but no GPU is available (CPU-only deployment), the dataprep service now falls back to CPU with a visible warning instead of crashing at docling initialization.
 
 ### Security
 
-- **Horizontal privilege escalation prevented:** Query message endpoints now validate that the requesting user owns the queried resource. (#DW-103)
+- **Horizontal privilege escalation prevented:** Query message endpoints now validate that the requesting user owns the queried resource.
 
 ## [2.0.1] - 2026-08-03
 

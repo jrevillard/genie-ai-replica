@@ -34,7 +34,12 @@ RUN useradd -ms /bin/bash user
 RUN mkdir -p /home/user/comps && chown -R user:user /home/user
 
 # Copy the *contents* of the cloned 'comps' directory to the expected path
-RUN cp -R /src/GenAIComps/comps/. /home/user/comps/
+# Assert-on-patch guard: verify key files landed or the build fails (upstream
+# restructuring would otherwise ship a silently-broken image).
+RUN cp -R /src/GenAIComps/comps/. /home/user/comps/ && \
+    test -f /home/user/comps/cores/proto/api_protocol.py && \
+    test -s /home/user/comps/cores/proto/api_protocol.py || \
+    { echo "ASSERT-ON-PATCH GUARD FAILED: /home/user/comps/cores/proto/api_protocol.py missing or empty after cp — upstream restructured the comps layout"; exit 1; }
 
 # Set default user for this base
 USER user
@@ -84,7 +89,11 @@ COPY genie-ai-overlay/core/label_contract.py /app/core/label_contract.py
 
 # --- FIX: Copy the original api_protocol.py to /app to make it importable as top-level 'api_protocol' ---
 # This path '/home/user/comps/...' will now be correct
-RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py
+# Assert-on-patch guard: verify the copy landed or the build fails.
+RUN cp /home/user/comps/cores/proto/api_protocol.py /app/api_protocol.py && \
+    test -f /app/api_protocol.py && \
+    test -s /app/api_protocol.py || \
+    { echo "ASSERT-ON-PATCH GUARD FAILED: /app/api_protocol.py missing or empty after cp — upstream removed cores/proto/api_protocol.py"; exit 1; }
 
 # --- Copy to the correct path where comps is located (/home/user/comps) ---
 # This copies the hacked api_protocol.py and constants.py

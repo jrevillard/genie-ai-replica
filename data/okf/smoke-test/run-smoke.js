@@ -953,43 +953,59 @@ async function ingestPhase(db) {
     : fail('manifest v1 not intact: ' + JSON.stringify(manifest1Still));
 
   // ── (xii) _LINKS_TO EDGES (Story 2.9.3 — G7/G22) ──
-  // The worker wrote each concept's within-repo edges post-index. Assert the
-  // graph is now traversable: edges carry label/file_id/repo_id/bundle_version,
-  // both endpoints are IN this repo's ENTITY collection (zero cross-repo), and
-  // every bundle concept has an ENTITY vertex.
-  const edgeRows = await aqlAll(
+  // The worker wrote each concept's within-repo edges post-index. The per-repo
+  // graph ALSO carries dataprep's entity-extraction artifacts (numeric-key
+  // ENTITY/LINKS_TO, no bundle_version) — the assertions target THIS story's
+  // concept edges (the c_/e_ deterministic keys) so dataprep's noise can never
+  // mask or false-fail the concept-graph proof.
+  const myEdges = await aqlAll(
     'FOR e IN `' +
       OKF_GRAPH +
-      "_LINKS_TO` RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version'])"
+      "_LINKS_TO` FILTER STARTS_WITH(e._from, '" +
+      OKF_GRAPH +
+      "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version'])"
   );
-  edgeRows.length > 0
+  myEdges.length > 0
     ? pass(
         'edges: ' +
-          edgeRows.length +
-          ' _LINKS_TO edges written into ' +
+          myEdges.length +
+          ' CONCEPT _LINKS_TO edges written into ' +
           OKF_GRAPH +
-          '_LINKS_TO (the graph is traversable)'
+          '_LINKS_TO (the concept graph is traversable)'
       )
-    : fail("edges: ZERO _LINKS_TO edges (the worker's post-index edge write did not fire)");
-  const edgesWellFormed = edgeRows.every(
+    : fail("edges: ZERO concept edges (the worker's post-index edge write did not fire)");
+  const edgesWellFormed = myEdges.every(
     (e) =>
-      String(e._from).startsWith(OKF_GRAPH + '_ENTITY/') &&
-      String(e._to).startsWith(OKF_GRAPH + '_ENTITY/') &&
+      String(e._from).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
+      String(e._to).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
       typeof e.label === 'string' &&
-      e.repo_id === INGEST_REPO &&
-      e.bundle_version != null
+      e.repo_id === INGEST_REPO
   );
   edgesWellFormed
-    ? pass('edges: ALL carry label + file_id + repo_id + bundle_version (citation-pinned, well-formed)')
-    : fail('edges malformed: ' + JSON.stringify(edgeRows.slice(0, 3)));
-  const crossRepo = edgeRows.filter((e) => !String(e._from).startsWith(OKF_GRAPH + '_ENTITY/'));
+    ? pass('edges: ALL concept edges carry label + repo_id + within-repo c_ endpoints (well-formed)')
+    : fail('edges malformed: ' + JSON.stringify(myEdges.slice(0, 3)));
+  const versionedEdge = myEdges.some((e) => e.bundle_version === 1);
+  versionedEdge
+    ? pass("edges: the post-mint re-ingested concept's edges carry bundle_version=1 (citation-pinned)")
+    : fail('edges: no bundle_version=1 edge (the pre-mint drain writes null; the modified re-ingest should stamp 1)');
+  const crossRepo = myEdges.filter((e) => !String(e._from).startsWith(OKF_GRAPH + '_ENTITY/c_'));
   crossRepo.length === 0
-    ? pass('edges: ZERO cross-repo edges (G22 — within-repo validation held)')
+    ? pass('edges: ZERO cross-repo concept edges (G22 — within-repo validation held)')
     : fail('cross-repo edges materialized: ' + JSON.stringify(crossRepo.slice(0, 3)));
-  const entityCount = (await aqlAll('FOR v IN `' + OKF_GRAPH + '_ENTITY` COLLECT WITH COUNT INTO n RETURN n'))[0];
-  entityCount >= EXPECTED_CONCEPTS
-    ? pass('edges: ENTITY vertices exist for the ' + EXPECTED_CONCEPTS + ' bundle concepts (' + entityCount + ' total)')
-    : fail('entity count: ' + entityCount + ' < ' + EXPECTED_CONCEPTS);
+  const conceptEntities = await aqlAll(
+    'FOR v IN `' +
+      OKF_GRAPH +
+      "_ENTITY` FILTER STARTS_WITH(v._key, 'c_') RETURN KEEP(v, ['concept_id','bundle_version'])"
+  );
+  conceptEntities.length >= EXPECTED_CONCEPTS
+    ? pass(
+        'edges: concept ENTITY vertices exist for the ' +
+          EXPECTED_CONCEPTS +
+          ' bundle concepts (' +
+          conceptEntities.length +
+          ' c_ nodes)'
+      )
+    : fail('concept entity count: ' + conceptEntities.length + ' < ' + EXPECTED_CONCEPTS);
 
   // ── (viii) CHUNKS — the physical proof, per facility/graph ──
   // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph

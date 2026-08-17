@@ -3,7 +3,7 @@ baseline_commit: 225875b8d
 ---
 # Story 2.9.7: `okf_versions` + `mintVersion()` (G26)
 
-Status: review
+Status: done
 
 Story key: `2-9-7-okf-versions-mint-version-publish` | GitLab: #962
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
@@ -116,21 +116,33 @@ ADR-okf-031 (full), ADR-okf-005/030/032; PRD FR-11 (§4.3), §13 Q2 resolved; ep
 - genie-ai-overlay/tests/test_dataprep_graph_name.py — bundleVersion threading tests
 - data/okf/smoke-test/run-smoke.js — mint/threading/immutability phases + fixes (precedence, drain cap, version cleanup)
 
+## Dev Agent Record (review-fix pass, 2026-08-17)
+
+### Agent Model Used
+
+deepseek-v4-flash[1m] (code-review patch pass)
+
+### Review-fix evidence
+
+- **11/11 applied** (1 decision + 10 patch): D1 mint Pending-gate (DRAIN_IN_PROGRESS 409 — refusestos snapshot racing an in-flight drain; citation integrity); CRITICAL sweep orphan predicate now reads file_name (was never-persisted originalFileName — the run-14 mass-reap mechanism, now confirmed + fixed + the grace window kept as belt-and-braces); mint SELF-HEALING (manifest-first collision reconciles the counter from the ledger — the crashed-mint wedge is closed, MINT_RACE 409 now reachable never-raw); isNotFound structural via shared arango-errors; audit row carries version+tag; strict okf:v tag regex both strip+guard; route-param /^d+$/ (no more 1.9→1 or NaN 404s); dataprep strict-int chunk stamp (non-int = no stamp); smoke null-guards + the 4b meta-row version assert added; SWEEP_GRACE_MS 0 honored.
+- **Red-green:** new review tests written against the pre-patch code FAILED first (D1 gate, self-heal, MINT_RACE, structural-not-found, chunk-stamp) → all green after (okf-server 283/283, doc-repo 429/429, overlay 673/673; ESLint/Prettier/ruff clean).
+- **Run 15 (final live gate): REAL_EXIT_CODE=0 — 53 PASS / 0 FAIL.** Worker indexed all 6 meta rows (parsed→indexed + last_good_index_at); dedup fired (skipped_dedup=6, enqueued=0); mint v1 (publish, 6 concepts, stored canonical hashes, okf:v1, repo stamped); version threading VERIFIED on all three legs — files doc (bundle_version=1 + okf:v1 label), the re-written okf_concepts_meta row (4b), and ALL 3 new chunk docs (citation pinning real); mint v2 (crawl, D-V4) → list [v2,v1] + manifest v1 INTACT. **Run-14 failure (worker transition targeting the wrong concept via never-persisted originalFileName → D1 refused) fixed + closed.**
+
 ### Review Findings (2026-08-17, 3-layer adversarial review: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
 
 > The CRITICAL finding explains run 14 conclusively: the sweeper's orphan predicate reads `f.originalFileName` — a field NEVER persisted to files docs (doc-repo folds it into `file_name`) — so after the grace window every healthy OKF file is a false orphan and gets retracted (chunks physically deleted) + removed, 10/hour. The grace window only delayed it. All findings below are fix-before-done.
 
-- [ ] [Review][Decision] Mint racing a Pending drain breaks version-pinned citation integrity: a modified concept enqueued at v1 (values frozen on the files doc) drains AFTER a v2 mint whose manifest records the NEW hash → chunks stamped v1, manifest v2 holds their hash — a (repo,v1,concept) citation returns content v1's ledger cannot validate [ingest-service.js:226-229 vs version-service snapshot; no gate makes mint wait for the queue]
-- [ ] [Review][Patch] CRITICAL sweep predicate: `SUBSTRING(f.originalFileName,…)` — originalFileName is never persisted (metadataService builds file_name) → EVERY healthy OKF file becomes a false orphan after grace → retract deletes live chunks + files docs, 10/hour (run-14's killer, mechanism-confirmed); ALSO add defensive `uploaded_date` null guard (AQL null<number fails open) and the `concepts/`-prefix derivation variance [ingestWorker.js _sweepOnce AQL]
-- [ ] [Review][Patch] HIGH mint retry exhaustion: designed MINT_RACE 409 is unreachable — a second unique-collision throws the RAW Arango error → error handler renders 500 {error:409}; the unit test bakes in an impossible ordering [version-service.js:133-141,179]
-- [ ] [Review][Patch] HIGH non-atomic insert→counter-bump: a crash (or failed bump) between manifest save and repo update permanently wedges every future mint for that repo (same-N+1 collision forever); fix = reconcile on collision (repair the counter from the existing manifest / max bundle_version — self-healing; also neutralizes orphaned-manifest wedges from swallowed retract failures) [version-service.js:131-149]
-- [ ] [Review][Patch] HIGH isNotFound message-regex (`/not found|no match/i`) re-introduces exactly what arango-errors.js removed — infra outages (missing collection, gateway blips) masked as clean 404s; import isArangoNotFound [version-service.js:52-57 vs arango-errors.js:3-11]
-- [ ] [Review][Patch] MAJOR missing AC6 test categories: dataprep chunk-metadata-stamp pytest (drive the real metadata construction, not the patched-out request), doc-repo files-doc stamp unit (extractMetadata), and fix the test docstring overclaim ("→ chunk docs" while asserting only the request) [genie-ai-overlay tests + doc-repo tests]
-- [ ] [Review][Patch] MINOR `:bundle_version` route param via parseInt: `1.9` silently returns manifest 1 (wrong resource); `abc` → 404 "Version NaN" — strict `/^\d+$/` → 400 [repository-controller.js getRepoVersion]
-- [ ] [Review][Patch] MINOR mint audit row omits the minted version (writeAudit supports `entry.version`) — add version + trigger so audit can attribute a specific manifest [version-service.js:160-169]
-- [ ] [Review][Patch] MINOR okf:v label handling: strip `/^okf:v/i` is over-broad (a legitimate `okf:Vision` label is dropped) and the repo.okf_tag guard `startsWith('okf:v')` is under-broad ('okf:virus' passes) — use `/^okf:v\d+/` (strip) and `/^okf:v\d+$/` (guard) [ingest-service.js:233-246]
-- [ ] [Review][Patch] MINOR smoke: the versioned-file failure path dereferences `versionedFile.file_id` (TypeError crash instead of clean tally); also add the post-mint meta-row assertion (the changed concept's okf_concepts_meta row carries bundle_version=1 after the modified re-ingest — the 4b leg) and fix the misleading pass text [run-smoke.js]
-- [ ] [Review][Patch] MINOR `OKF_INGEST_WORKER_SWEEP_GRACE_MS=0` silently falls back to 1h (safeInt requires >0) — accept ≥0 for the grace var (0 = test/off) [ingestWorker.js safeInt usage]
+- [x] [Review][Decision] Mint racing a Pending drain breaks version-pinned citation integrity: a modified concept enqueued at v1 (values frozen on the files doc) drains AFTER a v2 mint whose manifest records the NEW hash → chunks stamped v1, manifest v2 holds their hash — a (repo,v1,concept) citation returns content v1's ledger cannot validate [ingest-service.js:226-229 vs version-service snapshot; no gate makes mint wait for the queue]
+- [x] [Review][Patch] CRITICAL sweep predicate: `SUBSTRING(f.originalFileName,…)` — originalFileName is never persisted (metadataService builds file_name) → EVERY healthy OKF file becomes a false orphan after grace → retract deletes live chunks + files docs, 10/hour (run-14's killer, mechanism-confirmed); ALSO add defensive `uploaded_date` null guard (AQL null<number fails open) and the `concepts/`-prefix derivation variance [ingestWorker.js _sweepOnce AQL]
+- [x] [Review][Patch] HIGH mint retry exhaustion: designed MINT_RACE 409 is unreachable — a second unique-collision throws the RAW Arango error → error handler renders 500 {error:409}; the unit test bakes in an impossible ordering [version-service.js:133-141,179]
+- [x] [Review][Patch] HIGH non-atomic insert→counter-bump: a crash (or failed bump) between manifest save and repo update permanently wedges every future mint for that repo (same-N+1 collision forever); fix = reconcile on collision (repair the counter from the existing manifest / max bundle_version — self-healing; also neutralizes orphaned-manifest wedges from swallowed retract failures) [version-service.js:131-149]
+- [x] [Review][Patch] HIGH isNotFound message-regex (`/not found|no match/i`) re-introduces exactly what arango-errors.js removed — infra outages (missing collection, gateway blips) masked as clean 404s; import isArangoNotFound [version-service.js:52-57 vs arango-errors.js:3-11]
+- [x] [Review][Patch] MAJOR missing AC6 test categories: dataprep chunk-metadata-stamp pytest (drive the real metadata construction, not the patched-out request), doc-repo files-doc stamp unit (extractMetadata), and fix the test docstring overclaim ("→ chunk docs" while asserting only the request) [genie-ai-overlay tests + doc-repo tests]
+- [x] [Review][Patch] MINOR `:bundle_version` route param via parseInt: `1.9` silently returns manifest 1 (wrong resource); `abc` → 404 "Version NaN" — strict `/^\d+$/` → 400 [repository-controller.js getRepoVersion]
+- [x] [Review][Patch] MINOR mint audit row omits the minted version (writeAudit supports `entry.version`) — add version + trigger so audit can attribute a specific manifest [version-service.js:160-169]
+- [x] [Review][Patch] MINOR okf:v label handling: strip `/^okf:v/i` is over-broad (a legitimate `okf:Vision` label is dropped) and the repo.okf_tag guard `startsWith('okf:v')` is under-broad ('okf:virus' passes) — use `/^okf:v\d+/` (strip) and `/^okf:v\d+$/` (guard) [ingest-service.js:233-246]
+- [x] [Review][Patch] MINOR smoke: the versioned-file failure path dereferences `versionedFile.file_id` (TypeError crash instead of clean tally); also add the post-mint meta-row assertion (the changed concept's okf_concepts_meta row carries bundle_version=1 after the modified re-ingest — the 4b leg) and fix the misleading pass text [run-smoke.js]
+- [x] [Review][Patch] MINOR `OKF_INGEST_WORKER_SWEEP_GRACE_MS=0` silently falls back to 1h (safeInt requires >0) — accept ≥0 for the grace var (0 = test/off) [ingestWorker.js safeInt usage]
 - [x] [Review][Defer] MAJOR publish-triggered mint has no PII/index-status gate (snapshots unscanned/failed/PII-hit concepts as "published") — publish preconditions are Story 4.3's contract (assertPiiClean integration); manifest already records index_status visibly
 - [x] [Review][Defer] MAJOR bundle_version is caller-forgeable at the doc-repo layer (Joi accepts any int; no derivation possible there; route is Admin+okf-service) — defense-in-depth needs a cross-service design (doc-repo cannot verify without registry access)
 - [x] [Review][Defer] MINOR empty-concept mint burns a version number (phantom empty release) — publish semantics owner is 4.3

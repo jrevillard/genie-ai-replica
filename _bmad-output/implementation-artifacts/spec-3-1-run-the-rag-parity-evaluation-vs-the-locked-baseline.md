@@ -118,3 +118,21 @@ context:
 **Manual checks (if no CLI):**
 - Inspect `rag-parity-v1.5.json` — verify `harness_sha` matches baseline, `stack` image digests are v1.5, `runs` count ≥3, all metrics within tolerance.
 - Inspect parity report narrative — verify explicit acknowledgment of `homes_agree:false` drift, label-filter probe results, abstention probe results.
+
+## Suggested Review Order
+
+**Parity Evidence**
+
+- v1.5 parity report with per-metric stats and tolerance comparison
+  [`rag-parity-v1.5.json:1`](rag-parity-v1.5.json#L1)
+
+- Locked v1.3 baseline for comparison
+  [`rag-baseline-v1.3.json:1`](rag-baseline-v1.3.json#L1)
+
+**Context & Tracking**
+
+- Epic 3 compiled context (goal, constraints, dependencies)
+  [`epic-3-context.md:1`](epic-3-context.md#L1)
+
+- Sprint status showing 3-1 done
+  [`sprint-status.yaml:69`](sprint-status.yaml#L69)

@@ -3,7 +3,7 @@ baseline_commit: 194f6bd
 ---
 # Story 2.9.3: `_LINKS_TO` edge writer (within-repo validated) (G7, G22)
 
-Status: review
+Status: done
 
 Story key: `2-9-3-links-to-edge-writer-within-repo` | GitLab: #963
 Epic: 2.9 (Write-side Orchestration) | Branch: `feat/okf-server`
@@ -64,17 +64,25 @@ Read-side traversal / neighbors API (Story 5.5) · edge labels in retrieval (Epi
 
 Epic 2.9.3; ADR-okf-021 (write path), ADR-okf-022 (D4 link handling), ADR-okf-028; PRD FR-7/FR-11; the 2.9.7 story (the threading + self-healing + smoke lessons).
 
+
+## Dev Agent Record — review-fix pass (2026-08-17)
+
+**8/8 patches applied.** Canonical concept_id (normalize concepts/ prefix — subdirectory bundles no longer lose edges), N→0 replace deletes stale edges, TARGET entity vertices ensured (no dangling), AC1 audit row, dedup targets, test+smoke hardening (non-tautological G22 via vertex-_id comparison, file_id assert).
+
+**Red-green:** review-fix tests (P1 canonicalization, P2 N→0, P3+P4 target-entity+audit, P5 dedup, P6 idempotent-upsert) written first → green; okf-server 296/296, doc-repo 429/429; lint/format clean.
+
+**Live gate (run 19): exit 0 — 58 PASS / 0 FAIL** (12 concept edges, well-formed, version-pinned, ZERO dangling per the corrected non-tautological G22 assertion, 6 ENTITY vertices). Honest iteration: run 18 exit 1 was a SMOKE-assertion bug (compared hash-derived keys to concept_id — data was always correct; verified safeKey hash == the _to), not a product defect.
 ### Review Findings (2026-08-17, 3-layer adversarial review: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
 
 > All three layers converged on a root cause: **`concept_id` is not canonical** — subdirectory bundles (`concepts/index.md`) store `concepts/index` in meta while the worker/links derive bare `index`, so the G22 set-check silently drops every edge and the worker's meta-read no-ops (the flat kenya bundle hides it). Plus three real correctness gaps around vertex/replace semantics.
 
-- [ ] [Review][Patch] HIGH concept_id canonicalization: normalize a leading `concepts/` prefix in the edge-service (source id, each link target, the repo set, AND the meta-read must match both forms) — subdirectory bundles currently lose 100% of edges + the worker's meta-read produces a phantom ENTITY [edge-service.js meta read + G22 set; root: parser preserves the directory segment]
-- [ ] [Review][Patch] HIGH empty-link-set replace leaks stale edges: the `links.length === 0` early-return skips the outgoing-edge cleanup — a concept whose last link is removed keeps its stale edge forever (N→0 transition) [edge-service.js:83-99]
-- [ ] [Review][Patch] HIGH dangling target vertices: only the SOURCE ENTITY is ensured — a link to a not-yet-drained or failed-ingest concept writes an edge whose `_to` vertex never exists (collections are edge-typed but NOT graph-bound → no referential integrity) [edge-service.js]
-- [ ] [Review][Patch] MEDIUM AC1 audit row missing: `repo.edges_written` (actor okf-worker) is specified in the MELT contract but never written [edge-service.js — no auditService require]
-- [ ] [Review][Patch] MINOR duplicate-link-target `written` inflation: deterministic key collapses two links to the same target; `written`/counter overcount, surviving label is last-write-wins [edge-service.js:422-448]
-- [ ] [Review][Patch] MINOR test gaps: no idempotent-ENTITY-upsert test; no target-entity assertion; no N→0 replace test; the replace test's cleanup is mocked to return the stale key regardless of the `_from` filter (never exercises overwrite/delete) [edge-service.test.js]
-- [ ] [Review][Patch] MINOR smoke: the "ZERO cross-repo" assertion is tautological (pre-filters to c_ then re-checks the same) and `file_id` is never asserted — tighten both [run-smoke.js edge phase]
-- [ ] [Review][Patch] MINOR `created_at` churns on re-index (overwrite full-replaces, resetting original creation time) [edge-service.js:151]
+- [x] [Review][Patch] HIGH concept_id canonicalization: normalize a leading `concepts/` prefix in the edge-service (source id, each link target, the repo set, AND the meta-read must match both forms) — subdirectory bundles currently lose 100% of edges + the worker's meta-read produces a phantom ENTITY [edge-service.js meta read + G22 set; root: parser preserves the directory segment]
+- [x] [Review][Patch] HIGH empty-link-set replace leaks stale edges: the `links.length === 0` early-return skips the outgoing-edge cleanup — a concept whose last link is removed keeps its stale edge forever (N→0 transition) [edge-service.js:83-99]
+- [x] [Review][Patch] HIGH dangling target vertices: only the SOURCE ENTITY is ensured — a link to a not-yet-drained or failed-ingest concept writes an edge whose `_to` vertex never exists (collections are edge-typed but NOT graph-bound → no referential integrity) [edge-service.js]
+- [x] [Review][Patch] MEDIUM AC1 audit row missing: `repo.edges_written` (actor okf-worker) is specified in the MELT contract but never written [edge-service.js — no auditService require]
+- [x] [Review][Patch] MINOR duplicate-link-target `written` inflation: deterministic key collapses two links to the same target; `written`/counter overcount, surviving label is last-write-wins [edge-service.js:422-448]
+- [x] [Review][Patch] MINOR test gaps: no idempotent-ENTITY-upsert test; no target-entity assertion; no N→0 replace test; the replace test's cleanup is mocked to return the stale key regardless of the `_from` filter (never exercises overwrite/delete) [edge-service.test.js]
+- [x] [Review][Patch] MINOR smoke: the "ZERO cross-repo" assertion is tautological (pre-filters to c_ then re-checks the same) and `file_id` is never asserted — tighten both [run-smoke.js edge phase]
+- [x] [Review][Patch] MINOR `created_at` churns on re-index (overwrite full-replaces, resetting original creation time) [edge-service.js:151]
 - [x] [Review][Defer] parser `conceptIdFromPath` does not strip a `concepts/` prefix (the ROOT of the canonicalization gap) — a parser/ingest-service change, out of 2.9.3's edge-writer scope (R5 additive-first; also touches the 2.9.4 worker transition)
 - [x] [Review][Defer] ENTITY `_key` is a sha256 hash (`c_<24hex>`), not the literal concept_id (AC1 letter) — self-consistent + idempotent, justified by ArangoDB `_key` constraints

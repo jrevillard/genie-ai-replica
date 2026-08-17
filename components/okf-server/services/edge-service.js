@@ -8,13 +8,16 @@
 //
 // G22 (within-repo): a link target that is NOT a concept of the same repo is
 // DROPPED + logged — a cross-repo edge can never be materialized. The graph's
-// `_LINKS_TO` is ENTITY→ENTITY, so each concept also gets an ENTITY vertex
-// (idempotent upsert) — otherwise the edges would dangle.
+// `_LINKS_TO` is ENTITY→ENTITY, so BOTH the source and every target concept get
+// an ENTITY vertex (idempotent upsert) — otherwise the edges would dangle (the
+// collections are edge-typed but NOT graph-bound, so ArangoDB enforces no
+// referential integrity).
 //
 // Replace semantics: re-indexing a changed concept replaces its outgoing edges
-// (delete-then-insert) so removed links vanish; unchanged concepts are dedup-
-// skipped by 4e and keep their edges. Deterministic keys make the write
-// idempotent. Never throws into the ingest path (the caller isolates).
+// (delete-then-insert) — INCLUDING the N→0 case where the last link is removed.
+// Unchanged concepts are dedup-skipped by 4e and keep their edges. Deterministic
+// keys make the write idempotent. Never throws into the ingest path (the caller
+// isolates).
 
 const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
@@ -22,6 +25,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
+const auditService = require('./audit-service');
 
 const meter = getMeter();
 const edgesCounter = meter.createCounter('okf_edges_written_total', {
@@ -40,6 +44,15 @@ async function getDb() {
   if (_db) return _db;
   _db = await dbService.getConnection('default');
   return _db;
+}
+
+/** REVIEW FIX (P1, 2026-08-17): canonical concept_id — a `concepts/` prefix is
+ * a legacy artifact that leaks in from subdirectory bundles; the worker and the
+ * link targets use the bare form. Normalize so the G22 set and the meta read
+ * compare like-for-like (never silently drop edges). */
+function normalizeConceptId(id) {
+  const s = String(id || '');
+  return s.replace(/^concepts\//, '');
 }
 
 /** ArangoDB-safe deterministic key: `/` is illegal in _key, so we hash. */
@@ -63,57 +76,45 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     const entityCol = db.collection(`${graph}_ENTITY`);
     const edgeCol = db.collection(`${graph}_LINKS_TO`);
     const dropped = [];
+    const cid = normalizeConceptId(concept_id);
 
-    // 1. The concept's persisted links (from the 4b meta doc).
+    // 1. The concept's persisted links (from the 4b meta doc). The meta read
+    // matches BOTH the bare and the `concepts/`-prefixed stored form so a
+    // subdirectory bundle never turns into a silent no-op.
     let meta = null;
     try {
       const rows = await (
         await db.query(
-          'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id == @concept_id LIMIT 1 ' +
+          'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND (m.concept_id == @cid OR m.concept_id == @prefixed) LIMIT 1 ' +
             'RETURN KEEP(m, ["concept_id", "title", "labels", "links", "bundle_version"])',
-          { repo_id, concept_id }
+          { repo_id, cid, prefixed: `concepts/${cid}` }
         )
       ).all();
       meta = rows[0] || null;
     } catch (err) {
-      logger.warn('Edge write: meta read failed', { repo_id, concept_id, error: err.message });
-      return { repo_id, concept_id, written: 0, dropped };
+      logger.warn('Edge write: meta read failed', { repo_id, concept_id: cid, error: err.message });
+      return { repo_id, concept_id: cid, written: 0, dropped };
     }
     const links = Array.isArray(meta && meta.links) ? meta.links.filter((l) => l && l.to_concept_id) : [];
-    if (links.length === 0) {
-      // Still ensure the ENTITY node exists (a concept with no links is a vertex).
-      const entityKey = safeKey('c', concept_id);
-      await entityCol
-        .save(
-          {
-            _key: entityKey,
-            concept_id,
-            repo_id,
-            title: (meta && meta.title) || null,
-            labels: (meta && meta.labels) || [],
-            bundle_version: (meta && meta.bundle_version) ?? ctx.bundle_version ?? null
-          },
-          { overwrite: true }
-        )
-        .catch((err) => logger.warn('Edge write: ENTITY upsert failed', { repo_id, concept_id, error: err.message }));
-      return { repo_id, concept_id, written: 0, dropped };
-    }
 
-    // 2. The repo's concept-id set — the within-repo boundary (G22).
+    // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
+    // so prefixed stored ids match bare link targets.
     let repoConceptIds = new Set();
     try {
       const rows = await (
         await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id RETURN m.concept_id', { repo_id })
       ).all();
-      repoConceptIds = new Set(rows);
+      repoConceptIds = new Set(rows.map(normalizeConceptId));
     } catch (err) {
       logger.warn('Edge write: repo concept-set read failed — dropping all links', { repo_id, error: err.message });
-      return { repo_id, concept_id, written: 0, dropped: links.map((l) => l.to_concept_id) };
+      return { repo_id, concept_id: cid, written: 0, dropped: links.map((l) => l.to_concept_id) };
     }
 
-    const sourceEntity = `${graph}_ENTITY/${safeKey('c', concept_id)}`;
-    // 3. Replace: remove this concept's existing outgoing edges (by key), then
-    // insert the current set — removed links vanish on re-index.
+    const sourceEntity = `${graph}_ENTITY/${safeKey('c', cid)}`;
+
+    // 3. Replace: remove this concept's existing outgoing edges (by key). Runs
+    // for EVERY transition — including N→0 (REVIEW FIX P2: the old code skipped
+    // cleanup when the new link set was empty, leaking stale edges).
     try {
       const existing = await (
         await db.query('FOR e IN `' + graph + '_LINKS_TO` FILTER e._from == @src RETURN e._key', { src: sourceEntity })
@@ -122,23 +123,69 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
         await edgeCol.remove(key).catch(() => {});
       }
     } catch (err) {
-      logger.warn('Edge write: outgoing-edge cleanup failed', { repo_id, concept_id, error: err.message });
+      logger.warn('Edge write: outgoing-edge cleanup failed', { repo_id, concept_id: cid, error: err.message });
     }
 
+    // 4. Ensure BOTH the source and every valid target ENTITY vertex exist
+    // (REVIEW FIX P3: the old code only ensured the source — a link to a
+    // not-yet-drained / failed concept dangled on a missing `_to`).
+    const ensureEntity = (id, title, labels, bundleVersion) =>
+      entityCol
+        .save(
+          {
+            _key: safeKey('c', normalizeConceptId(id)),
+            concept_id: normalizeConceptId(id),
+            repo_id,
+            title: title || null,
+            labels: labels || [],
+            bundle_version: bundleVersion ?? ctx.bundle_version ?? null
+          },
+          { overwrite: true }
+        )
+        .catch((err) =>
+          logger.warn('Edge write: ENTITY upsert failed', { repo_id, concept_id: id, error: err.message })
+        );
+    await ensureEntity(
+      cid,
+      (meta && meta.title) || null,
+      (meta && meta.labels) || [],
+      (meta && meta.bundle_version) ?? null
+    );
+
+    // 5. Write edges — dedup by target so a target listed twice is ONE edge and
+    // `written`/the counter are accurate (REVIEW FIX P5).
+    const seen = new Set();
     let written = 0;
     for (const link of links) {
-      if (!repoConceptIds.has(link.to_concept_id)) {
+      const target = normalizeConceptId(link.to_concept_id);
+      if (!repoConceptIds.has(target)) {
         dropped.push(link.to_concept_id);
         logger.info('Edge write: cross-repo/missing target dropped (G22)', {
           repo_id,
-          from: concept_id,
+          from: cid,
           to: link.to_concept_id
         });
         continue;
       }
-      const targetEntity = `${graph}_ENTITY/${safeKey('c', link.to_concept_id)}`;
-      const edgeKey = safeKey('e', `${concept_id}->${link.to_concept_id}`);
+      if (seen.has(target)) continue; // duplicate link to the same target
+      seen.add(target);
+      // Ensure the target ENTITY vertex exists (REVIEW FIX P3) — a link to a
+      // not-yet-drained / failed concept must never dangle. Title/labels are
+      // filled in by that concept's own write when it drains; this minimal
+      // upsert guarantees the vertex.
+      await ensureEntity(target, null, null, (meta && meta.bundle_version) ?? null);
+      const targetEntity = `${graph}_ENTITY/${safeKey('c', target)}`;
+      const edgeKey = safeKey('e', `${cid}->${target}`);
       try {
+        // Preserve the original created_at on overwrite (REVIEW FIX P8): read
+        // the existing edge first so re-indexing doesn't churn provenance.
+        let created_at = DateTime.now().toUTC().toISO();
+        try {
+          const existingEdge = await edgeCol.document(edgeKey);
+          if (existingEdge && existingEdge.created_at) created_at = existingEdge.created_at;
+        } catch {
+          /* first write */
+        }
         await edgeCol.save(
           {
             _key: edgeKey,
@@ -148,45 +195,34 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
             file_id: ctx.file_id || null,
             repo_id,
             bundle_version: (meta && meta.bundle_version) ?? ctx.bundle_version ?? null,
-            created_at: DateTime.now().toUTC().toISO()
+            created_at
           },
           { overwrite: true }
         );
         written += 1;
       } catch (err) {
-        logger.warn('Edge write: edge insert failed', {
-          repo_id,
-          concept_id,
-          to: link.to_concept_id,
-          error: err.message
-        });
+        logger.warn('Edge write: edge insert failed', { repo_id, concept_id: cid, to: target, error: err.message });
       }
-    }
-    // Ensure the source ENTITY vertex exists (edges may reference it).
-    try {
-      await entityCol
-        .save(
-          {
-            _key: safeKey('c', concept_id),
-            concept_id,
-            repo_id,
-            title: (meta && meta.title) || null,
-            labels: (meta && meta.labels) || [],
-            bundle_version: (meta && meta.bundle_version) ?? ctx.bundle_version ?? null
-          },
-          { overwrite: true }
-        )
-        .catch(() => {});
-    } catch {
-      /* entity upsert is best-effort */
     }
 
     span.setAttribute('okf.edges.written', written);
     span.setAttribute('okf.edges.dropped', dropped.length);
     recordEdges(written);
-    logger.info('OKF concept edges written', { repo_id, concept_id, written, dropped: dropped.length });
-    return { repo_id, concept_id, written, dropped };
+    logger.info('OKF concept edges written', { repo_id, concept_id: cid, written, dropped: dropped.length });
+    // REVIEW FIX P4: the MELT audit row (AC1).
+    auditService
+      .writeAudit({
+        actor: 'okf-worker',
+        action: 'repo.edges_written',
+        repo_id,
+        source_ip: null,
+        edges_written: written
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+    return { repo_id, concept_id: cid, written, dropped };
   });
 }
 
-module.exports = { writeRepoConceptEdges };
+module.exports = { writeRepoConceptEdges, normalizeConceptId };

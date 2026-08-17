@@ -12,6 +12,9 @@ jest.mock('../shared-lib/tracing', () => ({
 jest.mock('../shared-lib/metrics', () => ({
   getMeter: () => ({ createCounter: () => ({ add: jest.fn() }) })
 }));
+jest.mock('../services/audit-service', () => ({
+  writeAudit: jest.fn().mockResolvedValue(null)
+}));
 jest.mock('../shared-lib/db-connection-service', () => {
   const mockDb = require('./mocks/arango-mock').createMockDb();
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
@@ -148,5 +151,93 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
     mockDb.query.mockRejectedValueOnce(new Error('arango down'));
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result).toMatchObject({ written: 0, dropped: ['x'] });
+  });
+});
+
+describe('edgeService — review fixes (2026-08-17)', () => {
+  const { writeAudit } = require('../services/audit-service');
+
+  test('P1: canonicalizes concepts/-prefixed link targets against a prefixed stored set (no silent edge loss)', async () => {
+    // Stored concept ids are `concepts/`-prefixed (subdirectory bundle); link
+    // targets are bare (parser strips ./ from the href). Both must normalize.
+    mockDb.query.mockImplementationOnce(async () => ({
+      all: async () => [metaRow({ links: [{ to_concept_id: 'index', label: 'Index' }] })]
+    }));
+    mockDb.query.mockImplementationOnce(async () => ({
+      all: async () => ['concepts/service_directory', 'concepts/index']
+    }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [] })); // cleanup: no stale edges
+    const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
+    expect(result.written).toBe(1);
+    expect(result.dropped).toEqual([]);
+    // target ENTITY node written with the NORMALIZED concept_id
+    const entities = Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {});
+    expect(entities.some((v) => v.concept_id === 'index')).toBe(true);
+  });
+
+  test('P2: N→0 replace — removing the last link deletes the stale edge', async () => {
+    await mockDb.collection(`${GRAPH}_LINKS_TO`).save({
+      _key: 'e_stale',
+      _from: `${GRAPH}_ENTITY/c_source`,
+      _to: `${GRAPH}_ENTITY/c_target`,
+      label: 'Old',
+      repo_id: REPO
+    });
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [metaRow({ links: [] })] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => ['service_directory'] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => ['e_stale'] })); // cleanup finds the stale edge
+    const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
+    expect(result.written).toBe(0);
+    expect(Object.values(mockDb._stores[`${GRAPH}_LINKS_TO`] || {})).toHaveLength(0); // stale edge gone
+  });
+
+  test('P3+P4: ensures TARGET entity vertices + writes the audit row', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({
+      all: async () => [metaRow({ links: [{ to_concept_id: 'index', label: 'I' }] })]
+    }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => ['service_directory', 'index'] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [] }));
+    const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', { file_id: 'f1' });
+    expect(result.written).toBe(1);
+    const entities = Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {});
+    expect(entities.some((v) => v.concept_id === 'service_directory')).toBe(true); // source
+    expect(entities.some((v) => v.concept_id === 'index')).toBe(true); // target (P3)
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'repo.edges_written', actor: 'okf-worker', repo_id: REPO })
+    );
+  });
+
+  test('P5: duplicate link targets collapse to ONE edge and an accurate written count', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({
+      all: async () => [
+        metaRow({
+          links: [
+            { to_concept_id: 'index', label: 'First' },
+            { to_concept_id: 'index', label: 'Second' }
+          ]
+        })
+      ]
+    }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => ['service_directory', 'index'] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [] }));
+    const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
+    expect(result.written).toBe(1);
+    expect(Object.values(mockDb._stores[`${GRAPH}_LINKS_TO`] || {})).toHaveLength(1);
+  });
+
+  test('P6: idempotent ENTITY upsert — a second write keeps ONE source vertex (same _key)', async () => {
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [metaRow({ links: [] })] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => ['service_directory'] }));
+    await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
+    const keys = Object.keys(mockDb._stores[`${GRAPH}_ENTITY`] || {});
+    expect(keys).toHaveLength(1);
+    const before = keys[0];
+    // second write (same concept) — still one vertex, same key
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [metaRow({ links: [] })] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => ['service_directory'] }));
+    mockDb.query.mockImplementationOnce(async () => ({ all: async () => [] }));
+    await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
+    const keys2 = Object.keys(mockDb._stores[`${GRAPH}_ENTITY`] || {});
+    expect(keys2).toEqual([before]);
   });
 });

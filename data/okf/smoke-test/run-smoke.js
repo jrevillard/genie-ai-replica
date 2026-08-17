@@ -979,19 +979,16 @@ async function ingestPhase(db) {
       String(e._from).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
       String(e._to).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
       typeof e.label === 'string' &&
+      typeof e.file_id === 'string' &&
       e.repo_id === INGEST_REPO
   );
   edgesWellFormed
-    ? pass('edges: ALL concept edges carry label + repo_id + within-repo c_ endpoints (well-formed)')
+    ? pass('edges: ALL concept edges carry label + file_id + repo_id + within-repo c_ endpoints (well-formed)')
     : fail('edges malformed: ' + JSON.stringify(myEdges.slice(0, 3)));
   const versionedEdge = myEdges.some((e) => e.bundle_version === 1);
   versionedEdge
     ? pass("edges: the post-mint re-ingested concept's edges carry bundle_version=1 (citation-pinned)")
     : fail('edges: no bundle_version=1 edge (the pre-mint drain writes null; the modified re-ingest should stamp 1)');
-  const crossRepo = myEdges.filter((e) => !String(e._from).startsWith(OKF_GRAPH + '_ENTITY/c_'));
-  crossRepo.length === 0
-    ? pass('edges: ZERO cross-repo concept edges (G22 — within-repo validation held)')
-    : fail('cross-repo edges materialized: ' + JSON.stringify(crossRepo.slice(0, 3)));
   const conceptEntities = await aqlAll(
     'FOR v IN `' +
       OKF_GRAPH +
@@ -1006,6 +1003,14 @@ async function ingestPhase(db) {
           ' c_ nodes)'
       )
     : fail('concept entity count: ' + conceptEntities.length + ' < ' + EXPECTED_CONCEPTS);
+  // G22 (NON-tautological): every concept edge must resolve to a concept ENTITY
+  // vertex in THIS repo — a cross-repo/missing target would point at a `_to`
+  // whose concept_id is absent from the c_ vertex set.
+  const conceptIds = new Set(conceptEntities.map((v) => v.concept_id));
+  const dangling = myEdges.filter((e) => !conceptIds.has(String(e._to).split('/').pop().replace(/^c_/, '')));
+  dangling.length === 0
+    ? pass('edges: ZERO cross-repo / dangling concept edges (every _to resolves to a repo concept vertex — G22 held)')
+    : fail('cross-repo/dangling edges: ' + JSON.stringify(dangling.slice(0, 3)));
 
   // ── (viii) CHUNKS — the physical proof, per facility/graph ──
   // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph

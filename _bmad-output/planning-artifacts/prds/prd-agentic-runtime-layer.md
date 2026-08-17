@@ -19,9 +19,13 @@ This draft PRD builds on the PRD — GENIE.AI Agentic Enablement ( ../prd-agenti
 
 The objective is to introduce agentic capabilities that allow applications to execute multi-step, stateful, tool-using workflows rather than being limited to a single request/retrieval/generation interaction.
 
-The proposed GENIEAI Agent Runtime will provide a standardized and extensible execution environment for building and running AI agents while preserving compatibility with the existing GENIEAI/OPEA microservice infrastructure.
+The initial implementation is expected to leverage LangChain, LangGraph, and Deep Agents, while ensuring that GENIEAI’s public abstractions do not become unnecessarily coupled to any specific agent framework.
 
-The initial implementation is expected to leverage LangChain, LangGraph, and Deep Agents, while ensuring that GENIEAI’s public abstractions do not become unnecessarily coupled to any specific agent framework. The runtime should support simple use cases such as agentic RAG with web search while providing an extensible foundation for significantly more complex agents, workflows, memory architectures, tools, and integrations.
+GENIEAI shall distinguish between workflow definition and workflow execution. A declarative, framework-independent Workflow Definition, represented in YAML or JSON and validated against a defined schema, may describe application-level workflow semantics, user interactions, forms, fixed workflow steps, agent tasks, tools, human approvals, notifications, and outputs. The Workflow Definition should also provide metadata required by the GENIEAI frontend to render and monitor the workflow.
+
+The Workflow Definition shall be interpreted or compiled into an execution representation by the Agent Runtime. LangGraph is expected to provide the initial workflow execution implementation, but LangGraph-specific concepts should not unnecessarily become part of the public GENIEAI workflow contract.
+
+This separation allows GENIEAI to provide a consistent application and UI model while retaining flexibility in the underlying workflow execution technology.
 
 A central design objective is composability. GENIEAI should provide sensible defaults and high-level configuration for common use cases while allowing developers to replace or extend individual components when application requirements exceed the default capabilities.
 
@@ -109,6 +113,10 @@ The Agent Runtime shall:
 11. Support high-level configuration for common use cases.
 12. Provide extension mechanisms for advanced/custom use cases.
 13. Avoid unnecessary coupling between GENIEAI and a specific agent framework or storage technology.
+14. Provide a declarative, framework-independent workflow definition model.
+15. Allow workflow definitions to serve as a contract between the Agent Runtime and the GENIEAI frontend.
+16. Separate application/workflow definition from the underlying workflow execution engine.
+17. Support both structured workflows with predefined steps and more autonomous agent-driven workflows.
 
 ## 5.2 Secondary Goals
 
@@ -240,7 +248,25 @@ The architecture should avoid unnecessary LLM calls and uncontrolled accumulatio
 
 ⸻
 
-### P7. Observability by Design
+### P6. Declarative Workflow Definition
+
+GENIEAI shall provide a declarative workflow definition model that describes application-level workflow semantics independently of the underlying workflow execution technology.
+
+Workflow definitions may include user interactions, forms, fixed workflow steps, agent tasks, tools, human approvals, notifications, outputs and UI metadata.
+
+The definition should be representable using both human-friendly configuration formats such as YAML and machine-oriented representations such as JSON.
+
+⸻
+
+### P7. Separation of Workflow Definition and Execution
+
+The GENIEAI Workflow Definition shall be independent from the underlying workflow execution engine.
+
+The initial implementation may translate or interpret the Workflow Definition into a LangGraph execution graph. LangGraph-specific implementation details should not be exposed through the public GENIEAI workflow contract unless required by a deliberate extension mechanism.
+
+⸻
+
+### P8. Observability by Design
 
 Agent executions should be observable at the workflow, node, tool, model, memory, and error levels.
 
@@ -251,7 +277,7 @@ Observability should support both:
 
 ⸻
 
-### P8. Incremental Complexity
+### P9. Incremental Complexity
 
 The platform should make simple agentic applications easy to build without requiring developers to configure advanced capabilities.
 
@@ -308,6 +334,28 @@ The runtime shall support:
 
 ## 9.2 Workflow Orchestration
 
+### 9.2.1 Workflow Definition
+
+The platform shall support a declarative workflow definition model capable of representing:
+
+* workflow identity and version;
+* workflow metadata;
+* fixed application steps;
+* user-input steps;
+* forms and fields;
+* validation rules;
+* agent tasks;
+* tool invocations;
+* human approval steps;
+* notifications;
+* workflow outputs;
+* UI presentation metadata;
+* error/fallback behavior where appropriate.
+
+The definition should support both YAML and JSON representations, with a formal schema used for validation.
+
+### 9.2.2 Workflow Execution
+
 The runtime shall support workflows containing:
 
 * sequential execution;
@@ -319,9 +367,12 @@ The runtime shall support workflows containing:
 * deterministic processing;
 * intermediate results;
 * workflow checkpoints;
-* human-in-the-loop steps.
+* human-in-the-loop steps;
+* interruption and resumption.
 
-The initial workflow implementation is expected to use LangGraph.
+The initial workflow execution implementation is expected to use LangGraph.
+
+The Workflow Engine should consume the framework-independent Workflow Definition rather than requiring application developers to construct LangGraph graphs directly for standard use cases.
 
 ⸻
 
@@ -483,6 +534,11 @@ The proposed architecture is:
               │                           │
       Existing GENIEAI              Agent Runtime
         Services                         │
+              │                ┌─────────┴─────────┐
+              │         Workflow Definition     Agent Definition
+              │                └─────────┬─────────┘
+              │         Workflow Interpreter / Compiler
+              │                          │
               │                ┌─────────┼─────────┐
               │                │         │         │
               │             Workflow   Memory   Context
@@ -569,7 +625,73 @@ The GENIEAI architecture should avoid exposing LangGraph-specific concepts unnec
 
 ⸻
 
-## 11.4 State Manager
+## 11.4 Workflow Definition
+
+The Workflow Definition provides a framework-independent declarative representation of a GENIEAI application workflow.
+
+It may define:
+
+* application workflow structure;
+* user interaction;
+* forms and fields;
+* validation;
+* fixed process steps;
+* agent tasks;
+* tool invocations;
+* human approvals;
+* notifications and inbox interactions;
+* workflow outputs;
+* UI metadata;
+* workflow version.
+
+Workflow definitions should be represented in YAML and/or JSON and validated against a formal schema.
+
+The Workflow Definition should not expose LangGraph-specific concepts as part of its core model.
+
+⸻
+
+## 11.4 Workflow Definition Interpreter / Compiler
+
+The Interpreter/Compiler converts or maps the Workflow Definition into an executable representation.
+
+Responsibilities include:
+
+* validating workflow definitions;
+* resolving referenced agents and tools;
+* resolving configuration;
+* constructing the execution representation;
+* connecting workflow steps;
+* applying runtime policies;
+* exposing workflow metadata to the frontend.
+
+The initial implementation is expected to generate or construct LangGraph workflows.
+
+The implementation should avoid coupling the Workflow Definition itself to LangGraph.
+
+⸻
+
+## 11.5 Workflow Engine
+
+The Workflow Engine executes the runtime representation of a workflow.
+
+The initial implementation is expected to use LangGraph.
+
+The Workflow Engine is responsible for:
+
+* workflow execution;
+* state transitions;
+* conditional routing;
+* loops;
+* parallelism;
+* checkpoints;
+* interruption;
+* resumption;
+* error handling;
+* retries.
+
+The Workflow Engine should remain conceptually separate from the declarative Workflow Definition.
+
+## 11.6 State Manager
 
 The State Manager is responsible for execution state persistence and recovery.
 
@@ -585,7 +707,7 @@ The state schema should be defined by the workflow/agent rather than imposed glo
 
 ⸻
 
-## 11.5 Memory Manager
+## 11.7 Memory Manager
 
 The Memory Manager provides a common abstraction for persistent agent memory.
 
@@ -609,7 +731,7 @@ Memory Manager
 
 ⸻
 
-## 11.6 Context Manager
+## 11.8 Context Manager
 
 The Context Manager transforms available state and memory into the context provided to the LLM.
 
@@ -628,7 +750,7 @@ The Context Manager should be independently replaceable.
 
 ⸻
 
-## 11.7 Tool Manager
+## 11.9 Tool Manager
 
 The Tool Manager provides standardized tool registration and invocation.
 
@@ -644,7 +766,7 @@ It should manage:
 
 ⸻
 
-## 11.8 MCP Layer
+## 11.10 MCP Layer
 
 The MCP layer provides connectivity to external MCP servers and tools.
 
@@ -677,7 +799,7 @@ It should support:
 
 ⸻
 
-11.11 Execution Event and Observability Layer
+## 11.11 Execution Event and Observability Layer
 
 The runtime should emit structured events representing execution progress.
 
@@ -728,6 +850,22 @@ Research Agent
 
 The UI architecture should allow future visualization of more complex workflows without requiring major changes to the Agent Runtime.
 
+The Workflow Definition should provide sufficient metadata for the frontend to render workflow-specific user interactions without requiring knowledge of the underlying workflow execution engine.
+
+This may include:
+
+* form definitions;
+* field types;
+* validation requirements;
+* labels and descriptions;
+* workflow step titles;
+* progress information;
+* notification/inbox requirements;
+* human approval interfaces;
+* output presentation requirements.
+
+The frontend should additionally receive runtime execution events so that it can display the actual execution status of the workflow.
+
 ⸻
 
 # 13. Configuration and Customization
@@ -736,24 +874,72 @@ The Agent Runtime should support high-level configuration for common agents.
 
 Conceptually:
 
+Agent Configuration
+
 ```
 agent:
+
   name: research_assistant
+
 model:
+
   provider: vllm
+
   model: configured-model
-workflow:
-  engine: langgraph
-  definition: research_workflow
+
 memory:
+
   providers:
+
     - working
-    - arangodb
+
+    - arango
+
+    - okf
+
 context:
+
   strategy: default
+
 tools:
+
   - rag
+
   - web_search
+```
+
+Workflow Configuration
+
+```
+workflow:
+
+  id: research_workflow
+
+  version: "1.0"
+
+  steps:
+
+    - id: understand_request
+
+      type: agent_task
+
+      agent: research_assistant
+
+    - id: collect_evidence
+
+      type: agent_task
+
+      agent: research_assistant
+
+    - id: user_review
+
+      type: human_approval
+
+    - id: generate_report
+
+      type: agent_task
+
+      agent: research_assistant
 ```
 
 
@@ -921,6 +1107,8 @@ The initial Agent Runtime should be considered successful when:
 10. Developers can define custom workflows.
 11. The runtime continues to use the existing GENIEAI/OPEA service infrastructure.
 12. The architecture does not prevent future support for substantially more complex agentic applications.
+13. A workflow can be defined without requiring the developer to understand LangGraph-specific APIs.
+14. The same workflow definition provides sufficient information for both runtime execution and generation of the required GENIEAI user interface.
 
 ⸻
 

@@ -317,3 +317,30 @@ describe('concept-meta-service — real-arangojs no-match tolerance (smoke-test 
     await expect(conceptMeta.upsertConceptMeta('r1', parsedInput())).rejects.toThrow('connection reset');
   });
 });
+
+describe('concept-meta-service — Story 2.9.3 links persistence (4b additive)', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('persists the parser links on the meta doc (the edge writer reads them post-index)', async () => {
+    await conceptMeta.upsertConceptMeta(
+      'r1',
+      parsedInput({
+        links: [
+          { to_concept_id: 'concepts/funding', label: 'Funding' },
+          { to_concept_id: 'concepts/governance', label: 'Governance' }
+        ]
+      })
+    );
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.links).toEqual([
+      { to_concept_id: 'concepts/funding', label: 'Funding' },
+      { to_concept_id: 'concepts/governance', label: 'Governance' }
+    ]);
+  });
+
+  it('defaults links to [] when the parsed input has none (additive, never undefined-crash)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput({ links: undefined }));
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.links).toEqual([]);
+  });
+});

@@ -58,6 +58,16 @@ function createMockDb() {
         }
         delete stores[name];
         delete handles[name];
+      }),
+      remove: jest.fn(async (key) => {
+        if (!s[key]) {
+          const e = new Error('not found');
+          e.code = 404;
+          e.errorNum = 1204;
+          throw e;
+        }
+        delete s[key];
+        return { _key: key };
       })
     };
     handles[name] = handle;

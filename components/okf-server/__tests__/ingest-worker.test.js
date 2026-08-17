@@ -30,11 +30,15 @@ jest.mock('../services/service-token', () => ({
   authedAxios: { get: jest.fn(), post: jest.fn(async () => ({ status: 200 })) }
 }));
 jest.mock('../config', () => ({ documentRepository: { url: 'http://document-repository:3001' } }));
+jest.mock('../services/edge-service', () => ({
+  writeRepoConceptEdges: jest.fn(async () => ({ written: 0, dropped: [] }))
+}));
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const worker = require('../workers/ingestWorker');
 const conceptMeta = require('../services/concept-meta-service');
 const { authedAxios } = require('../services/service-token');
+const edgeService = require('../services/edge-service');
 
 const REPO = '99999999-9999-4999-8999-999999999999';
 
@@ -87,7 +91,7 @@ describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
     expect(authedAxios.post).not.toHaveBeenCalled();
   });
 
-  test('oldest Pending OKF doc → kick → Ingested → meta indexed + last_good_index_at', async () => {
+  test('oldest Pending OKF doc → kick → Ingested → meta indexed + edges written post-index', async () => {
     programQueries(
       [
         {
@@ -95,7 +99,8 @@ describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
           file_name: 'bad_concept.md',
           originalFileName: 'bad_concept.md',
           repo_id: REPO,
-          graph_name: `OKF_${REPO}`
+          graph_name: `OKF_${REPO}`,
+          bundle_version: 3
         }
       ],
       [{ dataprep: { status: 'Ingesting' }, chunk_count: 0 }], // poll 1: still working
@@ -116,6 +121,11 @@ describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
       { concept_id: 'bad_concept' },
       { patch: { index_status: 'indexed', last_good_index_at: expect.any(String) } }
     );
+    // Story 2.9.3: the post-index edge write is invoked with the drain context.
+    expect(edgeService.writeRepoConceptEdges).toHaveBeenCalledWith(REPO, 'bad_concept', {
+      file_id: 'f1',
+      bundle_version: 3
+    });
   });
 
   test('Ingestion Error → meta failed + last_error (dead-letter; recovery = re-ingest)', async () => {

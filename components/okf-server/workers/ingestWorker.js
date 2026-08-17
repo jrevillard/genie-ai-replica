@@ -24,6 +24,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const conceptMetaService = require('../services/concept-meta-service');
+const edgeService = require('../services/edge-service');
 const auditService = require('../services/audit-service');
 const { authedAxios } = require('../services/service-token');
 const config = require('../config');
@@ -90,7 +91,7 @@ async function claimNextJob(db) {
       FILTER f.dataprep.status == 'Pending' AND f.repo_id != null
       SORT f.uploaded_date ASC
       LIMIT 1
-      RETURN KEEP(f, ['file_id', 'file_name', 'originalFileName', 'repo_id', 'graph_name', 'uploaded_date'])
+      RETURN KEEP(f, ['file_id', 'file_name', 'originalFileName', 'repo_id', 'graph_name', 'uploaded_date', 'bundle_version'])
   `)
   ).all();
   return rows[0] || null;
@@ -177,10 +178,10 @@ async function _processOneJob() {
 
     // 3. Transition the meta row (worker-exclusive states; D-G).
     // REVIEW FIX (2026-08-17, run-14): `originalFileName` is NEVER persisted on
-// files docs (doc-repo folds it into `file_name`) — reading it first made the
-// transition target the WRONG concept_id (undefined→job.file_name is correct,
-// but the precedence hid it). file_name is the persisted truth, always.
-const conceptId = conceptIdFromFileName(job.file_name);
+    // files docs (doc-repo folds it into `file_name`) — reading it first made the
+    // transition target the WRONG concept_id (undefined→job.file_name is correct,
+    // but the precedence hid it). file_name is the persisted truth, always.
+    const conceptId = conceptIdFromFileName(job.file_name);
     const finish = (outcome, extra) => {
       recordJob(outcome);
       auditService
@@ -214,6 +215,21 @@ const conceptId = conceptIdFromFileName(job.file_name);
           });
         } catch (err) {
           logger.error('Ingest worker: indexed transition failed', {
+            repo_id: job.repo_id,
+            concept_id: conceptId,
+            error: err.message
+          });
+        }
+        // Story 2.9.3 (G7/G22): POST-INDEX, write the concept's within-repo
+        // edges into the per-repo graph. Isolated + best-effort — a failure
+        // here must never fail the drain (edges are a graph-refinement layer).
+        try {
+          await edgeService.writeRepoConceptEdges(job.repo_id, conceptId, {
+            file_id: job.file_id,
+            bundle_version: job.bundle_version
+          });
+        } catch (err) {
+          logger.error('Ingest worker: edge write failed (isolated)', {
             repo_id: job.repo_id,
             concept_id: conceptId,
             error: err.message

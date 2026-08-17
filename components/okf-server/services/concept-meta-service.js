@@ -99,6 +99,9 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
   const summary = (fm.description && String(fm.description).trim()) || (fm.summary && String(fm.summary).trim()) || '';
   const lifecycleStatus = LIFECYCLE_STATUSES.includes(p.status) ? p.status : 'draft'; // enum-validated
   const staleAfter = p.stale_after || null;
+  // Story 2.9.3 (AC2): persist the parser's structural links so the post-index
+  // edge writer can read them (additive — no consumer depends on the absence).
+  const links = Array.isArray(p.links) ? p.links : [];
   return {
     repo_id,
     concept_id: p.concept_id,
@@ -110,6 +113,7 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
     tags,
     labels,
     summary,
+    links,
     frontmatter: fm,
     content_hash: contentHash(p.body),
     lifecycle_status: lifecycleStatus,

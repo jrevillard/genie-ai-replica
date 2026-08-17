@@ -3,6 +3,8 @@ const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
 const { isValidDateStr } = require('./path-sanitizer');
+const { aql } = require('arangojs');
+const keycloakProxyService = require('./keycloak-proxy-service');
 
 class AdminDashboardService {
   constructor() {

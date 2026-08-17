@@ -579,6 +579,82 @@ module.exports = (adminService, logsService) => {
     }
   });
 
+  /**
+   * @swagger
+   * /api/admin/users/{userKey}/roles:
+   *   post:
+   *     summary: Assign a realm role to a user
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userKey
+   *         schema:
+   *           type: string
+   *         required: true
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               roleName:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Role assigned successfully
+   */
+  router.post('/users/:userKey/roles', async (req, res, next) => {
+    try {
+      const { userKey } = req.params;
+      const { roleName } = req.body;
+      if (!roleName) {
+        const err = new Error('roleName is required');
+        err.status = 400;
+        throw err;
+      }
+      const result = await adminDashboardService.assignUserRole(userKey, roleName);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/users/{userKey}/roles/{roleName}:
+   *   delete:
+   *     summary: Remove a realm role from a user
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userKey
+   *         schema:
+   *           type: string
+   *         required: true
+   *       - in: path
+   *         name: roleName
+   *         schema:
+   *           type: string
+   *         required: true
+   *     responses:
+   *       200:
+   *         description: Role removed successfully
+   */
+  router.delete('/users/:userKey/roles/:roleName', async (req, res, next) => {
+    try {
+      const { userKey, roleName } = req.params;
+      const result = await adminDashboardService.removeUserRole(userKey, roleName);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ============================================================
   // QUERY INSPECTOR ROUTES
   // ============================================================

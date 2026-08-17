@@ -235,6 +235,64 @@ const keycloakProxyService = {
     }
   },
 
+  /**
+   * Assign a realm role to a user
+   * @param {string} userKey - ArangoDB _key
+   * @param {string} roleName - Keycloak realm role name
+   */
+  async assignRealmRole(userKey, roleName) {
+    const uuid = await this._resolveKeycloakUserId(userKey);
+    logger.info('[KeycloakProxy] Assigning role to user', { userKey, uuid, roleName });
+
+    // 1. Get role ID
+    let role;
+    try {
+      role = await this._adminApiCall('GET', `/roles/${roleName}`);
+    } catch (error) {
+      if (error.status === 404) {
+        throw new Error(`Role ${roleName} not found in Keycloak`);
+      }
+      throw error;
+    }
+
+    // 2. Assign role
+    await this._adminApiCall('POST', `/users/${uuid}/role-mappings/realm`, [
+      {
+        id: role.id,
+        name: role.name
+      }
+    ]);
+  },
+
+  /**
+   * Remove a realm role from a user
+   * @param {string} userKey - ArangoDB _key
+   * @param {string} roleName - Keycloak realm role name
+   */
+  async removeRealmRole(userKey, roleName) {
+    const uuid = await this._resolveKeycloakUserId(userKey);
+    logger.info('[KeycloakProxy] Removing role from user', { userKey, uuid, roleName });
+
+    // 1. Get role ID
+    let role;
+    try {
+      role = await this._adminApiCall('GET', `/roles/${roleName}`);
+    } catch (error) {
+      if (error.status === 404) {
+        return; // Role doesn't exist, nothing to remove
+      }
+      throw error;
+    }
+
+    // 2. Remove role
+    await this._adminApiCall('DELETE', `/users/${uuid}/role-mappings/realm`, [
+      {
+        id: role.id,
+        name: role.name
+      }
+    ]);
+  },
+
   // ---------------------------------------------------------------------------
   // Public API — Self-service operations
   // ---------------------------------------------------------------------------

@@ -492,7 +492,13 @@ const ROUTE_CONFIGS = [
     keycloakAuth: true
   },
   { file: 'weather-routes', paths: ['/api/weather'], serviceName: 'weatherService', keycloakAuth: true },
-  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true }
+  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true },
+  {
+    file: 'tools-routes',
+    paths: ['/api/admin/tools'],
+    serviceName: 'toolsService',
+    keycloakAuth: true
+  }
 ];
 
 /**
@@ -1028,7 +1034,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, logsService;
-  let databaseOperationsService, weatherService, securityScanService, translationService;
+  let databaseOperationsService, weatherService, securityScanService, translationService, toolsService;
 
   const importService = async (name, servicePath) => {
     logger.info(`Importing service: ${name}`);
@@ -1062,6 +1068,7 @@ async function initializeServices() {
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
+    toolsService = await importService('ToolsService', './services/tools-service');
 
     // Initialize user provisioning schema (indexes, legacy cleanup)
     const userProvisioningService = require('./services/user-provisioning-service');
@@ -1079,7 +1086,8 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
-      translationService: { instance: translationService, name: 'TranslationService' }
+      translationService: { instance: translationService, name: 'TranslationService' },
+      toolsService: { instance: toolsService, name: 'ToolsService' }
     };
 
     // Validate services
@@ -1126,7 +1134,8 @@ async function initializeServices() {
       { service: services.logsService, name: 'LogsService' },
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
-      { service: services.translationService, name: 'TranslationService' }
+      { service: services.translationService, name: 'TranslationService' },
+      { service: services.toolsService, name: 'ToolsService' }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {

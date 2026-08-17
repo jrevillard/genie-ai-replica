@@ -1,6 +1,3 @@
-I have everything I need. Here is the full SST PRD markdown.
-
-```markdown
 ---
 title: PRD — GENIE.AI Server-Side Tools (SST)
 status: draft
@@ -8,7 +5,7 @@ created: 2026-08-07
 updated: 2026-08-07
 prd_key: server-side-tools
 initiative: agentic-enablement
-branch: feat/agentic-enablement
+branch: feat/sst
 parent_prd: ./prd-agentic-enablement.md
 builds_on:
   - "git feat/server-side-tools/prd: _bmad-output/planning-artifacts/prd.md (725 lines)"
@@ -16,7 +13,7 @@ builds_on:
   - "git feat/server-side-tools/prd: _bmad-output/planning-artifacts/epics.md (758 lines, Epics 1–4)"
   - ../team-briefing-agentic-enablement.md
   - ../OPEA-1.5-upgrade-analysis.md
-architecture: "consolidated into this PRD + the retained ADRs cited inline (SST Decisions 2,3,5–13,16)"
+architecture: ../architecture.md
 depends_on:
   - OPEA 1.3 → 1.5 overlay bump (foundational, ~3–5 engineer-days) — SST's Python tool implementations land on the bumped `genie-ai-overlay` base; the bump is a prerequisite, not a co-dependency.
   - GENIE workflows service (Sprint 24 #603 — custom LangChain Deep Agents on the OPEA `MicroService` harness) — SST's surviving value is delivered AS LangGraph tools consumed by this orchestrator; the workflows service is the host, SST is the payload.
@@ -29,6 +26,8 @@ authors: Genie.ai Dev
 > **Pillar spec of the [agentic-enablement initiative](./prd-agentic-enablement.md)** — SST delivers the agent's TOOLS + GOVERNANCE (web search, stream ingestor, governance), wired as LangGraph tools into the GENIE workflows service. The original Tool Registry/Executor/MCP-transport are subsumed by LangChain Deep Agents + the `mcp` SDK; see the umbrella PRD.
 
 > **Reduced-scope rewrite.** The original SST spec lived on `feat/server-side-tools/prd` as a four-epic, 17-ADR design centered on a standalone YAML Tool Registry + Tool Executor + `mcpo` transport. The August-2026 decision (see [decision doc](../OPEA-1.5-upgrade-analysis.md) + [team briefing](../team-briefing-agentic-enablement.md)) subsumed that foundation into LangGraph. This PRD supersedes the original's scope framing; it is the authoritative SST surface for the `feat/agentic-enablement` branch. The original spec is retained on its branch as a historical/auditable design record and is referenced, not duplicated, here. FR/NFR IDs below preserve the original spec's numbering for traceability to GitLab issues #696–#725 (to be re-baselined per §7).
+
+> **Read [§10 Errata](#10-errata--spec-vs-implemented-reality-2026-08-17) before implementing.** A code audit found that several surfaces this PRD says it extends do not exist in the codebase. §10 records the corrections; it is authoritative where it conflicts with §3/§4.
 
 ## 0. Document Purpose
 
@@ -345,13 +344,72 @@ SST lands **after** the OPEA 1.5 bump and **in parallel** with the agentic layer
 3. **Web search + #603 ordering.** Confirm governance + web search are hard blockers for #603 go-live (assumed yes — NFR6).
 4. **Mixed vector-search relevance baseline.** What curated-only baseline validates feed-chunk relevance before production? (Regression guard, §3.2.)
 5. **SearXNG AGPL review.** Confirm the legal sign-off that NFR26's "unmodified API-consumed" exception covers the SearXNG upstream image is recorded (it is the only AGPL component in SST).
-```
+6. **OQ-SST-6 — `source_type` enum ownership (cross-pillar).** SST writes `source_type:"feed"` (Decision 3) and OKF writes `source_type:"okf"` (OKF FR-6 / ADR-okf-010) into the **same** chunk-metadata field, which does not exist yet in either codebase. One agreed enum with one owner is required, or the two pillars will ship divergent vocabularies into a shared collection. Recommendation: whichever pillar lands first declares the enum in `genie-ai-overlay/core/`; the other extends it. **Gate:** Stream Ingestor start (§3.2).
+7. **OQ-SST-7 — SSE metadata contract ownership.** Citations (FR21/22/37/38), the degradation object (FR39), and `source_type` all have to cross a hardcoded field whitelist in the BFF (`components/gov-chat-backend/routes/query-routes.js:322-327`) that today forwards only `source_documents`, `confidence_score`, `is_grounded` — see E3. Extend it ad-hoc per field, or promote it to a declared contract shared by Vue and Flutter? **Gate:** Web Search start (§3.1).
+8. **OQ-SST-8 — tool-host boundary.** Confirm SST builds only the minimum `MicroService` shell needed to host and invoke governed tools, and that the LangGraph graphs, MCP client, ArangoDB checkpointer, and HITL gates remain #603's scope (decision doc Part B). **Gate:** Governance start (§3.3).
 
-This is the complete markdown for `_bmad-output/planning-artifacts/prds/prd-server-side-tools.md`.
+## 10. Errata — spec vs. implemented reality (2026-08-17)
 
-Key decisions reflected:
-- **Front-matter** matches OKF's schema (parent_prd points to `./prd-agentic-enablement.md` since both are in `prds/`; `builds_on` references the `feat/server-side-tools/prd` branch artifacts via `git <branch>:` prefixes; `depends_on` lists the OPEA 1.5 bump, the workflows service, and the reused stack).
-- **§2.2** lists every subsumed capability (YAML registry, Tool Executor/`ToolOrchestratorContract`, `mcpo`, canonical contract D14, progressive disclosure D15, agent-orchestrator contract D17) with a one-line "why subsumed" each — matching the decision framing exactly.
-- **§3.3 Governance** is flagged REFRAME and is explicitly the REFRAMED Decision 16 wrapped around LangGraph tool calls in `genie-ai-overlay/workflows/tools/governance.py`, with Presidio + BLOCK-on-failure (Decision 5) called out as the non-negotiable sovereignty guarantee.
-- **FR/NFR IDs and Decision numbers (D2, D3, D5–D13, D16)** are preserved verbatim from the extracted survivor detail for traceability to GitLab #696–#725.
-- **OQ-SST-1** surfaces the FR30 feed-config carve-out ambiguity flagged in the extraction notes for the umbrella PRD to resolve.
+Recorded after a code audit of `feat/sst`. Each item invalidates an FR or Decision **as literally written**; the capability intent is unchanged in every case. Where this section conflicts with §3/§4, this section is authoritative.
+
+### E1 — `DocumentManagement.vue` does not exist (affects FR35, §4)
+
+§4 says the admin surface integrates into "the existing `DocumentManagement.vue` / `AdminDashboard.vue`". There is no `DocumentManagement.vue`. Document Management is the `documents` tab **inside** `components/gov-chat-frontend/src/components/AdminDashboard.vue` — a single 4446-line Options-API component (tab list at `:1623-1632`, panel markup at `:389-572`).
+
+**Correction:** FR35 targets a new tab in `AdminDashboard.vue`. Follow the `components/gov-chat-frontend/src/components/admin/QueryInspector/` sub-tree pattern (the only precedent for extracting from the monolith) and create `components/admin/Tools/` rather than growing the 4446-line file. Note the design system (`components/ds/`) has no Checkbox, Toggle, or Table primitive.
+
+### E2 — there are no "static role checkboxes" to replace (affects Decision 9, §4)
+
+Decision 9 frames list-and-grant as replacing "static role checkboxes" in user management. No such control exists. Today `AdminDashboard.vue` renders roles as **read-only text** (`:1437`) and the Actions column is a **deep link out to the Keycloak admin console** (`:1440-1449`, `getUserManageUrl` `:2463-2468`).
+
+**Correction:** Decision 9 replaces the read-only role column plus external deep link with in-app grant/revoke. The search half already exists and is reusable (`services/admin-dashboard-service.js:1050-1173` → `GET admin/users/search`); only the grant/revoke half is net-new. Write to Keycloak via `services/keycloak-proxy-service.js:105` `_adminApiCall` — the `genie-proxy-client` service account **already holds `manage-users`** (`configs/keycloak/genie-realm.yaml:87-98`). Never write `roles` into ArangoDB: it is JIT-protected (`constants/jit-fields.js:19-36`), so grants take effect on next login, as Decision 9 already assumes.
+
+### E3 — citations and degradation cannot reach either client (affects FR21, FR22, FR37, FR38, FR39, NFR21)
+
+The BFF's SSE relay whitelists metadata fields by name at `components/gov-chat-backend/routes/query-routes.js:322-327`, forwarding exactly `source_documents`, `confidence_score`, `is_grounded`. Anything else the ChatQnA emits is silently dropped — `retrieval_confidence_score` is **already being lost this way today**. Vue and Flutter therefore cannot receive `source_type`, `retrieved_at`, or the degradation object no matter what §4's shared schema specifies.
+
+**Correction:** the whitelist is the single insertion point and must be extended **once**, not per consumer. Downstream, add the fields to the Vue SSE demux (`src/services/chatbotService.js:101-120`) and the Flutter parser (`lib/components/chat/chatbot_component.dart`, non-stream `:686-701`, stream `:474-607`). A new SSE *event type* (as opposed to a new metadata field) additionally needs a `case` in both demuxers. See OQ-SST-7.
+
+### E4 — `source_type` does not exist on chunks (affects Decision 3, FR28, NFR25)
+
+Decision 3 describes the feed-chunk fields as an additive extension of existing chunk metadata. The field set today is `{file_id, file_path, chunk_index, chunk_labels}` (plus `chunk_text` when `CONTEXTUAL_RETRIEVAL_ENABLED`), built at `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:1296-1307`. **There is no `source_type` anywhere in the repository**, so the "`"file"` default on existing chunks" in §3.2 has no current writer.
+
+**Correction:** the extension is still additive and non-breaking, but it is net-new on three surfaces — the dataprep writer, the retriever passthrough (`genie-ai-overlay/retriever/genieai_retriever_arangodb.py`), and backfill/default semantics for chunks already in the collection. Chunks are written indirectly via `langchain-arangodb`'s `add_graph_documents` (`:1176-1188`), so only the langchain `Document.metadata` payload is under our control. Cross-pillar collision with OKF: see OQ-SST-6.
+
+### E5 — rate limiting, circuit breaking, and Redis Streams are greenfield (affects Decisions 2 and 8, FR15, FR41, FR42, FR43, FR44)
+
+Decisions 2 and 8 read as configuration of existing infrastructure. None of it exists: no `XADD`/`XREADGROUP`/consumer groups anywhere, no `express-rate-limit`, no Kong `rate-limiting` plugin, no `opossum` or any circuit-breaker implementation in Python or Node. The only real Redis client in the repo is `components/gov-chat-backend/services/translation-service.js:3` (`ioredis`, plain get/setEx cache).
+
+**Correction:** treat all three as primitives to build, not integrations to configure. Useful prior art: `translation-service.js` for Redis client wiring and degrade-gracefully-when-Redis-is-down behaviour; `_run_guardrail` (`genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py:446-455`) for a fail-closed external call with an explicit timeout — the exact shape the governance BLOCK path needs. `genie-ai-overlay/tests/conftest.py:254` already provides an unused `mock_redis` factory fixture; reuse it rather than adding another.
+
+### E6 — FR47 has two insertion seams, not one (affects FR47, FR19, FR23, FR24)
+
+FR47 specifies one integration point "after ArangoDB retrieval and before LLM prompt construction". `genieai_chatqna.py` has **two** such seams, because five `add_remote_service*` pipeline shapes exist:
+
+- `:1307-1309` — the RERANK branch of `align_outputs`, where reranked docs become the LLM input string. The primary seam.
+- `:1183-1223` — the no-rerank mirror, used by `add_remote_service_without_rerank` (`:1840`).
+
+**Correction:** patching only `:1307` leaves a live pipeline shape without web search. Two further hazards in the same path: the abstention fork at `:1296` currently keys off `not docs` and must account for web results before abstaining (FR23); and `_assemble_source_documents` (`:1512-1660`) has an unconditional `continue` at `:1575-1582` for any document absent from `file_id_pairs`, which would **silently drop every web result** from the citation payload (FR21). The per-document dict is built at `:1629-1638`.
+
+### E7 — file and reference hygiene
+
+- This PRD was committed with an assistant's chat wrapper intact: a preamble line, a ` ```markdown ` fence wrapping the entire document, and trailing meta-commentary. Frontmatter began at line 4, so no tool could parse `prd_key`/`initiative`. **Fixed 2026-08-17.**
+- Frontmatter `branch:` said `feat/agentic-enablement`, which exists on no remote. **Corrected to `feat/sst`** (see commit `d6d6f934a` for why the pillar branch is not `feat/server-side-tools`). The umbrella PRD carries the same stale value.
+- The umbrella PRD's links to the OKF PRD and to `docs/adr/okf-001..016` are **broken on `feat/sst`** — those artifacts live on `origin/feat/okf-server`. Reading the initiative end-to-end requires both branches or a worktree.
+- The OKF PRD's `depends_on` and glossary still describe SST as providing "Registry / ToolExecutor / Stream-Ingestor / mcpo". It predates the August-2026 decision (§2.2) and needs reconciling by the OKF owner.
+
+### Confirmed-as-specified (audited, no correction needed)
+
+- `ServiceType.WEB_RETRIEVER = 14` already exists (`genie-ai-overlay/core/constants.py:31`) — available if web search ever becomes a graph node rather than an inline call.
+- Placement on CPU `genieai=true` nodes (Decision 11) matches the existing convention (`docker-compose.yaml`: frontend, redis-cache, backend, document-repository, arango all constrained there). Note the OPEA services currently sit on `gpu`, not `genieai`.
+- Flutter has no admin surface to remove — component directories are exactly `auth/`, `chat/`, `settings/`, `shared/`, `sidebar/`, `user/`. The §4 platform split holds as written.
+- Two PII-redaction key sets already exist for telemetry scrubbing (`components/gov-chat-backend/tracing-pii.js:4-6`, `genie-ai-overlay/tracing.py:39`). Decision 5's request-path redactor is correctly net-new, but should extend these rather than define a third vocabulary.
+
+### Implementation gates this errata adds
+
+| Item | Blocks | Owner |
+|---|---|---|
+| E3 whitelist extension | any citation or degradation FR reaching a client | BFF owner |
+| E4 `source_type` enum agreed with OKF | Stream Ingestor ingestion path | SST + OKF |
+| E6 both seams patched + abstention + `file_id` gap | Web Search production | ChatQnA owner (jrevillard) |
+| `ServiceType.WORKFLOW=101` from the OPEA 1.5 bump | tool-host shell only | jrevillard |

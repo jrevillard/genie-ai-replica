@@ -152,7 +152,7 @@ worktree_seed = [".bmad-loop/ci-status.sh"]  # seed ci-status.sh into story work
 # its declarative manifest (settings + out-of-process shell hooks) automatically.
 # A plugin that ships an in-process [python] module is NEVER imported or run
 # unless its name is listed here. Empty = no plugins trusted (today's behavior).
-enabled = []                 # e.g. ["unity", "my-lint-plugin"]
+enabled = ["story-track-dev", "story-track-review"]                 # e.g. ["unity", "my-lint-plugin"]
 
 # The game-engine layer is a plugin. For a Unity project whose dev/sweep cycle
 # drives a live Editor via an Editor MCP, enable it above and configure it here:
@@ -167,6 +167,8 @@ enabled = []                 # e.g. ["unity", "my-lint-plugin"]
 # (The legacy [engine] block still loads with a deprecation warning, folded into
 #  [plugins.unity] — migrate to [plugins] when convenient.)
 
+[plugins.story-track-review]
+story_track_review_blocking = true
 [tui]
 # low_frame_rate = true caps Textual to 15fps and disables animations (sets
 # TEXTUAL_FPS=15 / TEXTUAL_ANIMATIONS=none at launch). Fixes repaint tearing

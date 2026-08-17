@@ -613,7 +613,16 @@ export default {
     renderMarkdown(content) {
       try {
         const html = marked.parse(content);
-        return DOMPurify.sanitize(html);
+        let sanitized = DOMPurify.sanitize(html);
+        
+        // Render inline citations e.g. [1] or [1, 2]
+        sanitized = sanitized.replace(/\[((?:\d+)(?:,\s*(?:\d+))*)\]/g, (match, p1) => {
+          const numbers = p1.split(',').map(n => n.trim());
+          const links = numbers.map(n => `<a href="#" class="citation-link" data-citation="${n}" title="Source ${n}">[${n}]</a>`);
+          return `<sup class="citation">${links.join(', ')}</sup>`;
+        });
+        
+        return sanitized;
       } catch (error) {
         console.error('Error rendering Markdown:', error);
         return DOMPurify.sanitize(content);
@@ -1974,6 +1983,59 @@ export default {
 
 .message-bubble :deep(a:hover) {
   color: var(--accent-hover);
+}
+
+.message.bot-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+:deep(.citation) {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+  top: -0.5em;
+  margin: 0 0.1em;
+}
+
+:deep(.citation-link) {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+:deep(.citation-link:hover) {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+.confidence-score,
+.grounding-flag {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  background-color: var(--color-background-soft);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.grounding-flag {
+  color: var(--color-warning-dark, #b45309);
+  background-color: var(--color-warning-light, #fef3c7);
+  border-color: var(--color-warning-border, #fcd34d);
+}
+
+.feedback-trigger {
+  margin-left: auto;
 }
 
 .message-bubble :deep(code) {

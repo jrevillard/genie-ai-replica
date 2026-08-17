@@ -84,6 +84,12 @@
                   <span>{{ translate('admin.queryInspector', 'Query Inspector') }}</span>
                 </a>
               </li>
+              <li class="nav-item">
+                <router-link to="/admin/tools" class="nav-link">
+                  <i>🛠️</i>
+                  <span>{{ translate('admin.tools', 'Tools & Integrations') }}</span>
+                </router-link>
+              </li>
             </ul>
           </div>
 
@@ -1437,16 +1443,25 @@
                         <td>{{ user.email }}</td>
                         <td>{{ (user.roles || []).join(', ') || user.role }}</td>
                         <td>
-                          <DsButton
-                            variant="secondary"
-                            tag="a"
-                            small
-                            :href="getUserManageUrl(user)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {{ translate('admin.manage', 'Manage') }} →
-                          </DsButton>
+                          <div style="display: flex; gap: 8px;">
+                            <DsButton
+                              variant="secondary"
+                              small
+                              @click="openAssignRoleDialog(user)"
+                            >
+                              Roles
+                            </DsButton>
+                            <DsButton
+                              variant="secondary"
+                              tag="a"
+                              small
+                              :href="getUserManageUrl(user)"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {{ translate('admin.manage', 'Manage') }} →
+                            </DsButton>
+                          </div>
                         </td>
                       </tr>
                       <tr v-if="displayedUsers.length === 0">
@@ -1704,9 +1719,14 @@ export default {
       searchResults: [],
 
       userSearchTerm: '',
-      userSearchField: 'all',
+      isCreating: false,
       isSearchingUsers: false,
       userSearchResults: null,
+      roleDialog: {
+        visible: false,
+        user: null,
+      },
+      isManagingRole: null,
       userSearchTotal: 0,
       userSearchLimit: 20,
       userSearchOffset: 0,
@@ -2478,35 +2498,83 @@ export default {
           // This call specifically gets the active/new/total user counts
           const statsResponse = await adminDashboardService.getUserStats();
           if (statsResponse) {
-            this.userStats.totalUsers = statsResponse.totalUsers;
-            this.userStats.activeUsers = statsResponse.activeUsers;
-            this.userStats.newUsers = statsResponse.newUsers;
+            this.userStats = {
+              totalUsers: statsResponse.totalUsers,
+              activeUsers: statsResponse.activeUsers,
+              newUsers: statsResponse.newUsers
+            };
+            // Also prepopulate the first page from this payload if no term
+            this.userSearchResults = statsResponse.users || [];
+            this.userSearchTotal = statsResponse.totalUsers;
+            this.isSearchingUsers = false;
+            return;
           }
         }
 
-        // This call gets the paginated list of users for the table
-        const searchResponse = await adminDashboardService.searchUsers({
-          term: this.userSearchTerm,
-          field: this.userSearchField,
-          limit: this.userSearchLimit,
-          offset: this.userSearchOffset
-        });
-
-        if (searchResponse && searchResponse.data) {
-          this.userSearchResults = [...(searchResponse.data.users || [])];
-          this.userSearchTotal = searchResponse.data.total || 0;
-        } else {
-          this.userSearchResults = [];
-          this.userSearchTotal = 0;
-        }
+        const response = await adminDashboardService.searchUsers(
+          this.userSearchTerm,
+          this.userSearchField,
+          this.userSearchLimit,
+          this.userSearchOffset
+        );
+        this.userSearchResults = response.users;
+        this.userSearchTotal = response.total;
       } catch (error) {
-        console.error('Error searching users:', error);
-        this.showNotification(this.translate('admin.userSearch.error', 'Error searching users'), 'error');
-        this.userSearchResults = [];
-        this.userSearchTotal = 0;
+        console.error('Failed to search users:', error);
+        notificationService.error(this.translate('admin.userSearchError', 'Failed to search users'));
       } finally {
         this.isSearchingUsers = false;
       }
+    },
+
+    openAssignRoleDialog(user) {
+      this.roleDialog.user = user;
+      this.roleDialog.visible = true;
+    },
+
+    closeRoleDialog() {
+      this.roleDialog.visible = false;
+      this.roleDialog.user = null;
+    },
+
+    hasRole(user, role) {
+      if (!user) return false;
+      const roles = user.roles || (user.role ? [user.role] : []);
+      return roles.includes(role);
+    },
+
+    async toggleUserRole(role) {
+      const user = this.roleDialog.user;
+      if (!user) return;
+      this.isManagingRole = role;
+      
+      try {
+        const isAdding = !this.hasRole(user, role);
+        if (isAdding) {
+          await adminDashboardService.assignUserRole(user._key, role);
+          if (!user.roles) user.roles = [];
+          user.roles.push(role);
+        } else {
+          await adminDashboardService.removeUserRole(user._key, role);
+          if (user.roles) {
+            user.roles = user.roles.filter(r => r !== role);
+          }
+        }
+        notificationService.success(`Role ${role} ${isAdding ? 'assigned' : 'removed'}`);
+      } catch (e) {
+        console.error(e);
+        notificationService.error(`Failed to modify role: ${e.message}`);
+      } finally {
+        this.isManagingRole = null;
+      }
+    },
+
+    /**
+     * Start a new search (reset pagination)
+     */
+    handleUserSearch() {
+      this.userSearchOffset = 0;
+      this.searchUsers();
     },
 
     /**

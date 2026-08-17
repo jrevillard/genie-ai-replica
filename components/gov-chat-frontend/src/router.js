@@ -41,6 +41,12 @@ const routes = [
     meta: { requiresAuth: true, showSidebar: false }
   },
   {
+    path: '/admin/tools',
+    name: 'AdminTools',
+    component: () => import('@/views/AdminToolsView.vue'),
+    meta: { requiresAuth: true, showSidebar: false }
+  },
+  {
     path: '/',
     redirect: '/dashboard'
   },

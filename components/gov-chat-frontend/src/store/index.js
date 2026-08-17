@@ -2,12 +2,14 @@
 import { createStore } from 'vuex';
 import chatHistoryStore from './chatHistoryStore';
 import auth from './modules/auth';
+import tools from './modules/tools';
 
 // Create and export the store
 export default createStore({
   modules: {
     chatHistory: chatHistoryStore,
-    auth
+    auth,
+    tools
   },
 
   plugins: [

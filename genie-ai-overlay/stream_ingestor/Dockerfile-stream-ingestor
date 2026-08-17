@@ -1,0 +1,15 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY genie-ai-overlay/stream_ingestor/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+COPY genie-ai-overlay/stream_ingestor/genieai_stream_ingestor.py /app/genieai_stream_ingestor.py
+
+CMD ["python", "genieai_stream_ingestor.py"]

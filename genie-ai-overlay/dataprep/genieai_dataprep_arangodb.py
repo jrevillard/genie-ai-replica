@@ -1298,6 +1298,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         "file_path": input.storage_path,
                         "chunk_index": i,
                         "chunk_labels": doc["labels"],
+                        "source_type": getattr(input, "source_type", "file"),
+                        "feed_id": getattr(input, "feed_id", None),
+                        "expires_at": getattr(input, "expires_at", None),
                     }
                     if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
                         metadata["chunk_text"] = original_chunks[i]

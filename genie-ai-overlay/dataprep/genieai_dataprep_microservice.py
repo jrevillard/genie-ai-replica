@@ -114,6 +114,9 @@ class DocRepoIngestPayload(BaseModel):
     fileType: str
     fileLabels: list[str] | None = None
     storagePath: str | None = None
+    sourceType: str | None = "file"
+    feedId: str | None = None
+    expiresAt: int | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
@@ -203,6 +206,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # --- FIX: Pass Dynamic Chunking Configuration ---
                 chunk_size=CHUNK_SIZE,
                 chunk_overlap=CHUNK_OVERLAP,
+                source_type=payload.sourceType,
+                feed_id=payload.feedId,
+                expires_at=payload.expiresAt,
             )
 
             # --- Trigger Tracked Background Task ---

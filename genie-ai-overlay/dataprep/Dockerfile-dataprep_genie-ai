@@ -127,11 +127,12 @@ COPY genie-ai-overlay/core/genieai_api_protocol.py /app/comps/cores/proto/geniea
 # Assert-on-patch guards: each sed MUST land or the build fails (upstream
 # restructuring would otherwise ship a silently-broken image).
 RUN sed -i '/from integrations\./ { /arangodb/! s/^/#/ }' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
-    grep -q '^# from integrations\.' /app/comps/dataprep/src/opea_dataprep_microservice.py || \
-    { echo "ASSERT-ON-PATCH GUARD FAILED: non-arangodb integrations not commented out in opea_dataprep_microservice.py — upstream restructured the integration imports"; exit 1; } && \
-    sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
-    grep -q 'from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep' /app/comps/dataprep/src/opea_dataprep_microservice.py || \
-    { echo "ASSERT-ON-PATCH GUARD FAILED: Step J absolute-import rewrite did not land — upstream restructured the arangodb import path"; exit 1; }
+    (grep -q '^# from integrations\.' /app/comps/dataprep/src/opea_dataprep_microservice.py || \
+    { echo "ASSERT-ON-PATCH GUARD FAILED: non-arangodb integrations not commented out in opea_dataprep_microservice.py -- upstream restructured the integration imports"; exit 1; })
+
+RUN sed -i 's|from integrations.arangodb import OpeaArangoDataprep|from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep|' /app/comps/dataprep/src/opea_dataprep_microservice.py && \
+    (grep -q 'from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep' /app/comps/dataprep/src/opea_dataprep_microservice.py || \
+    { echo "ASSERT-ON-PATCH GUARD FAILED: Step J absolute-import rewrite did not land -- upstream restructured the arangodb import path"; exit 1; })
 
 # Step K: Create non-root user and set permissions
 RUN useradd -ms /bin/bash user && \

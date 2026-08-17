@@ -55,10 +55,16 @@ const enabled = () => (process.env.OKF_INGEST_WORKER_ENABLED || 'true').toLowerC
 const intervalMs = () => safeInt('OKF_INGEST_WORKER_INTERVAL_MS', DEFAULT_INTERVAL_MS);
 const sweepIntervalMs = () => safeInt('OKF_INGEST_WORKER_SWEEP_INTERVAL_MS', DEFAULT_SWEEP_INTERVAL_MS);
 
-/** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). */
+/** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
+ * variable 0 is a legitimate value (sweep immediately / test) — use
+ * safeIntOrZero for it (review fix P10: a 0 was silently replaced by 1h). */
 function safeInt(name, fallback) {
   const parsed = parseInt(process.env[name] || '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+function safeIntOrZero(name, fallback) {
+  const parsed = parseInt(process.env[name] || '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 /** concept_id from the files doc the orchestrator enqueued
@@ -254,13 +260,20 @@ async function _processOneJob() {
  */
 async function _sweepOnce() {
   const db = await getDb();
-  const graceMs = safeInt('OKF_INGEST_WORKER_SWEEP_GRACE_MS', 3600000);
+  const graceMs = safeIntOrZero('OKF_INGEST_WORKER_SWEEP_GRACE_MS', 3600000);
+  // REVIEW FIX (critical, 2026-08-17): the orphan predicate previously read
+  // `f.originalFileName` — a field that is NEVER persisted (doc-repo folds it
+  // into `file_name`), so EVERY healthy OKF file matched as an orphan and the
+  // sweep retracted live chunks after the grace window (run-14's killer). The
+  // concept_id derives from `file_name` (strip .md; match the parser's bare-id
+  // form) and the grace filter REQUIRES a valid uploaded_date (AQL null<number
+  // is TRUE — a missing date must fail safe, never fail open).
   const orphans = await (
     await db.query(aql`
     FOR f IN files
       FILTER f.repo_id != null AND f.dataprep.status != 'Pending'
-      FILTER DATE_TIMESTAMP(f.uploaded_date) < DATE_NOW() - ${graceMs}
-      FILTER LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == f.repo_id AND m.concept_id == SUBSTRING(f.originalFileName, 0, LENGTH(f.originalFileName) - 3) LIMIT 1 RETURN 1) == 0
+      FILTER f.uploaded_date != null AND f.uploaded_date != '' AND DATE_TIMESTAMP(f.uploaded_date) < DATE_NOW() - ${graceMs}
+      FILTER LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == f.repo_id AND m.concept_id == SUBSTRING(f.file_name, 0, LENGTH(f.file_name) - 3) LIMIT 1 RETURN 1) == 0
       LIMIT 10
       RETURN KEEP(f, ['file_id', 'file_name', 'repo_id'])
   `)

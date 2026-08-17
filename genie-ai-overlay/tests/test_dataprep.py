@@ -988,6 +988,48 @@ class TestIngestFileWithGuardrail:
         assert doc.metadata["file_id"] == "test-file-123"
         assert doc.metadata["chunk_index"] == 0
         assert doc.metadata["chunk_labels"] == ["Healthcare"]
+        # Story 2.9.7 (ADR-031) "threaded everywhere": a request WITHOUT a minted
+        # version gets NO bundle_version stamp (the MagicMock default would be a
+        # truthy mock — this asserts the strict None guard).
+        assert doc.metadata.get("bundle_version") is None
+
+    @pytest.mark.asyncio
+    async def test_document_metadata_bundle_version_stamped(self):
+        """Story 2.9.7: a request carrying bundle_version stamps EVERY chunk doc
+        with it (version-pinned citation), and the value rides the metadata."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        inp.bundle_version = 3  # the minted version (absent on the base mock)
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["A"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=[
+                    {"text": "chunk1", "labels": ["Healthcare"]},
+                    {"text": "chunk2", "labels": ["Healthcare"]},
+                ],
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 2
+        for doc in captured_docs:
+            assert doc.metadata["bundle_version"] == 3
 
     @pytest.mark.asyncio
     async def test_document_metadata_sequential_indices(self):

@@ -197,10 +197,16 @@ async function listRepoVersions(req, res, next) {
   }
 }
 
-/** Story 2.9.7 — one full manifest (read scope; version-pinned citation). */
+/** Story 2.9.7 — one full manifest (read scope; version-pinned citation).
+ * Strict integer-format param (review fix P6: parseInt silently prefix-parsed
+ * '1.9'→1 and turned 'abc'→NaN 404 — a client error must 400, never a wrong
+ * resource or an internal-key leak). */
 async function getRepoVersion(req, res, next) {
   try {
     const { repo_id, bundle_version } = req.params;
+    if (!/^\d+$/.test(String(bundle_version))) {
+      throw new ValidationError([`bundle_version must be a positive integer (got "${bundle_version}")`]);
+    }
     await repoService.getById(repo_id, { authz: authzForService(req) });
     res.status(200).json(await versionService.getVersion(repo_id, parseInt(bundle_version, 10)));
   } catch (err) {

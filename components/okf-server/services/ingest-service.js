@@ -228,22 +228,25 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   const aclLabels = deriveAclLabels(repo);
   const bundleVersion = repo.version != null ? repo.version : null;
   // Story 2.9.7 (D-V1): the minted version tag rides the labels so it is
-  // in-band on files docs + chunks (okf:v{N} — strip caller attempts at the
-  // okf: prefix too: the tag is derived, never caller-supplied).
-  const okfTag = typeof repo.okf_tag === 'string' && repo.okf_tag.startsWith('okf:v') ? repo.okf_tag : null;
+  // in-band on files docs + chunks. Review fix P9: the guard is STRICT —
+  // `/^okf:v\d+$/` — so a corrupted repo.okf_tag ('okf:virus') is never
+  // trusted, and only an actual minted tag is appended.
+  const okfTag = typeof repo.okf_tag === 'string' && /^okf:v\d+$/.test(repo.okf_tag) ? repo.okf_tag : null;
 
   // Caller labels are appended AFTER the ACL set — but an ACL-prefixed caller
   // label would re-scope the concept, so it is stripped + warned (sole
-  // injector invariant; review fix).
+  // injector invariant; review fix). The version-tag strip is equally strict:
+  // only an actual minted-shaped `okf:v<N>` label is reserved (a steward's
+  // 'okf:Vision' hierarchy label is NOT a spoof).
   const rawCallerLabels = Array.isArray(input && input.labels) ? input.labels.filter((l) => typeof l === 'string') : [];
-  const strippedLabels = rawCallerLabels.filter((l) => ACL_LABEL_RE.test(l) || /^okf:v/i.test(l));
+  const strippedLabels = rawCallerLabels.filter((l) => ACL_LABEL_RE.test(l) || /^okf:v\d+/i.test(l));
   if (strippedLabels.length > 0) {
     logger.warn('Caller-supplied ACL/version-tag labels stripped (sole-injector invariant)', {
       repo_id,
       stripped: strippedLabels
     });
   }
-  const callerLabels = rawCallerLabels.filter((l) => !ACL_LABEL_RE.test(l) && !/^okf:v/i.test(l));
+  const callerLabels = rawCallerLabels.filter((l) => !ACL_LABEL_RE.test(l) && !/^okf:v\d+/i.test(l));
   const labels = [...aclLabels, ...callerLabels, ...(okfTag ? [okfTag] : [])]; // ACL set FIRST, version tag LAST
 
   // Gather concept inputs: a bundle ZIP (the 2.9.5 contract — server-side

@@ -444,3 +444,10 @@ Items deferred during code reviews. Revisit when the related component is next m
 - Double repo fetch per ingest (route gate + service fetch) — deliberate, documented.
 - doc-repo ingest-bundle swagger still says Admin-only (route now allows okf-service).
 - repo.ingest audit row carries no outcome totals (accepted/partial not distinguishable in audit).
+
+## Deferred from: code review of 2-9-7-okf-versions-mint-version-publish (2026-08-17)
+
+- **Publish-triggered mint lacks PII/index-status gate** (snapshots unscanned/failed/PII-hit concepts as a "published" version) — publish preconditions belong to Story 4.3 (lifecycle) which should call assertPiiClean before trigger='publish' mints; the manifest already records per-concept index_status visibly. Files: components/okf-server/services/version-service.js (snapshotConcepts), repository-controller.js mintRepoVersion.
+- **bundle_version caller-forgeable at doc-repo** (ingest-bundle Joi accepts any positive int; doc-repo cannot derive/verify the minted version without registry access; route already restricted to Admin+okf-service) — cross-service integrity design needed (e.g. okf-server-signed mint tokens) if the threat model includes compromised in-network callers. Files: components/document-repository/src/controllers/fileController.js (bundleIngest).
+- **Empty-concept mint burns a version number** (a mint over a repo with zero concepts creates a phantom empty manifest and bumps the counter) — decide with publish semantics in Story 4.3 (refuse-empty vs allow-empty). Files: version-service.js snapshotConcepts/mintVersion.
+- **Sweep removes files docs on retract-500** (transient dataprep/doc-repo failures orphan graph chunks by destroying the only retraction record; "already retracted" also maps to 500 so a naive keep-on-500 loops) — needs doc-repo to distinguish already-retracted (2xx idempotent) from failure. Files: ingestWorker.js _sweepOnce, document-repository fileController._retractFileById.

@@ -863,40 +863,69 @@ async function ingestPhase(db) {
         "' AND f.bundle_version == 1 SORT f.uploaded_date DESC LIMIT 1 RETURN KEEP(f, ['file_id','file_name','bundle_version','labels','dataprep'])"
     )
   )[0];
-  versionedFile && versionedFile.file_name === 'service_directory.md' && (versionedFile.labels || []).includes('okf:v1')
+  const versionedOk =
+    versionedFile &&
+    versionedFile.file_name === 'service_directory.md' &&
+    (versionedFile.labels || []).includes('okf:v1');
+  versionedOk
     ? pass('version threading: files doc carries bundle_version=1 + the okf:v1 label (sole-injector tag)')
     : fail('versioned files doc: ' + JSON.stringify(versionedFile));
+  // The re-written okf_concepts_meta row must ALSO carry the new version (the
+  // 4b leg — review fix P8: the files doc and chunks are asserted, the meta
+  // row was not; the "stamps v1" pass text now names the actual actor).
+  const versionedMetaRow = versionedFile
+    ? (
+        await aqlAll(
+          "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+            INGEST_REPO +
+            "' AND m.concept_id == '" +
+            versionedFile.file_name.replace(/\.md$/, '') +
+            "' RETURN KEEP(m, ['concept_id', 'bundle_version', 'index_status'])"
+        )
+      )[0]
+    : null;
+  versionedMetaRow && versionedMetaRow.bundle_version === 1 && versionedMetaRow.index_status === 'indexed'
+    ? pass(
+        'version threading: the re-written okf_concepts_meta row carries bundle_version=1 (4b leg — re-ingest threads the minted version)'
+      )
+    : fail('versioned meta row: ' + JSON.stringify(versionedMetaRow));
   // Wait for the WORKER to drain the versioned file (worker-paced).
   let vStatus = null;
-  for (let i = 0; i < 60; i++) {
-    await new Promise((r) => setTimeout(r, 15000));
-    const row = (
-      await aqlAll("FOR x IN files FILTER x.file_id == '" + versionedFile.file_id + "' RETURN KEEP(x, ['dataprep'])")
-    )[0];
-    vStatus = row && row.dataprep && row.dataprep.status;
-    if (vStatus === 'Ingested' || vStatus === 'Ingestion Error' || vStatus === 'Killed') break;
+  if (versionedFile) {
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 15000));
+      const row = (
+        await aqlAll("FOR x IN files FILTER x.file_id == '" + versionedFile.file_id + "' RETURN KEEP(x, ['dataprep'])")
+      )[0];
+      vStatus = row && row.dataprep && row.dataprep.status;
+      if (vStatus === 'Ingested' || vStatus === 'Ingestion Error' || vStatus === 'Killed') break;
+    }
+    vStatus === 'Ingested'
+      ? pass('version threading: worker drained the v1 concept to Ingested')
+      : fail('versioned file drain ended "' + vStatus + '"');
   }
-  vStatus === 'Ingested'
-    ? pass('version threading: worker drained the v1 concept to Ingested')
-    : fail('versioned file drain ended "' + vStatus + '"');
-  const versionedChunks = (
-    await aqlAll(
-      'FOR c IN `' +
-        OKF_GRAPH +
-        '_SOURCE` FILTER c.file_id == "' +
-        versionedFile.file_id +
-        '" COLLECT WITH COUNT INTO n RETURN n'
-    )
-  )[0];
-  const versionedChunkStamps = (
-    await aqlAll(
-      'FOR c IN `' +
-        OKF_GRAPH +
-        '_SOURCE` FILTER c.file_id == "' +
-        versionedFile.file_id +
-        '" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
-    )
-  )[0];
+  const versionedChunks =
+    versionedFile &&
+    (
+      await aqlAll(
+        'FOR c IN `' +
+          OKF_GRAPH +
+          '_SOURCE` FILTER c.file_id == "' +
+          versionedFile.file_id +
+          '" COLLECT WITH COUNT INTO n RETURN n'
+      )
+    )[0];
+  const versionedChunkStamps =
+    versionedFile &&
+    (
+      await aqlAll(
+        'FOR c IN `' +
+          OKF_GRAPH +
+          '_SOURCE` FILTER c.file_id == "' +
+          versionedFile.file_id +
+          '" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
+      )
+    )[0];
   versionedChunks > 0 && versionedChunkStamps === versionedChunks
     ? pass(
         'version threading VERIFIED: all ' +

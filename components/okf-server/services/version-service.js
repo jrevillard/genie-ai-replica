@@ -47,14 +47,10 @@ class VersionError extends Error {
   }
 }
 
+const { isArangoNotFound } = require('./arango-errors');
 const isUniqueViolation = (err) =>
   err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409 || err.statusCode === 409);
-const isNotFound = (err) =>
-  err &&
-  (err.code === 404 ||
-    err.errorNum === 1204 ||
-    err.statusCode === 404 ||
-    /not found|no match/i.test(String(err.message || '')));
+const isNotFound = (err) => isArangoNotFound(err); // structural ONLY — never message-regex (outages must not mask as 404)
 
 let _db = null;
 async function getDb() {
@@ -108,9 +104,32 @@ async function mintVersion(repo_id, opts = {}, actor) {
       throw new VersionError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
 
-    // Race-guarded mint: compute N+1, INSERT the manifest first (the unique
-    // [repo_id, bundle_version] index catches concurrent mints), then bump the
-    // repo counter. On a unique violation, re-read and retry ONCE.
+    // D1 (review, 2026-08-17): refuse to mint while the repo has Pending OKF
+    // files — a snapshot racing an in-flight drain would freeze the OLD version
+    // on files/chunks that carry the NEW manifest's hashes (citation integrity).
+    const pending = await (
+      await db.query(
+        `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`,
+        {
+          repo_id
+        }
+      )
+    ).all();
+    if (pending.length > 0) {
+      recordOp('mint', 'busy');
+      throw new VersionError(
+        'DRAIN_IN_PROGRESS',
+        `repository ${repo_id} has Pending ingests — retry after the worker drains`,
+        409
+      );
+    }
+
+    // Race-guarded, SELF-HEALING mint (P2/P3, review 2026-08-17): compute N+1,
+    // INSERT the manifest first (the unique [repo_id, bundle_version] index
+    // catches concurrent mints AND a previously committed-but-unbumped manifest
+    // — the crashed-mint wedge), then bump the counter. On a unique violation,
+    // RECONCILE from the existing manifest (the ledger is the source of truth
+    // for the counter) and retry — never brick the repo on a crash.
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const nextVersion = (repo.version || 0) + 1;
       const okfTag = `okf:v${nextVersion}`;
@@ -130,17 +149,35 @@ async function mintVersion(repo_id, opts = {}, actor) {
       try {
         await db.collection(VERSIONS).save(manifest);
       } catch (err) {
-        if (isUniqueViolation(err) && attempt === 0) {
-          logger.warn('Version mint raced — re-reading counter and retrying once', { repo_id });
-          repo = await db.collection(REPOS).document(repo_id);
-          continue;
+        if (!isUniqueViolation(err)) {
+          recordOp('mint', 'error');
+          logger.error('Version manifest insert failed', { repo_id, bundle_version: nextVersion, error: err.message });
+          throw err;
         }
-        recordOp('mint', 'error');
-        logger.error('Version manifest insert failed', { repo_id, bundle_version: nextVersion, error: err.message });
-        throw err;
+        if (attempt === 1) {
+          // Two racers + self-heal still collided — the ledger is being
+          // written concurrently; surface the designed 409 (never raw).
+          recordOp('mint', 'race');
+          throw new VersionError('MINT_RACE', 'concurrent mint could not be resolved', 409);
+        }
+        // SELF-HEAL: the manifest for THIS version already exists — either a
+        // concurrent winner (counter ahead) or a crashed mint that committed
+        // the manifest but died before the counter bump (counter behind). The
+        // existing manifest's bundle_version IS the truth; reconcile the repo
+        // counter to max(repo.version, existing) and retry with N+2.
+        logger.warn('Version mint reconciled from the ledger', { repo_id, collidedVersion: nextVersion });
+        const existing = await db
+          .collection(VERSIONS)
+          .document(`${repo_id}_${nextVersion}`)
+          .catch(() => null);
+        const reconciled = Math.max(repo.version || 0, (existing && existing.bundle_version) || 0, nextVersion);
+        repo = { ...repo, version: reconciled };
+        continue;
       }
       // Bump the repo's counter + record the tag (mint is the sole writer of
-      // `version`; repository-service.update() cannot touch it).
+      // `version`; repository-service.update() cannot touch it). The bump is
+      // the only post-commit step — a failure here leaves the manifest + a
+      // stale counter, which the SELF-HEAL path repairs on the next mint.
       await db.collection(REPOS).update(repo_id, {
         version: nextVersion,
         okf_tag: okfTag,
@@ -162,6 +199,8 @@ async function mintVersion(repo_id, opts = {}, actor) {
           actor: (actor && actor.sub) || 'system',
           action: 'repo.version_mint',
           repo_id,
+          version: nextVersion, // review fix P7: attribute the exact manifest
+          okf_tag: okfTag,
           source_ip: (actor && actor.source_ip) || null
         })
         .catch(() => {

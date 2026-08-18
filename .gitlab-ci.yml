@@ -1025,10 +1025,10 @@ mutation-probe:
     GIT_AUTHOR_EMAIL: "ci@genie.ai"
   script:
     - echo "=== Mutation Probe — Proving Gates Are Not Theater ==="
-    - echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-    - echo "Commit: $CI_COMMIT_SHA"
+    - 'echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"'
+    - 'echo "Commit: $CI_COMMIT_SHA"'
     - echo ""
-    - echo "Step 1: Deliberately breaking a contract test..."
+    - 'echo "Step 1: Deliberately breaking a contract test..."'
     - cd genie-ai-overlay/contracts
     - |
       # Introduce a deliberate failing test in test_contract_harness.py
@@ -1040,7 +1040,7 @@ mutation-probe:
       MUTATION_EOF
     - echo "✅ Contract test broken (appended failing test to test_contract_harness.py)"
     - echo ""
-    - echo "Step 2: Running pytest (expecting failure)..."
+    - 'echo "Step 2: Running pytest (expecting failure)..."'
     - pip install --no-cache-dir pytest pytest-asyncio
     - set +e
     - python -m pytest test_contract_harness.py::test_mutation_probe_deliberate_break -v 2>&1 | tee /tmp/probe-output.txt
@@ -1058,11 +1058,11 @@ mutation-probe:
         echo "✅ Pipeline went red as expected (exit code: $PYTEST_EXIT)"
       fi
     - echo ""
-    - echo "Step 3: Reverting the break..."
+    - 'echo "Step 3: Reverting the break..."'
     - git checkout test_contract_harness.py
     - echo "✅ Break reverted"
     - echo ""
-    - echo "Step 4: Recording probe execution in evidence ledger..."
+    - 'echo "Step 4: Recording probe execution in evidence ledger..."'
     - cd ../..
     - PROBE_TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
     - |

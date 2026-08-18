@@ -1,1 +1,6 @@
-{"status": "green"}
+{
+  "status": "red",
+  "pipeline_url": "https://opensource.unicc.org/un/itu/genie-ai/-/pipelines/6239",
+  "failed_jobs": ["lint:backend", "lint:python", "lint:dart", "mobile:scheme-coherence"],
+  "diagnostic": "All 4 lint failures are pre-existing (not caused by story 3-3 changes). Details:\n1. lint:backend (job 55005): Prettier format issue in __tests__/controllers/analyticsController.test.js (not modified by this story)\n2. lint:python (job 55008): E501 line too long (121>120) in genie-ai-overlay/core/genieai_api_protocol.py:79 (not modified by this story)\n3. lint:dart (job 55010): 6 const errors in Flutter test files (auth_notifier_test.dart:140, i18n_service_test.dart:180, keycloak_service_test.dart:40) — not modified by this story\n4. mobile:scheme-coherence (job 55011): KC_MOBILE_REDIRECT_SCHEME env template has placeholder '<institution>' vs Dart hardcoded 'com.itu.genieai' — not modified by this story\n\nStory 3-3 only modified: .gitlab-ci.yml, backend test files (adminController.test.js, shared-lib.js, analytics.test.js, chat-history-routes.test.js, chat.test.js, query-routes.test.js, query-service*.test.js), and BMAD artifacts. None of the failing files were touched."
+}

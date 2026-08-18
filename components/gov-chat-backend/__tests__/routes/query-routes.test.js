@@ -10,6 +10,7 @@ const translationService = require('../../services/translation-service');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
+jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
 // Mock keycloak-auth-service (used by middleware)
 jest.mock('../../services/keycloak-auth-service', () => ({

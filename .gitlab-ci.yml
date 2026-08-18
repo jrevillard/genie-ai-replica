@@ -2220,7 +2220,7 @@ lint:doc-repo:
       when: on_success
 
 lint:python:
-  image: python:3.10-slim
+  image: python:3.11-slim
   stage: lint
   interruptible: true
   before_script:
@@ -2245,7 +2245,7 @@ lint:python:
       when: on_success
 
 lint:overrides:
-  image: python:3.10-slim
+  image: python:3.11-slim
   stage: lint
   interruptible: true
   script:
@@ -2303,7 +2303,7 @@ mobile:scheme-coherence:
 # Covers MRs that only modify deploy/ansible/, docs/, or root-level files
 # where no component lint/test job would otherwise trigger.
 docs:validate:
-  image: python:3.10-slim
+  image: python:3.11-slim
   stage: lint
   before_script:
     - pip install ansible-core yamllint
@@ -2434,7 +2434,7 @@ test:doc-repo:
 # convenience alias for local use (filters to route tests only).
 
 test:python:
-  image: python:3.10-slim
+  image: python:3.11-slim
   stage: test
   interruptible: true
   before_script:
@@ -2477,7 +2477,7 @@ test:python:
 
 # genie_ssl_patch.py tests — SSL bypass + API key injection
 test:sitecustomize:
-  image: python:3.10-slim
+  image: python:3.11-slim
   stage: test
   interruptible: true
   before_script:
@@ -2890,7 +2890,7 @@ scheduled:cleanup:
 # RAG quality regression — requires GPU runner
 # Enhanced by Epic 8 (RAG Quality)
 manual:rag-quality:
-  image: python:3.10-slim
+  image: python:3.11-slim
   stage: manual
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"

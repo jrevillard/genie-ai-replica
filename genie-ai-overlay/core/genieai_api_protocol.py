@@ -76,9 +76,7 @@ class ChatCompletionRequest(BaseModel):
     # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.temperature | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_temperature_accepts_zero_rejects_negative  # noqa: E501
     temperature: NonNegativeFloat | None = 0.01  # vllm default 0.7
     # OVERRIDE core.genieai_api_protocol.ChatCompletionRequest.top_p | disposition: re-graft-to-new-API | reason: mirror v1.5 NonNegativeFloat type | test: tests/test_core.py::TestChatCompletionRequest::test_top_p_accepts_zero_rejects_negative  # noqa: E501
-    top_p: NonNegativeFloat | None = (
-        None  # openai default 1.0, but tgi needs `top_p` must be >= 0.0 and < 1.0, set None  # noqa: E501
-    )
+    top_p: NonNegativeFloat | None = None  # openai default 1.0; tgi requires >=0.0 <1.0, set None
     tools: list[ChatCompletionToolsParam] | None = None
     tool_choice: Union[Literal["none"], ChatCompletionNamedToolChoiceParam] | None = "none"
     parallel_tool_calls: bool | None = True

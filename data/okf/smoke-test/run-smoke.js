@@ -996,13 +996,22 @@ async function ingestPhase(db) {
   // ENTITY/LINKS_TO, no bundle_version) — the assertions target THIS story's
   // concept edges (the c_/e_ deterministic keys) so dataprep's noise can never
   // mask or false-fail the concept-graph proof.
-  const myEdges = await aqlAll(
-    'FOR e IN `' +
-      OKF_GRAPH +
-      "_LINKS_TO` FILTER STARTS_WITH(e._from, '" +
-      OKF_GRAPH +
-      "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version'])"
-  );
+  // The worker writes the post-index edges AFTER the file status lands 'Ingested'
+  // (the same file-before-meta/edges window as (vii) — live-caught r5: the
+  // versioned-edge check fired before the modified re-ingest's edge write landed).
+  // Settle-wait for the versioned edge (bundle_version=1) before asserting.
+  let myEdges = [];
+  for (let i = 0; i < 20; i++) {
+    myEdges = await aqlAll(
+      'FOR e IN `' +
+        OKF_GRAPH +
+        "_LINKS_TO` FILTER STARTS_WITH(e._from, '" +
+        OKF_GRAPH +
+        "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version'])"
+    );
+    if (myEdges.some((e) => e.bundle_version === 1)) break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
   myEdges.length > 0
     ? pass(
         'edges: ' +

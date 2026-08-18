@@ -30,7 +30,7 @@ So that **I fix issues in-context before review — nothing invalid reaches publ
 - [ ] T1 `OkfCuratorPanel.vue` (concept tree + inline 4.2 editor + clone banner) + tests
 - [ ] T2 `OkfValidationPanel.vue` (conformanceService + getRepoMetrics + issue grouping) + tests
 - [ ] T3 Formatting badge (4.2b dry-run) + "Format this concept" preview + tests
-- [ ] T4 i18n + Jest + lint/format; close-out (sprint/#969/push)
+- [ ] T4 i18n + Jest + lint/format; close-out (sprint/#970/push)
 
 ## Dev Notes
 

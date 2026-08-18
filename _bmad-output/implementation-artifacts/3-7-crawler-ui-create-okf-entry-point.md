@@ -30,7 +30,7 @@ So that **I can turn a set of public web sources into a structured, producer-dra
 - [ ] T1 `AddFromLinkDialog` OKF segment + model tier + wizard preload + tests
 - [ ] T2 `FileDetailsDialog` "Create OKF from crawl" (Succeeded gate) + tests
 - [ ] T3 Post-crawl trigger (7.4b: `config.okf` read in crawlWorker success block; failure-isolated) + tests
-- [ ] T4 i18n + Jest + lint/format; close-out (sprint/#968/push)
+- [ ] T4 i18n + Jest + lint/format; close-out (sprint/#969/push)
 
 ## Dev Notes
 

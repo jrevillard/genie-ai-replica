@@ -32,7 +32,7 @@ So that **I can manage the whole OKF estate at a glance, not repo-by-repo**.
 - [ ] T2 Resume routing (card → 3.4 draft step / 3.2 details) + published-open
 - [ ] T3 Bulk publish (per-repo gate semantics, skip-with-reason) + tests
 - [ ] T4 Shared-label-decision surface (gated on 6.1b) + inbox-link gating
-- [ ] T5 i18n + Jest + lint/format; close-out (sprint/#966/push)
+- [ ] T5 i18n + Jest + lint/format; close-out (sprint/#967/push)
 
 ## Dev Notes
 

@@ -31,7 +31,7 @@ So that **I can lift an existing document batch into a structured, validated OKF
 - [ ] T1 Batch action + `showCreateOkfButton` gate (3 conditions, tooltip reasons) + tests
 - [ ] T2 Wizard Documents-variant preload (selection → Step 2) + produce wiring to 7.7
 - [ ] T3 `okf_repo_id` stamp at produce (additive metadataService field) + tests
-- [ ] T4 i18n + Jest + lint/format; close-out (sprint/#967/push)
+- [ ] T4 i18n + Jest + lint/format; close-out (sprint/#968/push)
 
 ## Dev Notes
 

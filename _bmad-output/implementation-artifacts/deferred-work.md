@@ -2228,3 +2228,91 @@ location: genie-ai-overlay/chatqna/genieai_chatqna.py:1030-1342
 severity: low
 reason: The _gp/_gp_or_kw extraction is duplicated at top of both align_inputs and align_outputs. Extracting per-ServiceType handlers into separate functions would improve testability.
 status: open
+
+### DW-310: SHA256SUMS only covers JSON outputs, not build logs/report/README
+origin: spec-deferred 3bf1522d2b18
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Evidence bundle integrity requires checksums for all artifacts
+status: open
+
+### DW-311: No unit tests for diff-advisories.py
+origin: spec-deferred 672b2e0f2aed
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Evidence script lacks automated verification
+status: open
+
+### DW-312: sys.exit(2) conflates policy verdict with process failure
+origin: spec-deferred 17c0c05c3c51
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Callers cannot distinguish blocked from crashed
+status: open
+
+### DW-313: No trivy-db version pinning
+origin: spec-deferred 9f65b2d9ccf1
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Documented in Design Notes as known limitation
+status: open
+
+### DW-314: Hardcoded image list in script
+origin: spec-deferred c4084af1ad90
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Script is single-use; not reusable without editing
+status: open
+
+### DW-315: No CVE-to-NVD linkage
+origin: spec-deferred dca5384f8af7
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Report lacks CVSS vectors and exploitability context
+status: open
+
+### DW-316: Exit code 2 not verified
+origin: spec-deferred a5858f144134
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: Verification commands check file existence, not behavioral contract
+status: open
+
+### DW-317: No machine-readable verdict artifact
+origin: spec-deferred b687e0a2e73f
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: low
+reason: CI cannot consume verdict without parsing markdown
+status: open
+
+### DW-318: CVE-2022-46337 (Apache Derby in Python image) requires investigation
+origin: spec-deferred fc47e692fdc2
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: medium
+reason: Java package CVE in Python base image; could be transitive dep, trivy false positive, or SBOM artifact
+status: open
+
+### DW-319: No attribution of net-new CVEs to root cause (OPEA vs Python base)
+origin: spec-deferred 6e5fbd905675
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: medium
+reason: 83 CVEs mix two independent changes; breakdown requires separate investigation
+status: open
+
+### DW-320: deferred-work.md has no entry for blocked-upgrade outcome
+origin: spec-deferred 153fdd812173
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: medium
+reason: 83 net-new CVEs requiring triage need follow-up tracking
+status: open

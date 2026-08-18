@@ -932,7 +932,7 @@ verify:evidence:
   script:
     - echo "=== Evidence Ledger Verification ==="
     - echo "Checking required artifacts from Epics 1–3..."
-    - echo "Freshness threshold: ${EVIDENCE_FRESHNESS_HOURS}h"
+    - 'echo "Freshness threshold: ${EVIDENCE_FRESHNESS_HOURS}h"'
     - echo ""
     - |
       REQUIRED_ARTIFACTS=(

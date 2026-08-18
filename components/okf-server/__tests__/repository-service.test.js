@@ -327,16 +327,29 @@ describe('create additive opts (Story 4.8 — R5 default pinned)', () => {
     expect(audits[0].action).toBe('repo.create');
   });
 
-  test('opts { lifecycle_state, cloned_from, audit_action } are honored (clone path)', async () => {
+  test('opts { lifecycle_state, cloned_from, audit_action, okf_version } are honored (clone path)', async () => {
     const repo = await repoService.create(validCreateInput(), ACTOR, {
       lifecycle_state: 'draft',
       cloned_from: { repo_id: 'src', version: 2 },
-      audit_action: 'repo.clone'
+      audit_action: 'repo.clone',
+      okf_version: '0.3'
     });
     expect(repo.lifecycle_state).toBe('draft');
     expect(repo.cloned_from).toEqual({ repo_id: 'src', version: 2 });
+    expect(repo.okf_version).toBe('0.3');
     const audits = Object.values(db._stores.okf_audit || {});
     expect(audits[0].action).toBe('repo.clone');
+  });
+
+  test('create() validates additive opts — invalid lifecycle_state / malformed cloned_from → 400 (review fix)', async () => {
+    await expect(repoService.create(validCreateInput(), ACTOR, { lifecycle_state: 'bogus' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    await expect(repoService.create(validCreateInput(), ACTOR, { cloned_from: { version: 2 } })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
   });
 });
 
@@ -352,11 +365,24 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
       db._stores.okf_concepts_meta[k] = { ...doc, _key: k, _id: `okf_concepts_meta/${k}`, _rev: '1' };
       return { ...db._stores.okf_concepts_meta[k] };
     });
-    // The clone's meta read (db.query with {source_id} bind var) returns the rows.
-    db.query.mockImplementation(async (_query, bindVars) => ({
-      all: async () =>
-        Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === (bindVars && bindVars.source_id))
-    }));
+    // The clone's meta read (db.query with {source_id} bind var) returns the rows;
+    // the compensation REMOVE (with {clone_id}) executes against the store.
+    db.query.mockImplementation(async (query, bindVars) => {
+      const q = String(query || '');
+      if (q.includes('REMOVE')) {
+        const id = bindVars && bindVars.clone_id;
+        if (id) {
+          for (const k of Object.keys(db._stores.okf_concepts_meta)) {
+            if (db._stores.okf_concepts_meta[k].repo_id === id) delete db._stores.okf_concepts_meta[k];
+          }
+        }
+        return { all: async () => [] };
+      }
+      return {
+        all: async () =>
+          Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === (bindVars && bindVars.source_id))
+      };
+    });
   });
 
   /** Seed a source repo + N concept-meta rows (incl. a `concepts/`-prefixed id). */
@@ -484,5 +510,47 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
     const sourceMeta = Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === src.repo_id);
     expect(sourceMeta).toHaveLength(rows.length);
     expect(sourceMeta.every((m) => m.graph_name === `OKF_${src.repo_id}`)).toBe(true);
+  });
+
+  test('409 DUPLICATE_REPO via the DB unique-index backstop when save races the app dup-check (review fix)', async () => {
+    const { src } = await seedSource();
+    db.collection('okf_repositories').save.mockRejectedValueOnce({ errorNum: 1210, code: 409 });
+    await expect(repoService.cloneRepository(src.repo_id, {}, ACTOR)).rejects.toMatchObject({
+      code: 'DUPLICATE_REPO',
+      status: 409
+    });
+  });
+
+  test('cloning an empty source (0 meta rows) → valid draft fork, copied_concepts 0 (AC5 edge)', async () => {
+    const { src } = await seedSource();
+    for (const k of Object.keys(db._stores.okf_concepts_meta)) delete db._stores.okf_concepts_meta[k];
+    const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    expect(clone.lifecycle_state).toBe('draft');
+    expect(clone.copied_concepts).toBe(0);
+  });
+
+  test('a source that is itself a clone → cloned_from points at the immediate parent (AC5 edge, no recursion)', async () => {
+    const { src } = await seedSource();
+    const c1 = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    const c2 = await repoService.cloneRepository(c1.repo_id, { name: 'Source KB (clone v2)' }, ACTOR);
+    expect(c2.cloned_from).toEqual({ repo_id: c1.repo_id, version: null });
+  });
+
+  test('compensates on a mid-copy failure: NO orphaned partial fork (review fix)', async () => {
+    const { src } = await seedSource();
+    let calls = 0;
+    db.collection('okf_concepts_meta').save.mockImplementation(async (doc) => {
+      calls += 1;
+      if (calls === 2) throw new Error('transient arango failure');
+      const k = `meta-copy-${calls}`;
+      db._stores.okf_concepts_meta[k] = { ...doc, _key: k, _id: `okf_concepts_meta/${k}`, _rev: '1' };
+      return { ...db._stores.okf_concepts_meta[k] };
+    });
+    await expect(repoService.cloneRepository(src.repo_id, {}, ACTOR)).rejects.toThrow('transient arango failure');
+    // The partial fork is rolled back: NO draft registry entry, NO leftover clone meta.
+    const draftRepos = Object.values(db._stores.okf_repositories).filter((r) => r.lifecycle_state === 'draft');
+    expect(draftRepos).toHaveLength(0);
+    const leftover = Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id !== src.repo_id);
+    expect(leftover).toHaveLength(0);
   });
 });

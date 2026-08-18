@@ -600,12 +600,15 @@ describe('POST /api/okf/repos/:source_id/clone (Story 4.8 — D-V5)', () => {
     const res = await request(createApp()).post('/api/okf/repos/repoA/clone').set('Authorization', TOKEN).send({});
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ repo_id: 'clone-1', lifecycle_state: 'draft', copied_concepts: 3 });
-    // gate order: getById (existence+authz) BEFORE clone
+    // gate order: getById (existence+authz) BEFORE clone — asserted, not just called
     expect(repoService.getById).toHaveBeenCalledWith('repoA', expect.anything());
     expect(repoService.cloneRepository).toHaveBeenCalledWith(
       'repoA',
       {},
       expect.objectContaining({ sub: 'steward-1' })
+    );
+    expect(repoService.getById.mock.invocationCallOrder[0]).toBeLessThan(
+      repoService.cloneRepository.mock.invocationCallOrder[0]
     );
   });
 
@@ -632,7 +635,9 @@ describe('POST /api/okf/repos/:source_id/clone (Story 4.8 — D-V5)', () => {
     expect(repoService.cloneRepository).not.toHaveBeenCalled();
   });
 
-  test('foreign source (super-admin) → 404 via getById gate; clone never called', async () => {
+  test('missing/soft-deleted source (super-admin) → 404 via getById gate; clone never called', async () => {
+    // A real foreign source for a scoped caller is 403 at requireRepoScope (leaks
+    // nothing about existence); this 404 is the missing/soft-deleted case.
     authScoped([], ['tools-admin']);
     repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
     const res = await request(createApp()).post('/api/okf/repos/repoB/clone').set('Authorization', TOKEN).send({});

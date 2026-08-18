@@ -138,15 +138,29 @@ function decodeCursor(cursor) {
  * @param {object} input {name, domain, source?, acl, retention?}
  * @param {object} actor {sub, name?, source_ip?}
  * @param {object} [opts] ADDITIVE (Story 4.8, R5) — { lifecycle_state?, cloned_from?,
- *        audit_action? }. Defaults reproduce the pre-4.8 behavior byte-identically
- *        ('register', no cloned_from field, audit 'repo.create') so existing
- *        callers are untouched. The clone passes { lifecycle_state:'draft',
- *        cloned_from:{repo_id,version}, audit_action:'repo.clone' }.
+ *        audit_action?, okf_version? }. Defaults reproduce the pre-4.8 behavior
+ *        byte-identically ('register', no cloned_from field, audit 'repo.create',
+ *        okf_version '0.2') so existing callers are untouched. The clone passes
+ *        { lifecycle_state:'draft', cloned_from:{repo_id,version},
+ *        audit_action:'repo.clone', okf_version: source.okf_version }.
  */
 async function create(input, actor, opts = {}) {
   return withSpan('okf.repo.create', async (span) => {
     span.setAttribute('okf.operation', 'create');
     span.setAttribute('okf.domain', input.domain);
+    // Review fix (4.8): the additive opts are a public API surface now — validate
+    // them so a typo'd lifecycle_state or malformed cloned_from can never persist
+    // an out-of-invariant registry doc (the clone path itself is hardcoded safe).
+    if (opts.lifecycle_state != null && !LIFECYCLE_STATES.includes(opts.lifecycle_state)) {
+      throw new RepoError(
+        'VALIDATION_ERROR',
+        `invalid lifecycle_state '${opts.lifecycle_state}' (must be one of ${LIFECYCLE_STATES.join('|')})`,
+        400
+      );
+    }
+    if (opts.cloned_from != null && typeof opts.cloned_from.repo_id !== 'string') {
+      throw new RepoError('VALIDATION_ERROR', 'cloned_from.repo_id must be a string', 400);
+    }
     logger.info('Creating OKF repository', { name: input.name, domain: input.domain });
     const db = await getDb();
 
@@ -173,7 +187,7 @@ async function create(input, actor, opts = {}) {
       domain: input.domain,
       source: input.source || null,
       graph_name,
-      okf_version: '0.2',
+      okf_version: opts.okf_version || '0.2', // Story 4.8: the clone inherits the source's okf_version (additive; default '0.2')
       lifecycle_state: opts.lifecycle_state || INITIAL_STATE, // Story 4.8: the clone enters 'draft' (additive; default = register)
       version: null,
       curator: actor ? { sub: actor.sub || null, name: actor.name || null } : null,
@@ -256,40 +270,71 @@ async function cloneRepository(source_id, input, actor) {
     // domain + the source's ACL (a fork keeps the source's access policy). The
     // (name, domain, deleted_at) unique index + create()'s dup-check backstop
     // enforce the D-V2 unique-registry invariant → 409 DUPLICATE_REPO.
+    // Review fix (4.8): the fork does NOT inherit the source's external
+    // `source` (git/s3 origin + syncSchedule) or `retention` — D-V5 says
+    // "upstream updates never propagate automatically"; a clone is an in-app
+    // fork with no external origin and its own lifecycle.
+    // The derived name is clamped to the 200-char registry bound (a source
+    // named at the Joi max would otherwise derive a 209-char name past it).
+    const derivedName = String(source.name || '').slice(0, 190) + ' (clone)';
     const target = {
-      name: (input && input.name) || `${source.name} (clone)`,
+      name: (input && input.name) || derivedName,
       domain: (input && input.domain) || source.domain,
-      acl: (input && input.acl) || source.acl || {},
-      source: (input && input.source) || source.source || null,
-      retention: (input && input.retention) || source.retention || null
+      acl: (input && input.acl) || source.acl || {}
     };
 
     // New registry entry via the shared create() registry logic — additive opts
-    // (lifecycle_state='draft', cloned_from lineage, audit 'repo.clone').
+    // (lifecycle_state='draft', cloned_from lineage, audit 'repo.clone',
+    // okf_version from the source).
     const clone = await create(target, actor, {
       lifecycle_state: 'draft',
       cloned_from: { repo_id: source_id, version: source.version != null ? source.version : null },
-      audit_action: 'repo.clone'
+      audit_action: 'repo.clone',
+      okf_version: source.okf_version || '0.2'
     });
 
     // Copy the source's concepts + meta VERBATIM into the clone's repo. The
-    // (repo_id, concept_id) unique index guards each inserted row.
+    // (repo_id, concept_id) unique index guards each inserted row. Bounded: a
+    // source's concept set is ingest-capped (OKF_INGEST_MAX_CONCEPTS per ingest),
+    // so the sequential copy is bounded per-repo in practice (review note).
+    // COMPENSATION (review fix, 4.8): create() commits the registry entry before
+    // the copy — a mid-copy failure must NEVER leave an orphaned partial fork.
+    // On any error we hard-delete the fresh registry doc + any copied rows and
+    // rethrow (with a clone failure metric), so a retry starts clean.
     const metaCol = db.collection('okf_concepts_meta');
-    const sourceRows = await (
-      await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @source_id RETURN m', { source_id })
-    ).all();
-    const ts = nowIso();
     let copied = 0;
-    for (const row of sourceRows) {
-      const copy = { ...row };
-      delete copy._key;
-      delete copy._id;
-      delete copy._rev;
-      copy.repo_id = clone.repo_id;
-      copy.graph_name = `OKF_${clone.repo_id}`;
-      copy.updated_at = ts; // created_at preserved (the content's origin lineage)
-      await metaCol.save(copy);
-      copied += 1;
+    try {
+      const sourceRows = await (
+        await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @source_id RETURN m', { source_id })
+      ).all();
+      const ts = nowIso();
+      for (const row of sourceRows) {
+        const copy = { ...row };
+        delete copy._key;
+        delete copy._id;
+        delete copy._rev;
+        copy.repo_id = clone.repo_id;
+        copy.graph_name = `OKF_${clone.repo_id}`;
+        copy.updated_at = ts; // created_at preserved (the content's origin lineage)
+        await metaCol.save(copy);
+        copied += 1;
+      }
+    } catch (err) {
+      try {
+        await db.collection(COLLECTION).remove(clone.repo_id);
+        await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @clone_id REMOVE m IN okf_concepts_meta', {
+          clone_id: clone.repo_id
+        });
+        logger.warn('OKF clone compensated (rolled back partial fork)', { source_id, repo_id: clone.repo_id });
+      } catch (cleanupErr) {
+        logger.error('OKF clone compensation cleanup failed', {
+          source_id,
+          repo_id: clone.repo_id,
+          error: cleanupErr.message
+        });
+      }
+      recordOp('clone', 'error');
+      throw err;
     }
 
     span.setAttribute('okf.clone.repo_id', clone.repo_id);

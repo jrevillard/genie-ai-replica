@@ -588,11 +588,14 @@ async function ingestPhase(db) {
     : fail('ingest scoped-read -> ' + s1.status + ' ' + JSON.stringify(s1.body).slice(0, 100));
 
   // Story 4.8 (D-V5): the clone is an ADMIN mutation on the source repo — a
-  // scoped READ caller must be 403 at the route (the real clone happens late,
-  // in-container, when user tokens are expired; this is the live HTTP gate).
+  // caller without admin on the source must be 403 at the route (the real clone
+  // happens late, in-container, when user tokens are expired; this is the live
+  // HTTP gate). NOTE: the SCOPED token holds read on a DIFFERENT repo than
+  // INGEST_REPO, so the live proof is "no admin on the source → 403"; the exact
+  // read≠admin case is unit-tested.
   const c0 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/clone', SCOPED, {});
   c0.status === 403 && c0.body && c0.body.error === 'FORBIDDEN_SCOPE'
-    ? pass('clone: scoped READ caller -> 403 FORBIDDEN_SCOPE (admin mutation on the source)')
+    ? pass('clone: caller without admin on the source -> 403 FORBIDDEN_SCOPE (admin mutation)')
     : fail('clone scoped-read -> ' + c0.status + ' ' + JSON.stringify(c0.body).slice(0, 100));
 
   // ── (ii) THE FULL KENYA BUNDLE AS A ZIP, through the orchestrator ──
@@ -1042,6 +1045,18 @@ async function ingestPhase(db) {
       "' RETURN KEEP(r, ['repo_id'])"
   );
   for (const pc of priorClones) {
+    // A prior crashed run may have left the clone's files mid-drain — retract
+    // them via doc-repo FIRST so the worker never writes into collections this
+    // cleanup is about to drop (mirrors the ingest phase's re-run retract).
+    const priorFiles = await aqlAll(
+      "FOR f IN files FILTER f.repo_id == '" + pc.repo_id + "' RETURN KEEP(f, ['file_id','file_name','dataprep'])"
+    );
+    for (const pf of priorFiles) {
+      const retr = await call('POST', DOCREPO + '/api/files/' + pf.file_id + '/retract', await serviceToken());
+      if (retr.status !== 200) {
+        console.log('    NOTE clone-cleanup retract ' + pf.file_name + ' -> ' + retr.status + ' (best-effort)');
+      }
+    }
     try {
       await repositoryService.remove(pc.repo_id, { sub: 'smoke-run' });
     } catch (e) {
@@ -1134,12 +1149,13 @@ async function ingestPhase(db) {
           JSON.stringify({ skipped: rc.skipped_dedup, enqueued: rc.enqueued, errors: rc.enqueue_errors })
       );
 
-  // Drain the clone's single new Pending file (worker-paced).
+  // Drain the clone's single new Pending file (worker-paced). Sorted so a fixture
+  // drift that enqueues >1 concept is watched deterministically (not arbitrary).
   let cloneFile = (
     await aqlAll(
       "FOR f IN files FILTER f.repo_id == '" +
         CLONE_ID +
-        "' RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name'])"
+        "' SORT f.file_id RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name'])"
     )
   )[0];
   let cStatus = null;

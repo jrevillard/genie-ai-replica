@@ -69,7 +69,7 @@ development_status:
   3-1-run-the-rag-parity-evaluation-vs-the-locked-baseline: done
   3-2-produce-the-cve-baseline-diff-evidence: done
   3-3-confirm-the-full-test-suites-green: done
-  3-4-confirm-the-targeted-upstream-improvements-land: backlog
+  3-4-confirm-the-targeted-upstream-improvements-land: done
   3-5-complete-the-evidence-ledger-verify-evidence-gate: backlog
   epic-3-retrospective: optional
 

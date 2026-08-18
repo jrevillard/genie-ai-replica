@@ -1,6 +1,11 @@
 {
   "status": "red",
-  "pipeline_url": "https://opensource.unicc.org/un/itu/genie-ai/-/pipelines/6239",
-  "failed_jobs": ["lint:backend", "lint:python", "lint:dart", "mobile:scheme-coherence"],
-  "diagnostic": "All 4 lint failures are pre-existing (not caused by story 3-3 changes). Details:\n1. lint:backend (job 55005): Prettier format issue in __tests__/controllers/analyticsController.test.js (not modified by this story)\n2. lint:python (job 55008): E501 line too long (121>120) in genie-ai-overlay/core/genieai_api_protocol.py:79 (not modified by this story)\n3. lint:dart (job 55010): 6 const errors in Flutter test files (auth_notifier_test.dart:140, i18n_service_test.dart:180, keycloak_service_test.dart:40) — not modified by this story\n4. mobile:scheme-coherence (job 55011): KC_MOBILE_REDIRECT_SCHEME env template has placeholder '<institution>' vs Dart hardcoded 'com.itu.genieai' — not modified by this story\n\nStory 3-3 only modified: .gitlab-ci.yml, backend test files (adminController.test.js, shared-lib.js, analytics.test.js, chat-history-routes.test.js, chat.test.js, query-routes.test.js, query-service*.test.js), and BMAD artifacts. None of the failing files were touched."
+  "pipeline_url": "https://opensource.unicc.org/un/itu/genie-ai/-/pipelines/6240",
+  "failed_jobs": [
+    "lint:python",
+    "lint:backend",
+    "lint:dart",
+    "mobile:scheme-coherence"
+  ],
+  "diagnostic": "All 4 lint failures are pre-existing on feat/opea-1.5-upgrade/prd — this story (3-4-confirm-the-targeted-upstream-improvements-land) made zero code changes (verification-only: confirmed FR-19 upstream improvements present, updated deferred-work.md ledger).\n\n1. lint:python — E501 Line too long (121 > 120) at genie-ai-overlay/core/genieai_api_protocol.py:79 (top_p field comment)\n2. lint:backend — Prettier formatting issue in __tests__/controllers/analyticsController.test.js\n3. lint:dart — 6 const constructor errors in mobile test files (auth_notifier_test.dart:140, i18n_service_test.dart:180, keycloak_service_test.dart:40)\n4. mobile:scheme-coherence — MISMATCH: env KC_MOBILE_REDIRECT_SCHEME='com.<institution>.genieai' vs Dart itu='com.itu.genieai'\n\nThese failures exist on the target branch independent of this story's changes."
 }

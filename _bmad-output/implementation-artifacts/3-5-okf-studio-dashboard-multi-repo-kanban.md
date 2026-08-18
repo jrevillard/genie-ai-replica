@@ -5,7 +5,7 @@ baseline_commit: 14205ae
 
 Status: ready-for-dev
 
-Story key: `3-5-okf-studio-dashboard-multi-repo-kanban` | GitLab: #966
+Story key: `3-5-okf-studio-dashboard-multi-repo-kanban` | GitLab: #967
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`
 FRs: FR-26, FR-25 | Spec: [okf-studio-ux-design-2026-08-13](../planning-artifacts/okf-studio-ux-design-2026-08-13.md) §1.4, §10.5
 

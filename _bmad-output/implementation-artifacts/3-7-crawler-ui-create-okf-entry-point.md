@@ -5,7 +5,7 @@ baseline_commit: 14205ae
 
 Status: ready-for-dev
 
-Story key: `3-7-crawler-ui-create-okf-entry-point` | GitLab: #968
+Story key: `3-7-crawler-ui-create-okf-entry-point` | GitLab: #969
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`
 FRs: FR-38, FR-30, FR-2 | Spec: [okf-studio-ux-design-2026-08-13](../planning-artifacts/okf-studio-ux-design-2026-08-13.md) §1.3b, §8.1; [7.2 producer](../planning-artifacts/prds/prd-okf-server-2026-07-15/epics.md)
 

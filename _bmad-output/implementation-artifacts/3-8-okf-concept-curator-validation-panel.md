@@ -5,7 +5,7 @@ baseline_commit: 14205ae
 
 Status: ready-for-dev
 
-Story key: `3-8-okf-concept-curator-validation-panel` | GitLab: #969
+Story key: `3-8-okf-concept-curator-validation-panel` | GitLab: #970
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`
 FRs: FR-25, FR-26 | Spec: [okf-studio-ux-design-2026-08-13](../planning-artifacts/okf-studio-ux-design-2026-08-13.md) §1.1 Steps 5–6, §8.2
 

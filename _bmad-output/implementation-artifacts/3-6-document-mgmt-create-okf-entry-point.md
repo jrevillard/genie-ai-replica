@@ -5,7 +5,7 @@ baseline_commit: 14205ae
 
 Status: ready-for-dev
 
-Story key: `3-6-document-mgmt-create-okf-entry-point` | GitLab: #967
+Story key: `3-6-document-mgmt-create-okf-entry-point` | GitLab: #968
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`
 FRs: FR-38, FR-26 | Spec: [okf-studio-ux-design-2026-08-13](../planning-artifacts/okf-studio-ux-design-2026-08-13.md) §1.3a, §5.2
 

@@ -5,7 +5,7 @@ baseline_commit: 14205ae
 
 Status: ready-for-dev
 
-Story key: `3-4-okf-studio-wizard-shell-stepper-tab` | GitLab: #965
+Story key: `3-4-okf-studio-wizard-shell-stepper-tab` | GitLab: #966
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`
 FRs: **FR-38** ("one wizard, 3 workflows" → now 4 sources), FR-26 | Spec: [okf-studio-ux-design-2026-08-13](../planning-artifacts/okf-studio-ux-design-2026-08-13.md) §1.1, §1.4, §8.1
 

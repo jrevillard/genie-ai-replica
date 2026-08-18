@@ -56,11 +56,11 @@ development_status:
   3-1-okf-repositories-tab-service-vuex: backlog
   3-2-repository-dialog-details-view: backlog
   3-3-ingestion-progress-i18n: backlog
-  3-4-okf-studio-wizard-shell-stepper-tab: backlog          # NEW 2026-08-13 (Epic 10 Studio frontend)
-  3-5-okf-studio-dashboard-multi-repo-kanban: backlog        # NEW 2026-08-13
-  3-6-document-mgmt-create-okf-entry-point: backlog          # NEW 2026-08-13 (sibling to Ingest Selected)
-  3-7-crawler-ui-create-okf-entry-point: backlog             # NEW 2026-08-13 (AddFromLinkDialog + FileDetailsDialog)
-  3-8-okf-concept-curator-validation-panel: backlog          # NEW 2026-08-13 (Step 5/6; composes conformance-service)
+  3-4-okf-studio-wizard-shell-stepper-tab: ready-for-dev          # NEW 2026-08-13 (Epic 10 Studio frontend)
+  3-5-okf-studio-dashboard-multi-repo-kanban: ready-for-dev        # NEW 2026-08-13
+  3-6-document-mgmt-create-okf-entry-point: ready-for-dev          # NEW 2026-08-13 (sibling to Ingest Selected)
+  3-7-crawler-ui-create-okf-entry-point: ready-for-dev             # NEW 2026-08-13 (AddFromLinkDialog + FileDetailsDialog)
+  3-8-okf-concept-curator-validation-panel: ready-for-dev          # NEW 2026-08-13 (Step 5/6; composes conformance-service)
   3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — Clone action: repos-tab toolbar/row + details dialog + Studio Step-1 source card; consumes 4.8 clone API
   epic-3-retrospective: optional
 

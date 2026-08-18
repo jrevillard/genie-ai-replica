@@ -1443,14 +1443,8 @@
                         <td>{{ user.email }}</td>
                         <td>{{ (user.roles || []).join(', ') || user.role }}</td>
                         <td>
-                          <div style="display: flex; gap: 8px;">
-                            <DsButton
-                              variant="secondary"
-                              small
-                              @click="openAssignRoleDialog(user)"
-                            >
-                              Roles
-                            </DsButton>
+                          <div style="display: flex; gap: 8px">
+                            <DsButton variant="secondary" small @click="openAssignRoleDialog(user)"> Roles </DsButton>
                             <DsButton
                               variant="secondary"
                               tag="a"
@@ -1724,7 +1718,7 @@ export default {
       userSearchResults: null,
       roleDialog: {
         visible: false,
-        user: null,
+        user: null
       },
       isManagingRole: null,
       userSearchTotal: 0,
@@ -2547,7 +2541,7 @@ export default {
       const user = this.roleDialog.user;
       if (!user) return;
       this.isManagingRole = role;
-      
+
       try {
         const isAdding = !this.hasRole(user, role);
         if (isAdding) {
@@ -2557,7 +2551,7 @@ export default {
         } else {
           await adminDashboardService.removeUserRole(user._key, role);
           if (user.roles) {
-            user.roles = user.roles.filter(r => r !== role);
+            user.roles = user.roles.filter((r) => r !== role);
           }
         }
         this.showNotification(`Role ${role} ${isAdding ? 'assigned' : 'removed'}`, 'success');

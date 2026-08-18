@@ -20,7 +20,7 @@ class ToolsService {
           type: 'persistent',
           fields: ['url'],
           unique: true,
-          name: 'idx_feeds_url',
+          name: 'idx_feeds_url'
         });
       }
       this.initialized = true;
@@ -63,9 +63,9 @@ class ToolsService {
         last_polled: 0,
         last_entry_date: 0,
         failures: 0,
-        createdAt: Date.now(),
+        createdAt: Date.now()
       };
-      
+
       const result = await this.db.collection('feeds').save(feed, { returnNew: true });
       return result.new;
     } catch (error) {
@@ -80,7 +80,7 @@ class ToolsService {
       delete updateData._key;
       delete updateData._id;
       delete updateData._rev;
-      
+
       const result = await this.db.collection('feeds').update(id, updateData, { returnNew: true });
       return result.new;
     } catch (error) {

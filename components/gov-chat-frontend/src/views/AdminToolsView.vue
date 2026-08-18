@@ -53,19 +53,15 @@
             <div class="card-header">
               <div class="card-title">RSS Stream Ingestor Feeds</div>
               <div class="card-actions">
-                <DsButton variant="primary" @click="showAddFeedModal = true">
-                  + Add Feed
-                </DsButton>
+                <DsButton variant="primary" @click="showAddFeedModal = true"> + Add Feed </DsButton>
               </div>
             </div>
 
-            <DsStateDisplay v-if="isLoadingFeeds" type="loading">
-              Loading feeds...
-            </DsStateDisplay>
+            <DsStateDisplay v-if="isLoadingFeeds" type="loading"> Loading feeds... </DsStateDisplay>
             <DsStateDisplay v-else-if="error" type="error">
               {{ error }}
             </DsStateDisplay>
-            
+
             <div class="table-container" v-else>
               <table class="data-table">
                 <thead>
@@ -109,14 +105,14 @@
             </div>
             <div class="p-4">
               <p class="mb-4">
-                SearXNG is integrated natively via the backend search service. 
-                Configure search parameters to test connectivity.
+                SearXNG is integrated natively via the backend search service. Configure search parameters to test
+                connectivity.
               </p>
-              
+
               <div class="form-group mb-4">
                 <label>Test Search Query</label>
-                <div style="display: flex; gap: 8px;">
-                  <DsInput v-model="searchQuery" placeholder="Enter query..." style="flex: 1;" />
+                <div style="display: flex; gap: 8px">
+                  <DsInput v-model="searchQuery" placeholder="Enter query..." style="flex: 1" />
                   <DsButton variant="primary" @click="runTestSearch" :disabled="!searchQuery || isSearching">
                     {{ isSearching ? 'Searching...' : 'Test Search' }}
                   </DsButton>
@@ -137,7 +133,9 @@
                     <tbody>
                       <tr v-for="result in (searchResults.results || []).slice(0, 5)" :key="result.url">
                         <td>{{ result.title }}</td>
-                        <td class="cell-main"><a :href="result.url" target="_blank">{{ result.url }}</a></td>
+                        <td class="cell-main">
+                          <a :href="result.url" target="_blank">{{ result.url }}</a>
+                        </td>
                         <td>{{ result.engine }}</td>
                       </tr>
                     </tbody>
@@ -146,21 +144,20 @@
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
 
     <!-- Add/Edit Feed Modal -->
     <div v-if="showAddFeedModal" class="modal-overlay">
-      <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-content" style="max-width: 500px">
         <h3 class="modal-title">{{ editingFeed ? 'Edit Feed' : 'Add New Feed' }}</h3>
-        
+
         <div class="form-group">
           <label>Title</label>
           <DsInput v-model="feedForm.title" placeholder="e.g. UN News" />
         </div>
-        
+
         <div class="form-group mt-3">
           <label>RSS URL</label>
           <DsInput v-model="feedForm.url" placeholder="https://..." />
@@ -171,18 +168,19 @@
           <DsInput type="number" v-model.number="feedForm.polling_interval" />
         </div>
 
-        <div class="form-group mt-3" style="display: flex; align-items: center; gap: 8px;">
+        <div class="form-group mt-3" style="display: flex; align-items: center; gap: 8px">
           <input type="checkbox" id="feed-enabled" v-model="feedForm.enabled" />
-          <label for="feed-enabled" style="margin: 0;">Enabled</label>
+          <label for="feed-enabled" style="margin: 0">Enabled</label>
         </div>
 
-        <div class="modal-actions mt-4" style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div class="modal-actions mt-4" style="display: flex; justify-content: flex-end; gap: 8px">
           <DsButton variant="secondary" @click="closeFeedModal">Cancel</DsButton>
-          <DsButton variant="primary" @click="saveFeed" :disabled="!feedForm.title || !feedForm.url">Save Feed</DsButton>
+          <DsButton variant="primary" @click="saveFeed" :disabled="!feedForm.title || !feedForm.url"
+            >Save Feed</DsButton
+          >
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -199,7 +197,7 @@ export default {
     DsButton,
     DsInput,
     DsStateDisplay,
-    DsStatusTag,
+    DsStatusTag
   },
   data() {
     return {
@@ -210,22 +208,22 @@ export default {
         title: '',
         url: '',
         polling_interval: 3600,
-        enabled: true,
+        enabled: true
       },
       searchQuery: '',
       isSearching: false,
-      searchResults: null,
+      searchResults: null
     };
   },
   computed: {
-    ...mapState('tools', ['feeds', 'isLoadingFeeds', 'error']),
+    ...mapState('tools', ['feeds', 'isLoadingFeeds', 'error'])
   },
   mounted() {
     this.fetchFeeds();
   },
   methods: {
     ...mapActions('tools', ['fetchFeeds', 'addFeed', 'updateFeed', 'deleteFeed', 'testSearch']),
-    
+
     closeFeedModal() {
       this.showAddFeedModal = false;
       this.editingFeed = null;
@@ -233,16 +231,16 @@ export default {
         title: '',
         url: '',
         polling_interval: 3600,
-        enabled: true,
+        enabled: true
       };
     },
-    
+
     editFeed(feed) {
       this.editingFeed = feed;
       this.feedForm = { ...feed };
       this.showAddFeedModal = true;
     },
-    
+
     async saveFeed() {
       const success = this.editingFeed
         ? await this.updateFeed({ id: this.editingFeed._key, data: this.feedForm })
@@ -251,7 +249,7 @@ export default {
         this.closeFeedModal();
       }
     },
-    
+
     async removeFeed(id) {
       if (confirm('Are you sure you want to delete this feed?')) {
         await this.deleteFeed(id);
@@ -477,8 +475,16 @@ export default {
   color: var(--color-heading);
 }
 
-.mt-3 { margin-top: 1rem; }
-.mt-4 { margin-top: 1.5rem; }
-.mb-4 { margin-bottom: 1rem; }
-.p-4 { padding: 1.5rem; }
+.mt-3 {
+  margin-top: 1rem;
+}
+.mt-4 {
+  margin-top: 1.5rem;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.p-4 {
+  padding: 1.5rem;
+}
 </style>

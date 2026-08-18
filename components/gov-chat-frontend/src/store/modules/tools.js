@@ -3,12 +3,12 @@ import api from '@/services/api';
 const state = {
   feeds: [],
   isLoadingFeeds: false,
-  error: null,
+  error: null
 };
 
 const getters = {
   feeds: (state) => state.feeds,
-  isLoadingFeeds: (state) => state.isLoadingFeeds,
+  isLoadingFeeds: (state) => state.isLoadingFeeds
 };
 
 const actions = {
@@ -114,7 +114,7 @@ const mutations = {
   },
   CLEAR_ERROR(state) {
     state.error = null;
-  },
+  }
 };
 
 export default {
@@ -122,5 +122,5 @@ export default {
   state,
   getters,
   actions,
-  mutations,
+  mutations
 };

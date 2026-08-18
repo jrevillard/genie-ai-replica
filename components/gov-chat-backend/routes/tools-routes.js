@@ -72,7 +72,7 @@ module.exports = (toolsService) => {
       if (!query) {
         return res.status(400).json({ success: false, message: 'Query is required' });
       }
-      
+
       const searxngUrl = process.env.SEARXNG_URL || 'http://searxng:8080';
       const searchRes = await fetch(`${searxngUrl}/search?q=${encodeURIComponent(query)}&format=json`);
       if (!searchRes.ok) {

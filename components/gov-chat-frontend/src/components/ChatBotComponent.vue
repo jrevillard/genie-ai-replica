@@ -614,14 +614,16 @@ export default {
       try {
         const html = marked.parse(content);
         let sanitized = DOMPurify.sanitize(html);
-        
+
         // Render inline citations e.g. [1] or [1, 2]
         sanitized = sanitized.replace(/\[((?:\d+)(?:,\s*(?:\d+))*)\]/g, (match, p1) => {
-          const numbers = p1.split(',').map(n => n.trim());
-          const links = numbers.map(n => `<a href="#" class="citation-link" data-citation="${n}" title="Source ${n}">[${n}]</a>`);
+          const numbers = p1.split(',').map((n) => n.trim());
+          const links = numbers.map(
+            (n) => `<a href="#" class="citation-link" data-citation="${n}" title="Source ${n}">[${n}]</a>`
+          );
           return `<sup class="citation">${links.join(', ')}</sup>`;
         });
-        
+
         return sanitized;
       } catch (error) {
         console.error('Error rendering Markdown:', error);

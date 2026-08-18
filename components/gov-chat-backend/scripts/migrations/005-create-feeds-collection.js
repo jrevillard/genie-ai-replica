@@ -11,7 +11,7 @@ async function up(database) {
       type: 'persistent',
       fields: ['url'],
       unique: true,
-      name: 'idx_feeds_url',
+      name: 'idx_feeds_url'
     });
 
     console.log(`[migrations] Created collection ${collectionName} with indexes`);
@@ -21,5 +21,5 @@ async function up(database) {
 }
 
 module.exports = {
-  up,
+  up
 };

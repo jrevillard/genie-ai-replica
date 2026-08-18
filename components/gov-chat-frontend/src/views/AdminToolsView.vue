@@ -62,7 +62,7 @@
               {{ error }}
             </DsStateDisplay>
 
-            <div class="table-container" v-else>
+            <div v-else class="table-container">
               <table class="data-table">
                 <thead>
                   <tr>
@@ -113,7 +113,7 @@
                 <label>Test Search Query</label>
                 <div style="display: flex; gap: 8px">
                   <DsInput v-model="searchQuery" placeholder="Enter query..." style="flex: 1" />
-                  <DsButton variant="primary" @click="runTestSearch" :disabled="!searchQuery || isSearching">
+                  <DsButton variant="primary" :disabled="!searchQuery || isSearching" @click="runTestSearch">
                     {{ isSearching ? 'Searching...' : 'Test Search' }}
                   </DsButton>
                 </div>
@@ -165,17 +165,17 @@
 
         <div class="form-group mt-3">
           <label>Polling Interval (seconds)</label>
-          <DsInput type="number" v-model.number="feedForm.polling_interval" />
+          <DsInput v-model.number="feedForm.polling_interval" type="number" />
         </div>
 
         <div class="form-group mt-3" style="display: flex; align-items: center; gap: 8px">
-          <input type="checkbox" id="feed-enabled" v-model="feedForm.enabled" />
+          <input id="feed-enabled" v-model="feedForm.enabled" type="checkbox" />
           <label for="feed-enabled" style="margin: 0">Enabled</label>
         </div>
 
         <div class="modal-actions mt-4" style="display: flex; justify-content: flex-end; gap: 8px">
           <DsButton variant="secondary" @click="closeFeedModal">Cancel</DsButton>
-          <DsButton variant="primary" @click="saveFeed" :disabled="!feedForm.title || !feedForm.url"
+          <DsButton variant="primary" :disabled="!feedForm.title || !feedForm.url" @click="saveFeed"
             >Save Feed</DsButton
           >
         </div>
@@ -186,10 +186,10 @@
 
 <script>
 import { mapState, mapActions } from 'vuex';
-import DsButton from '@/components/design-system/DsButton.vue';
-import DsInput from '@/components/design-system/DsInput.vue';
-import DsStateDisplay from '@/components/design-system/DsStateDisplay.vue';
-import DsStatusTag from '@/components/design-system/DsStatusTag.vue';
+import DsButton from '@/components/ds/Button.vue';
+import DsInput from '@/components/ds/Input.vue';
+import DsStateDisplay from '@/components/ds/StateDisplay.vue';
+import DsStatusTag from '@/components/ds/StatusTag.vue';
 
 export default {
   name: 'AdminToolsView',
@@ -272,8 +272,6 @@ export default {
 </script>
 
 <style scoped>
-@import '@/assets/theme-components.css';
-
 .admin-page {
   display: flex;
   height: 100vh;

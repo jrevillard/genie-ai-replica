@@ -311,3 +311,178 @@ describe('authz strictness (2026-08-16 review fixes)', () => {
     await expect(repoService.getById('r1', { authz: ['repoA'] })).rejects.toMatchObject({ code: 'AUTHZ_TYPE_ERROR' });
   });
 });
+
+// ─── Story 4.8: repository clone (D-V5) ───────────────────────────────────────
+
+describe('create additive opts (Story 4.8 — R5 default pinned)', () => {
+  beforeEach(() => db._reset());
+
+  test('legacy call (no opts) is byte-identical: lifecycle register + NO cloned_from field', async () => {
+    const repo = await repoService.create(validCreateInput(), ACTOR);
+    expect(repo.lifecycle_state).toBe('register');
+    expect(repo.cloned_from).toBeUndefined();
+    const stored = db._stores.okf_repositories[repo.repo_id];
+    expect(stored.cloned_from).toBeUndefined();
+    const audits = Object.values(db._stores.okf_audit || {});
+    expect(audits[0].action).toBe('repo.create');
+  });
+
+  test('opts { lifecycle_state, cloned_from, audit_action } are honored (clone path)', async () => {
+    const repo = await repoService.create(validCreateInput(), ACTOR, {
+      lifecycle_state: 'draft',
+      cloned_from: { repo_id: 'src', version: 2 },
+      audit_action: 'repo.clone'
+    });
+    expect(repo.lifecycle_state).toBe('draft');
+    expect(repo.cloned_from).toEqual({ repo_id: 'src', version: 2 });
+    const audits = Object.values(db._stores.okf_audit || {});
+    expect(audits[0].action).toBe('repo.clone');
+  });
+});
+
+describe('cloneRepository (Story 4.8 — D-V5)', () => {
+  beforeEach(() => {
+    db._reset();
+    // The arango-mock's save derives the key from doc.repo_id — every copied meta
+    // row would collide on the clone's repo_id. Give the meta store unique keys
+    // (real ArangoDB auto-generates _key; the mock needs a hand).
+    let n = 0;
+    db.collection('okf_concepts_meta').save.mockImplementation(async (doc) => {
+      const k = doc._key || `meta-copy-${++n}`;
+      db._stores.okf_concepts_meta[k] = { ...doc, _key: k, _id: `okf_concepts_meta/${k}`, _rev: '1' };
+      return { ...db._stores.okf_concepts_meta[k] };
+    });
+    // The clone's meta read (db.query with {source_id} bind var) returns the rows.
+    db.query.mockImplementation(async (_query, bindVars) => ({
+      all: async () =>
+        Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === (bindVars && bindVars.source_id))
+    }));
+  });
+
+  /** Seed a source repo + N concept-meta rows (incl. a `concepts/`-prefixed id). */
+  async function seedSource() {
+    const src = await repoService.create(validCreateInput({ name: 'Source KB', domain: 'smoke' }), ACTOR);
+    const rows = [
+      { concept_id: 'index', title: 'Index', bundle_version: null, content_hash: 'h1', index_status: 'indexed' },
+      {
+        concept_id: 'service_directory',
+        title: 'Service Directory',
+        bundle_version: 1,
+        content_hash: 'h2',
+        index_status: 'indexed'
+      },
+      {
+        concept_id: 'concepts/bad_concept',
+        title: 'Bad',
+        bundle_version: null,
+        content_hash: 'h3',
+        index_status: 'indexed'
+      }
+    ];
+    rows.forEach((r, i) => {
+      db._stores.okf_concepts_meta[`src-meta-${i}`] = {
+        _key: `src-meta-${i}`,
+        repo_id: src.repo_id,
+        graph_name: `OKF_${src.repo_id}`,
+        pii_state: 'clean',
+        conformance_issues: [],
+        lifecycle_status: 'stable',
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z',
+        ...r
+      };
+    });
+    return { src, rows };
+  }
+
+  test('mints a NEW repo (new repo_id + OKF_{new} graph, lifecycle draft) + default name + cloned_from lineage', async () => {
+    const { src } = await seedSource();
+    const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    expect(clone.repo_id).not.toBe(src.repo_id);
+    expect(clone.graph_name).toBe(`OKF_${clone.repo_id}`);
+    expect(clone.lifecycle_state).toBe('draft');
+    expect(clone.name).toBe('Source KB (clone)');
+    expect(clone.domain).toBe('smoke');
+    expect(clone.cloned_from).toEqual({ repo_id: src.repo_id, version: null });
+    expect(clone.copied_concepts).toBe(3);
+  });
+
+  test('cloned_from.version = the source CURRENT version (never-minted → null)', async () => {
+    const { src } = await seedSource();
+    const unminted = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    expect(unminted.cloned_from.version).toBeNull();
+    // Mint the source (bump version on the stored doc) then re-clone → version carried.
+    db._stores.okf_repositories[src.repo_id].version = 2;
+    const minted = await repoService.cloneRepository(src.repo_id, { name: 'Source KB (clone v2)' }, ACTOR);
+    expect(minted.cloned_from).toEqual({ repo_id: src.repo_id, version: 2 });
+  });
+
+  test('copies meta VERBATIM: concept_id (incl. concepts/ prefix), title, bundle_version, content_hash, index_status — graph rewritten to OKF_{clone}', async () => {
+    const { src, rows } = await seedSource();
+    const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    const copied = Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === clone.repo_id);
+    expect(copied).toHaveLength(rows.length);
+    const byId = Object.fromEntries(copied.map((m) => [m.concept_id, m]));
+    expect(byId['concepts/bad_concept']).toBeDefined(); // verbatim — never re-derived
+    for (const r of rows) {
+      const c = byId[r.concept_id];
+      expect(c).toBeDefined();
+      expect(c.title).toBe(r.title);
+      expect(c.bundle_version).toBe(r.bundle_version);
+      expect(c.content_hash).toBe(r.content_hash);
+      expect(c.index_status).toBe(r.index_status);
+      expect(c.graph_name).toBe(`OKF_${clone.repo_id}`);
+      expect(c.pii_state).toBe('clean');
+    }
+    // created_at preserved; updated_at stamped to the clone time.
+    expect(byId.index.updated_at).not.toBe('2026-08-01T00:00:00.000Z');
+    expect(byId.index.created_at).toBe('2026-08-01T00:00:00.000Z');
+  });
+
+  test('explicit target name/domain/acl override the derived defaults', async () => {
+    const { src } = await seedSource();
+    const clone = await repoService.cloneRepository(
+      src.repo_id,
+      { name: 'My Fork', domain: 'health', acl: { sensitivity: 'public' } },
+      ACTOR
+    );
+    expect(clone.name).toBe('My Fork');
+    expect(clone.domain).toBe('health');
+    expect(clone.acl).toEqual({ sensitivity: 'public' });
+  });
+
+  test('404 REPO_NOT_FOUND when the source is unknown or soft-deleted', async () => {
+    await expect(repoService.cloneRepository('nope', {}, ACTOR)).rejects.toMatchObject({
+      code: 'REPO_NOT_FOUND',
+      status: 404
+    });
+    const { src } = await seedSource();
+    await repoService.remove(src.repo_id, ACTOR);
+    await expect(repoService.cloneRepository(src.repo_id, {}, ACTOR)).rejects.toMatchObject({
+      code: 'REPO_NOT_FOUND',
+      status: 404
+    });
+  });
+
+  test('409 DUPLICATE_REPO when the target (name, domain) collides with a live repo', async () => {
+    const { src } = await seedSource();
+    // A live repo already named '<source> (clone)' in the same domain.
+    await repoService.create(validCreateInput({ name: 'Source KB (clone)', domain: 'smoke' }), ACTOR);
+    await expect(repoService.cloneRepository(src.repo_id, {}, ACTOR)).rejects.toMatchObject({
+      code: 'DUPLICATE_REPO',
+      status: 409
+    });
+  });
+
+  test('writes a repo.clone audit row + does NOT mutate the source meta', async () => {
+    const { src, rows } = await seedSource();
+    const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
+    const audits = Object.values(db._stores.okf_audit || {}).filter((a) => a.action === 'repo.clone');
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ actor: 'steward-1', repo_id: clone.repo_id });
+    // Source meta untouched.
+    const sourceMeta = Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === src.repo_id);
+    expect(sourceMeta).toHaveLength(rows.length);
+    expect(sourceMeta.every((m) => m.graph_name === `OKF_${src.repo_id}`)).toBe(true);
+  });
+});

@@ -56,6 +56,13 @@
 //      concept WITH bundle_version=1 + the okf:v1 label; the worker drains it
 //      and EVERY new chunk doc carries bundle_version=1; mint v2 (crawl
 //      trigger, D-V4) → list [v2, v1], manifest v1 INTACT (INSERT-only).
+//  14. Clone VERIFIED (4.8, D-V5 §8.4): the clone endpoint 403s a scoped READ
+//      caller (admin mutation); cloning the minted source yields a NEW repo
+//      (new repo_id + OKF_{new} graph + lifecycle draft) with cloned_from
+//      {repo_id, version: 2} + 6 meta rows copied verbatim (title/bundle_version/
+//      content_hash/index_status preserved); a modified concept re-ingests into
+//      the CLONE graph ONLY (dedup-skips the other 5), and the SOURCE's chunks +
+//      edges are UNCHANGED (isolation).
 
 const fs = require('fs');
 const path = require('path');
@@ -205,7 +212,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    '\nSMOKE TEST PASSED (control-plane + 6.1 authz matrix + 2.9.1 orchestrator + zip bundle + dual-facility graphs, all asserted)'
+    '\nSMOKE TEST PASSED (control-plane + 6.1 authz matrix + 2.9.1 orchestrator + zip bundle + dual-facility graphs + 2.9.7 versions + 4.8 clone isolation, all asserted)'
   );
   process.exit(0); // the db-connection cleanup timer keeps the loop alive otherwise
 }
@@ -579,6 +586,14 @@ async function ingestPhase(db) {
   s1.status === 403 && s1.body && s1.body.error === 'FORBIDDEN_SCOPE'
     ? pass('ingest: scoped READ caller -> 403 FORBIDDEN_SCOPE (zip body)')
     : fail('ingest scoped-read -> ' + s1.status + ' ' + JSON.stringify(s1.body).slice(0, 100));
+
+  // Story 4.8 (D-V5): the clone is an ADMIN mutation on the source repo — a
+  // scoped READ caller must be 403 at the route (the real clone happens late,
+  // in-container, when user tokens are expired; this is the live HTTP gate).
+  const c0 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/clone', SCOPED, {});
+  c0.status === 403 && c0.body && c0.body.error === 'FORBIDDEN_SCOPE'
+    ? pass('clone: scoped READ caller -> 403 FORBIDDEN_SCOPE (admin mutation on the source)')
+    : fail('clone scoped-read -> ' + c0.status + ' ' + JSON.stringify(c0.body).slice(0, 100));
 
   // ── (ii) THE FULL KENYA BUNDLE AS A ZIP, through the orchestrator ──
   const r1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
@@ -1012,6 +1027,213 @@ async function ingestPhase(db) {
     ? pass('edges: ZERO cross-repo / dangling concept edges (every _to resolves to a repo concept vertex — G22 held)')
     : fail('cross-repo/dangling edges: ' + JSON.stringify(dangling.slice(0, 3)));
 
+  // ── (xiii) CLONE (Story 4.8 — D-V5 §8.4): fork the repo, curate, isolate ──
+  // The source must be fully drained + minted (meta rows carry index_status=
+  // 'indexed' + the source version is 2 for cloned_from). The clone runs via the
+  // in-container service module (the HTTP 201/404/409 matrix is unit-tested; the
+  // live HTTP 403 admin-gate is asserted EARLY above, before the drain).
+  const repositoryService = require('./services/repository-service');
+  const CLONE_NAME = REPO_NAME + ' (smoke clone)';
+  console.log('  CLONE   : forking "' + REPO_NAME + '" (D-V5) — new repo + meta copy + cloned_from + isolation');
+  // Re-run safety: remove any prior smoke clone (fixed clone name) + purge data.
+  const priorClones = await aqlAll(
+    "FOR r IN okf_repositories FILTER r.domain == 'smoke' AND r.name == '" +
+      CLONE_NAME +
+      "' RETURN KEEP(r, ['repo_id'])"
+  );
+  for (const pc of priorClones) {
+    try {
+      await repositoryService.remove(pc.repo_id, { sub: 'smoke-run' });
+    } catch (e) {
+      /* best-effort — already removed */
+    }
+    await aqlAll("FOR m IN okf_concepts_meta FILTER m.repo_id == '" + pc.repo_id + "' REMOVE m IN okf_concepts_meta");
+    await aqlAll("FOR f IN files FILTER f.repo_id == '" + pc.repo_id + "' REMOVE f IN files");
+    await aqlAll("FOR v IN okf_versions FILTER v.repo_id == '" + pc.repo_id + "' REMOVE v IN okf_versions");
+    await aqlAll("REMOVE '" + pc.repo_id + "' IN okf_repositories");
+  }
+  // Snapshot the source's physical state — the isolation baseline.
+  const srcChunksBefore =
+    (await aqlAll('FOR c IN `' + OKF_GRAPH + '_SOURCE` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
+  const srcEdgesBefore =
+    (await aqlAll('FOR e IN `' + OKF_GRAPH + '_LINKS_TO` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
+
+  const clone = await repositoryService.cloneRepository(
+    INGEST_REPO,
+    { name: CLONE_NAME, domain: 'smoke' },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  const CLONE_ID = clone.repo_id;
+  const CLONE_GRAPH = clone.graph_name || 'OKF_' + CLONE_ID;
+  clone.repo_id !== INGEST_REPO && clone.graph_name === CLONE_GRAPH && clone.lifecycle_state === 'draft'
+    ? pass('clone: new repo_id + ' + CLONE_GRAPH + ' graph + lifecycle_state=draft (unique registry entry)')
+    : fail('clone registry: ' + JSON.stringify(clone));
+  clone.cloned_from && clone.cloned_from.repo_id === INGEST_REPO && clone.cloned_from.version === 2
+    ? pass('clone: cloned_from { repo_id: source, version: 2 } lineage recorded')
+    : fail('clone cloned_from: ' + JSON.stringify(clone.cloned_from));
+
+  // The copied meta: concept_id set identical + the D-V1 triple preserved.
+  const cloneMeta = await aqlAll(
+    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+      CLONE_ID +
+      "' RETURN KEEP(m, ['concept_id','title','bundle_version','content_hash','index_status','graph_name'])"
+  );
+  const srcMeta2 = await aqlAll(
+    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+      INGEST_REPO +
+      "' RETURN KEEP(m, ['concept_id','title','bundle_version','content_hash','index_status'])"
+  );
+  cloneMeta.length === EXPECTED_CONCEPTS
+    ? pass('clone meta: ' + cloneMeta.length + ' concepts copied (source had ' + srcMeta2.length + ')')
+    : fail('clone meta count: ' + cloneMeta.length);
+  const tripleOk =
+    cloneMeta.length === srcMeta2.length &&
+    cloneMeta.every((cm) => {
+      const s = srcMeta2.find((x) => x.concept_id === cm.concept_id);
+      return (
+        s &&
+        s.title === cm.title &&
+        s.bundle_version === cm.bundle_version &&
+        s.content_hash === cm.content_hash &&
+        s.index_status === cm.index_status &&
+        cm.graph_name === CLONE_GRAPH
+      );
+    });
+  tripleOk
+    ? pass(
+        'clone meta: title/bundle_version/content_hash/index_status preserved verbatim + graph rewritten to OKF_{clone}'
+      )
+    : fail('clone meta triple mismatch: ' + JSON.stringify({ clone: cloneMeta, src: srcMeta2 }));
+
+  // Curate the clone: modify ONE concept, re-ingest → the other 5 dedup-skip
+  // (unchanged + index_status preserved) and the modified one re-indexes into the
+  // CLONE's graph only.
+  const cloneConcepts = concepts.map((c) =>
+    c.path === 'service_directory.md'
+      ? {
+          ...c,
+          body:
+            c.body +
+            '\n\n## Cloned amendment (D-V5 §8.4)\n\nModified in the clone to prove it re-indexes into the CLONE graph only.\n'
+        }
+      : c
+  );
+  const rc = await ingestService.ingestRepoConcepts(
+    CLONE_ID,
+    { concepts: cloneConcepts, labels: ['Service Directory'] },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  rc.skipped_dedup === EXPECTED_CONCEPTS - 1 && rc.enqueued === 1
+    ? pass(
+        'clone re-ingest: ' +
+          (EXPECTED_CONCEPTS - 1) +
+          ' dedup-skipped (unchanged+indexed), 1 enqueued (modified concept)'
+      )
+    : fail(
+        'clone re-ingest summary: ' +
+          JSON.stringify({ skipped: rc.skipped_dedup, enqueued: rc.enqueued, errors: rc.enqueue_errors })
+      );
+
+  // Drain the clone's single new Pending file (worker-paced).
+  let cloneFile = (
+    await aqlAll(
+      "FOR f IN files FILTER f.repo_id == '" +
+        CLONE_ID +
+        "' RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name'])"
+    )
+  )[0];
+  let cStatus = null;
+  if (cloneFile) {
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 15000));
+      const row = (
+        await aqlAll("FOR x IN files FILTER x.file_id == '" + cloneFile.file_id + "' RETURN KEEP(x, ['dataprep'])")
+      )[0];
+      cStatus = row && row.dataprep && row.dataprep.status;
+      if (cStatus === 'Ingested' || cStatus === 'Ingestion Error' || cStatus === 'Killed') break;
+    }
+  }
+  cloneFile && cloneFile.graph_name === CLONE_GRAPH
+    ? pass("clone: the modified concept's files doc is graph-stamped to the CLONE graph (" + CLONE_GRAPH + ')')
+    : fail('clone files doc graph_name: ' + JSON.stringify(cloneFile));
+  cStatus === 'Ingested'
+    ? pass('clone: worker drained the modified concept to Ingested')
+    : fail('clone drain ended "' + cStatus + '"');
+
+  // Physical isolation: the modified concept's chunks in the CLONE graph ONLY,
+  // and the SOURCE's chunks + edges are UNCHANGED (the original is never touched).
+  const cloneChunks = cloneFile
+    ? (
+        await aqlAll(
+          'FOR c IN `' +
+            CLONE_GRAPH +
+            '_SOURCE` FILTER c.file_id == "' +
+            cloneFile.file_id +
+            '" COLLECT WITH COUNT INTO n RETURN n'
+        )
+      )[0]
+    : 0;
+  cloneChunks > 0
+    ? pass(
+        'clone: modified concept indexed into the CLONE graph (' +
+          cloneChunks +
+          ' chunks in ' +
+          CLONE_GRAPH +
+          '_SOURCE)'
+      )
+    : fail('clone graph: no chunks for the modified concept in ' + CLONE_GRAPH + '_SOURCE');
+  const srcLeak = cloneFile
+    ? (
+        await aqlAll(
+          'FOR c IN `' +
+            OKF_GRAPH +
+            '_SOURCE` FILTER c.file_id == "' +
+            cloneFile.file_id +
+            '" COLLECT WITH COUNT INTO n RETURN n'
+        )
+      )[0]
+    : 0;
+  (srcLeak || 0) === 0
+    ? pass('clone isolation: ZERO clone chunks in the SOURCE graph')
+    : fail('clone isolation BROKEN: ' + srcLeak + ' clone chunks in the source graph');
+  const srcChunksAfter =
+    (await aqlAll('FOR c IN `' + OKF_GRAPH + '_SOURCE` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
+  const srcEdgesAfter =
+    (await aqlAll('FOR e IN `' + OKF_GRAPH + '_LINKS_TO` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
+  srcChunksAfter === srcChunksBefore && srcEdgesAfter === srcEdgesBefore
+    ? pass(
+        'clone isolation: SOURCE chunks+edges UNCHANGED (' +
+          srcChunksBefore +
+          ' chunks / ' +
+          srcEdgesBefore +
+          ' edges — the original is never touched)'
+      )
+    : fail(
+        'clone isolation: source changed before=' +
+          srcChunksBefore +
+          '/' +
+          srcEdgesBefore +
+          ' after=' +
+          srcChunksAfter +
+          '/' +
+          srcEdgesAfter
+      );
+  const cloneGraphTotal =
+    (await aqlAll('FOR c IN `' + CLONE_GRAPH + '_SOURCE` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
+  cloneGraphTotal === (cloneChunks || 0)
+    ? pass(
+        'clone: exactly the modified concept materialized in the clone graph (' +
+          cloneGraphTotal +
+          ' chunks; the other 5 metadata-only until curated)'
+      )
+    : fail('clone graph total: ' + cloneGraphTotal + ' != ' + cloneChunks);
+
+  // Cleanup: remove the clone (drops its graph + meta + files + versions via the
+  // real remove() → retractRepoGraph) + purge the registry tombstone.
+  await repositoryService.remove(CLONE_ID, { sub: 'smoke-run' });
+  await aqlAll("REMOVE '" + CLONE_ID + "' IN okf_repositories");
+  pass('clone: cleanup — clone removed, its ' + CLONE_GRAPH + ' graph dropped (registry hygiene for re-runs)');
+
   // ── (viii) CHUNKS — the physical proof, per facility/graph ──
   // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph
   // (Story 2.9.6 wiring: doc-repo sends graph_name → dataprep writes the
@@ -1150,7 +1372,7 @@ async function ingestPhase(db) {
   // (retractRepoGraph, wired into repository delete). Verified via the real
   // remove() flow (the service function — the HTTP DELETE route's authz is
   // unit-tested; the user token has expired by this point in the run).
-  const repositoryService = require('./services/repository-service');
+  // (repositoryService already required by the clone phase above.)
   const delResult = await repositoryService.remove(INGEST_REPO, { sub: 'smoke-run' });
   delResult && delResult.deleted_at
     ? pass('bundle retract: repo soft-deleted (pending_hard_delete) → graph drop executed')

@@ -8,7 +8,7 @@ const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
 const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
-const { createSchema, updateSchema } = require('../validators/repository-validator');
+const { createSchema, updateSchema, cloneSchema } = require('../validators/repository-validator');
 
 class ValidationError extends Error {
   constructor(details) {
@@ -214,6 +214,26 @@ async function getRepoVersion(req, res, next) {
   }
 }
 
+/**
+ * Story 4.8 (D-V5) — clone an OKF repository: create a NEW draft repo that copies
+ * the source's concepts + meta verbatim + records cloned_from lineage. Gate order
+ * mirrors ingest: requireRepoScope('source_id','admin') (route) → getById pre-gate
+ * (404 foreign/missing, anti-enumeration) → cloneRepository → 201. All body fields
+ * optional (defaults derived by the service); a duplicate (name,domain) → 409.
+ */
+async function cloneRepo(req, res, next) {
+  try {
+    const { source_id } = req.params;
+    const input = validate(cloneSchema, req.body || {});
+    // Repo-existence + authorization gate (mirrors every other mutating route).
+    await repoService.getById(source_id, { authz: authzForService(req) });
+    const clone = await repoService.cloneRepository(source_id, input, actorFrom(req));
+    res.status(201).json(clone);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function updateRepo(req, res, next) {
   try {
     const patch = validate(updateSchema, req.body);
@@ -301,6 +321,7 @@ async function piiScan(req, res, next) {
 
 module.exports = {
   createRepo,
+  cloneRepo,
   listRepos,
   getRepo,
   updateRepo,

@@ -37,4 +37,9 @@ router.post('/:repo_id/versions', requireRepoScope('repo_id', 'admin'), ctrl.min
 router.get('/:repo_id/versions', requireRepoScope('repo_id', 'read'), ctrl.listRepoVersions);
 router.get('/:repo_id/versions/:bundle_version', requireRepoScope('repo_id', 'read'), ctrl.getRepoVersion);
 
+// Repository clone (Story 4.8 — D-V5): an ADMIN mutation on the SOURCE repo —
+// the clone reads the source wholesale (registry + meta), so the source's admin
+// scope gates it (mirrors ingest). getById pre-gate (404 foreign) in the controller.
+router.post('/:source_id/clone', requireRepoScope('source_id', 'admin'), ctrl.cloneRepo);
+
 module.exports = router;

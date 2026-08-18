@@ -578,3 +578,83 @@ describe('GET /api/okf/repos/:repo_id/versions (list + manifest)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+// ─── Story 4.8: POST /api/okf/repos/:source_id/clone ──────────────────────────
+
+describe('POST /api/okf/repos/:source_id/clone (Story 4.8 — D-V5)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+    repoService.cloneRepository.mockResolvedValue({
+      repo_id: 'clone-1',
+      graph_name: 'OKF_clone-1',
+      lifecycle_state: 'draft',
+      cloned_from: { repo_id: 'repoA', version: 2 },
+      copied_concepts: 3
+    });
+  });
+
+  test('admin scope + empty body → 201 with the clone (defaults derived by the service)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA', version: 2 });
+    const res = await request(createApp()).post('/api/okf/repos/repoA/clone').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ repo_id: 'clone-1', lifecycle_state: 'draft', copied_concepts: 3 });
+    // gate order: getById (existence+authz) BEFORE clone
+    expect(repoService.getById).toHaveBeenCalledWith('repoA', expect.anything());
+    expect(repoService.cloneRepository).toHaveBeenCalledWith(
+      'repoA',
+      {},
+      expect.objectContaining({ sub: 'steward-1' })
+    );
+  });
+
+  test('explicit body fields are validated + passed through', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/clone')
+      .set('Authorization', TOKEN)
+      .send({ name: 'My Fork', domain: 'health' });
+    expect(res.status).toBe(201);
+    expect(repoService.cloneRepository).toHaveBeenCalledWith(
+      'repoA',
+      expect.objectContaining({ name: 'My Fork', domain: 'health' }),
+      expect.anything()
+    );
+  });
+
+  test('read scope → 403 FORBIDDEN_SCOPE (clone is an admin mutation)', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp()).post('/api/okf/repos/repoA/clone').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('FORBIDDEN_SCOPE');
+    expect(repoService.cloneRepository).not.toHaveBeenCalled();
+  });
+
+  test('foreign source (super-admin) → 404 via getById gate; clone never called', async () => {
+    authScoped([], ['tools-admin']);
+    repoService.getById.mockRejectedValue(Object.assign(new Error('nf'), { code: 'REPO_NOT_FOUND', status: 404 }));
+    const res = await request(createApp()).post('/api/okf/repos/repoB/clone').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(404);
+    expect(repoService.cloneRepository).not.toHaveBeenCalled();
+  });
+
+  test('409 DUPLICATE_REPO surfaces from the service (target (name,domain) collision)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    repoService.cloneRepository.mockRejectedValue(
+      Object.assign(new Error('dup'), { code: 'DUPLICATE_REPO', status: 409 })
+    );
+    const res = await request(createApp()).post('/api/okf/repos/repoA/clone').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('DUPLICATE_REPO');
+  });
+
+  test('tools-admin (no scopes) passes via super-role — operator regression', async () => {
+    authScoped([], ['tools-admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
+    const res = await request(createApp()).post('/api/okf/repos/repoA/clone').set('Authorization', TOKEN).send({});
+    expect(res.status).toBe(201);
+  });
+});

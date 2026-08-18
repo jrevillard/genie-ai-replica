@@ -26,7 +26,21 @@ const { retractRepoGraph } = require('./graph-retract-service');
 const COLLECTION = 'okf_repositories';
 
 // FR-9 lifecycle states — inlined per story; extract to lifecycle.js in Story 4.3.
-const LIFECYCLE_STATES = ['register', 'validate', 'review', 'approve', 'publish', 'version', 'deprecate', 'retire'];
+// 'draft' (Story 4.8, design addendum D-V5): a CLONED repository enters 'draft' —
+// a fork not yet in the register→…→retire flow. Story 4.3's TRANSITIONS map must
+// include a 'draft' entry (noted in the 4.8 scope boundary). Manually-created
+// repos keep INITIAL_STATE='register' — two distinct entry states, both valid.
+const LIFECYCLE_STATES = [
+  'draft',
+  'register',
+  'validate',
+  'review',
+  'approve',
+  'publish',
+  'version',
+  'deprecate',
+  'retire'
+];
 const INITIAL_STATE = 'register';
 const DELETE_STATE = 'retire';
 const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
@@ -123,8 +137,13 @@ function decodeCursor(cursor) {
  * so concurrent creates cannot produce duplicates.
  * @param {object} input {name, domain, source?, acl, retention?}
  * @param {object} actor {sub, name?, source_ip?}
+ * @param {object} [opts] ADDITIVE (Story 4.8, R5) — { lifecycle_state?, cloned_from?,
+ *        audit_action? }. Defaults reproduce the pre-4.8 behavior byte-identically
+ *        ('register', no cloned_from field, audit 'repo.create') so existing
+ *        callers are untouched. The clone passes { lifecycle_state:'draft',
+ *        cloned_from:{repo_id,version}, audit_action:'repo.clone' }.
  */
-async function create(input, actor) {
+async function create(input, actor, opts = {}) {
   return withSpan('okf.repo.create', async (span) => {
     span.setAttribute('okf.operation', 'create');
     span.setAttribute('okf.domain', input.domain);
@@ -155,7 +174,7 @@ async function create(input, actor) {
       source: input.source || null,
       graph_name,
       okf_version: '0.2',
-      lifecycle_state: INITIAL_STATE,
+      lifecycle_state: opts.lifecycle_state || INITIAL_STATE, // Story 4.8: the clone enters 'draft' (additive; default = register)
       version: null,
       curator: actor ? { sub: actor.sub || null, name: actor.name || null } : null,
       acl: input.acl || {},
@@ -165,6 +184,11 @@ async function create(input, actor) {
       deleted_at: null,
       delete_after: null
     };
+    // Story 4.8 (D-V5): a clone records its origin lineage. Additive — a regular
+    // create carries NO cloned_from field, so its doc shape is byte-identical.
+    if (opts.cloned_from) {
+      doc.cloned_from = opts.cloned_from;
+    }
     try {
       await db.collection(COLLECTION).save(doc);
     } catch (err) {
@@ -184,13 +208,95 @@ async function create(input, actor) {
 
     await auditService.writeAudit({
       actor: (actor && actor.sub) || 'system',
-      action: 'repo.create',
+      action: opts.audit_action || 'repo.create', // Story 4.8: the clone audits 'repo.clone' (additive)
       repo_id,
       source_ip: (actor && actor.source_ip) || null
     });
     recordOp('create', 'success');
     logger.info('OKF repository created', { repo_id, graph_name, domain: input.domain });
     return toResponse(doc);
+  });
+}
+
+/**
+ * Clone an OKF repository (Story 4.8 — design addendum D-V5 backend semantics).
+ * Creates a NEW repository (new repo_id + OKF_{repo_id} graph, unique registry
+ * entry, lifecycle_state='draft') whose registry doc records the origin lineage
+ * `cloned_from: { repo_id, version }`, then copies the source's okf_concepts_meta
+ * rows VERBATIM — the D-V1 ingestion-identity triple (title, bundle_version,
+ * content_hash) AND the indexing state (index_status/pii_state/conformance_issues/
+ * lifecycle_status/trust_tier/labels/links/frontmatter/sources/created_at) are
+ * preserved; `concept_id` is copied AS-IS (never re-derived — the 2.9.3
+ * `concepts/`-prefix lesson). The copy is METADATA-ONLY (D-V5 v1 semantics):
+ * chunks/edges are NOT copied; content materializes into the clone's OWN graph on
+ * re-ingest through the EXISTING write path (2.9.1 orchestrator → 2.9.4 worker →
+ * 2.9.6 graph wiring). Because index_status is preserved, an unchanged+indexed
+ * concept dedup-skips on the clone's re-ingest (the 4e rule); a MODIFIED concept
+ * re-ingests into the clone graph. The SOURCE is never written (isolation).
+ * @param {string} source_id — the repository to fork
+ * @param {object} [input] { name?, domain?, acl?, source?, retention? } — target
+ *        identity overrides (defaults: `<source> (clone)`, source domain/acl)
+ * @param {object} [actor] { sub, name?, source_ip? } — audit
+ * @returns {Promise<{...repo, cloned_from, copied_concepts}>}
+ * @throws RepoError REPO_NOT_FOUND (404) | DUPLICATE_REPO (409)
+ */
+async function cloneRepository(source_id, input, actor) {
+  return withSpan('okf.repo.clone', async (span) => {
+    span.setAttribute('okf.operation', 'clone');
+    span.setAttribute('okf.source_repo_id', source_id);
+    const db = await getDb();
+
+    // Resolve the source — the same getById semantics (404 when missing or
+    // soft-deleted; transient DB errors surface, never masked). The controller's
+    // authz-aware getById pre-gate ran FIRST (anti-enumeration); this fetch is
+    // the authoritative existence check + the derivation fields.
+    const source = await getById(source_id);
+
+    // Target identity (D-V5 §8.1): defaults `<source> (clone)` + the source's
+    // domain + the source's ACL (a fork keeps the source's access policy). The
+    // (name, domain, deleted_at) unique index + create()'s dup-check backstop
+    // enforce the D-V2 unique-registry invariant → 409 DUPLICATE_REPO.
+    const target = {
+      name: (input && input.name) || `${source.name} (clone)`,
+      domain: (input && input.domain) || source.domain,
+      acl: (input && input.acl) || source.acl || {},
+      source: (input && input.source) || source.source || null,
+      retention: (input && input.retention) || source.retention || null
+    };
+
+    // New registry entry via the shared create() registry logic — additive opts
+    // (lifecycle_state='draft', cloned_from lineage, audit 'repo.clone').
+    const clone = await create(target, actor, {
+      lifecycle_state: 'draft',
+      cloned_from: { repo_id: source_id, version: source.version != null ? source.version : null },
+      audit_action: 'repo.clone'
+    });
+
+    // Copy the source's concepts + meta VERBATIM into the clone's repo. The
+    // (repo_id, concept_id) unique index guards each inserted row.
+    const metaCol = db.collection('okf_concepts_meta');
+    const sourceRows = await (
+      await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @source_id RETURN m', { source_id })
+    ).all();
+    const ts = nowIso();
+    let copied = 0;
+    for (const row of sourceRows) {
+      const copy = { ...row };
+      delete copy._key;
+      delete copy._id;
+      delete copy._rev;
+      copy.repo_id = clone.repo_id;
+      copy.graph_name = `OKF_${clone.repo_id}`;
+      copy.updated_at = ts; // created_at preserved (the content's origin lineage)
+      await metaCol.save(copy);
+      copied += 1;
+    }
+
+    span.setAttribute('okf.clone.repo_id', clone.repo_id);
+    span.setAttribute('okf.clone.copied_concepts', copied);
+    recordOp('clone', 'success');
+    logger.info('OKF repository cloned', { source_id, repo_id: clone.repo_id, copied_concepts: copied });
+    return { ...clone, copied_concepts: copied };
   });
 }
 
@@ -443,6 +549,7 @@ async function remove(repo_id, actor) {
 
 module.exports = {
   create,
+  cloneRepository,
   list,
   getById,
   update,

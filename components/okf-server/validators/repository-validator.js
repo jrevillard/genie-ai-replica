@@ -41,4 +41,14 @@ const updateSchema = Joi.object({
   .unknown(true)
   .required();
 
-module.exports = { createSchema, updateSchema, aclSchema, sourceSchema };
+// Story 4.8 (D-V5 clone): all fields OPTIONAL — an empty body is valid and the
+// service derives the target identity (`<source> (clone)` + source domain/acl).
+const cloneSchema = Joi.object({
+  name: Joi.string().min(1).max(200).optional(),
+  domain: Joi.string().min(1).max(200).optional(),
+  acl: aclSchema.optional(),
+  source: sourceSchema.optional(),
+  retention: retentionSchema.optional()
+}).required();
+
+module.exports = { createSchema, updateSchema, cloneSchema, aclSchema, sourceSchema };

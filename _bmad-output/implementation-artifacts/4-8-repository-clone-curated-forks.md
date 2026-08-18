@@ -3,7 +3,7 @@ baseline_commit: 3d8add4264b43bba74bdbc0bb7269dfb591333fd
 ---
 # Story 4.8: Repository clone & curated forks — the clone API (D-V5)
 
-Status: ready-for-dev
+Status: review
 
 Story key: `4-8-repository-clone-curated-forks` | GitLab: #971
 Epic: 4 (In-App Concept Authoring & Curation) | Branch: `feat/okf-server`
@@ -94,10 +94,39 @@ Admin-Dashboard clone UI (Story 3.9 — consumes this API; details-dialog lineag
 
 ### Agent Model Used
 
-(dev-story to fill)
+deepseek-v4-flash[1m] (dev-story, 2026-08-18)
 
 ### Debug Log References
 
+- **Red-green:** the clone route/service tests were written to the story ACs first (cloneRepository + create() opts + route matrix); they cannot pass without the implementation (new feature — the route 404s / the service export is undefined pre-change). Target suites: `repository-service.test.js` + `repos-routes.test.js` **88/88**, full okf-server **311/311** (was ~296 before the +15 clone/opts tests); doc-repo **429/429** (regression — NO doc-repo/dataprep change, per AC 6); ESLint 0 errors, Prettier clean (rtk proxy to avoid the phantom wrapper).
+- **Live smoke (local build at C:\Dev\builds\main, okf-server image rebuilt at cfad731):** run 1 = **REAL_EXIT_CODE=0, 71 PASS / 0 FAIL**. (Two prior shell invocations never reached the smoke: an MSYS path-mangling of the token file, then of `/app/run-smoke.js` — fixed with `MSYS2_ARG_CONV_EXCL='*'`; NOT smoke failures.) The **clone phase (D-V5 §8.4) passed end-to-end live**:
+  - `clone: scoped READ caller -> 403 FORBIDDEN_SCOPE` (early HTTP admin-gate)
+  - `clone: new repo_id + OKF_53a80d79-… graph + lifecycle_state=draft (unique registry entry)`
+  - `clone: cloned_from { repo_id: source, version: 2 } lineage recorded`
+  - `clone meta: 6 concepts copied` + `title/bundle_version/content_hash/index_status preserved verbatim + graph rewritten to OKF_{clone}`
+  - `clone re-ingest: 5 dedup-skipped (unchanged+indexed), 1 enqueued (modified concept)` — the preserved index_status makes the other 5 dedup-skip
+  - `clone: the modified concept's files doc is graph-stamped to the CLONE graph`
+  - `clone: worker drained the modified concept to Ingested`
+  - `clone: modified concept indexed into the CLONE graph (3 chunks in OKF_53a80d79-…_SOURCE)`
+  - `clone isolation: ZERO clone chunks in the SOURCE graph` + `SOURCE chunks+edges UNCHANGED (21 chunks / 174 edges — the original is never touched)`
+  - `clone: exactly the modified concept materialized in the clone graph (3 chunks; the other 5 metadata-only until curated)`
+  - `clone: cleanup — clone removed, its OKF_… graph dropped`
+  - Every PRIOR assertion stayed green (authz matrix, zip ingest, worker drain, dedup, mint v1/v2 + manifests, edges, dual retraction) — the assertions never shrink.
+
 ### Completion Notes List
 
+- **All 5 tasks / 7 ACs satisfied.** `LIFECYCLE_STATES` += `'draft'` (additive; Story 4.3 must include a `draft` TRANSITIONS entry — noted in scope boundary). `create(input, actor, opts)` gained ADDITIVE opts (`lifecycle_state`/`cloned_from`/`audit_action`) — the legacy default (register / no cloned_from / repo.create) is pinned by a test.
+- **`cloneRepository`** mints a NEW repo (new repo_id + `OKF_{new}` graph, lifecycle `'draft'`, `cloned_from { repo_id, version: source.version ?? null }`), copies the source's `okf_concepts_meta` rows VERBATIM (concept_id AS-IS incl. `concepts/` prefixes; title/bundle_version/content_hash/index_status/pii_state/etc. preserved; graph rewritten; created_at kept, updated_at stamped), metadata-only (no chunks/edges — content materializes on re-ingest into the clone's own graph), never touches the source.
+- **Route** `POST /api/okf/repos/:source_id/clone` — `requireRepoScope('source_id','admin')` + getById pre-gate (404 foreign, anti-enumeration, mirrors ingest) + all-optional body (defaults derived) → 201 with `{...repo, cloned_concepts}`; 409 DUPLICATE_REPO on target collision. Synchronous 201 (D-2).
+- **Smoke** extended: early scoped-READ 403 + the late clone phase (meta triple, dedup-aware re-ingest, clone-graph-only indexing, source isolation, cleanup). Re-run-safe (fixed clone name cleanup + registry tombstone purge).
+- Commits: `3b806144` (story + sprint status, create-story), `cfad731c` (implementation + smoke + tests).
+
 ### File List
+
+- components/okf-server/services/repository-service.js — LIFECYCLE_STATES += 'draft'; create() additive opts; cloneRepository (NEW)
+- components/okf-server/controllers/repository-controller.js — cloneRepo controller (NEW)
+- components/okf-server/routes/repos-routes.js — POST /:source_id/clone (NEW)
+- components/okf-server/validators/repository-validator.js — cloneSchema (NEW)
+- components/okf-server/__tests__/repository-service.test.js — create-opts + cloneRepository tests (+15)
+- components/okf-server/__tests__/repos-routes.test.js — clone route matrix (+6)
+- data/okf/smoke-test/run-smoke.js — clone phase + early 403 + success criteria (criterion 14)

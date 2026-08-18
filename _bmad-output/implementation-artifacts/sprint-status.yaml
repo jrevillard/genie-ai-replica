@@ -1,5 +1,5 @@
 # generated: 2026-08-10
-# last_updated: 2026-08-12
+# last_updated: 2026-08-19
 
 # project: genie-ai
 # project_key: opea-1.5-upgrade
@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-08-10
-last_updated: 2026-08-12
+last_updated: 2026-08-19
 
 project: genie-ai
 project_key: opea-1.5-upgrade
@@ -68,7 +68,7 @@ development_status:
   epic-3: backlog
   3-1-run-the-rag-parity-evaluation-vs-the-locked-baseline: done
   3-2-produce-the-cve-baseline-diff-evidence: done
-  3-3-confirm-the-full-test-suites-green: backlog
+  3-3-confirm-the-full-test-suites-green: done
   3-4-confirm-the-targeted-upstream-improvements-land: backlog
   3-5-complete-the-evidence-ledger-verify-evidence-gate: backlog
   epic-3-retrospective: optional

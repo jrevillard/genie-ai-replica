@@ -3,6 +3,7 @@
 require('../setup-env');
 
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
+jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
 jest.mock('../../services/keycloak-auth-service', () => ({
   verifyToken: jest.fn(),
@@ -154,9 +155,7 @@ describe('Auth guard (DW-119)', () => {
   });
 
   it('should return 401 on POST /api/chat/conversations without token', async () => {
-    const response = await request(app)
-      .post('/api/chat/conversations')
-      .send({ title: 'Test' });
+    const response = await request(app).post('/api/chat/conversations').send({ title: 'Test' });
     expect(response.status).toBe(401);
   });
 

@@ -1,4 +1,4 @@
-import api from '@/services/api';
+import httpService from '@/services/httpService';
 
 const state = {
   feeds: [],
@@ -16,7 +16,7 @@ const actions = {
     commit('SET_LOADING', true);
     commit('CLEAR_ERROR');
     try {
-      const response = await api.get('/api/admin/tools/feeds');
+      const response = await httpService.get('admin/tools/feeds');
       if (response.data && response.data.success) {
         commit('SET_FEEDS', response.data.data);
       }
@@ -31,7 +31,7 @@ const actions = {
   async addFeed({ commit }, feedData) {
     commit('CLEAR_ERROR');
     try {
-      const response = await api.post('/api/admin/tools/feeds', feedData);
+      const response = await httpService.post('admin/tools/feeds', feedData);
       if (response.data && response.data.success) {
         commit('ADD_FEED', response.data.data);
         return true;
@@ -47,7 +47,7 @@ const actions = {
   async updateFeed({ commit }, { id, data }) {
     commit('CLEAR_ERROR');
     try {
-      const response = await api.put(`/api/admin/tools/feeds/${id}`, data);
+      const response = await httpService.put(`admin/tools/feeds/${id}`, data);
       if (response.data && response.data.success) {
         commit('UPDATE_FEED', response.data.data);
         return true;
@@ -63,7 +63,7 @@ const actions = {
   async deleteFeed({ commit }, id) {
     commit('CLEAR_ERROR');
     try {
-      const response = await api.delete(`/api/admin/tools/feeds/${id}`);
+      const response = await httpService.delete(`admin/tools/feeds/${id}`);
       if (response.data && response.data.success) {
         commit('REMOVE_FEED', id);
         return true;
@@ -78,7 +78,7 @@ const actions = {
 
   async testSearch(_, query) {
     try {
-      const response = await api.post('/api/admin/tools/test-search', { query });
+      const response = await httpService.post('admin/tools/test-search', { query });
       if (response.data && response.data.success) {
         return response.data.data;
       }

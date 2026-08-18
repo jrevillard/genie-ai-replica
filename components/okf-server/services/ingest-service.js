@@ -412,6 +412,38 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     }
   }
 
+  // [4g] Story 2.9.5-amend (2026-08-18): when the input was a ZIP bundle, ALSO
+  // store the bundle zip itself as a file doc in the doc-repo — associated with
+  // the OKF repo (repo_id + graph_name) + the SAME knowledge-hierarchy labels
+  // that flow to dataprep. The bundle is the ingestion INPUT (a means to feed
+  // the process), stored at 'Ingested' + is_bundle=true so the worker ignores it.
+  // Isolated + non-fatal: a bundle-doc store failure never fails the ingest.
+  if (typeof (input || {}).zip === 'string' && input.zip) {
+    const bundleFileName = (input && input.bundle_name) || `${repo.name || 'repo'}-bundle.zip`;
+    try {
+      const bres = await authedAxios.post(
+        `${config.documentRepository.url}/api/files/ingest-bundle`,
+        {
+          bundle: input.zip,
+          graph_name: graphName,
+          repo_id,
+          originalFileName: bundleFileName,
+          labels, // the ACL + caller hierarchy labels — the SAME set dataprep's
+          // LLM labeler selects from (per-concept 4f + the bundle doc both carry it)
+          bundle_version: bundleVersion,
+          is_bundle: true
+        },
+        { timeout: ENQUEUE_TIMEOUT_MS }
+      );
+      summary.bundle_stored = bundleFileName;
+      summary.bundle_file_id = bres.data && bres.data.file_id;
+      logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: summary.bundle_file_id });
+    } catch (err) {
+      summary.bundle_storage_error = err.message;
+      logger.error('Ingest 4g bundle-zip store failed (isolated, non-fatal)', { repo_id, error: err.message });
+    }
+  }
+
   // success=false + metric 'error' when every enqueue failed (nothing was
   // queued and nothing was a dedup skip — the request accomplished nothing).
   const allEnqueuesFailed = summary.enqueue_errors.length > 0 && summary.enqueued === 0;

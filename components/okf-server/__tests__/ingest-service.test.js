@@ -447,8 +447,17 @@ describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)
     const summary = await ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR);
     expect(summary).toMatchObject({ total: 2, parsed: 2, enqueued: 2, enqueue_errors: [] });
     // entry name → path → concept_id (matches the concepts[] mode for the same names)
+    // PLUS the 4g bundle-zip store call (is_bundle) — the zip itself is stored as
+    // a file doc associated with the repo.
     const fileNames = authedAxios.post.mock.calls.map((c) => c[1].originalFileName).sort();
-    expect(fileNames).toEqual(['index.md', 'service_directory.md']);
+    expect(fileNames).toEqual(['index.md', 'repo-bundle.zip', 'service_directory.md']);
+    const bundleCall = authedAxios.post.mock.calls.find((c) => c[1].is_bundle === true);
+    expect(bundleCall).toBeTruthy();
+    expect(bundleCall[1]).toMatchObject({
+      graph_name: `OKF_${REPO}`,
+      bundle: b64,
+      originalFileName: 'repo-bundle.zip'
+    });
     // the parser receives the ENTRY'S OWN markdown (frontmatter intact, not re-serialized)
     const firstMarkdown = parserService.parseConcept.mock.calls[0][0];
     expect(firstMarkdown).toContain('title: Government Services KB');

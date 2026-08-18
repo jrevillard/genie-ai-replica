@@ -908,8 +908,14 @@ class FileService {
   // The files doc carries graph_name + repo_id (metadataService.extractMetadata
   // persists them via the T5 fix).
   async uploadBundle(buffer, bundleInfo = {}) {
+    // Story 2.9.5-amend (2026-08-18): a ZIP bundle is ALSO stored as a file doc —
+    // the bundle file is associated with the OKF repo (repo_id + graph_name +
+    // labels) and is the ingestion INPUT (its concepts are enqueued separately,
+    // never re-chunked). Stored at dataprep.status='Ingested' + is_bundle=true so
+    // the 2.9.4 worker ignores it (it polls Pending only).
+    const isBundle = !!bundleInfo.is_bundle;
     const fileId = fileUtils.generateUniqueFileId();
-    const fileName = `${fileId}.md`;
+    const fileName = isBundle ? `${fileId}.zip` : `${fileId}.md`;
     const filePath = path.join(this.uploadDir, fileName);
 
     // ClamAV scan (the one pipeline stage we KEEP)
@@ -928,16 +934,23 @@ class FileService {
       await fs.writeFile(filePath, buffer);
 
       // Create files doc (graph_name + repo_id + bundle_version persisted via
-      // the T5 extractMetadata fix + Story 2.9.7)
+      // the T5 extractMetadata fix + Story 2.9.7; the bundle-zip doc carries the
+      // same knowledge-hierarchy labels + is_bundle + an 'Ingested' status).
       await metadataService.addMetadata(filePath, {
         file_id: fileId,
         file_name: bundleInfo.originalFileName || fileName,
-        file_type: 'text/markdown',
+        file_type: isBundle ? 'application/zip' : 'text/markdown',
         storage_path: filePath,
         labels: bundleInfo.labels || [],
         graph_name: bundleInfo.graph_name,
         repo_id: bundleInfo.repo_id,
-        bundle_version: bundleInfo.bundle_version != null ? bundleInfo.bundle_version : null
+        bundle_version: bundleInfo.bundle_version != null ? bundleInfo.bundle_version : null,
+        ...(isBundle
+          ? {
+              is_bundle: true,
+              dataprep: { status: 'Ingested', ingest_date: new Date().toISOString(), retract_date: '' }
+            }
+          : {})
       });
     } catch (error) {
       try {
@@ -948,7 +961,9 @@ class FileService {
       throw error;
     }
 
-    logger.info(`[FILE-SERVICE] Bundle uploaded: ${fileId} (graph_name=${bundleInfo.graph_name})`);
+    logger.info(
+      `[FILE-SERVICE] Bundle uploaded: ${fileId} (graph_name=${bundleInfo.graph_name} is_bundle=${isBundle})`
+    );
     return { file_id: fileId, file_name: bundleInfo.originalFileName || fileName, storage_path: filePath };
   }
 }

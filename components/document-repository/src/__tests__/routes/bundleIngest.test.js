@@ -279,6 +279,29 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     await new Promise((resolve) => setImmediate(resolve));
     ingestSpy.mockRestore();
   });
+
+  it('is_bundle=true stores the ZIP as a file doc at 201, NO dataprep kick (Story 2.9.5-amend)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'bundle-zip-id',
+      file_name: 'kenya-bundle.zip',
+      storage_path: '/uploads/bundle-zip-id.zip'
+    });
+    const ingestSpy = jest.spyOn(fileController, '_ingestFileById').mockResolvedValue({ success: true });
+
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({ ...validBody, originalFileName: 'kenya-bundle.zip', is_bundle: true, labels: ['Service Directory'] });
+
+    expect(res.status).toBe(201); // bundle zip doc — synchronous store, not a kick
+    expect(res.body.is_bundle).toBe(true);
+    expect(res.body.file_name).toBe('kenya-bundle.zip');
+    const callArgs = fileService.uploadBundle.mock.calls[0][1];
+    expect(callArgs.is_bundle).toBe(true); // uploadBundle stamps is_bundle + Ingested status
+    expect(callArgs.labels).toEqual(['Service Directory']);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(ingestSpy).not.toHaveBeenCalled(); // the zip is the INPUT — never re-chunked
+    ingestSpy.mockRestore();
+  });
 });
 
 // ─── Story 2.9.1: defer_kick (per-concept enqueues must not race the lock) ────

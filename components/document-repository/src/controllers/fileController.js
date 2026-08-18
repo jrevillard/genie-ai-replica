@@ -1068,7 +1068,7 @@ class FileController {
   // will replace this kick when it lands.
   async bundleIngest(req, res) {
     try {
-      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version } = req.body;
+      const { bundle, graph_name, repo_id, originalFileName, labels, defer_kick, bundle_version, is_bundle } = req.body;
 
       // Joi validation
       const schema = Joi.object({
@@ -1089,7 +1089,11 @@ class FileController {
         // files doc but do NOT kick dataprep — the OKF ingestionWorker (2.9.4)
         // owns draining. Per-concept orchestrator enqueues use this so they
         // never race dataprep's single-ingest lock (429).
-        defer_kick: Joi.boolean().default(false)
+        defer_kick: Joi.boolean().default(false),
+        // Story 2.9.5-amend (2026-08-18): a ZIP BUNDLE file doc — the zip is the
+        // ingestion INPUT, stored at 'Ingested' + is_bundle=true (never re-chunked;
+        // its concepts are enqueued separately). The worker ignores it (non-Pending).
+        is_bundle: Joi.boolean().default(false)
       });
       const { error, value } = schema.validate({
         bundle,
@@ -1098,7 +1102,8 @@ class FileController {
         originalFileName,
         labels,
         defer_kick,
-        bundle_version
+        bundle_version,
+        is_bundle
       });
       if (error) {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
@@ -1116,13 +1121,14 @@ class FileController {
       const buffer = Buffer.from(bundle, 'base64');
 
       // Store + ClamAV scan + files doc (graph_name + repo_id + bundle_version
-      // persisted via T5 + Story 2.9.7)
+      // persisted via T5 + Story 2.9.7; is_bundle stores the ZIP + labels)
       const result = await fileService.uploadBundle(buffer, {
         originalFileName,
         graph_name,
         repo_id,
         bundle_version: value.bundle_version,
-        labels: value.labels
+        labels: value.labels,
+        is_bundle: value.is_bundle
       });
 
       // Fire-and-forget ingestion kick (does not block the 202). dataprep.status
@@ -1130,7 +1136,9 @@ class FileController {
       // logged and surfaces via the files doc status, never a silent drop.
       // SKIPPED when defer_kick (Story 2.9.1): the doc stays 'Pending' for the
       // 2.9.4 worker to drain (per-concept enqueues would race the 429 lock).
-      if (!value.defer_kick) {
+      // ALWAYS skipped for a bundle-zip doc (is_bundle): the zip is the ingestion
+      // INPUT, not a chunkable file — its concepts were enqueued separately.
+      if (!value.defer_kick && !value.is_bundle) {
         setImmediate(() => {
           this._ingestFileById(result.file_id).catch((ingestErr) => {
             logger.error(`[FILE-CONTROLLER] Bundle async ingestion failed for ${result.file_id}: ${ingestErr.message}`);
@@ -1138,11 +1146,12 @@ class FileController {
         });
       }
 
-      return res.status(202).json({
+      return res.status(value.is_bundle ? 201 : 202).json({
         success: true,
-        message: 'Bundle accepted for async ingestion',
+        message: value.is_bundle ? 'OKF bundle zip stored' : 'Bundle accepted for async ingestion',
         file_id: result.file_id,
-        graph_name
+        graph_name,
+        ...(value.is_bundle ? { is_bundle: true, file_name: result.file_name } : {})
       });
     } catch (err) {
       if (err.message && err.message.includes('virus')) {

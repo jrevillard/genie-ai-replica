@@ -39,11 +39,12 @@
 //      manual kicks) and transitions every meta row parsed→indexed with
 //      last_good_index_at stamped; facility A stays manual (worker ignores
 //      non-OKF docs — repo_id filter).
-//  10. Facility A: single-doc upload (existing route) → Ingested → chunks in
-//      the DEFAULT GRAPH. Facility B: zip bundle drains → chunks in
-//      OKF_{repo_id}_SOURCE and NOT in the default graph (the split, 2.9.6).
-//      Re-ingest of unchanged+indexed concepts → skipped_dedup=N, enqueued=0
-//      (the 4e dedup rule fires LIVE), meta rows stay indexed (no downgrade).
+//  10. The OKF bundle (zip) drains → chunks in OKF_{repo_id}_SOURCE and NOT in
+//      the default graph (the split, 2.9.6). The bundle ZIP is stored as a file
+//      doc in the doc-repo (repo_id + graph_name + the knowledge-hierarchy labels
+//      + is_bundle @ Ingested). Re-ingest of unchanged+indexed concepts →
+//      skipped_dedup=N, enqueued=0 (the 4e dedup rule fires LIVE), meta rows stay
+//      indexed (no downgrade).
 //  11. Bundle retraction VERIFIED: retracting one concept physically removes
 //      its chunks from OKF_{repo_id}_SOURCE (right graph, real delete — never
 //      a silent 200) and leaves the other concepts' chunks untouched.
@@ -155,7 +156,6 @@ async function cleanupOnly(db) {
   console.log("CLEANUP-ONLY: removing the previous smoke run's artifacts (CRUD APIs)...");
   const DOCREPO = process.env.OKF_SMOKE_DOCREPO_URL || 'http://document-repository:3001';
   const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
-  const INGEST_REPO = '99999999-9999-4999-8999-999999999999';
   const REPO_NAME = 'Kenya Government Services Knowledge Base (smoke)';
   const CLONE_NAME = REPO_NAME + ' (smoke clone)';
   const repositoryService = require('./services/repository-service');
@@ -215,11 +215,10 @@ async function cleanupOnly(db) {
     }
   }
 
-  // The smoke repos (INGEST_REPO + any smoke clone) — CRUD repo-delete.
+  // The smoke repos (the created repo + any smoke clone, found BY NAME — the
+  // repo_id is dynamic) — CRUD repo-delete.
   const smokeRepos = await aqlAll(
-    "FOR r IN okf_repositories FILTER r.domain == 'smoke' AND (r.repo_id == '" +
-      INGEST_REPO +
-      "' OR r.name == '" +
+    "FOR r IN okf_repositories FILTER r.domain == 'smoke' AND (r.name == '" +
       CLONE_NAME +
       "' OR r.name == '" +
       REPO_NAME +
@@ -501,22 +500,6 @@ async function authzPhase(db) {
 // in for it) using the okf-server SERVICE token — re-mintable client_credentials
 // that outlive the 5-min user tokens (live-proven TTL pitfall).
 
-const SINGLE_DOC_NAME = 'smoke-single-doc.md';
-const SINGLE_DOC_BODY = `# Public Service Announcement (Smoke Fixture)
-
-This single document exercises the EXISTING document ingestion facility:
-a plain English markdown file uploaded through document-repository's standard
-upload route and ingested into the default knowledge graph. It carries no OKF
-frontmatter and belongs to no repository — it must land in the shared GRAPH
-collections, distinct from OKF repository bundles which land in their own
-per-repository graphs.
-
-## Notes
-
-- Facility A: single document, default graph.
-- The OKF facility (zip bundles) is exercised separately by the same smoke run.
-`;
-
 async function ingestPhase(db) {
   const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
   const SCOPED = process.env.OKF_SMOKE_TOKEN_SCOPED;
@@ -527,10 +510,13 @@ async function ingestPhase(db) {
   const matter = require('gray-matter');
   const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
   const DOCREPO = process.env.OKF_SMOKE_DOCREPO_URL || 'http://document-repository:3001';
-  // Must be a UUID — doc-repo's ingest-bundle validates repo_id:uuid().
-  const INGEST_REPO = '99999999-9999-4999-8999-999999999999';
-  const OKF_GRAPH = 'OKF_' + INGEST_REPO;
   const GRAPH = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
+  // The OKF repo is CREATED VIA THE API (emulating the process flow) below, so
+  // its repo_id is dynamic (a UUID minted by the registry). Set + OKF_GRAPH
+  // computed AFTER the API create. Used by the doc-repo routes (uuid-validated).
+  const REPO_NAME = 'Kenya Government Services Knowledge Base (smoke)';
+  let INGEST_REPO = null;
+  let OKF_GRAPH = null;
   const h = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
   async function call(method, url, token, body) {
     const res = await fetch(url, { method, headers: h(token), body: body ? JSON.stringify(body) : undefined });
@@ -588,7 +574,7 @@ async function ingestPhase(db) {
   const own = await call('POST', DOCREPO + '/api/files/ingest-bundle', svc, {
     bundle: Buffer.from('# x').toString('base64'),
     graph_name: 'OKF_00000000-0000-4000-8000-000000000000',
-    repo_id: INGEST_REPO,
+    repo_id: '00000000-0000-4000-8000-000000000000',
     originalFileName: 'ownership-probe.md'
   });
   own.status === 400
@@ -596,61 +582,65 @@ async function ingestPhase(db) {
     : fail('ownership guard: expected 400, got ' + own.status + ' ' + JSON.stringify(own.body).slice(0, 100));
 
   // ── re-run safety (CLEANUP=full only): retract + delete prior artifacts at
-  //    phase START — VIA THE CRUD APIS, no raw AQL writes. The prior INGEST_REPO
-  //    is removed through the okf-server repo-delete CRUD (the future Admin-UI
-  //    "delete repository" path, which retracts the graph + removes meta + files
-  //    + versions); the facility-A single doc is retracted + Admin-deleted. With
-  //    CLEANUP=none this is SKIPPED so the previous run stays visible. ──
+  //    phase START — VIA THE CRUD APIS, no raw AQL writes. Prior smoke repos
+  //    (found BY NAME — the repo_id is dynamic) are removed through the okf-server
+  //    repo-delete CRUD (the future Admin-UI "delete repository" path, which
+  //    retracts the graph + removes meta + files + versions). With CLEANUP=none
+  //    this is SKIPPED so the previous run stays visible. ──
   const repositoryServiceCleanup = require('./services/repository-service');
   if (CLEANUP !== 'none') {
     const single = (
-      await aqlAll("FOR f IN files FILTER f.file_name == '" + SINGLE_DOC_NAME + "' RETURN KEEP(f, ['file_id'])")
+      await aqlAll("FOR f IN files FILTER f.file_name == 'smoke-single-doc.md' RETURN KEEP(f, ['file_id'])")
     )[0];
     if (single) {
       const retr = await call('POST', DOCREPO + '/api/files/' + single.file_id + '/retract', svc);
       const del = await call('DELETE', DOCREPO + '/api/files/' + single.file_id, ADMIN);
       console.log('  cleanup: single-doc retract=' + retr.status + ' delete=' + del.status);
     }
-    try {
-      await repositoryServiceCleanup.remove(INGEST_REPO, { sub: 'smoke-run' });
-      console.log(
-        '  cleanup: prior ' + INGEST_REPO + ' removed via CRUD repo-delete (graph+meta+files+versions cascaded)'
-      );
-    } catch (e) {
-      console.log('  cleanup: prior repo remove skipped (' + e.message + ') — fresh state');
+    const priorSmoke = await aqlAll(
+      "FOR r IN okf_repositories FILTER r.domain == 'smoke' AND r.name == '" +
+        REPO_NAME +
+        "' RETURN KEEP(r, ['repo_id','deleted_at'])"
+    );
+    for (const r of priorSmoke) {
+      if (r.deleted_at) continue;
+      try {
+        await repositoryServiceCleanup.remove(r.repo_id, { sub: 'smoke-run' });
+        console.log(
+          '  cleanup: prior ' + r.repo_id + ' removed via CRUD repo-delete (graph+meta+files+versions cascaded)'
+        );
+      } catch (e) {
+        console.log('  cleanup: prior repo remove skipped (' + e.message + ')');
+      }
     }
   }
 
-  // ── repo for this phase (direct save; resurrect if soft-deleted) ──
-  // PROPERLY NAMED (design addendum D-V1/D-V2): the repository name derives
-  // from the BUNDLE's own identity (index.md title) — the registry entry,
-  // graph, and bundle are one named association, not an anonymous UUID.
-  // UNMINTED start (Story 2.9.7): version null + no okf_tag — the MINT phase
-  // below sets version 1 via the real mintVersion() (never hand-set here).
+  // ── EMULATE THE PROCESS FLOW: create the OKF repo VIA THE API ──
+  // PROPERLY NAMED (design addendum D-V1/D-V2): the repository name derives from
+  // the BUNDLE's own identity (index.md title) — the registry entry, graph, and
+  // bundle are one named association, not an anonymous UUID. The repo is created
+  // through the same POST /api/okf/repos endpoint the Admin UI will use (the repo
+  // is stored in the DB first; the bundle is created + ingested later).
   const idxMatter = matter(fs.readFileSync(path.join(BUNDLE_DIR, 'index.md'), 'utf8'));
   const bundleTitle = (idxMatter.data && idxMatter.data.title) || 'Kenya Government Services Knowledge Base';
   const bundleOkfVersion = (idxMatter.data && idxMatter.data.okf_version) || '0.2';
-  const REPO_NAME = 'Kenya Government Services Knowledge Base (smoke)';
   const repos = db.collection('okf_repositories');
-  try {
-    const repoDoc = await repos.document(INGEST_REPO);
-    const patch = { deleted_at: null, name: REPO_NAME, version: null, okf_tag: null, version_minted_at: null };
-    if (repoDoc.deleted_at || repoDoc.name !== REPO_NAME || repoDoc.version != null) {
-      await repos.update(INGEST_REPO, patch);
-    }
-  } catch (err) {
-    if (err && (err.errorNum === 1204 || err.code === 404 || err.statusCode === 404)) {
-      await repos.save({
-        _key: INGEST_REPO,
-        repo_id: INGEST_REPO,
-        name: REPO_NAME,
-        domain: 'smoke',
-        graph_name: 'OKF_' + INGEST_REPO,
-        okf_version: bundleOkfVersion,
-        version: null,
-        lifecycle_state: 'register'
-      });
-    } else throw err;
+  const createRes = await call('POST', BASE + '/api/okf/repos', ADMIN, {
+    name: REPO_NAME,
+    domain: 'smoke',
+    acl: { required_scopes: [] }
+  });
+  if (createRes.status === 201 && createRes.body && createRes.body.repo_id) {
+    INGEST_REPO = createRes.body.repo_id;
+    OKF_GRAPH = 'OKF_' + INGEST_REPO;
+    pass('flow: OKF repository "' + REPO_NAME + '" created via the API (repo_id=' + INGEST_REPO + ')');
+  } else {
+    fail(
+      'flow: repo create via API -> ' +
+        createRes.status +
+        ' ' +
+        JSON.stringify(createRes.body).slice(0, 150)
+    );
   }
   // The named association the smoke proves end-to-end:
   console.log(
@@ -667,75 +657,10 @@ async function ingestPhase(db) {
   );
   console.log('  GRAPH     : ' + OKF_GRAPH + ' (collections ' + OKF_GRAPH + '_SOURCE/_ENTITY/_HAS_SOURCE/_LINKS_TO)');
 
-  // ── (i-a) FACILITY A FIRST, drained ALONE (no worker contention) ──
-  // The single-document facility is uploaded + kicked + drained to terminal
-  // BEFORE the zip ingest: dataprep is single-flight, and the 2.9.4 worker
-  // starts claiming OKF docs the moment they exist — running facility A first
-  // means nothing contends (live-caught run 9: concurrent kicks → transient
-  // 429s; now also fixed doc-repo-side — 429 never poisons a file).
-  const singleUpload = await (async () => {
-    const fd = new FormData();
-    fd.append('file', new Blob([SINGLE_DOC_BODY], { type: 'text/markdown' }), SINGLE_DOC_NAME);
-    const upRes = await fetch(DOCREPO + '/api/files/upload', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + ADMIN },
-      body: fd
-    });
-    let upBody = null;
-    try {
-      upBody = await upRes.json();
-    } catch {
-      /* non-json */
-    }
-    if (upRes.status !== 201) {
-      fail('facility-A upload -> ' + upRes.status + ' ' + JSON.stringify(upBody).slice(0, 150));
-      return null;
-    }
-    pass('facility A: single-doc upload -> 201 (' + SINGLE_DOC_NAME + ')');
-    const singleFileId = upBody && upBody.data && (upBody.data.file_id || upBody.data.id);
-    if (!singleFileId) {
-      fail('facility A: no file_id in upload response: ' + JSON.stringify(upBody).slice(0, 150));
-      return null;
-    }
-    const singleDoc = (
-      await aqlAll(
-        "FOR f IN files FILTER f.file_id == '" +
-          singleFileId +
-          "' RETURN KEEP(f, ['file_name','graph_name','repo_id','dataprep'])"
-      )
-    )[0];
-    singleDoc &&
-    singleDoc.graph_name == null &&
-    singleDoc.repo_id == null &&
-    singleDoc.dataprep &&
-    singleDoc.dataprep.status === 'Pending'
-      ? pass('facility A: files doc Pending, NO graph_name/repo_id (default-graph facility — distinct from facility B)')
-      : fail('facility A files doc: ' + JSON.stringify(singleDoc));
-    // Kick (the existing UI action) and drain to terminal ALONE.
-    const kickA = await call('POST', DOCREPO + '/api/files/' + singleFileId + '/ingest', await serviceToken());
-    if (kickA.status !== 200) {
-      fail('facility A kick -> ' + kickA.status + ' ' + JSON.stringify(kickA.body).slice(0, 120));
-      return null;
-    }
-    let aStatus = null;
-    let aChunks = 0;
-    for (let i = 0; i < 96; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      const row = (
-        await aqlAll(
-          "FOR x IN files FILTER x.file_id == '" + singleFileId + "' RETURN KEEP(x, ['dataprep','chunk_count'])"
-        )
-      )[0];
-      aStatus = row && row.dataprep && row.dataprep.status;
-      aChunks = (row && row.chunk_count) || 0;
-      if (aStatus === 'Ingested' || aStatus === 'Ingestion Error' || aStatus === 'Killed') break;
-    }
-    aStatus === 'Ingested'
-      ? pass('facility A: single doc Ingested ALONE (' + aChunks + ' chunks — existing pipeline, manual kick)')
-      : fail('facility A drain ended "' + aStatus + '"');
-    return singleFileId;
-  })();
-  const singleFileId = singleUpload;
+  // NOTE (2026-08-18, David): the legacy single-document facility is NOT part of
+  // the OKF smoke — the smoke exercises ONLY the OKF bundle path with the kenya
+  // bundle (data/okf/smoke-test/kenya-bundle). The legacy facility is covered by
+  // its own tests; the UI will handle single files + zip bundles separately later.
 
   // ── (i) scoped READ caller → 403 (ingest is an admin mutation) ──
   const zipB64 = fs.readFileSync(BUNDLE_ZIP).toString('base64');
@@ -756,8 +681,13 @@ async function ingestPhase(db) {
     : fail('clone scoped-read -> ' + c0.status + ' ' + JSON.stringify(c0.body).slice(0, 100));
 
   // ── (ii) THE FULL KENYA BUNDLE AS A ZIP, through the orchestrator ──
+  // Emulates the authoring flow: the bundle zip + the knowledge-hierarchy labels
+  // (the user selects them from the hierarchy) feed the ingest. The orchestrator
+  // stores the bundle zip as a file doc (associated with the repo) AND enqueues
+  // each concept through the SAME single-file ingestion path.
   const r1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
     zip: zipB64,
+    bundle_name: 'kenya-bundle.zip',
     labels: ['Service Directory']
   });
   if (r1.status !== 202) {
@@ -783,7 +713,37 @@ async function ingestPhase(db) {
     if (r1.body.enqueue_errors.length !== 0)
       fail('unexpected enqueue_errors: ' + JSON.stringify(r1.body.enqueue_errors));
     if (r1.body.success !== true) fail('summary.success expected true');
+    if (r1.body.bundle_stored !== 'kenya-bundle.zip')
+      fail('summary.bundle_stored: ' + JSON.stringify(r1.body.bundle_stored));
   }
+
+  // The bundle zip is stored as a file doc in the doc-repo — ASSOCIATED with the
+  // OKF repo (repo_id + graph_name), carrying the knowledge-hierarchy labels, at
+  // dataprep.status='Ingested' + is_bundle=true (the ingestion INPUT — its
+  // concepts are enqueued separately; the worker ignores it, never re-chunks it).
+  const bundleDoc = (
+    await aqlAll(
+      "FOR f IN files FILTER f.file_name == 'kenya-bundle.zip' AND f.repo_id == '" +
+        INGEST_REPO +
+        "' RETURN KEEP(f, ['file_id','file_name','repo_id','graph_name','labels','is_bundle','dataprep','file_type'])"
+    )
+  )[0];
+  bundleDoc &&
+  bundleDoc.repo_id === INGEST_REPO &&
+  bundleDoc.graph_name === OKF_GRAPH &&
+  bundleDoc.is_bundle === true &&
+  bundleDoc.file_type === 'application/zip' &&
+  Array.isArray(bundleDoc.labels) &&
+  bundleDoc.labels.includes('Service Directory') &&
+  bundleDoc.labels.includes('t:smoke') &&
+  bundleDoc.dataprep &&
+  bundleDoc.dataprep.status === 'Ingested'
+    ? pass(
+        'bundle zip: stored as a file doc — repo-associated, graph-stamped, KH labels (' +
+          JSON.stringify(bundleDoc.labels) +
+          '), is_bundle=true @ Ingested'
+      )
+    : fail('bundle zip file doc: ' + JSON.stringify(bundleDoc));
 
   // ── (iii) meta rows for EVERY bundle concept: parsed + graph-stamped ──
   const metaRows = await aqlAll(
@@ -1442,19 +1402,11 @@ async function ingestPhase(db) {
     console.log('  NOTE: clone ' + CLONE_ID + ' LEFT IN PLACE (CLEANUP=none — run OKF_SMOKE_CLEANUP=only to remove)');
   }
 
-  // ── (viii) CHUNKS — the physical proof, per facility/graph ──
-  // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph
+  // ── (viii) CHUNKS — the physical proof (facility B: the per-repo graph) ──
+  // The OKF bundle's chunks must land in the per-repo OKF_{repo_id} graph
   // (Story 2.9.6 wiring: doc-repo sends graph_name → dataprep writes the
-  // per-repo collections) — and NOT in the default graph.
-  const aChunks = (
-    await aqlAll(
-      'FOR c IN ' + GRAPH + "_SOURCE FILTER c.file_id == '" + singleFileId + "' COLLECT WITH COUNT INTO n RETURN n"
-    )
-  )[0];
-  aChunks > 0
-    ? pass('facility A graph: ' + aChunks + ' chunks in the DEFAULT ' + GRAPH + '_SOURCE')
-    : fail('facility A: no chunks for ' + singleFileId + ' in ' + GRAPH + '_SOURCE');
-
+  // per-repo collections) — and NOT in the default graph. (The legacy
+  // single-document facility is out of scope — the smoke tests only the OKF path.)
   // The OKF graph name is hyphenated (OKF_<uuid>) — AQL needs backtick-quoted
   // identifiers for it (live-caught: unquoted → lexer error at the first '-').
   const bChunkRows = await aqlAll(

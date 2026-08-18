@@ -2292,3 +2292,27 @@ location: n/a
 severity: low
 reason: CI cannot consume verdict without parsing markdown
 status: open
+
+### DW-318: CVE-2022-46337 (Apache Derby in Python image) requires investigation
+origin: spec-deferred fc47e692fdc2
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: medium
+reason: Java package CVE in Python base image; could be transitive dep, trivy false positive, or SBOM artifact
+status: open
+
+### DW-319: No attribution of net-new CVEs to root cause (OPEA vs Python base)
+origin: spec-deferred 6e5fbd905675
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: medium
+reason: 83 CVEs mix two independent changes; breakdown requires separate investigation
+status: open
+
+### DW-320: deferred-work.md has no entry for blocked-upgrade outcome
+origin: spec-deferred 153fdd812173
+source_spec: `spec-3-2-produce-the-cve-baseline-diff-evidence.md`
+location: n/a
+severity: medium
+reason: 83 net-new CVEs requiring triage need follow-up tracking
+status: open

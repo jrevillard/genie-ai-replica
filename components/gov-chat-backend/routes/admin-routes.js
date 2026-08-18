@@ -615,7 +615,7 @@ module.exports = (adminService, logsService) => {
         err.status = 400;
         throw err;
       }
-      const result = await adminDashboardService.assignUserRole(userKey, roleName);
+      const result = await adminService.assignUserRole(userKey, roleName);
       res.json(result);
     } catch (error) {
       next(error);
@@ -648,7 +648,7 @@ module.exports = (adminService, logsService) => {
   router.delete('/users/:userKey/roles/:roleName', async (req, res, next) => {
     try {
       const { userKey, roleName } = req.params;
-      const result = await adminDashboardService.removeUserRole(userKey, roleName);
+      const result = await adminService.removeUserRole(userKey, roleName);
       res.json(result);
     } catch (error) {
       next(error);

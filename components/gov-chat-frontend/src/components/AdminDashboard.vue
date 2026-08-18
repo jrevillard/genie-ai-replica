@@ -2521,7 +2521,7 @@ export default {
         this.userSearchTotal = response.total;
       } catch (error) {
         console.error('Failed to search users:', error);
-        notificationService.error(this.translate('admin.userSearchError', 'Failed to search users'));
+        this.showNotification(this.translate('admin.userSearchError', 'Failed to search users'), 'error');
       } finally {
         this.isSearchingUsers = false;
       }
@@ -2560,10 +2560,10 @@ export default {
             user.roles = user.roles.filter(r => r !== role);
           }
         }
-        notificationService.success(`Role ${role} ${isAdding ? 'assigned' : 'removed'}`);
+        this.showNotification(`Role ${role} ${isAdding ? 'assigned' : 'removed'}`, 'success');
       } catch (e) {
         console.error(e);
-        notificationService.error(`Failed to modify role: ${e.message}`);
+        this.showNotification(`Failed to modify role: ${e.message}`, 'error');
       } finally {
         this.isManagingRole = null;
       }

@@ -1,5 +1,3 @@
-const { db } = require('@arangodb');
-
 async function up(database) {
   const collectionName = 'feeds';
 

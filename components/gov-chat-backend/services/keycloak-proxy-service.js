@@ -250,7 +250,7 @@ const keycloakProxyService = {
       role = await this._adminApiCall('GET', `/roles/${roleName}`);
     } catch (error) {
       if (error.status === 404) {
-        throw new Error(`Role ${roleName} not found in Keycloak`);
+        throw new Error(`Role ${roleName} not found in Keycloak`, { cause: error });
       }
       throw error;
     }

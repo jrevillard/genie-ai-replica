@@ -283,6 +283,26 @@ const adminDashboardService = {
       console.error('[AdminDashboardService] Error fetching query details:', error.message);
       throw error;
     }
+  },
+
+  async assignUserRole(userKey, roleName) {
+    try {
+      const response = await httpService.post(`admin/users/${userKey}/roles`, { roleName });
+      return response.data;
+    } catch (error) {
+      console.error('[AdminDashboardService] Error assigning user role:', error.message);
+      throw error;
+    }
+  },
+
+  async removeUserRole(userKey, roleName) {
+    try {
+      const response = await httpService.delete(`admin/users/${userKey}/roles/${roleName}`);
+      return response.data;
+    } catch (error) {
+      console.error('[AdminDashboardService] Error removing user role:', error.message);
+      throw error;
+    }
   }
 };
 

@@ -244,12 +244,9 @@ export default {
     },
     
     async saveFeed() {
-      let success = false;
-      if (this.editingFeed) {
-        success = await this.updateFeed({ id: this.editingFeed._key, data: this.feedForm });
-      } else {
-        success = await this.addFeed(this.feedForm);
-      }
+      const success = this.editingFeed
+        ? await this.updateFeed({ id: this.editingFeed._key, data: this.feedForm })
+        : await this.addFeed(this.feedForm);
       if (success) {
         this.closeFeedModal();
       }

@@ -20,7 +20,7 @@ module.exports = (toolsService) => {
 
   // --- Feeds ---
 
-  router.get('/feeds', async (req, res, next) => {
+  router.get('/feeds', async (req, res, _next) => {
     try {
       const feeds = await toolsService.getFeeds();
       res.json({ success: true, data: feeds });
@@ -30,7 +30,7 @@ module.exports = (toolsService) => {
     }
   });
 
-  router.post('/feeds', async (req, res, next) => {
+  router.post('/feeds', async (req, res, _next) => {
     try {
       const feed = await toolsService.createFeed(req.body);
       res.status(201).json({ success: true, data: feed });
@@ -40,7 +40,7 @@ module.exports = (toolsService) => {
     }
   });
 
-  router.put('/feeds/:id', async (req, res, next) => {
+  router.put('/feeds/:id', async (req, res, _next) => {
     try {
       const feed = await toolsService.updateFeed(req.params.id, req.body);
       res.json({ success: true, data: feed });
@@ -50,7 +50,7 @@ module.exports = (toolsService) => {
     }
   });
 
-  router.delete('/feeds/:id', async (req, res, next) => {
+  router.delete('/feeds/:id', async (req, res, _next) => {
     try {
       const result = await toolsService.deleteFeed(req.params.id);
       if (!result.success) {
@@ -66,7 +66,7 @@ module.exports = (toolsService) => {
   // --- SearXNG ---
 
   // Basic testing proxy to SearXNG
-  router.post('/test-search', async (req, res, next) => {
+  router.post('/test-search', async (req, res, _next) => {
     try {
       const { query } = req.body;
       if (!query) {

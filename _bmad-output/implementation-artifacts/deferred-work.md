@@ -2324,3 +2324,27 @@ location: .gitlab-ci.yml (all 8 python:3.11-slim occurrences)
 severity: low
 reason: Floating tags like python:3.11-slim can be retagged upstream, causing silent CI drift. Pinning to a digest or patch version eliminates this risk.
 status: open
+
+### DW-322: Override audit claims "every override accounted for" but provides no per-override mapping to verification items.
+origin: spec-deferred cac3a5a46a93
+source_spec: `spec-3-4-confirm-the-targeted-upstream-improvements-land.md`
+location: _bmad-output/implementation-artifacts/upstream-improvements-verification.md (Override Audit section)
+severity: low
+reason: OVERRIDES.yaml has 19 overrides; the evidence artifact says "all tied to story 2.1 or DW-5" but does not list which A/B/C verification item each override maps to. Reader cannot check the claim from the artifact alone.
+status: open
+
+### DW-323: Verification is grep-based but false-positive risk not documented (e.g., token present but not consumed, version pinned but overridden at install).
+origin: spec-deferred b56ca431ccb8
+source_spec: `spec-3-4-confirm-the-targeted-upstream-improvements-land.md`
+location: _bmad-output/implementation-artifacts/spec-3-4-confirm-the-targeted-upstream-improvements-land.md (Design Notes)
+severity: low
+reason: A grep match proves a token exists, not that it behaves correctly. The spec Design Notes say "grep-based confirmation pass" but never address this limitation.
+status: open
+
+### DW-324: Verification procedure has no documented path for check failures (what to record when grep returns 0 matches or count thresholds not met).
+origin: spec-deferred 1ed2c47189e4
+source_spec: `spec-3-4-confirm-the-targeted-upstream-improvements-land.md`
+location: _bmad-output/implementation-artifacts/spec-3-4-confirm-the-targeted-upstream-improvements-land.md (Tasks & Acceptance, Verification)
+severity: low
+reason: All verification commands specify only "expected" success outcomes. No failure handling documented.
+status: open

@@ -61,12 +61,14 @@ development_status:
   3-6-document-mgmt-create-okf-entry-point: backlog          # NEW 2026-08-13 (sibling to Ingest Selected)
   3-7-crawler-ui-create-okf-entry-point: backlog             # NEW 2026-08-13 (AddFromLinkDialog + FileDetailsDialog)
   3-8-okf-concept-curator-validation-panel: backlog          # NEW 2026-08-13 (Step 5/6; composes conformance-service)
+  3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — Clone action: repos-tab toolbar/row + details dialog + Studio Step-1 source card; consumes 4.8 clone API
   epic-3-retrospective: optional
 
   epic-4: backlog            # Authoring & curation — ungated (Node-side)
   4-1-concept-crud-incremental-reindex: backlog    # (+ 2026-08-13: optimistic concurrency If-Match/409 — G25)
   4-1b-concept-label-rematerialization-on-edit: backlog  # NEW 2026-08-13 — recompute chunk_labels/trust_tier on edit (G29)
   4-2-inapp-markdown-concept-editor: backlog
+  4-2b-okf-markdown-formatter-service: backlog          # NEW 2026-08-18 (authorship directive; Studio §8.2) — validate+auto-format markdown; round-trip-safe formatter (OKF_FORMAT_ON_INGEST opt-in); consumed by the OkfDiffReviewPanel Formatting lane
   4-3-lifecycle-states: backlog
   4-4-review-approval-gate: backlog
   4-5-versioning-provenance: backlog

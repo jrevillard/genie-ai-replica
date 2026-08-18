@@ -434,7 +434,7 @@ So that **I can administer a repository end-to-end from the UI**.
 **Given** the new components,
 **When** the operator creates/edits a repository,
 **Then** `OkfRepositoryDialog.vue` offers a domain picker via `serviceTreeService.getAdminCategories()`; `OkfRepositoryDetails.vue` shows tabs (Concepts tree, Conformance/PII, Versions, Source/Sync, Audit) with actions Sync/Validate/Publish/Retire/Delete,
-**And** mutating actions enforce `tools-admin`/admin role (Kong + OKF Server), DS primitives are used, and components are Jest-tested. *(FR-26; UX-DR2, UX-DR4, UX-DR7; **2026-08-13**: the "last sync / health" column reads from `okf_sources` (Story 2.9.8 must land first, or the column is explicitly blank-stubbed) — G32.)*
+**And** mutating actions enforce `tools-admin`/admin role (Kong + OKF Server), DS primitives are used, and components are Jest-tested. *(FR-26; UX-DR2, UX-DR4, UX-DR7; **2026-08-13**: the "last sync / health" column reads from `okf_sources` (Story 2.9.8 must land first, or the column is explicitly blank-stubbed) — G32; **2026-08-18**: **Clone** is added as a primary action (Story 3.9) — the dialog is a clone entry point, and the details view surfaces `cloned_from` lineage when present.)*
 
 ### Story 3.3: Ingestion progress + i18n completeness
 As an **operator**,
@@ -446,6 +446,22 @@ So that **I can watch ingestion happen and non-English users see the OKF UI in t
 **When** the operator views a repository,
 **Then** `OkfIngestionProgress.vue` polls live status (`{ silent: true }` pattern) without error spam,
 **And** the `okf.*` i18n tree is complete across all active locales with opportune fixes to undefined `link.*`/`common.close` fallbacks. *(FR-26; UX-DR5, UX-DR6)*
+
+### Story 3.9: OKF Repository Clone — Admin Dashboard authoring action *(NEW 2026-08-18 — design addendum D-V5)*
+As a **steward**,
+I want **to clone an OKF repository from the Admin Dashboard and author my copy**,
+So that **cloning is an end-user authoring feature, not just a backend API** — I can adapt a published knowledge base to my context without touching the original.
+
+**Acceptance Criteria:**
+**Given** an OKF repository the steward can read (any lifecycle state ≥ registered),
+**When** the steward triggers **Clone**,
+**Then** the action appears in ALL authoring entry points — the **OKF Repositories tab** (toolbar + per-row action, Story 3.1), the **repository details dialog** (`OkfRepositoryDialog.vue` primary action beside Create/Edit, Story 3.2), and the **OKF Studio wizard** (Story 3.4/3.5 "start from existing") — as a **DS-primitive modal** (Options API, Vuex `okf` module, `httpService` — the established admin-dashboard patterns):
+- **Source selector** lists read-scoped repos (foreign/missing 404 identically — anti-enumeration);
+- **Target identity** pre-fills name/domain (`<source> (clone)`) and rejects a duplicate `(name, domain)` with an in-app 409 before the request;
+- **Confirm → 202** → the new repo appears at `draft` in the list; the **details view surfaces `Cloned from <source> · version <vN>`** (reads `cloned_from`);
+- Role-gated admin (`tools-admin`/admin; Kong + OKF Server both enforce) and i18n-complete (`okf.clone.*` across all active locales — the 3.3 discipline).
+
+**And** the clone is immediately authorable via Epic 4 (4.1 CRUD, 4.2 editor, 4.3 lifecycle, 4.4 review) and mints its own versions — the **end-user authoring loop**: `clone → curate → validate → review-gate → publish → mint version → cite`. *(FR-26, FR-25; UX-DR2, UX-DR4, UX-DR7; [design addendum D-V5](design-addendum-versioning-integrity-clone-2026-08-16.md); pairs with Story 4.8's backend — 3.9 consumes `POST /api/okf/repos/:id/clone`. **2026-08-18**: Clone is ALSO the **Step-1 source card** in the OKF Studio wizard (amended [Studio UX design](okf-studio-ux-design-2026-08-13.md) §8.1) — the clone action skips Produce and opens directly at Step 5 Curate with `Cloned from <source> · version <vN>` in the context rail. One action, three entries: repos tab toolbar/row, details dialog, Studio Step 1.)*
 
 ---
 
@@ -479,6 +495,18 @@ So that **I can build a domain repository without external Git tooling**.
 **When** the author edits a concept,
 **Then** the frontmatter form offers `type` (required) + `title`/`description`/`resource`/`tags` plus the optional v0.2 families (`generated`/`verified`/`status`/`stale_after`/`sources`); the Markdown body uses `marked` + `DOMPurify`; a link picker inserts `[…](/path/to/concept.md)` from the repository's concept tree; live OKF §11 validation + PII pre-check run,
 **And** a non-conformant save is blocked at the editor with a specific §11 error — no invalid concept reaches `published`. *(FR-25; UX-DR3; ADR-okf-015, ADR-okf-017)*
+
+### Story 4.2b: OKF markdown formatter service — validate & auto-format *(NEW 2026-08-18 — authorship directive; Studio §8.2)*
+As a **knowledge author**,
+I want **my OKF markdown validated and automatically formatted where necessary**,
+So that **concepts meet the OKF formatting contract without manual whitespace/YAML/hierarchy cleanup**.
+
+**Acceptance Criteria:**
+**Given** `services/formatter-service.js` (okf-server, NEW),
+**When** `formatMarkdown(markdown)` runs,
+**Then** it deterministically normalizes the OKF document — frontmatter key-order + js-yaml quoting (the SAME gray-matter/js-yaml the parser uses), one-H1 discipline, `##` section hierarchy, relative `.md` link normalization, list style, blank-line/EOF discipline, trailing-whitespace — **and** the contract holds: `format(parse(x))` re-parses to IDENTICAL frontmatter; the canonical `content_hash` changes ONLY when content genuinely changes; semantics are never altered (a format is a no-op on an already-conforming doc).
+**And** a `validateFormatting(markdown)` dry-run reports per-rule diffs without writing (the Studio Step-6 "N concepts need formatting" badge), `formatAll(concepts)` batches a repo, and `OKF_FORMAT_ON_INGEST` (default OFF, R5 additive) canonicalizes before enqueue for repos that opt in — existing ingests stay byte-identical.
+**And** red-green tests cover round-trip (parse→format→parse identical), a no-op on conforming docs, and each normalization rule. *(FR-25; ADR-okf-015/017; consumed by Studio §8.2 — the OkfDiffReviewPanel Formatting lane; pairs with 4.2's live validation — format is the fix, validation is the gate.)*
 
 ### Story 4.3: Repository/concept lifecycle states
 As a **steward**,

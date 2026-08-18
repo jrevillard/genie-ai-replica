@@ -51,12 +51,32 @@ A crawl (Epic 7 producer / `crawlWorker`) associated with an OKF repository does
 
 ## D-V5 — Clone & curate at the application level
 
-A steward can **clone** an OKF repository from the admin UI/API:
+A steward can **clone** an OKF repository — **an end-user feature in the Admin Dashboard, incorporated into OKF repository authoring** — not merely a backend API:
+
+### Backend semantics (Story 4.8)
 
 - Clone creates a NEW repository: new `repo_id`, new `OKF_{repo_id}` graph, new registry entry (D-V2), `lifecycle_state='draft'`.
 - The clone copies the source's concepts + meta (title/version/content-hash triple preserved) and records lineage: `cloned_from: { repo_id, version }`.
 - The clone is then **curated** through the existing in-app authoring path (FR-25: editor, lifecycle, review gate — Epic 4 stories 4.2–4.4): modify concepts, re-run the full ingest pipeline (parse → meta → conformance → PII → dedup → enqueue), mint its own versions.
 - Upstream updates never propagate automatically; a steward may diff against `cloned_from` versions (FR-11 steward diff) and cherry-pick.
+
+### Admin Dashboard end-user feature (Story 3.9 + 3.2 amendment — THE AUTHORING ENTRY)
+
+Clone is a **first-class authoring action in the OKF Admin Dashboard**, exactly parallel to "Create repository":
+
+1. **Entry points** — the "Clone" action appears in EVERY place a steward can author a repo:
+   - the **OKF Repositories tab** (Story 3.1) as a toolbar action **and** a per-repo row action;
+   - the **repository details dialog** (Story 3.2 — `OkfRepositoryDialog.vue`) as a primary action beside Create/Edit;
+   - the **OKF Studio** (Story 3.4/3.5) as the "start from a template/existing repo" step of the authoring wizard.
+2. **Clone flow (a modal — DS primitives, Options API, Vuex `okf` module — the existing admin-dashboard patterns)**:
+   - **Source selector**: pick any repository the steward can read (`okf:*:*:read` scope; foreign/missing 404s identically — anti-enumeration from 6.1).
+   - **Target identity**: pre-filled name/domain (default `<source> (clone)` + the same domain), validated against the unique `(name, domain)` registry — a duplicate target is rejected 409 `DUPLICATE_REPO` in-app before the request.
+   - **Confirm + progress**: on confirm → `POST /api/okf/repos/:source_id/clone` (admin scope) → 202 → the new repo appears in the list at `draft`; the clone is ready to author immediately.
+   - **Lineage surfacing**: the details view shows `Cloned from <source> · version <vN>` (a read of `cloned_from`) — the steward always knows the origin.
+3. **Role gating**: clone is an admin mutation (mirrors Create — `tools-admin`/admin; Kong + OKF Server both enforce); the read-side source selector is `read`-scoped. i18n: `okf.clone.*` keys across all active locales (the 3.3 i18n discipline).
+4. **The authoring loop the feature enables** (the end-user workflow to document + smoke):
+   `Clone a published repo → modify/curate concepts in the editor (4.2) → run validation + PII → review-gate → publish (4.3/4.4) → mint the clone's own version (2.9.7) → cite (repo, version, concept)` — the original is NEVER touched.
+5. **Smoke obligation**: the dual-facility smoke extends with a **clone phase** — clone the kenya repo via the API, assert the new repo + graph + copied meta + `cloned_from` lineage, then assert the ORIGINAL's chunks/edges are untouched (isolation), and a modified concept in the clone re-indexes into the CLONE's graph only.
 
 ## Implementation mapping
 

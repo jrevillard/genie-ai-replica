@@ -4,6 +4,8 @@
 **Method:** BMAD design workflow — 4 parallel UX approaches (guided wizard · workspace/studio · pipeline+inline · template+bulk), scored by 3 independent judges, synthesized. Every citation verified against the real code.
 **Constraint (user, 2026-08-13):** reuse the **existing admin-dashboard paradigms** (tabs/dialogs/stepper/httpService/DS primitives/Options API) — **zero UI inconsistencies**. The winner satisfies this by construction (no canvas, no SSE, no novel navigation).
 
+> **AMENDED 2026-08-18 (design addendum D-V5 + authorship directive):** the wizard gains a **Clone** source path in Step 1, and Step 7's `OkfDiffReviewPanel` gains a **Markdown Formatting** lane (the formatter service — Story 4.2b). Both amend THIS design; the parallel draft `okf-authorship-workspace-architecture-2026-08-18.md` is superseded by this file (per the amend-not-parallel decision). See **§8 — 2026-08-18 amendments**.
+
 ---
 
 ## 1. The Design — OKF Studio Guided Linear Wizard
@@ -79,3 +81,24 @@ The existing upload → ClamAV → text-extract → ingest-into-free-form-corpus
 - Code: `AdminDashboard.vue:172,454-538,517,1844,2957` · `AddFromLinkDialog.vue:180,393,438` · `FileDetailsDialog.vue:568,586,1125` · `serviceTreeService.js:30,134,168` · `documentFileService.js:16,180` · `conformance-service.js:47,126,146,160-161` · `repository-service.js:28,111,132,142` · `crawlWorker.js:211,252,264-296` · `parser-service.js:109-110`.
 - Planning: [label-onboarding-design-2026-08-13](label-onboarding-design-2026-08-13.md) · [okf-course-correction-2026-08-13](okf-course-correction-2026-08-13.md) · PRD FR-25/FR-32/FR-36/FR-37/FR-38 · ADR-okf-019/020/030/033/034.
 - Memory: `feedback_existing-ui-paradigms` (zero inconsistencies) · `feedback_bounded-knowledge-hierarchy` · `feedback_story-whole-initiative-detail`.
+
+## 8. 2026-08-18 amendments (authorship directives)
+
+### 8.1 Step 1 — Choose workflow gains a **Clone** source path (4th card)
+
+- A **Clone** card sits beside Crawl / Documents / Manual. Selecting it swaps Step 2's renderer for the **clone source selector**: any repo the steward can read (`okf:*:*:read`; foreign/missing 404 identically — the 6.1 anti-enumeration), with the target identity pre-filled (`<source> (clone)`, same domain) and the unique `(name, domain)` registry checked in-app (a duplicate → 409 `DUPLICATE_REPO` before the request).
+- **Clone skips Produce** (Steps 2/3/4 — the concepts already exist): after the 3.9 clone action returns 202, the wizard advances straight to **Step 5 Curate** with the copied concept tree + `Cloned from <source> · version <vN>` surfaced in the context rail (reads `cloned_from`). Re-ingest of modified concepts flows through the normal 2.9.1 orchestrator → 2.9.4 worker → clone's OWN `OKF_{repo_id}` graph (the original is untouched — isolation smoke-asserted).
+- Backend: `POST /api/okf/repos/:id/clone` (Story 4.8); UI action = Story 3.9 (repos tab toolbar/row + details dialog + this Step-1 card — one action, three entries).
+
+### 8.2 Step 7 — **Markdown Formatting** lane in the OkfDiffReviewPanel (4th lane)
+
+- The panel gains a **Formatting** lane alongside Conformance fixes / Label mappings / Broken links. Each card = a formatter proposal `{ kind, before→after red/green diff, rationale }` with per-line Accept/Reject + lane-level "Format all" — the same traffic-light discipline (green = safe auto-apply default, amber = review).
+- The engine is **`okf-formatter-service`** (Story 4.2b, `services/formatter-service.js`): a deterministic OKF markdown formatter — frontmatter key-order + js-yaml quoting normalization (the SAME gray-matter/js-yaml the parser uses), one-H1 discipline, `##` section hierarchy, relative `.md` link normalization, list style, blank-line/EOF discipline, trailing-whitespace.
+- **Round-trip-safe contract (non-negotiable):** `format(parse(x))` re-parses to IDENTICAL frontmatter; `content_hash` (the canonical trimmed-body sha256) changes ONLY when content genuinely changes; **never** change semantics. Server-side canonicalization before enqueue is an **opt-in** `OKF_FORMAT_ON_INGEST` (R5 additive — default OFF, existing ingests byte-identical).
+- Step 6 (Validate) also surfaces a "N concepts need formatting" badge from the formatter's dry-run (no write) — a passive signal; the Apply happens only in Step 7.
+
+### 8.3 Composition unchanged (anti-scope-creep preserved)
+The Studio still only IMPORTS/mounts the owning epics' components (3.9 clone, 4.2 editor, 4.2b formatter, 7.2 producer, 9.x label onboarding); their logic stays in their epics. The 2026-08-13 decisions (§5) stand — Clone and Formatting are additive source/lane variants of the same spine, not new surfaces.
+
+### 8.4 Authoring-loop smoke obligation (live)
+The dual-facility smoke extends with an **authorship phase**: clone the kenya repo via the API → assert the new repo + graph + copied meta + `cloned_from`; modify one concept + auto-format via the formatter → assert round-trip (re-parse identical) + the modified concept re-indexes into the CLONE's graph only (original's chunks/edges untouched); produce-from-crawl drafts a concept set → assert the producer lifecycle. The loop exercises the SAME services the UI calls.

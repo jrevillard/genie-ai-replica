@@ -762,11 +762,27 @@ async function ingestPhase(db) {
     : fail('facility B worker drain: ' + okfIngested.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
 
   // ── (vii) WORKER TRANSITIONS — the worker-EXCLUSIVE meta states ──
-  const metaAfter = await aqlAll(
-    "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
-      INGEST_REPO +
-      "' RETURN KEEP(d, ['concept_id','index_status','last_good_index_at'])"
-  );
+  // The worker sets the FILE status to 'Ingested' BEFORE transitioning the META
+  // to 'indexed' (a sub-second window — live-caught r4: the drain broke the
+  // instant the last file looked terminal, but the meta transition landed ~1s
+  // later, so the old one-shot check flaked). Settle-wait for the transitions
+  // (up to 60s) so the check is deterministic — the assertion then reads the
+  // settled state, never a mid-transition race.
+  let metaAfter = null;
+  for (let i = 0; i < 20; i++) {
+    metaAfter = await aqlAll(
+      "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
+        INGEST_REPO +
+        "' RETURN KEEP(d, ['concept_id','index_status','last_good_index_at'])"
+    );
+    if (
+      metaAfter.length === EXPECTED_CONCEPTS &&
+      metaAfter.every((m) => m.index_status === 'indexed' && typeof m.last_good_index_at === 'string')
+    ) {
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
   const allIndexed = metaAfter.length === EXPECTED_CONCEPTS && metaAfter.every((m) => m.index_status === 'indexed');
   allIndexed
     ? pass('worker transition: all ' + EXPECTED_CONCEPTS + ' meta rows index_status=indexed (parsed→indexed)')

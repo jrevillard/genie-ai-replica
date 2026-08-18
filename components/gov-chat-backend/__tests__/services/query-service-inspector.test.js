@@ -17,6 +17,7 @@ jest.mock(
   }),
   { virtual: true }
 );
+jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
 jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })

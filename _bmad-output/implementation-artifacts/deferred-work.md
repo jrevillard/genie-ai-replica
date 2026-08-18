@@ -2316,3 +2316,11 @@ location: n/a
 severity: medium
 reason: 83 net-new CVEs requiring triage need follow-up tracking
 status: open
+
+### DW-321: Pin CI Python image tags to a specific patch version (e.g., python:3.11.9-slim) for reproducibility.
+origin: spec-deferred 6e9817af7839
+source_spec: `spec-3-3-confirm-the-full-test-suites-green.md`
+location: .gitlab-ci.yml (all 8 python:3.11-slim occurrences)
+severity: low
+reason: Floating tags like python:3.11-slim can be retagged upstream, causing silent CI drift. Pinning to a digest or patch version eliminates this risk.
+status: open

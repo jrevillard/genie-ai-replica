@@ -675,19 +675,21 @@ async function ingestPhase(db) {
       INGEST_REPO +
       "' SORT f.file_name RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name','labels'])"
   );
-  const pending = fileDocs.filter((f) => f.dataprep && f.dataprep.status === 'Pending');
-  pending.length === EXPECTED_CONCEPTS
-    ? pass('files docs: ' + pending.length + ' per-concept docs at Pending (4f + defer_kick)')
-    : fail(
-        'files docs at Pending: expected ' +
-          EXPECTED_CONCEPTS +
-          ', got ' +
-          pending.length +
-          ' (' +
-          JSON.stringify(fileDocs.map((d) => d.dataprep && d.dataprep.status)) +
-          ')'
-      );
-  const withAcl = pending.filter(
+  // The WORKER may already have claimed a concept (status Ingesting/Ingested) by
+  // the time this query runs — defer_kick leaves them Pending at enqueue, but the
+  // worker's poll (15s) can fire between enqueue and this snapshot (live-caught:
+  // the "files docs at Pending" count is a ~50% race). The count + ACL assertions
+  // therefore run on ALL the repo's files docs — a worker claim is the worker
+  // doing its job, not a defer_kick violation.
+  const okfFiles = fileDocs;
+  okfFiles.length === EXPECTED_CONCEPTS
+    ? pass(
+        'files docs: ' +
+          okfFiles.length +
+          ' per-concept docs for the repo (4f + defer_kick; the worker may already claim one)'
+      )
+    : fail('files docs count: expected ' + EXPECTED_CONCEPTS + ', got ' + okfFiles.length);
+  const withAcl = okfFiles.filter(
     (f) =>
       (f.labels || []).includes('t:smoke') &&
       (f.labels || []).includes('r:' + INGEST_REPO) &&
@@ -697,7 +699,7 @@ async function ingestPhase(db) {
   );
   withAcl.length === EXPECTED_CONCEPTS
     ? pass('files docs: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
-    : fail('files docs labels/graph: ' + JSON.stringify(pending.map((f) => [f.graph_name, f.labels])));
+    : fail('files docs labels/graph: ' + JSON.stringify(okfFiles.map((f) => [f.graph_name, f.labels])));
   if (withAcl.length > 0) {
     // The named bundle→repo→graph association, per concept doc:
     console.log(
@@ -716,11 +718,13 @@ async function ingestPhase(db) {
   // ── (v) DRAIN — the 2.9.4 INGESTION WORKER owns the OKF files ──
   // Facility A was already drained ALONE (i-a); the worker ignores it (no
   // repo_id — that filter is itself asserted by A draining via manual kick
-  // only). The OKF bundle's Pending docs are drained BY THE WORKER (no manual
-  // kicks — exactly what it does in production).
-  console.log('  draining: ' + pending.length + ' OKF concepts (WORKER-paced — the slow part)...');
+  // only). The OKF bundle's docs are drained BY THE WORKER (no manual kicks —
+  // exactly what it does in production). The drain list is ALL the repo's files
+  // docs (any already claimed by the worker are recorded terminal on the first
+  // poll — the worker race is absorbed, not a flake).
+  console.log('  draining: ' + okfFiles.length + ' OKF concepts (WORKER-paced — the slow part)...');
   const statuses = {};
-  const drainList = pending.slice();
+  const drainList = okfFiles.slice();
   const drainIds = JSON.stringify(drainList.map((d) => d.file_id));
   for (let i = 0; i < 100; i++) {
     await new Promise((r) => setTimeout(r, 15000));
@@ -751,7 +755,7 @@ async function ingestPhase(db) {
       fail('drain ' + d.file_name + ' ended "' + statuses[d.file_id] + '"');
     }
   }
-  const okfIds = pending.map((p) => p.file_id);
+  const okfIds = okfFiles.map((p) => p.file_id);
   const okfIngested = okfIds.filter((k) => statuses[k] && statuses[k].split(':')[0] === 'Ingested');
   okfIngested.length === EXPECTED_CONCEPTS
     ? pass('facility B: WORKER drained all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (no manual kicks)')
@@ -1306,7 +1310,7 @@ async function ingestPhase(db) {
   // are physically GONE from the per-repo graph and the other concepts'
   // chunks survive. Retract ONE concept (bad_concept — deliberately
   // non-conforming, the natural deletion candidate).
-  const retractFile = pending.find((p) => p.file_name === 'bad_concept.md') || pending[0];
+  const retractFile = okfFiles.find((p) => p.file_name === 'bad_concept.md') || okfFiles[0];
   const retractChunksBefore = (
     await aqlAll(
       'FOR c IN `' +

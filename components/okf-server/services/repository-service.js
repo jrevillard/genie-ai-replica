@@ -42,7 +42,6 @@ const LIFECYCLE_STATES = [
   'retire'
 ];
 const INITIAL_STATE = 'register';
-const DELETE_STATE = 'retire';
 const IMMUTABLE_FIELDS = ['graph_name', 'repo_id', 'domain'];
 const UPDATABLE_FIELDS = ['name', 'source', 'acl', 'retention'];
 
@@ -544,8 +543,12 @@ async function update(repo_id, patch, actor) {
 }
 
 /**
- * Soft-delete: stamp deleted_at + delete_after (grace window), set lifecycle=retire,
- * invoke graph-retract hook (no-op until 2.6). No scheduled sweep (deferred to 4.6).
+ * Delete a repository — CLEANS EVERYTHING UP (David, 2026-08-18): the cascade
+ * retract (per-repo graph drop + meta rows + dangling files docs + version
+ * manifests) AND the registry entry itself are removed — no lingering tombstone.
+ * The `delete_after` grace metadata is retained in the response for the audit
+ * trail, but deletion is immediate (the soft-delete grace window is superseded;
+ * re-create of the same (name, domain) is allowed because the doc is gone).
  * @param {string} repo_id
  * @param {object} actor
  */
@@ -569,16 +572,21 @@ async function remove(repo_id, actor) {
     const graceHours = parseInt(process.env.OKF_DELETE_GRACE_HOURS || '168', 10);
     const ts = nowIso();
     const delete_after = DateTime.now().plus({ hours: graceHours }).toUTC().toISO();
-    await db
-      .collection(COLLECTION)
-      .update(repo_id, { lifecycle_state: DELETE_STATE, deleted_at: ts, delete_after, updated_at: ts });
 
-    // Graph retract — no-op until Story 2.6; never fatal.
+    // Cascade retract FIRST — retractRepoGraph reads the registry doc for the
+    // graph_name, so the registry entry must still exist while it runs. It drops
+    // the per-repo graph (definition + 4 collections) + the repo's meta rows +
+    // dangling files docs + version manifests. Never fatal (best-effort).
     try {
       await retractRepoGraph(repo_id);
     } catch (err) {
       logger.warn('Graph retract failed (non-fatal)', { repo_id, error: err.message });
     }
+
+    // Then remove the registry entry entirely — the delete service cleans
+    // everything up (no tombstone). Re-create of the same identity is now
+    // allowed (no unique-index tombstone collision).
+    await db.collection(COLLECTION).remove(repo_id);
 
     await auditService.writeAudit({
       actor: (actor && actor.sub) || 'system',
@@ -587,8 +595,8 @@ async function remove(repo_id, actor) {
       source_ip: (actor && actor.source_ip) || null
     });
     recordOp('delete', 'success');
-    logger.info('OKF repository soft-deleted', { repo_id, delete_after });
-    return { repo_id, deleted_at: ts, delete_after, status: 'pending_hard_delete' };
+    logger.info('OKF repository deleted (fully cleaned)', { repo_id });
+    return { repo_id, deleted_at: ts, delete_after, status: 'deleted' };
   });
 }
 

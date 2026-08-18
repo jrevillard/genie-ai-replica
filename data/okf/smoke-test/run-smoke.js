@@ -94,6 +94,162 @@ function pass(msg) {
   console.log(`PASS  ${msg}`);
 }
 
+// Cleanup modes (OKF_SMOKE_CLEANUP) — how the smoke handles prior-run artifacts:
+//   full (default): retract+delete prior artifacts at START and retract+delete
+//     everything at END (self-cleaning — the DB ends with ZERO OKF_* artifacts).
+//   none: run WITHOUT any cleanup — the bundle docs, the repo, and the graphs all
+//     PERSIST so they can be inspected in the UI / ArangoDB after the run. The
+//     next `only` run cleans them up.
+//   only: DO NOT run the test — just clean up the previous run (retract + delete
+//     the OKF files via the doc-repo API, remove the smoke repos via the
+//     okf-server CRUD repo-delete — the same path the Admin UI will use), then
+//     verify ZERO OKF_* graphs/collections remain.
+// Operating procedure (David, 2026-08-18): run with OKF_SMOKE_CLEANUP=none, inspect
+// the results, then run OKF_SMOKE_CLEANUP=only to clean up.
+const CLEANUP = (process.env.OKF_SMOKE_CLEANUP || 'full').toLowerCase();
+if (!['full', 'none', 'only'].includes(CLEANUP)) {
+  console.error(`OKF_SMOKE_CLEANUP must be 'full' | 'none' | 'only' (got '${CLEANUP}')`);
+  process.exit(1);
+}
+
+/** Query ArangoDB for all OKF_* graph definitions (raw read — the test's state
+ * verification; NOT a write). */
+async function listOkfGraphs(db) {
+  const gRes = await db.route('_api/gharial').get();
+  const graphs = (gRes.body && gRes.body.graphs) || [];
+  return graphs.filter((g) => String(g.name).startsWith('OKF_'));
+}
+
+/** Assert ZERO OKF_* graphs + collections remain (the "properly cleaned" proof). */
+async function assertZeroOkfArtifacts(db) {
+  const graphs = await listOkfGraphs(db);
+  const cols = await db.listCollections();
+  const okfCols = cols.filter((c) => String(c.name).startsWith('OKF_'));
+  if (graphs.length === 0 && okfCols.length === 0) {
+    pass('cleanup VERIFIED: ZERO OKF_* graphs + collections remain in ArangoDB');
+    return true;
+  }
+  fail(
+    'cleanup NOT clean: ' +
+      graphs.length +
+      ' OKF_* graphs (' +
+      graphs.map((g) => g.name).join(',') +
+      ') + ' +
+      okfCols.length +
+      ' OKF_* collections (' +
+      okfCols.map((c) => c.name).join(',') +
+      ') remain'
+  );
+  return false;
+}
+
+/**
+ * Cleanup-only mode (OKF_SMOKE_CLEANUP=only): remove the previous run's artifacts
+ * VIA THE CRUD APIS — retract each OKF file through doc-repo's retract endpoint,
+ * delete it through doc-repo's DELETE endpoint (Admin), and remove each smoke repo
+ * through the okf-server repo-delete CRUD (repositoryService.remove — the future
+ * Admin-UI "delete repository" path, which retracts the repo's graph + meta +
+ * files + versions). NO raw AQL writes — reads only (finding the artifacts).
+ */
+async function cleanupOnly(db) {
+  console.log("CLEANUP-ONLY: removing the previous smoke run's artifacts (CRUD APIs)...");
+  const DOCREPO = process.env.OKF_SMOKE_DOCREPO_URL || 'http://document-repository:3001';
+  const ADMIN = process.env.OKF_SMOKE_TOKEN_ADMIN;
+  const INGEST_REPO = '99999999-9999-4999-8999-999999999999';
+  const REPO_NAME = 'Kenya Government Services Knowledge Base (smoke)';
+  const CLONE_NAME = REPO_NAME + ' (smoke clone)';
+  const repositoryService = require('./services/repository-service');
+  const aqlAll = async (query) => await (await db.query(query)).all();
+
+  let _svc = null;
+  let _svcAt = 0;
+  async function serviceToken() {
+    if (_svc && Date.now() - _svcAt < 180000) return _svc;
+    const base = (
+      process.env.KEYCLOAK_INTERNAL_URL ||
+      process.env.KEYCLOAK_PUBLIC_URL ||
+      'http://keycloak:8080'
+    ).replace(/\/$/, '');
+    const r = await fetch(`${base}/realms/${process.env.KEYCLOAK_REALM || 'genie'}/protocol/openid-connect/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: process.env.KC_OKF_SERVER_CLIENT_ID || 'okf-server',
+        client_secret: process.env.KC_OKF_SERVER_CLIENT_SECRET || ''
+      })
+    });
+    if (!r.ok) throw new Error('service token mint failed: ' + r.status);
+    const j = await r.json();
+    _svc = j.access_token;
+    _svcAt = Date.now();
+    return _svc;
+  }
+  async function call(method, url, token, body) {
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    let j = null;
+    try {
+      j = await res.json();
+    } catch {
+      /* non-json */
+    }
+    return { status: res.status, body: j };
+  }
+  const svc = await serviceToken();
+
+  // The facility-A single doc (no repo — clean via retract + Admin delete).
+  const single = (
+    await aqlAll("FOR f IN files FILTER f.file_name == 'smoke-single-doc.md' RETURN KEEP(f, ['file_id','dataprep'])")
+  )[0];
+  if (single) {
+    await call('POST', DOCREPO + '/api/files/' + single.file_id + '/retract', svc);
+    if (ADMIN) {
+      const del = await call('DELETE', DOCREPO + '/api/files/' + single.file_id, ADMIN);
+      console.log('  single-doc ' + single.file_id + ' delete -> ' + del.status);
+    } else {
+      console.log('  single-doc retracted; DELETE skipped (no OKF_SMOKE_TOKEN_ADMIN)');
+    }
+  }
+
+  // The smoke repos (INGEST_REPO + any smoke clone) — CRUD repo-delete.
+  const smokeRepos = await aqlAll(
+    "FOR r IN okf_repositories FILTER r.domain == 'smoke' AND (r.repo_id == '" +
+      INGEST_REPO +
+      "' OR r.name == '" +
+      CLONE_NAME +
+      "' OR r.name == '" +
+      REPO_NAME +
+      "') RETURN KEEP(r, ['repo_id','deleted_at'])"
+  );
+  for (const r of smokeRepos) {
+    if (r.deleted_at) continue; // already removed
+    // Retract the repo's files first (the surgical per-file path — the future
+    // Admin-UI delete flow retracts documents before removing them).
+    const files = await aqlAll(
+      "FOR f IN files FILTER f.repo_id == '" + r.repo_id + "' RETURN KEEP(f, ['file_id','file_name','dataprep'])"
+    );
+    for (const f of files) {
+      const retr = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/retract', svc);
+      console.log('  retract ' + f.file_name + ' -> ' + retr.status);
+    }
+    try {
+      await repositoryService.remove(r.repo_id, { sub: 'smoke-run' });
+      console.log('  repo ' + r.repo_id + ' removed (CRUD repo-delete — graph + meta + files + versions cascaded)');
+    } catch (e) {
+      console.log('  repo ' + r.repo_id + ' remove skipped: ' + e.message);
+    }
+  }
+  await assertZeroOkfArtifacts(db);
+  console.log(
+    'CLEANUP-ONLY done. NOTE: the repo-delete CRUD service now removes the registry entry entirely (no tombstone) — re-create is allowed.'
+  );
+  return failures === 0;
+}
+
 async function ensureRepoDoc(db) {
   const repos = db.collection('okf_repositories');
   try {
@@ -113,11 +269,23 @@ async function ensureRepoDoc(db) {
 }
 
 async function main() {
+  // Cleanup-only mode: do NOT run the test — remove the previous run's artifacts
+  // via the CRUD APIs and exit.
+  if (CLEANUP === 'only') {
+    const db = await dbService.getConnection('default');
+    const ok = await cleanupOnly(db);
+    process.exit(ok ? 0 : 1);
+  }
+  console.log(
+    `OKF smoke test: bundle=${BUNDLE_DIR} concepts=${EXPECTED_CONCEPTS} repo=${REPO_ID} cleanupMode=${CLEANUP}` +
+      (CLEANUP === 'none'
+        ? ' (leaving all artifacts in place for inspection — run OKF_SMOKE_CLEANUP=only afterward)'
+        : '')
+  );
   const files = fs
     .readdirSync(BUNDLE_DIR)
     .filter((f) => f.endsWith('.md'))
     .sort();
-  console.log(`OKF smoke test: bundle=${BUNDLE_DIR} concepts=${files.length} repo=${REPO_ID}`);
   if (files.length !== EXPECTED_CONCEPTS) {
     fail(`expected ${EXPECTED_CONCEPTS} concept files, found ${files.length}`);
     process.exit(1);
@@ -427,41 +595,30 @@ async function ingestPhase(db) {
     ? pass('integrity: doc-repo rejects graph_name != OKF_{repo_id} (ownership guard)')
     : fail('ownership guard: expected 400, got ' + own.status + ' ' + JSON.stringify(own.body).slice(0, 100));
 
-  // ── re-run safety: retract + delete prior artifacts at phase START ──
-  const priorFiles = await aqlAll(
-    `FOR f IN files FILTER f.repo_id == '${INGEST_REPO}' || f.file_name == '${SINGLE_DOC_NAME}' RETURN KEEP(f, ['file_id','file_name','repo_id','dataprep'])`
-  );
-  if (priorFiles.length > 0) {
-    console.log('  cleanup: ' + priorFiles.length + ' prior-run files docs (retract via service token + delete)');
-    for (const f of priorFiles) {
-      const retr = await call('POST', DOCREPO + '/api/files/' + f.file_id + '/retract', svc);
-      if (retr.status === 403) {
-        fail('retract as okf-service -> 403 (role wiring broken): ' + JSON.stringify(retr.body).slice(0, 100));
-      } else if (retr.status !== 200) {
-        console.log(
-          '    NOTE retract ' +
-            f.file_name +
-            ' -> ' +
-            retr.status +
-            ' (best-effort; was ' +
-            (f.dataprep && f.dataprep.status) +
-            ')'
-        );
-      }
-      await aqlAll("FOR x IN files FILTER x.file_id == '" + f.file_id + "' REMOVE x IN files");
+  // ── re-run safety (CLEANUP=full only): retract + delete prior artifacts at
+  //    phase START — VIA THE CRUD APIS, no raw AQL writes. The prior INGEST_REPO
+  //    is removed through the okf-server repo-delete CRUD (the future Admin-UI
+  //    "delete repository" path, which retracts the graph + removes meta + files
+  //    + versions); the facility-A single doc is retracted + Admin-deleted. With
+  //    CLEANUP=none this is SKIPPED so the previous run stays visible. ──
+  const repositoryServiceCleanup = require('./services/repository-service');
+  if (CLEANUP !== 'none') {
+    const single = (
+      await aqlAll("FOR f IN files FILTER f.file_name == '" + SINGLE_DOC_NAME + "' RETURN KEEP(f, ['file_id'])")
+    )[0];
+    if (single) {
+      const retr = await call('POST', DOCREPO + '/api/files/' + single.file_id + '/retract', svc);
+      const del = await call('DELETE', DOCREPO + '/api/files/' + single.file_id, ADMIN);
+      console.log('  cleanup: single-doc retract=' + retr.status + ' delete=' + del.status);
     }
-  }
-  const removedMeta = await aqlAll(
-    `FOR d IN okf_concepts_meta FILTER d.repo_id == '${INGEST_REPO}' REMOVE d IN okf_concepts_meta RETURN OLD.concept_id`
-  );
-  if (removedMeta.length > 0) {
-    console.log('  cleanup: removed ' + removedMeta.length + ' prior-run meta rows');
-  }
-  const removedVersions = await aqlAll(
-    `FOR v IN okf_versions FILTER v.repo_id == '${INGEST_REPO}' REMOVE v IN okf_versions RETURN OLD.bundle_version`
-  );
-  if (removedVersions.length > 0) {
-    console.log('  cleanup: removed ' + removedVersions.length + ' prior-run version manifests');
+    try {
+      await repositoryServiceCleanup.remove(INGEST_REPO, { sub: 'smoke-run' });
+      console.log(
+        '  cleanup: prior ' + INGEST_REPO + ' removed via CRUD repo-delete (graph+meta+files+versions cascaded)'
+      );
+    } catch (e) {
+      console.log('  cleanup: prior repo remove skipped (' + e.message + ') — fresh state');
+    }
   }
 
   // ── repo for this phase (direct save; resurrect if soft-deleted) ──
@@ -1273,11 +1430,17 @@ async function ingestPhase(db) {
       )
     : fail('clone graph total: ' + cloneGraphTotal + ' != ' + cloneChunks);
 
-  // Cleanup: remove the clone (drops its graph + meta + files + versions via the
-  // real remove() → retractRepoGraph) + purge the registry tombstone.
-  await repositoryService.remove(CLONE_ID, { sub: 'smoke-run' });
-  await aqlAll("REMOVE '" + CLONE_ID + "' IN okf_repositories");
-  pass('clone: cleanup — clone removed, its ' + CLONE_GRAPH + ' graph dropped (registry hygiene for re-runs)');
+  // Cleanup (CLEANUP=full only): remove the clone via the okf-server repo-delete
+  // CRUD (remove() → retractRepoGraph drops the clone's graph + meta + files +
+  // versions). The soft-deleted registry tombstone is left per the soft-delete
+  // contract (the next run's clone cleanup finds it by name). With CLEANUP=none
+  // the clone PERSISTS for inspection.
+  if (CLEANUP === 'full') {
+    await repositoryService.remove(CLONE_ID, { sub: 'smoke-run' });
+    pass('clone: cleanup — clone removed, its ' + CLONE_GRAPH + ' graph dropped (CRUD repo-delete)');
+  } else {
+    console.log('  NOTE: clone ' + CLONE_ID + ' LEFT IN PLACE (CLEANUP=none — run OKF_SMOKE_CLEANUP=only to remove)');
+  }
 
   // ── (viii) CHUNKS — the physical proof, per facility/graph ──
   // Facility A: default GRAPH. Facility B: the per-repo OKF_{repo_id} graph
@@ -1329,44 +1492,20 @@ async function ingestPhase(db) {
     ? pass('isolation: ZERO OKF bundle chunks in the default ' + GRAPH + '_SOURCE (the graphs are split)')
     : fail('isolation broken: ' + leaked + ' OKF chunks found in default ' + GRAPH + '_SOURCE');
 
-  // ── (ix) BUNDLE RETRACTION — VERIFIED, not just a 200 ──
-  // History lesson (G5): retract once returned success while deleting NOTHING
-  // (wrong-graph fallback). A retract is only proven when the concept's chunks
-  // are physically GONE from the per-repo graph and the other concepts'
-  // chunks survive. Retract ONE concept (bad_concept — deliberately
-  // non-conforming, the natural deletion candidate).
-  const retractFile = okfFiles.find((p) => p.file_name === 'bad_concept.md') || okfFiles[0];
-  const retractChunksBefore = (
-    await aqlAll(
-      'FOR c IN `' +
-        OKF_GRAPH +
-        '_SOURCE` FILTER c.file_id == "' +
-        retractFile.file_id +
-        '" COLLECT WITH COUNT INTO n RETURN n'
-    )
-  )[0];
-  const retr = await call('POST', DOCREPO + '/api/files/' + retractFile.file_id + '/retract', await serviceToken());
-  if (retr.status !== 200) {
-    fail('retract ' + retractFile.file_name + ' -> ' + retr.status + ' ' + JSON.stringify(retr.body).slice(0, 120));
-  } else {
-    // Poll the files doc to the terminal 'retracted' state (retract also runs
-    // cascading LINKS_TO/HAS_SOURCE cleanup in the graph — give it time).
-    let rStatus = null;
-    for (let i = 0; i < 24; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      const row = (
-        await aqlAll(
-          "FOR x IN files FILTER x.file_id == '" + retractFile.file_id + "' RETURN KEEP(x, ['dataprep','chunk_count'])"
-        )
-      )[0];
-      rStatus = row && row.dataprep && (row.dataprep.status || '').toLowerCase();
-      if (rStatus === 'retracted') break;
-    }
-    (rStatus === 'retracted' ? pass : fail)(
-      'retract: files doc -> ' + (rStatus || 'never-terminal') + ' (' + retractFile.file_name + ')'
-    );
-    // THE physical proof: that concept's chunks are GONE from the per-repo graph.
-    const chunksAfter = (
+  // ── RETRACTION + CLEANUP (CLEANUP=full only) ──
+  // Verify per-concept + bundle retraction — the repo-delete service cleans
+  // EVERYTHING (graph + meta + files + versions + the registry entry). With
+  // CLEANUP=none the repo, its bundle docs, and the OKF_{repo} graph PERSIST for
+  // inspection (the user inspects the results, then runs OKF_SMOKE_CLEANUP=only).
+  if (CLEANUP === 'full') {
+    // ── (ix) BUNDLE RETRACTION — VERIFIED, not just a 200 ──
+    // History lesson (G5): retract once returned success while deleting NOTHING
+    // (wrong-graph fallback). A retract is only proven when the concept's chunks
+    // are physically GONE from the per-repo graph and the other concepts'
+    // chunks survive. Retract ONE concept (bad_concept — deliberately
+    // non-conforming, the natural deletion candidate).
+    const retractFile = okfFiles.find((p) => p.file_name === 'bad_concept.md') || okfFiles[0];
+    const retractChunksBefore = (
       await aqlAll(
         'FOR c IN `' +
           OKF_GRAPH +
@@ -1375,91 +1514,144 @@ async function ingestPhase(db) {
           '" COLLECT WITH COUNT INTO n RETURN n'
       )
     )[0];
-    retractChunksBefore > 0 && (chunksAfter || 0) === 0
-      ? pass(
-          'retract VERIFIED: ' +
-            retractChunksBefore +
-            ' chunks of ' +
-            retractFile.file_name +
-            ' physically removed from ' +
+    const retr = await call('POST', DOCREPO + '/api/files/' + retractFile.file_id + '/retract', await serviceToken());
+    if (retr.status !== 200) {
+      fail('retract ' + retractFile.file_name + ' -> ' + retr.status + ' ' + JSON.stringify(retr.body).slice(0, 120));
+    } else {
+      // Poll the files doc to the terminal 'retracted' state (retract also runs
+      // cascading LINKS_TO/HAS_SOURCE cleanup in the graph — give it time).
+      let rStatus = null;
+      for (let i = 0; i < 24; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const row = (
+          await aqlAll(
+            "FOR x IN files FILTER x.file_id == '" +
+              retractFile.file_id +
+              "' RETURN KEEP(x, ['dataprep','chunk_count'])"
+          )
+        )[0];
+        rStatus = row && row.dataprep && (row.dataprep.status || '').toLowerCase();
+        if (rStatus === 'retracted') break;
+      }
+      (rStatus === 'retracted' ? pass : fail)(
+        'retract: files doc -> ' + (rStatus || 'never-terminal') + ' (' + retractFile.file_name + ')'
+      );
+      // THE physical proof: that concept's chunks are GONE from the per-repo graph.
+      const chunksAfter = (
+        await aqlAll(
+          'FOR c IN `' +
             OKF_GRAPH +
-            '_SOURCE (right graph, real delete)'
+            '_SOURCE` FILTER c.file_id == "' +
+            retractFile.file_id +
+            '" COLLECT WITH COUNT INTO n RETURN n'
         )
-      : fail(
-          'retract NOT verified: before=' +
-            retractChunksBefore +
-            ' after=' +
-            (chunksAfter || 0) +
-            ' in ' +
-            OKF_GRAPH +
-            '_SOURCE (silent no-op?)'
-        );
-    // The rest of the bundle must be untouched.
-    const survivors = await aqlAll(
-      'FOR c IN `' +
-        OKF_GRAPH +
-        '_SOURCE` FILTER c.file_id IN ' +
-        JSON.stringify(okfIds.filter((id) => id !== retractFile.file_id)) +
-        ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
-    );
-    survivors.length === EXPECTED_CONCEPTS - 1 && survivors.every((r) => r.n > 0)
-      ? pass(
-          'retract VERIFIED: the other ' +
-            (EXPECTED_CONCEPTS - 1) +
-            ' concepts keep their chunks (no collateral damage)'
-        )
-      : fail('retract collateral: survivors=' + JSON.stringify(survivors));
-  }
-
-  // ── (x) BUNDLE-LEVEL RETRACTION — repo delete DROPS the graph ──
-  // A per-repo graph serves exactly ONE bundle: the simplest correct
-  // retraction is dropping the graph definition + the 4 collections
-  // (retractRepoGraph, wired into repository delete). Verified via the real
-  // remove() flow (the service function — the HTTP DELETE route's authz is
-  // unit-tested; the user token has expired by this point in the run).
-  // (repositoryService already required by the clone phase above.)
-  const delResult = await repositoryService.remove(INGEST_REPO, { sub: 'smoke-run' });
-  delResult && delResult.deleted_at
-    ? pass('bundle retract: repo soft-deleted (pending_hard_delete) → graph drop executed')
-    : fail('bundle retract: remove() returned ' + JSON.stringify(delResult));
-  const collectionGone = async (name) => {
-    try {
-      await db.collection(name).get();
-      return false;
-    } catch {
-      return true; // 404 — physically dropped
+      )[0];
+      retractChunksBefore > 0 && (chunksAfter || 0) === 0
+        ? pass(
+            'retract VERIFIED: ' +
+              retractChunksBefore +
+              ' chunks of ' +
+              retractFile.file_name +
+              ' physically removed from ' +
+              OKF_GRAPH +
+              '_SOURCE (right graph, real delete)'
+          )
+        : fail(
+            'retract NOT verified: before=' +
+              retractChunksBefore +
+              ' after=' +
+              (chunksAfter || 0) +
+              ' in ' +
+              OKF_GRAPH +
+              '_SOURCE (silent no-op?)'
+          );
+      // The rest of the bundle must be untouched.
+      const survivors = await aqlAll(
+        'FOR c IN `' +
+          OKF_GRAPH +
+          '_SOURCE` FILTER c.file_id IN ' +
+          JSON.stringify(okfIds.filter((id) => id !== retractFile.file_id)) +
+          ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
+      );
+      survivors.length === EXPECTED_CONCEPTS - 1 && survivors.every((r) => r.n > 0)
+        ? pass(
+            'retract VERIFIED: the other ' +
+              (EXPECTED_CONCEPTS - 1) +
+              ' concepts keep their chunks (no collateral damage)'
+          )
+        : fail('retract collateral: survivors=' + JSON.stringify(survivors));
     }
-  };
-  const allDropped = (
-    await Promise.all(['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'].map((s) => collectionGone(OKF_GRAPH + s)))
-  ).every(Boolean);
-  allDropped
-    ? pass('bundle retract VERIFIED: all 4 ' + OKF_GRAPH + '_* collections physically DROPPED from ArangoDB')
-    : fail('bundle retract: some ' + OKF_GRAPH + '_* collections still exist');
-  let graphDefGone = false;
-  try {
-    await db.route('_api/gharial/' + OKF_GRAPH).get();
-  } catch {
-    graphDefGone = true;
-  }
-  graphDefGone
-    ? pass('bundle retract VERIFIED: named graph definition ' + OKF_GRAPH + ' removed')
-    : fail('bundle retract: graph definition ' + OKF_GRAPH + ' still exists');
-  const leftoverMeta = (
-    await aqlAll("RETURN LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == '" + INGEST_REPO + "' RETURN 1)")
-  )[0];
-  leftoverMeta === 0
-    ? pass('bundle retract VERIFIED: all okf_concepts_meta rows for the repo removed')
-    : fail('bundle retract: ' + leftoverMeta + ' meta rows remain');
-  const leftoverFiles = (
-    await aqlAll("RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN 1)")
-  )[0];
-  leftoverFiles === 0
-    ? pass('bundle retract VERIFIED: dangling files docs removed')
-    : fail('bundle retract: ' + leftoverFiles + ' files docs remain');
 
-  // Registry hygiene for the NEXT run: purge the smoke tombstone (fixed _key).
-  await aqlAll("REMOVE '" + INGEST_REPO + "' IN okf_repositories");
+    // ── (x) BUNDLE-LEVEL RETRACTION — repo delete DROPS the graph ──
+    // A per-repo graph serves exactly ONE bundle: the simplest correct
+    // retraction is dropping the graph definition + the 4 collections
+    // (retractRepoGraph, wired into repository delete). Verified via the real
+    // remove() flow (the service function — the HTTP DELETE route's authz is
+    // unit-tested; the user token has expired by this point in the run).
+    // (repositoryService already required by the clone phase above.)
+    const delResult = await repositoryService.remove(INGEST_REPO, { sub: 'smoke-run' });
+    delResult && delResult.deleted_at && delResult.status === 'deleted'
+      ? pass('bundle retract: repo-delete CRUD ran (delete service cleans everything)')
+      : fail('bundle retract: remove() returned ' + JSON.stringify(delResult));
+    const collectionGone = async (name) => {
+      try {
+        await db.collection(name).get();
+        return false;
+      } catch {
+        return true; // 404 — physically dropped
+      }
+    };
+    const allDropped = (
+      await Promise.all(['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'].map((s) => collectionGone(OKF_GRAPH + s)))
+    ).every(Boolean);
+    allDropped
+      ? pass('bundle retract VERIFIED: all 4 ' + OKF_GRAPH + '_* collections physically DROPPED from ArangoDB')
+      : fail('bundle retract: some ' + OKF_GRAPH + '_* collections still exist');
+    let graphDefGone = false;
+    try {
+      await db.route('_api/gharial/' + OKF_GRAPH).get();
+    } catch {
+      graphDefGone = true;
+    }
+    graphDefGone
+      ? pass('bundle retract VERIFIED: named graph definition ' + OKF_GRAPH + ' removed')
+      : fail('bundle retract: graph definition ' + OKF_GRAPH + ' still exists');
+    const leftoverMeta = (
+      await aqlAll("RETURN LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == '" + INGEST_REPO + "' RETURN 1)")
+    )[0];
+    leftoverMeta === 0
+      ? pass('bundle retract VERIFIED: all okf_concepts_meta rows for the repo removed')
+      : fail('bundle retract: ' + leftoverMeta + ' meta rows remain');
+    const leftoverFiles = (
+      await aqlAll("RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN 1)")
+    )[0];
+    leftoverFiles === 0
+      ? pass('bundle retract VERIFIED: dangling files docs removed')
+      : fail('bundle retract: ' + leftoverFiles + ' files docs remain');
+
+    // The delete service cleans EVERYTHING: the registry entry is gone too (the
+    // soft-delete tombstone is superseded — no lingering docs).
+    const repoGone = await (async () => {
+      try {
+        await repos.document(INGEST_REPO);
+        return false;
+      } catch {
+        return true;
+      }
+    })();
+    repoGone
+      ? pass('bundle retract VERIFIED: the repository registry entry is removed (delete service cleans everything)')
+      : fail('bundle retract: registry doc still present');
+    await assertZeroOkfArtifacts(db);
+  } else {
+    console.log(
+      '  NOTE: CLEANUP=none — retraction + cleanup phases skipped; the repo (' +
+        INGEST_REPO +
+        '), its bundle docs, and the ' +
+        OKF_GRAPH +
+        ' graph PERSIST for inspection. Run OKF_SMOKE_CLEANUP=only to clean up afterward.'
+    );
+  }
 
   console.log(
     '  NOTE: multi-graph READ (retriever fan-out over OKF_{repo_id} graphs) is Epic 1 — the retriever still queries the default graph until then.'

@@ -134,22 +134,26 @@ describe('repository-service', () => {
     });
   });
 
-  describe('remove (soft delete)', () => {
-    test('stamps deleted_at + delete_after, sets lifecycle=retire', async () => {
+  describe('remove (delete — cleans everything)', () => {
+    test('cascades the retract + removes the registry entry entirely (no tombstone)', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       const result = await repoService.remove(created.repo_id, ACTOR);
-      expect(result.status).toBe('pending_hard_delete');
+      expect(result.status).toBe('deleted');
       expect(result.deleted_at).toEqual(expect.any(String));
       expect(result.delete_after).toEqual(expect.any(String));
-      const stored = db._stores.okf_repositories[created.repo_id];
-      expect(stored.lifecycle_state).toBe('retire');
-      expect(stored.deleted_at).toBeTruthy();
+      // The delete service cleans EVERYTHING: the registry doc is gone.
+      expect(db._stores.okf_repositories[created.repo_id]).toBeUndefined();
     });
 
-    test('invokes the graph-retract hook (no-op)', async () => {
+    test('re-create of the same (name, domain) is allowed after delete (no tombstone collision)', async () => {
+      const created = await repoService.create(validCreateInput(), ACTOR);
+      await repoService.remove(created.repo_id, ACTOR);
+      await expect(repoService.create(validCreateInput(), ACTOR)).resolves.toBeTruthy();
+    });
+
+    test('invokes the graph-retract cascade (non-fatal)', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       const result = await repoService.remove(created.repo_id, ACTOR);
-      // retract is a no-op stub until Story 2.6
       expect(result.repo_id).toBe(created.repo_id);
     });
 

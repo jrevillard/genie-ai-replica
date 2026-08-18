@@ -74,7 +74,7 @@ development_status:
   4-5-versioning-provenance: backlog
   4-6-retention-ttl: backlog
   4-7-reserved-files-foi-audit-export: backlog
-  4-8-repository-clone-curated-forks: review # #971 — clone repo (new repo_id+graph, cloned_from lineage, lifecycle draft) + meta-copy + isolation smoke; consumed by 3.9. Dev+smoke 2026-08-18: 71 PASS live exit 0
+  4-8-repository-clone-curated-forks: done # #971 — clone repo (new repo_id+graph, cloned_from lineage, lifecycle draft) + meta-copy + isolation smoke; consumed by 3.9. Done 2026-08-18: review 3-layer 10 patches, r6 live exit 0 (71 PASS), 316/316 suites
   epic-4-retrospective: optional
 
   epic-5: backlog            # Serving — REST ungated, MCP gated

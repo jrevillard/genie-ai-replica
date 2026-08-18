@@ -3,7 +3,7 @@ baseline_commit: 3d8add4264b43bba74bdbc0bb7269dfb591333fd
 ---
 # Story 4.8: Repository clone & curated forks — the clone API (D-V5)
 
-Status: review
+Status: done
 
 Story key: `4-8-repository-clone-curated-forks` | GitLab: #971
 Epic: 4 (In-App Concept Authoring & Curation) | Branch: `feat/okf-server`
@@ -32,7 +32,7 @@ so that **I can adapt a published knowledge base to my context and curate my cop
 4. **Versioning + lifecycle interplay (unchanged contracts):**
    - `cloned_from.version` = the source's CURRENT `version` at clone time, or `null` when the source was never minted. The clone's OWN `version` starts `null` — it mints its own via `mintVersion` (2.9.7, D-V4) when it publishes/crawls. The copied meta rows KEEP the source's `bundle_version` (the identity triple is preserved); the clone's re-ingest threads the CLONE's version (`null` until the clone mints) — this is correct D-V4 semantics (a fork's content belongs to the fork's versions, cited by the fork's manifests).
    - The D1 Pending-gate applies **unchanged** to the clone: minting the CLONE refuses while the CLONE has Pending files docs. Cloning does NOT enqueue, so a clone is immediately mintable — but a steward who re-ingests then mints must wait for the worker (existing 2.9.7 contract, nothing new).
-5. **Edge cases (must hold):** cloning a soft-deleted source → 404; cloning an empty source (0 meta rows) → valid draft fork (`copied_concepts: 0`, no error); a source that is ITSELF a clone → the new clone's `cloned_from` points at the immediate parent (lineage is a parent pointer, no recursion — D-V5 "stewards can diff against `cloned_from` versions" resolves transitively through the chain); re-cloning the same source always mints a NEW unique repo (clones are never idempotent — that is the fork semantics); the copied `concept_id` set may contain `concepts/`-prefixed ids (subdirectory bundles) — copied verbatim.
+5. **Edge cases (must hold):** cloning a soft-deleted source → 404; cloning an empty source (0 meta rows) → valid draft fork (`copied_concepts: 0`, no error); a source that is ITSELF a clone → the new clone's `cloned_from` points at the immediate parent (lineage is a parent pointer, no recursion — D-V5 "stewards can diff against `cloned_from` versions" resolves transitively through the chain); **each clone mints a NEW unique `repo_id`** (clones are never idempotent — that is the fork semantics) **but the derived default name `<source> (clone)` collides after the first fork → 409 `DUPLICATE_REPO`** (the 3.9 UI pre-validates the target and prompts for a distinct name — the 409 is the designed contract, review-fix 2026-08-18); the copied `concept_id` set may contain `concepts/`-prefixed ids (subdirectory bundles) — copied verbatim.
 6. **Tests** — repository-service units (clone 404 unknown/deleted; 409 duplicate target via the app dup-check AND the DB-index backstop; new repo_id + `OKF_{new}` graph minted; `lifecycle_state='draft'`; `cloned_from` version null + version=N; meta rows copied with the triple + `concept_id` verbatim incl. a `concepts/`-prefixed fixture; source meta rows + graph NOT mutated; `create()` additive opts default = legacy 'register' + no `cloned_from` — pins the R5 default); route tests (repos-routes matrix style: 201 admin, 403 scoped-read, 404 foreign super-admin via getById, 409 duplicate, empty body valid → 201, gate order getById-before-clone); ESLint/Prettier clean. **No doc-repo / dataprep changes** — the clone reuses the entire existing write path.
 7. **Smoke (live gate, R1 — extend `run-smoke.js`)**, D-V5 §8.4:
    - **Early (fresh ADMIN token, in the ingest phase):** `POST /api/okf/repos/{INGEST_REPO}/clone` with the SCOPED token → **403 FORBIDDEN_SCOPE** (read ≠ admin — the live HTTP authz gate).
@@ -130,3 +130,45 @@ deepseek-v4-flash[1m] (dev-story, 2026-08-18)
 - components/okf-server/__tests__/repository-service.test.js — create-opts + cloneRepository tests (+15)
 - components/okf-server/__tests__/repos-routes.test.js — clone route matrix (+6)
 - data/okf/smoke-test/run-smoke.js — clone phase + early 403 + success criteria (criterion 14)
+
+## Dev Agent Record (review-fix pass, 2026-08-18)
+
+### Agent Model Used
+
+deepseek-v4-flash[1m] (code-review patch pass)
+
+### Review-fix evidence
+
+- **10 findings fixed** (1 HIGH + 7 LOW/MEDIUM + 2 NIT) + **7 deferred** + **3 dismissed**. All applied patches keep the additive R5 discipline (the legacy `create()` default stays pinned by a test). **okf-server 316/316** (was 311; +5 review-fix tests), ESLint/Prettier clean.
+- **Post-patch live runs (honest history, local build at C:\Dev\builds\main):**
+  - r1 (pre-review dev build): exit 0, 71 PASS.
+  - r2: never ran — the container recreate wiped the docker-cp'd fixtures (`ENOENT /app/kenya-bundle`), not a smoke failure; re-cp'd.
+  - r3: exit 1 (4 FAILs) — the 2.9.4 worker's 15s poll fired between the zip enqueue and the files-docs snapshot, claiming one concept (`Ingesting`) → the "Pending: 6" count is a ~50% timing race, not a defer_kick violation. **Fixed:** the files-docs assertions + drain now run on ALL the repo's files docs (7e5c318).
+  - r4: exit 1 (5 FAILs) — the worker sets the FILE status to `Ingested` BEFORE transitioning the META to `indexed` (~1s window); the one-shot (vii) check read service_directory mid-transition → phase (viii) re-enqueued it → the mint's D1 Pending-gate refused. **Fixed:** (vii) settle-waits (up to 60s) for all meta rows to reach `indexed`+`last_good_index_at` (0f58ce2).
+  - r5: exit 1 (1 FAIL) — the versioned-edge assertion (bundle_version=1 from the modified re-ingest) fired before the worker's post-index edge write landed (same file-before-meta/edges window). **Fixed:** the (xii) edge read settle-waits for the versioned edge (430b1d4).
+  - **r6 (final): REAL_EXIT_CODE=0 — 71 PASS / 0 FAIL**, including all 13 clone assertions (new repo + OKF_{new} graph + draft; cloned_from {repo_id, version:2}; 6 meta rows with the identity triple preserved; 5 dedup-skipped + 1 enqueued; files-doc graph-stamped to the clone; worker-drained; 3 chunks in the CLONE graph; ZERO clone chunks in the SOURCE graph; SOURCE chunks+edges UNCHANGED at 21/174; exactly the modified concept materialized; cleanup) + the versioned-edge assertion + every prior assertion (authz, zip ingest, drain, dedup, mint v1/v2 + manifests, edges, dual retraction).
+
+### Review Findings (2026-08-18, 3-layer adversarial review: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+
+> All three layers converged on the top defect: **the clone is non-atomic** — `create()` commits the registry entry + `repo.clone` audit before the meta copy, so a mid-copy failure orphaned a draft fork (a retry then 409s on the derived name). The convergence finding + the D-V5 auto-propagation contradiction (inherited `source`/`retention`) are the material fixes; the rest harden the surface.
+
+- [x] [Review][Patch] HIGH non-atomic clone: registry + audit committed before the meta copy with no rollback → a transient mid-copy failure leaves an orphaned draft fork (and a retry 409s on the derived name) [repository-service.js cloneRepository] — FIXED: compensation removes the fresh registry doc + any copied meta rows on any copy error (then rethrow with `recordOp('clone','error')`)
+- [x] [Review][Patch] MEDIUM `okf_version` not inherited — `create()` hardcoded '0.2' (AC1 "okf_version from the source") [repository-service.js:176] — FIXED: additive `okf_version` opt; the clone passes `source.okf_version || '0.2'`
+- [x] [Review][Patch] MEDIUM clone inherited the source's `source` (git/s3 origin + syncSchedule) + `retention` — a future sync worker keyed on `repo.source` is exactly the "upstream never auto-propagates" channel D-V5 forbids [repository-service.js target + cloneSchema] — FIXED: target = `{name, domain, acl}` only; cloneSchema = `{name?, domain?, acl?}` only
+- [x] [Review][Patch] MEDIUM AC-5 "re-cloning the same source always mints a NEW unique repo" contradicted by the derived default name (the second default-name clone 409s) [repository-service.js:260 + AC5] — FIXED (spec): the 409 IS the designed 3.9 contract (the UI pre-validates + prompts for a name); AC-5 wording corrected to "each clone mints a NEW unique repo_id; the derived default name collides after the first fork → 409"
+- [x] [Review][Patch] LOW create() additive opts unvalidated — a typo'd `lifecycle_state` / malformed `cloned_from` persisted out-of-invariant [repository-service.js create] — FIXED: validate against `LIFECYCLE_STATES` + `cloned_from.repo_id` string → 400
+- [x] [Review][Patch] LOW derived name can exceed the 200-char registry bound (a 200-char source → 209-char '… (clone)') [repository-service.js:260] — FIXED: clamp to `slice(0,190) + ' (clone)'`
+- [x] [Review][Patch] LOW no clone-failure metric — `recordOp('clone','success')` only on the happy path [repository-service.js:311] — FIXED: `recordOp('clone','error')` in the compensation path
+- [x] [Review][Patch] LOW test gaps: clone DB-index backstop, empty-source clone, clone-of-clone lineage, route gate-order assertion, mislabeled "foreign super-admin 404" test — FIXED: +5 tests (repository-service + repos-routes)
+- [x] [Review][Patch] LOW smoke: prior-clone re-run cleanup could race the worker mid-drain (dropped collections under an in-flight drain); cloneFile unsorted; early-403 message overstated "read ≠ admin" (the scoped token holds read on a DIFFERENT repo) — FIXED: doc-repo retract-before-drop, `SORT f.file_id`, message accuracy
+- [x] [Review][Patch] NIT cloneSchema lacked `.unknown(true)` (silently stripped unknown body keys the 3.9 UI might send) [repository-validator.js] — FIXED: `.unknown(true)` (mirrors updateSchema)
+- [x] [Review][Defer] MEDIUM copied `sources`/`links` retain source-scoped file/graph refs that dangle after the source is retracted — D-V5 "verbatim copy" intent; re-ingest refreshes; document in 4.8b
+- [x] [Review][Defer] MEDIUM 'draft' clone has no transition out until Story 4.3's `TRANSITIONS` map ships — the explicit 4.3 scope boundary (the story already notes the `draft` entry)
+- [x] [Review][Defer] MEDIUM `index_status='indexed'` preserved on concepts with ZERO chunks in the clone graph (metadata-only fork) — the documented D-3 v1 semantics; "reset to parsed / materialized flag" is the 4.8b candidate
+- [x] [Review][Defer] LOW a fresh draft clone is mintable before content materializes → a v1 manifest pins the SOURCE's hashes with no backing chunks — D-3 semantics; the D-V5 authoring loop mints after curation
+- [x] [Review][Defer] LOW `cloneRepository`'s `getById` carries no authz (service-layer callers bypass) — the controller is the established authz boundary (ingest/mint do the same)
+- [x] [Review][Defer] LOW O(N) sequential meta copy + double `getById` metric compute — bounded by the ingest cap (OKF_INGEST_MAX_CONCEPTS per ingest); documented in-code
+- [x] [Review][Defer] LOW inherited `acl.required_scopes` still name the SOURCE's repo — inert today (nothing reads `repo.acl`); Story 6.1b's resolver's concern
+- [DISMISS] "201 leaks `_id`/`_key`/`_rev` (not toResponse shape)" — false positive: `create()` already returns `toResponse(doc)`
+- [DISMISS] MELT create+clone double-count — benign (the clone DID perform a create; the `clone` op is the higher-level signal)
+- [DISMISS] smoke derived-name not exercised live — unit-tested; the smoke uses a fixed clone name for deterministic re-run cleanup

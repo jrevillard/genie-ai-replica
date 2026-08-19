@@ -35,8 +35,8 @@ class ConnectivityService {
   ConnectivityService._internal({
     ConnectivityProvider? provider,
     Future<List<InternetAddress>> Function(String)? dnsLookup,
-  })  : _provider = provider ?? RealConnectivityProvider(),
-        _dnsLookupFn = dnsLookup ?? _defaultDnsLookup;
+  }) : _provider = provider ?? RealConnectivityProvider(),
+       _dnsLookupFn = dnsLookup ?? _defaultDnsLookup;
 
   /// Public test constructor — creates a fresh (non-singleton) instance with
   /// injectable dependencies for deterministic unit tests.
@@ -45,8 +45,7 @@ class ConnectivityService {
   factory ConnectivityService.test({
     ConnectivityProvider? provider,
     Future<List<InternetAddress>> Function(String)? dnsLookup,
-  }) =>
-      ConnectivityService._internal(provider: provider, dnsLookup: dnsLookup);
+  }) => ConnectivityService._internal(provider: provider, dnsLookup: dnsLookup);
 
   /// Reset the singleton for test isolation.
   @visibleForTesting
@@ -165,9 +164,9 @@ class ConnectivityService {
   ) async {
     try {
       final stopwatch = Stopwatch()..start();
-      final lookup = await _dnsLookupFn('google.com').timeout(
-        const Duration(seconds: 2),
-      );
+      final lookup = await _dnsLookupFn(
+        'google.com',
+      ).timeout(const Duration(seconds: 2));
       stopwatch.stop();
 
       if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {

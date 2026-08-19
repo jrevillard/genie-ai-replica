@@ -280,7 +280,9 @@ void main() {
 
       test('theme as list falls back to defaults', () {
         final tokens = AppTokens.fromConfig(
-          config: const {'theme': ['bad']},
+          config: const {
+            'theme': ['bad'],
+          },
           isDark: false,
         );
         expect(tokens.brand, const Color(0xFF4682B4));
@@ -300,7 +302,9 @@ void main() {
       test('colors as list falls back to defaults', () {
         final tokens = AppTokens.fromConfig(
           config: const {
-            'theme': {'colors': ['bad']},
+            'theme': {
+              'colors': ['bad'],
+            },
           },
           isDark: false,
         );

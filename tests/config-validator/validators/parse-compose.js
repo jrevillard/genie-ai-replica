@@ -220,4 +220,46 @@ function parseAnsibleImages(filePath) {
   return results;
 }
 
-module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages };
+/**
+ * Parse image references from GitLab CI configuration (.gitlab-ci.yml).
+ *
+ * Looks for lines matching `image: <value>` (with any indentation) and returns
+ * them as { job, image }. GitLab CI files are plain YAML with no ${} substitutions,
+ * so simple line parsing is sufficient.
+ *
+ * @param {string} filePath - Path to a .gitlab-ci.yml file
+ * @returns {Array<{ job: string|null, image: string }>}
+ */
+function parseGitlabCiImages(filePath) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read GitLab CI file: ${filePath}`, { cause: err });
+  }
+
+  const lines = content.split('\n');
+  const results = [];
+  let currentJob = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+
+    // Detect job definition (top-level key with 0 indent)
+    const jobMatch = line.match(/^([\w-]+):\s*$/);
+    if (jobMatch) {
+      currentJob = jobMatch[1];
+      continue;
+    }
+
+    // Detect image reference (any indent)
+    const imageMatch = trimmed.match(/^image:\s*(.+)$/);
+    if (imageMatch) {
+      results.push({ job: currentJob, image: imageMatch[1].trim() });
+    }
+  }
+  return results;
+}
+
+module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages };

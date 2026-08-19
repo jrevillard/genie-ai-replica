@@ -5,7 +5,7 @@
 # GitLab sync is driven directly via glab against the OKF epics.md.
 
 generated: 2026-08-11
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 project: GENIE.AI OKF Server
 project_key: okf-server
 tracking_system: gitlab
@@ -50,6 +50,11 @@ development_status:
   2-9-7-okf-versions-mint-version-publish: done # G26 (#962) — repo-level bundle_version, immutable manifest, okf:v{N} tag, chunk-doc threading (ADR-031 + D-V1/D-V4)
   2-9-8-okf-sources-writer-source-sync: backlog    # G32 — SHRUNK: source-sync deferred; now ingest-health backing only (fold into admin UI later)
   2-9-9-retention-ttl-sweep-deletion-reason: backlog # G27 — sweep + deletion_reason discriminator
+  # Bundle-graph refactor (Story 4.8-amend, WP-A + WP-B + WP-C, 2026-08-19, commits 5265c8d + b0b28dc + d0db1a13):
+  # WP-A: hard/warning split → rejected at ingest + publish gate enforced in mintVersion (FR-25 made real).
+  # WP-B: rooted named graph (is_index root marker + ENTITY is_index + named gharial graph in _ensure_graph_collections).
+  # WP-C: content-only chunking — only bundle zip is a doc-repo file; concepts are graph content chunked directly from okf-server worker to dataprep (no per-concept files doc); concept_id on chunks; secret-gated internal callback (OKF_INTERNAL_SECRET, fail-closed); compose + env + Ansible env.j2 + CI defaults wired. okf-server jest 327/327, overlay pytest 107/107, ESLint/Prettier/Ruff clean, GitLab pipeline #6270 (MR !278) 75/75 GREEN.
+  4-8-amend-wp-c-content-only-chunking: done  # WP-C landed on feat/okf-server @ d0db1a13; live smoke rework deferred to follow-up context (jest+pytest+CI is the merge gate)
   epic-2.9-retrospective: optional
 
   epic-3: backlog            # Vue admin UI — ungated

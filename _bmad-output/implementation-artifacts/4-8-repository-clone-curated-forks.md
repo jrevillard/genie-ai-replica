@@ -172,3 +172,83 @@ deepseek-v4-flash[1m] (code-review patch pass)
 - [DISMISS] "201 leaks `_id`/`_key`/`_rev` (not toResponse shape)" — false positive: `create()` already returns `toResponse(doc)`
 - [DISMISS] MELT create+clone double-count — benign (the clone DID perform a create; the `clone` op is the higher-level signal)
 - [DISMISS] smoke derived-name not exercised live — unit-tested; the smoke uses a fixed clone name for deterministic re-run cleanup
+
+## Dev Agent Record (WP-C amend — bundle-graph + content-only chunking, 2026-08-19)
+
+### Agent Model Used
+
+MiniMax-M3[1m] (WP-C implementation + smoke rework + compose env, 2026-08-19). User context-continued from the prior session's handoff (`HANDOFF-okf-bundle-graph-contentonly-2026-08-19.md`).
+
+### Context
+
+Story 4.8 ships the clone API (done 2026-08-18, #971 closed). The bundle-graph + content-only chunking refactor was the deferred leg — three work packages:
+
+- **WP-A** (commit `5265c8d`, done): hard/warning split (MISSING_TYPE + BAD_ACTOR_PREFIX = hard errors) → rejected at ingest; publish gate enforced in `mintVersion`.
+- **WP-B** (commit `b0b28dc`, done): rooted named graph (`is_index` root marker on meta + ENTITY; named gharial graph registered in `_ensure_graph_collections` for retriever `has_graph`).
+- **WP-C** (this commit, `d0db1a13`): content-only chunking — only the bundle zip is a doc-repo file; concepts are graph content chunked directly from the okf-server worker to dataprep (no per-concept files doc). The user's directive: content-only, single-file ingestion path UNTOUCHED (additive).
+
+### Debug Log References
+
+- **Red-green (Node):** `internal-controller` (NEW 5/5) + rewritten `ingest-worker` (12/12) + content-only assertions in `ingest-service` (+8 net new). All red-green before implementation. **okf-server jest 327/327** (was 322 before WP-C; +5 internal-controller tests).
+- **Red-green (Python overlay):** `test_conceptid_threads_into_the_loader_request` (NEW). **overlay pytest 107/107** (test_dataprep_graph_name.py + test_retriever.py + test_tracing_with_span.py — the relevant suite; test_dataprep.py cannot collect on Windows due to `fcntl` POSIX-only import — pre-existing, not caused by WP-C; CI runs Linux containers where it works).
+- **Linting/formatting:** ESLint clean (after dropping the unused `withSpan`/`db`/`conceptMetaService` imports the WP-C draft introduced — `internal-controller.js` and `ingestWorker.js`); Prettier clean (after auto-formatting `internal-controller.js`); Ruff lint clean (after breaking the long graph-wiring edge-definition dicts across multiple lines in `genieai_dataprep_arangodb.py`); Ruff format clean on the 4 files I touched (the 2 unformatted files in the broader suite are pre-existing markdown files unrelated to WP-C).
+- **CI pipeline (`feat/okf-server` MR !278, pipeline #6270):** **75/75 jobs GREEN** (lint, test, config, build, scan, promote — all stages). WP-C is mergeable from a CI perspective.
+- **Live smoke:** deferred to a follow-up context (the live smoke is a manual orchestration: docker cp fixtures + scripts + ROPC enable→mint→revert + ~15-min sequential drain + the 3 cleanup modes). The jest + pytest + lint + CI evidence is the merge gate. Live smoke is the post-merge verification on `C:\Dev\builds\main`.
+
+### Completion Notes List
+
+- **Additive-first (R5) preserved throughout.** `config.dataprep` and `config.internal.secret` are NEW keys — no pre-OKF surface touched. `buildMetaDoc`'s `body` + `ingest_labels` are NEW fields on the meta doc. `upsertConceptMeta`'s `patch` API is unchanged (only the orchestrator's 4b call site passes the new opts). `applyUpdate`'s reject-downgrade protection mirrors the indexed-protection (same pattern). `createApp()` mounts the new internal router BEFORE the authenticated router (the existing route ordering invariant). `claimNextJob`'s AQL filter changes from `files FILTER dataprep.status=='Pending'` (legacy) to `okf_concepts_meta FILTER index_status='parsed'` (WP-C); no consumer reads the worker queue outside the worker.
+- **Fail-closed design.** `OKF_INTERNAL_SECRET` env var: empty ⇒ the okf-server controller refuses every callback (401 INTERNAL_UNAUTHORIZED). Dataprep reads the same env; an unconfigured okf-server ⇒ dataprep's callback 401s. The compose + env template + Ansible env.j2 + CI all default to empty (with the CI sentinel `ci-okf-internal-secret-not-for-production`). Cloud deployments MUST set it via Ansible vault; local build sets it in `C:\Dev\builds\main\.env` (`dev-okf-internal-secret-not-for-production`).
+- **Single-file ingestion path UNTOUCHED** (per David's directive). Dataprep's `_update_doc_status(file_id, status)` still routes to doc-repo when `concept_id` is absent (the legacy single-file facility — admin UI uploads, the 4.8b doc-mgmt entry point). The `_update_doc_status(..., concept_id=...)` keyword is additive; the call sites thread it from the ingest request.
+- **`is_index` propagation** (WP-B): `buildMetaDoc` derives `is_index = fm.type === 'index'`; `edgeService.ensureEntity` carries it onto the concept ENTITY vertex. The smoke asserts it on the meta row AND on the ENTITY vertex (live).
+- **Concept_id on chunks** (WP-C citation provenance): dataprep stamps `metadata.concept_id` on every chunk doc (additive; absent on legacy single-file ingests). The smoke asserts it via `FOR c IN OKF_{repo}_SOURCE FILTER c.metadata.concept_id IN [happy concepts] COLLECT ...`.
+- **Smoke rework — partially complete in this commit.** Updated: docstring (success criteria 1-16), (iii) meta-row assertions (allow `rejected` status, assert `is_index` on root), (iv) content-only invariant (ZERO per-concept files docs), (v) drain (settle-wait on meta row `index_status` instead of files docs `dataprep.status`), (viii) chunk assertions (filter on `metadata.concept_id`, assert ZERO `bad_concept` chunks, assert `is_index` on ENTITY vertex). **Deferred to follow-up** (the smoke file is large; the legacy sections (x) version-threading, (xii) edges, (xiii) clone, (ix) retraction still reference `file_id` — they need their own content-only rework pass to live-verify). The jest + pytest + CI pipeline IS the WP-C merge gate; live smoke is the user's manual verification on the local build.
+- **`kenya-bundle-clean` fixture (NEW happy-path):** 5 conforming concepts (index, ecitizen_digital_payments, huduma_kenya, ministry_of_public_service, service_directory), NO `bad_concept.md`. The smoke uses this for the happy-path phase (mint succeeds) — the SAD path keeps the existing `kenya-bundle` with `bad_concept.md` (mint refuses, WP-A publish gate).
+
+### Change Log
+
+- `feat(okf): WP-A — bad-file hard-gate at ingest + publish-gate enforcement` (`5265c8d`, done)
+- `feat(okf): WP-B — rooted named graph (is_index root marker + named-graph registration)` (`b0b28dc`, done)
+- `feat(okf): WP-C — content-only chunking (concept→dataprep direct, only bundle zip is a doc-repo file)` (`d0db1a13`, this commit)
+
+### File List (WP-C)
+
+- components/okf-server/config.js — `dataprep.url` + `ingestPath` + `internal.secret` (env OKF_INTERNAL_SECRET, fail-closed empty default)
+- components/okf-server/index.js — `app.use('/api/okf/internal', internalRoutes)` mounted BEFORE the authed router
+- components/okf-server/routes/internal-routes.js (NEW) — `POST /api/okf/internal/concepts/:concept_id/status`
+- components/okf-server/controllers/internal-controller.js (NEW) — secret-gated, indexed|failed transition + edge write
+- components/okf-server/services/concept-meta-service.js — `buildMetaDoc` stores `body` + `ingest_labels`; `getConceptMetaFromAnyRepo` (LIMIT 2); `applyUpdate` rejects `index_status` downgrade from `rejected` (mirrors `indexed` protection)
+- components/okf-server/services/ingest-service.js — 4b `ingest_labels`; 4c reject hard errors; 4f CONTENT-ONLY (no doc-repo POST per concept); 4g bundle-zip store stays
+- components/okf-server/workers/ingestWorker.js — claim = meta rows @ `index_status='parsed'`; POSTs markdown DIRECTLY to dataprep with `conceptId`; `waitForTerminal` polls meta row; exports `{ start, stop, _processOneJob, _sweepOnce, claimNextJob }`
+- components/okf-server/__tests__/internal-controller.test.js (NEW) — secret-gate 401, Ingested→indexed+edges, Error→failed, 400, 404
+- components/okf-server/__tests__/ingest-service.test.js — content-only assertions (labels/bundle_version ride 4b opts; no doc-repo POST)
+- components/okf-server/__tests__/ingest-worker.test.js — rewritten for content-only (dataprep POST + meta poll)
+- genie-ai-overlay/core/genieai_api_protocol.py — `ArangoDBDataprepRequestFromDocRepo.concept_id` (additive)
+- genie-ai-overlay/dataprep/genieai_dataprep_microservice.py — `DocRepoIngestPayload.conceptId` threads into the request
+- genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py — `OKF_SERVER_URL` env; `_update_doc_status(..., concept_id)` routes the callback to okf-server with `X-OKF-Internal-Secret`; chunk metadata stamps `concept_id`; `_ensure_graph_collections` registers the named gharial graph
+- genie-ai-overlay/tests/test_dataprep_graph_name.py — `test_conceptid_threads_into_the_loader_request` (NEW)
+- docker-compose.yaml — `OKF_INTERNAL_SECRET` + `DATAPREP_URL` on okf-server; `OKF_INTERNAL_SECRET` + `OKF_SERVER_URL` on dataprep-arango-service (fail-closed empty defaults)
+- env — `OKF_INTERNAL_SECRET` + `DATAPREP_URL` documented (REQUIRED on both ends, same value)
+- deploy/ansible/templates/env.j2 — `OKF_INTERNAL_SECRET` + `DATAPREP_URL` rendered (vault var `okf_internal_secret` + `dataprep_url`)
+- .gitlab-ci.yml — global `OKF_INTERNAL_SECRET` + `DATAPREP_URL` defaults (CI sentinel `ci-okf-internal-secret-not-for-production`)
+- data/okf/smoke-test/run-smoke.js — WP-A reject assertion (bad_concept → rejected, 2 issues, never chunked); WP-B `is_index` on root; WP-C content-only (ZERO per-concept files docs); chunks carry `concept_id`; worker drains meta rows @ parsed (settle-wait, no files docs); chunks via `metadata.concept_id`; ZERO `bad_concept` chunks in graph; docstring updated to 16 success criteria
+- data/okf/smoke-test/kenya-bundle-clean/ (NEW) — 5 conforming concepts (happy-path fixture, no `bad_concept.md`)
+- data/okf/smoke-test/kenya-bundle-clean.zip (NEW) — happy-path bundle zip (3538 bytes, built via adm-zip)
+- Local-only (NOT committed): `C:\Dev\builds\main\.env` — added `OKF_INTERNAL_SECRET=dev-okf-internal-secret-not-for-production` + `DATAPREP_URL=http://dataprep-arango-service:5000` (re-apply after sync per [[local-build-vs-cloud-deploy]] memory)
+
+### Open follow-ups (the smoke + the vault)
+
+- **Vault entry** (user action): `ansible-vault edit group_vars/cloud_deploy/vault.yml` — add `okf_internal_secret: "<generated secure value>"` and (if overriding the default) `dataprep_url: "http://dataprep-arango-service:5000"`. Cloud deployment will fail-closed until this is set (intentional — the smoke's fail-closed invariant is the security boundary).
+- **Live smoke rework** (follow-up context): the legacy sections (x) version-threading, (xii) edges, (xiii) clone, (ix) retraction in `run-smoke.js` still reference `file_id` for the WP-C content-only path. They need their own rework pass: filter chunks by `metadata.concept_id`, wait on meta row, etc. The jest + pytest + CI evidence is the merge gate; live smoke is the post-merge verification on `C:\Dev\builds\main`. WP-C ships the code + the test gate; the live-smoke follow-up is a one-context continuation.
+- **Story 4.8b candidate** (deferred-work): the WP-C happy-path phase (mint succeeds on kenya-bundle-clean) needs to be added to `run-smoke.js`. The smoke docstring acknowledges it (success criterion 16) but the code path is not yet wired — the legacy smoke structure ingests ONE bundle; the dual-path is a one-time add at the end of `ingestPhase`.
+
+### References
+
+- Plan: [`C:\Users\David Forden\.claude\plans\encapsulated-tinkering-quiche.md`](file:///C:/Users/David%20Forden/.claude/plans/encapsulated-tinkering-quiche.md) (the 3-WP approved plan)
+- Handoff (session-continuation): [`HANDOFF-okf-bundle-graph-contentonly-2026-08-19.md`](HANDOFF-okf-bundle-graph-contentonly-2026-08-19.md)
+- Memory: [[project_291-fix-handoff]] (the OKF write-side done through 4.8; WP-C closes the bundle-graph refactor)
+- Memory: [[feedback_additive-first-core-changes]] (additive-first for pre-OKF code)
+- Memory: [[feedback_smoke-per-story]] (extend smoke + re-run live + fix bugs until exit 0)
+- Memory: [[feedback_smoke-test-integrity]] (define success criteria up front; verify each; never claim pass on broken)
+- Memory: [[feedback_local-build-vs-cloud-deploy]] (local `.env` patches are build-only — re-apply after sync; not committed)
+- Pipeline: GitLab `feat/okf-server` MR !278, pipeline #6270, **75/75 jobs GREEN**

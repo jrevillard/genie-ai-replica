@@ -10,6 +10,7 @@ const translationService = require('../../services/translation-service');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
+jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
 // Mock keycloak-auth-service (used by middleware)
 jest.mock('../../services/keycloak-auth-service', () => ({
@@ -974,6 +975,35 @@ describe('GET /:queryId/conversations', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(conversations);
+    expect(queryService.getConversationsForQuery).toHaveBeenCalledWith(
+      'q1',
+      'http://localhost:8080/realms/genie#user-123'
+    );
+  });
+
+  it('should return 403 when caller does not own the query', async () => {
+    queryService.getConversationsForQuery.mockRejectedValue(new Error('Access denied'));
+
+    const response = await authGet('/api/queries/q-other/conversations');
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ success: false, message: 'Access denied' });
+  });
+
+  it('should return 400 when userId is missing', async () => {
+    keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
+      req.user = { iss_sub: undefined, _key: 'user-123' };
+      next();
+    });
+
+    const response = await authGet('/api/queries/q1/conversations');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      success: false,
+      message: 'User ID is required'
+    });
+    expect(queryService.getConversationsForQuery).not.toHaveBeenCalled();
   });
 
   it('should return 500 via next(error) on service failure', async () => {

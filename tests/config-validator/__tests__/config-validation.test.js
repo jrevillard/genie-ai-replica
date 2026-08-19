@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
-const { parseComposeEnvVars, crossReference } = require('../validators/parse-compose');
+const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages } = require('../validators/parse-compose');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
@@ -24,6 +24,7 @@ const COMPOSE_FILE = path.join(ROOT, 'docker-compose.yaml');
 const GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.gpu.yaml');
 const T4_FILE = path.join(ROOT, 'env.t4');
 const RTX6000_FILE = path.join(ROOT, 'env.rtx6000');
+const ANSIBLE_GROUPVARS_FILE = path.join(ROOT, 'deploy/ansible/group_vars/all.yml');
 
 describe('Configuration Validation Suite', () => {
   let envParsed;
@@ -288,6 +289,47 @@ describe('Configuration Validation Suite', () => {
       if (!gpuExists) return;
       // Only known orphans allowed (Section 14 vars used by app node, not GPU compose)
       expect(gpuXRef.orphaned).toEqual([]);
+    });
+  });
+
+  // --- Image tag pinning (no :latest in deployment configs) ---
+  describe('Image tag pinning (no :latest)', () => {
+    test('all main compose image tags are pinned (no :latest)', () => {
+      const images = parseComposeImages(COMPOSE_FILE);
+      expect(images.length).toBeGreaterThan(0);
+
+      // Variable references (${GENIE_AI_*_IMAGE:-...}) are the documented local-dev
+      // escape hatch: their `${VAR:-latest}` fallback only resolves to :latest when
+      // no env value is set, which is acceptable for local dev. Skip those — only
+      // check literal image references, which must always be pinned.
+      const literalImages = images.filter((img) => !img.isVariableRef);
+      expect(literalImages.length).toBeGreaterThan(0);
+
+      const violations = literalImages.filter((img) => img.image.endsWith(':latest'));
+      expect(violations.map((v) => `${v.service}: ${v.image}`)).toEqual([]);
+
+      // Every literal image must also have an explicit tag (not bare image:foo)
+      const untagged = literalImages.filter((img) => !img.image.includes(':'));
+      expect(untagged.map((v) => `${v.service}: ${v.image}`)).toEqual([]);
+    });
+
+    test('Ansible image tags are pinned (no :latest)', () => {
+      if (!fs.existsSync(ANSIBLE_GROUPVARS_FILE)) return;
+      const images = parseAnsibleImages(ANSIBLE_GROUPVARS_FILE);
+      expect(images.length).toBeGreaterThan(0);
+
+      const violations = images.filter((img) => img.image.endsWith(':latest'));
+      expect(violations.map((v) => `${v.name}: ${v.image}`)).toEqual([]);
+    });
+
+    test('GitLab CI image tags are pinned (no :latest)', () => {
+      const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+      if (!fs.existsSync(ciFile)) return;
+      const images = parseGitlabCiImages(ciFile);
+      expect(images.length).toBeGreaterThan(0);
+
+      const violations = images.filter((img) => img.image.endsWith(':latest'));
+      expect(violations.map((v) => `${v.job || 'global'}: ${v.image}`)).toEqual([]);
     });
   });
 

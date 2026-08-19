@@ -949,13 +949,28 @@ class ChatHistoryService {
   }
 
   /**
-   * Find messages related to a specific query
+   * Find messages related to a specific query, enforcing ownership.
    * @param {String} queryId - Query ID
-   * @returns {Promise<Array>} Related messages with conversation info
+   * @param {String} userId - Caller userId (iss_sub) for ownership validation
+   * @returns {Promise<Array|Object|null>} Related messages array on success,
+   *   `{ forbidden: true }` if the query exists but belongs to another user,
+   *   or `null` if the query does not exist.
    */
-  async findMessagesForQuery(queryId) {
+  async findMessagesForQuery(queryId, userId) {
     try {
-      logger.info(`Finding messages related to query ${queryId}`);
+      logger.info(`Finding messages related to query ${queryId} for user ${userId}`);
+
+      // Ownership + existence check: look up the query document first.
+      const lookupCursor = await this.db.query(aql`FOR q IN queries FILTER q._key == ${queryId} RETURN q.userId`);
+      const ownerIds = await lookupCursor.all();
+      if (ownerIds.length === 0) {
+        logger.info(`Query ${queryId} not found`);
+        return null;
+      }
+      if (ownerIds[0] !== userId) {
+        logger.warn(`User ${userId} attempted to access query ${queryId} owned by ${ownerIds[0]}`);
+        return { forbidden: true };
+      }
 
       const query = aql`
         FOR edge IN queryMessages

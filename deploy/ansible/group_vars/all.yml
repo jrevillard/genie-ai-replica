@@ -140,7 +140,7 @@ keycloak_ssl_skip_verify: ""
 #                                         #   (one call/doc, N× cheaper, same context on all chunks)
 #   contextual_label_raw: false           # decoupled: label RAW chunk, context for embedding only (recommended)
 
-vllm_llm_image: vllm/vllm-openai:latest
+vllm_llm_image: vllm/vllm-openai:v0.10.0
 vllm_translation_image: vllm/vllm-openai:v0.10.0
 tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
 tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3

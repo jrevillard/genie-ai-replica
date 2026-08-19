@@ -98,8 +98,8 @@ export default {
       if (chatIndex !== -1) {
         state.chats[chatIndex] = {
           ...state.chats[chatIndex],
-          title: title || state.chats[chatIndex].title,
-          preview: preview || state.chats[chatIndex].preview,
+          title: title ?? state.chats[chatIndex].title,
+          preview: preview ?? state.chats[chatIndex].preview,
           updatedAt: new Date().toISOString()
         };
       }

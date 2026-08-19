@@ -289,7 +289,7 @@ async def retract_file(payload: DocRepoRetractPayload):
     """Deletes a file and its entities/relations from the graph."""
     start = time.time()
     file_id = payload.fileId
-    graph_name = os.getenv("ARANGO_GRAPH_NAME", "genie_graph")
+    graph_name = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
     logger.info(f"[ retract ] Start to delete ingested file {file_id}")
 

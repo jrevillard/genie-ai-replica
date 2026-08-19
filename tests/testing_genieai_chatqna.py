@@ -738,7 +738,14 @@ class ChatQnAService:
 
         return None
 
-    def add_remote_service(self):
+    def _build_rag_graph(self, include_rerank: bool = True, llm_endpoint: str | None = None):
+        """Build the RAG service graph (embedding → retriever → [rerank] → llm).
+
+        Mirrors the consolidated builder in the prod chatqna service (Story 1.4).
+        This test stub uses ``/embed`` for the embedding endpoint and
+        ``api_key=OPENAI_API_KEY`` for the LLM, matching the pre-cleanup stubs.
+        """
+        llm_endpoint = llm_endpoint or "/v1/chat/completions"
 
         embedding = MicroService(
             name="embedding",
@@ -758,201 +765,60 @@ class ChatQnAService:
             service_type=ServiceType.RETRIEVER,
         )
 
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
+        services = [embedding, retriever]
+        edges = [(embedding, retriever)]
+
+        if include_rerank:
+            rerank = MicroService(
+                name="rerank",
+                host=RERANK_SERVER_HOST_IP,
+                port=RERANK_SERVER_PORT,
+                endpoint="/v1/reranking",
+                use_remote_service=True,
+                service_type=ServiceType.RERANK,
+            )
+            services.append(rerank)
+            edges.append((retriever, rerank))
+            previous = rerank
+        else:
+            previous = retriever
 
         llm = MicroService(
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
             api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
+            endpoint=llm_endpoint,
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        services.append(llm)
+        edges.append((previous, llm))
+
+        for service in services:
+            self.megaservice.add(service)
+        for src, dst in edges:
+            self.megaservice.flow_to(src, dst)
+
+    def add_remote_service(self):
+        """Full RAG graph: embedding → retriever → rerank → llm (chat/completions)."""
+        self._build_rag_graph(include_rerank=True)
 
     def add_remote_service_without_rerank(self):
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-        self.megaservice.add(embedding).add(retriever).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, llm)
+        """RAG graph without the rerank node: embedding → retriever → llm."""
+        self._build_rag_graph(include_rerank=False)
 
     def add_remote_service_faqgen(self):
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            endpoint="/v1/faqgen",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        """Full RAG graph with the FAQ LLM endpoint."""
+        self._build_rag_graph(include_rerank=True, llm_endpoint="/v1/faqgen")
 
     def add_remote_service_without_translation(self):
-        """
-        Builds the full RAG pipeline wrapped with input and output translation.
-        Flow: translator_in -> embedding -> retriever -> rerank -> llm -> translator_out
-        """
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-
-
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
-
+        """Alias of :meth:`add_remote_service` — kept for CLI/test compat."""
+        self.add_remote_service()
 
     def add_remote_service_genieai(self):
-        """
-        Builds the full RAG pipeline wrapped with input and output translation.
-        Flow: translator_in -> embedding -> retriever -> rerank -> llm -> translator_out
-        """
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint="/embed",
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            api_key=OPENAI_API_KEY,
-            endpoint="/v1/chat/completions",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        """Alias of :meth:`add_remote_service` — kept for CLI/test compat."""
+        self.add_remote_service()
 
 
     async def _get_translated_history_string(self, history: list, target_language: str) -> str:

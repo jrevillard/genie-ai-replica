@@ -1,0 +1,84 @@
+# OVERRIDES.yaml — core-layer override audit manifest (architecture pattern 1).
+#
+# Every intentional deviation of the GENIE.AI overlay from the vendored OPEA
+# source is recorded here with a disposition, an owner, and a ticket. Each entry
+# must be matched by a `# OVERRIDE <module>.<name> | disposition: ... | reason: ... | test: ...`
+# comment record in the source tree (verified by build-patches/lint_overrides.py).
+#
+# Disposition:
+#   - still-needed:        override is still required on the current OPEA version.
+#   - re-graft-to-new-API: override must be re-expressed against a newer OPEA API.
+#   - obsolete-remove:     override was fixed upstream and can be deleted.
+overrides:
+  - override: core.constants.ServiceType
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: core.genieai_api_protocol.ChatCompletionRequest.k
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: core.genieai_api_protocol.ChatCompletionRequest.fetch_k
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: core.genieai_api_protocol.ChatCompletionRequest.lambda_mult
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: core.genieai_api_protocol.ChatCompletionRequest.score_threshold
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: core.genieai_api_protocol.ChatCompletionRequest.max_tokens
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.n
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.seed
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.temperature
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.top_p
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.best_of
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.repetition_penalty
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.top_k
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.timeout
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.top_n
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: DW-5
+  - override: build-patches.docarray_alias_shim
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: build-patches.install_site_startup
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1
+  - override: contracts._harness.import_docarray
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    ticket: story 2.1

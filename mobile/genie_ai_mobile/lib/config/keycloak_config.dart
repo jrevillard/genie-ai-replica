@@ -36,7 +36,7 @@ class KeycloakConfig {
   /// locales; a flavor may restrict this (e.g. el-salvador → ['en', 'es']).
   final List<String> supportedLocaleCodes;
 
-  const KeycloakConfig({
+  KeycloakConfig({
     required this.keycloakUrl,
     required this.realm,
     required this.clientId,
@@ -44,7 +44,14 @@ class KeycloakConfig {
     required this.backendUrl,
     this.allowInsecureConnections = false,
     this.supportedLocaleCodes = allSupportedLocaleCodes,
-  });
+  }) : assert(
+         redirectScheme.isNotEmpty &&
+             RegExp(
+               r'^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$',
+             ).hasMatch(redirectScheme),
+         'redirectScheme must be a non-empty reverse-domain string '
+         '(e.g. "com.itu.genieai"), got: "$redirectScheme"',
+       );
 
   String get realmUrl => '$keycloakUrl/realms/$realm';
 

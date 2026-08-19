@@ -452,11 +452,25 @@ describe('ChatHistoryService', () => {
     });
 
     describe('findMessagesForQuery', () => {
-      it('should return messages linked to a query', async () => {
-        mockDb.query.mockResolvedValue(createMockCursor([{ _key: 'msg-1', content: 'Hello' }]));
-        const result = await chatHistoryService.findMessagesForQuery('query-1');
+      it('should return messages linked to a query when caller owns the query', async () => {
+        mockDb.query
+          .mockResolvedValueOnce(createMockCursor(['user-1'])) // ownership lookup
+          .mockResolvedValueOnce(createMockCursor([{ _key: 'msg-1', content: 'Hello' }]));
+        const result = await chatHistoryService.findMessagesForQuery('query-1', 'user-1');
         expect(result).toBeDefined();
         expect(Array.isArray(result)).toBe(true);
+      });
+
+      it('should return null when query does not exist', async () => {
+        mockDb.query.mockResolvedValueOnce(createMockCursor([])); // no owner found
+        const result = await chatHistoryService.findMessagesForQuery('missing', 'user-1');
+        expect(result).toBeNull();
+      });
+
+      it('should return forbidden when caller does not own the query', async () => {
+        mockDb.query.mockResolvedValueOnce(createMockCursor(['owner-user'])); // different owner
+        const result = await chatHistoryService.findMessagesForQuery('query-1', 'other-user');
+        expect(result).toEqual({ forbidden: true });
       });
     });
 
@@ -735,24 +749,133 @@ describe('ChatHistoryService', () => {
       ).rejects.toThrow('Step failed');
       expect(mockTrx.abort).toHaveBeenCalled();
     });
+
+    // DW-84: duplicate folder IDs — service processes both entries (no dedup logic)
+    it('should process duplicate folder IDs without deduplication', async () => {
+      const mockTrx = {
+        step: jest.fn().mockImplementation(async (fn) => fn()),
+        commit: jest.fn().mockResolvedValue(undefined),
+        abort: jest.fn().mockResolvedValue(undefined)
+      };
+      mockDb.beginTransaction.mockResolvedValue(mockTrx);
+
+      // Permission check + parent check for each duplicate entry (4 queries total)
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // perm folder-1 (first)
+        .mockResolvedValueOnce(createMockCursor([null])) // parent of folder-1
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // perm folder-1 (second)
+        .mockResolvedValueOnce(createMockCursor([null])); // parent of folder-1
+
+      const result = await chatHistoryService.reorderFolders(
+        'user-1',
+        [
+          { folderId: 'folder-1', order: 1 },
+          { folderId: 'folder-1', order: 2 }
+        ],
+        null,
+        'user-1'
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.updatedFolders).toBe(2);
+      expect(mockTrx.commit).toHaveBeenCalled();
+    });
+
+    // DW-84: non-existent folderId — permission check throws ForbiddenError
+    it('should throw ForbiddenError when folderId does not exist', async () => {
+      mockDb.query.mockResolvedValueOnce(createMockCursor([])); // no permission doc
+
+      await expect(
+        chatHistoryService.reorderFolders('user-1', [{ folderId: 'MISSING', order: 1 }], null, 'user-1')
+      ).rejects.toThrow();
+    });
+
+    // DW-84: mixed valid/invalid IDs — aborts on first error in validation loop
+    it('should abort on first invalid folderId in mixed valid/invalid array', async () => {
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // perm folder-1 (valid)
+        .mockResolvedValueOnce(createMockCursor([null])) // parent of folder-1
+        .mockResolvedValueOnce(createMockCursor([])); // no permission for MISSING (invalid)
+
+      await expect(
+        chatHistoryService.reorderFolders(
+          'user-1',
+          [
+            { folderId: 'folder-1', order: 1 },
+            { folderId: 'MISSING', order: 2 }
+          ],
+          null,
+          'user-1'
+        )
+      ).rejects.toThrow();
+    });
   });
 
   describe('deleteFolder', () => {
-    it('should delete folder with contents when user has permission', async () => {
+    // DW-215: Verify cascade side effects (folderConversations.remove, deleteConversation, folders.remove)
+    it('should cascade-remove conversation links and conversations when deleteContents=true', async () => {
+      const mockTrx = {
+        step: jest.fn().mockImplementation(async (fn) => fn()),
+        commit: jest.fn().mockResolvedValue(undefined),
+        abort: jest.fn().mockResolvedValue(undefined)
+      };
+      mockDb.beginTransaction.mockResolvedValue(mockTrx);
+
+      // 3 conversation links returned from folderConversations query
+      const conversationLinks = [
+        { _key: 'fc-1', _to: 'conversations/conv-1' },
+        { _key: 'fc-2', _to: 'conversations/conv-2' },
+        { _key: 'fc-3', _to: 'conversations/conv-3' }
+      ];
+
       mockDb.query
         .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // permission check
-        .mockResolvedValueOnce(createMockCursor([{ _key: 'fc-1', _to: 'conversations/conv-1' }])) // folder conversations
-        .mockResolvedValueOnce(createMockCursor([])) // child folders
-        .mockResolvedValueOnce(createMockCursor([])) // getConversationOwnerId
-        .mockResolvedValue(createMockCursor([])); // deletions
-
-      mockConversations.remove.mockResolvedValueOnce({ _key: 'conv-1' });
-      mockFolders.remove.mockResolvedValueOnce({ _key: 'folder-1' });
+        .mockResolvedValueOnce(createMockCursor(conversationLinks)) // folder conversations
+        .mockResolvedValueOnce(createMockCursor([])) // child folders (none)
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'conv-1' }])) // getConversationOwnerId (conv-1 exists)
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'conv-2' }])) // getConversationOwnerId (conv-2 exists)
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'conv-3' }])) // getConversationOwnerId (conv-3 exists)
+        .mockResolvedValue(createMockCursor([])); // remaining queries (userFolders edge removal, etc.)
 
       const result = await chatHistoryService.deleteFolder('folder-1', 'user-1', true, 'user-1');
+
       expect(result).toBeDefined();
-      expect(result.conversationLinksDeleted).toBe(1);
       expect(result.success).toBe(true);
+      expect(result.conversationLinksDeleted).toBe(3);
+
+      // Verify folderConversations.remove called for each link (3 times)
+      const removeCalls = mockFolderConversations.remove.mock.calls;
+      expect(removeCalls.length).toBeGreaterThanOrEqual(3);
+
+      // Verify folders.remove called once for the folder itself
+      expect(mockFolders.remove).toHaveBeenCalledWith('folder-1');
+    });
+
+    it('should remove links but not conversations when deleteContents=false', async () => {
+      const mockTrx = {
+        step: jest.fn().mockImplementation(async (fn) => fn()),
+        commit: jest.fn().mockResolvedValue(undefined),
+        abort: jest.fn().mockResolvedValue(undefined)
+      };
+      mockDb.beginTransaction.mockResolvedValue(mockTrx);
+
+      const conversationLinks = [
+        { _key: 'fc-1', _to: 'conversations/conv-1' },
+        { _key: 'fc-2', _to: 'conversations/conv-2' }
+      ];
+
+      mockDb.query
+        .mockResolvedValueOnce(createMockCursor([{ _key: 'uf-1' }])) // permission check
+        .mockResolvedValueOnce(createMockCursor(conversationLinks)) // folder conversations
+        .mockResolvedValueOnce(createMockCursor([])) // child folders
+        .mockResolvedValue(createMockCursor([])); // remaining queries
+
+      const result = await chatHistoryService.deleteFolder('folder-1', 'user-1', false, 'user-1');
+
+      expect(result).toBeDefined();
+      expect(result.success).toBe(true);
+      // folders.remove still called for the folder itself
+      expect(mockFolders.remove).toHaveBeenCalledWith('folder-1');
     });
   });
 });

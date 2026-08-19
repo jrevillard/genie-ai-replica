@@ -1111,3 +1111,230 @@ async def test_tei_200_non_list_response_raises():
         pytest.raises(RuntimeError, match=r"unexpected response type"),
     ):
         await reranker.invoke(input_doc)
+
+
+# ---------------------------------------------------------------------------
+# Test: Bounds check — out-of-range TEI index (DW-131)
+#
+# A buggy TEI response can carry an index outside [0, len(retrieved_docs)).
+# The bounds check must skip the result and log an error, not raise IndexError.
+# ---------------------------------------------------------------------------
+
+
+class TestBoundsCheck:
+    """Tests for retrieved_docs[index] bounds safety."""
+
+    @pytest.mark.asyncio
+    async def test_slice_out_of_range_index_skipped_and_logged(self):
+        """TEI returns index=5 for 3 docs → result skipped, error logged, no crash."""
+        reranker = create_reranker()
+        tei_response = [{"index": 5, "score": 0.8}]
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b", "c"],
+            reranking_strategy="slice",
+            top_n=1,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.logger") as mock_logger,
+        ):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 0
+        mock_logger.error.assert_called()
+        error_msg = mock_logger.error.call_args[0][0]
+        assert "TEI index 5 out of range for 3 docs" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_slice_negative_index_skipped_and_logged(self):
+        """TEI returns index=-1 → result skipped, error logged."""
+        reranker = create_reranker()
+        tei_response = [{"index": -1, "score": 0.9}]
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="slice",
+            top_n=1,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.logger") as mock_logger,
+        ):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 0
+        mock_logger.error.assert_called()
+        error_msg = mock_logger.error.call_args[0][0]
+        assert "TEI index -1 out of range for 2 docs" in error_msg
+
+    @pytest.mark.asyncio
+    async def test_threshold_out_of_range_index_skipped(self):
+        """Threshold strategy: out-of-range index skipped, in-range kept."""
+        reranker = create_reranker()
+        tei_response = [
+            {"index": 0, "score": 0.95},
+            {"index": 99, "score": 0.85},
+            {"index": 1, "score": 0.80},
+        ]
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="threshold",
+            reranking_threshold=0.75,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        # 2 in-range results kept, 1 out-of-range skipped
+        assert len(result.reranked_docs) == 2
+        scores = [d.score for d in result.reranked_docs]
+        assert scores == [0.95, 0.80]
+
+    @pytest.mark.asyncio
+    async def test_adaptive_out_of_range_index_skipped(self):
+        """Adaptive strategy: out-of-range index skipped in ranked lists."""
+        reranker = create_reranker()
+        tei_response = [
+            {"index": 2, "score": 0.95},
+            {"index": 50, "score": 0.85},
+            {"index": 0, "score": 0.60},
+        ]
+        input_doc = create_mock_chat_request(
+            texts=["alpha", "beta", "gamma"],
+            embedding=[1.0, 0.0],
+            chunk_embeddings=[[0.9, 0.1], [0.5, 0.5], [0.1, 0.9]],
+            reranking_strategy="adaptive",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        # No crash, at least the in-range docs processed
+        assert result is input_doc
+        texts_out = {d.text for d in result.reranked_docs}
+        assert "gamma" in texts_out or "alpha" in texts_out
+
+    @pytest.mark.asyncio
+    async def test_valid_index_no_error_logged(self):
+        """Valid index → no error logged, normal access."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.95, 0.82])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="slice",
+            top_n=2,
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.logger") as mock_logger,
+        ):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 2
+        mock_logger.error.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test: KneeLocator edge cases (DW-132)
+#
+# KneeLocator can return knee=None or misbehave on degenerate inputs.
+# Verify the knee_threshold strategy handles single-doc and flat-score inputs
+# without crashing, computing a sensible cutoff.
+# ---------------------------------------------------------------------------
+
+
+class TestKneeLocatorEdgeCases:
+    """KneeLocator edge case tests for knee_threshold strategy."""
+
+    @pytest.mark.asyncio
+    async def test_single_doc_knee_none_returns_the_doc(self):
+        """1 doc → KneeLocator.knee=None, cutoff=1, the single doc returned."""
+        reranker = create_reranker()
+        tei_response = [{"index": 0, "score": 0.9}]
+        input_doc = create_mock_searched_doc(
+            texts=["only doc"],
+            reranking_strategy="knee_threshold",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        mock_knee = MagicMock()
+        mock_knee.knee = None
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.KneeLocator", return_value=mock_knee),
+        ):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].text == "only doc"
+        assert result.reranked_docs[0].score == 0.9
+
+    @pytest.mark.asyncio
+    async def test_flat_scores_no_crash(self):
+        """All scores identical → KneeLocator may find no knee, docs still returned."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.5, 0.5, 0.5])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b", "c"],
+            reranking_strategy="knee_threshold",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        mock_knee = MagicMock()
+        mock_knee.knee = None
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.KneeLocator", return_value=mock_knee),
+        ):
+            result = await reranker.invoke(input_doc)
+
+        # No crash, cutoff = len(document_scores) = 3, all docs returned
+        assert len(result.reranked_docs) == 3
+
+    @pytest.mark.asyncio
+    async def test_flat_scores_with_knee_found(self):
+        """Flat scores where KneeLocator finds a knee at position 0 → cutoff=1."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.5, 0.5, 0.5])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b", "c"],
+            reranking_strategy="knee_threshold",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        mock_knee = MagicMock()
+        mock_knee.knee = 0  # cutoff = 0 + 1 = 1
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.KneeLocator", return_value=mock_knee),
+        ):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 1
+
+    @pytest.mark.asyncio
+    async def test_two_docs_knee_none_returns_both(self):
+        """2 docs, knee=None → cutoff=2, both returned."""
+        reranker = create_reranker()
+        tei_response = create_tei_rerank_response([0.9, 0.8])
+        input_doc = create_mock_searched_doc(
+            texts=["a", "b"],
+            reranking_strategy="knee_threshold",
+        )
+        mock_session = create_mock_aiohttp_session(tei_response)
+
+        mock_knee = MagicMock()
+        mock_knee.knee = None
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            patch("reranker.genieai_tei_reranker.KneeLocator", return_value=mock_knee),
+        ):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 2

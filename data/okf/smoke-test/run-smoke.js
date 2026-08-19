@@ -574,7 +574,7 @@ async function ingestPhase(db) {
   const own = await call('POST', DOCREPO + '/api/files/ingest-bundle', svc, {
     bundle: Buffer.from('# x').toString('base64'),
     graph_name: 'OKF_00000000-0000-4000-8000-000000000000',
-    repo_id: '00000000-0000-4000-8000-000000000000',
+    repo_id: '99999999-9999-4999-8999-999999999999', // deliberately DIFFERENT → ownership mismatch
     originalFileName: 'ownership-probe.md'
   });
   own.status === 400

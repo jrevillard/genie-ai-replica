@@ -682,7 +682,6 @@ kics-iac-sast:
     paths:
       - sbom.spdx.json
       - gl-scan-tmp.json
-  allow_failure: true
 
 
 .promote_template: &promote_template
@@ -728,9 +727,7 @@ kics-iac-sast:
     # Rewrite tmp/ image names → promoted names in the container scanning report.
     # Same digest, correct name → GitLab vulnerability report tracks real images.
     # Uses the first (primary) tag from the promote step (e.g. main-<sha>, v2.1.0, vX.Y-<sha>).
-    # The scan stage is allow_failure — a scan can time out (e.g. torch-heavy
-    # images) and produce no report. Promote must not hard-fail the whole pipeline
-    # for that: retag the image and only rewrite the report when one exists.
+    # Scan failures block promotion (security policy). Promote handles missing reports gracefully
     - |
       if [ -f gl-scan-tmp.json ]; then
         PRIMARY_TAG="${FINAL_TAGS%% *}"

@@ -65,6 +65,7 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
     expect(doc.title).toBe('Health Policy');
     expect(doc.type).toBe('policy');
+    expect(doc.is_index).toBe(false); // type 'policy' ≠ 'index' (Story 4.8-amend)
     expect(doc.tags).toEqual(['health', 'public']);
     expect(doc.labels).toEqual(['t:t1']);
     expect(doc.summary).toBe('Summary text');
@@ -76,6 +77,16 @@ describe('concept-meta-service.upsertConceptMeta (G9)', () => {
     expect(doc.bundle_version).toBe(1);
     expect(doc.graph_name).toBe('OKF_r1');
     expect(doc.frontmatter.title).toBe('Health Policy');
+  });
+
+  it('is_index: true derived for type "index" (the bundle ROOT/discovery entry — Story 4.8-amend)', async () => {
+    await conceptMeta.upsertConceptMeta(
+      'r1',
+      parsedInput({ concept_id: 'index', path: 'index.md', frontmatter: { title: 'KB', type: 'index' } })
+    );
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.concept_id).toBe('index');
+    expect(doc.is_index).toBe(true);
   });
 
   it('UPDATES on re-ingest — same body is idempotent (no duplicate, same hash, created_at preserved)', async () => {

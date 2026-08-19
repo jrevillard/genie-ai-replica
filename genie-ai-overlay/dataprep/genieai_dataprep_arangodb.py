@@ -1306,6 +1306,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 except Exception as e:
                     logger.warning(f"[ ensure-graph ] Could not create {name}: {e}")
 
+        # Story 4.8-amend (2026-08-19): register the NAMED graph (gharial). The
+        # retriever's traversal guard (``db.has_graph(graph_name)``) returns empty
+        # for any graph that is not a registered named graph, so without this the
+        # OKF per-repo graph is un-queryable at runtime. Edge directions match the
+        # retriever's traversal: ENTITY -(_HAS_SOURCE)-> SOURCE(chunk) and
+        # ENTITY -(_LINKS_TO)-> ENTITY. Idempotent (a re-registration is a no-op).
+        try:
+            if not self.db.has_graph(graph_name):
+                self.db.create_graph(
+                    graph_name,
+                    edge_definitions=[
+                        {"collection": f"{graph_name}_HAS_SOURCE", "from": [f"{graph_name}_ENTITY"], "to": [f"{graph_name}_SOURCE"]},
+                        {"collection": f"{graph_name}_LINKS_TO", "from": [f"{graph_name}_ENTITY"], "to": [f"{graph_name}_ENTITY"]},
+                    ],
+                )
+                logger.info(f"[ ensure-graph ] Registered named graph {graph_name}")
+        except Exception as e:  # pragma: no cover - already-exists / transient
+            logger.warning(f"[ ensure-graph ] Could not register named graph {graph_name}: {e}")
+
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
         """
         Asynchronous ingestion task with support for graceful 'Killed' status transitions.

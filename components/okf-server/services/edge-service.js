@@ -81,7 +81,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // 1. The concept's persisted links (from the 4b meta doc). The meta read
     // matches BOTH the bare and the `concepts/`-prefixed stored form so a
     // subdirectory bundle never turns into a silent no-op.
-    let meta = null;
+    let meta;
     try {
       const rows = await (
         await db.query(
@@ -99,7 +99,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
 
     // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
     // so prefixed stored ids match bare link targets.
-    let repoConceptIds = new Set();
+    let repoConceptIds;
     try {
       const rows = await (
         await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id RETURN m.concept_id', { repo_id })
@@ -129,7 +129,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // 4. Ensure BOTH the source and every valid target ENTITY vertex exist
     // (REVIEW FIX P3: the old code only ensured the source — a link to a
     // not-yet-drained / failed concept dangled on a missing `_to`).
-    const ensureEntity = (id, title, labels, bundleVersion) =>
+    const ensureEntity = (id, title, labels, bundleVersion, isIndex) =>
       entityCol
         .save(
           {
@@ -138,7 +138,12 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
             repo_id,
             title: title || null,
             labels: labels || [],
-            bundle_version: bundleVersion ?? ctx.bundle_version ?? null
+            bundle_version: bundleVersion ?? ctx.bundle_version ?? null,
+            // Story 4.8-amend (2026-08-19): the bundle ROOT (index.md, type: index)
+            // is persisted on its ENTITY vertex so graph-native traversal has a seed
+            // without a meta join. Only set for the concept's OWN write (target
+            // upserts below are minimal and are corrected when that concept drains).
+            ...(isIndex === true ? { is_index: true } : {})
           },
           { overwrite: true }
         )
@@ -149,7 +154,8 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
       cid,
       (meta && meta.title) || null,
       (meta && meta.labels) || [],
-      (meta && meta.bundle_version) ?? null
+      (meta && meta.bundle_version) ?? null,
+      (meta && meta.is_index) === true
     );
 
     // 5. Write edges — dedup by target so a target listed twice is ONE edge and

@@ -226,3 +226,27 @@ class TestEnsureGraphCollections:
         instance.db = MagicMock()
         instance.db.collections.side_effect = Exception("arango hiccup")
         instance._ensure_graph_collections("OKF_repo1")  # must not raise
+
+    def test_registers_the_named_graph_for_a_new_repo(self):
+        """Story 4.8-amend: the retriever's `has_graph` guard requires a named
+        graph; register ENTITY -(_HAS_SOURCE)-> SOURCE + ENTITY -(_LINKS_TO)-> ENTITY."""
+        instance, db = self._bare_loader(["GRAPH_SOURCE", "_graphs"])
+        db.has_graph.return_value = False
+        instance._ensure_graph_collections("OKF_repo1")
+        db.create_graph.assert_called_once()
+        name = db.create_graph.call_args.args[0]
+        kwargs = db.create_graph.call_args.kwargs
+        assert name == "OKF_repo1"
+        edge_defs = kwargs["edge_definitions"]
+        has_source = next(d for d in edge_defs if d["collection"] == "OKF_repo1_HAS_SOURCE")
+        assert has_source["from"] == ["OKF_repo1_ENTITY"] and has_source["to"] == ["OKF_repo1_SOURCE"]
+        links = next(d for d in edge_defs if d["collection"] == "OKF_repo1_LINKS_TO")
+        assert links["from"] == ["OKF_repo1_ENTITY"] and links["to"] == ["OKF_repo1_ENTITY"]
+
+    def test_skips_graph_registration_when_graph_exists(self):
+        instance, db = self._bare_loader(
+            ["OKF_repo1_SOURCE", "OKF_repo1_ENTITY", "OKF_repo1_HAS_SOURCE", "OKF_repo1_LINKS_TO"]
+        )
+        db.has_graph.return_value = True
+        instance._ensure_graph_collections("OKF_repo1")
+        db.create_graph.assert_not_called()

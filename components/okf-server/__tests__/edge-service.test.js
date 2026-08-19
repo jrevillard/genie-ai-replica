@@ -84,6 +84,18 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
     expect(entities.length).toBeGreaterThan(0);
   });
 
+  test('the bundle ROOT (is_index) is stamped on its ENTITY vertex (Story 4.8-amend)', async () => {
+    programQueries(
+      [metaRow({ concept_id: 'index', is_index: true, links: [{ to_concept_id: 'huduma_kenya', label: 'Huduma' }] })],
+      ['index', 'huduma_kenya']
+    );
+    await edgeService.writeRepoConceptEdges(REPO, 'index', { file_id: 'file-idx', bundle_version: 1 });
+    const entities = Object.values(mockDb._stores[`${GRAPH}_ENTITY`] || {});
+    const indexEntity = entities.find((e) => e.concept_id === 'index');
+    expect(indexEntity).toBeTruthy();
+    expect(indexEntity.is_index).toBe(true);
+  });
+
   test('cross-repo / missing targets are DROPPED + logged (G22) — never materialized', async () => {
     programQueries(
       [

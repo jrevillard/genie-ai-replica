@@ -110,6 +110,10 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
     bundle_version: p.bundle_version != null ? p.bundle_version : (opts.bundle_version ?? null),
     title,
     type: fm.type || '',
+    // Story 4.8-amend (2026-08-19): index.md is the bundle ROOT/discovery entry —
+    // `type: index` is the reserved marker. Persisted first-class so traversal has
+    // a seed and serving can enumerate the entry point without string-matching.
+    is_index: fm.type === 'index',
     tags,
     labels,
     summary,

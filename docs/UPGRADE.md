@@ -34,9 +34,11 @@ All OPEA overlay images now use Python 3.11 (matching OPEA v1.5's base). Custom 
 
 #### Dataprep Image Base Change
 
-The dataprep image switched from CUDA/Ubuntu to `python:3.11-slim`. This reduces image size and attack surface since dataprep has no GPU assignment.
+The dataprep image base changed from `nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04` to `python:3.11-slim`. **GPU support is maintained** — CUDA libraries are now installed via pip (`cuda-toolkit`, `nvidia-cuda-runtime`) rather than baked into the base image.
 
-**Compatibility**: No functional change. Dataprep continues to use CPU for document processing.
+**Compatibility**: No functional change. Docling continues to use GPU for document parsing when `DOCLING_DEVICE=cuda` (default). The dataprep service still runs on GPU nodes (`node.labels.gpu == true`).
+
+**Benefits**: Smaller image size, faster builds, same GPU capability.
 
 #### Image Tag Pinning Policy
 

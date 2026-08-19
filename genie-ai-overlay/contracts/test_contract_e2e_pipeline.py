@@ -232,8 +232,10 @@ def test_e2e_graph_schedules_real_orchestrator(comps, fake_http):
     # The LLM node output must be a dict or StreamingResponse (v1.5 returns
     # streaming responses; v1.3 returned dicts).
     from starlette.responses import StreamingResponse
-    assert isinstance(result[llm_key], (dict, StreamingResponse)), \
+
+    assert isinstance(result[llm_key], (dict, StreamingResponse)), (
         f"LLM node output is not a dict or StreamingResponse: {type(result[llm_key])}"
+    )
 
 
 # --- DW-263: confidence / abstention / response-schema assertions -----------

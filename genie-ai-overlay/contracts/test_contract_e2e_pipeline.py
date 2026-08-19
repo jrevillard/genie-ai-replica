@@ -209,13 +209,15 @@ def test_e2e_graph_schedules_real_orchestrator(comps, fake_http):
     graph.flow_to(rerank, llm)
 
     llm_params = _harness.import_docarray("LLMParams")()
-    result = asyncio.run(
+    raw_result = asyncio.run(
         graph.schedule(
             initial_inputs={"text": "what is tomato blight?", "model": "genie"},
             llm_parameters=llm_params,
             **_harness.WIRE_KWARGS,
         )
     )
+    # v1.5 schedule() returns (dict, DAG); v1.3 returned just dict. Handle both.
+    result = raw_result[0] if isinstance(raw_result, tuple) else raw_result
     # schedule() returns after traversing the graph; assert the observable
     # surface — a structured result dict with the LLM node reached, not just
     # a non-None return from a pipeline that may have failed silently.

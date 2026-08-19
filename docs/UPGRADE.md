@@ -6,6 +6,46 @@ change requires manual action from deployers.
 
 ---
 
+## v2.0.1 → v2.1.0
+
+### Breaking Changes
+
+#### OPEA v1.3 → v1.5
+
+All four OPEA overlay images (chatqna, dataprep, retriever, reranker) now build from OPEA v1.5. The upgrade absorbs 7.5 months of upstream bug fixes and dependency CVEs while preserving GENIE's RAG behavior (retrieval, reranking, labeling, contextual retrieval).
+
+**Compatibility**: ArangoDB vector store format unchanged. Existing embeddings and graph data are compatible. No data migration required.
+
+**Rollback**: Redeploy the previous v1.3-based image tags. The v1.3 images remain in the registry.
+
+**What changed**:
+- All OPEA services now use Python 3.11 (was 3.10)
+- Dataprep image base: `python:3.11-slim` (was CUDA/Ubuntu) — dataprep has no GPU assignment
+- Image tags pinned to specific versions (no `:latest` in AI stack)
+- Retriever graph name default unified to `ARANGO_GRAPH_NAME` (was `RETRIEVER_ARANGO_GRAPH_NAME`)
+
+**Migration**: No manual migration required. Pull new images and redeploy.
+
+#### Python 3.10 → 3.11
+
+All OPEA overlay images now use Python 3.11 (matching OPEA v1.5's base). Custom Python code in the overlay (if any) should be tested against Python 3.11.
+
+**Compatibility**: Python 3.11 is backward-compatible with 3.10 for standard library and most third-party packages. No code changes expected.
+
+#### Dataprep Image Base Change
+
+The dataprep image switched from CUDA/Ubuntu to `python:3.11-slim`. This reduces image size and attack surface since dataprep has no GPU assignment.
+
+**Compatibility**: No functional change. Dataprep continues to use CPU for document processing.
+
+#### Image Tag Pinning Policy
+
+All AI-stack image tags are now pinned to specific versions. No `:latest` tags remain. The `versions.env` file (if present) is the authoritative manifest for image versions.
+
+**Compatibility**: Deployments using `:latest` tags must update to pinned versions. CI now rejects `:latest` in AI-stack images.
+
+---
+
 ## v2.0.0 → v2.0.1
 
 ### Breaking Changes

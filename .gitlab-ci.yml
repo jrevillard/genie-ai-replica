@@ -2741,6 +2741,33 @@ config:validate:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+
+config:no-next-placeholders:
+  extends: .alpine_base
+  stage: config
+  script:
+    - |
+      echo "Checking for NEXT placeholders in version-related files..."
+      if grep -rn "NEXT" \
+        --include="*.py" --include="*.yaml" --include="*.yml" --include="Dockerfile*" --include="env*" \
+        --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=_bmad --exclude-dir=site \
+        --exclude=".gitlab-ci.yml" \
+        . | grep -iE "version|opea|vllm|python" | grep -v "NEXT_NODE\|next_data\|next("; then
+        echo "ERROR: Found NEXT placeholder in version-related files"
+        echo "Replace NEXT with actual version before merging"
+        exit 1
+      fi
+      echo "✓ No NEXT placeholders found in version-related files"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "env"
+        - "env.*"
+        - "docker-compose.yaml"
+        - "docker-compose.gpu.yaml"
+        - "genie-ai-overlay/**/Dockerfile*"
+        - "CHANGELOG.md"
+        - "docs/UPGRADE.md"
 # Validate CHANGELOG.md has an entry for the version being released
 config:changelog:
   stage: config

@@ -168,3 +168,44 @@ verify:no-next-placeholders:
 ## Status
 
 **ready-for-dev** — Ultimate context engine analysis completed.
+
+---
+
+## Tasks/Subtasks
+
+### Task 1: Update docs/UPGRADE.md
+- [x] Add section "v2.0.1 → v2.1.0" (or next version) after the header
+- [x] Document OPEA v1.3 → v1.5 changes
+- [x] Document Python 3.10 → 3.11 migration
+- [x] Document dataprep image base change (CUDA/Ubuntu → python:3.11-slim)
+- [x] Document rollback procedure (redeploy v1.3-based image tags)
+- [x] Note image tag pinning policy (no `:latest` in AI stack)
+
+### Task 2: Verify CHANGELOG.md [Unreleased] section
+- [x] Verify all OPEA upgrade changes are captured
+- [x] Verify Python 3.11 change is documented
+- [x] Verify image tag pinning is documented
+- [x] Verify mobile client ID placeholder change is documented
+- [x] Add any missing entries from story 4-1, 4-2
+
+### Task 3: Update CLAUDE.md with post-bump facts
+- [x] Update Technology Stack table: Backend Node.js 22, AI/ML OPEA v1.5 + Python 3.11
+- [x] Update Environment Configuration section if needed
+- [x] Verify Docker image references are current
+
+### Task 4: Reconcile env file
+- [x] Update `RETRIEVER_ARANGO_GRAPH_NAME` comment to reflect actual behavior (var name changed in code per story 4-1)
+- [x] Verify `RERANKER_TOP_N` default consistency across env, docker-compose, code
+- [x] Ensure all three homes agree on defaults
+
+### Task 5: Add CI job for NEXT placeholder check
+- [x] Add `config:no-next-placeholders` job to `.gitlab-ci.yml` in `config` stage
+- [x] Job greps for `NEXT` in version-related files (exclude legitimate uses)
+- [x] Job runs on merge requests
+- [x] Test the job locally or in MR
+
+### Task 6: Final validation
+- [x] Spot-check all updated files
+- [x] Run CI job to confirm no NEXT placeholders
+- [x] Verify no regressions in existing CI jobs
+- [x] Update sprint-status to `done`

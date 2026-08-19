@@ -36,6 +36,7 @@ function seedRepo(extra = {}) {
     graph_name: `OKF_${REPO}`,
     version: null,
     deleted_at: null,
+    pii_scan_status: 'complete', // publish gate pre-requisite (Story 4.8-amend)
     ...extra
   });
 }
@@ -200,6 +201,51 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]); // gate [](auto) + snapshot
     const result = await versionService.mintVersion(REPO);
     expect(result.bundle_version).toBe(3);
+  });
+
+  test('PUBLISH GATE: refuses mint while a concept is non-indexed (rejected) → 409 PUBLISH_GATE_BLOCKED', async () => {
+    seedRepo({ version: 1 });
+    programQuery([
+      {
+        concept_id: 'bad',
+        title: 'Bad',
+        content_hash: 'h',
+        index_status: 'rejected',
+        conformance_issues: [{ code: 'MISSING_TYPE' }],
+        pii_state: 'clean'
+      }
+    ]);
+    await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
+      code: 'PUBLISH_GATE_BLOCKED',
+      status: 409
+    });
+    expect(mockDb._stores.okf_repositories[REPO].version).toBe(1); // no bump
+  });
+
+  test('PUBLISH GATE: refuses mint while a concept carries conformance issues → 409', async () => {
+    seedRepo({ version: 1 });
+    programQuery([
+      {
+        concept_id: 'warn',
+        title: 'Warn',
+        content_hash: 'h',
+        index_status: 'indexed',
+        conformance_issues: [{ code: 'INVALID_STATUS_ENUM' }],
+        pii_state: 'clean'
+      }
+    ]);
+    await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
+      code: 'PUBLISH_GATE_BLOCKED',
+      status: 409
+    });
+  });
+
+  test('PUBLISH GATE: refuses mint when the repo PII scan is incomplete → 409', async () => {
+    seedRepo({ version: 1, pii_scan_status: 'pending' });
+    await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
+      code: 'PUBLISH_GATE_BLOCKED',
+      status: 409
+    });
   });
 
   test('P3: self-heal after a CRASHED mint — manifest committed but counter never bumped', async () => {

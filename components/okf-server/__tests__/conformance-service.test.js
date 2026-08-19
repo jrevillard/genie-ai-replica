@@ -92,18 +92,33 @@ describe('conformance-service — validateConcept (pure)', () => {
     expect(validateConcept(parsedConcept({ sources: [{ resource: 'https://x.com' }] })).issues).toEqual([]);
   });
 
-  test('non-blocking — multiple issues collected, no throw', () => {
+  test('multiple issues collected, no throw — with a hard/warning severity split', () => {
     const parsed = parsedConcept({
-      frontmatter: {},
-      status: 'bad',
-      stale_after: 'nope',
-      sources: [{ author: 'X' }]
+      frontmatter: {}, // MISSING_TYPE (hard)
+      status: 'bad', // INVALID_STATUS_ENUM (warning)
+      stale_after: 'nope', // UNPARSEABLE_STALE_AFTER (warning)
+      sources: [{ author: 'X' }], // SOURCE_MISSING_RESOURCE (warning)
+      generated: { by: 'robot:unknown' } // BAD_ACTOR_PREFIX (hard)
     });
     const result = validateConcept(parsed);
-    expect(result.issues.length).toBeGreaterThanOrEqual(3);
+    expect(result.issues.length).toBe(5);
     expect(result.valid).toBe(false);
-    // All issues are warnings
-    expect(result.issues.every((i) => i.severity === 'warning')).toBe(true);
+    // hardErrors = the structural integrity violations; the rest are warnings.
+    expect(result.hardErrors.map((i) => i.code).sort()).toEqual(['BAD_ACTOR_PREFIX', 'MISSING_TYPE']);
+    expect(result.hardErrors.every((i) => i.severity === 'error')).toBe(true);
+    const warnings = result.issues.filter((i) => i.severity === 'warning');
+    expect(warnings.map((i) => i.code).sort()).toEqual([
+      'INVALID_STATUS_ENUM',
+      'SOURCE_MISSING_RESOURCE',
+      'UNPARSEABLE_STALE_AFTER'
+    ]);
+  });
+
+  test('hardErrors empty for a conformant concept', () => {
+    const { issues, hardErrors, valid } = validateConcept(parsedConcept());
+    expect(issues).toEqual([]);
+    expect(hardErrors).toEqual([]);
+    expect(valid).toBe(true);
   });
 
   test('empty/null parsed → only MISSING_TYPE (no crash)', () => {

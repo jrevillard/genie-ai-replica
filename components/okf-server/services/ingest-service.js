@@ -295,6 +295,7 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     created: 0,
     updated: 0,
     skipped_dedup: 0,
+    rejected: 0,
     pii: { clean: 0, hit: 0, error: 0 },
     enqueued: 0,
     enqueue_errors: [],
@@ -343,9 +344,15 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     }
 
     // [4c] conformance — validate then persist (patch-only via the writer).
-    // ALWAYS after 4b (the 2.9.2 clobber-proof order).
+    // ALWAYS after 4b (the 2.9.2 clobber-proof order). HARD errors (missing type /
+    // invalid provenance actor) REJECT the concept at ingest — recorded with
+    // index_status='rejected' + the issues, and NEVER chunked into the graph
+    // (Story 4.8-amend, 2026-08-19: "no invalid concept reaches the graph").
+    // Warning-only concepts proceed (recorded + gated at publish).
+    let issues = [];
+    let hardErrors = [];
     try {
-      const { issues } = conformanceService.validateConcept(parsed);
+      ({ issues, hardErrors } = conformanceService.validateConcept(parsed));
       await conformanceService.persistConformanceIssues(repo_id, parsed.concept_id, issues);
     } catch (err) {
       logger.error('Ingest 4c conformance persist failed (non-fatal)', {
@@ -353,6 +360,30 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
         concept_id: parsed.concept_id,
         error: err.message
       });
+    }
+    if (hardErrors.length > 0) {
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          repo_id,
+          { concept_id: parsed.concept_id, repo_id },
+          {
+            patch: { index_status: 'rejected', conformance_issues: issues }
+          }
+        );
+      } catch (err) {
+        logger.error('Ingest 4c reject persist failed (non-fatal)', {
+          repo_id,
+          concept_id: parsed.concept_id,
+          error: err.message
+        });
+      }
+      summary.rejected += 1;
+      logger.warn('Ingest 4c rejected a non-conformant concept (hard errors — never chunked)', {
+        repo_id,
+        concept_id: parsed.concept_id,
+        hard_errors: hardErrors.map((e) => e.code)
+      });
+      continue; // skip 4d PII, 4e dedup, 4f enqueue
     }
 
     // [4d] PII scan — fail-closed: 'error' state blocks publish later; an

@@ -64,11 +64,13 @@ function nowIso() {
 }
 
 /** Manifest snapshot of the repo's concept set, read from okf_concepts_meta.
- * Hashes are the STORED canonical content_hash — single source of truth. */
+ * Hashes are the STORED canonical content_hash — single source of truth. Carries
+ * conformance_issues + pii_state too (Story 4.8-amend) so the publish gate can be
+ * enforced on the snapshot AND the manifest records per-concept conformance/PII. */
 async function snapshotConcepts(db, repo_id) {
   const cursor = await db.query(
     `FOR m IN ${META} FILTER m.repo_id == @repo_id SORT m.concept_id ASC ` +
-      'RETURN KEEP(m, ["concept_id", "title", "content_hash", "index_status"])',
+      'RETURN KEEP(m, ["concept_id", "title", "content_hash", "index_status", "conformance_issues", "pii_state"])',
     { repo_id }
   );
   return cursor.all();
@@ -124,6 +126,18 @@ async function mintVersion(repo_id, opts = {}, actor) {
       );
     }
 
+    // PUBLISH GATE — repo-level PII scan completeness (Story 4.8-amend, 2026-08-19).
+    // The per-concept gate (index_status/conformance/pii) is enforced on the
+    // snapshot result inside the loop below (no separate query).
+    if (repo.pii_scan_status !== 'complete') {
+      recordOp('mint', 'blocked');
+      throw new VersionError(
+        'PUBLISH_GATE_BLOCKED',
+        'repository has not completed a PII scan (pii_scan_status != complete)',
+        409
+      );
+    }
+
     // Race-guarded, SELF-HEALING mint (P2/P3, review 2026-08-17): compute N+1,
     // INSERT the manifest first (the unique [repo_id, bundle_version] index
     // catches concurrent mints AND a previously committed-but-unbumped manifest
@@ -134,6 +148,37 @@ async function mintVersion(repo_id, opts = {}, actor) {
       const nextVersion = (repo.version || 0) + 1;
       const okfTag = `okf:v${nextVersion}`;
       const concepts = await snapshotConcepts(db, repo_id);
+
+      // PER-CONCEPT PUBLISH GATE (Story 4.8-amend, 2026-08-19 — FR-25 enforced):
+      // a version manifest must only snapshot fully-indexed, conformant, PII-clean
+      // concepts. Any non-indexed / non-conformant / PII-flagged concept refuses
+      // the mint (the formerly-advisory conformance + PII signals are now enforced).
+      const gateReasons = [];
+      const notIndexed = concepts.filter((c) => c.index_status !== 'indexed');
+      if (notIndexed.length > 0) {
+        gateReasons.push(
+          `${notIndexed.length} concept(s) not indexed: ${notIndexed.map((c) => c.concept_id).join(', ')}`
+        );
+      }
+      const nonConformant = concepts.filter(
+        (c) => Array.isArray(c.conformance_issues) && c.conformance_issues.length > 0
+      );
+      if (nonConformant.length > 0) {
+        gateReasons.push(
+          `${nonConformant.length} concept(s) with conformance issues: ${nonConformant.map((c) => c.concept_id).join(', ')}`
+        );
+      }
+      const piiFlagged = concepts.filter((c) => c.pii_state === 'hit' || c.pii_state === 'error');
+      if (piiFlagged.length > 0) {
+        gateReasons.push(
+          `${piiFlagged.length} concept(s) with PII hit/error: ${piiFlagged.map((c) => c.concept_id).join(', ')}`
+        );
+      }
+      if (gateReasons.length > 0) {
+        recordOp('mint', 'blocked');
+        throw new VersionError('PUBLISH_GATE_BLOCKED', gateReasons.join('; '), 409);
+      }
+
       const manifest = {
         _key: `${repo_id}_${nextVersion}`, // deterministic + tamper-evident
         repo_id,

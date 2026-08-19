@@ -30,7 +30,7 @@ jest.mock('../services/parser-service', () => ({
   }))
 }));
 jest.mock('../services/conformance-service', () => ({
-  validateConcept: jest.fn(() => ({ issues: [], valid: true })),
+  validateConcept: jest.fn(() => ({ issues: [], hardErrors: [], valid: true })),
   persistConformanceIssues: jest.fn(async () => undefined)
 }));
 jest.mock('../services/concept-meta-service', () => ({
@@ -343,6 +343,34 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
   test('enqueue carries a 30s timeout (review fix)', async () => {
     await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('Tmo')] }, ACTOR);
     expect(authedAxios.post.mock.calls[0][2]).toEqual({ timeout: 30000 });
+  });
+
+  test('hard conformance error REJECTS the concept — recorded, never enqueued (Story 4.8-amend)', async () => {
+    conformanceService.validateConcept.mockReturnValueOnce({
+      issues: [{ code: 'MISSING_TYPE', severity: 'error' }],
+      hardErrors: [{ code: 'MISSING_TYPE', severity: 'error' }],
+      valid: false
+    });
+    const summary = await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('Bad')] }, ACTOR);
+    expect(summary.rejected).toBe(1);
+    expect(summary.enqueued).toBe(0);
+    // The reject persists index_status='rejected' via the writer; no enqueue → no files doc.
+    const rejectUpsert = conceptMeta.upsertConceptMeta.mock.calls.find(
+      (c) => c[2] && c[2].patch && c[2].patch.index_status === 'rejected'
+    );
+    expect(rejectUpsert).toBeTruthy();
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
+  test('warning-only conformance still enqueues (recorded, gated at publish)', async () => {
+    conformanceService.validateConcept.mockReturnValueOnce({
+      issues: [{ code: 'INVALID_STATUS_ENUM', severity: 'warning' }],
+      hardErrors: [],
+      valid: false
+    });
+    const summary = await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('Warn')] }, ACTOR);
+    expect(summary.rejected).toBe(0);
+    expect(summary.enqueued).toBe(1);
   });
 });
 

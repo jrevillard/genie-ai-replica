@@ -280,6 +280,15 @@ describe('concept-meta-service — 2.9.1 review findings (2026-08-16 code review
     expect(Object.values(mockDb._stores.okf_concepts_meta)[0].index_status).toBe('parsed');
   });
 
+  it('REGRESSION: full re-ingest does NOT downgrade index_status rejected → parsed (Story 4.8-amend)', async () => {
+    await conceptMeta.upsertConceptMeta('r1', parsedInput(), {
+      patch: { index_status: 'rejected', conformance_issues: [{ code: 'MISSING_TYPE' }] }
+    });
+    await conceptMeta.upsertConceptMeta('r1', parsedInput()); // FULL re-ingest writes index_status:'parsed'
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.index_status).toBe('rejected'); // the hard-error rejection survives re-ingest until fixed
+  });
+
   it('getConceptMeta returns the stored doc / null when absent (the 4e PRE-upsert read)', async () => {
     expect(await conceptMeta.getConceptMeta('r1', 'concepts/health-policy')).toBeNull();
     await conceptMeta.upsertConceptMeta('r1', parsedInput());

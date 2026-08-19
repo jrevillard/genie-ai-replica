@@ -154,6 +154,13 @@ async function applyUpdate(col, existing, repo_id, conceptId, parsed, opts, mini
     if (existing.index_status === 'indexed' && patch.index_status === 'parsed') {
       delete patch.index_status;
     }
+    // Story 4.8-amend (2026-08-19): a REJECTED concept (hard conformance error)
+    // must not be silently un-rejected back to 'parsed' by a re-ingest — the
+    // steward fixes the frontmatter first, then the next ingest re-validates.
+    // Mirrors the 'indexed' protection above.
+    if (existing.index_status === 'rejected' && patch.index_status === 'parsed') {
+      delete patch.index_status;
+    }
   }
   patch.updated_at = nowIso();
   try {

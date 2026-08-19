@@ -45,12 +45,13 @@ class KeycloakConfig {
     this.allowInsecureConnections = false,
     this.supportedLocaleCodes = allSupportedLocaleCodes,
   }) : assert(
-          redirectScheme.isNotEmpty &&
-              RegExp(r'^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$')
-                  .hasMatch(redirectScheme),
-          'redirectScheme must be a non-empty reverse-domain string '
-          '(e.g. "com.itu.genieai"), got: "$redirectScheme"',
-        );
+         redirectScheme.isNotEmpty &&
+             RegExp(
+               r'^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$',
+             ).hasMatch(redirectScheme),
+         'redirectScheme must be a non-empty reverse-domain string '
+         '(e.g. "com.itu.genieai"), got: "$redirectScheme"',
+       );
 
   String get realmUrl => '$keycloakUrl/realms/$realm';
 

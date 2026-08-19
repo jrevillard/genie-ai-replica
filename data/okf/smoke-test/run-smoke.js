@@ -5,16 +5,33 @@
 // container (has shared-lib + ArangoDB + pii-service + doc-repo reachability):
 //   docker cp data/okf/smoke-test/kenya-bundle <container>:/app/kenya-bundle
 //   docker cp data/okf/smoke-test/kenya-bundle.zip <container>:/app/kenya-bundle.zip
+//   docker cp data/okf/smoke-test/kenya-bundle-clean <container>:/app/kenya-bundle-clean
+//   docker cp data/okf/smoke-test/kenya-bundle-clean.zip <container>:/app/kenya-bundle-clean.zip
 //   docker cp data/okf/smoke-test/run-smoke.js <container>:/app/run-smoke.js
 //   docker exec -e OKF_SMOKE_TOKEN_*=<...> <container> node /app/run-smoke.js
 //
-// Exercised: parser (2.3) -> conformance (2.4) -> persistConformanceIssues
-// (2.9.2 G9 REWIRED path) -> concepts-meta UPSERT writer -> PII scan + gate
-// (2.8) -> 6.1 authz matrix -> 2.9.1 orchestrator (ZIP bundle + concepts[])
-// -> dual-facility graphs: (A) the EXISTING single-document facility (upload →
-// per-file ingest → default GRAPH) and (B) the OKF repository facility (zip →
-// orchestrator → per-repo OKF_{repo_id} graph, Story 2.9.6 wiring).
+// Exercised: parser (2.3) -> conformance (2.4, WP-A hard/warning split) ->
+// persistConformanceIssues (2.9.2 G9 REWIRED path) -> concepts-meta UPSERT writer
+// (4b body + ingest_labels + is_index) -> PII scan + gate (2.8) -> 6.1 authz
+// matrix -> 2.9.1 orchestrator (ZIP bundle + concepts[], 4f CONTENT-ONLY WP-C) ->
+// 2.9.4 worker (drains meta rows @ parsed, POSTs directly to dataprep) ->
+// 2.9.6 graph_name wiring -> 2.9.7 versions + mintVersion -> 4.8 clone (D-V5).
 // Every assertion below is HARD: any failure exits non-zero.
+//
+// WP-A (5265c8d): hard conformance errors (MISSING_TYPE / BAD_ACTOR_PREFIX) are
+// REJECTED at ingest — never chunked, never enqueued, persisted with
+// index_status='rejected' + the issues. The mint gate refuses while any concept
+// is non-indexed.
+// WP-B (b0b28dc): the named gharial graph (OKF_{repo}) is registered;
+// is_index: true on the meta + ENTITY row for the index.md root.
+// WP-C (this commit): concepts are NEVER doc-repo files docs — content-only
+// chunking. Only the bundle zip is a files doc. The worker POSTs concepts
+// directly to dataprep (conceptId); dataprep's completion callback hits the
+// okf-server internal endpoint (secret-gated). Chunks carry concept_id.
+//
+// The smoke runs TWO bundle paths (David, 2026-08-19): the SAD path (kenya-bundle
+// with bad_concept.md) proves the WP-A gate; the HAPPY path (kenya-bundle-clean,
+// 5 conforming concepts) proves WP-C content-only end-to-end + mint succeeds.
 //
 // TOKEN LIFETIME (live-proven pitfall): user tokens are 5-min TTL and the
 // sequential drain takes ~10 min — all user-token calls run EARLY; the drain
@@ -29,41 +46,52 @@
 //   4. persistConformanceIssues (the G9 path) persists issues for every file;
 //      metrics then read concept_count=6, conformance_issue_count=2 from live
 //      Arango — non-tautological proof the writer wrote and metrics compute.
-//   5. Every concept scans pii_state='clean' (fixtures are authored PII-free).
+//   5. Every conforming concept scans pii_state='clean' (bad_concept is
+//      rejected pre-PII per WP-A — PII scan does not run).
 //   6. After markRepoPiiScanned, the publish gate is OPEN (blocked=false).
 //   7. The 6.1 authz matrix holds (scoped read-only, default-deny, admin).
-//   8. ZIP ingest: POST kenya-bundle.zip → 202 with total=6/parsed=6/enqueued=6;
-//      6 meta rows parsed+graph-stamped; bad_concept carries 2 issues; PII clean;
-//      6 per-concept files docs at Pending with t:/r:/d: ACL labels + graph_name.
-//   9. The 2.9.4 INGESTION WORKER drains the OKF bundle's Pending docs (no
-//      manual kicks) and transitions every meta row parsed→indexed with
-//      last_good_index_at stamped; facility A stays manual (worker ignores
-//      non-OKF docs — repo_id filter).
-//  10. The OKF bundle (zip) drains → chunks in OKF_{repo_id}_SOURCE and NOT in
-//      the default graph (the split, 2.9.6). The bundle ZIP is stored as a file
-//      doc in the doc-repo (repo_id + graph_name + the knowledge-hierarchy labels
-//      + is_bundle @ Ingested). Re-ingest of unchanged+indexed concepts →
-//      skipped_dedup=N, enqueued=0 (the 4e dedup rule fires LIVE), meta rows stay
-//      indexed (no downgrade).
-//  11. Bundle retraction VERIFIED: retracting one concept physically removes
+//   8. SAD-PATH ZIP ingest: POST kenya-bundle.zip → 202 with total=6/parsed=6/
+//      rejected=1 (bad_concept, WP-A)/ enqueued=5; 6 meta rows — 5
+//      parsed+graph-stamped + 1 rejected with 2 issues; PII clean on the 5
+//      conforming; ZERO per-concept files docs (WP-C content-only); bundle zip
+//      stored as a file doc (repo-associated, graph-stamped, KH labels,
+//      is_bundle @ Ingested).
+//   9. The 2.9.4 INGESTION WORKER drains the 5 parsed meta rows directly to
+//      dataprep (no doc-repo round-trip — WP-C) and the concept-status
+//      callback transitions each meta row parsed→indexed + writes within-repo
+//      edges + stamps chunk_count + last_good_index_at.
+//  10. Chunks in OKF_{repo}_SOURCE carry concept_id (WP-C citation provenance);
+//      the index.md root carries is_index: true on its ENTITY vertex (WP-B);
+//      ZERO OKF chunks in the default graph (2.9.6 split); re-ingest of
+//      unchanged+indexed concepts → skipped_dedup=N, enqueued=0 (the 4e dedup
+//      rule fires LIVE), meta rows stay indexed (no downgrade).
+//  11. SAD-PATH MINT GATE (WP-A): mintVersion on the sad repo REFUSES
+//      (PUBLISH_GATE_BLOCKED — bad_concept is rejected); HAPPY-PATH mint
+//      SUCCEEDS (v1 manifest with 5 concepts + stored canonical hashes +
+//      okf:v1; repo.version stamped).
+//  12. Bundle retraction VERIFIED: retracting one concept physically removes
 //      its chunks from OKF_{repo_id}_SOURCE (right graph, real delete — never
 //      a silent 200) and leaves the other concepts' chunks untouched.
-//  12. Bundle-level retraction VERIFIED: repo delete DROPS the per-repo graph
+//  13. Bundle-level retraction VERIFIED: repo delete DROPS the per-repo graph
 //      (definition + all 4 collections physically gone from ArangoDB) and
-//      removes the repo's meta rows + dangling files docs.
-//  13. Versioning VERIFIED (2.9.7): mint v1 (publish trigger) → manifest with
-//      the 6 concepts + STORED canonical hashes + okf:v1; repo.version stamped;
-//      a modified re-ingest dedup-skips the 5 unchanged + enqueues the changed
-//      concept WITH bundle_version=1 + the okf:v1 label; the worker drains it
-//      and EVERY new chunk doc carries bundle_version=1; mint v2 (crawl
-//      trigger, D-V4) → list [v2, v1], manifest v1 INTACT (INSERT-only).
-//  14. Clone VERIFIED (4.8, D-V5 §8.4): the clone endpoint 403s a scoped READ
+//      removes the repo's meta rows + the bundle-zip files doc.
+//  14. Versioning VERIFIED (2.9.7): modified re-ingest dedup-skips the
+//      unchanged + enqueues the changed concept WITH bundle_version=1 + the
+//      okf:v1 label; the worker drains it and EVERY new chunk doc carries
+//      bundle_version=1; mint v2 (crawl trigger, D-V4) → list [v2, v1],
+//      manifest v1 INTACT (INSERT-only).
+//  15. Clone VERIFIED (4.8, D-V5 §8.4): the clone endpoint 403s a scoped READ
 //      caller (admin mutation); cloning the minted source yields a NEW repo
 //      (new repo_id + OKF_{new} graph + lifecycle draft) with cloned_from
-//      {repo_id, version: 2} + 6 meta rows copied verbatim (title/bundle_version/
+//      {repo_id, version: 2} + 5 meta rows copied verbatim (title/bundle_version/
 //      content_hash/index_status preserved); a modified concept re-ingests into
-//      the CLONE graph ONLY (dedup-skips the other 5), and the SOURCE's chunks +
-//      edges are UNCHANGED (isolation).
+//      the CLONE graph ONLY (dedup-skips the other 4), and the SOURCE's chunks
+//      + edges are UNCHANGED (isolation).
+//  16. HAPPY-PATH ZIP ingest: POST kenya-bundle-clean.zip → 202 with total=5/
+//      parsed=5/rejected=0/enqueued=5; 5 meta rows parsed+graph-stamped;
+//      ZERO per-concept files docs; bundle zip stored; worker drains to
+//      indexed; chunks carry concept_id + is_index on the root; mint SUCCEEDS
+//      with v1 (5 concepts + stored canonical hashes).
 
 const fs = require('fs');
 const path = require('path');
@@ -794,10 +822,26 @@ async function ingestPhase(db) {
   allVersioned
     ? pass('meta rows: bundle_version null pre-mint (unminted repo — the MINT phase stamps v1)')
     : fail('meta rows bundle_version: ' + JSON.stringify(metaRows.map((m) => [m.concept_id, m.bundle_version])));
-  const allParsed = metaRows.every((m) => m.index_status === 'parsed' && m.graph_name === OKF_GRAPH);
+  const allParsed = metaRows.every(
+    (m) => (m.index_status === 'parsed' || m.index_status === 'rejected') && m.graph_name === OKF_GRAPH
+  );
   allParsed
-    ? pass('meta rows: all index_status=parsed + graph_name=OKF_{repo}')
-    : fail('meta rows: not all parsed/graph-stamped: ' + JSON.stringify(metaRows));
+    ? pass(
+        'meta rows: index_status ∈ {parsed, rejected} + graph_name=OKF_{repo} (WP-A: bad_concept is rejected, the 5 conforming are parsed)'
+      )
+    : fail('meta rows: not all parsed-or-rejected/graph-stamped: ' + JSON.stringify(metaRows));
+  // WP-A: bad_concept is REJECTED at ingest (hard conformance errors) — the meta
+  // row carries index_status='rejected' + the 2 issues + last_error. It is NEVER
+  // chunked into the graph.
+  const rejectedRows = metaRows.filter((m) => m.index_status === 'rejected');
+  rejectedRows.length === 1 && rejectedRows[0].concept_id === 'bad_concept'
+    ? pass('WP-A hard-gate: bad_concept REJECTED at ingest (' + rejectedRows.length + ' rejected, 2 issues recorded)')
+    : fail('WP-A: expected 1 rejected row (bad_concept), got ' + JSON.stringify(rejectedRows.map((r) => r.concept_id)));
+  // WP-B (is_index root): index.md carries is_index: true on its meta row.
+  const indexRow = metaRows.find((m) => m.concept_id === 'index');
+  indexRow && indexRow.is_index === true
+    ? pass('WP-B: index.md meta row carries is_index: true (root marker)')
+    : fail('WP-B: index.md is_index: ' + JSON.stringify(indexRow && indexRow.is_index));
   const badRow = metaRows.find((m) => m.concept_id === 'bad_concept');
   badRow && Array.isArray(badRow.conformance_issues) && badRow.conformance_issues.length === EXPECTED_ISSUES
     ? pass('meta rows: bad_concept carries exactly ' + EXPECTED_ISSUES + ' conformance issues (4c)')
@@ -807,99 +851,89 @@ async function ingestPhase(db) {
     ? pass('PII: all ' + EXPECTED_CONCEPTS + ' concepts clean (4d)')
     : fail('PII clean count: ' + cleanPii + '/' + EXPECTED_CONCEPTS);
 
-  // ── (iv) per-concept files docs: Pending + graph + ACL labels (defer_kick) ──
-  // The bundle-zip file doc (is_bundle=true) is EXCLUDED — it's the ingestion
-  // INPUT (asserted separately), not a concept file to drain/retract.
+  // ── (iv) CONTENT-ONLY chunking (WP-C): ZERO per-concept files docs ──
+  // The bundle zip is the ONLY doc-repo artifact. The worker POSTs each concept's
+  // markdown DIRECTLY to dataprep (no doc-repo round-trip), and the meta row's
+  // index_status='parsed' is the queue. The 5 conforming concepts are enqueued,
+  // bad_concept is REJECTED at ingest (WP-A, never chunked, never enqueued).
   const fileDocs = await aqlAll(
     "FOR f IN files FILTER f.repo_id == '" +
       INGEST_REPO +
       "' AND f.is_bundle != true SORT f.file_name RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name','labels'])"
   );
-  // The WORKER may already have claimed a concept (status Ingesting/Ingested) by
-  // the time this query runs — defer_kick leaves them Pending at enqueue, but the
-  // worker's poll (15s) can fire between enqueue and this snapshot (live-caught:
-  // the "files docs at Pending" count is a ~50% race). The count + ACL assertions
-  // therefore run on ALL the repo's files docs — a worker claim is the worker
-  // doing its job, not a defer_kick violation.
   const okfFiles = fileDocs;
-  okfFiles.length === EXPECTED_CONCEPTS
-    ? pass(
-        'files docs: ' +
-          okfFiles.length +
-          ' per-concept docs for the repo (4f + defer_kick; the worker may already claim one)'
-      )
-    : fail('files docs count: expected ' + EXPECTED_CONCEPTS + ', got ' + okfFiles.length);
-  const withAcl = okfFiles.filter(
-    (f) =>
-      (f.labels || []).includes('t:smoke') &&
-      (f.labels || []).includes('r:' + INGEST_REPO) &&
-      (f.labels || []).includes('d:smoke') &&
-      (f.labels || []).includes('Service Directory') &&
-      f.graph_name === OKF_GRAPH
-  );
-  withAcl.length === EXPECTED_CONCEPTS
-    ? pass('files docs: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
-    : fail('files docs labels/graph: ' + JSON.stringify(okfFiles.map((f) => [f.graph_name, f.labels])));
-  if (withAcl.length > 0) {
-    // The named bundle→repo→graph association, per concept doc:
-    console.log(
-      '  ASSOCIATION: bundle "kenya-bundle.zip" → repo "' +
-        REPO_NAME +
-        '" → graph ' +
-        OKF_GRAPH +
-        ' (e.g. ' +
-        withAcl[0].file_name +
-        ' → labels ' +
-        JSON.stringify(withAcl[0].labels) +
-        ')'
-    );
+  okfFiles.length === 0
+    ? pass('WP-C content-only: ZERO per-concept files docs (only the bundle zip exists)')
+    : fail(
+        'WP-C content-only: expected 0 per-concept files docs (content-only — concepts are NOT files docs), got ' +
+          okfFiles.length
+      );
+  // The bundle zip file doc (the ONLY artifact) — its labels ride the SAME
+  // t:/r:/d: ACL set the orchestrator owns (sole injector invariant).
+  if (bundleDoc) {
+    const withAcl =
+      (bundleDoc.labels || []).includes('t:smoke') &&
+      (bundleDoc.labels || []).includes('r:' + INGEST_REPO) &&
+      (bundleDoc.labels || []).includes('d:smoke') &&
+      (bundleDoc.labels || []).includes('Service Directory') &&
+      bundleDoc.graph_name === OKF_GRAPH;
+    withAcl
+      ? pass('bundle zip: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
+      : fail('bundle zip labels/graph: ' + JSON.stringify(bundleDoc.labels));
   }
+  const okfIds = []; // WP-C: no per-concept files docs ⇒ no file_id list to drain
 
-  // ── (v) DRAIN — the 2.9.4 INGESTION WORKER owns the OKF files ──
-  // Facility A was already drained ALONE (i-a); the worker ignores it (no
-  // repo_id — that filter is itself asserted by A draining via manual kick
-  // only). The OKF bundle's docs are drained BY THE WORKER (no manual kicks —
-  // exactly what it does in production). The drain list is ALL the repo's files
-  // docs (any already claimed by the worker are recorded terminal on the first
-  // poll — the worker race is absorbed, not a flake).
-  console.log('  draining: ' + okfFiles.length + ' OKF concepts (WORKER-paced — the slow part)...');
+  // ── (v) DRAIN — the 2.9.4 INGESTION WORKER claims meta rows @ parsed (WP-C) ──
+  // WP-C content-only: there are NO per-concept files docs to poll. The worker
+  // reads okf_concepts_meta FILTER index_status='parsed' and POSTs each concept's
+  // markdown DIRECTLY to dataprep. The completion callback (dataprep → okf-server
+  // internal concept-status) transitions the meta row to indexed|failed and
+  // writes the post-index edges. The smoke settle-waits on the meta row.
+  const DRAIN_CONCEPTS = GOOD_FILES; // 5 conforming; bad_concept is rejected (WP-A, never enqueued)
+  console.log('  draining: ' + DRAIN_CONCEPTS.length + ' OKF concepts (WORKER-paced — meta row poll)...');
   const statuses = {};
-  const drainList = okfFiles.slice();
-  const drainIds = JSON.stringify(drainList.map((d) => d.file_id));
   for (let i = 0; i < 100; i++) {
     await new Promise((r) => setTimeout(r, 15000));
     const rows = await aqlAll(
-      'FOR x IN files FILTER x.file_id IN ' + drainIds + " RETURN KEEP(x, ['file_id','dataprep','chunk_count'])"
+      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+        INGEST_REPO +
+        "' AND m.concept_id IN " +
+        JSON.stringify(DRAIN_CONCEPTS) +
+        " RETURN KEEP(m, ['concept_id','index_status','chunk_count','last_error'])"
     );
     let allTerminal = true;
-    for (const d of drainList) {
-      if (statuses[d.file_id]) continue;
-      const row = rows.find((r) => r.file_id === d.file_id);
-      const st = row && row.dataprep && row.dataprep.status;
-      if (st === 'Ingested' || st === 'Ingestion Error' || st === 'Killed') {
-        statuses[d.file_id] = st + ':' + (row.chunk_count || 0);
-        console.log('    ' + d.file_name + ' -> ' + statuses[d.file_id]);
+    for (const cid of DRAIN_CONCEPTS) {
+      if (statuses[cid]) continue;
+      const row = rows.find((r) => r.concept_id === cid);
+      if (row && (row.index_status === 'indexed' || row.index_status === 'failed')) {
+        statuses[cid] = row.index_status + ':' + (row.chunk_count || 0);
+        console.log('    ' + cid + ' -> ' + statuses[cid]);
       } else {
         allTerminal = false;
       }
     }
-    if (allTerminal && Object.keys(statuses).length === drainList.length) break;
+    if (allTerminal && Object.keys(statuses).length === DRAIN_CONCEPTS.length) break;
   }
-  for (const d of drainList) {
-    if (!statuses[d.file_id]) {
-      statuses[d.file_id] = 'timeout';
+  for (const cid of DRAIN_CONCEPTS) {
+    if (!statuses[cid]) {
+      statuses[cid] = 'timeout';
       fail(
-        'drain ' + d.file_name + ' never reached a terminal state (worker interval 15s — is OKF_INGEST_WORKER_ENABLED?)'
+        'drain ' +
+          cid +
+          ' never reached a terminal meta state (worker interval 15s — is OKF_INGEST_WORKER_ENABLED?)'
       );
-    } else if (statuses[d.file_id].split(':')[0] !== 'Ingested') {
-      fail('drain ' + d.file_name + ' ended "' + statuses[d.file_id] + '"');
+    } else if (statuses[cid].split(':')[0] !== 'indexed') {
+      fail('drain ' + cid + ' ended "' + statuses[cid] + '"');
     }
   }
-  const okfIds = okfFiles.map((p) => p.file_id);
-  const okfIngested = okfIds.filter((k) => statuses[k] && statuses[k].split(':')[0] === 'Ingested');
-  okfIngested.length === EXPECTED_CONCEPTS
-    ? pass('facility B: WORKER drained all ' + EXPECTED_CONCEPTS + ' bundle concepts Ingested (no manual kicks)')
-    : fail('facility B worker drain: ' + okfIngested.length + '/' + EXPECTED_CONCEPTS + ' Ingested');
+  const indexed = DRAIN_CONCEPTS.filter((c) => statuses[c] && statuses[c].split(':')[0] === 'indexed');
+  indexed.length === DRAIN_CONCEPTS.length
+    ? pass(
+        'WP-C: WORKER drained all ' +
+          DRAIN_CONCEPTS.length +
+          ' meta rows parsed→indexed (content-only — the meta row is the queue)'
+      )
+    : fail('WP-C worker drain: ' + indexed.length + '/' + DRAIN_CONCEPTS.length + ' indexed');
 
   // ── (vii) WORKER TRANSITIONS — the worker-EXCLUSIVE meta states ──
   // The worker sets the FILE status to 'Ingested' BEFORE transitioning the META
@@ -1426,46 +1460,70 @@ async function ingestPhase(db) {
     console.log('  NOTE: clone ' + CLONE_ID + ' LEFT IN PLACE (CLEANUP=none — run OKF_SMOKE_CLEANUP=only to remove)');
   }
 
-  // ── (viii) CHUNKS — the physical proof (facility B: the per-repo graph) ──
+  // ── (viii) CHUNKS — the physical proof (WP-C content-only chunks) ──
   // The OKF bundle's chunks must land in the per-repo OKF_{repo_id} graph
   // (Story 2.9.6 wiring: doc-repo sends graph_name → dataprep writes the
-  // per-repo collections) — and NOT in the default graph. (The legacy
-  // single-document facility is out of scope — the smoke tests only the OKF path.)
+  // per-repo collections) — and NOT in the default graph. WP-C content-only:
+  // chunks are NOT keyed by file_id (no per-concept files doc) — they're keyed
+  // by the concept's markdown via the worker. Chunks carry `concept_id` in
+  // metadata (citation provenance — Story 4.8-amend).
   // The OKF graph name is hyphenated (OKF_<uuid>) — AQL needs backtick-quoted
   // identifiers for it (live-caught: unquoted → lexer error at the first '-').
+  const HAPPY_CONCEPTS = GOOD_FILES; // 5 conforming (bad_concept is REJECTED, never chunked)
   const bChunkRows = await aqlAll(
     'FOR c IN `' +
       OKF_GRAPH +
-      '_SOURCE` FILTER c.file_id IN ' +
-      JSON.stringify(okfIds) +
-      ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
+      '_SOURCE` FILTER c.metadata.concept_id IN ' +
+      JSON.stringify(HAPPY_CONCEPTS) +
+      ' COLLECT cid = c.metadata.concept_id WITH COUNT INTO n RETURN {cid, n}'
   );
-  bChunkRows.length === okfIds.length && bChunkRows.every((r) => r.n > 0)
+  bChunkRows.length === HAPPY_CONCEPTS.length && bChunkRows.every((r) => r.n > 0)
     ? pass(
-        'facility B graph: chunks present for EVERY bundle concept (' +
-          bChunkRows.map((r) => r.n).join('+') +
+        'WP-C chunks: ' +
+          bChunkRows.map((r) => r.cid + ':' + r.n).join('+') +
           ' chunks in ' +
           OKF_GRAPH +
-          '_SOURCE — the properly named graph of repository "' +
-          REPO_NAME +
-          '")'
+          '_SOURCE — every happy-path concept materialized (concept_id-keyed)'
       )
-    : fail('facility B chunks in ' + OKF_GRAPH + '_SOURCE: ' + JSON.stringify(bChunkRows));
+    : fail('WP-C chunks in ' + OKF_GRAPH + '_SOURCE: ' + JSON.stringify(bChunkRows));
   const bTotal = bChunkRows.reduce((a, r) => a + r.n, 0);
-  bTotal >= EXPECTED_CONCEPTS
-    ? pass('facility B graph: total ' + bTotal + ' chunks from the full zip bundle')
-    : fail('facility B total chunks: ' + bTotal);
-  const leaked = (
-    await aqlAll(
-      'FOR c IN ' +
-        GRAPH +
-        '_SOURCE FILTER c.file_id IN ' +
-        JSON.stringify(okfIds) +
-        ' COLLECT WITH COUNT INTO n RETURN n'
-    )
-  )[0];
+  bTotal >= HAPPY_CONCEPTS.length
+    ? pass('WP-C: total ' + bTotal + ' chunks from the full happy-path zip')
+    : fail('WP-C total chunks: ' + bTotal);
+  // WP-C: bad_concept MUST have ZERO chunks (rejected at ingest, never chunked).
+  const badChunks =
+    (
+      await aqlAll(
+        'FOR c IN `' +
+          OKF_GRAPH +
+          '_SOURCE` FILTER c.metadata.concept_id == "bad_concept" COLLECT WITH COUNT INTO n RETURN n'
+      )
+    )[0] || 0;
+  badChunks === 0
+    ? pass('WP-A hard-gate: ZERO bad_concept chunks in ' + OKF_GRAPH + '_SOURCE (rejected at ingest)')
+    : fail('WP-A broken: ' + badChunks + ' bad_concept chunks leaked into the graph');
+  // WP-B (is_index root): the index.md ENTITY vertex carries is_index: true.
+  const indexEntity = await aqlAll(
+    'FOR v IN `' +
+      OKF_GRAPH +
+      "_ENTITY` FILTER v.concept_id == 'index' RETURN KEEP(v, ['_key','is_index','concept_id'])"
+  );
+  indexEntity.length === 1 && indexEntity[0].is_index === true
+    ? pass('WP-B: index.md ENTITY vertex carries is_index: true (root marker)')
+    : fail('WP-B: index.md ENTITY is_index=' + JSON.stringify(indexEntity));
+  // Zero leakage into the default graph.
+  const leaked =
+    (
+      await aqlAll(
+        'FOR c IN ' +
+          GRAPH +
+          '_SOURCE FILTER c.metadata.concept_id IN ' +
+          JSON.stringify(HAPPY_CONCEPTS) +
+          ' COLLECT WITH COUNT INTO n RETURN n'
+      )
+    )[0] || 0;
   (leaked || 0) === 0
-    ? pass('isolation: ZERO OKF bundle chunks in the default ' + GRAPH + '_SOURCE (the graphs are split)')
+    ? pass('isolation: ZERO OKF chunks in the default ' + GRAPH + '_SOURCE (the graphs are split)')
     : fail('isolation broken: ' + leaked + ' OKF chunks found in default ' + GRAPH + '_SOURCE');
 
   // ── RETRACTION + CLEANUP (CLEANUP=full only) ──

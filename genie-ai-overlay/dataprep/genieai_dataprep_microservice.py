@@ -121,6 +121,11 @@ class DocRepoIngestPayload(BaseModel):
     # doc so citations can pin (repo_id, bundle_version, concept_id).
     # Absent/None → chunks carry no version (legacy behavior unchanged).
     bundleVersion: int | None = None
+    # OKF concept id (Story 4.8-amend, 2026-08-19): content-only chunking — when
+    # set, chunks are stamped with this citation field AND the completion status
+    # callback routes to the OKF Server (no doc-repo files doc exists for a
+    # concept). Absent/None → legacy single-file behavior (doc-repo callback).
+    conceptId: str | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
@@ -203,6 +208,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 graph_name=payload.graphName or ARANGO_GRAPH_NAME,
                 # Story 2.9.7: the minted version rides through to chunk docs.
                 bundle_version=payload.bundleVersion,
+                # Story 4.8-amend: the OKF concept id rides through to chunk docs
+                # (citation provenance) + routes the completion callback.
+                concept_id=payload.conceptId,
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,
                 embed_nodes=True,

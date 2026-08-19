@@ -128,6 +128,13 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
     sources: Array.isArray(p.sources) ? p.sources : [],
     pii_state: 'unknown', // superseded on scan (2.8 pii-service); never downgraded on update
     last_good_index_at: null,
+    // Story 4.8-amend (2026-08-19): content-only chunking — the concept's raw
+    // markdown BODY + the orchestrator's ingest labels (ACL + KH + okf:v tag) are
+    // persisted on the meta doc so the worker can POST directly to dataprep
+    // WITHOUT a doc-repo files doc. The body is the content to chunk; ingest_labels
+    // is what dataprep's LLM labeler selects from.
+    body: p.body || '',
+    ingest_labels: Array.isArray(opts.ingest_labels) ? opts.ingest_labels : [],
     created_at: nowIso(),
     updated_at: nowIso()
   };
@@ -257,4 +264,20 @@ async function getConceptMeta(repo_id, concept_id) {
   return findConceptDoc(db.collection(COLLECTION), repo_id, concept_id);
 }
 
-module.exports = { upsertConceptMeta, getConceptMeta, buildMetaDoc, contentHash };
+/** Resolve a concept's meta row by concept_id across ALL repos (the dataprep
+ * completion callback knows only the concept_id — Story 4.8-amend content-only
+ * chunking). null when absent or ambiguous. */
+async function getConceptMetaFromAnyRepo(concept_id) {
+  if (!concept_id) return null;
+  const db = await getDb();
+  const rows = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.concept_id == @cid LIMIT 2 RETURN KEEP(m, ["repo_id", "concept_id", "bundle_version", "index_status"])',
+      { cid: concept_id }
+    )
+  ).all();
+  if (!rows || rows.length !== 1) return null; // absent OR ambiguous (2 repos, same concept_id)
+  return rows[0];
+}
+
+module.exports = { upsertConceptMeta, getConceptMeta, getConceptMetaFromAnyRepo, buildMetaDoc, contentHash };

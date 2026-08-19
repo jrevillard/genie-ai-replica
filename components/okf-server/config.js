@@ -14,5 +14,18 @@ module.exports = {
   },
   documentRepository: {
     url: process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001'
+  },
+  // Story 4.8-amend: content-only chunking — the worker POSTs concepts directly
+  // to dataprep (no doc-repo files doc), and dataprep's completion callback hits
+  // the okf-server internal endpoint.
+  dataprep: {
+    url: process.env.DATAPREP_URL || 'http://dataprep-arango-service:5000',
+    ingestPath: '/v1/dataprep/ingest_file'
+  },
+  // Shared secret for the INTERNAL concept-status callback (dataprep → okf-server).
+  // Empty ⇒ the internal endpoint refuses all callbacks (fail-closed). This is a
+  // separate surface from the authenticated /api/okf router.
+  internal: {
+    secret: process.env.OKF_INTERNAL_SECRET || ''
   }
 };

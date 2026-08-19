@@ -219,6 +219,7 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         text_capitalization_strategy: str | None = None,
         include_chunks: bool | None = None,
         bundle_version: int | None = None,
+        concept_id: str | None = None,
     ):
         super().__init__(
             files=files,
@@ -251,3 +252,6 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         # OKF minted repo version (Story 2.9.7, ADR-031) — stamped onto every
         # chunk doc (version-pinned citation); None = unminted legacy.
         self.bundle_version = bundle_version
+        # OKF concept id (Story 4.8-amend): content-only chunking citation + the
+        # completion-callback routing key; None = legacy single-file ingest.
+        self.concept_id = concept_id

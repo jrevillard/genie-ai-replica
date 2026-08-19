@@ -562,6 +562,16 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
 # OKF_INGEST_CONCURRENCY=1
 
+# --- OKF content-only chunking (Story 4.8-amend) ---
+# Concepts never become doc-repo files docs — the worker POSTs the concept's
+# markdown DIRECTLY to dataprep (DATAPREP_URL below). Dataprep's completion
+# callback then hits the OKF_SERVER_URL (set in compose, defaults to
+# http://okf-server:3002) and authenticates with OKF_INTERNAL_SECRET. The
+# okf-server controller is FAIL-CLOSED — empty secret ⇒ every callback 401s.
+# MUST be the SAME value on both services.
+# OKF_INTERNAL_SECRET=<set this — same value on okf-server + dataprep-arango-service>
+# DATAPREP_URL=http://dataprep-arango-service:5000
+
 # Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 

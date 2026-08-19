@@ -18,6 +18,12 @@ variables:
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
+  # --- OKF content-only chunking (Story 4.8-amend) ---
+  # The okf-server internal concept-status callback is fail-closed: any test
+  # that exercises the live dataprep → okf-server path needs this same value on
+  # both ends. Unit tests mock it; the CI default is a non-prod sentinel.
+  OKF_INTERNAL_SECRET: "ci-okf-internal-secret-not-for-production"
+  DATAPREP_URL: "http://dataprep-arango-service:5000"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:

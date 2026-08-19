@@ -115,7 +115,9 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(conformanceService.validateConcept).toHaveBeenCalledTimes(2);
     expect(conformanceService.persistConformanceIssues).toHaveBeenCalledTimes(2);
     expect(piiService.scanConcept).toHaveBeenCalledTimes(2);
-    expect(authedAxios.post).toHaveBeenCalledTimes(2);
+    // Story 4.8-amend (content-only): NO doc-repo POST for a concept — the meta row
+    // is the queue; the worker POSTs to dataprep directly.
+    expect(authedAxios.post).not.toHaveBeenCalled();
   });
 
   test('4b FULL upsert happens BEFORE 4c conformance persist (the clobber-proof order)', async () => {
@@ -129,19 +131,18 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(writerInput.body).toBeDefined();
   });
 
-  test('derives ACL labels from the repo (t:domain r:repo d:domain — D-A), caller labels, then the minted okf:v tag', async () => {
+  test('derives ACL labels from the repo (t:domain r:repo d:domain — D-A), caller labels, then the minted okf:v tag (content-only: rides the meta row)', async () => {
     await ingestService.ingestRepoConcepts(
       REPO,
       { labels: ['Service Directory'], concepts: [conceptInput('Acl')] },
       ACTOR
     );
-    const body = authedAxios.post.mock.calls[0][1];
-    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory', 'okf:v3']);
-    expect(body.graph_name).toBe(`OKF_${REPO}`);
-    expect(body.repo_id).toBe(REPO);
-    expect(body.defer_kick).toBe(true);
-    expect(body.originalFileName).toBe('acl.md');
-    expect(body.bundle_version).toBe(3); // Story 2.9.7: version rides the files doc
+    // Story 4.8-amend: NO doc-repo POST for a concept — the labels + graph + version
+    // ride the 4b meta upsert (ingest_labels) for the worker to POST to dataprep.
+    expect(authedAxios.post).not.toHaveBeenCalled();
+    const opts = conceptMeta.upsertConceptMeta.mock.calls[0][2];
+    expect(opts.ingest_labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory', 'okf:v3']);
+    expect(opts.bundle_version).toBe(3); // Story 2.9.7: version rides the meta row → chunk docs
   });
 
   test('ACL-prefixed AND caller okf:v tags are STRIPPED + warned (sole-injector invariant)', async () => {
@@ -153,8 +154,8 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
       },
       ACTOR
     );
-    const body = authedAxios.post.mock.calls[0][1];
-    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory', 'okf:v3']);
+    const opts = conceptMeta.upsertConceptMeta.mock.calls[0][2];
+    expect(opts.ingest_labels).toEqual([`t:social`, `r:${REPO}`, `d:social`, 'Service Directory', 'okf:v3']);
     expect(logger.warn).toHaveBeenCalledWith(
       'Caller-supplied ACL/version-tag labels stripped (sole-injector invariant)',
       expect.objectContaining({
@@ -174,9 +175,9 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
       okf_tag: null
     });
     await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('NoV')] }, ACTOR);
-    const body = authedAxios.post.mock.calls[0][1];
-    expect(body.labels).toEqual([`t:social`, `r:${REPO}`, `d:social`]);
-    expect(body.bundle_version).toBeNull();
+    const opts = conceptMeta.upsertConceptMeta.mock.calls[0][2];
+    expect(opts.ingest_labels).toEqual([`t:social`, `r:${REPO}`, `d:social`]);
+    expect(opts.bundle_version).toBeNull();
   });
 
   test('threads bundle_version from repo.version (D-B) into the writer opts', async () => {
@@ -229,10 +230,8 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(summary.created).toBe(1);
   });
 
-  test('per-concept isolation: an enqueue failure records the error, others proceed', async () => {
-    authedAxios.post
-      .mockRejectedValueOnce(new Error('doc-repo down'))
-      .mockResolvedValueOnce({ status: 202, data: { file_id: 'f2' } });
+  test('per-concept isolation: a meta-upsert failure records the error, others proceed', async () => {
+    conceptMeta.upsertConceptMeta.mockRejectedValueOnce(new Error('arango down'));
     const summary = await ingestService.ingestRepoConcepts(
       REPO,
       { concepts: [conceptInput('Bad'), conceptInput('Good')] },
@@ -241,7 +240,7 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(summary.enqueued).toBe(1);
     expect(summary.enqueue_errors).toHaveLength(1);
     expect(summary.enqueue_errors[0].concept_id).toBe('concepts/bad');
-    expect(summary.enqueue_errors[0].stage).toBe('enqueue');
+    expect(summary.enqueue_errors[0].stage).toBe('meta_upsert');
   });
 
   test('4a parse isolation (review fix): a PARSE_ERROR records {stage:"parse"} and the request STAYS 202', async () => {
@@ -262,21 +261,6 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
       { concept_id: 'broken.md', stage: 'parse', error: 'Malformed frontmatter: bad yaml' }
     ]);
     expect(summary.success).toBe(true); // partial, not total failure
-  });
-
-  test('ALL enqueues failed → success=false (metric carries status "error")', async () => {
-    // Once-per-call rejections: a bare mockRejectedValue would persist past
-    // clearAllMocks and poison every later test in this file.
-    authedAxios.post
-      .mockRejectedValueOnce(new Error('doc-repo down'))
-      .mockRejectedValueOnce(new Error('doc-repo down'));
-    const summary = await ingestService.ingestRepoConcepts(
-      REPO,
-      { concepts: [conceptInput('A'), conceptInput('B')] },
-      ACTOR
-    );
-    expect(summary.enqueued).toBe(0);
-    expect(summary.success).toBe(false);
   });
 
   test('PII fail-closed CONTINUES: an unexpected scan throw is isolated, not fatal', async () => {
@@ -340,8 +324,11 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(summary.enqueued).toBe(1);
   });
 
-  test('enqueue carries a 30s timeout (review fix)', async () => {
-    await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('Tmo')] }, ACTOR);
+  test('the bundle-zip store POST carries a 30s timeout (review fix)', async () => {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    zip.addFile('tmo.md', Buffer.from('# Tmo'));
+    await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
     expect(authedAxios.post.mock.calls[0][2]).toEqual({ timeout: 30000 });
   });
 
@@ -382,17 +369,17 @@ describe('ingestService slug handling (review fix: collisions + non-Latin)', () 
     const b = conceptInput('Same', { body: '# second body, longer' });
     const summary = await ingestService.ingestRepoConcepts(REPO, { concepts: [a, b] }, ACTOR);
     expect(summary.total).toBe(2);
-    const fileNames = authedAxios.post.mock.calls.map((c) => c[1].originalFileName);
-    expect(fileNames[0]).toBe('same.md');
-    expect(fileNames[1]).toMatch(/^same-H\d+\.md$/); // 'H' + body length (contentHash mock)
-    expect(new Set(fileNames).size).toBe(2);
+    const paths = parserService.parseConcept.mock.calls.map((c) => c[1].path);
+    expect(paths[0]).toBe('same.md');
+    expect(paths[1]).toMatch(/^same-H\d+\.md$/); // 'H' + body length (contentHash mock)
+    expect(new Set(paths).size).toBe(2);
   });
 
   test('non-Latin title (empty slug) gets a concept-<hash8> slug, not a blanket "concept"', async () => {
     const summary = await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('中文')] }, ACTOR);
     expect(summary.parsed).toBe(1);
-    const fileName = authedAxios.post.mock.calls[0][1].originalFileName;
-    expect(fileName).toMatch(/^concept-H\d+\.md$/);
+    const path = parserService.parseConcept.mock.calls[0][1].path;
+    expect(path).toMatch(/^concept-H\d+\.md$/);
   });
 
   test('explicit path keeps its shape and still uniquifies on in-batch duplicates', async () => {
@@ -474,14 +461,14 @@ describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)
     });
     const summary = await ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR);
     expect(summary).toMatchObject({ total: 2, parsed: 2, enqueued: 2, enqueue_errors: [] });
-    // entry name → path → concept_id (matches the concepts[] mode for the same names)
-    // PLUS the 4g bundle-zip store call (is_bundle) — the zip itself is stored as
-    // a file doc associated with the repo.
-    const fileNames = authedAxios.post.mock.calls.map((c) => c[1].originalFileName).sort();
-    expect(fileNames).toEqual(['index.md', 'repo-bundle.zip', 'service_directory.md']);
-    const bundleCall = authedAxios.post.mock.calls.find((c) => c[1].is_bundle === true);
-    expect(bundleCall).toBeTruthy();
+    // Story 4.8-amend (content-only): NO doc-repo POST for a concept — the concepts
+    // stay at index_status='parsed' for the worker; the ONLY doc-repo artifact is
+    // the 4g bundle-zip store (is_bundle) — the zip itself as a file doc.
+    const postCalls = authedAxios.post.mock.calls;
+    expect(postCalls).toHaveLength(1); // only the bundle-zip store
+    const bundleCall = postCalls[0];
     expect(bundleCall[1]).toMatchObject({
+      is_bundle: true,
       graph_name: `OKF_${REPO}`,
       bundle: b64,
       originalFileName: 'repo-bundle.zip'
@@ -490,8 +477,9 @@ describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)
     const firstMarkdown = parserService.parseConcept.mock.calls[0][0];
     expect(firstMarkdown).toContain('title: Government Services KB');
     expect(firstMarkdown).toContain('# Government Services KB');
-    // enqueued .md round-trips the parsed concept (gray-matter serializer)
-    expect(authedAxios.post.mock.calls[0][1].graph_name).toBe(`OKF_${REPO}`);
+    // the concept bodies + labels are persisted on the meta row (4b) for the worker
+    const opts = conceptMeta.upsertConceptMeta.mock.calls[0][2];
+    expect(opts.ingest_labels).toBeDefined();
   });
 
   test('zip junk filtered: directories, __MACOSX/, dotfiles, non-.md entries ignored', async () => {

@@ -19,12 +19,11 @@
 // 'indexed'|'failed' on okf_concepts_meta (2.9.1 writes 'parsed' only).
 
 const { aql } = require('arangojs');
+const matter = require('gray-matter');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
-const conceptMetaService = require('../services/concept-meta-service');
-const edgeService = require('../services/edge-service');
 const auditService = require('../services/audit-service');
 const { authedAxios } = require('../services/service-token');
 const config = require('../config');
@@ -68,70 +67,63 @@ function safeIntOrZero(name, fallback) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-/** concept_id from the files doc the orchestrator enqueued
- * (originalFileName = '<concept_id>.md' — 2.9.1 4f). The parser's
- * conceptIdFromPath strips ONLY the .md suffix (no prefix — live-verified run
- * 9: the zip entry 'index.md' → concept_id 'index'). Null when unshaped. */
-function conceptIdFromFileName(fileName) {
-  if (typeof fileName !== 'string' || !fileName.endsWith('.md')) return null;
-  const base = fileName.replace(/\.md$/, '');
-  return base || null;
-}
-
 async function getDb() {
   return dbService.getConnection('default');
 }
 
-/** Oldest Pending OKF files doc (repo_id present = orchestrator-enqueued;
- * the single-document facility — no repo_id — keeps manual/UI kicks). */
+/** Re-serialize a concept's stored markdown (frontmatter + body) — the same
+ * gray-matter serializer the orchestrator uses (ADR-021 4f round-trip). */
+function markdownFor(input) {
+  return matter.stringify(input.body || '', input.frontmatter || {});
+}
+
+/** Oldest concept awaiting chunking: an okf_concepts_meta row at
+ * index_status='parsed' (the orchestrator left it parsed; 'rejected' concepts
+ * are excluded by construction — the ingest hard-gate never enqueues them).
+ * Story 4.8-amend: content-only chunking — no doc-repo files doc exists for a
+ * concept; the concept's own meta row is the queue. */
 async function claimNextJob(db) {
   const rows = await (
     await db.query(aql`
-    FOR f IN files
-      FILTER f.dataprep.status == 'Pending' AND f.repo_id != null
-      SORT f.uploaded_date ASC
+    FOR m IN okf_concepts_meta
+      FILTER m.index_status == 'parsed' AND m.repo_id != null
+      SORT m.updated_at ASC
       LIMIT 1
-      RETURN KEEP(f, ['file_id', 'file_name', 'originalFileName', 'repo_id', 'graph_name', 'uploaded_date', 'bundle_version'])
+      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at'])
   `)
   ).all();
   return rows[0] || null;
 }
 
-/** Terminal-state poll of ONE file (doc-repo owns the status machine). */
-async function waitForTerminal(db, fileId) {
+/** Terminal-state poll of ONE concept — the okf-server concept-status callback
+ * (dataprep → okf-server) transitions the meta row to 'indexed' | 'failed'.
+ * The worker waits for that; a vanished/retracted concept is 'vanished'. */
+async function waitForTerminal(db, repoId, conceptId) {
   const deadline = Date.now() + JOB_TIMEOUT_MS();
   for (;;) {
     await new Promise((r) => setTimeout(r, JOB_POLL_MS()));
     const rows = await (
       await db.query(aql`
-      FOR f IN files FILTER f.file_id == ${fileId}
-        RETURN KEEP(f, ['dataprep', 'chunk_count'])
+      FOR m IN okf_concepts_meta FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+        RETURN KEEP(m, ['index_status', 'last_error', 'chunk_count'])
     `)
     ).all();
     const row = rows[0];
-    const status = row && row.dataprep && row.dataprep.status;
-    if (status === 'Ingested' || status === 'Ingestion Error' || status === 'Killed') {
-      return { status, chunk_count: (row && row.chunk_count) || 0 };
-    }
-    // The doc vanished (deleted mid-drain, e.g. bundle retract) or was
-    // retracted by someone else — nothing to wait for, nothing to transition.
-    if (!row || status === 'retracted' || status === 'Retracted') {
-      return { status: 'vanished', chunk_count: 0 };
-    }
+    if (!row) return { status: 'vanished', chunk_count: 0 }; // removed mid-drain
+    if (row.index_status === 'indexed') return { status: 'Ingested', chunk_count: (row && row.chunk_count) || 0 };
+    if (row.index_status === 'failed') return { status: 'Ingestion Error', chunk_count: (row && row.chunk_count) || 0 };
     if (Date.now() > deadline) return { status: 'timeout', chunk_count: 0 };
   }
 }
 
-/** Transition the concept's meta row — the worker's EXCLUSIVE writes. */
-async function transitionMeta(repoId, conceptId, patch) {
-  // MINIMAL upsert (no frontmatter AND no body ⇒ patch-only, never clobbers
-  // the 4b full-write fields — same guarded path conformance uses).
-  await conceptMetaService.upsertConceptMeta(repoId, { concept_id: conceptId }, { patch });
-}
-
 /**
- * Drain ONE Pending OKF file (test hook). Returns the outcome:
- * 'ingested' | 'failed' | 'busy' | 'error' | 'timeout'.
+ * Drain ONE concept awaiting chunking (content-only, Story 4.8-amend). The job
+ * is an okf_concepts_meta row at index_status='parsed'. The worker POSTs the
+ * concept's markdown DIRECTLY to dataprep (no doc-repo files doc — the bundle
+ * zip is the only doc-repo artifact); dataprep's completion callback routes to
+ * the okf-server concept-status endpoint, which transitions the meta row to
+ * 'indexed'/'failed' + writes the concept's edges. The worker waits for that.
+ * Returns the outcome: 'ingested' | 'failed' | 'busy' | 'error' | 'timeout'.
  */
 async function _processOneJob() {
   const db = await getDb();
@@ -139,16 +131,29 @@ async function _processOneJob() {
   if (!job) return { outcome: 'idle' };
 
   return withSpan('okf.ingest.worker.job', async (span) => {
-    span.setAttribute('okf.file_id', job.file_id);
+    span.setAttribute('okf.concept_id', job.concept_id);
     span.setAttribute('okf.repo_id', job.repo_id);
     const startedAt = Date.now();
+    const conceptId = job.concept_id;
+    const fileId = conceptId; // the concept_id is the dataprep fileId (content-keyed)
 
-    // 1. Kick doc-repo's per-file ingest (okf-service token; 30s cap).
+    // 1. POST the concept's markdown DIRECTLY to dataprep (content-only).
+    //    Re-serialize from the stored meta row (frontmatter + body).
+    const conceptMd = markdownFor({ frontmatter: job.frontmatter || {}, body: job.body || '' });
     let kick;
     try {
       kick = await authedAxios.post(
-        `${config.documentRepository.url}/api/files/${job.file_id}/ingest`,
-        {},
+        `${config.dataprep.url}${config.dataprep.ingestPath}`,
+        {
+          fileId,
+          fileName: `${conceptId.replace(/^concepts\//, '')}.md`,
+          fileBase64: Buffer.from(conceptMd).toString('base64'),
+          fileType: 'text/markdown',
+          fileLabels: Array.isArray(job.ingest_labels) ? job.ingest_labels : [],
+          graphName: job.graph_name || `OKF_${job.repo_id}`,
+          bundleVersion: job.bundle_version != null ? job.bundle_version : null,
+          conceptId
+        },
         { timeout: 30000 }
       );
     } catch (err) {
@@ -156,114 +161,54 @@ async function _processOneJob() {
       if (status === 429) {
         // Dataprep single-flight busy (another drain in flight) — back off to
         // the next poll cycle; never hammer, never transition states.
-        logger.info('Ingest worker: dataprep busy (429) — backing off', { file_id: job.file_id });
+        logger.info('Ingest worker: dataprep busy (429) — backing off', { concept_id: conceptId });
         recordJob('busy');
-        return { outcome: 'busy', file_id: job.file_id };
+        return { outcome: 'busy', concept_id: conceptId };
       }
       recordJob('error');
-      logger.error('Ingest worker: kick failed', { file_id: job.file_id, error: err.message });
-      return { outcome: 'error', file_id: job.file_id, error: err.message };
+      logger.error('Ingest worker: dataprep POST failed', { concept_id: conceptId, error: err.message });
+      return { outcome: 'error', concept_id: conceptId, error: err.message };
     }
-    if (kick.status !== 200) {
+    if (kick.status !== 200 && kick.status !== 202) {
       recordJob('error');
-      logger.error('Ingest worker: kick rejected', { file_id: job.file_id, status: kick.status });
-      return { outcome: 'error', file_id: job.file_id, error: `kick status ${kick.status}` };
+      logger.error('Ingest worker: dataprep rejected', { concept_id: conceptId, status: kick.status });
+      return { outcome: 'error', concept_id: conceptId, error: `dataprep status ${kick.status}` };
     }
 
-    // 2. Wait for the file's terminal state (doc-repo's machine).
-    const terminal = await waitForTerminal(db, job.file_id);
+    // 2. Wait for the concept's terminal state — the okf-server concept-status
+    //    callback (dataprep → okf-server) transitions the meta row to indexed|failed.
+    const terminal = await waitForTerminal(db, job.repo_id, conceptId);
     const durationMs = Date.now() - startedAt;
     span.setAttribute('okf.ingest.worker.outcome', terminal.status);
     span.setAttribute('okf.ingest.worker.duration_ms', durationMs);
 
-    // 3. Transition the meta row (worker-exclusive states; D-G).
-    // REVIEW FIX (2026-08-17, run-14): `originalFileName` is NEVER persisted on
-    // files docs (doc-repo folds it into `file_name`) — reading it first made the
-    // transition target the WRONG concept_id (undefined→job.file_name is correct,
-    // but the precedence hid it). file_name is the persisted truth, always.
-    const conceptId = conceptIdFromFileName(job.file_name);
-    const finish = (outcome, extra) => {
-      recordJob(outcome);
-      auditService
-        .writeAudit({
-          actor: 'okf-worker',
-          action: `ingest.${outcome}`,
-          repo_id: job.repo_id,
-          source_ip: null
-        })
-        .catch(() => {
-          /* best-effort */
-        });
-      logger.info('Ingest worker job finished', {
-        file_id: job.file_id,
+    // 3. Report (the callback owns the meta transition + the edge write — the
+    //    worker only observes the outcome).
+    const outcome = terminal.status === 'Ingested' ? 'ingested' : terminal.status === 'timeout' ? 'timeout' : 'failed';
+    recordJob(outcome);
+    auditService
+      .writeAudit({
+        actor: 'okf-worker',
+        action: `ingest.${outcome}`,
         repo_id: job.repo_id,
-        concept_id: conceptId,
-        outcome,
-        chunks: terminal.chunk_count,
-        duration_ms: durationMs,
-        ...extra
+        source_ip: null
+      })
+      .catch(() => {
+        /* best-effort */
       });
-      return { outcome, file_id: job.file_id, concept_id: conceptId, chunks: terminal.chunk_count, ...extra };
-    };
-
-    if (terminal.status === 'Ingested') {
-      if (conceptId) {
-        try {
-          await transitionMeta(job.repo_id, conceptId, {
-            index_status: 'indexed',
-            last_good_index_at: new Date().toISOString()
-          });
-        } catch (err) {
-          logger.error('Ingest worker: indexed transition failed', {
-            repo_id: job.repo_id,
-            concept_id: conceptId,
-            error: err.message
-          });
-        }
-        // Story 2.9.3 (G7/G22): POST-INDEX, write the concept's within-repo
-        // edges into the per-repo graph. Isolated + best-effort — a failure
-        // here must never fail the drain (edges are a graph-refinement layer).
-        try {
-          await edgeService.writeRepoConceptEdges(job.repo_id, conceptId, {
-            file_id: job.file_id,
-            bundle_version: job.bundle_version
-          });
-        } catch (err) {
-          logger.error('Ingest worker: edge write failed (isolated)', {
-            repo_id: job.repo_id,
-            concept_id: conceptId,
-            error: err.message
-          });
-        }
-      }
-      return finish('ingested');
-    }
-    if (terminal.status === 'timeout') {
-      return finish('timeout');
-    }
+    logger.info('Ingest worker job finished', {
+      concept_id: conceptId,
+      repo_id: job.repo_id,
+      outcome,
+      chunks: terminal.chunk_count,
+      duration_ms: durationMs
+    });
     if (terminal.status === 'vanished') {
-      // File removed/retracted mid-drain (e.g. bundle retract) — no transition.
       recordJob('vanished');
-      logger.info('Ingest worker: file vanished mid-drain', { file_id: job.file_id });
-      return { outcome: 'vanished', file_id: job.file_id };
+      logger.info('Ingest worker: concept vanished mid-drain', { concept_id: conceptId });
+      return { outcome: 'vanished', concept_id: conceptId };
     }
-    // Ingestion Error | Killed → dead-letter: 'failed' (+ the files doc already
-    // carries doc-repo's error state). Recovery = re-ingest (4e hash-dedup).
-    if (conceptId) {
-      try {
-        await transitionMeta(job.repo_id, conceptId, {
-          index_status: 'failed',
-          last_error: `${terminal.status} (chunks=${terminal.chunk_count})`
-        });
-      } catch (err) {
-        logger.error('Ingest worker: failed transition errored', {
-          repo_id: job.repo_id,
-          concept_id: conceptId,
-          error: err.message
-        });
-      }
-    }
-    return finish('failed', { terminal: terminal.status });
+    return { outcome, concept_id: conceptId, chunks: terminal.chunk_count };
   });
 }
 
@@ -377,4 +322,4 @@ function stop() {
   _sweepTimer = null;
 }
 
-module.exports = { start, stop, _processOneJob, _sweepOnce, conceptIdFromFileName };
+module.exports = { start, stop, _processOneJob, _sweepOnce, claimNextJob };

@@ -57,6 +57,10 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
+# 3. OKF Server: the control plane that owns per-concept index status (Story
+#    4.8-amend — content-only chunking routes the concept completion callback
+#    here instead of the doc-repo, which holds no files doc for a concept).
+OKF_SERVER_URL = os.getenv("OKF_SERVER_URL", "http://okf-server:3002")
 
 # 3. Keycloak Service Account for OIDC authentication
 from keycloak_service_account import get_service_account_token
@@ -312,20 +316,35 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.error(f"Failed to obtain service account token: {e}")
             return None
 
-    async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
-        """Updates file status in Document Repository (Spec 4.1/6.1)."""
+    async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None, concept_id: str = None):
+        """Updates file status. For an OKF CONCEPT (concept_id set — content-only
+        chunking, no doc-repo files doc), the completion callback routes to the OKF
+        Server, which owns the concept's index_status. Otherwise (legacy single-file
+        ingest), it routes to the Document Repository as before (Spec 4.1/6.1)."""
         headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
-        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
-
-        # FIX: chunk_count must be at the ROOT level, not inside dataprep object
-        payload = {"dataprep": {"status": status}}
-        if chunk_count is not None:
-            payload["chunk_count"] = chunk_count
+        if concept_id:
+            # Story 4.8-amend: OKF concept completion → okf-server concept-status
+            # endpoint (the control plane that owns index_status + edges).
+            url = f"{OKF_SERVER_URL}/api/okf/internal/concepts/{concept_id}/status"
+            payload = {"file_id": file_id, "status": status}
+            if chunk_count is not None:
+                payload["chunk_count"] = chunk_count
+            # Internal cross-service auth: the shared secret (fail-closed — an
+            # unconfigured okf-server refuses every callback). From the env so
+            # it is never hardcoded.
+            headers = dict(headers or {})
+            headers["X-OKF-Internal-Secret"] = os.getenv("OKF_INTERNAL_SECRET", "")
+        else:
+            url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
+            # FIX: chunk_count must be at the ROOT level, not inside dataprep object
+            payload = {"dataprep": {"status": status}}
+            if chunk_count is not None:
+                payload["chunk_count"] = chunk_count
 
         try:
             propagate.inject(headers)
@@ -338,7 +357,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 if response.status != 200:
                     logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
         except Exception as e:
-            logger.error(f"Error calling Doc Repo Status API: {e}")
+            logger.error(f"Error calling status API: {e}")
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
         """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
@@ -1317,8 +1336,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 self.db.create_graph(
                     graph_name,
                     edge_definitions=[
-                        {"collection": f"{graph_name}_HAS_SOURCE", "from": [f"{graph_name}_ENTITY"], "to": [f"{graph_name}_SOURCE"]},
-                        {"collection": f"{graph_name}_LINKS_TO", "from": [f"{graph_name}_ENTITY"], "to": [f"{graph_name}_ENTITY"]},
+                        {
+                            "collection": f"{graph_name}_HAS_SOURCE",
+                            "from": [f"{graph_name}_ENTITY"],
+                            "to": [f"{graph_name}_SOURCE"],
+                        },
+                        {
+                            "collection": f"{graph_name}_LINKS_TO",
+                            "from": [f"{graph_name}_ENTITY"],
+                            "to": [f"{graph_name}_ENTITY"],
+                        },
                     ],
                 )
                 logger.info(f"[ ensure-graph ] Registered named graph {graph_name}")
@@ -1335,7 +1362,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         try:
             # --- START PROTECTED EXECUTION (Spec 5.1) ---
-            await self._update_doc_status(input.file_id, "Ingesting")
+            await self._update_doc_status(input.file_id, "Ingesting", concept_id=getattr(input, "concept_id", None))
             await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
 
             try:
@@ -1412,6 +1439,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     bv = getattr(input, "bundle_version", None)
                     if isinstance(bv, int):
                         metadata["bundle_version"] = bv
+                    # Story 4.8-amend (2026-08-19): the OKF concept id is stamped
+                    # onto every chunk doc (citation provenance — a retrieved chunk
+                    # resolves to its concept without a files-doc join). Absent on
+                    # the request → no stamp (legacy single-file behavior).
+                    cid = getattr(input, "concept_id", None)
+                    if isinstance(cid, str) and cid:
+                        metadata["concept_id"] = cid
                     if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
                         metadata["chunk_text"] = original_chunks[i]
                     # Embed the contextualized text (subject propagation); falls back
@@ -1441,7 +1475,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     await asyncio.gather(*tasks)
 
                 # 6. Final Status Update
-                await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                await self._update_doc_status(
+                    input.file_id, "Ingested", chunk_count=len(chunks), concept_id=getattr(input, "concept_id", None)
+                )
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
 
                 return {
@@ -1465,7 +1501,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
 
                 # Set final status to "Killed" as per state machine specification
-                await self._update_doc_status(input.file_id, "Killed")
+                await self._update_doc_status(input.file_id, "Killed", concept_id=getattr(input, "concept_id", None))
 
                 await self._write_ingestion_log(
                     input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
@@ -1478,7 +1514,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 logger.error(error_msg)
 
                 await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
-                await self._update_doc_status(input.file_id, "Ingestion Error")
+                await self._update_doc_status(
+                    input.file_id, "Ingestion Error", concept_id=getattr(input, "concept_id", None)
+                )
 
                 # Auto-retract created data
                 await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))

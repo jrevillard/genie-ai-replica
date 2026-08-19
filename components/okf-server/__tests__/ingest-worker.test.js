@@ -29,7 +29,11 @@ jest.mock('../services/audit-service', () => ({
 jest.mock('../services/service-token', () => ({
   authedAxios: { get: jest.fn(), post: jest.fn(async () => ({ status: 200 })) }
 }));
-jest.mock('../config', () => ({ documentRepository: { url: 'http://document-repository:3001' } }));
+jest.mock('../config', () => ({
+  documentRepository: { url: 'http://document-repository:3001' },
+  dataprep: { url: 'http://dataprep-arango-service:5000', ingestPath: '/v1/dataprep/ingest_file' },
+  internal: { secret: '' }
+}));
 jest.mock('../services/edge-service', () => ({
   writeRepoConceptEdges: jest.fn(async () => ({ written: 0, dropped: [] }))
 }));
@@ -69,131 +73,92 @@ afterEach(() => {
   delete process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS;
 });
 
-describe('ingestWorker.conceptIdFromFileName (2.9.1 4f contract — the REAL parser strips only .md, no prefix)', () => {
-  test('derives the bare concept_id from the orchestrator-enqueued file name', () => {
-    expect(worker.conceptIdFromFileName('bad_concept.md')).toBe('bad_concept');
-    expect(worker.conceptIdFromFileName('nested/path.md')).toBe('nested/path');
-    expect(worker.conceptIdFromFileName('index.md')).toBe('index');
-  });
-  test('null for unshaped names', () => {
-    expect(worker.conceptIdFromFileName('')).toBeNull();
-    expect(worker.conceptIdFromFileName('no-extension')).toBeNull();
-    expect(worker.conceptIdFromFileName(undefined)).toBeNull();
-    expect(worker.conceptIdFromFileName('.md')).toBeNull();
-  });
-});
-
-describe('ingestWorker._processOneJob (drain one Pending OKF file)', () => {
-  test('idle when no Pending OKF docs exist (never touches non-OKF Pending)', async () => {
+describe('ingestWorker._processOneJob (content-only — claim a parsed meta row → POST to dataprep → wait for the callback)', () => {
+  test('idle when no parsed concepts exist', async () => {
     programQueries([]); // claim finds nothing
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'idle' });
     expect(authedAxios.post).not.toHaveBeenCalled();
   });
 
-  test('oldest Pending OKF doc → kick → Ingested → meta indexed + edges written post-index', async () => {
+  test('parsed concept → POSTs its markdown DIRECTLY to dataprep, waits for indexed', async () => {
     programQueries(
       [
         {
-          file_id: 'f1',
-          file_name: 'bad_concept.md',
-          originalFileName: 'bad_concept.md',
           repo_id: REPO,
+          concept_id: 'bad_concept',
           graph_name: `OKF_${REPO}`,
+          frontmatter: { title: 'Bad', type: 'service' },
+          body: '# Bad\nBody.',
+          ingest_labels: [`t:smoke`, `r:${REPO}`, 'Service Directory'],
           bundle_version: 3
         }
       ],
-      [{ dataprep: { status: 'Ingesting' }, chunk_count: 0 }], // poll 1: still working
-      [{ dataprep: { status: 'Ingested' }, chunk_count: 2 }] // poll 2: terminal
+      [{ index_status: 'parsed' }], // poll 1: still working (callback not yet applied)
+      [{ index_status: 'indexed', chunk_count: 2 }] // poll 2: the callback transitioned it
     );
     authedAxios.post.mockResolvedValue({ status: 200 });
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('ingested');
     expect(res.chunks).toBe(2);
-    expect(authedAxios.post).toHaveBeenCalledWith(
-      `http://document-repository:3001/api/files/f1/ingest`,
-      {},
-      { timeout: 30000 }
-    );
-    // The worker-EXCLUSIVE transition (minimal patch — never clobbers 4b fields)
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
-      REPO,
-      { concept_id: 'bad_concept' },
-      { patch: { index_status: 'indexed', last_good_index_at: expect.any(String) } }
-    );
-    // Story 2.9.3: the post-index edge write is invoked with the drain context.
-    expect(edgeService.writeRepoConceptEdges).toHaveBeenCalledWith(REPO, 'bad_concept', {
-      file_id: 'f1',
-      bundle_version: 3
+    // The POST targets DATAPREP directly (content-only — no doc-repo files doc).
+    const [url, body] = authedAxios.post.mock.calls[0];
+    expect(url).toBe('http://dataprep-arango-service:5000/v1/dataprep/ingest_file');
+    expect(body).toMatchObject({
+      fileId: 'bad_concept',
+      fileName: 'bad_concept.md',
+      fileType: 'text/markdown',
+      graphName: `OKF_${REPO}`,
+      bundleVersion: 3,
+      conceptId: 'bad_concept'
     });
+    expect(Buffer.from(body.fileBase64, 'base64').toString()).toContain('# Bad');
+    // The callback (okf-server concept-status) owns the transition + edges — the
+    // worker does NOT write them (no transitionMeta / edge call here).
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    expect(edgeService.writeRepoConceptEdges).not.toHaveBeenCalled();
   });
 
-  test('Ingestion Error → meta failed + last_error (dead-letter; recovery = re-ingest)', async () => {
+  test('callback reports failure → meta failed outcome (dead-letter; recovery = re-ingest)', async () => {
     programQueries(
-      [{ file_id: 'f2', file_name: 'x.md', originalFileName: 'x.md', repo_id: REPO }],
-      [{ dataprep: { status: 'Ingestion Error' }, chunk_count: 0 }]
+      [{ repo_id: REPO, concept_id: 'x', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# x' }],
+      [{ index_status: 'failed', chunk_count: 0 }]
     );
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('failed');
-    expect(res.terminal).toBe('Ingestion Error');
-    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
-      REPO,
-      { concept_id: 'x' },
-      { patch: { index_status: 'failed', last_error: expect.stringContaining('Ingestion Error') } }
-    );
   });
 
   test('429 busy → back off, NO meta transition, NO crash (dataprep single-flight)', async () => {
-    programQueries([{ file_id: 'f3', file_name: 'a.md', originalFileName: 'a.md', repo_id: REPO }]);
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
     const busy = Object.assign(new Error('429'), { response: { status: 429 } });
     authedAxios.post.mockRejectedValue(busy);
     const res = await worker._processOneJob();
-    expect(res).toEqual({ outcome: 'busy', file_id: 'f3' });
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 
-  test('kick transport error → outcome error, files-doc state machine untouched', async () => {
-    programQueries([{ file_id: 'f4', file_name: 'a.md', originalFileName: 'a.md', repo_id: REPO }]);
-    authedAxios.post.mockRejectedValue(new Error('doc-repo down'));
+  test('dataprep transport error → outcome error', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockRejectedValue(new Error('dataprep down'));
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('error');
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 
-  test('non-200 kick → outcome error with status', async () => {
-    programQueries([{ file_id: 'f5', file_name: 'a.md', originalFileName: 'a.md', repo_id: REPO }]);
+  test('non-200 dataprep kick → outcome error with status', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
     authedAxios.post.mockResolvedValue({ status: 404 });
     const res = await worker._processOneJob();
-    expect(res).toMatchObject({ outcome: 'error', error: 'kick status 404' });
+    expect(res).toMatchObject({ outcome: 'error', error: 'dataprep status 404' });
   });
 
-  test('meta transition failure is isolated (job still reports ingested)', async () => {
+  test('concept vanished mid-drain → outcome vanished', async () => {
     programQueries(
-      [{ file_id: 'f6', file_name: 'c.md', originalFileName: 'c.md', repo_id: REPO }],
-      [{ dataprep: { status: 'Ingested' }, chunk_count: 3 }]
-    );
-    conceptMeta.upsertConceptMeta.mockRejectedValueOnce(new Error('arango blip'));
-    const res = await worker._processOneJob();
-    expect(res.outcome).toBe('ingested');
-  });
-
-  test('file retracted/vanished mid-drain → outcome vanished, NO meta transition', async () => {
-    programQueries(
-      [{ file_id: 'f8', file_name: 'v.md', originalFileName: 'v.md', repo_id: REPO }],
-      [] // files doc gone on the first poll (bundle retract removed it)
+      [{ repo_id: REPO, concept_id: 'v', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# v' }],
+      [] // meta row gone (bundle retract removed it)
     );
     const res = await worker._processOneJob();
-    expect(res).toEqual({ outcome: 'vanished', file_id: 'f8' });
-    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
-  });
-
-  test('unshaped originalFileName → drains but skips the meta transition (logged)', async () => {
-    programQueries(
-      [{ file_id: 'f7', file_name: 'weird.bin', originalFileName: 'weird.bin', repo_id: REPO }],
-      [{ dataprep: { status: 'Ingested' }, chunk_count: 1 }]
-    );
-    const res = await worker._processOneJob();
-    expect(res.outcome).toBe('ingested');
+    expect(res).toEqual({ outcome: 'vanished', concept_id: 'v' });
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 });

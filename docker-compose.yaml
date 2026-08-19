@@ -569,6 +569,12 @@ services:
       - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
       - OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=${OKF_INGEST_WORKER_SWEEP_INTERVAL_MS:-3600000}
       - OKF_INGEST_CONCURRENCY=${OKF_INGEST_CONCURRENCY:-1}
+      # Story 4.8-amend: content-only chunking — the worker POSTs the concept's
+      # markdown DIRECTLY to dataprep (no doc-repo files doc). Empty default =
+      # fail-closed; the controller refuses every callback without a secret
+      # configured, so the .env / deployment MUST set both ends to the same value.
+      - DATAPREP_URL=${DATAPREP_URL:-http://dataprep-arango-service:5000}
+      - OKF_INTERNAL_SECRET=${OKF_INTERNAL_SECRET:-}
     networks:
       - genieai_network
     deploy:
@@ -1083,6 +1089,13 @@ services:
       ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       DOCUMENT_REPOSITORY_URL: http://document-repository:3001
       BACKEND_SERVICE_URL: http://backend:3000
+      # Story 4.8-amend: content-only chunking — OKF concept completion callbacks
+      # (dataprep → okf-server internal endpoint) instead of doc-repo. Empty
+      # default = fail-closed; the okf-server controller refuses every callback
+      # without a matching shared secret, so the .env / deployment MUST set both
+      # ends to the same value.
+      OKF_SERVER_URL: http://okf-server:3002
+      OKF_INTERNAL_SECRET: ${OKF_INTERNAL_SECRET:-}
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       # Split-URL OIDC (local builds): when the public KEYCLOAK_URL is
       # unreachable from the container (Docker Desktop WSL2), set

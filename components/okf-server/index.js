@@ -14,6 +14,7 @@ const { logger } = require('./shared-lib/logger'); // shared logger — imported
 const metricsMiddleware = require('./shared-lib/metrics-middleware'); // shared OTel HTTP metrics → OTLP (MELT)
 const healthRoutes = require('./routes/health-routes');
 const okfRoutes = require('./routes/okf-routes');
+const internalRoutes = require('./routes/internal-routes');
 const errorHandler = require('./middleware/error-handler');
 
 /**
@@ -41,7 +42,10 @@ function createApp() {
   // Public health endpoints (no auth)
   app.use('/health', healthRoutes);
   app.use('/ready', healthRoutes);
-  // OKF API surface (auth applied per-route within the router)
+  // OKF API surface (auth applied per-route within the router). The INTERNAL
+  // surface is mounted FIRST so /api/okf/internal/* is not swallowed by the
+  // authenticated router's requireScope gate (Story 4.8-amend).
+  app.use('/api/okf/internal', internalRoutes);
   app.use('/api/okf', okfRoutes);
 
   app.use(errorHandler);

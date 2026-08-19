@@ -137,6 +137,32 @@ class TestIngestGraphName:
         assert captured["bundle_version"] == 3
         assert captured["graph_name"] == "OKF_99999999-9999-4999-8999-999999999999"
 
+    async def test_conceptid_threads_into_the_loader_request(self, isolated_env):
+        """Story 4.8-amend: content-only chunking — the concept id rides the
+        payload → request → chunk docs (citation) + the completion callback."""
+        captured = {}
+
+        def _capture_request(**kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(**kwargs)
+
+        with (
+            patch.object(micro, "loader") as mock_loader,
+            patch.object(micro, "ArangoDBDataprepRequestFromDocRepo", side_effect=_capture_request),
+        ):
+            mock_loader.ingest_file_with_guardrail = AsyncMock(return_value={"status": 200, "success": True})
+            payload = micro.DocRepoIngestPayload(
+                fileId="index",
+                fileName="index.md",
+                fileBase64=_b64("# KB"),
+                fileType="text/markdown",
+                graphName="OKF_99999999-9999-4999-8999-999999999999",
+                conceptId="index",
+            )
+            await micro.ingest_file_from_repo(payload)
+        assert captured["concept_id"] == "index"
+        assert captured["graph_name"] == "OKF_99999999-9999-4999-8999-999999999999"
+
     async def test_bundleversion_defaults_none_legacy(self, isolated_env):
         captured = {}
 

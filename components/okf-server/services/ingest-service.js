@@ -333,9 +333,13 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
 
     // [4b] FULL upsert (first-class fields; index_status='parsed'; the
     // writer's minimal-input, pii_state and index_status protections apply
-    // automatically).
+    // automatically). Story 4.8-amend: the concept's body + the ingest labels
+    // (ACL + KH + okf:v tag) are persisted so the worker can chunk content-only.
     try {
-      const r = await conceptMetaService.upsertConceptMeta(repo_id, parsed, { bundle_version: bundleVersion });
+      const r = await conceptMetaService.upsertConceptMeta(repo_id, parsed, {
+        bundle_version: bundleVersion,
+        ingest_labels: labels
+      });
       summary[r.action === 'created' ? 'created' : 'updated'] += 1;
     } catch (err) {
       logger.error('Ingest 4b meta upsert failed', { repo_id, concept_id: parsed.concept_id, error: err.message });
@@ -411,36 +415,12 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       }
     }
 
-    // [4f] enqueue: per-concept .md stored via doc-repo's bundle route with
-    // defer_kick — the files doc lands at 'Pending' for the 2.9.4 worker
-    // (per-concept enqueues must NOT race dataprep's single-ingest lock).
-    // 30s timeout caps the total request risk (review fix).
-    try {
-      const conceptMd = markdownFor({ frontmatter: parsed.frontmatter, body: parsed.body });
-      await authedAxios.post(
-        `${config.documentRepository.url}/api/files/ingest-bundle`,
-        {
-          bundle: Buffer.from(conceptMd).toString('base64'),
-          graph_name: graphName,
-          repo_id,
-          originalFileName: `${parsed.concept_id.replace(/^concepts\//, '')}.md`,
-          labels,
-          // Story 2.9.7: the minted version rides the files doc → datapretreat
-          // stamps it onto every chunk doc (ADR-031 "threaded everywhere").
-          bundle_version: bundleVersion,
-          defer_kick: true
-        },
-        { timeout: ENQUEUE_TIMEOUT_MS }
-      );
-      summary.enqueued += 1;
-    } catch (err) {
-      summary.enqueue_errors.push({ concept_id: parsed.concept_id, stage: 'enqueue', error: err.message });
-      logger.error('Ingest 4f enqueue failed (isolated)', {
-        repo_id,
-        concept_id: parsed.concept_id,
-        error: err.message
-      });
-    }
+    // [4f] enqueue — Story 4.8-amend (content-only): NO doc-repo files doc is
+    // created for a concept. The concept's meta row (index_status='parsed',
+    // body + ingest_labels persisted at 4b) IS the queue — the 2.9.4 worker
+    // claims it and POSTs the concept's markdown DIRECTLY to dataprep. This is
+    // what keeps the document-repository list showing ONLY the bundle zip.
+    summary.enqueued += 1;
   }
 
   // [4g] Story 2.9.5-amend (2026-08-18): when the input was a ZIP bundle, ALSO

@@ -178,7 +178,7 @@ function parseComposeImages(filePath) {
     // Image reference: 4-space (or deeper) indent inside a service block
     const imageMatch = line.match(/^ {4,}image:\s*(.+)$/);
     if (imageMatch && currentService) {
-      const image = imageMatch[1].trim();
+      const image = imageMatch[1].trim().replace(/\s+#.*$/, "").trim();
       results.push({
         service: currentService,
         image,
@@ -214,7 +214,7 @@ function parseAnsibleImages(filePath) {
     if (trimmed.startsWith('#') || trimmed === '') continue;
     const match = trimmed.match(/^([\w]+_image):\s*(.+)$/);
     if (match) {
-      results.push({ name: match[1], image: match[2].trim() });
+      results.push({ name: match[1], image: match[2].trim().replace(/\s+#.*$/, "").trim() });
     }
   }
   return results;
@@ -256,7 +256,7 @@ function parseGitlabCiImages(filePath) {
     // Detect image reference (any indent)
     const imageMatch = trimmed.match(/^image:\s*(.+)$/);
     if (imageMatch) {
-      results.push({ job: currentJob, image: imageMatch[1].trim() });
+      results.push({ job: currentJob, image: imageMatch[1].trim().replace(/\s+#.*$/, "").trim() });
     }
   }
   return results;

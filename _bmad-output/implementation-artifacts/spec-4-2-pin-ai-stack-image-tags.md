@@ -2,7 +2,7 @@
 title: 'Pin AI-stack image tags (no :latest, no split-brain)'
 type: 'chore'
 created: '2026-08-19'
-status: 'in-progress'
+status: 'done'
 review_loop_iteration: 0
 context: []
 baseline_commit: 'ad7c7c592d0eeace4aa34546ab02a5e4f1a9fc59'

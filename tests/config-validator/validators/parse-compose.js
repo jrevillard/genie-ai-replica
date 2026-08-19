@@ -119,4 +119,105 @@ function crossReference(composeVars, envParsed) {
   return { orphaned, undocumented, conflicting };
 }
 
-module.exports = { parseComposeEnvVars, crossReference };
+/**
+ * Extract all image references from a docker-compose file.
+ *
+ * Returns every `image:` line parsed as { service, image, isVariableRef }.
+ * - `service` is the enclosing service name (best-effort via 2/4-space YAML indent).
+ * - `image` is the raw image string (may contain ${} substitutions).
+ * - `isVariableRef` is true when the image starts with `${` (i.e. the whole value
+ *   is a variable reference; the fallback `:latest` in those expressions is the
+ *   documented local-dev escape hatch and is NOT flagged by the `:latest` test).
+ *
+ * Follows the same regex-on-raw-YAML approach as parseGpuCompose() in
+ * validate-gpu-node.js — compose files contain ${VAR:-default} shell substitutions
+ * that are not valid YAML, so we cannot use js-yaml here.
+ *
+ * @param {string} filePath - Path to a docker-compose file
+ * @returns {Array<{ service: string|null, image: string, isVariableRef: boolean }>}
+ */
+function parseComposeImages(filePath) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read compose file: ${filePath}`, { cause: err });
+  }
+
+  const lines = content.split('\n');
+  const results = [];
+  let currentService = null;
+  let inServices = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip comment lines and blank lines
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+
+    // Detect top-level `services:` block
+    if (line.match(/^services:\s*$/)) {
+      inServices = true;
+      continue;
+    }
+    // Detect any other top-level block (networks, volumes, configs, secrets, etc.)
+    if (line.match(/^[a-z][\w-]*:\s*$/) && !line.startsWith(' ')) {
+      inServices = trimmed === 'services:';
+      continue;
+    }
+
+    if (!inServices) continue;
+
+    // Service definition: 2-space indent + name
+    const serviceMatch = line.match(/^ {2}([\w-]+):\s*$/);
+    if (serviceMatch) {
+      currentService = serviceMatch[1];
+      continue;
+    }
+
+    // Image reference: 4-space (or deeper) indent inside a service block
+    const imageMatch = line.match(/^ {4,}image:\s*(.+)$/);
+    if (imageMatch && currentService) {
+      const image = imageMatch[1].trim();
+      results.push({
+        service: currentService,
+        image,
+        isVariableRef: image.startsWith('${')
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Parse image references from Ansible group_vars (YAML).
+ *
+ * Looks for lines matching `<name>_image: <value>` and returns them as
+ * { name, image }. The Ansible group_vars file is plain YAML with no ${}
+ * substitutions, so simple line parsing is sufficient.
+ *
+ * @param {string} filePath - Path to an Ansible group_vars YAML file
+ * @returns {Array<{ name: string, image: string }>}
+ */
+function parseAnsibleImages(filePath) {
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`Failed to read Ansible file: ${filePath}`, { cause: err });
+  }
+
+  const results = [];
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') continue;
+    const match = trimmed.match(/^([\w]+_image):\s*(.+)$/);
+    if (match) {
+      results.push({ name: match[1], image: match[2].trim() });
+    }
+  }
+  return results;
+}
+
+module.exports = { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages };

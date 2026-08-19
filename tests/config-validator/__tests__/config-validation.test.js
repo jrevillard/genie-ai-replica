@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
-const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages } = require('../validators/parse-compose');
+const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages } = require('../validators/parse-compose');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
@@ -320,6 +320,16 @@ describe('Configuration Validation Suite', () => {
 
       const violations = images.filter((img) => img.image.endsWith(':latest'));
       expect(violations.map((v) => `${v.name}: ${v.image}`)).toEqual([]);
+    });
+
+    test('GitLab CI image tags are pinned (no :latest)', () => {
+      const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+      if (!fs.existsSync(ciFile)) return;
+      const images = parseGitlabCiImages(ciFile);
+      expect(images.length).toBeGreaterThan(0);
+
+      const violations = images.filter((img) => img.image.endsWith(':latest'));
+      expect(violations.map((v) => `${v.job || 'global'}: ${v.image}`)).toEqual([]);
     });
   });
 

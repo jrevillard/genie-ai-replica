@@ -2110,7 +2110,7 @@ promote:tempo-proxy:
 # release-cli binary into job containers (observed "release-cli: not found").
 release:create:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  image: registry.gitlab.com/gitlab-org/release-cli:v0.24.0
   script:
     - |
       VERSION="${CI_COMMIT_TAG#v}"

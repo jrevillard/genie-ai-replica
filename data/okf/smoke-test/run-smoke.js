@@ -635,12 +635,7 @@ async function ingestPhase(db) {
     OKF_GRAPH = 'OKF_' + INGEST_REPO;
     pass('flow: OKF repository "' + REPO_NAME + '" created via the API (repo_id=' + INGEST_REPO + ')');
   } else {
-    fail(
-      'flow: repo create via API -> ' +
-        createRes.status +
-        ' ' +
-        JSON.stringify(createRes.body).slice(0, 150)
-    );
+    fail('flow: repo create via API -> ' + createRes.status + ' ' + JSON.stringify(createRes.body).slice(0, 150));
   }
   // The named association the smoke proves end-to-end:
   console.log(
@@ -680,6 +675,32 @@ async function ingestPhase(db) {
     ? pass('clone: caller without admin on the source -> 403 FORBIDDEN_SCOPE (admin mutation)')
     : fail('clone scoped-read -> ' + c0.status + ' ' + JSON.stringify(c0.body).slice(0, 100));
 
+  // ── SELECT THE LABELS FROM THE KNOWLEDGE HIERARCHY (the real taxonomy) ──
+  // Emulates the authoring flow: the steward selects labels from the KH tree (the
+  // same /api/service-categories/categories taxonomy the dataprep LLM labeler
+  // consumes). The kenya bundle's concepts map to these services/categories.
+  const khCategories = await aqlAll('FOR c IN serviceCategories RETURN c.nameEN');
+  const khServices = await aqlAll('FOR s IN services RETURN s.nameEN');
+  const KH_LABELS = [...khCategories, ...khServices].filter(Boolean);
+  const SELECTED_KH_LABELS = [
+    'Digital Government Services',
+    'Public Service Administration',
+    'eCitizen',
+    'Huduma Kenya',
+    'Ministry of Public Service',
+    'Service Directory'
+  ];
+  const missingKh = SELECTED_KH_LABELS.filter((l) => !KH_LABELS.includes(l));
+  missingKh.length === 0
+    ? pass(
+        'labels: ' +
+          SELECTED_KH_LABELS.length +
+          ' labels selected FROM the knowledge hierarchy (' +
+          KH_LABELS.length +
+          ' in the tree)'
+      )
+    : fail('labels NOT in the KH: ' + JSON.stringify(missingKh) + ' (KH has ' + JSON.stringify(KH_LABELS) + ')');
+
   // ── (ii) THE FULL KENYA BUNDLE AS A ZIP, through the orchestrator ──
   // Emulates the authoring flow: the bundle zip + the knowledge-hierarchy labels
   // (the user selects them from the hierarchy) feed the ingest. The orchestrator
@@ -688,7 +709,7 @@ async function ingestPhase(db) {
   const r1 = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/ingest', ADMIN, {
     zip: zipB64,
     bundle_name: 'kenya-bundle.zip',
-    labels: ['Service Directory']
+    labels: SELECTED_KH_LABELS
   });
   if (r1.status !== 202) {
     fail('zip ingest 202 expected, got ' + r1.status + ': ' + JSON.stringify(r1.body).slice(0, 220));
@@ -929,7 +950,7 @@ async function ingestPhase(db) {
   const filesBefore = (await aqlAll(filesCountQuery))[0];
   const r2 = await ingestService.ingestRepoConcepts(
     INGEST_REPO,
-    { concepts, labels: ['Service Directory'] },
+    { concepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
   r2.skipped_dedup === EXPECTED_CONCEPTS && r2.enqueued === 0
@@ -1008,7 +1029,7 @@ async function ingestPhase(db) {
   );
   const r3 = await ingestService.ingestRepoConcepts(
     INGEST_REPO,
-    { concepts: modifiedConcepts, labels: ['Service Directory'] },
+    { concepts: modifiedConcepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
   r3.skipped_dedup === EXPECTED_CONCEPTS - 1 && r3.enqueued === 1
@@ -1284,7 +1305,7 @@ async function ingestPhase(db) {
   );
   const rc = await ingestService.ingestRepoConcepts(
     CLONE_ID,
-    { concepts: cloneConcepts, labels: ['Service Directory'] },
+    { concepts: cloneConcepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
   rc.skipped_dedup === EXPECTED_CONCEPTS - 1 && rc.enqueued === 1

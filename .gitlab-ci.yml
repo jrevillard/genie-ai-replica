@@ -814,6 +814,7 @@ contract:retriever-arango:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == "feat/opea-1.5-upgrade/prd"
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
@@ -842,6 +843,7 @@ contract:reranker:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == "feat/opea-1.5-upgrade/prd"
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
@@ -866,6 +868,7 @@ contract:dataprep-arango:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == "feat/opea-1.5-upgrade/prd"
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
@@ -905,6 +908,7 @@ contract:unit:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == "feat/opea-1.5-upgrade/prd"
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]

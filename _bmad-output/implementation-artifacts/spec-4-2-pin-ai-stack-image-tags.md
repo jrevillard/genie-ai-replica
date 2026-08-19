@@ -2,9 +2,10 @@
 title: 'Pin AI-stack image tags (no :latest, no split-brain)'
 type: 'chore'
 created: '2026-08-19'
-status: 'ready-for-dev'
+status: 'in-progress'
 review_loop_iteration: 0
 context: []
+baseline_commit: 'ad7c7c592d0eeace4aa34546ab02a5e4f1a9fc59'
 ---
 
 <frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">

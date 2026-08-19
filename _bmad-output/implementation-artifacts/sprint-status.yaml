@@ -36,7 +36,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-08-10
-last_updated: 2026-08-19
+last_updated: '2026-08-19'
 
 project: genie-ai
 project_key: opea-1.5-upgrade
@@ -76,7 +76,7 @@ development_status:
   # Epic 4: Operational readiness & rollout
   epic-4: in-progress
   4-1-fix-the-latent-dataprep-retriever-bugs: done
-  4-2-pin-the-ai-stack-image-tags-no-latest-no-split-brain: backlog
+  4-2-pin-the-ai-stack-image-tags-no-latest-no-split-brain: in-progress
   4-3-canary-on-release-el-salvador-with-required-shadow-comparison: backlog
   4-4-rehearse-rollback-whole-set-revert-backward-read-retention: backlog
   4-5-update-docs-env-and-the-upgrade-matrix: backlog

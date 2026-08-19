@@ -79,5 +79,5 @@ development_status:
   4-2-pin-the-ai-stack-image-tags-no-latest-no-split-brain: done
   4-3-canary-on-release-el-salvador-with-required-shadow-comparison: closed
   4-4-rehearse-rollback-whole-set-revert-backward-read-retention: closed
-  4-5-update-docs-env-and-the-upgrade-matrix: backlog
+  4-5-update-docs-env-and-the-upgrade-matrix: ready-for-dev
   epic-4-retrospective: optional

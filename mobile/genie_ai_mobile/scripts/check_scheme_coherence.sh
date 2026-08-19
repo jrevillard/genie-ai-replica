@@ -111,7 +111,8 @@ for flavor in dev staging e2e itu; do
 done
 
 # env template holds the itu (default deployment) scheme
-if [[ -n "$env_scheme" && -n "${dart_schemes[itu]:-}" ]]; then
+# Skip check if env has placeholder (template for deployer customization)
+if [[ -n "$env_scheme" && -n "${dart_schemes[itu]:-}" && "$env_scheme" != *"<institution>"* ]]; then
   if [[ "$env_scheme" != "${dart_schemes[itu]}" ]]; then
     echo "MISMATCH: env KC_MOBILE_REDIRECT_SCHEME='$env_scheme' vs Dart itu='${dart_schemes[itu]}'"
     errors=$((errors + 1))

@@ -237,11 +237,7 @@ describe('AnalyticsController', () => {
       await controller.getSatisfactionGauge(req, res);
       expect(res.json).toHaveBeenCalledWith({ currentValue: 85, target: 85 });
       // DW-113: verify locale is propagated from req.query to service
-      expect(mockAnalyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith(
-        '2026-01-01',
-        '2026-01-31',
-        'fr'
-      );
+      expect(mockAnalyticsService.getSatisfactionGaugeData).toHaveBeenCalledWith('2026-01-01', '2026-01-31', 'fr');
     });
 
     it('should return 500 on service error', async () => {
@@ -265,11 +261,7 @@ describe('AnalyticsController', () => {
       await controller.getSatisfactionHeatmap(req, res);
       expect(res.json).toHaveBeenCalledWith([{ name: 'Cat 1', data: [] }]);
       // DW-113: verify locale is propagated from req.query to service
-      expect(mockAnalyticsService.getSatisfactionHeatmapData).toHaveBeenCalledWith(
-        '2026-01-01',
-        '2026-01-31',
-        'es'
-      );
+      expect(mockAnalyticsService.getSatisfactionHeatmapData).toHaveBeenCalledWith('2026-01-01', '2026-01-31', 'es');
     });
 
     it('should return 500 on service error', async () => {

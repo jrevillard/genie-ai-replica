@@ -37,7 +37,7 @@ class MockHttpClientConfig {
 }
 
 void main() {
-  const testConfig = KeycloakConfig(
+  final testConfig = KeycloakConfig(
     keycloakUrl: 'http://localhost:8080',
     realm: 'genie',
     clientId: 'test-client',

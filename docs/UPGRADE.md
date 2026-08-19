@@ -20,8 +20,7 @@ All four OPEA overlay images (chatqna, dataprep, retriever, reranker) now build 
 
 **What changed**:
 - All OPEA services now use Python 3.11 (was 3.10)
-- Dataprep image base: `python:3.11-slim` (was CUDA/Ubuntu) — dataprep has no GPU assignment
-- Image tags pinned to specific versions (no `:latest` in AI stack)
+- Dataprep image base aligned to OPEA v1.5 upstream (`python:3.11-slim`, GPU support maintained via pip-installed CUDA libraries)
 - Retriever graph name default unified to `ARANGO_GRAPH_NAME` (was `RETRIEVER_ARANGO_GRAPH_NAME`)
 
 **Migration**: No manual migration required. Pull new images and redeploy.
@@ -34,17 +33,9 @@ All OPEA overlay images now use Python 3.11 (matching OPEA v1.5's base). Custom 
 
 #### Dataprep Image Base Change
 
-The dataprep image base changed from `nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04` to `python:3.11-slim`. **GPU support is maintained** — CUDA libraries are now installed via pip (`cuda-toolkit`, `nvidia-cuda-runtime`) rather than baked into the base image.
+The dataprep image base changed from `nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04` to `python:3.11-slim` to align with OPEA v1.5 upstream. **GPU support is maintained** — CUDA libraries are now installed via pip (`cuda-toolkit`, `nvidia-cuda-runtime`) rather than baked into the base image.
 
 **Compatibility**: No functional change. Docling continues to use GPU for document parsing when `DOCLING_DEVICE=cuda` (default). The dataprep service still runs on GPU nodes (`node.labels.gpu == true`).
-
-**Benefits**: Smaller image size, faster builds, same GPU capability.
-
-#### Image Tag Pinning Policy
-
-All AI-stack image tags are now pinned to specific versions. No `:latest` tags remain. The `versions.env` file (if present) is the authoritative manifest for image versions.
-
-**Compatibility**: Deployments using `:latest` tags must update to pinned versions. CI now rejects `:latest` in AI-stack images.
 
 ---
 

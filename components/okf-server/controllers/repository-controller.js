@@ -125,7 +125,7 @@ async function ingestRepo(req, res, next) {
   try {
     const { repo_id } = req.params;
     const body = req.body || {};
-    const { concepts, file_ids, discover, labels, zip } = body;
+    const { concepts, file_ids, discover, labels, zip, bundle_name } = body;
     const hasZip = typeof zip === 'string' && zip.length > 0;
     if (!hasZip) {
       if (!Array.isArray(concepts) || concepts.length === 0) {
@@ -159,7 +159,7 @@ async function ingestRepo(req, res, next) {
     await repoService.getById(repo_id, { authz: authzForService(req) });
     const summary = await ingestService.ingestRepoConcepts(
       repo_id,
-      { concepts, file_ids, discover, labels, zip },
+      { concepts, file_ids, discover, labels, zip, bundle_name },
       actorFrom(req)
     );
     res.status(202).json({ success: true, ...summary });

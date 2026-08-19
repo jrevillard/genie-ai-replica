@@ -787,10 +787,12 @@ async function ingestPhase(db) {
     : fail('PII clean count: ' + cleanPii + '/' + EXPECTED_CONCEPTS);
 
   // ── (iv) per-concept files docs: Pending + graph + ACL labels (defer_kick) ──
+  // The bundle-zip file doc (is_bundle=true) is EXCLUDED — it's the ingestion
+  // INPUT (asserted separately), not a concept file to drain/retract.
   const fileDocs = await aqlAll(
     "FOR f IN files FILTER f.repo_id == '" +
       INGEST_REPO +
-      "' SORT f.file_name RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name','labels'])"
+      "' AND f.is_bundle != true SORT f.file_name RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name','labels'])"
   );
   // The WORKER may already have claimed a concept (status Ingesting/Ingested) by
   // the time this query runs — defer_kick leaves them Pending at enqueue, but the
@@ -922,7 +924,8 @@ async function ingestPhase(db) {
     return { path: f, frontmatter: data, body: content.trim() };
   });
   const ingestService = require('./services/ingest-service');
-  const filesCountQuery = "RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' RETURN 1)";
+  const filesCountQuery =
+    "RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' AND f.is_bundle != true RETURN 1)";
   const filesBefore = (await aqlAll(filesCountQuery))[0];
   const r2 = await ingestService.ingestRepoConcepts(
     INGEST_REPO,

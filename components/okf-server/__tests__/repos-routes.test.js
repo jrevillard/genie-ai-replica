@@ -461,6 +461,29 @@ describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
       expect.anything()
     );
   });
+
+  test('zip ingest passes bundle_name through to the service (bundle-zip file doc name)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke', graph_name: 'OKF_repoA' });
+    ingestService.ingestRepoConcepts.mockResolvedValue({
+      repo_id: 'repoA',
+      total: 1,
+      parsed: 1,
+      enqueued: 1,
+      enqueue_errors: [],
+      pii: { clean: 1, hit: 0, error: 0 }
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/ingest')
+      .set('Authorization', TOKEN)
+      .send({ zip: 'UEsDBAoAAAAAAA', bundle_name: 'kenya-bundle.zip' });
+    expect(res.status).toBe(202);
+    expect(ingestService.ingestRepoConcepts).toHaveBeenCalledWith(
+      'repoA',
+      expect.objectContaining({ zip: 'UEsDBAoAAAAAAA', bundle_name: 'kenya-bundle.zip' }),
+      expect.anything()
+    );
+  });
 });
 
 // ─── Story 2.9.7: version mint + manifests ─────────────────────────────────────

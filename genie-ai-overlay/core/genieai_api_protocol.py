@@ -255,3 +255,8 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         # OKF concept id (Story 4.8-amend): content-only chunking citation + the
         # completion-callback routing key; None = legacy single-file ingest.
         self.concept_id = concept_id
+        # Story 4.8-amend follow-up (David's 4th-time directive, 2026-08-20):
+        # the concept's original filename is mirrored into the bundle zip's
+        # ingestion log entry so the bundle's UI Ingestion Log tab can trace
+        # each log line to its source concept file.
+        self.file_name = file_name

@@ -211,6 +211,13 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # Story 4.8-amend: the OKF concept id rides through to chunk docs
                 # (citation provenance) + routes the completion callback.
                 concept_id=payload.conceptId,
+                # Story 4.8-amend follow-up: concept's source filename mirrors
+                # into the bundle zip's ingestion log so the bundle's UI
+                # Ingestion Log tab can trace each entry to its concept file.
+                # (file_name is already in the parent payload — the docs
+                # repo's addIngestionLog file_id-keyed POST keys on it.)
+                # The ArangoDBDataprepRequest class sets it on the instance
+                # via the super().__init__() chain.
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,
                 embed_nodes=True,

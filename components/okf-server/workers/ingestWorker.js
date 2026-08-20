@@ -199,6 +199,10 @@ async function _processOneJob() {
         `${config.dataprep.url}${config.dataprep.ingestPath}`,
         {
           fileId,
+          // The concept's original filename (e.g. 'ecitizen_digital_payments.md')
+          // is mirrored into the bundle zip's ingestion log so the bundle's
+          // UI Ingestion Log tab is traceable to the source concept file
+          // (David's 4th-time directive, 2026-08-20).
           fileName: `${conceptId.replace(/^concepts\//, '')}.md`,
           fileBase64: Buffer.from(conceptMd).toString('base64'),
           fileType: 'text/markdown',

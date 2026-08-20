@@ -261,9 +261,97 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
         self._log_semaphore = asyncio.Semaphore(100)
+        # Story 4.8-amend (David's 4th-time directive, 2026-08-20): per-instance
+        # caches that map (concept_id → bundle_file_id) and (concept_id →
+        # concept_file_name) so every per-stage log POST can mirror into the
+        # bundle zip's ingestion_log (file-centric UI) without re-querying
+        # doc-repo for every chunk. The cache is populated lazily on the first
+        # log write that targets a concept id; the resolution is best-effort
+        # (any failure → no mirror, primary log still succeeds).
+        self._bundle_file_id_cache: dict[str, str] = {}
+        self._concept_file_name_cache: dict[str, str] = {}
 
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
+
+    def _concept_file_name(self, file_id: str) -> str | None:
+        """Return the concept's original filename for use as a log prefix so
+        the bundle's UI Ingestion Log tab is traceable. Pulled from the
+        ``input.file_name`` (Story 4.8-amend follow-up) on first use; cached."""
+        cached = self._concept_file_name_cache.get(file_id)
+        if cached is not None:
+            return cached or None
+        # The file_id IS the concept_id; the request body carries the original
+        # filename under input.file_name. The microservice populates this from
+        # the worker's POST (which sets fileName: <concept>.md). For non-OKF
+        # single-file paths, input.file_name mirrors the upload's filename.
+        # We lazily capture it on the first label_log call.
+        try:
+            file_name = getattr(self._current_input, "file_name", None)
+        except AttributeError:
+            file_name = None
+        if file_name:
+            self._concept_file_name_cache[file_id] = file_name
+        else:
+            self._concept_file_name_cache[file_id] = ""
+        return file_name or None
+
+    async def _bundle_log_url(self, session, file_id: str, headers: dict) -> str | None:
+        """Resolve the doc-repo URL that mirrors an ingestion log into the
+        bundle zip's ingestion_log (file-centric UI). Returns None when no
+        bundle exists for the current repo or the doc-repo query fails."""
+        # Cache hit
+        if file_id in self._bundle_file_id_cache:
+            cached = self._bundle_file_id_cache[file_id]
+            if not cached:
+                return None
+            return f"{DOCUMENT_REPOSITORY_URL}/api/files/{cached}/ingestion-log"
+        # Single-file (non-concept_id-keyed) requests: the file_id IS the
+        # bundle — no mirror needed.
+        if not (file_id and self._is_concept_id(file_id)):
+            self._bundle_file_id_cache[file_id] = ""
+            return None
+        repo_id = getattr(self, "_current_repo_id", None)
+        if not repo_id:
+            self._bundle_file_id_cache[file_id] = ""
+            return None
+        # Look up the bundle zip via doc-repo's getFiles (Story 4.8-amend +
+        # ce9d825 supports repo_id + is_bundle=true filters).
+        try:
+            url = f"{DOCUMENT_REPOSITORY_URL}/api/files?repo_id={repo_id}&is_bundle=true&limit=1"
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                if r.status != 200:
+                    self._bundle_file_id_cache[file_id] = ""
+                    return None
+                data = await r.json()
+                items = (
+                    data.get("data")
+                    if isinstance(data, dict) and "data" in data
+                    else (data if isinstance(data, list) else [])
+                )
+                if not items:
+                    self._bundle_file_id_cache[file_id] = ""
+                    return None
+                bundle_file_id = items[0].get("file_id")
+                if not bundle_file_id:
+                    self._bundle_file_id_cache[file_id] = ""
+                    return None
+                self._bundle_file_id_cache[file_id] = bundle_file_id
+                return f"{DOCUMENT_REPOSITORY_URL}/api/files/{bundle_file_id}/ingestion-log"
+        except Exception as e:
+            if logflag:
+                logger.warning(f"Bundle-log URL resolve failed for concept {file_id}: {e}")
+            self._bundle_file_id_cache[file_id] = ""
+            return None
+
+    def _is_concept_id(self, value: str) -> bool:
+        """Heuristic: an OKF concept id is a non-UUID bare id (e.g.
+        'ecitizen_digital_payments', 'index'); a doc-repo file_id is a long
+        numeric timestamp. Anything matching the timestamp shape is treated as
+        a file_id (no mirror); bare ids are concept ids (mirror)."""
+        if not value:
+            return False
+        return not value[0].isdigit()
 
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
@@ -360,34 +448,78 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.error(f"Error calling status API: {e}")
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
-        """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
+        """Writes human-readable logs to Document Repository (Spec 5.2/6.2).
+
+        Story 4.8-amend (David's 4th-time directive, 2026-08-20): for
+        content-only chunking the request carries `conceptId` (no per-concept
+        files doc exists). The existing log POST keys on the concept_id, which
+        the file-centric FileDetailsDialog cannot surface. We also mirror the
+        log entry to the bundle-zip's file_id (looked up from `repo_id`) so
+        the bundle's UI Ingestion Log tab shows the FULL per-stage lifecycle
+        (Ingestion/Chunking/Contextualization/Graph/System) — mirroring what
+        single-file ingestion produces."""
         headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
-        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
         payload = {
             "level": level,  # Sent exactly as passed (INFO, WARN, ERROR)
             "stage": stage,
             "message": message,
         }
+        propagate.inject(headers)
         try:
-            propagate.inject(headers)
             # FIX: Limit concurrency of log writes to prevent 429 flooding
-            async with (
-                self._log_semaphore,
-                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
-                session.post(url, json=payload, headers=headers) as response,
-            ):
-                # Ignore 429s in logs specifically to prevent recursion or spam
-                if response.status == 429:
+            async with self._log_semaphore, aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
+                # Primary POST (concept_id-keyed; preserved for any future
+                # concept-level UI + non-regression on single-file path).
+                primary_url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
+                try:
+                    async with session.post(primary_url, json=payload, headers=headers) as response:
+                        if response.status == 429 and logflag:
+                            logger.warning("Log write rate-limited (429). Dropping log message.")
+                        elif response.status != 201 and logflag:
+                            logger.warning(f"Failed to write log: status={response.status}")
+                except Exception as e:
                     if logflag:
-                        logger.warning("Log write rate-limited (429). Dropping log message.")
-                    return
-                if response.status != 201:
-                    logger.error(f"Failed to write log for {file_id}: {await response.text()}")
+                        logger.warning(f"Failed to write log to {primary_url}: {e}")
+                # Story 4.8-amend: mirror to the bundle zip's file_id so
+                # the bundle's UI Ingestion Log tab shows per-concept
+                # lifecycle (Chunking/Contextualization/Labeling/Graph).
+                # The OKF worker's writeBundleIngestionLog already emits
+                # System "started"/"completed" lines — we skip System here
+                # to avoid duplicates. Every other stage (Chunking,
+                # Contextualization, Graph, Labeling) IS mirrored so the
+                # bundle's tab shows the same per-chunk / per-batch detail
+                # as the single-file path. The message is prefixed with
+                # the concept's file_name (when known) for traceability
+                # and the concept_id for correlation.
+                if stage == "System" and (
+                    message.startswith("Ingestion task started")
+                    or message.startswith("Ingestion completed successfully")
+                ):
+                    # Duplicate of the worker's mirror — skip.
+                    pass
+                else:
+                    mirror_url = await self._bundle_log_url(session, file_id, headers)
+                    if mirror_url:
+                        file_label = (
+                            f"[{self._concept_file_name(file_id)}] "
+                            if self._concept_file_name(file_id)
+                            else f"[{file_id}] "
+                        )
+                        mirror_payload = dict(payload)
+                        mirror_payload["message"] = file_label + message
+                        try:
+                            async with session.post(mirror_url, json=mirror_payload, headers=headers) as mr:
+                                if mr.status == 429 and logflag:
+                                    logger.warning("Bundle-log mirror rate-limited (429).")
+                        except Exception:
+                            # Mirror is best-effort; never fail the primary log
+                            pass
+                logger.error(f"Failed to write log for {file_id}: {await response.text()}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Log API: {e}")
 
@@ -1359,6 +1491,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         # NOTE: lock_file is passed from the microservice and is already LOCKED.
         # We are responsible for releasing and closing it in the finally block.
+        # Story 4.8-amend (David's 4th-time directive, 2026-08-20): stash
+        # the input + repo_id on the instance so the per-stage log POST
+        # helper can mirror into the bundle zip's ingestion_log (file-centric UI).
+        self._current_input = input
+        # The graph name encodes the repo_id (`OKF_<repo_id>`); pull it back out.
+        try:
+            graph_name = input.graph_name or ""
+        except AttributeError:
+            graph_name = ""
+        if graph_name.startswith("OKF_") and len(graph_name) > 4:
+            self._current_repo_id = graph_name[4:]
+        else:
+            self._current_repo_id = None
+        # Cache the concept's filename eagerly so the per-stage log prefix
+        # is populated without an extra lookup.
+        concept_id = getattr(input, "concept_id", None)
+        if concept_id:
+            file_name = getattr(input, "file_name", None)
+            if file_name:
+                self._concept_file_name_cache[concept_id] = file_name
 
         try:
             # --- START PROTECTED EXECUTION (Spec 5.1) ---

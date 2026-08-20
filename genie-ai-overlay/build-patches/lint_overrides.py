@@ -3,10 +3,11 @@
 
 Implements the override-audit contract (architecture pattern 1):
 
-* every entry carries exactly the schema keys ``override`` / ``disposition`` /
-  ``owner`` / ``ticket``;
+* every entry carries the schema keys ``override`` / ``disposition`` /
+  ``owner`` / ``justification`` / ``added_in`` / ``last_validated``;
 * ``disposition`` is one of ``still-needed`` / ``re-graft-to-new-API`` /
   ``obsolete-remove``;
+* ``added_in`` and ``last_validated`` are OPEA versions (e.g., v1.3, v1.5);
 * every entry is matched by a ``# OVERRIDE <module>.<name> | disposition: ...``
   comment record in the source tree (core/*.py and build-patches/*), and the
   record's disposition agrees with the manifest entry.
@@ -22,7 +23,8 @@ OVERLAY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 MANIFEST = OVERLAY_ROOT / "OVERRIDES.yaml"
 
 VALID_DISPOSITIONS = {"still-needed", "re-graft-to-new-API", "obsolete-remove"}
-REQUIRED_KEYS = ("override", "disposition", "owner", "ticket")
+REQUIRED_KEYS = ("override", "disposition", "owner", "justification", "added_in", "last_validated")
+OPTIONAL_KEYS = ("test",)
 
 # Files scanned for ``# OVERRIDE`` marker records.
 SCAN_PATTERNS = ("core/*.py", "build-patches/*", "reranker/*.py", "contracts/*.py")
@@ -111,7 +113,7 @@ def validate() -> int:
         override_id = entry.get("override")
         line = entry.get("_line", "?")
 
-        extra_keys = set(entry) - set(REQUIRED_KEYS) - {"_line"}
+        extra_keys = set(entry) - set(REQUIRED_KEYS) - set(OPTIONAL_KEYS) - {"_line"}
         if extra_keys:
             _fail(f"line {line}: unexpected key(s) {sorted(extra_keys)}")
         missing_keys = [key for key in REQUIRED_KEYS if key not in entry or not entry.get(key)]

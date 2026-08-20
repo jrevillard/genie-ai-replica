@@ -839,7 +839,12 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.addIngestionLog);
+// Story 4.8-amend: the OKF ingest worker mirrors per-concept ingestion
+// progress to the bundle zip's ingestion log (David's 3rd-time directive
+// 2026-08-20). The okf-server service-account client holds the bootstrap
+// `tools-admin` super-role (see genie-realm.yaml client role mapping) so
+// the worker's mirror POSTs succeed.
+router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']), fileController.addIngestionLog);
 
 /**
  * @swagger

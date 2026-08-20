@@ -209,7 +209,7 @@ def test_e2e_graph_schedules_real_orchestrator(comps, fake_http):
     graph.flow_to(rerank, llm)
 
     llm_params = _harness.import_docarray("LLMParams")()
-    result = asyncio.run(
+    result, _dag = asyncio.run(
         graph.schedule(
             initial_inputs={"text": "what is tomato blight?", "model": "genie"},
             llm_parameters=llm_params,

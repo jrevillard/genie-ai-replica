@@ -672,14 +672,14 @@ kics-iac-sast:
       fi
       IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       echo "Scanning $IMAGE"
-      syft --scope squashed -o spdx-json "$IMAGE" > sbom.spdx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
+      syft --scope squashed -o cyclonedx-json "$IMAGE" > sbom.cyclonedx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
       trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format json --output gl-scan-tmp.json --exit-code 0 "$IMAGE"
       trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
   artifacts:
     when: always
     expire_in: 1 year
     paths:
-      - sbom.spdx.json
+      - sbom.cyclonedx.json
       - gl-scan-tmp.json
 
 
@@ -733,12 +733,8 @@ kics-iac-sast:
         sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" gl-scan-tmp.json > gl-container-scanning-report.json
         echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
       else
-        echo "WARN: gl-scan-tmp.json not found (scan produced no report) — promoting image without report rewrite"
-        # Keep the declared container_scanning artifact present so the reports
-        # upload does not fail the job, but mark the scan as FAILED rather than
-        # presenting the image as scanned-clean: an unscanned image must never
-        # look like it has zero findings.
-        printf '%s\n' '{"version":"15.0.0","vulnerabilities":[],"scan":{"type":"container_scanning","status":"failed"}}' > gl-container-scanning-report.json
+        echo "ERROR: gl-scan-tmp.json not found (scan produced no report) — blocking promotion (NFR-S1 supply-chain integrity)"
+        exit 1
       fi
   artifacts:
     reports:
@@ -810,6 +806,7 @@ contract:retriever-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/retriever/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
@@ -838,6 +835,7 @@ contract:reranker:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/reranker/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
@@ -862,6 +860,7 @@ contract:dataprep-arango:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/dataprep/**/*", "genie-ai-overlay/core/**/*", "genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
@@ -901,6 +900,7 @@ contract:unit:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         paths: ["genie-ai-overlay/contracts/**/*", ".gitlab-ci.yml"]

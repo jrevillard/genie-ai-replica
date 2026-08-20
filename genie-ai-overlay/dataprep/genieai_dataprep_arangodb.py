@@ -86,6 +86,10 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # spec-contextual-retrieval.md). Default ON; set false to disable (no-op beyond
 # skipping context gen). Adds one LLM call per chunk (concurrency-bounded) when
 # enabled. Part B (retriever BM25 hybrid) is a separate spec.
+# BREAKING CHANGE (v1.3 → v1.5): default changed from "false" to "true".
+# Enables Contextual Retrieval (Anthropic-style) by default — adds one vLLM call
+# per chunk at ingest (~20% slower, higher quality embeddings). Set to "false" to
+# restore v1.3 behavior.
 CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "true").lower() == "true"
 # Model used for context generation. Empty → reuse VLLM_MODEL_ID (auto-detected
 # on remote GPU nodes). Set to a smaller/cheaper model to cut context-gen cost.
@@ -1318,6 +1322,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
+                # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
+                # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
+                # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
 
                 documents_to_process = []

@@ -100,6 +100,7 @@ class MicroServiceEndpoint(Enum):
         return self.value
 
 
+# OVERRIDE core.constants.MCPFuncType | disposition: still-needed | reason: v1.5 MCP support | test: tests/test_core.py::TestMCPFuncType
 class MCPFuncType(Enum):
     """The enum of a MCP function type."""
 

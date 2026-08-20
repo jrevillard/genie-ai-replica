@@ -82,3 +82,9 @@ overrides:
     disposition: re-graft-to-new-API
     owner: genie-ai
     ticket: story 2.1
+  - override: core.constants.MCPFuncType
+    disposition: still-needed
+    owner: genie-ai
+    ticket: DW-265
+    reason: v1.5 MCP support — enum not present in upstream OPEA v1.5 constants.py
+    test: tests/test_core.py::TestMCPFuncType

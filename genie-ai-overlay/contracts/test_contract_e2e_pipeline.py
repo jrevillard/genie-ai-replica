@@ -227,9 +227,14 @@ def test_e2e_graph_schedules_real_orchestrator(comps, fake_http):
     assert llm_key is not None, (
         f"LLM node key not found in result — pipeline did not reach the LLM. Keys present: {list(result.keys())}"
     )
-    # The LLM node output must be a dict (the chatqna handle_request reads
-    # ``result_dict[llm_key].get("text", ...)`` — a non-dict would crash).
-    assert isinstance(result[llm_key], dict), f"LLM node output is not a dict: {type(result[llm_key])}"
+    # The LLM node output must be either a dict (non-streaming) or a
+    # StreamingResponse object (streaming). In v1.5, streaming responses are
+    # passed through as StreamingResponse objects rather than being converted
+    # to dicts. Both are valid outputs from the LLM node.
+    from starlette.responses import StreamingResponse
+    assert isinstance(result[llm_key], (dict, StreamingResponse)), (
+        f"LLM node output is not a dict or StreamingResponse: {type(result[llm_key])}"
+    )
 
 
 # --- DW-263: confidence / abstention / response-schema assertions -----------

@@ -63,7 +63,12 @@ const getFilesSchema = Joi.object({
   search: Joi.string().max(100).optional(),
   dataprepStatus: Joi.string()
     .valid('pending', 'ingesting', 'ingested', 'ingested with warnings', 'ingestion error', 'retracted', 'killed')
-    .optional()
+    .optional(),
+  // Story 4.8-amend: the OKF ingest worker mirrors per-concept ingest
+  // progress to the bundle zip's ingestion log, so it needs to resolve
+  // the bundle file_id from doc-repo via repo_id + is_bundle=true.
+  repo_id: Joi.string().uuid().optional(),
+  is_bundle: Joi.boolean().optional()
 });
 
 const updateFileSchema = Joi.object({

@@ -116,6 +116,51 @@ async function waitForTerminal(db, repoId, conceptId) {
   }
 }
 
+// Bundle-ingestion-log mirror (Story 4.8-amend ingestion_log visibility fix,
+// David's 3rd-time directive, 2026-08-20): dataprep's _write_ingestion_log
+// keys log entries on file_id=concept_id (no per-concept files doc exists for
+// content-only chunking) — those entries are NOT visible in the UI's
+// FileDetailsDialog, which only shows logs keyed on a real files doc. The
+// worker's mirror posts ingestion-log entries to doc-repo keyed on the BUNDLE
+// ZIP's file_id, with the concept_id embedded in the message — the UI's
+// bundle-zip panel then shows the per-concept ingest progress (Started /
+// Ingested / Ingestion Error).
+const _bundleFileCache = new Map(); // repo_id -> bundle file_id (one bundle per repo)
+async function getBundleFileId(repoId) {
+  const cached = _bundleFileCache.get(repoId);
+  if (cached) return cached;
+  // The bundle zip is the only doc-repo artifact with is_bundle=true for the repo.
+  const resp = await authedAxios.get(
+    `${config.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repoId)}&is_bundle=true&limit=1`
+  );
+  const items = (resp && resp.data && (resp.data.items || resp.data.files || resp.data)) || [];
+  const bundle = Array.isArray(items) ? items[0] : null;
+  if (!bundle || !bundle.file_id) {
+    throw new Error(`Bundle zip not found in doc-repo for repo_id=${repoId}`);
+  }
+  _bundleFileCache.set(repoId, bundle.file_id);
+  return bundle.file_id;
+}
+
+/** Best-effort ingestion-log mirror — never fatal to the worker (a doc-repo
+ * hiccup must not block chunking). Errors are logged + swallowed. */
+async function writeBundleIngestionLog(repoId, conceptId, level, stage, message) {
+  try {
+    const bundleFileId = await getBundleFileId(repoId);
+    await authedAxios.post(
+      `${config.documentRepository.url}/api/files/${encodeURIComponent(bundleFileId)}/ingestion-log`,
+      { level, stage, message: `[${conceptId}] ${message}` },
+      { timeout: 10000 }
+    );
+  } catch (err) {
+    logger.warn('Bundle ingestion-log mirror failed (non-fatal)', {
+      repo_id: repoId,
+      concept_id: conceptId,
+      error: err.message
+    });
+  }
+}
+
 /**
  * Drain ONE concept awaiting chunking (content-only, Story 4.8-amend). The job
  * is an okf_concepts_meta row at index_status='parsed'. The worker POSTs the
@@ -141,6 +186,10 @@ async function _processOneJob() {
     //    Re-serialize from the stored meta row (frontmatter + body).
     const conceptMd = markdownFor({ frontmatter: job.frontmatter || {}, body: job.body || '' });
     let kick;
+    // Mirror "Concept started" to the bundle zip's ingestion log so the UI's
+    // FileDetailsDialog shows per-concept progress (dataprep's own logs are
+    // keyed on concept_id and not visible to the file-centric UI).
+    writeBundleIngestionLog(job.repo_id, conceptId, 'INFO', 'System', 'Concept ingestion started');
     try {
       kick = await authedAxios.post(
         `${config.dataprep.url}${config.dataprep.ingestPath}`,
@@ -186,6 +235,32 @@ async function _processOneJob() {
     //    worker only observes the outcome).
     const outcome = terminal.status === 'Ingested' ? 'ingested' : terminal.status === 'timeout' ? 'timeout' : 'failed';
     recordJob(outcome);
+    // Mirror the terminal outcome to the bundle zip's ingestion log.
+    if (outcome === 'ingested') {
+      writeBundleIngestionLog(
+        job.repo_id,
+        conceptId,
+        'INFO',
+        'System',
+        `Concept ingestion completed (${terminal.chunk_count} chunks)`
+      );
+    } else if (outcome === 'failed') {
+      writeBundleIngestionLog(
+        job.repo_id,
+        conceptId,
+        'ERROR',
+        'System',
+        `Concept ingestion failed: ${terminal.status}`
+      );
+    } else if (outcome === 'timeout') {
+      writeBundleIngestionLog(
+        job.repo_id,
+        conceptId,
+        'WARN',
+        'System',
+        `Concept ingestion timed out (${JOB_TIMEOUT_MS() / 1000}s)`
+      );
+    }
     auditService
       .writeAudit({
         actor: 'okf-worker',

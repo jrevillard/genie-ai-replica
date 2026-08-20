@@ -594,7 +594,7 @@ class FileService {
    */
   async getFiles(options = {}) {
     try {
-      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus } = options;
+      const { page = 1, limit = 10, language, mimeType, search, dataprepStatus, repo_id, is_bundle } = options;
       const offset = (page - 1) * limit;
 
       // Build query
@@ -632,6 +632,18 @@ class FileService {
         // Use case-insensitive matching for status
         filters.push('LOWER(file.dataprep.status) == LOWER(@status)');
         bindVars.status = dataprepStatus;
+      }
+      // Story 4.8-amend: bundle-file lookup by repo_id + is_bundle=true
+      // (the OKF worker mirrors per-concept ingest progress to the bundle zip's
+      // ingestion log, so it must resolve the bundle file_id).
+      if (repo_id) {
+        filters.push('file.repo_id == @repo_id');
+        bindVars.repo_id = repo_id;
+      }
+      if (is_bundle === true) {
+        filters.push('file.is_bundle == true');
+      } else if (is_bundle === false) {
+        filters.push('(file.is_bundle == false OR file.is_bundle == null)');
       }
 
       if (filters.length > 0) {

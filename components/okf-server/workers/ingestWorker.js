@@ -130,11 +130,13 @@ async function getBundleFileId(repoId) {
   const cached = _bundleFileCache.get(repoId);
   if (cached) return cached;
   // The bundle zip is the only doc-repo artifact with is_bundle=true for the repo.
+  // Doc-repo returns { data: [...], pagination: {...} } (no `items`/`files` key).
   const resp = await authedAxios.get(
     `${config.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repoId)}&is_bundle=true&limit=1`
   );
-  const items = (resp && resp.data && (resp.data.items || resp.data.files || resp.data)) || [];
-  const bundle = Array.isArray(items) ? items[0] : null;
+  const body = resp && resp.data;
+  const items = Array.isArray(body) ? body : (body && (body.data || body.items || body.files)) || [];
+  const bundle = items[0];
   if (!bundle || !bundle.file_id) {
     throw new Error(`Bundle zip not found in doc-repo for repo_id=${repoId}`);
   }
@@ -156,6 +158,8 @@ async function writeBundleIngestionLog(repoId, conceptId, level, stage, message)
     logger.warn('Bundle ingestion-log mirror failed (non-fatal)', {
       repo_id: repoId,
       concept_id: conceptId,
+      status: err && err.response && err.response.status,
+      body: err && err.response && err.response.data && JSON.stringify(err.response.data).substring(0, 200),
       error: err.message
     });
   }

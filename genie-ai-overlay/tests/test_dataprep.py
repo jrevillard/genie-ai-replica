@@ -34,6 +34,11 @@ def create_dataprep(db_mock=None, embeddings_mock=None, graph_mock=None):
     dp.graph = graph_mock or MagicMock()
     dp.llm_transformer = MagicMock()
     dp._log_semaphore = asyncio.Semaphore(100)
+    # Story 4.8-amend follow-up (David's 4th-time directive, 2026-08-21):
+    # the bundle mirror helper looks up the concept file name from a cache.
+    # __new__ skips __init__, so initialize the cache here too.
+    dp._concept_file_name_cache = {}
+    dp._bundle_file_id_cache = {}
     dp._initialize_llm = MagicMock()
     dp._initialize_embeddings = MagicMock()
     return dp

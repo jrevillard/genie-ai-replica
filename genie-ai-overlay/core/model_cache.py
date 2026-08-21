@@ -50,8 +50,9 @@ def _probe(endpoint_url: str) -> str | None:
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     # Align with the project's OPEA_SSL_SKIP_VERIFY mechanism (self-signed GPU
-    # certs). The global genie_ssl_patch.py sitecustomize also handles this, but
-    # we set verify explicitly so the probe is correct regardless of patch state.
+    # certs). The global genie_ssl_patch.py (installed via the zz_genie_startup.pth
+    # site-init hook) also handles this, but we set verify explicitly so the probe
+    # is correct regardless of patch state.
     verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
     try:
         resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=verify)

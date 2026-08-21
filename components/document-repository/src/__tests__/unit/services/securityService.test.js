@@ -101,8 +101,14 @@ describe('securityService', () => {
     });
 
     it('should reject oversized buffer', () => {
-      const bigBuffer = Buffer.alloc(50 * 1024 * 1024 + 1);
-      return expect(securityService.scanBuffer(bigBuffer)).rejects.toThrow('Buffer size exceeds');
+      const originalMax = securityService.maxBufferSize;
+      securityService.maxBufferSize = 10;
+      try {
+        const bigBuffer = Buffer.alloc(11);
+        return expect(securityService.scanBuffer(bigBuffer)).rejects.toThrow('Buffer size exceeds');
+      } finally {
+        securityService.maxBufferSize = originalMax;
+      }
     });
 
     it('should skip scanning when clamscan is null and return clean result', async () => {

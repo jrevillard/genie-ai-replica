@@ -241,6 +241,14 @@ keyAlias=<institution>
 storeFile=<path-to-<institution>-release.keystore>
 ```
 
+> **Security:** Restrict file permissions immediately after editing — `key.properties` contains plaintext passwords for the signing keystore:
+>
+> ```bash
+> chmod 600 mobile/genie_ai_mobile/android/key.properties
+> ```
+>
+> The file is already gitignored, but restrictive permissions prevent other local users or processes from reading the credentials.
+
 ## Step 6: Build
 
 Build commands always use `--flavor <name>` syntax. Do not use `--dart-define` or `-t` flags.
@@ -266,6 +274,37 @@ For detailed build and run instructions, see `mobile/genie_ai_mobile/CLAUDE.md`.
 ## Step 7: Validate
 
 Run through this checklist after completing the flavor configuration.
+
+### Prerequisite: Verify Service Health
+
+Before running the verification commands below, confirm that the `keycloak-config` service has finished importing the realm configuration. Running verification too early (while keycloak-config-cli is still starting up or importing) produces misleading "NOT FOUND" results.
+
+```bash
+# Check keycloak-config completed realm import successfully
+# Docker Swarm:
+docker service logs genieai_keycloak-config --since 5m 2>&1 | grep -i "import\|success\|completed"
+# Docker Compose:
+docker compose logs keycloak-config --since 5m 2>&1 | grep -i "import\|success\|completed"
+```
+
+If no success message appears within 2-3 minutes, check service status:
+
+```bash
+# Docker Swarm:
+docker service ps genieai_keycloak-config
+# Docker Compose:
+docker compose ps keycloak-config
+```
+
+Restart if state is `failed` or `restarting`.
+
+Wait until you see a success/import-completed message before proceeding. If Keycloak itself is not yet responsive, also check:
+
+```bash
+# Verify Keycloak is accepting connections
+curl -sk -o /dev/null -w "%{http_code}" "<KEYCLOAK_URL>/realms/master"
+# Expected: 200
+```
 
 ### 7.1 Verify Keycloak Client Exists
 
@@ -556,6 +595,63 @@ GENIE.AI mobile OIDC works identically whether Keycloak is internet-facing or on
 
 - The mobile device must resolve the Keycloak hostname (e.g., `keycloak.<institution>.int`)
 - Configure local DNS or `/etc/hosts` on the device if no internal DNS server is available
+
+**Configuring local DNS resolution (no DNS server available):**
+
+When the deployment has no internal DNS server, point the Keycloak hostname to the server's IP address using one of the methods below.
+
+*Option A: `/etc/hosts` entry (Android emulator via `adb`, or Linux host):*
+
+```
+# /etc/hosts — add one line per hostname the app must reach
+10.0.0.100    keycloak.<institution>.int api.<institution>.int
+```
+
+For an Android emulator, push the entry into the emulator's `/etc/hosts`. **Prerequisites:** requires a `userdebug` or `eng` Android build — production/user builds have a locked `/system` partition and cannot modify `/etc/hosts`. Use a `userdebug` emulator image.
+
+```bash
+adb root
+adb remount
+adb shell "echo '10.0.0.100 keycloak.<institution>.int api.<institution>.int' >> /etc/hosts"
+```
+
+**Note:** `/etc/hosts` modifications do not survive emulator restart. Re-apply after each cold boot, or use the emulator `-dns-server` launch flag to point the emulator at a DNS server that resolves the hostnames.
+
+*Option B: `resolvectl` / `systemd-resolve` (Linux host running the app or emulator):*
+
+`systemd-resolve` is deprecated in favor of `resolvectl` on modern systemd (v237+). Use the command appropriate for your system:
+
+```bash
+# Modern (systemd v237+):
+sudo resolvectl dns <iface> 10.0.0.100
+# Or pin a single domain (route queries for this domain to this link's DNS):
+sudo resolvectl domain <iface> ~<institution>.int
+
+# Legacy (older systemd):
+sudo systemd-resolve --interface=<iface> --set-dns=10.0.0.100
+sudo systemd-resolve --interface=<iface> --set-domain=~<institution>.int
+```
+
+Verify with `resolvectl status <iface>` or `systemd-resolve --status <iface>`.
+
+*Option C: `nmcli` (NetworkManager-based Linux host):*
+
+```bash
+nmcli connection modify "<connection-name>" ipv4.dns "10.0.0.100" ipv4.ignore-auto-dns yes
+nmcli connection up "<connection-name>"
+```
+
+The `ipv4.ignore-auto-dns yes` flag ensures DHCP-assigned DNS servers do not override the manually configured DNS. Without it, DHCP may re-add the ISP DNS on reconnect, causing intermittent resolution failures.
+
+**Verify resolution before testing:**
+
+```bash
+# Confirm the hostname resolves to the expected IP
+ping -c 2 keycloak.<institution>.int
+nslookup keycloak.<institution>.int
+# Both should return 10.0.0.100 (or the configured IP)
+```
+
 - The device must be on the same network or VPN as the Keycloak server
 - No external internet access is required for OIDC — the entire flow stays within the internal network
 
@@ -609,6 +705,86 @@ For institutional deployments, enforce OS version policies via MDM:
 - Store signing credentials securely (do not commit to version control)
 - `key.properties` is gitignored — never commit signing secrets
 - Document the keystore location and password in a secure credential store (not in this repo)
+
+### Compliance Requirements
+
+App stores require explicit privacy disclosures. Prepare these before submitting:
+
+**Google Play — Data Safety section:**
+
+Google Play requires a Data Safety declaration describing what data the app collects, how it is used, and whether it is shared. The GENIE.AI mobile app typically collects:
+
+| Data type | Collected? | Purpose |
+|-----------|-----------|---------|
+| OIDC tokens (access, refresh, ID) | Yes | Authentication with the institutional backend |
+| Chat messages and conversation history | Yes | Core RAG chat functionality (stored on the institutional backend) |
+| Device identifier (Android ID) | Yes (Android) | Push notification routing, crash reporting |
+| Device identifier (IDFV) | Yes (iOS) | Push notification routing, crash reporting |
+| Name, email | Yes | User profile (sourced from Keycloak / institutional directory) |
+| Location, contacts, photos, microphone | No | Not accessed by the app |
+
+Declare data handling practices accurately — misrepresentation is a policy violation. Link to the institution's privacy policy in the store listing.
+
+See: [Google Play Data Safety documentation](https://support.google.com/googleplay/android-developer/answer/10787469)
+
+**Apple App Store — Privacy Manifests (required from Spring 2024):**
+
+Apple requires a `PrivacyInfo.xcprivacy` manifest declaring:
+
+1. **Required Reason APIs** — which protected API categories the app uses (e.g., `UserDefaults` for token storage, `File Timestamp APIs` for caching). List each API and the approved reason code.
+2. **Tracking domains** — any domains used for tracking users. The GENIE.AI app does not track users, so this is typically empty.
+3. **Data collected** — similar to Google Play's Data Safety, declare what user data is collected and the purpose.
+
+Flutter 3.16+ generates a baseline `PrivacyInfo.xcprivacy` during build. Most deployments must extend it manually for biometric authentication, push notifications via APNs, or other native APIs. Review the generated manifest and add entries for any additional protected APIs your deployment uses.
+
+See: [Apple Privacy Manifests documentation](https://developer.apple.com/documentation/bundleresources/privacy_manifest_files)
+
+## Version Code & Name Management
+
+App stores require each uploaded build to carry a **unique version code** that is strictly greater than the previously published build. When multiple institutions deploy from the same codebase, version code collisions must be avoided.
+
+### pubspec.yaml version format
+
+Flutter versions follow the pattern `X.Y.Z+N`:
+
+- `X.Y.Z` — **version name** (user-facing, e.g., `1.0.0`). Maps to Android `versionName` and iOS `CFBundleShortVersionString`.
+- `+N` — **version code** (integer, build-only). Maps to Android `versionCode`. iOS uses `CFBundleVersion` which Flutter also derives from `N`.
+
+```yaml
+# mobile/genie_ai_mobile/pubspec.yaml
+version: 1.0.0+1    # versionName = "1.0.0", versionCode = 1
+```
+
+In `android/app/build.gradle`, the values flow automatically:
+
+```gradle
+versionCode = flutter.versionCode   # reads the +N part
+versionName = flutter.versionName   # reads the X.Y.Z part
+```
+
+You only edit `pubspec.yaml` — Gradle and Xcode pick up the values.
+
+### Version code strategy for multi-deployment
+
+Each institutional deployment publishes to its own app store listing (distinct `applicationId` / bundle ID), so **version codes do not collide across deployments** — they only need to be monotonically increasing *within the same store listing*.
+
+Recommended approach:
+
+1. **Bump `+N` on every build submitted to a store** — even for re-signed or metadata-only re-uploads. Google Play and App Store Connect reject builds whose version code is ≤ the current published version.
+2. **Use a per-deployment changelog or build log** to track which `+N` was last submitted, so the next operator knows where to resume.
+3. **Do not reuse version codes** — once submitted, a code is consumed. If a build is retracted, the next build must still use a higher code.
+4. **For CI/CD**, automate the bump: derive `+N` from the CI build number or a monotonically increasing counter stored outside the repo (e.g., in the deployment's credential store), then inject it at build time via `--build-name` and `--build-number` flags:
+   ```bash
+   flutter build appbundle --flavor <institution> --release \
+     --build-name 1.0.0 --build-number 42
+   ```
+   This overrides `pubspec.yaml` for that single build without modifying the file.
+
+### iOS note
+
+iOS uses `CFBundleVersion` (a monotonically increasing string) for the App Store's build identification, separate from `CFBundleShortVersionString` (the user-facing version). Flutter maps `+N` to `CFBundleVersion`. When releasing on iOS, ensure `+N` increases with every submission — Apple rejects builds with a duplicate or lower `CFBundleVersion`.
+
+Apple requires `CFBundleVersion` uniqueness across all uploads for a given bundle ID — not just per version name. Two builds with the same `CFBundleShortVersionString` (e.g., `1.0.0`) must have different `CFBundleVersion` values (e.g., `+1` vs `+2`).
 
 ## Rollback
 
@@ -712,3 +888,35 @@ The fork does not affect production builds (production uses CA-signed certs and 
 **Cause:** `KC_MOBILE_CLIENT_ID` or `KC_MOBILE_REDIRECT_SCHEME` missing from `.env`.
 
 **Fix:** Set both variables in `.env` and restart the `keycloak-config` service. See [Step 1](#step-1-environment-variables).
+
+### Build Failure: flutter pub get
+
+**Symptom:** First build (or fresh checkout) fails during `flutter pub get` with dependency resolution errors, checksum mismatches, or "version solving failed."
+
+**Common causes and fixes:**
+
+1. **Stale pub cache** — the local package cache has corrupted or outdated entries:
+   ```bash
+   flutter pub cache clean
+   flutter pub get
+   ```
+
+2. **Network / proxy issues** — corporate proxy or firewall blocks pub.dev or GitHub:
+   ```bash
+   # If behind a corporate proxy, set the environment variables:
+   export https_proxy=http://proxy.<institution>.int:8080
+   export http_proxy=http://proxy.<institution>.int:8080
+   flutter pub get
+   ```
+   For Git-hosted dependencies (e.g., `flutter_appauth` local fork referenced via `path:`), ensure Git can reach its remotes.
+
+3. **Lock file conflicts** — `pubspec.lock` or `.flutter-plugins` is out of sync with `pubspec.yaml` (common after switching branches or pulling changes that modified dependencies):
+   ```bash
+   cd mobile/genie_ai_mobile
+   rm -f pubspec.lock .flutter-plugins .flutter-plugins-dependencies
+   flutter pub get
+   ```
+
+4. **Local fork path conflicts** — `pubspec.yaml` references a local path dependency (e.g., `path: flutter_appauth/flutter_appauth`) but the directory is missing or on a different branch. See the [flutter_appauth Local Fork](#flutter_appauth-local-fork) entry above for the development-only fork setup. Ensure the referenced path exists and contains a valid `pubspec.yaml`.
+
+**Recovery order:** try (1) cache clean first; if that fails, try (2) network issues; if that fails, try (3) lock file reset; if that fails, check (4) local fork paths.

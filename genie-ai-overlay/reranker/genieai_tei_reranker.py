@@ -187,6 +187,21 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
     return selected_indices, breakdown
 
 
+def _safe_get_doc(retrieved_docs, tei_index):
+    """Return ``retrieved_docs[tei_index]`` if in bounds, else log and return None.
+
+    A buggy TEI response can carry an out-of-range index (TEI returned fewer
+    scores than docs, or indices are malformed). Skipping preserves partial
+    results instead of crashing with IndexError; the caller logs the skip and
+    the upstream caller can decide whether to retry or fail.
+    """
+    doc_count = len(retrieved_docs)
+    if tei_index < 0 or tei_index >= doc_count:
+        logger.error(f"TEI index {tei_index} out of range for {doc_count} docs")
+        return None
+    return retrieved_docs[tei_index]
+
+
 @OpeaComponentRegistry.register("GENIE_TEI_RERANKING")
 class GenieTEIReranking(OpeaTEIReranking):
     """
@@ -292,18 +307,22 @@ class GenieTEIReranking(OpeaTEIReranking):
                 if reranking_strategy == "slice":
                     top_n = reranker_top_n if reranker_top_n else 1
                     for best_response in decoded_response[:top_n]:
-                        reranking_results.append(
-                            {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
-                        )
+                        doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
+                        if doc is None:
+                            continue
+                        reranking_results.append({"text": doc.text, "score": best_response["score"]})
 
                 elif reranking_strategy == "threshold":
                     document_scores = [r["score"] for r in decoded_response]
                     logger.info(f"[ DEBUG ] Reranked document scores {document_scores}")
                     for best_response in decoded_response:
                         if best_response["score"] >= reranking_threshold:
+                            doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
+                            if doc is None:
+                                continue
                             reranking_results.append(
                                 {
-                                    "text": input.retrieved_docs[best_response["index"]].text,
+                                    "text": doc.text,
                                     "score": best_response["score"],
                                 }
                             )
@@ -320,9 +339,10 @@ class GenieTEIReranking(OpeaTEIReranking):
 
                     for i in range(cutoff):
                         best_response = decoded_response[i]
-                        reranking_results.append(
-                            {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
-                        )
+                        doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
+                        if doc is None:
+                            continue
+                        reranking_results.append({"text": doc.text, "score": best_response["score"]})
 
                 elif reranking_strategy == "slice_threshold":
                     # Top-N, but only chunks scoring at/above the threshold.
@@ -331,9 +351,12 @@ class GenieTEIReranking(OpeaTEIReranking):
                     top_n = reranker_top_n if reranker_top_n else 1
                     for best_response in decoded_response:
                         if best_response["score"] >= reranking_threshold:
+                            doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
+                            if doc is None:
+                                continue
                             reranking_results.append(
                                 {
-                                    "text": input.retrieved_docs[best_response["index"]].text,
+                                    "text": doc.text,
                                     "score": best_response["score"],
                                 }
                             )
@@ -371,10 +394,21 @@ class GenieTEIReranking(OpeaTEIReranking):
                         # an 'index' pointing back to its original position in
                         # retrieved_docs. Reorder texts + chunk_embeddings into the
                         # same score-sorted order so each candidate's text, embedding
-                        # and score stay aligned for the selector.
-                        ranked_texts = [input.retrieved_docs[r["index"]].text for r in decoded_response]
-                        ranked_chunk_embeddings = [chunk_embeddings[r["index"]] for r in decoded_response]
-                        ranked_scores = [r["score"] for r in decoded_response]
+                        # and score stay aligned for the selector. Skip any entry
+                        # whose TEI index is out of range (defensive: chunk_embeddings
+                        # is validated to match retrieved_docs length at this point).
+                        ranked_texts = []
+                        ranked_chunk_embeddings = []
+                        ranked_scores = []
+                        ranked_tei_indices = []
+                        for r in decoded_response:
+                            doc = _safe_get_doc(input.retrieved_docs, r["index"])
+                            if doc is None:
+                                continue
+                            ranked_texts.append(doc.text)
+                            ranked_chunk_embeddings.append(chunk_embeddings[r["index"]])
+                            ranked_scores.append(r["score"])
+                            ranked_tei_indices.append(r["index"])
 
                         selected_positions, adaptive_breakdown = adaptive_context_selection(
                             texts=ranked_texts,
@@ -390,7 +424,7 @@ class GenieTEIReranking(OpeaTEIReranking):
                         # score recall. ranked position i -> decoded_response[i]
                         # -> ["index"] -> retrieved_docs position.
                         for rank_pos, rec in enumerate(adaptive_breakdown):
-                            rec["original_index"] = int(decoded_response[rank_pos]["index"])
+                            rec["original_index"] = int(ranked_tei_indices[rank_pos])
                         logger.info(f"[ADAPTIVE] Selected candidate positions: {selected_positions}")
                         # Emit the full per-candidate utility-cost breakdown so the
                         # eval harness / operators can recalibrate CONTEXT_DECAY_FACTOR
@@ -405,9 +439,12 @@ class GenieTEIReranking(OpeaTEIReranking):
 
                         for pos in selected_positions:
                             original_index = decoded_response[pos]["index"]
+                            doc = _safe_get_doc(input.retrieved_docs, original_index)
+                            if doc is None:
+                                continue
                             reranking_results.append(
                                 {
-                                    "text": input.retrieved_docs[original_index].text,
+                                    "text": doc.text,
                                     "score": decoded_response[pos]["score"],
                                 }
                             )
@@ -415,9 +452,10 @@ class GenieTEIReranking(OpeaTEIReranking):
                 else:
                     logger.warning(f"Unknown strategy {reranking_strategy}. Defaulting to slice.")
                     for best_response in decoded_response[:reranker_top_n]:
-                        reranking_results.append(
-                            {"text": input.retrieved_docs[best_response["index"]].text, "score": best_response["score"]}
-                        )
+                        doc = _safe_get_doc(input.retrieved_docs, best_response["index"])
+                        if doc is None:
+                            continue
+                        reranking_results.append({"text": doc.text, "score": best_response["score"]})
 
             span.set_attribute("reranker.output_doc_count", len(reranking_results))
 

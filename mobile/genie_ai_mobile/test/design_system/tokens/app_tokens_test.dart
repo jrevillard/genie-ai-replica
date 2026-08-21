@@ -258,5 +258,97 @@ void main() {
         expect(darkTokens.scrim, const Color(0xB3000000));
       });
     });
+
+    group('malformed config edge cases', () {
+      test('theme as string falls back to defaults', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {'theme': 'bad'},
+          isDark: false,
+        );
+        expect(tokens.brand, const Color(0xFF4682B4));
+        expect(tokens.fontScale, 1.0);
+      });
+
+      test('theme as number falls back to defaults', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {'theme': 42},
+          isDark: false,
+        );
+        expect(tokens.brand, const Color(0xFF4682B4));
+        expect(tokens.navbarBg, tokens.brand);
+      });
+
+      test('theme as list falls back to defaults', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {
+            'theme': ['bad'],
+          },
+          isDark: false,
+        );
+        expect(tokens.brand, const Color(0xFF4682B4));
+      });
+
+      test('navbar as string falls back to brand', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {
+            'theme': {'navbar': 'bad'},
+          },
+          isDark: false,
+        );
+        expect(tokens.navbarBg, tokens.brand);
+        expect(tokens.navbarFg, Colors.white);
+      });
+
+      test('colors as list falls back to defaults', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {
+            'theme': {
+              'colors': ['bad'],
+            },
+          },
+          isDark: false,
+        );
+        expect(tokens.success, const Color(0xFF10B981));
+        expect(tokens.warning, const Color(0xFFF59E0B));
+      });
+
+      test('typography as string falls back to defaults', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {
+            'theme': {'typography': 'bad'},
+          },
+          isDark: false,
+        );
+        expect(tokens.fontScale, 1.0);
+      });
+
+      test('fontScale as string falls back to 1.0', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {
+            'theme': {
+              'typography': {'fontScale': 'big'},
+            },
+          },
+          isDark: false,
+        );
+        expect(tokens.fontScale, 1.0);
+      });
+
+      test('all nested wrong types in dark mode falls back to defaults', () {
+        final tokens = AppTokens.fromConfig(
+          config: const {
+            'theme': {
+              'navbar': 'bad',
+              'colors': 'bad',
+              'typography': {'fontScale': 'huge'},
+            },
+          },
+          isDark: true,
+        );
+        expect(tokens.navbarBg, tokens.brand);
+        expect(tokens.success, const Color(0xFF10B981));
+        expect(tokens.fontScale, 1.0);
+      });
+    });
   });
 }

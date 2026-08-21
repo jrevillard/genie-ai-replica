@@ -157,8 +157,8 @@ When adding a doc, pick one home based on audience. Do not duplicate across both
 |-----------|------------|
 | Frontend | Vue 3, Vuex, vue-i18n, axios, ECharts/ApexCharts |
 | Mobile | Flutter 3.10+, Dart |
-| Backend | Node.js 18+, Express, JWT, winston |
-| AI/ML | OPEA, vLLM, TEI (embeddings/reranking) |
+| Backend | Node.js 22, Express, JWT, winston |
+| AI/ML | OPEA v1.5, Python 3.11, vLLM, TEI (embeddings/reranking) |
 | Database | ArangoDB 3.12+ (multi-model: document + graph + vector) |
 | Cache | Redis |
 | API Gateway | Kong, NGINX |

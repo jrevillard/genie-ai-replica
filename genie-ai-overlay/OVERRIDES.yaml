@@ -1,0 +1,137 @@
+# OVERRIDES.yaml — core-layer override audit manifest (architecture pattern 1).
+#
+# Every intentional deviation of the GENIE.AI overlay from the vendored OPEA
+# source is recorded here with a disposition, an owner, and a justification.
+# Each entry must be matched by a `# OVERRIDE <module>.<name> | disposition: ...`
+# comment record in the source tree (core/*.py and build-patches/*), and the
+# record's disposition agrees with the manifest entry.
+#
+# Disposition:
+#   - still-needed:        override is still required on the current OPEA version.
+#   - re-graft-to-new-API: override must be re-expressed against a newer OPEA API.
+#   - obsolete-remove:     override was fixed upstream and can be deleted.
+#
+# Schema:
+#   - override:        dotted path to the overridden module/class/function
+#   - disposition:     one of still-needed | re-graft-to-new-API | obsolete-remove
+#   - owner:           team or project responsible (genie-ai)
+#   - justification:   technical rationale — WHY this override exists (durable, not a PM reference)
+#   - added_in:        OPEA version when override was first introduced (v1.3, v1.5, etc.)
+#   - last_validated:  OPEA version when override was last re-confirmed necessary
+#   - test:            (optional) pytest path that validates the override still works
+overrides:
+  - override: core.constants.ServiceType
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: TRANSLATOR service type appended at v1.5 tail slot 29 (upstream ends at 28). Required for MegaService translation pipeline routing.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.k
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Retriever top-k parameter — upstream OPEA v1.5 ChatCompletionRequest lacks this field. GENIE adds it to pass retrieval count from chatqna → retriever.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.fetch_k
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Retriever fetch-k (pre-rerank candidate count) — upstream lacks this field. Controls how many chunks retriever pulls before reranker trims to top-k.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.lambda_mult
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Hybrid retrieval weighting (vector vs BM25) — upstream lacks this field. lambda_mult=0.0 → pure vector, 1.0 → pure BM25, 0.5 → balanced RRF fusion.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.score_threshold
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Retriever minimum similarity score filter — upstream lacks this field. Drops chunks below threshold before returning to chatqna (reduces noise).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.max_tokens
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Pydantic v2 field mirroring — upstream OPEA v1.5 ChatCompletionRequest lacks these fields. GENIE mirrors OpenAI-compatible request schema for LLM guardrail/validation.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.n
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Number of completions to generate — upstream lacks this field. GENIE exposes OpenAI-compatible 'n' parameter for multi-sample generation.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.seed
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Reproducible generation seed — upstream lacks this field. Enables deterministic LLM output for testing and debugging.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.temperature
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Sampling temperature — upstream lacks this field. Controls LLM output randomness (0.0 = greedy, 1.0 = full sampling).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.top_p
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Nucleus sampling threshold — upstream lacks this field. Limits token selection to cumulative probability mass (0.0-1.0).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.best_of
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Best-of-N sampling — upstream lacks this field. Generates N completions server-side, returns best (by logprob).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.repetition_penalty
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Repetition penalty — upstream lacks this field. Penalizes tokens already in context/output (reduces looping).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.top_k
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Top-k sampling — upstream lacks this field. Limits token selection to k most likely tokens.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.timeout
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Request timeout — upstream lacks this field. Prevents hanging on slow LLM endpoints (seconds).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: core.genieai_api_protocol.ChatCompletionRequest.top_n
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Top-n filtering (reranker) — upstream lacks this field. Reranker returns top-n results after scoring.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: build-patches.docarray_alias_shim
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Prevents vendored comps/cores/proto/docarray.py from shadowing real PyPI docarray. Manipulates sys.path at site-init to ensure correct import resolution.
+    added_in: v1.3
+    last_validated: v1.5
+  - override: build-patches.install_site_startup
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Site-startup hook installer — copies genie_ssl_patch.py + docarray_alias_shim.py into site-packages and wires via .pth mechanism (replaces hardcoded sitecustomize.py).
+    added_in: v1.3
+    last_validated: v1.5
+  - override: contracts._harness.import_docarray
+    disposition: re-graft-to-new-API
+    owner: genie-ai
+    justification: Contract test harness — dynamic docarray import with version-aware fallback. Handles docarray API changes between v1.3 and v1.5 (SearchedDoc, LLMParams).
+    added_in: v1.5
+    last_validated: v1.5
+  - override: core.constants.MCPFuncType
+    disposition: still-needed
+    owner: genie-ai
+    justification: MCP function type enum — not present in upstream OPEA v1.5 constants.py. GENIE adds TOOL/RESOURCE/PROMPT enums for Model Context Protocol support (agentic-enablement initiative).
+    added_in: v1.5
+    last_validated: v1.5
+    test: tests/test_core.py::TestMCPFuncType

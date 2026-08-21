@@ -1,0 +1,29 @@
+# story-track-dev plugin for bmad-loop.
+# Post-dev: push code, wait CI, create MR.
+
+[plugin]
+name = "story-track-dev"
+version = "1.0.0"
+api_version = 1
+description = "Post-dev: push code, wait CI, create MR. Runs for every completed story."
+author = "bmad-issue-tracking"
+
+[workflows.story-track-dev]
+stage = "post_dev_phase"
+role = "dev"
+prompt = "{scripts}/story-track-dev-prompt.md"
+blocking = true
+
+[[settings]]
+key = "story_track_dev_enabled"
+type = "bool"
+default = true
+label = "Enable story-track-dev"
+help = "Run the post-dev workflow: push code, wait CI, create MR."
+
+[[settings]]
+key = "story_track_dev_blocking"
+type = "bool"
+default = true
+label = "Block on failure"
+help = "If true, defer the story when story-track-dev fails."

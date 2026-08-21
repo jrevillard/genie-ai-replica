@@ -805,11 +805,14 @@ async function ingestPhase(db) {
   bundleDoc.labels.includes('Service Directory') &&
   bundleDoc.labels.includes('t:smoke') &&
   bundleDoc.dataprep &&
-  bundleDoc.dataprep.status === 'Ingested'
+  // Bundle state machine (David's directive): a bundle is STORED at 'Pending'
+  // — nothing has been ingested yet. It reaches 'Ingested' only via the
+  // okf-server controller after every concept settles (asserted post-drain).
+  bundleDoc.dataprep.status === 'Pending'
     ? pass(
         'bundle zip: stored as a file doc — repo-associated, graph-stamped, KH labels (' +
           JSON.stringify(bundleDoc.labels) +
-          '), is_bundle=true @ Ingested'
+          '), is_bundle=true @ Pending (state machine: born Pending, settles post-drain)'
       )
     : fail('bundle zip file doc: ' + JSON.stringify(bundleDoc));
 
@@ -987,6 +990,67 @@ async function ingestPhase(db) {
   allStamped
     ? pass('worker transition: last_good_index_at stamped on every concept')
     : fail('worker transition: missing last_good_index_at: ' + JSON.stringify(metaAfter));
+
+  // ── Bundle state machine CLOSE-OUT: every concept settled ⇒ the bundle zip
+  // must have transitioned Pending → Ingesting → Ingested (David's directive:
+  // nothing is 'Ingested' until it has actually been ingested + logs written).
+  // Settle-wait: the controller settles the bundle right after the LAST
+  // concept callback — poll briefly for the terminal bundle state.
+  let bundleAfter = null;
+  for (let i = 0; i < 20; i++) {
+    bundleAfter = (
+      await aqlAll(
+        "FOR f IN files FILTER f.repo_id == '" +
+          INGEST_REPO +
+          "' AND f.is_bundle == true RETURN KEEP(f, ['file_id','dataprep'])"
+      )
+    )[0];
+    if (bundleAfter && bundleAfter.dataprep && bundleAfter.dataprep.status === 'Ingested') break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  const bundleStatus = bundleAfter && bundleAfter.dataprep && bundleAfter.dataprep.status;
+  bundleStatus === 'Ingested'
+    ? pass('bundle state machine: Pending → Ingesting → Ingested (settled after the last concept indexed)')
+    : fail('bundle state machine: expected Ingested after full drain, got "' + bundleStatus + '"');
+
+  // Bundle ingestion-log completeness: EVERY stage for EVERY conforming
+  // concept, keyed on the BUNDLE file (the UI surface) with the concept file
+  // name in the message (David's 4th/5th-time directives).
+  const bundleLogs = await aqlAll(
+    "FOR log IN ingestion_log FILTER log.file_id == '" +
+      (bundleAfter && bundleAfter.file_id) +
+      "' RETURN KEEP(log, ['stage','message'])"
+  );
+  const stagesByConcept = {};
+  bundleLogs.forEach((l) => {
+    const m = l.message.match(/\[([^\]]+)\]/);
+    const cid = m ? m[1] : '(unknown)';
+    if (!stagesByConcept[cid]) stagesByConcept[cid] = new Set();
+    stagesByConcept[cid].add(l.stage);
+  });
+  const REQUIRED_STAGES = ['System', 'Chunking', 'Labeling', 'Graph'];
+  const conceptFiles = GOOD_FILES;
+  const allComplete =
+    conceptFiles.every((f) => {
+      const stages = stagesByConcept[f] || new Set();
+      return REQUIRED_STAGES.every((s) => stages.has(s));
+    }) && bundleLogs.length >= conceptFiles.length * REQUIRED_STAGES.length;
+  allComplete
+    ? pass(
+        'bundle ingestion log: ' +
+          bundleLogs.length +
+          ' entries on the bundle file — every stage (' +
+          REQUIRED_STAGES.join('/') +
+          ') logged for all ' +
+          conceptFiles.length +
+          ' conforming concepts, each prefixed with its file name'
+      )
+    : fail(
+        'bundle ingestion log incomplete: ' +
+          JSON.stringify(
+            Object.fromEntries(Object.entries(stagesByConcept).map(([k, v]) => [k, [...v]]))
+          )
+      );
 
   // ── (viii) re-ingest AFTER indexing — the 4e DEDUP rule fires LIVE ──
   // Unchanged content + now-indexed ⇒ skipped_dedup, no new Pending docs.

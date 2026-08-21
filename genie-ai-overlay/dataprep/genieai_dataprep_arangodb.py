@@ -454,78 +454,54 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.error(f"Error calling status API: {e}")
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
-        """Writes human-readable logs to Document Repository (Spec 5.2/6.2).
+        """Writes human-readable logs to the Document Repository (Spec 5.2/6.2).
 
-        Story 4.8-amend (David's 4th-time directive, 2026-08-20): for
-        content-only chunking the request carries `conceptId` (no per-concept
-        files doc exists). The existing log POST keys on the concept_id, which
-        the file-centric FileDetailsDialog cannot surface. We also mirror the
-        log entry to the bundle-zip's file_id (looked up from `repo_id`) so
-        the bundle's UI Ingestion Log tab shows the FULL per-stage lifecycle
-        (Ingestion/Chunking/Contextualization/Graph/System) — mirroring what
-        single-file ingestion produces."""
+        Story 4.8-amend (David's directive): for content-only chunking there is
+        no per-concept files doc — the primary write keys on the concept_id
+        (file_id), and EVERY entry is ALSO mirrored to the bundle zip's
+        ingestion_log (resolved from the ingest repo) with a
+        ``[<concept_file_name>]`` prefix so the bundle's UI Ingestion Log tab
+        shows the complete per-stage lifecycle (System/Chunking/
+        Contextualization/Labeling/Graph) exactly like a single-file ingest.
+        The mirror is best-effort and never fails the primary write.
+        """
         headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
-        payload = {
-            "level": level,  # Sent exactly as passed (INFO, WARN, ERROR)
-            "stage": stage,
-            "message": message,
-        }
+        payload = {"level": level, "stage": stage, "message": message}
         propagate.inject(headers)
+        primary_url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
         try:
-            # FIX: Limit concurrency of log writes to prevent 429 flooding
-            async with self._log_semaphore, aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                # Primary POST (concept_id-keyed; preserved for any future
-                # concept-level UI + non-regression on single-file path).
-                primary_url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
+            async with (
+                self._log_semaphore,
+                aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
+            ):
+                # --- primary write (concept_id-keyed) ---
                 try:
                     async with session.post(primary_url, json=payload, headers=headers) as response:
-                        if response.status == 429 and logflag:
-                            logger.warning("Log write rate-limited (429). Dropping log message.")
-                        elif response.status != 201 and logflag:
-                            logger.warning(f"Failed to write log: status={response.status}")
+                        if response.status == 429:
+                            if logflag:
+                                logger.warning("Log write rate-limited (429). Dropping log message.")
+                        elif response.status != 201:
+                            logger.warning(f"Log write for {file_id} failed: HTTP {response.status}")
                 except Exception as e:
-                    if logflag:
-                        logger.warning(f"Failed to write log to {primary_url}: {e}")
-                # Story 4.8-amend: mirror to the bundle zip's file_id so
-                # the bundle's UI Ingestion Log tab shows per-concept
-                # lifecycle (Chunking/Contextualization/Labeling/Graph).
-                # The OKF worker's writeBundleIngestionLog already emits
-                # System "started"/"completed" lines — we skip System here
-                # to avoid duplicates. Every other stage (Chunking,
-                # Contextualization, Graph, Labeling) IS mirrored so the
-                # bundle's tab shows the same per-chunk / per-batch detail
-                # as the single-file path. The message is prefixed with
-                # the concept's file_name (when known) for traceability
-                # and the concept_id for correlation.
-                if stage == "System" and (
-                    message.startswith("Ingestion task started")
-                    or message.startswith("Ingestion completed successfully")
-                ):
-                    # Duplicate of the worker's mirror — skip.
-                    pass
-                else:
+                    logger.warning(f"Log write for {file_id} failed: {e}")
+
+                # --- bundle mirror (every stage; prefixed with the concept file name) ---
+                try:
                     mirror_url = await self._bundle_log_url(session, file_id, headers)
                     if mirror_url:
-                        file_label = (
-                            f"[{self._concept_file_name(file_id)}] "
-                            if self._concept_file_name(file_id)
-                            else f"[{file_id}] "
-                        )
+                        name = self._concept_file_name(file_id)
                         mirror_payload = dict(payload)
-                        mirror_payload["message"] = file_label + message
-                        try:
-                            async with session.post(mirror_url, json=mirror_payload, headers=headers) as mr:
-                                if mr.status == 429 and logflag:
-                                    logger.warning("Bundle-log mirror rate-limited (429).")
-                        except Exception:
-                            # Mirror is best-effort; never fail the primary log
-                            pass
-                logger.error(f"Failed to write log for {file_id}: {await response.text()}")
+                        mirror_payload["message"] = f"[{name or file_id}] {message}"
+                        async with session.post(mirror_url, json=mirror_payload, headers=headers) as mr:
+                            if mr.status != 201 and logflag:
+                                logger.warning(f"Bundle-log mirror for {file_id} failed: HTTP {mr.status}")
+                except Exception as e:
+                    logger.warning(f"Bundle-log mirror for {file_id} failed: {e}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Log API: {e}")
 

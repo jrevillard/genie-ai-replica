@@ -192,10 +192,12 @@ async function _processOneJob() {
     //    Re-serialize from the stored meta row (frontmatter + body).
     const conceptMd = markdownFor({ frontmatter: job.frontmatter || {}, body: job.body || '' });
     let kick;
-    // Mirror "Concept started" to the bundle zip's ingestion log so the UI's
-    // FileDetailsDialog shows per-concept progress (dataprep's own logs are
-    // keyed on concept_id and not visible to the file-centric UI).
-    writeBundleIngestionLog(job.repo_id, conceptId, 'INFO', 'System', 'Concept ingestion started');
+    // NOTE (2026-08-21): the worker no longer mirrors "started"/"completed"
+    // System entries — dataprep's own per-stage logs (System/Chunking/
+    // Contextualization/Labeling/Graph, prefixed with the concept file name)
+    // mirror to the bundle zip directly. The worker mirror remains ONLY for
+    // verdicts dataprep cannot report itself: its own POST failures,
+    // dataprep-side failure statuses, and drain timeouts.
     try {
       kick = await authedAxios.post(
         `${config.dataprep.url}${config.dataprep.ingestPath}`,
@@ -245,16 +247,10 @@ async function _processOneJob() {
     //    worker only observes the outcome).
     const outcome = terminal.status === 'Ingested' ? 'ingested' : terminal.status === 'timeout' ? 'timeout' : 'failed';
     recordJob(outcome);
-    // Mirror the terminal outcome to the bundle zip's ingestion log.
-    if (outcome === 'ingested') {
-      writeBundleIngestionLog(
-        job.repo_id,
-        conceptId,
-        'INFO',
-        'System',
-        `Concept ingestion completed (${terminal.chunk_count} chunks)`
-      );
-    } else if (outcome === 'failed') {
+    // Mirror ONLY failure/timeout verdicts — dataprep's per-stage logs (incl.
+    // the System start/complete lines) already mirror to the bundle zip;
+    // a worker "completed" entry would duplicate them.
+    if (outcome === 'failed') {
       writeBundleIngestionLog(
         job.repo_id,
         conceptId,

@@ -774,8 +774,10 @@ async function ingestPhase(db) {
       fail('summary.total expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.total);
     if (r1.body.parsed !== EXPECTED_CONCEPTS)
       fail('summary.parsed expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.parsed);
-    if (r1.body.enqueued !== EXPECTED_CONCEPTS)
-      fail('summary.enqueued expected ' + EXPECTED_CONCEPTS + ', got ' + r1.body.enqueued);
+    // WP-A: bad_concept is hard-rejected at 4c and NEVER enqueued — the sad
+    // bundle enqueues EXPECTED_CONCEPTS - 1 (the conforming concepts).
+    if (r1.body.enqueued !== EXPECTED_CONCEPTS - 1)
+      fail('summary.enqueued expected ' + (EXPECTED_CONCEPTS - 1) + ' (WP-A rejects bad_concept), got ' + r1.body.enqueued);
     if (r1.body.enqueue_errors.length !== 0)
       fail('unexpected enqueue_errors: ' + JSON.stringify(r1.body.enqueue_errors));
     if (r1.body.success !== true) fail('summary.success expected true');
@@ -815,7 +817,7 @@ async function ingestPhase(db) {
   const metaRows = await aqlAll(
     "FOR d IN okf_concepts_meta FILTER d.repo_id == '" +
       INGEST_REPO +
-      "' RETURN KEEP(d, ['concept_id','title','bundle_version','index_status','graph_name','pii_state','conformance_issues'])"
+      "' RETURN KEEP(d, ['concept_id','title','bundle_version','index_status','graph_name','pii_state','conformance_issues','is_index'])"
   );
   metaRows.length === EXPECTED_CONCEPTS
     ? pass('meta rows: ' + metaRows.length + '/' + EXPECTED_CONCEPTS + ' bundle concepts (4b)')
@@ -863,10 +865,13 @@ async function ingestPhase(db) {
   badRow && Array.isArray(badRow.conformance_issues) && badRow.conformance_issues.length === EXPECTED_ISSUES
     ? pass('meta rows: bad_concept carries exactly ' + EXPECTED_ISSUES + ' conformance issues (4c)')
     : fail('bad_concept conformance: ' + JSON.stringify(badRow && badRow.conformance_issues));
+  // WP-A: the rejected concept never reaches the 4d PII scan (skipped after
+  // the 4c hard-gate) — its pii_state stays 'unknown'. Only the CONFORMING
+  // concepts are scanned.
   const cleanPii = metaRows.filter((m) => m.pii_state === 'clean').length;
-  cleanPii === EXPECTED_CONCEPTS
-    ? pass('PII: all ' + EXPECTED_CONCEPTS + ' concepts clean (4d)')
-    : fail('PII clean count: ' + cleanPii + '/' + EXPECTED_CONCEPTS);
+  cleanPii === EXPECTED_CONCEPTS - 1
+    ? pass('PII: all ' + (EXPECTED_CONCEPTS - 1) + ' conforming concepts clean (4d; bad_concept rejected pre-PII)')
+    : fail('PII clean count: ' + cleanPii + '/' + (EXPECTED_CONCEPTS - 1));
 
   // ── (iv) CONTENT-ONLY chunking (WP-C): ZERO per-concept files docs ──
   // The bundle zip is the ONLY doc-repo artifact. The worker POSTs each concept's

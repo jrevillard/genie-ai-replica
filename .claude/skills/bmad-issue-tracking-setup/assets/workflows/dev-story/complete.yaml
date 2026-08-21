@@ -16,7 +16,7 @@
 # and sprint-status.yaml may already reflect the updated status)
 - RUN: git branch --show-current
   STORE: current_branch
-- RUN: python3 -c "
+- RUN: uv run --no-project python -c "
 import sys
 branch = sys.argv[1]
 parts = branch.rstrip().split('/')
@@ -56,7 +56,7 @@ else:
       EXPECT_EXIT: 0
     - CHECK: empty issue_id
       FALSE:
-        - RUN: glab api --method POST "projects/{project}/issues/{issue_id}/notes" --hostname {host} -F "body=@/tmp/dev-story-comment.md"
+        - RUN: glab api --method POST "projects/{project_enc}/issues/{issue_id}/notes" --hostname {host} -F "body=@/tmp/dev-story-comment.md"
           PLATFORM: gitlab
           EXPECT_EXIT: 0
         - RUN: gh issue comment {issue_id} --body-file "/tmp/dev-story-comment.md" -R "{host}/{project}"

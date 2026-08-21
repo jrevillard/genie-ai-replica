@@ -9,7 +9,8 @@ One-time setup for BMAD Issue Tracking integration. Deploys TOML overrides to `_
 
 ## Prerequisites
 
-- BMAD Method module (BMM) 6.4.0+ installed
+- BMAD Method module (BMM) 6.11.0+ installed
+- `uv` available (required by BMM 6.11.0+ skills; the workflow YAMLs invoke Python via `uv run python`)
 - This module installed via `npx bmad-method install --custom-source https://github.com/jrevillard/bmad-issue-tracking`
 
 ## Instructions
@@ -18,11 +19,12 @@ One-time setup for BMAD Issue Tracking integration. Deploys TOML overrides to `_
 <action>IMPORTANT: When a step asks you to configure a value with a default, you MUST present the default as a suggestion and wait for the user's answer before writing anything. Never silently apply a default.</action>
 
 <step n="1" goal="Verify BMM installation">
-<action>Check that `_bmad/bmm/config.yaml` exists and contains `# Version:` header with version 6.4.0+.</action>
-<check if="version < 6.4.0 or not found">
-  <output>ERROR: BMM 6.4.0+ required. TOML overrides need customize.toml support for all 6 workflows.</output>
+<action>Check that `_bmad/bmm/config.yaml` exists and contains `# Version:` header with version 6.11.0+.</action>
+<check if="version < 6.11.0 or not found">
+  <output>ERROR: BMM 6.11.0+ required. This module targets the 6.11.0 skill set (bmad-ux, consolidated sprint-planning, uv-based tooling).</output>
   <action>Stop here</action>
 </check>
+<action>Verify `uv` is available by running `uv --version`. If missing, report the BMM 6.11.0 requirement (`uv` is mandatory for BMM 6.11.0+ skills).</action>
 </step>
 
 <step n="2" goal="Remove obsolete sync task file">
@@ -53,20 +55,19 @@ cp -f <path>/*.toml _bmad/custom/
 <action>Remove any `bmad-*.toml` files in `_bmad/custom/` that no longer exist in the source (files may have been renamed or removed in a new version).</action>
 
 <action>The following TOML files should now exist in `_bmad/custom/`:</action>
-- `bmad-check-implementation-readiness.toml` (requires BMM 6.4.0+)
-- `bmad-code-review.toml` (requires BMM 6.4.0+)
-- `bmad-correct-course.toml` (requires BMM 6.4.0+)
-- `bmad-create-architecture.toml` (requires BMM 6.4.0+)
-- `bmad-create-epics-and-stories.toml` (requires BMM 6.4.0+)
-- `bmad-create-prd.toml` (requires BMM 6.4.0+, superseded by bmad-prd.toml on BMM 6.8.0+)
-- `bmad-create-story.toml` (requires BMM 6.4.0+)
-- `bmad-create-ux-design.toml` (requires BMM 6.4.0+)
-- `bmad-dev-story.toml` (requires BMM 6.4.0+)
-- `bmad-edit-prd.toml` (requires BMM 6.4.0+, superseded by bmad-prd.toml on BMM 6.8.0+)
-- `bmad-prd.toml` (requires BMM 6.8.0+)
-- `bmad-retrospective.toml` (requires BMM 6.4.0+)
-- `bmad-sprint-planning.toml` (requires BMM 6.4.0+)
-- `bmad-sprint-status.toml` (requires BMM 6.4.0+)
+- `bmad-code-review.toml` (requires BMM 6.11.0+)
+- `bmad-correct-course.toml` (requires BMM 6.11.0+)
+- `bmad-create-architecture.toml` (requires BMM 6.11.0+)
+- `bmad-create-epics-and-stories.toml` (requires BMM 6.11.0+)
+- `bmad-create-prd.toml` (requires BMM 6.11.0+, superseded by bmad-prd.toml)
+- `bmad-create-story.toml` (requires BMM 6.11.0+; shim — deprecated upstream, bmad-build is the official path)
+- `bmad-dev-story.toml` (requires BMM 6.11.0+; shim — deprecated upstream, bmad-build is the official path)
+- `bmad-edit-prd.toml` (requires BMM 6.11.0+, superseded by bmad-prd.toml)
+- `bmad-prd.toml` (requires BMM 6.11.0+; unified PRD override)
+- `bmad-retrospective.toml` (requires BMM 6.11.0+)
+- `bmad-sprint-planning.toml` (requires BMM 6.11.0+; owns the sprint-status artifact)
+- `bmad-sprint-status.toml` (requires BMM 6.11.0+; consolidated into bmad-sprint-planning, retained as shim alias)
+- `bmad-ux.toml` (requires BMM 6.11.0+; replaces bmad-create-ux-design, removed in 6.11.0)
 
 <action>Note: All TOML files are in pointer format — they reference workflow YAML files deployed in step 3b.</action>
 <action>Verify each TOML file is valid by checking it contains a `[workflow]` section and at least one hook key (`on_complete`, `activation_steps_append`, etc.).</action>
@@ -94,30 +95,36 @@ cp -rf <path>/workflows/* _bmad/_config/custom/workflows/
 <action>Verify the following files exist:</action>
 - `_bmad/_config/custom/bmad-workflow-lang.md`
 - `_bmad/_config/custom/workflows/common/check-config.yaml`
+- `_bmad/_config/custom/workflows/common/check-mr-ci.yaml`
 - `_bmad/_config/custom/workflows/common/create-issue.yaml`
 - `_bmad/_config/custom/workflows/common/create-label.yaml`
 - `_bmad/_config/custom/workflows/common/ensure-board.yaml`
+- `_bmad/_config/custom/workflows/common/ensure-dynamic-labels.yaml`
 - `_bmad/_config/custom/workflows/common/ensure-labels.yaml`
 - `_bmad/_config/custom/workflows/common/find-issue.yaml`
 - `_bmad/_config/custom/workflows/common/find-prd.yaml`
+- `_bmad/_config/custom/workflows/common/find-prd-key.yaml`
 - `_bmad/_config/custom/workflows/common/find-stories.yaml`
+- `_bmad/_config/custom/workflows/common/mark-mr-ready.yaml`
 - `_bmad/_config/custom/workflows/common/set-story-status.yaml`
+- `_bmad/_config/custom/workflows/common/sync-issues.yaml`
 - `_bmad/_config/custom/workflows/common/update-issue-description.yaml`
 - `_bmad/_config/custom/workflows/common/update-issue-status.yaml`
-- `_bmad/_config/custom/workflows/check-implementation-readiness/activation.yaml`
-- `_bmad/_config/custom/workflows/check-implementation-readiness/complete.yaml`
+- `_bmad/_config/custom/workflows/common/wait-for-green-ci.yaml`
+- `_bmad/_config/custom/workflows/issue-sync/prepare.yaml`
+- `_bmad/_config/custom/workflows/issue-sync/sync.yaml`
+- `_bmad/_config/custom/workflows/bmad-prd/activation.yaml`
+- `_bmad/_config/custom/workflows/bmad-prd/complete.yaml`
+- `_bmad/_config/custom/workflows/bmad-ux/activation.yaml`
+- `_bmad/_config/custom/workflows/bmad-ux/complete.yaml`
 - `_bmad/_config/custom/workflows/code-review/activation.yaml`
-- `_bmad/_config/custom/workflows/create-architecture/activation.yaml`
-- `_bmad/_config/custom/workflows/create-architecture/complete.yaml`
-- `_bmad/_config/custom/workflows/create-ux-design/activation.yaml`
-- `_bmad/_config/custom/workflows/create-ux-design/complete.yaml`
 - `_bmad/_config/custom/workflows/code-review/complete.yaml`
 - `_bmad/_config/custom/workflows/correct-course/activation.yaml`
 - `_bmad/_config/custom/workflows/correct-course/complete.yaml`
+- `_bmad/_config/custom/workflows/create-architecture/activation.yaml`
+- `_bmad/_config/custom/workflows/create-architecture/complete.yaml`
 - `_bmad/_config/custom/workflows/create-epics-and-stories/activation.yaml`
 - `_bmad/_config/custom/workflows/create-epics-and-stories/complete.yaml`
-- `_bmad/_config/custom/workflows/bmad-prd/activation.yaml`
-- `_bmad/_config/custom/workflows/bmad-prd/complete.yaml`
 - `_bmad/_config/custom/workflows/create-prd/activation.yaml`
 - `_bmad/_config/custom/workflows/create-prd/complete.yaml`
 - `_bmad/_config/custom/workflows/create-story/activation.yaml`
@@ -132,6 +139,46 @@ cp -rf <path>/workflows/* _bmad/_config/custom/workflows/
 - `_bmad/_config/custom/workflows/sprint-planning/complete.yaml`
 - `_bmad/_config/custom/workflows/sprint-status/activation.yaml`
 - `_bmad/_config/custom/workflows/sprint-status/complete.yaml`
+</step>
+
+<step n="3c" goal="Deploy bmad-loop CI status + story tracking (optional)">
+<action>The module ships three pieces for bmad-loop, deployed only if the consuming project uses bmad-loop (has a `.bmad-loop/` directory after `bmad-loop init`):
+
+- **`story-track-dev` plugin** — an LLM workflow session at `post_dev_phase` that pushes the code dev, waits for the CI pipeline to complete, writes the result to `ci-status.json`, and creates the trace MR. It runs for EVERY story that completes dev, regardless of whether review happens afterward.
+- **`story-track-review` plugin** — an LLM workflow session at `post_review_result` that commits review modifications, pushes, waits for CI, writes `ci-status.json`, and mirrors the story to its GitLab/GitHub issue (status label, result comment, MR link). It runs ONLY when review completes.
+- **`ci-status.sh`** — a `[verify]` command that reads `ci-status.json` (written by the last plugin that ran). It returns exit 0 if CI is green, exit 1 if red (with diagnostic). bmad-loop answers a red CI with a feedback-driven repair session (re-runs `bmad-build-auto` with the failing output) — the auto-fix loop.
+
+The two-stage architecture ensures:
+- Stories that complete dev (with or without review) get pushed + CI + MR
+- Stories that complete review get review modifications committed + pushed + CI + issue tracking
+- ci-status.sh reads the latest ci-status.json (after last push)
+
+The scripts derive branch/host/project/platform from git and their working directory — no environment variables required.</action>
+
+<check if=".bmad-loop/ directory exists">
+  <true>
+    <action>Copy `ci-status.sh` to the repo root and register it in `[verify] commands` + `[scm] worktree_seed` (verify commands run inside each story worktree, so the script must be seeded into worktrees); copy the two `story-track-*` plugins into `.bmad-loop/plugins/`:</action>
+    ```bash
+    mkdir -p .bmad-loop .bmad-loop/plugins
+    cp -f <path>/bmad-loop/ci-gate/ci-status.sh .bmad-loop/ci-status.sh
+    cp -rf <path>/bmad-loop/story-track-dev .bmad-loop/plugins/story-track-dev
+    cp -rf <path>/bmad-loop/story-track-review .bmad-loop/plugins/story-track-review
+    ```
+    <action>Edit `.bmad-loop/policy.toml` (preserve existing keys):</action>
+    ```toml
+    [scm]
+    worktree_seed = [".bmad-loop/ci-status.sh"]
+
+    [verify]
+    commands = ["bash .bmad-loop/ci-status.sh"]
+    ```
+    <action>Verify `.bmad-loop/ci-status.sh` and `.bmad-loop/plugins/story-track-*/plugin.toml` exist.</action>
+    <action>Note: the `story-track-*` plugins are declarative (no `[python]` module) — they load automatically, no trust allowlist. The `ci-status.sh` script is deterministic and fast — it just reads a file. The intelligent work (polling CI, parsing logs) is done by the LLM workflows.</action>
+  </true>
+  <false>
+    <output>Skipping ci-status + story-track — project does not use bmad-loop (no `.bmad-loop/` directory).</output>
+  </false>
+</check>
 </step>
 
 <step n="4" goal="Configure issue_tracking">

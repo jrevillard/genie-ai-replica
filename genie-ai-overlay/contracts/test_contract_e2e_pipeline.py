@@ -232,6 +232,7 @@ def test_e2e_graph_schedules_real_orchestrator(comps, fake_http):
     # passed through as StreamingResponse objects rather than being converted
     # to dicts. Both are valid outputs from the LLM node.
     from starlette.responses import StreamingResponse
+
     assert isinstance(result[llm_key], (dict, StreamingResponse)), (
         f"LLM node output is not a dict or StreamingResponse: {type(result[llm_key])}"
     )

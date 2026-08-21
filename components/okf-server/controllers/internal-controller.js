@@ -50,6 +50,16 @@ async function conceptStatus(req, res) {
     }
     const repo_id = meta.repo_id;
     const st = String(status).toLowerCase();
+    // TRANSIENT status: dataprep announces "Ingesting" when it STARTS a
+    // concept. Treating it as terminal dead-lettered every concept to
+    // 'failed' for the whole processing window (the worker's terminal poll
+    // caught the false-failed state, logged ERROR System bundle entries,
+    // and reported failed drains — then the real "Ingested" callback
+    // arrived and flipped the row back; live-caught 2026-08-21).
+    if (st === 'ingesting') {
+      logger.info('Concept status callback: transient Ingesting (no transition)', { repo_id, concept_id });
+      return res.status(200).json({ success: true, transient: true });
+    }
     if (st === 'ingested') {
       await conceptMetaService.upsertConceptMeta(
         repo_id,
@@ -71,7 +81,7 @@ async function conceptStatus(req, res) {
       } catch (err) {
         logger.error('Concept status: edge write failed (isolated)', { repo_id, concept_id, error: err.message });
       }
-    } else {
+    } else if (st === 'ingestion error' || st === 'killed') {
       // Ingestion Error | Killed → dead-letter: 'failed' (recovery = re-ingest).
       await conceptMetaService.upsertConceptMeta(
         repo_id,

@@ -155,13 +155,15 @@ async function writeBundleIngestionLog(repoId, conceptId, level, stage, message)
       { timeout: 10000 }
     );
   } catch (err) {
-    logger.warn('Bundle ingestion-log mirror failed (non-fatal)', {
-      repo_id: repoId,
-      concept_id: conceptId,
-      status: err && err.response && err.response.status,
-      body: err && err.response && err.response.data && JSON.stringify(err.response.data).substring(0, 200),
-      error: err.message
-    });
+    // Winston console formatter STRIPS metadata fields — the diagnosis
+    // (status + body) must live IN the message string or the failure is
+    // invisible in logs (live-caught: "mirror failed" with no cause).
+    const status = err && err.response && err.response.status;
+    const body = err && err.response && err.response.data ? JSON.stringify(err.response.data).substring(0, 200) : '';
+    logger.warn(
+      `Bundle ingestion-log mirror failed (non-fatal): [${repoId}/${conceptId}] ` +
+        `status=${status || 'n/a'} err=${err.message}${body ? ' body=' + body : ''}`
+    );
   }
 }
 

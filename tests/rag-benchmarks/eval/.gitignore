@@ -1,6 +1,4 @@
 gold_dataset.json
-# The v1.3 RAG-parity BASELINE gold set is a pinned, committed artifact — un-ignore it.
-!gold_dataset.json
 chunks_registry.json
 chunks_labeling_audit.csv
 eval_report.json

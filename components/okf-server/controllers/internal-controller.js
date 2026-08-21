@@ -22,17 +22,28 @@ const config = require('../config');
  */
 async function conceptStatus(req, res) {
   try {
+    logger.info('INTERNAL conceptStatus hit', { concept_id: req.params.concept_id, method: req.method });
     // Fail-closed internal auth: the shared secret must be configured AND match.
     if (!config.internal.secret || req.get('x-okf-internal-secret') !== config.internal.secret) {
       return res.status(401).json({ error: 'INTERNAL_UNAUTHORIZED' });
     }
     const { concept_id } = req.params;
-    const { file_id, status, chunk_count } = req.body || {};
+    const { file_id, status, chunk_count, repo_id: repoHint } = req.body || {};
     if (!concept_id || typeof status !== 'string') {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'concept_id + status required' });
     }
-    // Resolve the repo from the concept's meta row (the single source of truth).
-    const meta = await conceptMetaService.getConceptMetaFromAnyRepo(concept_id);
+    // Resolve the repo from the concept's meta row. The caller's repo_id hint
+    // (threaded from the ingest graph_name OKF_{repo_id}) gives an EXACT
+    // lookup; the repo-wide search fallback is ambiguous when the same
+    // concept_id exists in multiple repos (clones, scratch repos) and
+    // deliberately returns null rather than guessing.
+    let meta = null;
+    if (repoHint) {
+      meta = await conceptMetaService.getConceptMeta(repoHint, concept_id);
+    }
+    if (!meta) {
+      meta = await conceptMetaService.getConceptMetaFromAnyRepo(concept_id);
+    }
     if (!meta) {
       logger.warn('Concept status callback: unknown concept', { concept_id });
       return res.status(404).json({ error: 'CONCEPT_NOT_FOUND' });

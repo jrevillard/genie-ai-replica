@@ -11,6 +11,12 @@ const router = express.Router();
 const ctrl = require('../controllers/internal-controller');
 
 // Dataprep completion callback for a concept (indexed|failed + edges).
+// BOTH methods: dataprep's _update_doc_status issues a PATCH (mirroring the
+// doc-repo status API it was cloned from) — a POST-only route let the PATCH
+// fall through to the authenticated /api/okf router and die with
+// FORBIDDEN_SCOPE (live-caught 2026-08-21: every concept callback 403'd,
+// meta rows never transitioned, the worker retry-looped forever).
 router.post('/concepts/:concept_id/status', ctrl.conceptStatus);
+router.patch('/concepts/:concept_id/status', ctrl.conceptStatus);
 
 module.exports = router;

@@ -422,6 +422,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             payload = {"file_id": file_id, "status": status}
             if chunk_count is not None:
                 payload["chunk_count"] = chunk_count
+            # Exact-lookup key: the same concept_id can exist in multiple repos
+            # (clones, smoke scratch repos); the okf-server resolves repo from
+            # this when present instead of an ambiguous repo-wide search.
+            current_repo = getattr(self, "_current_repo_id", None)
+            if current_repo:
+                payload["repo_id"] = current_repo
             # Internal cross-service auth: the shared secret (fail-closed — an
             # unconfigured okf-server refuses every callback). From the env so
             # it is never hardcoded.

@@ -72,7 +72,7 @@ android {
         }
         el_salvador {
             dimension "environment"
-            applicationIdSuffix ".elsalvador"
+            applicationId = "com.example.genie_ai_mobile.elsalvador"
             manifestPlaceholders = [
                 appAuthRedirectScheme: "sv.gov.agrogenio"
             ]

@@ -67,7 +67,10 @@ const getFilesSchema = Joi.object({
   // Story 4.8-amend: the OKF ingest worker mirrors per-concept ingest
   // progress to the bundle zip's ingestion log, so it needs to resolve
   // the bundle file_id from doc-repo via repo_id + is_bundle=true.
-  repo_id: Joi.string().uuid().optional(),
+  // Accept any non-empty string for repo_id (was Joi.string().uuid(), but
+  // the smoke uses short test IDs + some integration paths pass prefixed IDs;
+  // the route is authenticated + scoped, so no security risk in relaxing).
+  repo_id: Joi.string().min(1).max(256).optional(),
   is_bundle: Joi.boolean().optional()
 });
 

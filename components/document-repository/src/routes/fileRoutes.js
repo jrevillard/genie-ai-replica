@@ -844,7 +844,11 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
 // 2026-08-20). The okf-server service-account client holds the bootstrap
 // `tools-admin` super-role (see genie-realm.yaml client role mapping) so
 // the worker's mirror POSTs succeed.
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']), fileController.addIngestionLog);
+router.post(
+  '/:fileId/ingestion-log',
+  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  fileController.addIngestionLog
+);
 
 /**
  * @swagger

@@ -5,6 +5,10 @@ describe('labelService', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe('validateLevelAndStatus', () => {
     it('should not throw for valid level and status', () => {
       expect(() => labelService.validateLevelAndStatus('category', 'active')).not.toThrow();
@@ -32,7 +36,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockResolvedValue(label) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.getLabelById('1');
       expect(result).toEqual(label);
@@ -43,7 +47,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockRejectedValue({ errorNum: 1202 }) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.getLabelById('nonexistent')).rejects.toThrow('not found');
     });
@@ -52,7 +56,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockRejectedValue(new Error('connection refused')) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.getLabelById('1')).rejects.toThrow('connection refused');
     });
@@ -63,7 +67,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.getLabels({});
       expect(result).toEqual([]);
@@ -77,7 +81,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue(labels) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.getLabels({ name: 'A' });
       expect(result).toHaveLength(2);
@@ -87,7 +91,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.getLabels({ level: 'Category' });
       const query = mockDb.query.mock.calls[0][0];
@@ -100,7 +104,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.getLabels({ status: 'Active' });
       const bindVars = mockDb.query.mock.calls[0][1];
@@ -111,7 +115,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.getLabels({ parentId: 'parent1' });
       const query = mockDb.query.mock.calls[0][0];
@@ -124,7 +128,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.getLabels({ publish: 'true' });
       const bindVars = mockDb.query.mock.calls[0][1];
@@ -135,7 +139,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.getLabels({ publish: false });
       const bindVars = mockDb.query.mock.calls[0][1];
@@ -146,7 +150,7 @@ describe('labelService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.getLabels({ level: 'Category', status: 'Active', name: 'test' });
       const query = mockDb.query.mock.calls[0][0];
@@ -164,7 +168,7 @@ describe('labelService', () => {
       };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.createLabel(newLabel);
       expect(result).toEqual(savedLabel);
@@ -188,7 +192,7 @@ describe('labelService', () => {
       };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.createLabel({
         name: 'Child',
@@ -204,7 +208,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockResolvedValue(parentLabel) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.createLabel({ name: 'Child', level: 'service', parentId: 'service1' })).rejects.toThrow(
         'Parent must be a category'
@@ -215,7 +219,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockRejectedValue({ errorNum: 1202 }) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(
         labelService.createLabel({ name: 'Child', level: 'service', parentId: 'missing', status: 'active' })
@@ -234,7 +238,7 @@ describe('labelService', () => {
       };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await labelService.createLabel({ name: 'Test', level: 'category', status: 'active' });
       const savedArg = mockCollection.save.mock.calls[0][0];
@@ -258,7 +262,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.updateLabel('1', { name: 'New Name' });
       expect(result.name).toBe('New Name');
@@ -269,7 +273,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockRejectedValue({ errorNum: 1202 }) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.updateLabel('missing', { name: 'Test' })).rejects.toThrow('not found');
     });
@@ -284,7 +288,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.updateLabel('1', { level: 'service' })).rejects.toThrow('has child labels');
     });
@@ -302,7 +306,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.updateLabel('1', { level: 'service' });
       expect(result.level).toBe('service');
@@ -320,7 +324,7 @@ describe('labelService', () => {
       };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.updateLabel('1', { parentId: '2' })).rejects.toThrow('Parent must be a category');
     });
@@ -330,7 +334,7 @@ describe('labelService', () => {
       const mockCollection = { document: jest.fn().mockResolvedValue(currentLabel) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.updateLabel('1', { level: 'InvalidLevel' })).rejects.toThrow('Invalid level');
     });
@@ -345,7 +349,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.deleteLabel('1');
       expect(result).toBe(true);
@@ -361,7 +365,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(labelService.deleteLabel('parent1')).rejects.toThrow('has child labels');
     });
@@ -375,7 +379,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.deleteCategoryWithChildren('cat1');
       expect(result).toBe(true);
@@ -406,7 +410,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.getRelatedLabels('1');
       expect(result.label).toEqual(label);
@@ -423,7 +427,7 @@ describe('labelService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      labelService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(labelService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await labelService.getRelatedLabels('1');
       expect(result.parent).toBeNull();

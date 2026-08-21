@@ -77,6 +77,14 @@ describe('mimeTypeValidator', () => {
     it('should categorize unknown as other', () => {
       expect(getFileCategory('application/octet-stream')).toBe('other');
     });
+
+    it('should throw TypeError for null mimeType (uses String.includes)', () => {
+      expect(() => getFileCategory(null)).toThrow(TypeError);
+    });
+
+    it('should throw TypeError for undefined mimeType (uses String.includes)', () => {
+      expect(() => getFileCategory(undefined)).toThrow(TypeError);
+    });
   });
 
   describe('isTextExtractable', () => {
@@ -106,6 +114,18 @@ describe('mimeTypeValidator', () => {
 
     it('should return false for unknown types', () => {
       expect(isTextExtractable('application/octet-stream')).toBe(false);
+    });
+
+    it('should return false for null mimeType (Array.includes is safe)', () => {
+      expect(isTextExtractable(null)).toBe(false);
+    });
+
+    it('should return false for undefined mimeType (Array.includes is safe)', () => {
+      expect(isTextExtractable(undefined)).toBe(false);
+    });
+
+    it('should return true for application/msword (legacy Word MIME)', () => {
+      expect(isTextExtractable('application/msword')).toBe(true);
     });
   });
 });

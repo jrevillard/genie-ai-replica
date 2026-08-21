@@ -222,6 +222,30 @@ describe('POST /api/chat', () => {
 
 This pattern allows `supertest` to test Express routes directly without binding to a network port, enabling fast parallel test execution.
 
+### 4.4 Contract Test Layer
+
+The OPEA overlay (`genie-ai-overlay/`) ships a **contract test suite** that validates the integration contracts between GENIE.AI's custom overlay code and the vendored OPEA `comps` library. Unlike the mocked unit-test suite (`tests/`, which stubs `comps` in `sys.modules`), the contract suite runs **inside the built module image** against the real vendored `comps` — catching runtime API changes that mocked tests are blind to.
+
+**Isolation decision:** The contract suite lives in `genie-ai-overlay/contracts/`, a **sibling** of `tests/` — not nested inside it. The `pytest.ini` sets `testpaths = tests`, so the mocked suite never collects contract tests. The `contracts/conftest.py` provides a `comps` fixture that returns the real vendored module or **skips** when absent (dev venv / wrong module image). This separation ensures a test running against the mocked library cannot pass silently.
+
+**Suite layout:** Each contract file targets a specific module boundary:
+
+| File | Contract under test |
+|------|---------------------|
+| `test_contract_orchestrator_wire.py` | GENIE kwargs forwarding across mega-service nodes |
+| `test_contract_label_filter.py` | Category-filter AQL construction + forwarding to vector search |
+| `test_contract_retriever_fusion.py` | Hybrid RRF fusion (dedup, weights, unkeyed-doc isolation) |
+| `test_contract_reranker.py` | Reranker v1.5 adapter coupling surface |
+| `test_contract_e2e_pipeline.py` | Label-contract roundtrip, streaming metadata, graph schedule, confidence distribution, abstention |
+| `test_contract_ingest.py` | Real docling chunker: structured, text-bearing, deterministic chunks |
+| `test_contract_telemetry.py` | Span operation names dashboards rely on |
+
+**CI integration:** The `contract-in-image` stage in `.gitlab-ci.yml` runs per-module jobs (`contract:retriever-arango`, `contract:reranker`, `contract:dataprep-arango`) inside the built image with `--junitxml` artifacts. Pure-logic tests (label filter, harness, telemetry) also run in the dev venv via `contract:unit`.
+
+**Red-green validation principle:** Every contract test asserts an **observable shape the upgrade actually changes** — kwargs forwarding, docarray shim pin, chunk shape, AQL filter clause, streaming metadata fields. A green-on-green test (asserting something that passes regardless of the upgrade) is a quality failure. The suite was proven green on v1.3 and red on a bare v1.5 bump without overlay re-graft.
+
+For operational details (invocation commands, suite maintenance), see the [Contract Tests README](../../../genie-ai-overlay/contracts/README.md).
+
 ---
 
 ## 5. Observability Architecture

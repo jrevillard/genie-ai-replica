@@ -5,6 +5,7 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 class QueryService {
   constructor() {
@@ -1447,7 +1448,7 @@ class QueryService {
    * @param {String} queryId - Query ID
    * @returns {Promise<Array>} Conversations associated with the query
    */
-  async getConversationsForQuery(queryId) {
+  async getConversationsForQuery(queryId, userId) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.get_conversations_for_query_start', { queryId });
@@ -1457,7 +1458,15 @@ class QueryService {
         throw new Error('Chat history service is not set');
       }
 
-      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId);
+      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId, userId);
+
+      // Handle ownership check returns
+      if (relatedMessages === null) {
+        return []; // Query not found
+      }
+      if (relatedMessages && relatedMessages.forbidden) {
+        throw new Error('Access denied');
+      }
 
       const conversationMap = new Map();
       for (const item of relatedMessages) {
@@ -1604,8 +1613,8 @@ class QueryService {
   async getQueriesForInspector(options = {}) {
     const startTime = Date.now();
     try {
-      const limit = parseInt(options.limit) || 50;
-      const offset = parseInt(options.offset) || 0;
+      const limit = parsePositiveInt(options.limit, 50, { min: 1, max: 100 });
+      const offset = parsePositiveInt(options.offset, 0, { min: 0 });
 
       logger.info('QueryService.get_queries_for_inspector_start', { options });
 

@@ -19,17 +19,17 @@ async function extractMetadata(filePath, fileInfo = {}) {
   const baseMeta = {
     file_id: String(fileInfo.file_id || uuidv4()),
     file_name: fileInfo.file_name || path.basename(filePath),
-    file_size: fileInfo.file_size || stats.size,
-    file_type: fileInfo.file_type || mimeType,
-    storage_path: fileInfo.storage_path || filePath,
+    file_size: fileInfo.file_size ?? stats.size,
+    file_type: fileInfo.file_type ?? mimeType,
+    storage_path: fileInfo.storage_path ?? filePath,
     file_hash: fileInfo.file_hash || (await getFileHash(filePath)),
-    labels: fileInfo.labels || [],
-    author: fileInfo.author || '',
+    labels: fileInfo.labels ?? [],
+    author: fileInfo.author ?? '',
     uploaded_date: fileInfo.uploaded_date || new Date().toISOString(),
     create_date: fileInfo.create_date || stats.birthtime.toISOString(),
     crawl_date: fileInfo.crawl_date || '',
     source_url: fileInfo.source_url || '',
-    language: fileInfo.language || 'unknown',
+    language: fileInfo.language ?? 'unknown',
     chunk_count: 0,
     dataprep: {
       status: 'Pending', // Changed to capitalized 'Pending' per spec
@@ -191,10 +191,7 @@ class MetadataService {
       const updateObj = {};
       for (const key of Object.keys(updates)) {
         if (allowedFields.includes(key)) {
-          // Special handling for labels: allow adding/removing labels
-          if (key === 'labels' && Array.isArray(updates[key])) {
-            updateObj.labels = updates.labels;
-          } else if (key === 'dataprep' && typeof updates.dataprep === 'object') {
+          if (key === 'dataprep' && typeof updates.dataprep === 'object') {
             // Special handling for dataprep: allow updating status, ingest_date, retract_date
             updateObj.dataprep = {
               ...metadata.dataprep,

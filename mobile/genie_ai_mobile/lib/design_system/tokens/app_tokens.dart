@@ -2,6 +2,22 @@ import 'package:flutter/material.dart';
 
 import 'color_utils.dart';
 
+/// Safely cast a dynamic value to `Map<String, dynamic>?`.
+/// Returns `null` instead of throwing when the value is not a map.
+Map<String, dynamic>? _asMap(dynamic value) {
+  if (value == null) return null;
+  if (value is Map<String, dynamic>) return value;
+  return null;
+}
+
+/// Safely cast a dynamic value to `num?`.
+/// Returns `null` instead of throwing when the value is not numeric.
+num? _asNum(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value;
+  return null;
+}
+
 class AppTokens {
   final Color brand;
   final Color bg;
@@ -78,8 +94,7 @@ class AppTokens {
     required bool isDark,
     double fontScale = 1.0,
   }) {
-    final theme =
-        (config['theme'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final theme = _asMap(config['theme']) ?? <String, dynamic>{};
     final brandColor =
         ColorUtils.parseHexNullable(theme['brandColor']) ??
         const Color(0xFF4682B4);
@@ -100,14 +115,14 @@ class AppTokens {
     final fg =
         ColorUtils.parseHexNullable(theme['fg']) ?? const Color(0xFF1A1A2E);
 
-    final navbar = theme['navbar'] as Map<String, dynamic>? ?? {};
+    final navbar = _asMap(theme['navbar']) ?? {};
     final navbarBg =
         ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
     // Web: --navbar-fg is light text contrasted from brand (l+0.56, low chroma)
     final navbarFg =
         ColorUtils.parseHexNullable(navbar['text']) ?? Colors.white;
 
-    final colors = theme['colors'] as Map<String, dynamic>? ?? {};
+    final colors = _asMap(theme['colors']) ?? {};
     final success =
         ColorUtils.parseHexNullable(colors['success']) ??
         const Color(0xFF10B981);
@@ -120,8 +135,8 @@ class AppTokens {
     final info =
         ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF3B82F6);
 
-    final typography = theme['typography'] as Map<String, dynamic>? ?? {};
-    final scale = (typography['fontScale'] as num?)?.toDouble() ?? 1.0;
+    final typography = _asMap(theme['typography']) ?? {};
+    final scale = (_asNum(typography['fontScale']))?.toDouble() ?? 1.0;
 
     return AppTokens(
       brand: brandColor,
@@ -153,7 +168,7 @@ class AppTokens {
     required Map<String, dynamic> theme,
     required double fontScale,
   }) {
-    final navbar = theme['navbar'] as Map<String, dynamic>? ?? {};
+    final navbar = _asMap(theme['navbar']) ?? {};
     // Web: navbar-bg stays brand in both modes; navbar-fg is dark (l-0.32) in dark
     final navbarBg =
         ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
@@ -163,7 +178,7 @@ class AppTokens {
         ColorUtils.parseHexNullable(navbar['text']) ??
         ColorUtils.darken(brandColor, 0.25);
 
-    final colors = theme['colors'] as Map<String, dynamic>? ?? {};
+    final colors = _asMap(theme['colors']) ?? {};
     final success =
         ColorUtils.parseHexNullable(colors['success']) ??
         const Color(0xFF10B981);
@@ -176,8 +191,8 @@ class AppTokens {
     final info =
         ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF3B82F6);
 
-    final typography = theme['typography'] as Map<String, dynamic>? ?? {};
-    final scale = (typography['fontScale'] as num?)?.toDouble() ?? 1.0;
+    final typography = _asMap(theme['typography']) ?? {};
+    final scale = (_asNum(typography['fontScale']))?.toDouble() ?? 1.0;
 
     return AppTokens(
       brand: brandColor,

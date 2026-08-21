@@ -746,7 +746,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/translation:1.3
+    image: opea/translation:1.5
     environment:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}

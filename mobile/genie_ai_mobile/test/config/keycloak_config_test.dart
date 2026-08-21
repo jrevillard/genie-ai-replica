@@ -8,7 +8,7 @@ import 'package:genie_ai_mobile/config/flavors/itu.dart' as flavors;
 void main() {
   group('KeycloakConfig', () {
     test('holds all 6 fields correctly', () {
-      const config = KeycloakConfig(
+      final config = KeycloakConfig(
         keycloakUrl: 'https://example.com',
         realm: 'genie',
         clientId: 'test-client',
@@ -23,19 +23,45 @@ void main() {
       expect(config.allowInsecureConnections, isFalse);
     });
 
-    test('has const constructor', () {
-      const config = KeycloakConfig(
-        keycloakUrl: '',
-        realm: '',
-        clientId: '',
-        redirectScheme: '',
-        backendUrl: '',
+    test('rejects empty redirectScheme with AssertionError', () {
+      expect(
+        () => KeycloakConfig(
+          keycloakUrl: 'https://example.com',
+          realm: 'genie',
+          clientId: 'test',
+          redirectScheme: '',
+          backendUrl: 'https://api.example.com',
+        ),
+        throwsA(isA<AssertionError>()),
       );
-      expect(config, isA<KeycloakConfig>());
+    });
+
+    test('rejects invalid redirectScheme format', () {
+      expect(
+        () => KeycloakConfig(
+          keycloakUrl: 'https://example.com',
+          realm: 'genie',
+          clientId: 'test',
+          redirectScheme: 'INVALID-SCHEME',
+          backendUrl: 'https://api.example.com',
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('accepts valid reverse-domain redirectScheme', () {
+      final config = KeycloakConfig(
+        keycloakUrl: 'https://example.com',
+        realm: 'genie',
+        clientId: 'test',
+        redirectScheme: 'com.itu.genieai',
+        backendUrl: 'https://api.example.com',
+      );
+      expect(config.redirectScheme, 'com.itu.genieai');
     });
 
     test('computes realmUrl from keycloakUrl and realm', () {
-      const config = KeycloakConfig(
+      final config = KeycloakConfig(
         keycloakUrl: 'https://example.com',
         realm: 'myrealm',
         clientId: 'c',
@@ -168,7 +194,7 @@ void main() {
     });
 
     test('supportedLocaleCodes defaults to all shipped locales', () {
-      const KeycloakConfig config = KeycloakConfig(
+      final KeycloakConfig config = KeycloakConfig(
         keycloakUrl: 'u',
         realm: 'r',
         clientId: 'c',
@@ -179,7 +205,7 @@ void main() {
     });
 
     test('supportedLocaleCodes can be restricted per flavor', () {
-      const KeycloakConfig restricted = KeycloakConfig(
+      final KeycloakConfig restricted = KeycloakConfig(
         keycloakUrl: 'u',
         realm: 'r',
         clientId: 'c',
@@ -191,7 +217,7 @@ void main() {
     });
 
     test('an instance equals itself', () {
-      const KeycloakConfig a = KeycloakConfig(
+      final KeycloakConfig a = KeycloakConfig(
         keycloakUrl: 'u',
         realm: 'r',
         clientId: 'c',
@@ -228,14 +254,14 @@ void main() {
     );
 
     test('configs differing only in supportedLocaleCodes are not equal', () {
-      const KeycloakConfig def = KeycloakConfig(
+      final KeycloakConfig def = KeycloakConfig(
         keycloakUrl: 'u',
         realm: 'r',
         clientId: 'c',
         redirectScheme: 's',
         backendUrl: 'b',
       );
-      const KeycloakConfig restricted = KeycloakConfig(
+      final KeycloakConfig restricted = KeycloakConfig(
         keycloakUrl: 'u',
         realm: 'r',
         clientId: 'c',
@@ -247,7 +273,7 @@ void main() {
     });
 
     test('is not equal to an unrelated object', () {
-      const KeycloakConfig a = KeycloakConfig(
+      final KeycloakConfig a = KeycloakConfig(
         keycloakUrl: 'u',
         realm: 'r',
         clientId: 'c',

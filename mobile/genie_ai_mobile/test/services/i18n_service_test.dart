@@ -177,7 +177,7 @@ void main() {
       });
 
       test('a flavor can restrict to a subset (e.g. el-salvador en/es)', () {
-        const KeycloakConfig restricted = KeycloakConfig(
+        final KeycloakConfig restricted = KeycloakConfig(
           keycloakUrl: 'https://example.com',
           realm: 'genie',
           clientId: 'genie-app',

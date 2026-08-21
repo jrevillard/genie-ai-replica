@@ -526,6 +526,169 @@ class TestAlignInputs:
 
 
 # ===========================================================================
+# Bundled-dict path: align_inputs consumes from genie_params dict
+# ===========================================================================
+class TestAlignInputsBundledDict:
+    """Verify align_inputs extracts values from the bundled genie_params dict.
+
+    v1.5 re-graft: the 6 custom kwargs are packed into one ``genie_params``
+    dict at the ``schedule()`` call site. These tests call ``align_inputs``
+    with the bundled dict (not flat kwargs) and assert the handlers extract
+    values from the dict — closing the verification gap where the existing
+    mocked suite only exercises the flat-kwargs fallback.
+    """
+
+    def test_translator_extracts_original_language_from_dict(self):
+        """TRANSLATOR branch reads original_language from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"translator_node": create_mock_service_node(FakeServiceType.TRANSLATOR)}
+        llm_params = {"max_tokens": 512}
+        inputs = {"text": "Hola mundo"}
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "translator_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"original_language": "EN"},
+            )
+        assert "English" in result["messages"][0]["content"]
+
+    def test_retriever_extracts_retriever_parameters_from_dict(self):
+        """RETRIEVER branch reads retriever_parameters from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        llm_params = {}
+        inputs = {"text": "query", "k": 4}
+        retriever_params = MagicMock()
+        retriever_params.model_dump.return_value = {"search_type": "hybrid", "fetch_k": 20}
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"retriever_parameters": retriever_params},
+            )
+        assert result["search_type"] == "hybrid"
+        assert result["fetch_k"] == 20
+
+    def test_retriever_extracts_retrieval_context_from_dict(self):
+        """RETRIEVER branch reads retrieval_context from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        llm_params = {}
+        inputs = {"text": "query", "search_start": "chunk"}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch.dict("sys.modules", {"core.label_contract": MagicMock()}),
+        ):
+            # Patch the import inside the function
+            import sys
+
+            mock_contract = sys.modules["core.label_contract"]
+            mock_contract.encode_filter_labels.return_value = "chunk::labels:Tomato"
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "retriever_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"retrieval_context": {"categoryLabels": ["Tomato"]}},
+            )
+        assert result["search_start"] == "chunk::labels:Tomato"
+        mock_contract.encode_filter_labels.assert_called_once_with("chunk", ["Tomato"])
+
+    def test_rerank_extracts_reranker_parameters_from_dict(self):
+        """RERANK branch reads reranker_parameters from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+        llm_params = {}
+        inputs = {"text": "query"}
+        reranker_params = MagicMock()
+        reranker_params.model_dump.return_value = {"top_n": 3}
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "rerank_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"reranker_parameters": reranker_params},
+            )
+        assert result["top_n"] == 3
+
+    def test_llm_extracts_full_chat_history_string_from_dict(self):
+        """LLM branch reads full_chat_history_string from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+        llm_params = {"max_tokens": 512, "top_p": 0.9}
+        inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+        ):
+            mock_tokenizer.return_value.encode.return_value = []
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "llm_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"full_chat_history_string": "prior turn |<-MSG->| earlier"},
+            )
+        assert "prior turn" in result["messages"][1]["content"]
+
+    def test_llm_extracts_user_details_from_dict(self):
+        """LLM branch reads user_details from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+        llm_params = {"max_tokens": 512, "top_p": 0.9}
+        inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+            patch("chatqna.genieai_chatqna.UserContextBuilder") as mock_builder,
+        ):
+            mock_tokenizer.return_value.encode.return_value = []
+            mock_builder.return_value.build_user_context_string.return_value = "user context"
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "llm_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"user_details": {"role": "citizen"}},
+            )
+        assert "user context" in result["messages"][1]["content"]
+
+    def test_llm_extracts_original_language_from_dict(self):
+        """LLM branch reads original_language from genie_params dict."""
+        self_mock = MagicMock()
+        self_mock.services = {"llm_node": create_mock_service_node(FakeServiceType.LLM)}
+        llm_params = {"max_tokens": 512, "top_p": 0.9}
+        inputs = {"inputs": "rag prompt", "stream": False, "frequency_penalty": 0.0, "temperature": 0.7}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("chatqna.genieai_chatqna.get_tokenizer") as mock_tokenizer,
+        ):
+            mock_tokenizer.return_value.encode.return_value = []
+            result = align_inputs(
+                self_mock,
+                inputs,
+                "llm_node",
+                MagicMock(),
+                llm_params,
+                genie_params={"original_language": "EN"},
+            )
+        # EN language injects mandatory English instruction into system prompt
+        assert "MANDATORY" in result["messages"][0]["content"]
+        assert "English" in result["messages"][0]["content"]
+
+
+# ===========================================================================
 # Task 7: Test align_outputs() for each service type
 # ===========================================================================
 class TestAlignOutputs:
@@ -913,6 +1076,69 @@ class TestAlignOutputs:
 
 
 # ===========================================================================
+# Bundled-dict path: align_outputs consumes from genie_params dict
+# ===========================================================================
+class TestAlignOutputsBundledDict:
+    """Verify align_outputs extracts values from the bundled genie_params dict.
+
+    v1.5 re-graft: the 6 custom kwargs are packed into one ``genie_params``
+    dict at the ``schedule()`` call site. These tests call ``align_outputs``
+    with the bundled dict (not flat kwargs) and assert the handlers extract
+    values from the dict — closing the verification gap where the existing
+    mocked suite only exercises the flat-kwargs fallback.
+    """
+
+    def test_rerank_extracts_reranker_parameters_from_dict(self):
+        """RERANK branch reads reranker_parameters from genie_params dict.
+
+        The raw TEI output path (data is a list) uses reranker_parameters.top_n
+        to slice the results. This test verifies the bundled dict path works.
+        """
+        self_mock = MagicMock()
+        self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+        # Raw TEI output: list of {index, score} dicts
+        data = [
+            {"index": 0, "score": 0.9},
+            {"index": 1, "score": 0.8},
+            {"index": 2, "score": 0.7},
+        ]
+        # The RERANK branch reads original docs from inputs["documents"] (raw TEI path)
+        inputs = {
+            "documents": [
+                {"text": "doc0", "id": "id0"},
+                {"text": "doc1", "id": "id1"},
+                {"text": "doc2", "id": "id2"},
+            ],
+            "retrieved_docs": [
+                {"text": "doc0", "id": "id0"},
+                {"text": "doc1", "id": "id1"},
+                {"text": "doc2", "id": "id2"},
+            ],
+            "initial_query": "query",
+        }
+        reranker_params = MagicMock()
+        reranker_params.top_n = 2
+        llm_params = {}
+        with (
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+            patch("chatqna.genieai_chatqna._emit_reranker_selection_span"),
+        ):
+            result = align_outputs(
+                self_mock,
+                data,
+                "rerank_node",
+                inputs,
+                MagicMock(),
+                llm_params,
+                genie_params={"reranker_parameters": reranker_params},
+            )
+        # top_n=2 slices the first 2 docs
+        assert len(result["retrieved_docs"]) == 2
+        assert result["retrieved_docs"][0]["text"] == "doc0"
+        assert result["retrieved_docs"][1]["text"] == "doc1"
+
+
+# ===========================================================================
 # Task 8: Test align_generator() — SSE streaming
 # ===========================================================================
 class TestAlignGenerator:
@@ -1053,6 +1279,84 @@ class TestChatQnAServiceInit:
             assert add_kwargs[2]["use_remote_service"] is True
             assert add_kwargs[2]["service_type"] == FakeServiceType.LLM
             assert add_kwargs[2]["endpoint"] == "/v1/chat/completions"
+
+    def _run_graph_builder(self, method_name):
+        """Run one add_remote_service* variant and return (services, flow_edges).
+
+        Captures the graph the consolidated ``_build_rag_graph`` produces for a
+        given public wrapper, asserting the same node set + ``flow_to`` edges
+        the pre-cleanup variants built (AC4 — graph equivalence, asserted).
+
+        MicroService is patched with a side_effect so each construction returns
+        a DISTINCT instance carrying the real ``name`` (``MagicMock(name=...)``
+        would instead set the mock's own name and share one return_value).
+        """
+        with (
+            patch("chatqna.genieai_chatqna.ServiceOrchestrator") as mock_orch,
+            patch("chatqna.genieai_chatqna.MicroService") as mock_ms,
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+        ):
+            built = []
+
+            def _microservice(**kwargs):
+                svc = MagicMock()
+                svc.name = kwargs.get("name")
+                built.append(svc)
+                return svc
+
+            mock_ms.side_effect = _microservice
+
+            mock_orch_instance = MagicMock()
+            mock_orch_instance.add.return_value = mock_orch_instance  # chainable
+            mock_orch.return_value = mock_orch_instance
+
+            svc = ChatQnAService()
+            getattr(svc, method_name)()
+
+            nodes = [svc.name for svc in built]
+            edges = [(call[0][0].name, call[0][1].name) for call in mock_orch_instance.flow_to.call_args_list]
+            return nodes, edges
+
+    def test_faqgen_graph_equivalent_to_full(self):
+        """AC4: faqgen mode builds the SAME graph shape as the full graph, only
+        the LLM endpoint differs (/v1/faqgen vs /v1/chat/completions)."""
+        full_nodes, full_edges = self._run_graph_builder("add_remote_service")
+        faqgen_nodes, faqgen_edges = self._run_graph_builder("add_remote_service_faqgen")
+
+        assert faqgen_nodes == full_nodes  # embedding, retriever, rerank, llm
+        assert faqgen_edges == full_edges  # emb→ret→rerank→llm
+
+        # Endpoint differs — the one sanctioned axis of variation.
+        self._assert_faqgen_endpoint()
+
+    def _assert_faqgen_endpoint(self):
+        with (
+            patch("chatqna.genieai_chatqna.ServiceOrchestrator") as mock_orch,
+            patch("chatqna.genieai_chatqna.MicroService") as mock_ms,
+            patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType),
+        ):
+            mock_orch_instance = MagicMock()
+            mock_orch.return_value = mock_orch_instance
+            svc = ChatQnAService()
+            svc.add_remote_service_faqgen()
+            add_kwargs = [call[1] for call in mock_ms.call_args_list if call[1]]
+            llm = next(k for k in add_kwargs if k["name"] == "llm")
+            assert llm["endpoint"].endswith("/v1/faqgen")
+
+    def test_without_translation_alias_builds_full_graph(self):
+        """AC4: the without_translation alias produces the same graph as
+        add_remote_service (translation is not a graph node)."""
+        full_nodes, full_edges = self._run_graph_builder("add_remote_service")
+        alias_nodes, alias_edges = self._run_graph_builder("add_remote_service_without_translation")
+        assert alias_nodes == full_nodes
+        assert alias_edges == full_edges
+
+    def test_genieai_alias_builds_full_graph(self):
+        """AC4: the genieai alias produces the same graph as add_remote_service."""
+        full_nodes, full_edges = self._run_graph_builder("add_remote_service")
+        alias_nodes, alias_edges = self._run_graph_builder("add_remote_service_genieai")
+        assert alias_nodes == full_nodes
+        assert alias_edges == full_edges
 
     def test_find_node_key_finds_match(self):
         svc = create_chatqna_service()

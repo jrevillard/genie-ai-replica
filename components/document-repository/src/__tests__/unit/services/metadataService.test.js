@@ -33,6 +33,10 @@ describe('metadataService', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe('addMetadata', () => {
     it('should add metadata via addMetadata with mocked fs and db', async () => {
       const mockStats = { size: 1024, birthtime: new Date('2025-01-01') };
@@ -44,7 +48,7 @@ describe('metadataService', () => {
       };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.addMetadata('/fake/path.pdf', {
         file_name: 'test.pdf',
@@ -70,7 +74,7 @@ describe('metadataService', () => {
 
       const mockCollection = { save: jest.fn().mockResolvedValue({}) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.addMetadata('/path.pdf', {
         file_id: 'custom-id',
@@ -102,12 +106,68 @@ describe('metadataService', () => {
 
       const mockCollection = { save: jest.fn().mockResolvedValue({}) };
       const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.addMetadata('/path.pdf', { file_name: 'test.pdf' });
 
       const savedArg = mockCollection.save.mock.calls[0][0];
       expect(savedArg.language).toBe('unknown');
+    });
+
+    it('should preserve file_size of 0 (not fall back to stats.size)', async () => {
+      const mockStats = { size: 2048, birthtime: new Date() };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const mockCollection = { save: jest.fn().mockResolvedValue({}) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/path.pdf', { file_size: 0 });
+
+      const savedArg = mockCollection.save.mock.calls[0][0];
+      expect(savedArg.file_size).toBe(0);
+    });
+
+    it('should compute file_hash when file_hash is empty string', async () => {
+      const mockStats = { size: 100, birthtime: new Date() };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const mockCollection = { save: jest.fn().mockResolvedValue({}) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/path.pdf', { file_hash: '' });
+
+      const savedArg = mockCollection.save.mock.calls[0][0];
+      expect(savedArg.file_hash).toBe('abc123hash');
+    });
+
+    it('should preserve empty array labels (not fall back to [])', async () => {
+      const mockStats = { size: 100, birthtime: new Date() };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const mockCollection = { save: jest.fn().mockResolvedValue({}) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/path.pdf', { labels: [] });
+
+      const savedArg = mockCollection.save.mock.calls[0][0];
+      expect(savedArg.labels).toEqual([]);
+    });
+
+    it('should preserve empty string author (not fall back to default)', async () => {
+      const mockStats = { size: 100, birthtime: new Date() };
+      fs.stat.mockResolvedValue(mockStats);
+
+      const mockCollection = { save: jest.fn().mockResolvedValue({}) };
+      const mockDb = { collection: jest.fn().mockReturnValue(mockCollection) };
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
+
+      await metadataService.addMetadata('/path.pdf', { author: '' });
+
+      const savedArg = mockCollection.save.mock.calls[0][0];
+      expect(savedArg.author).toBe('');
     });
 
     it('should propagate errors from addMetadata', async () => {
@@ -122,7 +182,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await metadataService.searchMetadata();
       expect(result).toEqual([]);
@@ -135,7 +195,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata('report');
       const query = mockDb.query.mock.calls[0][0];
@@ -148,7 +208,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, 'application/pdf');
       const query = mockDb.query.mock.calls[0][0];
@@ -159,7 +219,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, null, '2025-01-01', '2025-12-31', '2024-01-01', '2024-12-31');
       const query = mockDb.query.mock.calls[0][0];
@@ -178,7 +238,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, null, null, null, null, null, ['label1', 'label2']);
       const query = mockDb.query.mock.calls[0][0];
@@ -189,7 +249,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, null, null, null, null, null, null, 'John');
       const query = mockDb.query.mock.calls[0][0];
@@ -200,7 +260,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, null, null, null, null, null, null, null, 'Ingested');
       const query = mockDb.query.mock.calls[0][0];
@@ -211,7 +271,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, null, null, null, null, null, null, null, null, 'en');
       const query = mockDb.query.mock.calls[0][0];
@@ -222,7 +282,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata('doc', 'text/plain', null, null, null, null, null, 'Alice');
       const query = mockDb.query.mock.calls[0][0];
@@ -234,7 +294,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.searchMetadata(null, null, null, null, null, null, []);
       const query = mockDb.query.mock.calls[0][0];
@@ -246,7 +306,7 @@ describe('metadataService', () => {
       const mockCursor = { all: jest.fn().mockResolvedValue(results) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await metadataService.searchMetadata('report');
       expect(result).toEqual(results);
@@ -254,7 +314,7 @@ describe('metadataService', () => {
 
     it('should propagate database errors', async () => {
       const mockDb = { query: jest.fn().mockRejectedValue(new Error('DB connection lost')) };
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(metadataService.searchMetadata('test')).rejects.toThrow('DB connection lost');
     });
@@ -266,7 +326,7 @@ describe('metadataService', () => {
       const mockCursor = { next: jest.fn().mockResolvedValue(metadata) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await metadataService.getMetadataById('123');
       expect(result).toEqual(metadata);
@@ -278,7 +338,7 @@ describe('metadataService', () => {
       const mockCursor = { next: jest.fn().mockResolvedValue(null) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await metadataService.getMetadataById('nonexistent');
       expect(result).toBeNull();
@@ -288,7 +348,7 @@ describe('metadataService', () => {
       const mockCursor = { next: jest.fn().mockResolvedValue(null) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.getMetadataById('file-abc123');
       const bindVars = mockDb.query.mock.calls[0][1];
@@ -301,7 +361,7 @@ describe('metadataService', () => {
       const mockCursor = { next: jest.fn().mockResolvedValue(null) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(metadataService.deleteMetadata('nonexistent')).rejects.toThrow('Metadata not found');
     });
@@ -315,7 +375,7 @@ describe('metadataService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await metadataService.deleteMetadata('123');
       expect(result).toBe(true);
@@ -331,7 +391,7 @@ describe('metadataService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(metadataService.deleteMetadata('123')).rejects.toThrow('remove failed');
     });
@@ -342,7 +402,7 @@ describe('metadataService', () => {
       const mockCursor = { next: jest.fn().mockResolvedValue(null) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(metadataService.updateMetadata('nonexistent', { dataprep: { status: 'Ingested' } })).rejects.toThrow(
         'Metadata not found'
@@ -370,7 +430,7 @@ describe('metadataService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.updateMetadata('123', {
         dataprep: { status: 'Ingested', ingest_date: '2025-01-01T00:00:00Z' },
@@ -394,7 +454,7 @@ describe('metadataService', () => {
       const mockCursor = { next: jest.fn().mockResolvedValue(metadata) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await expect(metadataService.updateMetadata('123', { file_name: 'hack.pdf' })).rejects.toThrow(
         'No valid fields to update'
@@ -421,7 +481,7 @@ describe('metadataService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       await metadataService.updateMetadata('123', {
         dataprep: { status: 'Retracted', retract_date: '2025-06-01' }
@@ -450,7 +510,7 @@ describe('metadataService', () => {
         collection: jest.fn().mockReturnValue(mockCollection)
       };
 
-      metadataService.getDb = jest.fn().mockResolvedValue(mockDb);
+      jest.spyOn(metadataService, 'getDb').mockResolvedValue(mockDb);
 
       const result = await metadataService.updateMetadata('123', { chunk_count: 10 });
       expect(result).toEqual(updatedDoc);

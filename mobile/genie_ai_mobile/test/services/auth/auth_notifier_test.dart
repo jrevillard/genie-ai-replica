@@ -137,7 +137,7 @@ class FakeConnectivityChecker implements ConnectivityChecker {
   void dispose() => _statusController.close();
 }
 
-const testConfig = KeycloakConfig(
+final testConfig = KeycloakConfig(
   keycloakUrl: 'http://localhost:8080',
   realm: 'genie',
   clientId: 'test-client',

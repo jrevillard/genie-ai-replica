@@ -503,6 +503,29 @@ CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 
+def _gp(kwargs: dict, key: str, default=None):
+    """Extract a GENIE param from ``kwargs`` with bundled-dict preference.
+
+    The orchestrator's ``schedule()`` call forwards all six custom kwargs as a
+    single ``genie_params`` dict (v1.5 re-graft). Handlers (align_inputs /
+    align_outputs) receive this dict via ``**kwargs``. This helper looks up
+    ``key`` inside ``kwargs["genie_params"]`` first; when the dict is absent
+    (legacy flat-kwargs path), it falls back to ``kwargs[key]``.
+
+    Args:
+        kwargs: The ``**kwargs`` dict passed to an align handler.
+        key: The parameter name to extract (e.g. ``"retriever_parameters"``).
+        default: Value returned when neither path carries the key.
+
+    Returns:
+        The parameter value, or ``default`` if absent on both paths.
+    """
+    genie_params = kwargs.get("genie_params")
+    if isinstance(genie_params, dict):
+        return genie_params.get(key, default)
+    return kwargs.get(key, default)
+
+
 def _build_filter_labels(retrieval_context: dict) -> list[str]:
     """Build the retriever filter-label list from the retrieval context.
 
@@ -827,7 +850,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
     if self.services[cur_node].service_type == ServiceType.TRANSLATOR:
         original_text = inputs["text"]
-        original_language = kwargs.get("original_language", "auto")
+        original_language = _gp(kwargs, "original_language", "auto")
 
         if original_language and original_language.strip().upper() == "EN":
             target_language = "English"
@@ -874,7 +897,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         del inputs["text"]
 
     elif self.services[cur_node].service_type == ServiceType.RETRIEVER:
-        retriever_parameters = kwargs.get("retriever_parameters")
+        retriever_parameters = _gp(kwargs, "retriever_parameters")
         if retriever_parameters:
             # inputs.update(retriever_parameters.model_dump())
             safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
@@ -894,7 +917,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # Format: "{base_mode}::labels:{label1},{label2},..."
         # The retriever parses this to build labels_to_filter for its DB-level
         # label filter (BM25 aql_filter_clause + dense post-filter).
-        retrieval_context = kwargs.get("retrieval_context", {})
+        retrieval_context = _gp(kwargs, "retrieval_context", {})
         # Build filter labels (category singular/plural + service). Extracted to
         # _build_filter_labels for testability.
         _filter_labels = _build_filter_labels(retrieval_context)
@@ -905,7 +928,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
-        reranker_parameters = kwargs.get("reranker_parameters")
+        reranker_parameters = _gp(kwargs, "reranker_parameters")
         if reranker_parameters:
             inputs.update(reranker_parameters.model_dump())
         if logflag:
@@ -918,9 +941,9 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
         rag_augmented_prompt = inputs["inputs"]
         # Get the full translated history *string* from kwargs
-        translated_history_string = kwargs.get("full_chat_history_string", "")
+        translated_history_string = _gp(kwargs, "full_chat_history_string", "")
 
-        user_details = kwargs.get("user_details", {})
+        user_details = _gp(kwargs, "user_details", {})
 
         user_context_string = ""
 
@@ -936,7 +959,7 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
 
         # CRITICAL: Inject explicit English language instructions when language is EN
         # This overrides model bias toward Spanish responses
-        original_language = kwargs.get("original_language")
+        original_language = _gp(kwargs, "original_language")
         if original_language and original_language.strip() == "EN":
             system_instructions = (
                 "\n\nMANDATORY: You MUST respond ONLY in English. "
@@ -1260,7 +1283,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         # 2. Fallback for raw TEI output
         elif isinstance(data, list):
-            reranker_parameters = kwargs.get("reranker_parameters")
+            reranker_parameters = _gp(kwargs, "reranker_parameters")
             top_n = reranker_parameters.top_n if reranker_parameters else 1
             original_docs = inputs.get("documents", [])
 
@@ -1794,7 +1817,16 @@ class ChatQnAService:
             return None
         return raw.decode("utf-8", errors="replace")
 
-    def add_remote_service(self):
+    def _build_rag_graph(self, include_rerank: bool = True, llm_endpoint: str | None = None):
+        """Build the RAG service graph (embedding → retriever → [rerank] → llm).
+
+        Single consolidated graph builder replacing the 5 near-duplicate
+        ``add_remote_service*`` variants (Story 1.4 pre-rebase cleanup). The only
+        real axes of variation are: (a) whether the rerank node is present, and
+        (b) the LLM endpoint (default ``/v1/chat/completions``; ``/v1/faqgen``
+        for the FAQ mode). The graph is otherwise identical across all modes.
+        """
+        llm_endpoint = llm_endpoint or f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions"
 
         embedding = MicroService(
             name="embedding",
@@ -1814,200 +1846,65 @@ class ChatQnAService:
             service_type=ServiceType.RETRIEVER,
         )
 
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
+        services = [embedding, retriever]
+        edges = [(embedding, retriever)]
+
+        if include_rerank:
+            rerank = MicroService(
+                name="rerank",
+                host=RERANK_SERVER_HOST_IP,
+                port=RERANK_SERVER_PORT,
+                endpoint="/v1/reranking",
+                use_remote_service=True,
+                service_type=ServiceType.RERANK,
+            )
+            services.append(rerank)
+            edges.append((retriever, rerank))
+            previous = rerank
+        else:
+            previous = retriever
 
         llm = MicroService(
             name="llm",
             host=LLM_SERVER_HOST_IP,
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
-            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
+            endpoint=llm_endpoint,
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        services.append(llm)
+        edges.append((previous, llm))
+
+        for service in services:
+            self.megaservice.add(service)
+        for src, dst in edges:
+            self.megaservice.flow_to(src, dst)
+
+    def add_remote_service(self):
+        """Full RAG graph: embedding → retriever → rerank → llm (chat/completions)."""
+        self._build_rag_graph(include_rerank=True)
 
     def add_remote_service_without_rerank(self):
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint=EMBEDDING_SERVER_ENDPOINT,
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            protocol=LLM_SERVER_PROTOCOL,
-            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-        self.megaservice.add(embedding).add(retriever).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, llm)
+        """RAG graph without the rerank node: embedding → retriever → llm."""
+        self._build_rag_graph(include_rerank=False)
 
     def add_remote_service_faqgen(self):
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint=EMBEDDING_SERVER_ENDPOINT,
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            protocol=LLM_SERVER_PROTOCOL,
-            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        """Full RAG graph with the FAQ LLM endpoint: embedding → retriever → rerank → llm (faqgen)."""
+        self._build_rag_graph(include_rerank=True, llm_endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/faqgen")
 
     def add_remote_service_without_translation(self):
+        """Alias of :meth:`add_remote_service` (the full graph) — kept for CLI/test compat.
+
+        The ``without_translation`` name predates the consolidation; GENIE's
+        translation happens in the chat handler, not as a graph node, so this
+        mode builds the same full graph as the default.
         """
-        Builds the full RAG pipeline wrapped with input and output translation.
-        Flow: translator_in -> embedding -> retriever -> rerank -> llm -> translator_out
-        """
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint=EMBEDDING_SERVER_ENDPOINT,
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            protocol=LLM_SERVER_PROTOCOL,
-            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        self.add_remote_service()
 
     def add_remote_service_genieai(self):
-        """
-        Builds the full RAG pipeline wrapped with input and output translation.
-        Flow: translator_in -> embedding -> retriever -> rerank -> llm -> translator_out
-        """
-
-        embedding = MicroService(
-            name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
-            port=EMBEDDING_SERVER_PORT,
-            endpoint=EMBEDDING_SERVER_ENDPOINT,
-            use_remote_service=True,
-            service_type=ServiceType.EMBEDDING,
-        )
-
-        retriever = MicroService(
-            name="retriever",
-            host=RETRIEVER_SERVICE_HOST_IP,
-            port=RETRIEVER_SERVICE_PORT,
-            endpoint="/v1/retrieval",
-            use_remote_service=True,
-            service_type=ServiceType.RETRIEVER,
-        )
-
-        rerank = MicroService(
-            name="rerank",
-            host=RERANK_SERVER_HOST_IP,
-            port=RERANK_SERVER_PORT,
-            endpoint="/v1/reranking",
-            use_remote_service=True,
-            service_type=ServiceType.RERANK,
-        )
-
-        llm = MicroService(
-            name="llm",
-            host=LLM_SERVER_HOST_IP,
-            port=LLM_SERVER_PORT,
-            protocol=LLM_SERVER_PROTOCOL,
-            endpoint=f"{LLM_SERVER_ENDPOINT_PREFIX}/v1/chat/completions",
-            use_remote_service=True,
-            service_type=ServiceType.LLM,
-        )
-
-        self.megaservice.add(embedding).add(retriever).add(rerank).add(llm)
-        self.megaservice.flow_to(embedding, retriever)
-        self.megaservice.flow_to(retriever, rerank)
-        self.megaservice.flow_to(rerank, llm)
+        """Alias of :meth:`add_remote_service` (the full graph) — kept for CLI/test compat."""
+        self.add_remote_service()
 
     @staticmethod
     def _build_translategemma_prompt(
@@ -2556,12 +2453,14 @@ class ChatQnAService:
                         "_blend_alpha": MULTI_TURN_BLEND_ALPHA,
                     },
                     llm_parameters=parameters,
-                    retriever_parameters=retriever_parameters,
-                    reranker_parameters=reranker_parameters,
-                    full_chat_history_string=translated_history_string,
-                    retrieval_context=retrieval_context,
-                    original_language=original_language,
-                    user_details=user_details,
+                    genie_params={
+                        "retriever_parameters": retriever_parameters,
+                        "reranker_parameters": reranker_parameters,
+                        "full_chat_history_string": translated_history_string,
+                        "retrieval_context": retrieval_context,
+                        "original_language": original_language,
+                        "user_details": user_details,
+                    },
                 )
                 _rag_duration = time.time() - _rag_start
 

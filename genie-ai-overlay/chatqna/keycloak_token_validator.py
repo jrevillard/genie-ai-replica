@@ -9,7 +9,7 @@ Provides defense-in-depth: each service validates tokens independently.
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from jose import JWSError, jwt
@@ -31,7 +31,7 @@ async def _fetch_jwks():
     """Fetch JWKS from Keycloak with caching."""
     global _jwks_keys, _jwks_fetched_at
 
-    now = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(UTC).timestamp()
     if _jwks_keys and (now - _jwks_fetched_at) < _JWKS_CACHE_TTL:
         return _jwks_keys
 

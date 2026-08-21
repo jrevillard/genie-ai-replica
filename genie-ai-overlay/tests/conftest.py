@@ -149,8 +149,6 @@ _integrations_tei_module.OpeaTEIReranking = type("OpeaTEIReranking", (), {"__ini
 sys.modules.setdefault("integrations", _integrations_mock)
 sys.modules.setdefault("integrations.tei", _integrations_tei_module)
 
-sys.modules.setdefault("comps.cores.proto.opea_docarray", MagicMock())
-
 # Reranker microservice telemetry import — opea_telemetry must be a passthrough decorator
 sys.modules.setdefault("comps.cores.telemetry", MagicMock())
 _opea_telemetry_module = MagicMock()

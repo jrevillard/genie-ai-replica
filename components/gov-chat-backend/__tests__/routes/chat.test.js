@@ -4,6 +4,7 @@ require('../setup-env');
 
 // Mock shared-lib — virtual because it only exists after Docker packaging
 jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
+jest.mock('../../shared-lib/validation-utils', () => require('../mocks/shared-lib'), { virtual: true });
 
 // Mock keycloak-auth-service (used by middleware)
 jest.mock('../../services/keycloak-auth-service', () => ({
@@ -608,7 +609,7 @@ describe('GET /api/chat/query/:queryId/messages', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual(queryMessages);
-    expect(chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('q-1');
+    expect(chatHistoryService.findMessagesForQuery).toHaveBeenCalledWith('q-1', mockUser.iss_sub);
   });
 });
 

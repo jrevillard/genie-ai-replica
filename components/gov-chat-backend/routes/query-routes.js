@@ -7,6 +7,7 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
@@ -888,10 +889,12 @@ module.exports = (queryService) => {
       if (!userId) {
         return res.status(401).json({ error: 'UNAUTHENTICATED', message: 'User not authenticated' });
       }
-      const { limit = 20, offset = 0, ...criteria } = req.query;
+      const { limit, offset, ...criteria } = req.query;
       criteria.userId = userId;
-      logger.info(`Searching queries for user ${userId}, limit: ${limit}, offset: ${offset}`);
-      const results = await queryService.searchQueries(criteria, parseInt(limit), parseInt(offset));
+      const parsedLimit = parsePositiveInt(limit, 20, { min: 1, max: 100 });
+      const parsedOffset = parsePositiveInt(offset, 0, { min: 0 });
+      logger.info(`Searching queries for user ${userId}, limit: ${parsedLimit}, offset: ${parsedOffset}`);
+      const results = await queryService.searchQueries(criteria, parsedLimit, parsedOffset);
       res.json(results);
     } catch (error) {
       logger.error(`Error searching queries: ${error.message}`, { stack: error.stack });
@@ -932,9 +935,19 @@ module.exports = (queryService) => {
   router.get('/:queryId/conversations', async (req, res, next) => {
     try {
       logger.info(`Getting conversations for query ${req.params.queryId}`);
-      const conversations = await queryService.getConversationsForQuery(req.params.queryId);
+      const userId = req.user?.iss_sub;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        });
+      }
+      const conversations = await queryService.getConversationsForQuery(req.params.queryId, userId);
       res.json(conversations);
     } catch (error) {
+      if (error.message === 'Access denied') {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
       logger.error(`Error getting conversations for query ${req.params.queryId}: ${error.message}`, {
         stack: error.stack
       });

@@ -32,12 +32,6 @@ from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDo
 from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader, document_loader, is_valid_content
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
 from comps.dataprep.src.utils import get_separators
-
-# Align OPEA parent with GENIE convention: use ARANGO_DB (default: genie-ai)
-# instead of ARANGO_DB_NAME (default: _system). Both retriever and dataprep
-# must target the same database for RAG retrieval to find graph data.
-_parent_mod.ARANGO_DB_NAME = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "_system"))
-
 from fastapi import HTTPException
 from langchain_arangodb import ArangoGraph
 from langchain_core.documents import Document
@@ -89,9 +83,13 @@ LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
 # context prepended to each chunk before embedding + labeling, so chunks carry
 # document-level subject (fixes label/embedding context loss; see
-# spec-contextual-retrieval.md). Default OFF — opt-in. Adds one LLM call per
-# chunk (concurrency-bounded) when enabled. Part B (retriever BM25 hybrid) is a
-# separate spec.
+# spec-contextual-retrieval.md). Default ON; set false to disable (no-op beyond
+# skipping context gen). Adds one LLM call per chunk (concurrency-bounded) when
+# enabled. Part B (retriever BM25 hybrid) is a separate spec.
+# BREAKING CHANGE (v1.3 → v1.5): default changed from "false" to "true".
+# Enables Contextual Retrieval (Anthropic-style) by default — adds one vLLM call
+# per chunk at ingest (~20% slower, higher quality embeddings). Set to "false" to
+# restore v1.3 behavior.
 CONTEXTUAL_RETRIEVAL_ENABLED = os.getenv("CONTEXTUAL_RETRIEVAL_ENABLED", "true").lower() == "true"
 # Model used for context generation. Empty → reuse VLLM_MODEL_ID (auto-detected
 # on remote GPU nodes). Set to a smaller/cheaper model to cut context-gen cost.
@@ -112,10 +110,10 @@ DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL = int(os.getenv("DATAPREP_CONTEXTUAL_DO
 #      document-level context is prepended to every chunk (N× cheaper; still
 #      propagates the document subject — enough to fix label/embedding loss).
 CONTEXTUAL_STRATEGY = os.getenv("CONTEXTUAL_STRATEGY", "per_chunk").strip().lower() or "per_chunk"
-# Decoupled mode: when true, label the RAW chunk and use the generated context
-# ONLY for the embedding. Recommended — keeps label precision (the labeler sees
-# the raw chunk) while propagating the document subject via the vector. Default
-# false (context fed to both embedding and labeling).
+# Decoupled mode: when true (default), label the RAW chunk and use the generated
+# context ONLY for the embedding. Recommended — keeps label precision (the
+# labeler sees the raw chunk) while propagating the document subject via the
+# vector. When false, the context is fed to both embedding and labeling.
 CONTEXTUAL_LABEL_RAW = os.getenv("CONTEXTUAL_LABEL_RAW", "true").lower() == "true"
 # Max output tokens for the context-generation LLM calls (doc-level + per-chunk).
 # The model writes a 50-100 word context (~196 tokens observed on large docs); the
@@ -241,6 +239,45 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
+    def _initialize_client(self):
+        """Override the OPEA parent's DB selection with the GENIE convention.
+
+        The parent reads the module-level ``ARANGO_DB_NAME`` (default ``_system``);
+        GENIE uses ``ARANGO_DB`` (default ``genie-ai``) so dataprep and retriever
+        target the SAME database for RAG retrieval. This replaces the former
+        import-time ``_parent_mod.ARANGO_DB_NAME = ...`` monkeypatch (Story 1.4
+        pre-rebase cleanup) with a subclass override — no module mutation.
+
+        The parent's own defaults are preserved for the connection params it
+        reads: ``ARANGO_URL`` (``http://localhost:8529``), ``ARANGO_USERNAME``
+        (``root``), ``ARANGO_PASSWORD`` (``test``). Only the DB name follows the
+        GENIE convention (``ARANGO_DB`` → ``ARANGO_DB_NAME`` → ``genie-ai``),
+        matching the retriever's default so both target the same database.
+        """
+        # GENIE convention: ARANGO_DB wins, falls back to ARANGO_DB_NAME,
+        # then genie-ai (same default as the retriever).
+        db_name = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "genie-ai"))
+
+        import arango
+
+        self.client = arango.ArangoClient(hosts=os.getenv("ARANGO_URL", "http://localhost:8529"))
+        sys_db = self.client.db(
+            name="_system",
+            username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
+            password=os.getenv("ARANGO_PASSWORD", "test"),
+            verify=True,
+        )
+
+        if not sys_db.has_database(db_name):
+            sys_db.create_database(db_name)
+
+        self.db = self.client.db(
+            name=db_name,
+            username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
+            password=os.getenv("ARANGO_PASSWORD", "test"),
+            verify=True,
+        )
+
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
         logger.debug(
@@ -273,9 +310,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             detected = get_model_id(_vllm_endpoint)
             if detected:
                 os.environ["VLLM_MODEL_ID"] = detected
-                # Also patch the parent module constant (evaluated at import time)
-                import comps.dataprep.src.integrations.arangodb as _parent_mod
-
+                # Patch the parent module constant (captured at parent import
+                # time — os.environ alone does not update it). The parent reads
+                # VLLM_MODEL_ID as a module constant, so this reassignment is
+                # the runtime mechanism for remote-model auto-detection.
                 _parent_mod.VLLM_MODEL_ID = detected
                 logger.info(f"Auto-detected remote vLLM model for graph extraction: {detected}")
 
@@ -1276,14 +1314,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
                 # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
                 contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
-                # Decoupled mode (CONTEXTUAL_LABEL_RAW): label the RAW chunk (the
-                # context prefix distorts labeling — over/under-label) and use the
-                # contextualized text ONLY for the embedding. Default: label the
-                # contextualized text (context fed to both).
+                # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
+                # RAW chunk (the context prefix distorts labeling — over/under-
+                # label) and use the contextualized text ONLY for the embedding.
+                # When false, the context is fed to both (label contextualized).
                 label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
                 labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
 
                 # 5. Graph Insertion (BATCHED & CONCURRENT)
+                # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
+                # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
+                # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
 
                 documents_to_process = []

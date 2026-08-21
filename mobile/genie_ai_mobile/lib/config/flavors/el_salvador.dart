@@ -7,7 +7,7 @@ import '../keycloak_config.dart';
 //  - Keycloak uses the legacy /auth/ prefix, so keycloakUrl must end in "/auth"
 //    (the realmUrl getter appends /realms/<realm>).
 
-const config = KeycloakConfig(
+final config = KeycloakConfig(
   keycloakUrl: 'https://mvp.ai.assembly.govstack.global/auth',
   realm: 'genie',
   clientId: 'genie-mobile-el-salvador',

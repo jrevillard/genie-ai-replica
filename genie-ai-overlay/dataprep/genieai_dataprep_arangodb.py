@@ -1486,6 +1486,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             self._current_repo_id = graph_name[4:]
         else:
             self._current_repo_id = None
+        # The bundle-id cache is keyed by concept_id, but concept ids RECUR
+        # across runs/repos ('index', 'service_directory', ...). A cache hit
+        # from a previous ingest would mirror this run's logs into the
+        # PREVIOUS (possibly deleted) bundle. Invalidate on every ingest —
+        # the lookup is one cheap GET per concept (live-caught 2026-08-21:
+        # a whole run's 25 stage logs landed on the prior run's bundle id).
+        self._bundle_file_id_cache = {}
         # Cache the concept's filename eagerly so the per-stage log prefix
         # is populated without an extra lookup.
         concept_id = getattr(input, "concept_id", None)

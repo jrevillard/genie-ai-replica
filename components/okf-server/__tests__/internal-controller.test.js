@@ -14,10 +14,18 @@ jest.mock('../shared-lib/db-connection-service', () => {
 });
 jest.mock('../services/concept-meta-service', () => ({
   upsertConceptMeta: jest.fn(async () => ({ action: 'updated' })),
-  getConceptMetaFromAnyRepo: jest.fn(async () => ({ repo_id: 'r1', concept_id: 'index', bundle_version: 1 }))
+  getConceptMetaFromAnyRepo: jest.fn(async () => ({ repo_id: 'r1', concept_id: 'index', bundle_version: 1 })),
+  getConceptMeta: jest.fn(async () => ({ repo_id: 'r1', concept_id: 'index', bundle_version: 1 })),
+  countByIndexStatus: jest.fn(async (repo, st) => (st === 'parsed' ? 0 : 0))
 }));
 jest.mock('../services/edge-service', () => ({
   writeRepoConceptEdges: jest.fn(async () => ({ written: 1, dropped: [] }))
+}));
+jest.mock('../services/service-token', () => ({
+  authedAxios: { get: jest.fn(), post: jest.fn(), patch: jest.fn(async () => ({ status: 200 })) }
+}));
+jest.mock('../workers/ingestWorker', () => ({
+  getBundleFileId: jest.fn(async () => 'bundle-file-1')
 }));
 jest.mock('../services/audit-service', () => ({ writeAudit: jest.fn().mockResolvedValue(null) }));
 jest.mock('../config', () => ({

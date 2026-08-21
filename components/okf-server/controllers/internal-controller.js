@@ -11,7 +11,45 @@
 const { logger } = require('../shared-lib/logger');
 const conceptMetaService = require('../services/concept-meta-service');
 const edgeService = require('../services/edge-service');
+const { authedAxios } = require('../services/service-token');
+const { getBundleFileId } = require('../workers/ingestWorker');
 const config = require('../config');
+
+/**
+ * Bundle zip state machine (David's directive: a bundle is NEVER 'Ingested'
+ * until its concepts actually are). The bundle is stored 'Pending' (doc-repo);
+ * this controller — the single owner of concept terminal transitions — moves
+ * it 'Ingesting' when its first concept starts and 'Ingested' (or 'Ingestion
+ * Error' when any concept failed) when no concept remains 'parsed'.
+ * Best-effort: a doc-repo hiccup never fails the concept callback.
+ */
+async function transitionBundle(repoId, status) {
+  try {
+    const bundleFileId = await getBundleFileId(repoId);
+    await authedAxios.patch(
+      `${config.documentRepository.url}/api/files/${encodeURIComponent(bundleFileId)}/status`,
+      { dataprep: { status } },
+      { timeout: 10000 }
+    );
+    logger.info(`Bundle state machine: ${status} (repo ${repoId}, bundle ${bundleFileId})`);
+  } catch (err) {
+    const st = err && err.response && err.response.status;
+    if (st !== 404 && st !== 409) {
+      logger.warn(`Bundle state machine -> ${status} failed: [${repoId}] status=${st || 'n/a'} err=${err.message}`);
+    }
+  }
+}
+
+/** After a concept reaches a terminal state, close the bundle out when the
+ * repo has no concepts left to ingest. 'rejected' concepts (hard-gate) count
+ * as settled-not-failed: the bundle reflects the INGESTION outcome, and the
+ * rejection is surfaced via meta + logs, not a bundle error. */
+async function settleBundleIfComplete(repoId) {
+  const remaining = await conceptMetaService.countByIndexStatus(repoId, 'parsed');
+  if (remaining > 0) return;
+  const failed = await conceptMetaService.countByIndexStatus(repoId, 'failed');
+  await transitionBundle(repoId, failed > 0 ? 'Ingestion Error' : 'Ingested');
+}
 
 /**
  * Dataprep completion callback for a concept (content-only path).
@@ -58,6 +96,8 @@ async function conceptStatus(req, res) {
     // arrived and flipped the row back; live-caught 2026-08-21).
     if (st === 'ingesting') {
       logger.info('Concept status callback: transient Ingesting (no transition)', { repo_id, concept_id });
+      // First dataprep activity for this bundle → 'Ingesting' (idempotent).
+      await transitionBundle(repo_id, 'Ingesting');
       return res.status(200).json({ success: true, transient: true });
     }
     if (st === 'ingested') {
@@ -89,6 +129,8 @@ async function conceptStatus(req, res) {
         { patch: { index_status: 'failed', last_error: `${status} (chunks=${chunk_count ?? 0})` } }
       );
     }
+    // Bundle state machine: close the bundle when its last concept settles.
+    await settleBundleIfComplete(repo_id);
     logger.info('Concept status callback applied', { repo_id, concept_id, status, chunk_count });
     return res.status(200).json({ success: true });
   } catch (err) {

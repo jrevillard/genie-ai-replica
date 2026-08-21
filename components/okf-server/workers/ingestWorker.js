@@ -403,4 +403,4 @@ function stop() {
   _sweepTimer = null;
 }
 
-module.exports = { start, stop, _processOneJob, _sweepOnce, claimNextJob };
+module.exports = { start, stop, _processOneJob, _sweepOnce, claimNextJob, getBundleFileId };

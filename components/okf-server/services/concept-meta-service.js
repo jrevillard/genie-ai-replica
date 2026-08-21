@@ -280,4 +280,25 @@ async function getConceptMetaFromAnyRepo(concept_id) {
   return rows[0];
 }
 
-module.exports = { upsertConceptMeta, getConceptMeta, getConceptMetaFromAnyRepo, buildMetaDoc, contentHash };
+/** Count a repo's meta rows at a given index_status (bundle completion
+ * check — the internal controller asks "are any concepts still parsed?"). */
+async function countByIndexStatus(repo_id, index_status) {
+  if (!repo_id || !index_status) return 0;
+  const db = await getDb();
+  const rows = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.index_status == @st COLLECT WITH COUNT INTO n RETURN n',
+      { rid: repo_id, st: index_status }
+    )
+  ).all();
+  return rows[0] || 0;
+}
+
+module.exports = {
+  upsertConceptMeta,
+  getConceptMeta,
+  getConceptMetaFromAnyRepo,
+  buildMetaDoc,
+  contentHash,
+  countByIndexStatus
+};

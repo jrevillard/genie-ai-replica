@@ -853,6 +853,15 @@ class FileService {
   async addIngestionLog(fileId, logData) {
     try {
       const db = await this.getDb();
+      // Integrity (live-caught 2026-08-21): a stale caller (e.g. dataprep's
+      // cross-run bundle-id cache) silently wrote logs against DELETED
+      // files — orphan rows the UI can never surface. Refuse instead.
+      const fileExists = await db.collection('files').firstExample({ file_id: fileId });
+      if (!fileExists) {
+        const err = new Error('File not found');
+        err.statusCode = 404;
+        throw err;
+      }
       const logEntry = {
         file_id: fileId,
         timestamp: new Date().toISOString(),
@@ -960,7 +969,13 @@ class FileService {
         ...(isBundle
           ? {
               is_bundle: true,
-              dataprep: { status: 'Ingested', ingest_date: new Date().toISOString(), retract_date: '' }
+              // Story 4.8-amend (bundle state machine, David's directive): a
+              // bundle zip is STORED at 'Pending' — its CONCEPTS are ingested
+              // asynchronously. The okf-server transitions it 'Ingesting' →
+              // 'Ingested' (or 'Ingestion Error') as its concepts complete.
+              // It must NEVER be born 'Ingested' — nothing has been ingested
+              // at store time.
+              dataprep: { status: 'Pending', retract_date: '' }
             }
           : {})
       });

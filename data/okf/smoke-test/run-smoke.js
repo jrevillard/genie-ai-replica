@@ -385,6 +385,28 @@ async function main() {
     fail(`publish gate must be OPEN after a clean full scan; reasons: ${gate.reasons.join('; ')}`);
   }
 
+  // ── control-plane scratch cleanup (IMMEDIATE — live-caught 2026-08-21) ──
+  // The steps above write 6 scratch meta rows into REPO_ID to exercise the
+  // 2.9.2 writer + PII + metrics. Their assert-purpose is NOW served — and
+  // the 2.9.4 worker (15s poll) claims ANY 'parsed' row, so the scratch rows
+  // MUST be gone before it wakes: left alive they (a) get chunked into the
+  // WRONG graph (OKF_smoke-kenya-repo-0001 — wasted GPU calls) and (b)
+  // duplicate every concept_id for the completion callback. Deleting here
+  // (in main(), right after the control-plane asserts — NOT at ingestPhase
+  // start) closes the race window.
+  {
+    const scratchRows = await aqlAll(
+      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+        REPO_ID +
+        "' REMOVE m IN okf_concepts_meta COLLECT WITH COUNT INTO deleted RETURN deleted"
+    );
+    if (scratchRows[0] > 0) {
+      console.log(
+        '  cleanup: removed ' + scratchRows[0] + ' control-plane scratch meta rows (repo ' + REPO_ID + ') — worker-race guard'
+      );
+    }
+  }
+
   // 7 (Story 6.1): HTTP authz matrix against THIS server (localhost:3002).
   // Three tokens arrive via env (minted host-side; ROPC enable→mint→revert):
   //   OKF_SMOKE_TOKEN_SCOPED   — user with okf_scopes=[okf:smoke:{REPO_ID}:read]
@@ -609,22 +631,8 @@ async function ingestPhase(db) {
     ? pass('integrity: doc-repo rejects graph_name != OKF_{repo_id} (ownership guard)')
     : fail('ownership guard: expected 400, got ' + own.status + ' ' + JSON.stringify(own.body).slice(0, 100));
 
-  // ── control-plane scratch cleanup (ALWAYS — live-caught 2026-08-21) ──
-  // The control-plane phase (main() step 4) writes 6 scratch meta rows into
-  // REPO_ID ('smoke-kenya-repo-0001') to exercise the 2.9.2 writer + metrics.
-  // Those asserts have ALREADY run by this point. If left in place they (a)
-  // duplicate every concept_id (the dataprep completion callback resolves
-  // concept → repo with LIMIT 2 and 404s on ambiguity — meta never
-  // transitions, the worker retry-loops forever), and (b) the worker claims
-  // the scratch rows FIRST (oldest updated_at) and chunks them into the WRONG
-  // graph (OKF_smoke-kenya-repo-0001). Delete them once their assert-purpose
-  // is served; the ingest phase below creates its own clean API repo.
-  const scratchRows = await aqlAll(
-    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" + REPO_ID + "' REMOVE m IN okf_concepts_meta COLLECT WITH COUNT INTO deleted RETURN deleted"
-  );
-  if (scratchRows[0] > 0) {
-    console.log('  cleanup: removed ' + scratchRows[0] + ' control-plane scratch meta rows (repo ' + REPO_ID + ') — drain-integrity guard');
-  }
+  // (control-plane scratch rows are already removed in main() immediately
+  // after their asserts — see the worker-race guard there.)
 
   // ── re-run safety (CLEANUP=full only): retract + delete prior artifacts at
   //    phase START — VIA THE CRUD APIS, no raw AQL writes. Prior smoke repos

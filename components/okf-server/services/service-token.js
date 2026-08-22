@@ -121,6 +121,19 @@ const authedAxios = {
       _clearTokenCache();
       return axios.post(url, body, withAuth(await getServiceToken(), opts));
     }
+  },
+  async patch(url, body, opts = {}) {
+    // Story 4.8-amend (bundle state machine): the internal controller PATCHes
+    // the bundle zip's doc-repo status (Pending → Ingesting → Ingested|Error).
+    // Same 401-retry shape as get/post.
+    const token = await getServiceToken();
+    try {
+      return await axios.patch(url, body, withAuth(token, opts));
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err;
+      _clearTokenCache();
+      return axios.patch(url, body, withAuth(await getServiceToken(), opts));
+    }
   }
 };
 

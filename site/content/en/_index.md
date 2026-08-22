@@ -68,19 +68,16 @@ weight: 1
       <h3>El Salvador</h3>
       <p>AI assistant for farming communities based on CENTA knowledge library</p>
     </article>
-
     <article class="g-card">
       <span class="g-card__tag">STATUS: ONGOING</span>
       <h3>Lesotho</h3>
       <p>AI assistant for agriculture extension workers integrated with local data</p>
     </article>
-
     <article class="g-card">
       <span class="g-card__tag">STATUS: ONGOING</span>
       <h3>The Gambia</h3>
       <p>Preventive health decision support tool for health workers and communities</p>
     </article>
-
     <article class="g-card">
       <span class="g-card__tag">STATUS: ONGOING</span>
       <h3>Bangladesh</h3>

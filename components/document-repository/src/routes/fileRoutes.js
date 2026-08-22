@@ -909,6 +909,12 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']
  *       '401':
  *         description: Unauthorized
  */
-router.patch('/:fileId/status', authorizeRole(['Admin', 'dataprep-service']), fileController.updateFileStatus);
+router.patch(
+  '/:fileId/status',
+  // Story 4.8-amend: the okf-server service client drives the BUNDLE state
+  // machine (Pending → Ingesting → Ingested|Error) through this route.
+  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  fileController.updateFileStatus
+);
 
 module.exports = router;

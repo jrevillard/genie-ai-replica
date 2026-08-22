@@ -395,11 +395,14 @@ async function main() {
   // (in main(), right after the control-plane asserts — NOT at ingestPhase
   // start) closes the race window.
   {
-    const scratchRows = await aqlAll(
-      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-        REPO_ID +
-        "' REMOVE m IN okf_concepts_meta COLLECT WITH COUNT INTO deleted RETURN deleted"
-    );
+    // (aqlAll is phase-scoped — query via the shared db handle here)
+    const scratchRows = await (
+      await db.query(
+        "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+          REPO_ID +
+          "' REMOVE m IN okf_concepts_meta COLLECT WITH COUNT INTO deleted RETURN deleted"
+      )
+    ).all();
     if (scratchRows[0] > 0) {
       console.log(
         '  cleanup: removed ' + scratchRows[0] + ' control-plane scratch meta rows (repo ' + REPO_ID + ') — worker-race guard'

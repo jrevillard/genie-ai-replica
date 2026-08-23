@@ -925,7 +925,10 @@ async function ingestPhase(db) {
   // markdown DIRECTLY to dataprep. The completion callback (dataprep → okf-server
   // internal concept-status) transitions the meta row to indexed|failed and
   // writes the post-index edges. The smoke settle-waits on the meta row.
-  const DRAIN_CONCEPTS = GOOD_FILES; // 5 conforming; bad_concept is rejected (WP-A, never enqueued)
+  // concept_ids are file names MINUS .md (the parser's bare-id form) — polling
+  // for 'index.md' never matches the meta row 'index' (live-caught: the drain
+  // loop always timed out 25 min while the worker had already finished).
+  const DRAIN_CONCEPTS = GOOD_FILES.map((f) => f.replace(/\.md$/, ''));
   console.log('  draining: ' + DRAIN_CONCEPTS.length + ' OKF concepts (WORKER-paced — meta row poll)...');
   const statuses = {};
   for (let i = 0; i < 100; i++) {
@@ -987,17 +990,29 @@ async function ingestPhase(db) {
     );
     if (
       metaAfter.length === EXPECTED_CONCEPTS &&
-      metaAfter.every((m) => m.index_status === 'indexed' && typeof m.last_good_index_at === 'string')
+      // bad_concept is REJECTED (WP-A — never indexed, never last_good stamped);
+      // only the CONFORMING concepts must settle indexed + stamped.
+      metaAfter.every(
+        (m) =>
+          (m.concept_id === 'bad_concept' ? m.index_status === 'rejected' : m.index_status === 'indexed') &&
+          (m.concept_id === 'bad_concept' || typeof m.last_good_index_at === 'string')
+      )
     ) {
       break;
     }
     await new Promise((r) => setTimeout(r, 3000));
   }
-  const allIndexed = metaAfter.length === EXPECTED_CONCEPTS && metaAfter.every((m) => m.index_status === 'indexed');
+  const goodRows = metaAfter.filter((m) => m.concept_id !== 'bad_concept');
+  const allIndexed =
+    metaAfter.length === EXPECTED_CONCEPTS &&
+    metaAfter.some((m) => m.concept_id === 'bad_concept' && m.index_status === 'rejected') &&
+    goodRows.every((m) => m.index_status === 'indexed');
   allIndexed
-    ? pass('worker transition: all ' + EXPECTED_CONCEPTS + ' meta rows index_status=indexed (parsed→indexed)')
+    ? pass(
+        'worker transition: 5 conforming meta rows indexed + bad_concept rejected (parsed→indexed / hard-gate)'
+      )
     : fail('worker transition: ' + JSON.stringify(metaAfter.map((m) => [m.concept_id, m.index_status])));
-  const allStamped = metaAfter.every((m) => typeof m.last_good_index_at === 'string' && m.last_good_index_at);
+  const allStamped = goodRows.every((m) => typeof m.last_good_index_at === 'string' && m.last_good_index_at);
   allStamped
     ? pass('worker transition: last_good_index_at stamped on every concept')
     : fail('worker transition: missing last_good_index_at: ' + JSON.stringify(metaAfter));
@@ -1084,8 +1099,8 @@ async function ingestPhase(db) {
     { concepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
-  r2.skipped_dedup === EXPECTED_CONCEPTS && r2.enqueued === 0
-    ? pass('DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' + EXPECTED_CONCEPTS + ', enqueued=0')
+  r2.skipped_dedup === EXPECTED_CONCEPTS - 1 && r2.enqueued === 0
+    ? pass('DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' + (EXPECTED_CONCEPTS - 1) + ', enqueued=0')
     : fail(
         'dedup summary: ' +
           JSON.stringify({ skipped_dedup: r2.skipped_dedup, enqueued: r2.enqueued, errors: r2.enqueue_errors })
@@ -1096,8 +1111,8 @@ async function ingestPhase(db) {
   const metaPostDedup = await aqlAll(
     "FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN KEEP(d, ['index_status'])"
   );
-  metaPostDedup.every((m) => m.index_status === 'indexed')
-    ? pass('re-ingest: index_status stays indexed (writer protection — never downgraded by 4b)')
+  metaPostDedup.every((m) => m.index_status === 'indexed' || m.index_status === 'rejected')
+    ? pass('re-ingest: index_status stays indexed|rejected (writer protection — never downgraded by 4b)')
     : fail('index_status downgraded after re-ingest: ' + JSON.stringify(metaPostDedup));
   const filesAfter = (await aqlAll(filesCountQuery))[0];
   filesAfter === filesBefore
@@ -1108,6 +1123,87 @@ async function ingestPhase(db) {
   // In-container service call (the HTTP route's authz matrix is unit-tested;
   // user tokens are expired by this point in the run).
   const versionService = require('./services/version-service');
+  // The mint's PII gate requires the INGEST repo's repo-level scan complete —
+  // the orchestrator scans concepts (4d) but the repo marker is only set by
+  // an explicit repo-level scan pass (same call the control-plane phase makes
+  // for the scratch repo). Live-caught: mint refused 'pii_scan_status !=
+  // complete' with all concepts pii_state=clean.
+  await piiService.markRepoPiiScanned(INGEST_REPO);
+  // ── (ix-a) SAD-PATH PUBLISH GATE (WP-A / FR-25): this repo's bundle
+  // contains bad_concept (REJECTED + conformance issues) — mint MUST refuse.
+  // "No invalid concept reaches published."
+  let sadGateRefused = null;
+  try {
+    await versionService.mintVersion(INGEST_REPO, { trigger: 'publish', source_ref: 'smoke://sad/v1' }, { sub: 'smoke-run' });
+    fail('WP-A publish gate: sad-repo mint SUCCEEDED — the gate did not enforce');
+  } catch (e) {
+    sadGateRefused = e;
+    (e.code === 'PUBLISH_GATE_BLOCKED' || /gate|conform|rejected|indexed/i.test(e.message))
+      ? pass('WP-A publish gate: sad-repo mint REFUSED (' + (e.code || e.message).toString().slice(0, 80) + ')')
+      : fail('sad-repo mint refused for the WRONG reason: ' + e.message.slice(0, 120));
+  }
+
+  // ── (ix-b) HAPPY PATH — a SECOND repo + the CLEAN bundle (requirement 11:
+  // happy + sad as SEPARATE repos and SEPARATE bundles so both results stay
+  // inspectable). All remaining lifecycle phases (dedup re-ingest, mint v1/v2,
+  // edges, clone, retraction) run against the HAPPY repo.
+  const repositoryServiceLate = require('./services/repository-service');
+  const HAPPY_NAME = 'Kenya Government Services Knowledge Base (smoke happy)';
+  const HAPPY_COUNT = 5; // the clean bundle's conforming concepts
+  // Re-run safety: remove a prior happy repo by name.
+  const priorHappy = await aqlAll(
+    "FOR r IN okf_repositories FILTER r.name == '" + HAPPY_NAME + "' RETURN KEEP(r, ['repo_id'])"
+  );
+  for (const ph of priorHappy) {
+    try { await repositoryServiceLate.remove(ph.repo_id, { sub: 'smoke-run' }); } catch (e) { /* best-effort */ }
+  }
+  const happyRepo = await repositoryServiceLate.create(
+    { name: HAPPY_NAME, domain: 'smoke', acl: { required_scopes: [] } },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  INGEST_REPO = happyRepo.repo_id;
+  OKF_GRAPH = happyRepo.graph_name;
+  pass('happy path: second repo created (' + INGEST_REPO + ' graph ' + OKF_GRAPH + ')');
+  const happyZipB64 = fs.readFileSync('/app/kenya-bundle-clean.zip').toString('base64');
+  const rh = await ingestService.ingestRepoConcepts(
+    INGEST_REPO,
+    { zip: happyZipB64, bundle_name: 'kenya-bundle-clean.zip', labels: SELECTED_KH_LABELS },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  rh.total === 5 && rh.parsed === 5 && rh.rejected === 0 && rh.enqueued === 5
+    ? pass('happy ingest: 202-equivalent summary (total=5 parsed=5 rejected=0 enqueued=5)')
+    : fail('happy ingest summary: ' + JSON.stringify({ total: rh.total, parsed: rh.parsed, rejected: rh.rejected, enqueued: rh.enqueued }));
+  // Worker drains the happy repo's 5 concepts (settle-wait, same poll shape).
+  console.log('  happy drain: 5 concepts (WORKER-paced)...');
+  let happySettled = false;
+  for (let i = 0; i < 100 && !happySettled; i++) {
+    await new Promise((r) => setTimeout(r, 15000));
+    const rows = await aqlAll(
+      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+        INGEST_REPO + "' RETURN KEEP(m, ['index_status'])"
+    );
+    happySettled = rows.length === 5 && rows.every((m) => m.index_status === 'indexed' || m.index_status === 'failed');
+  }
+  happySettled
+    ? pass('happy drain: all 5 concepts settled (worker + callback)')
+    : fail('happy drain: concepts did not settle in 25 min');
+  // Happy bundle state machine + log completeness (same asserts as the sad repo).
+  let happyBundle = null;
+  for (let i = 0; i < 20; i++) {
+    happyBundle = (
+      await aqlAll(
+        "FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' AND f.is_bundle == true RETURN KEEP(f, ['file_id','dataprep'])"
+      )
+    )[0];
+    if (happyBundle && happyBundle.dataprep && happyBundle.dataprep.status === 'Ingested') break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  const happyBundleStatus = happyBundle && happyBundle.dataprep && happyBundle.dataprep.status;
+  happyBundleStatus === 'Ingested'
+    ? pass('happy bundle state machine: Pending → Ingesting → Ingested')
+    : fail('happy bundle state machine: expected Ingested, got "' + happyBundleStatus + '"');
+  bundleAfter = happyBundle; // the lifecycle + log-completeness asserts below read this
+  await piiService.markRepoPiiScanned(INGEST_REPO);
   const mint1 = await versionService.mintVersion(
     INGEST_REPO,
     { trigger: 'publish', source_ref: 'smoke://kenya-bundle/v1' },
@@ -1128,11 +1224,11 @@ async function ingestPhase(db) {
       INGEST_REPO +
       "' SORT m.concept_id RETURN KEEP(m, ['concept_id','content_hash'])"
   );
-  manifest1.concept_count === EXPECTED_CONCEPTS &&
+  manifest1.concept_count === HAPPY_COUNT &&
   manifest1.concepts.every(
     (c, i) => c.concept_id === metaHashes[i].concept_id && c.content_hash === metaHashes[i].content_hash
   )
-    ? pass('manifest v1: all ' + EXPECTED_CONCEPTS + ' concepts snapshotted with the STORED canonical hashes')
+    ? pass('manifest v1: all ' + HAPPY_COUNT + ' concepts snapshotted with the STORED canonical hashes')
     : fail(
         'manifest v1 mismatch: ' +
           JSON.stringify(manifest1.concepts.slice(0, 2)) +
@@ -1163,8 +1259,8 @@ async function ingestPhase(db) {
     { concepts: modifiedConcepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
-  r3.skipped_dedup === EXPECTED_CONCEPTS - 1 && r3.enqueued === 1
-    ? pass('modified re-ingest: ' + (EXPECTED_CONCEPTS - 1) + ' dedup-skipped, 1 enqueued (changed concept carries v1)')
+  r3.skipped_dedup === HAPPY_COUNT - 1 && r3.enqueued === 1
+    ? pass('modified re-ingest: ' + (HAPPY_COUNT - 1) + ' dedup-skipped, 1 enqueued (changed concept carries v1)')
     : fail('modified re-ingest summary: ' + JSON.stringify({ skipped: r3.skipped_dedup, enqueued: r3.enqueued }));
   const versionedFile = (
     await aqlAll(
@@ -1313,7 +1409,7 @@ async function ingestPhase(db) {
       OKF_GRAPH +
       "_ENTITY` FILTER STARTS_WITH(v._key, 'c_') RETURN KEEP(v, ['_key','concept_id','bundle_version'])"
   );
-  conceptEntities.length >= EXPECTED_CONCEPTS
+  conceptEntities.length >= HAPPY_COUNT
     ? pass(
         'edges: concept ENTITY vertices exist for the ' +
           EXPECTED_CONCEPTS +
@@ -1399,7 +1495,7 @@ async function ingestPhase(db) {
       INGEST_REPO +
       "' RETURN KEEP(m, ['concept_id','title','bundle_version','content_hash','index_status'])"
   );
-  cloneMeta.length === EXPECTED_CONCEPTS
+  cloneMeta.length === HAPPY_COUNT
     ? pass('clone meta: ' + cloneMeta.length + ' concepts copied (source had ' + srcMeta2.length + ')')
     : fail('clone meta count: ' + cloneMeta.length);
   const tripleOk =
@@ -1439,7 +1535,7 @@ async function ingestPhase(db) {
     { concepts: cloneConcepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
-  rc.skipped_dedup === EXPECTED_CONCEPTS - 1 && rc.enqueued === 1
+  rc.skipped_dedup === HAPPY_COUNT - 1 && rc.enqueued === 1
     ? pass(
         'clone re-ingest: ' +
           (EXPECTED_CONCEPTS - 1) +
@@ -1704,7 +1800,7 @@ async function ingestPhase(db) {
           JSON.stringify(okfIds.filter((id) => id !== retractFile.file_id)) +
           ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
       );
-      survivors.length === EXPECTED_CONCEPTS - 1 && survivors.every((r) => r.n > 0)
+      survivors.length === HAPPY_COUNT - 1 && survivors.every((r) => r.n > 0)
         ? pass(
             'retract VERIFIED: the other ' +
               (EXPECTED_CONCEPTS - 1) +

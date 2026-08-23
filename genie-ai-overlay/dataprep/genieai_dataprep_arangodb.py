@@ -1266,11 +1266,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     _acl_preserved.append(_l)
 
         level = "INFO"
-        msg = f"Chunk {index}: Final labels ({len(labels_list)}): {labels_list}."
+        # The LLM's RAW recommendations lead the entry (David's directive,
+        # 2026-08-23: the ingestion log must include the label recommendations)
+        # so each chunk reads recommendation → decision: what the LLM suggested,
+        # what survived taxonomy+scope, what was dropped, what is proposed for
+        # the Knowledge Hierarchy.
+        raw_suggested = [l for l in (suggested or []) if isinstance(l, str)]
+        msg = f"Chunk {index}: LLM label recommendations ({len(raw_suggested)}): {raw_suggested}."
+        msg += f" Final labels ({len(labels_list)}): {labels_list}."
         if _acl_preserved:
             msg += f" (incl. {len(_acl_preserved)} ACL)"
         if dropped:
-            msg += f" Dropped (out of document scope): {dropped}."
+            msg += f" Dropped (out of bundle/document scope): {dropped}."
         if new_labels:
             level = "WARN"
             msg += f" New (non-taxonomy) labels suggested: {new_labels} — consider adding to the Knowledge Hierarchy."

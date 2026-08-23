@@ -139,6 +139,7 @@ async function writeRepoAuthorLinks(repo_id) {
               _to: `${graph}_ENTITY/${safeKey('c', target)}`,
               from_concept_id: cid,
               to_concept_id: target,
+              repo_id,
               weight: typeof l.weight === 'number' ? l.weight : 1.0,
               source: 'author',
               bundle_version: typeof m.bundle_version === 'number' ? m.bundle_version : null,

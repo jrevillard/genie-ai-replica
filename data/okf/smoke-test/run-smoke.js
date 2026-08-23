@@ -1441,16 +1441,23 @@ async function ingestPhase(db) {
           '_LINKS_TO (the concept graph is traversable)'
       )
     : fail("edges: ZERO concept edges (the worker's post-index edge write did not fire)");
+  // Well-formedness differs by edge source: parser edges (source undefined or
+  // 'parser') carry label + file_id; author edges (source='author', B) carry
+  // from/to_concept_id + weight instead. Both must have within-repo c_
+  // endpoints + repo_id.
   const edgesWellFormed = myEdges.every(
     (e) =>
       String(e._from).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
       String(e._to).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
-      typeof e.label === 'string' &&
-      typeof e.file_id === 'string' &&
-      e.repo_id === INGEST_REPO
+      e.repo_id === INGEST_REPO &&
+      (e.source === 'author'
+        ? typeof e.from_concept_id === 'string' && typeof e.to_concept_id === 'string'
+        : typeof e.label === 'string' && typeof e.file_id === 'string')
   );
   edgesWellFormed
-    ? pass('edges: ALL concept edges carry label + file_id + repo_id + within-repo c_ endpoints (well-formed)')
+    ? pass(
+        'edges: ALL concept edges well-formed — within-repo c_ endpoints + repo_id; parser edges carry label+file_id, author edges carry from/to+weight (per source)'
+      )
     : fail('edges malformed: ' + JSON.stringify(myEdges.slice(0, 3)));
   const versionedEdge = myEdges.some((e) => e.bundle_version === 1);
   versionedEdge

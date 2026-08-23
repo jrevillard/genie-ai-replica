@@ -252,3 +252,55 @@ Story 4.8 ships the clone API (done 2026-08-18, #971 closed). The bundle-graph +
 - Memory: [[feedback_smoke-test-integrity]] (define success criteria up front; verify each; never claim pass on broken)
 - Memory: [[feedback_local-build-vs-cloud-deploy]] (local `.env` patches are build-only — re-apply after sync; not committed)
 - Pipeline: GitLab `feat/okf-server` MR !278, pipeline #6270, **75/75 jobs GREEN**
+
+## Dev Agent Record (B+C+E — bundle manifest + author graph + discovery, 2026-08-23)
+
+### Agent Model Used
+
+MiniMax-M3[1m] (analysis → design → implementation → live audit → fixes, one session).
+
+### Directive chain (David, 2026-08-23)
+
+- Goals restated: (1) RAG accuracy, (2) response completeness, (3) efficiency, (4) flexibility, (5) multi-domain conjoined RAG. The 1-graph-per-OKF-repo strategy is CENTRAL and stays.
+- Q: "Is the created graph representative of the bundle's structure?" → honest analysis: NO — the graph held only parser-derived markdown edges; the bundle's own `links:` frontmatter structure was discarded.
+- Analysis of options A–E against the 5 goals → "let's just go for it with B+C+E".
+- "The metadata for the manifest should be collected while the ingestion is happening and should be authored by the LLM" → the manifest body is deterministic ingest-time metadata; the summary_text is LLM-authored LAZILY on first discovery read (cached on the doc; steward override via summary_override).
+- "Later for retrieval we need to stipulate how the manifests will be used to execute retrieval fan out" → tiered fan-out contract (below) — to be course-corrected into the PRD/ADRs via bmad.
+- "Ensure the ingestion logs reflect the changes" → Manifest + AuthorLinks stages mirrored into the bundle's ingestion_log.
+
+### What landed (commit 504b1af, + fixes fe8b9c9/c0e4267/4f6cac5)
+
+- **B — author-stated graph edges** (`edge-service.writeRepoAuthorLinks`): each concept's frontmatter `links:[...]` mirrored into the per-repo `_LINKS_TO` with `source='author'` at bundle settle. Same `safeKey('c', cid)` vertex scheme as `writeRepoConceptEdges` (the v11 audit caught the first draft using a mismatched key scheme → all 12 edges dangled; fixed + zero-tolerance dangling assert). Both endpoints ensured (partial-merge upsert); G22 within-repo boundary enforced.
+- **C — bundle manifest** (`concept-meta-service.writeManifest/readManifest/ensureSummary`): one `okf_bundle_manifest` doc per repo (`_key=repo_id`, overwrite on re-settle): concepts (id/title/type/is_index/index_status/chunk_count/labels), author links, root_id, summary_stats, cloned_from, version. `summary_text` = LLM-authored LAZILY (first discovery read; prompt from the deterministic metadata; cached; steward override wins; unreachable LLM → null + scoring still works).
+- **E — multi-domain discovery** (`discoverRepos` + `GET /repos/:repo_id/manifest` + `POST /repos/discovery`): tier 1 of the retrieval fan-out — every settled manifest scored (label overlap ×3 + name/domain token ×1), top-K ranked candidates. Ties among same-label repos are expected (sad/happy/clone share `d:smoke` + KH labels).
+- **Settle wiring** (internal-controller): after the bundle status transition → manifest write + author-edge write + BOTH mirrored into the bundle's ingestion_log (stages `Manifest`, `AuthorLinks`) for the UI's Ingestion Log tab.
+- Collections: `okf_bundle_manifest` + domain index (collections.js).
+
+### The tiered fan-out contract (retriever consumers — to be ADR'd)
+
+- **Tier 1 — discovery**: `POST /repos/discovery {query, labels?, domain?, k?}` → ranked candidate repos (manifest index; O(repos)). Authz-filtered per repo before drill.
+- **Tier 2 — chunk retrieval**: per candidate repo, the existing hybrid label/vector scan (chunk_labels discriminator; ACL preserved).
+- **Tier 3 — relational context**: per repo graph walk over `_LINKS_TO` (author + parser edges coexist; `source` discriminates) for multi-hop queries; root traversal from the `is_index` vertex / manifest root_id.
+
+### Live evidence
+
+- Smoke v10 (pre-BCE baseline): **PASS=70 / FAIL=0**.
+- Smoke v11 (BCE @504b1af): **PASS=71 / FAIL=2** — both FAILs were assert defects (hardcoded 5-concept manifest count; order-dependent discovery rank on a same-label tie), found by the full graph audit and fixed (fe8b9c9, c0e4267). All 71 substantive passes held.
+- Full graph audit (both ingestions): WP-A rejection (bad_concept rejected, 0 chunks leaked), manifest↔graph author-edge EXACT match (12=12), per-chunk label applicability (LLM picks from the pool; ACL verbatim), lazy summary null-until-read.
+- CI: 504b1af **success** (pipeline #6359); fe8b9c9/c0e4267 monitored.
+- Confirming smoke v12 (all fixes live) running at press time.
+
+### File List (B+C+E)
+
+- components/okf-server/services/edge-service.js — writeRepoAuthorLinks (NEW; vertex-integrity + G22)
+- components/okf-server/services/concept-meta-service.js — buildManifestDoc/writeManifest/readManifest/ensureSummary/discoverRepos (NEW) + axios/config imports
+- components/okf-server/controllers/internal-controller.js — settle path writes manifest + author links + ingestion-log mirrors
+- components/okf-server/controllers/repository-controller.js — getRepoManifest + discoverFromManifests (NEW)
+- components/okf-server/routes/repos-routes.js — GET /:repo_id/manifest (read-scope) + POST /discovery (tools-admin)
+- components/okf-server/db/collections.js — okf_bundle_manifest + domain index
+- data/okf/smoke-test/run-smoke.js — manifest/author-edge/dangling-zero/discovery asserts (+ tie tolerance)
+
+### Open follow-ups
+
+1. mint should refresh the manifest (version/okf_tag stamped post-settle) — small follow-up.
+2. PRD/ADR course-correction via bmad (the tiered fan-out contract + the bundle-is-a-graph decision) — in progress.

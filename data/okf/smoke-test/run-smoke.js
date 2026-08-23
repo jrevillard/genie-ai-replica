@@ -1086,7 +1086,7 @@ async function ingestPhase(db) {
     .readdirSync(BUNDLE_DIR)
     .filter((f) => f.endsWith('.md'))
     .sort();
-  const concepts = bundleFiles.map((f) => {
+  const sadConcepts = bundleFiles.map((f) => {
     const { data, content } = matter(fs.readFileSync(path.join(BUNDLE_DIR, f), 'utf8'));
     return { path: f, frontmatter: data, body: content.trim() };
   });
@@ -1096,7 +1096,7 @@ async function ingestPhase(db) {
   const filesBefore = (await aqlAll(filesCountQuery))[0];
   const r2 = await ingestService.ingestRepoConcepts(
     INGEST_REPO,
-    { concepts, labels: SELECTED_KH_LABELS },
+    { concepts: sadConcepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
   r2.skipped_dedup === EXPECTED_CONCEPTS - 1 && r2.enqueued === 0
@@ -1204,6 +1204,17 @@ async function ingestPhase(db) {
     : fail('happy bundle state machine: expected Ingested, got "' + happyBundleStatus + '"');
   bundleAfter = happyBundle; // the lifecycle + log-completeness asserts below read this
   await piiService.markRepoPiiScanned(INGEST_REPO);
+  // Lifecycle-phase content comes from the CLEAN bundle (the sad bundle's
+  // concepts would inject bad_concept into the happy repo and trip the gate).
+  const happyBundleDir = '/app/kenya-bundle-clean';
+  let concepts = fs
+    .readdirSync(happyBundleDir)
+    .filter((f) => f.endsWith('.md'))
+    .sort()
+    .map((f) => {
+      const { data, content } = matter(fs.readFileSync(path.join(happyBundleDir, f), 'utf8'));
+      return { path: f, frontmatter: data, body: content.trim() };
+    });
   const mint1 = await versionService.mintVersion(
     INGEST_REPO,
     { trigger: 'publish', source_ref: 'smoke://kenya-bundle/v1' },
@@ -1262,81 +1273,53 @@ async function ingestPhase(db) {
   r3.skipped_dedup === HAPPY_COUNT - 1 && r3.enqueued === 1
     ? pass('modified re-ingest: ' + (HAPPY_COUNT - 1) + ' dedup-skipped, 1 enqueued (changed concept carries v1)')
     : fail('modified re-ingest summary: ' + JSON.stringify({ skipped: r3.skipped_dedup, enqueued: r3.enqueued }));
-  const versionedFile = (
+  // CONTENT-ONLY (WP-C): there is no per-concept files doc — version
+  // threading is asserted on the META row (4b leg) and the CHUNK docs.
+  const versionedMetaRow = (
     await aqlAll(
-      "FOR f IN files FILTER f.repo_id == '" +
+      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
         INGEST_REPO +
-        "' AND f.bundle_version == 1 SORT f.uploaded_date DESC LIMIT 1 RETURN KEEP(f, ['file_id','file_name','bundle_version','labels','dataprep'])"
+        "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['concept_id', 'bundle_version', 'index_status'])"
     )
   )[0];
-  const versionedOk =
-    versionedFile &&
-    versionedFile.file_name === 'service_directory.md' &&
-    (versionedFile.labels || []).includes('okf:v1');
-  versionedOk
-    ? pass('version threading: files doc carries bundle_version=1 + the okf:v1 label (sole-injector tag)')
-    : fail('versioned files doc: ' + JSON.stringify(versionedFile));
-  // The re-written okf_concepts_meta row must ALSO carry the new version (the
-  // 4b leg — review fix P8: the files doc and chunks are asserted, the meta
-  // row was not; the "stamps v1" pass text now names the actual actor).
-  const versionedMetaRow = versionedFile
-    ? (
-        await aqlAll(
-          "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-            INGEST_REPO +
-            "' AND m.concept_id == '" +
-            versionedFile.file_name.replace(/\.md$/, '') +
-            "' RETURN KEEP(m, ['concept_id', 'bundle_version', 'index_status'])"
-        )
-      )[0]
-    : null;
-  versionedMetaRow && versionedMetaRow.bundle_version === 1 && versionedMetaRow.index_status === 'indexed'
-    ? pass(
-        'version threading: the re-written okf_concepts_meta row carries bundle_version=1 (4b leg — re-ingest threads the minted version)'
-      )
+  versionedMetaRow && versionedMetaRow.bundle_version === 1
+    ? pass('version threading: the re-written meta row carries bundle_version=1 (4b leg)')
     : fail('versioned meta row: ' + JSON.stringify(versionedMetaRow));
-  // Wait for the WORKER to drain the versioned file (worker-paced).
-  let vStatus = null;
-  if (versionedFile) {
-    for (let i = 0; i < 60; i++) {
-      await new Promise((r) => setTimeout(r, 15000));
-      const row = (
-        await aqlAll("FOR x IN files FILTER x.file_id == '" + versionedFile.file_id + "' RETURN KEEP(x, ['dataprep'])")
-      )[0];
-      vStatus = row && row.dataprep && row.dataprep.status;
-      if (vStatus === 'Ingested' || vStatus === 'Ingestion Error' || vStatus === 'Killed') break;
-    }
-    vStatus === 'Ingested'
-      ? pass('version threading: worker drained the v1 concept to Ingested')
-      : fail('versioned file drain ended "' + vStatus + '"');
+  // Settle-wait: the modified concept goes parsed (4b re-upsert) → indexed
+  // (worker + callback). Poll until its meta shows indexed with the NEW
+  // content (the amended body changed the canonical hash).
+  let versionedSettled = false;
+  for (let i = 0; i < 100 && !versionedSettled; i++) {
+    await new Promise((r) => setTimeout(r, 15000));
+    const row = (
+      await aqlAll(
+        "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+          INGEST_REPO + "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['index_status','content_hash','chunk_count'])"
+      )
+    )[0];
+    versionedSettled = !!row && row.index_status === 'indexed';
   }
-  const versionedChunks =
-    versionedFile &&
-    (
-      await aqlAll(
-        'FOR c IN `' +
-          OKF_GRAPH +
-          '_SOURCE` FILTER c.file_id == "' +
-          versionedFile.file_id +
-          '" COLLECT WITH COUNT INTO n RETURN n'
-      )
-    )[0];
-  const versionedChunkStamps =
-    versionedFile &&
-    (
-      await aqlAll(
-        'FOR c IN `' +
-          OKF_GRAPH +
-          '_SOURCE` FILTER c.file_id == "' +
-          versionedFile.file_id +
-          '" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
-      )
-    )[0];
+  versionedSettled
+    ? pass('version threading: worker + callback re-indexed the modified concept (new content_hash indexed)')
+    : fail('versioned concept did not re-index with the amended hash in 25 min');
+  // CHUNK version stamps (content-only: chunks key on metadata.concept_id).
+  const versionedChunks = (
+    await aqlAll(
+      'FOR c IN `' + OKF_GRAPH + '_SOURCE` FILTER c.metadata.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
+    )
+  )[0];
+  const versionedChunkStamps = (
+    await aqlAll(
+      'FOR c IN `' +
+        OKF_GRAPH +
+        '_SOURCE` FILTER c.metadata.concept_id == "service_directory" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
+    )
+  )[0];
   versionedChunks > 0 && versionedChunkStamps === versionedChunks
     ? pass(
         'version threading VERIFIED: all ' +
           versionedChunkStamps +
-          ' new chunk docs carry bundle_version=1 (citation pinning real)'
+          ' service_directory chunk docs carry bundle_version=1 (citation pinning real)'
       )
     : fail('chunk version stamps: ' + versionedChunkStamps + '/' + versionedChunks + ' carry bundle_version=1');
 

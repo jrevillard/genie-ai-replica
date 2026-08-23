@@ -1315,16 +1315,26 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # free-form docs (no ACL prefixes -> predicate False -> falls through to
         # the normal strategy dispatch). This is also the ONLY ACL-preserve
         # mechanism for the embedding/bm25 strategies.
+        #
+        # REVISED (David's directive, 2026-08-23): the OKF skip is REMOVED.
+        # Bundle-level labels are a CANDIDATE POOL, not forced attachments —
+        # "just because the labels are applied to a bundle does not mean every
+        # chunk must be labelled with those labels". The strategy runs for OKF
+        # concepts too; per-chunk applicability is decided by content:
+        #   chunk_labels = (LLM selections ∩ taxonomy) ∩ file_labels + ACL verbatim
+        # (_finalize_chunk_labels). Retrieval matches query labels against
+        # chunk labels — blanket labels would make every chunk match every
+        # scoped query; per-chunk selections are what discriminate. ACL
+        # tokens (t:/r:/d:) and the okf:v tag remain verbatim on every chunk
+        # (access scoping + version pinning, not content labels).
         if any(_is_acl_label(_l) for _l in (file_labels or [])) and file_labels:
-            _labels = list(dict.fromkeys(file_labels))  # order-preserving dedup (AC #6)
             await self._write_ingestion_log(
                 file_id,
                 "INFO",
                 "Labeling",
-                f"Skipping LLM labeling: file_labels carries ACL prefixes; "
-                f"preserving {len(_labels)} label(s) verbatim.",
+                f"OKF labeling: bundle labels ({len(file_labels)}) are the candidate pool; "
+                f"strategy={LABELING_STRATEGY} assigns per-chunk by applicability; ACL tokens verbatim.",
             )
-            return [{"text": c, "labels": list(_labels)} for c in plain_chunks]
 
         if not all_labels:
             await self._write_ingestion_log(

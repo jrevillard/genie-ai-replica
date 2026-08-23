@@ -89,7 +89,7 @@ async function claimNextJob(db) {
       FILTER m.index_status == 'parsed' AND m.repo_id != null
       SORT m.updated_at ASC
       LIMIT 1
-      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at'])
+      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at'])
   `)
   ).all();
   return rows[0] || null;
@@ -187,6 +187,25 @@ async function _processOneJob() {
     const startedAt = Date.now();
     const conceptId = job.concept_id;
     const fileId = conceptId; // the concept_id is the dataprep fileId (content-keyed)
+
+    // 0. RE-INDEX RETRACT (live-caught 2026-08-23): a MODIFIED concept
+    //    re-entering the queue (last_good_index_at set) still has its OLD
+    //    chunks in the graph — dataprep appends, never replaces, so the
+    //    concept carried duplicate chunk sets (stale bv=null + new bv=1).
+    //    Retract the old chunks first (content-keyed fileId + graph), then
+    //    re-ingest. Best-effort: a retract failure logs and proceeds.
+    if (job.last_good_index_at) {
+      try {
+        await authedAxios.post(
+          `${config.dataprep.url}/v1/dataprep/retract_file`,
+          { fileId, graphName: job.graph_name || `OKF_${job.repo_id}` },
+          { timeout: 30000 }
+        );
+        logger.info('Ingest worker: re-index retract done (stale chunks cleared)', { concept_id: conceptId });
+      } catch (err) {
+        logger.warn(`Ingest worker: re-index retract failed (proceeding): [${conceptId}] ${err.message}`);
+      }
+    }
 
     // 1. POST the concept's markdown DIRECTLY to dataprep (content-only).
     //    Re-serialize from the stored meta row (frontmatter + body).

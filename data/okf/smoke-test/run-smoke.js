@@ -1635,7 +1635,7 @@ async function ingestPhase(db) {
       OKF_GRAPH +
       '_SOURCE` FILTER c.concept_id IN ' +
       JSON.stringify(HAPPY_CONCEPTS) +
-      ' COLLECT cid = c.metadata.concept_id WITH COUNT INTO n RETURN {cid, n}'
+      ' COLLECT cid = c.concept_id WITH COUNT INTO n RETURN {cid, n}'
   );
   bChunkRows.length === HAPPY_CONCEPTS.length && bChunkRows.every((r) => r.n > 0)
     ? pass(
@@ -1656,7 +1656,7 @@ async function ingestPhase(db) {
       await aqlAll(
         'FOR c IN `' +
           OKF_GRAPH +
-          '_SOURCE` FILTER c.metadata.concept_id == "bad_concept" COLLECT WITH COUNT INTO n RETURN n'
+          '_SOURCE` FILTER c.concept_id == "bad_concept" COLLECT WITH COUNT INTO n RETURN n'
       )
     )[0] || 0;
   badChunks === 0

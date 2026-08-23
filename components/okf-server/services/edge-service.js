@@ -136,8 +136,10 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
             _key: safeKey('c', normalizeConceptId(id)),
             concept_id: normalizeConceptId(id),
             repo_id,
-            title: title || null,
-            labels: labels || [],
+            // Minimal target upserts pass null title/labels — OMIT them there
+            // so the merge never nulls the concept's own full write.
+            ...(title != null ? { title } : {}),
+            ...(labels != null ? { labels } : {}),
             bundle_version: bundleVersion ?? ctx.bundle_version ?? null,
             // Story 4.8-amend (2026-08-19): the bundle ROOT (index.md, type: index)
             // is persisted on its ENTITY vertex so graph-native traversal has a seed
@@ -145,7 +147,11 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
             // upserts below are minimal and are corrected when that concept drains).
             ...(isIndex === true ? { is_index: true } : {})
           },
-          { overwrite: true }
+          // PARTIAL-MERGE upsert (live-caught 2026-08-23): {overwrite: true}
+          // REPLACES the whole doc, so a minimal target upsert from another
+          // concept's drain WIPED is_index off the index root. 'update' merges —
+          // the vertex is created when absent, existing fields survive.
+          { overwriteMode: 'update' }
         )
         .catch((err) =>
           logger.warn('Edge write: ENTITY upsert failed', { repo_id, concept_id: id, error: err.message })

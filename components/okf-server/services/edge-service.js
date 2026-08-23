@@ -61,6 +61,74 @@ function safeKey(prefix, value) {
 }
 
 /**
+ * Persist a bundle's AUTHOR-STATED links (from each concept's frontmatter
+ * `links: [...]` array) as additional _LINKS_TO edges with source='author'.
+ * Idempotent: same _key, fresh payload (overwrite). Runs at bundle-settle
+ * alongside writeManifest — the manifest links and the graph edges carry the
+ * same author-stated structure; tier-3 graph-walk reads them transparently.
+ * @param {string} repo_id
+ * @returns {Promise<{repo_id, written: number, skipped: number}>}
+ */
+async function writeRepoAuthorLinks(repo_id) {
+  return withSpan('okf.edges.authorLinks', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+    const graph = `OKF_${repo_id}`;
+    const edgeCol = db.collection(`${graph}_LINKS_TO`);
+    const rows = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND IS_ARRAY(m.links) RETURN KEEP(m, ["concept_id", "links", "bundle_version"])',
+        { rid: repo_id }
+      )
+    ).all();
+    const seen = new Set();
+    let written = 0;
+    let skipped = 0;
+    for (const m of rows) {
+      const cid = normalizeConceptId(m.concept_id);
+      const links = Array.isArray(m.links) ? m.links : [];
+      for (const l of links) {
+        if (!l || !l.to_concept_id) continue;
+        const target = normalizeConceptId(l.to_concept_id);
+        if (target === cid) continue;
+        const key = `${cid}->${target}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        try {
+          await edgeCol.save(
+            {
+              _key: `${graph}_${cid}__${target}`,
+              _from: `${graph}_ENTITY/${createHash('sha256')
+                .update(String(repo_id + ':' + cid))
+                .digest('hex')
+                .slice(0, 24)}`,
+              _to: `${graph}_ENTITY/${createHash('sha256')
+                .update(String(repo_id + ':' + target))
+                .digest('hex')
+                .slice(0, 24)}`,
+              from_concept_id: cid,
+              to_concept_id: target,
+              weight: typeof l.weight === 'number' ? l.weight : 1.0,
+              source: 'author',
+              bundle_version: typeof m.bundle_version === 'number' ? m.bundle_version : null,
+              created_at: new Date().toISOString()
+            },
+            { overwrite: true }
+          );
+          written++;
+        } catch {
+          skipped++;
+        }
+      }
+    }
+    span.setAttribute('okf.edges.written', written);
+    span.setAttribute('okf.edges.skipped', skipped);
+    logger.info(`Repo author-links written (${written} new, ${skipped} skipped)`, { repo_id, graph });
+    return { repo_id, written, skipped };
+  });
+}
+
+/**
  * Write (or replace) ONE concept's outgoing edges into its per-repo graph.
  * @param {string} repo_id
  * @param {string} concept_id
@@ -237,4 +305,4 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
   });
 }
 
-module.exports = { writeRepoConceptEdges, normalizeConceptId };
+module.exports = { writeRepoConceptEdges, writeRepoAuthorLinks, normalizeConceptId };

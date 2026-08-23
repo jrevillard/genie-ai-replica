@@ -1039,6 +1039,54 @@ async function ingestPhase(db) {
     ? pass('bundle state machine: Pending → Ingesting → Ingested (settled after the last concept indexed)')
     : fail('bundle state machine: expected Ingested after full drain, got "' + bundleStatus + '"');
 
+  // ── Story B+C: the settled bundle's STRUCTURAL artifacts ──
+  // (1) The manifest doc: concepts + author links + root, written by the
+  //     settle path (deterministic body; LLM summary lazy on first read).
+  // (2) Author-stated cross-concept links mirrored into _LINKS_TO with
+  //     source='author' (the parser's markdown edges live alongside).
+  // Settle-wait: the settle path writes these AFTER the bundle status PATCH —
+  // poll briefly for the manifest to appear.
+  let happyManifest = null;
+  for (let i = 0; i < 20; i++) {
+    happyManifest = (
+      await aqlAll("FOR d IN okf_bundle_manifest FILTER d._key == '" + INGEST_REPO + "' RETURN d")
+    )[0];
+    if (happyManifest) break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  happyManifest &&
+  Array.isArray(happyManifest.concepts) &&
+  happyManifest.concepts.length === 5 &&
+  happyManifest.root_id === 'index' &&
+  Array.isArray(happyManifest.links) &&
+  happyManifest.links.length > 0 &&
+  happyManifest.links.every((l) => l.source === 'author')
+    ? pass(
+        'manifest (B+C): written at settle — ' +
+          happyManifest.concepts.length +
+          ' concepts, ' +
+          happyManifest.links.length +
+          ' author links, root=index (summary lazy)'
+      )
+    : fail('manifest (B+C): ' + JSON.stringify(happyManifest && {
+        concepts: happyManifest.concepts && happyManifest.concepts.length,
+        links: happyManifest.links && happyManifest.links.length,
+        root_id: happyManifest.root_id
+      }));
+  const authorEdges = await aqlAll(
+    "FOR e IN `" + OKF_GRAPH + "_LINKS_TO` FILTER e.source == 'author' RETURN KEEP(e, ['from_concept_id','to_concept_id','source'])"
+  );
+  authorEdges.length === (happyManifest ? happyManifest.links.length : -1)
+    ? pass(
+        "author links (B): " + authorEdges.length + " source='author' edges mirrored into _LINKS_TO (graph IS the bundle's structure)"
+      )
+    : fail(
+        'author links (B): graph has ' +
+          authorEdges.length +
+          ' author edges, manifest declares ' +
+          (happyManifest ? happyManifest.links.length : '?')
+      );
+
   // Bundle ingestion-log completeness: EVERY stage for EVERY conforming
   // concept, keyed on the BUNDLE file (the UI surface) with the concept file
   // name in the message (David's 4th/5th-time directives).
@@ -1619,6 +1667,31 @@ async function ingestPhase(db) {
   } else {
     console.log('  NOTE: clone ' + CLONE_ID + ' LEFT IN PLACE (CLEANUP=none — run OKF_SMOKE_CLEANUP=only to remove)');
   }
+
+  // ── Story E: multi-domain discovery (tier 1 of the retrieval fan-out) ──
+  // The manifests written at settle are the discovery index: score every
+  // settled bundle against the query (label overlap + name/domain tokens)
+  // and return the top-K candidate repos. Proven via the service module
+  // (in-container; the HTTP surface is tools-admin-gated and unit-tested).
+  const discSvc = require('./services/concept-meta-service');
+  const disc = await discSvc.discoverRepos(
+    { tokens: ['kenya', 'government', 'services'], labels: SELECTED_KH_LABELS },
+    { k: 10 }
+  );
+  const discIds = disc.map((d) => d.repo_id);
+  discIds.includes(INGEST_REPO) &&
+  disc.filter((d) => d.repo_id === INGEST_REPO).length === 1 &&
+  disc[0] &&
+  disc[0].repo_id === INGEST_REPO &&
+  disc[0].score > 0
+    ? pass(
+        'discovery (E): happy repo ranked #1 (score=' +
+          disc[0].score +
+          ') among ' +
+          disc.length +
+          ' candidate(s) — the manifest is the fan-out index'
+      )
+    : fail('discovery (E): ' + JSON.stringify(disc.map((d) => [d.repo_id, d.score])));
 
   // ── (viii) CHUNKS — the physical proof (WP-C content-only chunks) ──
   // The OKF bundle's chunks must land in the per-repo OKF_{repo_id} graph

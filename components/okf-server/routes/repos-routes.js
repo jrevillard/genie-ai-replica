@@ -42,4 +42,16 @@ router.get('/:repo_id/versions/:bundle_version', requireRepoScope('repo_id', 're
 // scope gates it (mirrors ingest). getById pre-gate (404 foreign) in the controller.
 router.post('/:source_id/clone', requireRepoScope('source_id', 'admin'), ctrl.cloneRepo);
 
+// Bundle manifest (Story B+C — the bundle IS a graph): read the settled
+// bundle's self-description (concepts, author links, root, stats). Read-scope
+// on the repo (it is the repo's discovery record, not a mutation).
+// ?summary=1 lazily generates + caches the LLM summary on first read.
+router.get('/:repo_id/manifest', requireRepoScope('repo_id', 'read'), ctrl.getRepoManifest);
+
+// Multi-domain discovery (Story E — tier 1 of the retrieval fan-out): score
+// every settled bundle manifest against the query (label overlap + name/domain
+// token match) and return the top-K candidate repos. Read-scope (it reads
+// manifest metadata only; per-repo drills stay behind their own scopes).
+router.post('/discovery', requireRole('tools-admin'), ctrl.discoverFromManifests);
+
 module.exports = router;

@@ -9,6 +9,7 @@
 // no secret configured ⇒ every callback is refused).
 
 const { logger } = require('../shared-lib/logger');
+const dbService = require('../shared-lib/db-connection-service');
 const conceptMetaService = require('../services/concept-meta-service');
 const edgeService = require('../services/edge-service');
 const { authedAxios } = require('../services/service-token');
@@ -43,12 +44,89 @@ async function transitionBundle(repoId, status) {
 /** After a concept reaches a terminal state, close the bundle out when the
  * repo has no concepts left to ingest. 'rejected' concepts (hard-gate) count
  * as settled-not-failed: the bundle reflects the INGESTION outcome, and the
- * rejection is surfaced via meta + logs, not a bundle error. */
+ * rejection is surfaced via meta + logs, not a bundle error.
+ *
+ * On settle the bundle's STRUCTURAL artifacts are also persisted (Story B+C:
+ * the bundle IS a graph — its structure becomes queryable):
+ *   1. The bundle manifest (okf_bundle_manifest): deterministic body (concept
+ *      list, author links, root, stats); the LLM summary is generated LAZILY
+ *      on the first discovery read (David's directive: summary authored by
+ *      the LLM from ingest-time metadata, not hand-written).
+ *   2. Author-stated cross-concept links mirrored into the per-repo
+ *      _LINKS_TO collection with source='author' (the parser's
+ *      markdown-syntax edges live alongside as source='parser' — a tier-3
+ *      graph walk reads either transparently).
+ * Both idempotent (re-settle refreshes) and mirrored into the bundle's
+ * ingestion_log so the UI's Ingestion Log tab reflects the full process. */
 async function settleBundleIfComplete(repoId) {
   const remaining = await conceptMetaService.countByIndexStatus(repoId, 'parsed');
   if (remaining > 0) return;
   const failed = await conceptMetaService.countByIndexStatus(repoId, 'failed');
   await transitionBundle(repoId, failed > 0 ? 'Ingestion Error' : 'Ingested');
+
+  const db = await dbService.getConnection('default');
+
+  // Manifest write (deterministic body; lazy LLM summary on first discovery).
+  try {
+    const repoRows = await (
+      await db.query('FOR r IN okf_repositories FILTER r.repo_id == @rid RETURN KEEP(r, ["version", "cloned_from"])', {
+        rid: repoId
+      })
+    ).all();
+    const repo = repoRows[0] || {};
+    const manifest = await conceptMetaService.writeManifest(
+      repoId,
+      repo.version != null ? repo.version : null,
+      repo.cloned_from || null
+    );
+    if (manifest) {
+      // Mirror into the bundle's ingestion log — keyed on the bundle file so
+      // the UI surfaces it (David: the logs must reflect the process).
+      try {
+        const bundleFileId = await getBundleFileId(repoId);
+        await authedAxios.post(
+          `${config.documentRepository.url}/api/files/${encodeURIComponent(bundleFileId)}/ingestion-log`,
+          {
+            level: 'INFO',
+            stage: 'Manifest',
+            message:
+              `[${repoId}] Bundle manifest written: ${manifest.concepts.length} concepts, ` +
+              `${manifest.links.length} author links, root=${manifest.root_id || 'none'} ` +
+              '(summary generated lazily on first discovery read).'
+          },
+          { timeout: 10000 }
+        );
+      } catch (logErr) {
+        logger.warn(`Manifest ingestion-log mirror failed (non-fatal): ${logErr.message}`);
+      }
+    }
+  } catch (err) {
+    logger.warn(`Bundle manifest write failed (non-fatal): [${repoId}] ${err.message}`);
+  }
+
+  // Author-stated cross-concept links → _LINKS_TO (source='author').
+  try {
+    const er = await edgeService.writeRepoAuthorLinks(repoId);
+    try {
+      const bundleFileId = await getBundleFileId(repoId);
+      await authedAxios.post(
+        `${config.documentRepository.url}/api/files/${encodeURIComponent(bundleFileId)}/ingestion-log`,
+        {
+          level: 'INFO',
+          stage: 'AuthorLinks',
+          message:
+            `[${repoId}] Author-stated cross-concept links written to the graph: ` +
+            `${er.written} written, ${er.skipped} skipped (source='author'; parser-derived ` +
+            "edges live alongside as source='parser')."
+        },
+        { timeout: 10000 }
+      );
+    } catch (logErr) {
+      logger.warn(`Author-links ingestion-log mirror failed (non-fatal): ${logErr.message}`);
+    }
+  } catch (err) {
+    logger.warn(`Author-link write failed (non-fatal): [${repoId}] ${err.message}`);
+  }
 }
 
 /**

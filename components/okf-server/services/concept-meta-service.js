@@ -20,9 +20,11 @@
 //    be silently un-blocked without a rescan, and indexed|failed transitions
 //    belong to the 2.9.4 worker alone.
 
+const axios = require('axios');
 const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
 const dbService = require('../shared-lib/db-connection-service');
+const config = require('../config');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
@@ -302,11 +304,266 @@ async function countByIndexStatus(repo_id, index_status) {
   return rows[0] || 0;
 }
 
+/** Build the bundle manifest doc (Story: multi-domain discovery + author
+ * structural graph). Computed from the persisted meta rows + the parsed
+ * links[] array each concept already carries. Deterministic metadata only —
+ * the LLM-generated summary (summary_text + concept_summaries) is computed
+ * lazily on the first discovery read (see ensureSummary) and cached on the
+ * manifest doc so subsequent reads are O(repos). The steward can pin the
+ * summary via a manifest override (kept verbatim). Idempotent: same _key. */
+async function buildManifestDoc(repo_id, version, cloned_from) {
+  if (!repo_id) return null;
+  const db = await getDb();
+  const metaRows = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid RETURN KEEP(m, ["_key","concept_id","title","type","labels","links","is_index","index_status","chunk_count"])',
+      { rid: repo_id }
+    )
+  ).all();
+  // Pull the repo's identifying fields (name/domain/okf_tag) from okf_repositories.
+  const repoRows = await (
+    await db.query(
+      'FOR r IN okf_repositories FILTER r.repo_id == @rid RETURN KEEP(r, ["_key","name","domain","okf_tag","cloned_from","summary_override"])',
+      { rid: repo_id }
+    )
+  ).all();
+  const repo = repoRows[0] || {};
+  const root_id = (metaRows.find((m) => m.type === 'index') || metaRows[0] || {}).concept_id || null;
+  const linkMap = new Map();
+  for (const m of metaRows) {
+    if (Array.isArray(m.links)) {
+      for (const l of m.links) {
+        if (!l || !l.to_concept_id) continue;
+        const key = `${m.concept_id}->${l.to_concept_id}`;
+        if (!linkMap.has(key)) {
+          linkMap.set(key, {
+            from_concept_id: m.concept_id,
+            to_concept_id: l.to_concept_id,
+            weight: typeof l.weight === 'number' ? l.weight : 1.0,
+            source: 'author'
+          });
+        }
+      }
+    }
+  }
+  const links = [...linkMap.values()];
+  const summary_stats = {
+    concept_count: metaRows.length,
+    root_id,
+    root_title: (metaRows.find((m) => m.concept_id === root_id) || {}).title || null,
+    root_is_index: (metaRows.find((m) => m.concept_id === root_id) || {}).is_index === true,
+    indexed_count: metaRows.filter((m) => m.index_status === 'indexed').length,
+    rejected_count: metaRows.filter((m) => m.index_status === 'rejected').length,
+    link_count: links.length
+  };
+  const concepts = metaRows
+    .map((m) => ({
+      id: m.concept_id,
+      title: m.title || null,
+      type: m.type || null,
+      is_index: m.is_index === true,
+      index_status: m.index_status || null,
+      chunk_count: typeof m.chunk_count === 'number' ? m.chunk_count : 0,
+      labels: Array.isArray(m.labels) ? m.labels : []
+    }))
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  return {
+    _key: repo_id,
+    repo_id,
+    name: repo.name || null,
+    domain: repo.domain || null,
+    version: typeof version === 'number' ? version : null,
+    okf_tag: repo.okf_tag || null,
+    root_id,
+    concepts,
+    links,
+    summary_stats, // deterministic only; summary_text added lazily
+    summary_text: repo.summary_override || null,
+    summary_generated_at: null,
+    summary_stale: false, // steward override OR lazy gen never yet done
+    cloned_from: cloned_from || repo.cloned_from || null,
+    created_at: nowIso(),
+    updated_at: nowIso()
+  };
+}
+
+/** Ensure the manifest has an LLM-generated summary (lazy, on first discovery
+ * read). The summary is the retriever's tier-1 hook — without it the label
+ * overlap score is meaningless against an empty summary field. Subsequent
+ * reads use the cached value; on subsequent writes the cache is preserved
+ * unless summary_stale is set (steward-controlled invalidation).
+ *
+ * The LLM is invoked with a compact prompt: the manifest's deterministic
+ * metadata (concept titles, labels, root concept, link list) is enough for the
+ * model to produce a 2-4 sentence bundle description. The model id matches
+ * VLLM_MODEL_ID (configurable). Result is cached on the manifest doc so
+ * only one LLM call per bundle per cache-lifetime.
+ *
+ * Lazy semantics: if the LLM is unreachable (or times out), the manifest is
+ * returned with summary_text=null and a discovery flag — label/token scoring
+ * still works (it doesn't depend on summary_text). */
+async function ensureSummary(repo_id, opts = {}) {
+  const m = await readManifest(repo_id);
+  if (!m) return null;
+  if (m.summary_text && !opts.force) return m;
+  if (m.summary_stale) {
+    // Steward-flagged stale → regenerate.
+  }
+  const timeout = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 5000;
+  const llmPrompt = buildSummaryPrompt(m);
+  let summary_text = null;
+  try {
+    summary_text = await runLlmSummary(llmPrompt, { timeoutMs: timeout });
+  } catch (err) {
+    logger.warn('Manifest summary LLM failed (returning manifest with summary_text=null)', {
+      repo_id,
+      error: err.message
+    });
+  }
+  if (!summary_text) return m;
+  const db = await getDb();
+  await db
+    .collection('okf_bundle_manifest')
+    .update(repo_id, { summary_text, summary_generated_at: nowIso(), summary_stale: false }, { keepNull: false });
+  return { ...m, summary_text, summary_generated_at: nowIso(), summary_stale: false };
+}
+
+/** Compact LLM prompt — fits in <2k tokens for a 30-concept bundle. The
+ * deterministic metadata is sufficient for an accurate description. */
+function buildSummaryPrompt(m) {
+  const conceptLines = m.concepts
+    .map((c) => `${c.id}${c.is_index ? ' (root)' : ''} [${c.type || 'concept'}]: ${c.title || '(no title)'}`)
+    .slice(0, 30)
+    .join('\n');
+  const linkLines = (m.links || [])
+    .slice(0, 25)
+    .map((l) => `  ${l.from_concept_id} -> ${l.to_concept_id}${l.weight !== 1.0 ? ` (weight=${l.weight})` : ''}`)
+    .join('\n');
+  return [
+    `Summarize this OKF knowledge bundle in 2-4 sentences for a discovery index.`,
+    `Bundle: ${m.name || '(unnamed)'} [domain=${m.domain || '?'}] version=${m.version || '?'}`,
+    `Concepts (${m.summary_stats?.concept_count || m.concepts.length}):`,
+    conceptLines,
+    linkLines ? `Author links:\n${linkLines}` : '',
+    'Output ONLY the 2-4 sentence summary, no preamble.'
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** Out-of-process LLM call (vLLM-compatible chat/completions). Uses the
+ * service-account client_credentials token (mirrors the controller's
+ * OKF_SERVER_URL flow). Short timeout — the summary is best-effort, not on
+ * the bundle-ingestion hot path; a slow/timed-out call is fine (we cache
+ * null). */
+async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
+  const base = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
+  if (!base) return null;
+  const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
+  if (!model) return null;
+  // Service-account token (mirrors the okf-server controller's auth pattern).
+  let token = null;
+  try {
+    const auth = process.env.OKF_LLM_CLIENT_ID && process.env.OKF_LLM_CLIENT_SECRET;
+    if (auth) {
+      const r = await axios.post(
+        `${base.replace(/\/$/, '')}/v1/auth/token`,
+        new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: process.env.OKF_LLM_CLIENT_ID,
+          client_secret: process.env.OKF_LLM_CLIENT_SECRET
+        }).toString(),
+        { timeout: 2000 }
+      );
+      token = r.data?.access_token;
+    }
+  } catch {
+    /* no service account configured; fall through */
+  }
+  const r = await axios.post(
+    `${base.replace(/\/$/, '')}/v1/chat/completions`,
+    {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 200,
+      temperature: 0.0
+    },
+    {
+      timeout: timeoutMs,
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    }
+  );
+  return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
+}
+
+/** Write (overwrite) the manifest doc for a repo. Called from the controller's
+ * settle path (once per bundle lifecycle — see settleBundleIfComplete).
+ * Idempotent: same _key. The deterministic body is written; the lazy summary
+ * is filled on first discovery read (see ensureSummary). */
+async function writeManifest(repo_id, version, cloned_from) {
+  const doc = await buildManifestDoc(repo_id, version, cloned_from);
+  if (!doc) return null;
+  const db = await getDb();
+  await db.collection('okf_bundle_manifest').save(doc, { overwrite: true });
+  return doc;
+}
+
+/** Read the manifest doc for a repo (null when absent / not yet settled). */
+async function readManifest(repo_id) {
+  if (!repo_id) return null;
+  const db = await getDb();
+  const rows = await (
+    await db.query('FOR d IN okf_bundle_manifest FILTER d._key == @rid RETURN d', { rid: repo_id })
+  ).all();
+  return rows[0] || null;
+}
+
+/** Multi-domain discovery (Story: tier 1 of the retriever pre-filter).
+ * Read every manifest, score each by label overlap + name/domain token
+ * match against the query's normalized tokens + labels. Return the top-K
+ * candidate repos ordered by score (desc). O(repos) per call — manifests are
+ * the discovery index; tier 2 (chunk label scan) and tier 3 (graph walk)
+ * are the per-repo drills that follow this pre-filter. */
+async function discoverRepos(query, opts = {}) {
+  const q = (query && query.tokens) || [];
+  const qLabels = (query && query.labels) || [];
+  const k = Number.isInteger(opts.k) ? opts.k : 5;
+  const domainFilter = (query && query.domain) || null;
+  const db = await getDb();
+  const manifests = await (await db.query('FOR d IN okf_bundle_manifest RETURN d')).all();
+  const scored = [];
+  const qTokenSet = new Set(q.map((t) => String(t).toLowerCase()).filter(Boolean));
+  const qLabelSet = new Set(qLabels.map((l) => String(l).toLowerCase()));
+  for (const m of manifests) {
+    if (domainFilter && m.domain && m.domain !== domainFilter) continue;
+    let score = 0;
+    // Label overlap is the dominant signal (matches the retriever's tier 2
+    // discriminator — repos whose bundle labels match the query are most likely
+    // to contain the answer chunks).
+    const rLabels = new Set(
+      Array.isArray(m.concepts) ? m.concepts.flatMap((c) => (Array.isArray(c.labels) ? c.labels : [])) : []
+    );
+    for (const ql of qLabelSet) if (rLabels.has(ql.toLowerCase())) score += 3;
+    // Name + domain token match (lower weight — covers queries that name the
+    // domain explicitly).
+    const text = `${m.name || ''} ${m.domain || ''}`.toLowerCase();
+    for (const t of qTokenSet) if (text.includes(t)) score += 1;
+    scored.push({ repo_id: m.repo_id, name: m.name, domain: m.domain, summary: m.summary, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, k);
+}
+
 module.exports = {
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,
   buildMetaDoc,
   contentHash,
-  countByIndexStatus
+  countByIndexStatus,
+  // Bundle manifest (Story: multi-domain discovery + author structural graph)
+  writeManifest,
+  readManifest,
+  ensureSummary,
+  discoverRepos
 };

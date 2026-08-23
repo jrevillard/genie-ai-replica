@@ -4,6 +4,7 @@
 // snake_case response → next(err) on failure. No business logic.
 
 const repoService = require('../services/repository-service');
+const conceptMetaService = require('../services/concept-meta-service');
 const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
 const versionService = require('../services/version-service');
@@ -319,6 +320,59 @@ async function piiScan(req, res, next) {
   }
 }
 
+/**
+ * Story B+C — read the settled bundle's manifest (the bundle's structural
+ * self-description: concepts, author links, root, stats). ?summary=1 lazily
+ * generates + caches the LLM summary (David's directive: the summary is
+ * LLM-authored from ingest-time metadata). 404 until the bundle settles —
+ * the manifest is written by the settle path, not at ingest time.
+ */
+async function getRepoManifest(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepo).
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const wantSummary = req.query.summary === '1' || req.query.summary === 'true';
+    const manifest = wantSummary
+      ? await conceptMetaService.ensureSummary(repo_id)
+      : await conceptMetaService.readManifest(repo_id);
+    if (!manifest) {
+      return res.status(404).json({ error: 'MANIFEST_NOT_FOUND', message: 'bundle has not settled yet' });
+    }
+    res.status(200).json(manifest);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story E — multi-domain discovery (tier 1 of the retrieval fan-out): score
+ * every settled bundle manifest against the query and return the top-K
+ * candidate repos. Body: { query: string, labels?: string[], domain?: string,
+ * k?: number }. The client then drills per-repo (tier 2 chunk-label scan,
+ * tier 3 graph walk) against the repos this returns, each behind its own
+ * read scope.
+ */
+async function discoverFromManifests(req, res, next) {
+  try {
+    const { query, labels, domain, k } = req.body || {};
+    if (typeof query !== 'string' || !query.trim()) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'query (string) required' });
+    }
+    const tokens = query
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length > 2);
+    const result = await conceptMetaService.discoverRepos(
+      { tokens, labels: Array.isArray(labels) ? labels : [], domain: typeof domain === 'string' ? domain : null },
+      { k: Number.isInteger(k) ? k : undefined }
+    );
+    res.status(200).json({ query, candidates: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   cloneRepo,
@@ -331,5 +385,7 @@ module.exports = {
   mintRepoVersion,
   listRepoVersions,
   getRepoVersion,
+  getRepoManifest,
+  discoverFromManifests,
   ValidationError
 };

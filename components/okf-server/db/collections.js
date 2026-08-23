@@ -10,7 +10,18 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 
 // repo_id IS the document _key (natural uniqueness) — no separate repo_id index.
-const COLLECTIONS = ['okf_repositories', 'okf_concepts_meta', 'okf_audit', 'okf_sources', 'okf_versions'];
+// okf_bundle_manifest (Story B+C): the settled bundle's self-description —
+// the multi-domain discovery index (tier 1 of the retrieval fan-out). Written
+// by the internal controller's settle path; read by discovery + the manifest
+// endpoint. _key = repo_id (one manifest per repo, overwrite on re-settle).
+const COLLECTIONS = [
+  'okf_repositories',
+  'okf_concepts_meta',
+  'okf_audit',
+  'okf_sources',
+  'okf_versions',
+  'okf_bundle_manifest'
+];
 
 const INDEXES = {
   okf_repositories: [
@@ -36,7 +47,10 @@ const INDEXES = {
     { type: 'persistent', fields: ['ts'] },
     { type: 'persistent', fields: ['repo_id'] }
   ],
-  okf_sources: [{ type: 'persistent', fields: ['repo_id'], unique: true }]
+  okf_sources: [{ type: 'persistent', fields: ['repo_id'], unique: true }],
+  // Story B+C: discovery scans every manifest — index the domain for the
+  // domain-filtered fan-out path.
+  okf_bundle_manifest: [{ type: 'persistent', fields: ['domain'] }]
 };
 
 // Shared DB connection — cache the RESOLVED proxy (not the promise). On failure

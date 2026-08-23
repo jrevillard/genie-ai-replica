@@ -134,3 +134,11 @@ development_status:
   10-5-studio-service-okf-studio-dashboard: backlog          # multi-repo dashboard + drafts + bulk publish
   10-6-review-publish-lifecycle-ui: backlog                  # Step 8/9 (gated 2.8 PII, 2.9.7 mintVersion)
   epic-10-retrospective: optional
+  # B+C+E (2026-08-23, David's directives — the bundle IS a graph + manifest discovery index):
+  # B: author-stated frontmatter links mirrored into _LINKS_TO (source='author', vertex-integrity + G22 enforced)
+  # C: okf_bundle_manifest written at settle (concepts/links/root/stats; LLM summary LAZY on first discovery read)
+  # E: discoverRepos + GET /repos/:id/manifest + POST /repos/discovery — tier 1 of the multi-domain retrieval fan-out
+  # Also: labeling skip REMOVED (bundle labels = candidate pool; per-chunk applicability; LLM recommendations logged);
+  # bundle state machine Pending→Ingesting→Ingested|Error; re-index retract; is_index merge-preserve.
+  # Smoke v10 PASS=70/0 baseline; v11 PASS=71/2 (2 assert defects, fixed fe8b9c9+c0e4267); v12 confirming.
+  bce-bundle-manifest-author-graph-discovery: review   # code complete + CI green through 504b1af; awaiting v12 full-pass + PRD/ADR course-correction

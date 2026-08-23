@@ -86,7 +86,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
       const rows = await (
         await db.query(
           'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND (m.concept_id == @cid OR m.concept_id == @prefixed) LIMIT 1 ' +
-            'RETURN KEEP(m, ["concept_id", "title", "labels", "links", "bundle_version"])',
+            'RETURN KEEP(m, ["concept_id", "title", "labels", "links", "bundle_version", "is_index"])',
           { repo_id, cid, prefixed: `concepts/${cid}` }
         )
       ).all();

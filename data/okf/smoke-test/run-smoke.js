@@ -1629,7 +1629,7 @@ async function ingestPhase(db) {
   // metadata (citation provenance — Story 4.8-amend).
   // The OKF graph name is hyphenated (OKF_<uuid>) — AQL needs backtick-quoted
   // identifiers for it (live-caught: unquoted → lexer error at the first '-').
-  const HAPPY_CONCEPTS = GOOD_FILES; // 5 conforming (bad_concept is REJECTED, never chunked)
+  const HAPPY_CONCEPTS = GOOD_FILES.map((f) => f.replace(/\.md$/, '')); // concept ids are file names MINUS .md
   const bChunkRows = await aqlAll(
     'FOR c IN `' +
       OKF_GRAPH +

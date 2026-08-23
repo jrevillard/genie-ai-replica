@@ -156,20 +156,28 @@ async function applyUpdate(col, existing, repo_id, conceptId, parsed, opts, mini
     // gate, erase indexing provenance, or downgrade an indexed concept back to
     // 'parsed' — indexed|failed transitions belong to the 2.9.4 worker alone
     // (2026-08-16 review fix; mirrors the pii_state rule).
+    // AMENDED (2026-08-23, live-caught in the two-repo smoke): a MODIFIED
+    // concept (content_hash CHANGED) MUST be allowed back to 'parsed' — that
+    // is the re-index path. The unconditional block stranded modified
+    // concepts at 'indexed' with stale chunks (the worker never re-claimed
+    // them; version threading died silently). The protection now keeps the
+    // terminal state only when the content is UNCHANGED (the dedup case).
+    const contentChanged =
+      patch.content_hash != null && existing.content_hash != null && patch.content_hash !== existing.content_hash;
     if (existing.pii_state && existing.pii_state !== 'unknown' && patch.pii_state === 'unknown') {
       delete patch.pii_state;
     }
     if (existing.last_good_index_at != null && patch.last_good_index_at == null) {
       delete patch.last_good_index_at;
     }
-    if (existing.index_status === 'indexed' && patch.index_status === 'parsed') {
+    if (existing.index_status === 'indexed' && patch.index_status === 'parsed' && !contentChanged) {
       delete patch.index_status;
     }
     // Story 4.8-amend (2026-08-19): a REJECTED concept (hard conformance error)
-    // must not be silently un-rejected back to 'parsed' by a re-ingest — the
-    // steward fixes the frontmatter first, then the next ingest re-validates.
-    // Mirrors the 'indexed' protection above.
-    if (existing.index_status === 'rejected' && patch.index_status === 'parsed') {
+    // must not be silently un-rejected back to 'parsed' by a re-ingest of the
+    // SAME content — the steward fixes the frontmatter first, then the next
+    // ingest re-validates. Fixed content (hash changed) re-enters validation.
+    if (existing.index_status === 'rejected' && patch.index_status === 'parsed' && !contentChanged) {
       delete patch.index_status;
     }
   }

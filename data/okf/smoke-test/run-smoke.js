@@ -1305,14 +1305,14 @@ async function ingestPhase(db) {
   // CHUNK version stamps (content-only: chunks key on metadata.concept_id).
   const versionedChunks = (
     await aqlAll(
-      'FOR c IN `' + OKF_GRAPH + '_SOURCE` FILTER c.metadata.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
+      'FOR c IN `' + OKF_GRAPH + '_SOURCE` FILTER c.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
     )
   )[0];
   const versionedChunkStamps = (
     await aqlAll(
       'FOR c IN `' +
         OKF_GRAPH +
-        '_SOURCE` FILTER c.metadata.concept_id == "service_directory" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
+        '_SOURCE` FILTER c.concept_id == "service_directory" AND c.bundle_version == 1 COLLECT WITH COUNT INTO n RETURN n'
     )
   )[0];
   versionedChunks > 0 && versionedChunkStamps === versionedChunks
@@ -1529,46 +1529,40 @@ async function ingestPhase(db) {
           JSON.stringify({ skipped: rc.skipped_dedup, enqueued: rc.enqueued, errors: rc.enqueue_errors })
       );
 
-  // Drain the clone's single new Pending file (worker-paced). Sorted so a fixture
-  // drift that enqueues >1 concept is watched deterministically (not arbitrary).
-  let cloneFile = (
+  // CONTENT-ONLY (WP-C): the clone's modified concept drains via its META row
+  // (no per-concept files doc). Settle-wait for index_status terminal.
+  let cStatus = null;
+  for (let i = 0; i < 100; i++) {
+    await new Promise((r) => setTimeout(r, 15000));
+    const row = (
+      await aqlAll(
+        "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+          CLONE_ID + "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['index_status'])"
+      )
+    )[0];
+    cStatus = row && row.index_status;
+    if (cStatus === 'indexed' || cStatus === 'failed') break;
+  }
+  const cloneGraphRow = (
     await aqlAll(
-      "FOR f IN files FILTER f.repo_id == '" +
-        CLONE_ID +
-        "' SORT f.file_id RETURN KEEP(f, ['file_id','file_name','dataprep','graph_name'])"
+      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+        CLONE_ID + "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['graph_name'])"
     )
   )[0];
-  let cStatus = null;
-  if (cloneFile) {
-    for (let i = 0; i < 60; i++) {
-      await new Promise((r) => setTimeout(r, 15000));
-      const row = (
-        await aqlAll("FOR x IN files FILTER x.file_id == '" + cloneFile.file_id + "' RETURN KEEP(x, ['dataprep'])")
-      )[0];
-      cStatus = row && row.dataprep && row.dataprep.status;
-      if (cStatus === 'Ingested' || cStatus === 'Ingestion Error' || cStatus === 'Killed') break;
-    }
-  }
-  cloneFile && cloneFile.graph_name === CLONE_GRAPH
-    ? pass("clone: the modified concept's files doc is graph-stamped to the CLONE graph (" + CLONE_GRAPH + ')')
-    : fail('clone files doc graph_name: ' + JSON.stringify(cloneFile));
-  cStatus === 'Ingested'
-    ? pass('clone: worker drained the modified concept to Ingested')
+  cloneGraphRow && cloneGraphRow.graph_name === CLONE_GRAPH
+    ? pass('clone: the modified concept is graph-stamped to the CLONE graph (' + CLONE_GRAPH + ')')
+    : fail('clone graph_name: ' + JSON.stringify(cloneGraphRow));
+  cStatus === 'indexed'
+    ? pass('clone: worker drained the modified concept to indexed')
     : fail('clone drain ended "' + cStatus + '"');
 
   // Physical isolation: the modified concept's chunks in the CLONE graph ONLY,
   // and the SOURCE's chunks + edges are UNCHANGED (the original is never touched).
-  const cloneChunks = cloneFile
-    ? (
-        await aqlAll(
-          'FOR c IN `' +
-            CLONE_GRAPH +
-            '_SOURCE` FILTER c.file_id == "' +
-            cloneFile.file_id +
-            '" COLLECT WITH COUNT INTO n RETURN n'
-        )
-      )[0]
-    : 0;
+  const cloneChunks = (
+    await aqlAll(
+      'FOR c IN `' + CLONE_GRAPH + '_SOURCE` FILTER c.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
+    )
+  )[0] || 0;
   cloneChunks > 0
     ? pass(
         'clone: modified concept indexed into the CLONE graph (' +
@@ -1578,20 +1572,10 @@ async function ingestPhase(db) {
           '_SOURCE)'
       )
     : fail('clone graph: no chunks for the modified concept in ' + CLONE_GRAPH + '_SOURCE');
-  const srcLeak = cloneFile
-    ? (
-        await aqlAll(
-          'FOR c IN `' +
-            OKF_GRAPH +
-            '_SOURCE` FILTER c.file_id == "' +
-            cloneFile.file_id +
-            '" COLLECT WITH COUNT INTO n RETURN n'
-        )
-      )[0]
-    : 0;
-  (srcLeak || 0) === 0
-    ? pass('clone isolation: ZERO clone chunks in the SOURCE graph')
-    : fail('clone isolation BROKEN: ' + srcLeak + ' clone chunks in the source graph');
+  // CONTENT-ONLY: a by-concept_id leak check is meaningless here (the SOURCE
+  // legitimately holds its own service_directory chunks). The isolation proof
+  // is the counts-unchanged assert below: the source's chunk + edge totals
+  // must be IDENTICAL around the clone's re-ingest.
   const srcChunksAfter =
     (await aqlAll('FOR c IN `' + OKF_GRAPH + '_SOURCE` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
   const srcEdgesAfter =
@@ -1649,7 +1633,7 @@ async function ingestPhase(db) {
   const bChunkRows = await aqlAll(
     'FOR c IN `' +
       OKF_GRAPH +
-      '_SOURCE` FILTER c.metadata.concept_id IN ' +
+      '_SOURCE` FILTER c.concept_id IN ' +
       JSON.stringify(HAPPY_CONCEPTS) +
       ' COLLECT cid = c.metadata.concept_id WITH COUNT INTO n RETURN {cid, n}'
   );
@@ -1693,7 +1677,7 @@ async function ingestPhase(db) {
       await aqlAll(
         'FOR c IN ' +
           GRAPH +
-          '_SOURCE FILTER c.metadata.concept_id IN ' +
+          '_SOURCE FILTER c.concept_id IN ' +
           JSON.stringify(HAPPY_CONCEPTS) +
           ' COLLECT WITH COUNT INTO n RETURN n'
       )

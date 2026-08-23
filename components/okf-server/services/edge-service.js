@@ -75,12 +75,43 @@ async function writeRepoAuthorLinks(repo_id) {
     const db = await getDb();
     const graph = `OKF_${repo_id}`;
     const edgeCol = db.collection(`${graph}_LINKS_TO`);
+    const entityCol = db.collection(`${graph}_ENTITY`);
     const rows = await (
       await db.query(
         'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND IS_ARRAY(m.links) RETURN KEEP(m, ["concept_id", "links", "bundle_version"])',
         { rid: repo_id }
       )
     ).all();
+    // The repo's concept-id set — the within-repo boundary (G22, mirrors
+    // writeRepoConceptEdges): an author link to a concept NOT in this repo is
+    // dropped, never materialized as a dangling cross-repo edge.
+    const conceptIds = new Set(
+      (
+        await (
+          await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid RETURN m.concept_id', { rid: repo_id })
+        ).all()
+      ).map(normalizeConceptId)
+    );
+    // INTEGRITY (live-caught in the v11 graph audit): the _LINKS_TO edges are
+    // NOT graph-bound, so ArangoDB enforces NO referential integrity — BOTH
+    // endpoints must exist as ENTITY vertices or the edge dangles (all 12 of
+    // the first run's author edges pointed at hash keys that matched no
+    // vertex: a different key scheme than ensureEntity's). Keys MUST use the
+    // SAME safeKey('c', concept_id) scheme, and BOTH vertices are ensured
+    // (partial-merge upsert — an existing vertex keeps its fields).
+    const ensureVertex = (conceptId) =>
+      entityCol
+        .save(
+          {
+            _key: safeKey('c', conceptId),
+            concept_id: conceptId,
+            repo_id
+          },
+          { overwriteMode: 'update' }
+        )
+        .catch(() => {
+          /* vertex exists or cannot be ensured — the edge write surfaces it */
+        });
     const seen = new Set();
     let written = 0;
     let skipped = 0;
@@ -90,22 +121,22 @@ async function writeRepoAuthorLinks(repo_id) {
       for (const l of links) {
         if (!l || !l.to_concept_id) continue;
         const target = normalizeConceptId(l.to_concept_id);
-        if (target === cid) continue;
+        if (target === cid || !conceptIds.has(target)) {
+          skipped++; // self-loop or cross-repo/missing target (G22)
+          continue;
+        }
         const key = `${cid}->${target}`;
         if (seen.has(key)) continue;
         seen.add(key);
         try {
+          await ensureVertex(cid);
+          await ensureVertex(target);
           await edgeCol.save(
             {
-              _key: `${graph}_${cid}__${target}`,
-              _from: `${graph}_ENTITY/${createHash('sha256')
-                .update(String(repo_id + ':' + cid))
-                .digest('hex')
-                .slice(0, 24)}`,
-              _to: `${graph}_ENTITY/${createHash('sha256')
-                .update(String(repo_id + ':' + target))
-                .digest('hex')
-                .slice(0, 24)}`,
+              // Deterministic edge key (same scheme family as writeRepoConceptEdges).
+              _key: safeKey('e', `${cid}->${target}->author`),
+              _from: `${graph}_ENTITY/${safeKey('c', cid)}`,
+              _to: `${graph}_ENTITY/${safeKey('c', target)}`,
               from_concept_id: cid,
               to_concept_id: target,
               weight: typeof l.weight === 'number' ? l.weight : 1.0,

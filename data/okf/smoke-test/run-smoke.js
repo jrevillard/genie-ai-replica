@@ -1054,29 +1054,37 @@ async function ingestPhase(db) {
     if (happyManifest) break;
     await new Promise((r) => setTimeout(r, 3000));
   }
+  // The SAD manifest legitimately carries 6 concepts (bad_concept present as
+  // 'rejected' — surfaced, not hidden). The assert checks: >=5 concepts, the
+  // 5 conforming present, rejected-present (sad) or absent (happy), the root,
+  // author links, and every link source='author'.
+  const mfConcepts = happyManifest ? happyManifest.concepts || [] : [];
+  const mfLinks = happyManifest ? happyManifest.links || [] : [];
+  const conformingPresent = GOOD_FILES.map((f) => f.replace(/\.md$/, '')).every((id) =>
+    mfConcepts.some((c) => c.id === id)
+  );
   happyManifest &&
-  Array.isArray(happyManifest.concepts) &&
-  happyManifest.concepts.length === 5 &&
+  mfConcepts.length >= 5 &&
+  conformingPresent &&
   happyManifest.root_id === 'index' &&
-  Array.isArray(happyManifest.links) &&
-  happyManifest.links.length > 0 &&
-  happyManifest.links.every((l) => l.source === 'author')
+  mfLinks.length > 0 &&
+  mfLinks.every((l) => l.source === 'author')
     ? pass(
         'manifest (B+C): written at settle — ' +
-          happyManifest.concepts.length +
+          mfConcepts.length +
           ' concepts, ' +
-          happyManifest.links.length +
+          mfLinks.length +
           ' author links, root=index (summary lazy)'
       )
     : fail('manifest (B+C): ' + JSON.stringify(happyManifest && {
-        concepts: happyManifest.concepts && happyManifest.concepts.length,
-        links: happyManifest.links && happyManifest.links.length,
+        concepts: mfConcepts.length,
+        links: mfLinks.length,
         root_id: happyManifest.root_id
       }));
   const authorEdges = await aqlAll(
     "FOR e IN `" + OKF_GRAPH + "_LINKS_TO` FILTER e.source == 'author' RETURN KEEP(e, ['from_concept_id','to_concept_id','source'])"
   );
-  authorEdges.length === (happyManifest ? happyManifest.links.length : -1)
+  authorEdges.length === (happyManifest ? mfLinks.length : -1)
     ? pass(
         "author links (B): " + authorEdges.length + " source='author' edges mirrored into _LINKS_TO (graph IS the bundle's structure)"
       )
@@ -1084,8 +1092,21 @@ async function ingestPhase(db) {
         'author links (B): graph has ' +
           authorEdges.length +
           ' author edges, manifest declares ' +
-          (happyManifest ? happyManifest.links.length : '?')
+          (happyManifest ? mfLinks.length : '?')
       );
+  // INTEGRITY (live-caught in the v11 audit): every author edge's _to MUST
+  // resolve to a real ENTITY vertex — the collections are not graph-bound, so
+  // nothing else enforces it. A dangling edge silently breaks tier-3 walks.
+  const danglingAuthor = await aqlAll(
+    "FOR e IN `" +
+      OKF_GRAPH +
+      "_LINKS_TO` FILTER e.source == 'author' " +
+      "FILTER LENGTH(FOR v IN `" + OKF_GRAPH + "_ENTITY` FILTER v._id == e._to LIMIT 1 RETURN 1) == 0 " +
+      'COLLECT WITH COUNT INTO n RETURN n'
+  );
+  (danglingAuthor[0] || 0) === 0
+    ? pass('author-link integrity (B): ZERO dangling _to — every edge resolves to a real concept vertex')
+    : fail('author-link integrity (B): ' + danglingAuthor[0] + ' dangling author edges (vertex scheme mismatch?)');
 
   // Bundle ingestion-log completeness: EVERY stage for EVERY conforming
   // concept, keyed on the BUNDLE file (the UI surface) with the concept file

@@ -409,21 +409,23 @@ describe('fileService', () => {
       expect(result).toEqual(mockResult.new);
     });
 
-    it('should refuse an ingestion log for a missing file (404)', async () => {
-      const mockSave = jest.fn();
-      const mockDb = {
-        collection: jest.fn().mockReturnValue({
-          save: mockSave,
-          firstExample: jest.fn().mockResolvedValue(null)
-        })
-      };
+    it('should accept an ingestion log for a concept key (no files doc — content-only chunking)', async () => {
+      // OKF concepts have NO files doc by design; their logs key on the
+      // concept_id. addIngestionLog must NOT require a files doc (the
+      // existence check 500'd every per-stage write — live-caught 2026-08-23).
+      const mockResult = { new: { file_id: 'some_concept', level: 'INFO', message: 'x' } };
+      const mockSave = jest.fn().mockResolvedValue(mockResult);
+      const mockDb = { collection: jest.fn().mockReturnValue({ save: mockSave }) };
 
       fileService.getDb = jest.fn().mockResolvedValue(mockDb);
 
-      await expect(
-        fileService.addIngestionLog('ghost', { level: 'INFO', stage: 'test', message: 'test' })
-      ).rejects.toMatchObject({ statusCode: 404 });
-      expect(mockSave).not.toHaveBeenCalled();
+      const result = await fileService.addIngestionLog('some_concept', {
+        level: 'INFO',
+        stage: 'Chunking',
+        message: 'x'
+      });
+      expect(result).toEqual(mockResult.new);
+      expect(mockSave).toHaveBeenCalled();
     });
 
     it('should get ingestion logs for a file', async () => {

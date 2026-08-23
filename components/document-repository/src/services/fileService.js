@@ -853,15 +853,12 @@ class FileService {
   async addIngestionLog(fileId, logData) {
     try {
       const db = await this.getDb();
-      // Integrity (live-caught 2026-08-21): a stale caller (e.g. dataprep's
-      // cross-run bundle-id cache) silently wrote logs against DELETED
-      // files — orphan rows the UI can never surface. Refuse instead.
-      const fileExists = await db.collection('files').firstExample({ file_id: fileId });
-      if (!fileExists) {
-        const err = new Error('File not found');
-        err.statusCode = 404;
-        throw err;
-      }
+      // NOTE (live-caught 2026-08-23, then reverted): do NOT enforce a
+      // files-doc existence check here — under OKF content-only chunking the
+      // PRIMARY log write keys on the concept_id, which has NO files doc by
+      // design; the check 500'd every per-stage write and emptied the bundle
+      // log. The stale-caller problem it guarded against is solved at the
+      // source (dataprep clears its bundle-id cache per ingest).
       const logEntry = {
         file_id: fileId,
         timestamp: new Date().toISOString(),

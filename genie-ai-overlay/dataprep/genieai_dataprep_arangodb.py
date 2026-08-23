@@ -1344,14 +1344,31 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
 
+        # ACL preserve for the non-LLM strategies (the removed skip used to be
+        # their only mechanism — live-flagged 2026-08-23): the embedding/bm25
+        # per-chunk selections get ONLY the ACL-prefixed file_labels unioned
+        # verbatim (t:/r:/d: + okf:v{N} — access scoping + version pinning).
+        # The non-ACL bundle labels are NOT forced (candidate-pool semantics);
+        # for those strategies the whole taxonomy is the pool.
+        _acl_tokens = [l for l in (file_labels or []) if _is_acl_label(l)]
+
+        def _with_acl(results: list[dict]) -> list[dict]:
+            if not _acl_tokens:
+                return results
+            return [
+                {"text": r["text"], "labels": list(dict.fromkeys(list(r.get("labels", [])) + list(_acl_tokens)))}
+                for r in results
+            ]
+
         if LABELING_STRATEGY == "embedding":
             # Offload CPU-bound embedding calculations to a thread
-            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
+            return _with_acl(await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels))
         elif LABELING_STRATEGY == "bm25":
             # Offload CPU-bound BM25 calculations to a thread
-            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
+            return _with_acl(await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels))
         else:
-            # Default to LLM (with retry fix and advisory logic)
+            # Default to LLM (with retry fix and advisory logic). _finalize_chunk_labels
+            # already scopes to the bundle pool + preserves ACL verbatim.
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---

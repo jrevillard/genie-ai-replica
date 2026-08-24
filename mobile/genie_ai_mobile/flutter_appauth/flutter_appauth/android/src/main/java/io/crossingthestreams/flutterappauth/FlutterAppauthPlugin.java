@@ -138,7 +138,12 @@ public class FlutterAppauthPlugin
       defaultAuthorizationService = new AuthorizationService(this.applicationContext);
     }
 
-    if (insecureAuthorizationService == null) {
+    // Security: only build the insecure service when the app explicitly opts in
+    // via allowInsecureConnections. Previously this was unconditional, which meant
+    // an insecure AuthorizationService was always pre-created at engine attach
+    // even when production never used it — leaving the InsecureConnectionBuilder
+    // (TLS verification disabled) wired up at the plugin level.
+    if (allowInsecureConnections && insecureAuthorizationService == null) {
       AppAuthConfiguration.Builder authConfigBuilder = new AppAuthConfiguration.Builder();
       authConfigBuilder.setConnectionBuilder(InsecureConnectionBuilder.INSTANCE);
       authConfigBuilder.setSkipIssuerHttpsCheck(true);
@@ -149,7 +154,9 @@ public class FlutterAppauthPlugin
 
   private void disposeAuthorizationServices() {
     defaultAuthorizationService.dispose();
-    insecureAuthorizationService.dispose();
+    if (insecureAuthorizationService != null) {
+      insecureAuthorizationService.dispose();
+    }
     defaultAuthorizationService = null;
     insecureAuthorizationService = null;
   }

@@ -304,3 +304,27 @@ MiniMax-M3[1m] (analysis → design → implementation → live audit → fixes,
 
 1. mint should refresh the manifest (version/okf_tag stamped post-settle) — small follow-up.
 2. PRD/ADR course-correction via bmad (the tiered fan-out contract + the bundle-is-a-graph decision) — in progress.
+
+### Review Findings (2026-08-24, 3-layer adversarial review: Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+
+> 50+ raw findings triaged to 11 patches + 4 decisions + 2 defers. All patches applied in 5523da6; the decisions were David's (D1-c accept tools-admin scope — internal cluster; D2-b keep the log existence-check removed; D3-a defer fan-out tiers 2-3 to Epic 1/5; D4-b never leave zero chunks). Post-patch smoke v15: **PASS=74 / FAIL=0** — full pass.
+
+- [x] [Review][Patch] P1 bundle-log completeness: dataprep negative-cached the mirror on any transient failure (no retry) + the Ingested callback fired before the final stage log + the smoke asserted without settle-wait [genieai_dataprep_arangodb.py / run-smoke.js] — FIXED: positive-only cache, log-before-callback, 60s settle-wait
+- [x] [Review][Patch] P2 smoke edges KEEP stripped source/from/to — every author edge failed the per-source assert [run-smoke.js] — FIXED: fields projected
+- [x] [Review][Patch] P3 re-settle wiped the cached LLM summary (triple-layer convergence) [concept-meta-service.writeManifest] — FIXED: summary carried forward unless stale
+- [x] [Review][Patch] P4 summary_stale dead branch (early return preceded it) [ensureSummary] — FIXED: stale honored first
+- [x] [Review][Patch] P5 discovery read m.summary (always undefined) [discoverRepos] — FIXED: summary_text
+- [x] [Review][Patch] P6 label-overlap scoring case-broken (query lowercased, labels raw) [discoverRepos] — FIXED: both sides lowercased
+- [x] [Review][Patch] P7 okf:v{N} tags dropped on embedding/bm25 — version-pinned retrieval returned zero [genieai_dataprep_arangodb._with_acl] — FIXED: tags unioned verbatim
+- [x] [Review][Patch] P8 invented /v1/auth/token + /v1/v1 path risk [runLlmSummary] — FIXED: static VLLM_API_KEY bearer + base normalization
+- [x] [Review][Patch] P9 null-domain manifests bypassed the domain filter [discoverRepos] — FIXED: excluded when filtering
+- [x] [Review][Patch] P10 k unclamped (0/negative/huge) [discoverRepos + controller] — FIXED: [1,50]
+- [x] [Review][Patch] P11 parser-edge replace deleted source='author' edges [edge-service.writeRepoConceptEdges] — FIXED: cleanup excludes author edges
+- [x] [Review][Patch] D4-b failed re-index after retract left zero chunks [ingestWorker] — FIXED: one-shot reindex_retry reset to parsed
+- [x] [Review][Patch] (test-env) fullclean didn't purge okf_bundle_manifest — stale manifests crowded the k=10 discovery slice (v14's only FAIL) — FIXED in the purge list
+- [x] [Review][Defer] concurrent last-callback double-settle (manifest/log dupes; benign) — needs a settle lock
+- [x] [Review][Defer] _current_input instance-global misattribution under overlapping dataprep ingests — needs request-scoping
+- [Review][Decision] D1-c tools-admin on PATCH /:fileId/status accepted (internal cluster) · D2-b log existence-check stays removed · D3-a tiers 2-3 deferred to Epic 1/5 · D4-b resolved as patch above
+- [DISMISS] config/getBundleFileId imports (verified present), root-fallback order (documented), tier 2-3 as contract text (D3-a)
+
+**Post-patch live evidence (v15, clean DB incl. manifests purge): PASS=74 / FAIL=0** — manifest (6 concepts / 12 author links / root=index / lazy summary), 12 author edges = manifest links, ZERO dangling, 42-entry bundle log (all 4 stages × 5 concepts × 2 bundles + Manifest/AuthorLinks stages), discovery happy-repo present (score 3, tie-tolerant), plus every prior assertion (authz, state machine, WP-A gate, mint v1/v2, clone isolation, retraction).

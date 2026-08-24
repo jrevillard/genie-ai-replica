@@ -14,9 +14,10 @@ jest.mock('../shared-lib/tracing', () => ({
 jest.mock('../shared-lib/metrics', () => ({
   getMeter: () => ({ createCounter: () => ({ add: jest.fn() }) })
 }));
-jest.mock('../shared-lib/db-connection-service', () => ({
-  getConnection: jest.fn(() => Promise.resolve(require('./mocks/arango-mock').createMockDb()))
-}));
+jest.mock('../shared-lib/db-connection-service', () => {
+  const mockDb = require('./mocks/arango-mock').createMockDb();
+  return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
+});
 jest.mock('../services/parser-service', () => ({
   parseConcept: jest.fn(async (markdown, ctx) => ({
     concept_id: `concepts/${ctx.path.replace(/\.md$/, '')}`,
@@ -275,12 +276,58 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(summary.enqueued).toBe(2); // the errored concept STILL enqueues (state recorded, publish gate blocks later)
   });
 
-  test('audit row written (actor = sub string)', async () => {
+  test('audit row written (actor = sub string) — carries the per-bundle totals', async () => {
     const { writeAudit } = require('../services/audit-service');
     await ingestService.ingestRepoConcepts(REPO, { concepts: [conceptInput('Aud')] }, ACTOR);
     expect(writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'repo.ingest', actor: 'steward-1', repo_id: REPO, source_ip: '127.0.0.1' })
+      expect.objectContaining({
+        action: 'repo.ingest',
+        actor: 'steward-1',
+        repo_id: REPO,
+        source_ip: '127.0.0.1',
+        total: 1,
+        enqueued: 1,
+        skipped_dedup: 0,
+        rejected: 0,
+        error_count: 0
+      })
     );
+  });
+
+  test('2-9-5 surfacing: last_ingest_summary written to the repo doc (capped errors)', async () => {
+    const mockDb = require('../shared-lib/db-connection-service').__mockDb;
+    const repoCol = mockDb.collection('okf_repositories');
+    const realUpdate = repoCol.update.getMockImplementation();
+    const updates = [];
+    repoCol.update.mockImplementation(async (id, patch) => {
+      updates.push({ id, patch });
+      return realUpdate(id, patch);
+    });
+    // A partial ingest: one concept parses, one fails at 4a.
+    parserService.parseConcept
+      .mockResolvedValueOnce({
+        concept_id: 'concepts/ok',
+        repo_id: REPO,
+        frontmatter: { title: 'T', type: 'service' },
+        body: 'ok',
+        links: []
+      })
+      .mockRejectedValueOnce(new Error('yaml explosion'));
+    const summary = await ingestService.ingestRepoConcepts(
+      REPO,
+      { concepts: [conceptInput('Ok'), conceptInput('Bad')] },
+      ACTOR
+    );
+    expect(summary.success).toBe(true); // partial 202 contract
+    const surf = updates.find((u) => u.patch && u.patch.last_ingest_summary);
+    expect(surf).toMatchObject({ id: REPO });
+    expect(surf.patch.last_ingest_summary).toMatchObject({
+      total: 2,
+      parsed: 1,
+      enqueued: 1,
+      error_count: 1,
+      errors: [{ concept_id: 'bad.md', stage: 'parse', error: 'yaml explosion' }]
+    });
   });
 
   test('OKF_INGEST_MAX_CONCEPTS bound: above the cap → VALIDATION-style error', async () => {

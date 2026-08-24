@@ -21,6 +21,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('./audit-service');
+const conceptMetaService = require('./concept-meta-service');
 
 const VERSIONS = 'okf_versions';
 const REPOS = 'okf_repositories';
@@ -106,18 +107,21 @@ async function mintVersion(repo_id, opts = {}, actor) {
       throw new VersionError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
 
-    // D1 (review, 2026-08-17): refuse to mint while the repo has Pending OKF
-    // files — a snapshot racing an in-flight drain would freeze the OLD version
-    // on files/chunks that carry the NEW manifest's hashes (citation integrity).
-    const pending = await (
-      await db.query(
-        `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`,
-        {
-          repo_id
-        }
-      )
-    ).all();
-    if (pending.length > 0) {
+    // D1 (review, 2026-08-17): refuse to mint while an ingest is in flight — a
+    // snapshot racing a drain would freeze the OLD version on files/chunks that
+    // carry the NEW manifest's hashes (citation integrity). WP-C (2026-08-19)
+    // moved the per-concept queue to META rows at index_status='parsed'; the
+    // bundle-zip files doc (Pending → Ingested) remains the bundle-level signal,
+    // so BOTH are checked.
+    const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
+    if (
+      (await drainInFlight(
+        `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`
+      )) ||
+      (await drainInFlight(
+        `FOR m IN ${META} FILTER m.repo_id == @repo_id AND m.index_status == 'parsed' LIMIT 1 RETURN 1`
+      ))
+    ) {
       recordOp('mint', 'busy');
       throw new VersionError(
         'DRAIN_IN_PROGRESS',
@@ -251,6 +255,21 @@ async function mintVersion(repo_id, opts = {}, actor) {
         .catch(() => {
           /* best-effort */
         });
+      // B+C+E follow-up (2026-08-24): refresh okf_bundle_manifest at mint time.
+      // The manifest is otherwise only rewritten at SETTLE (last concept
+      // terminal), so version + summary_stats go stale after a post-settle
+      // re-index until the next full settle. writeManifest is idempotent
+      // (same _key, cached summary preserved unless stale-flagged) and
+      // isolated — a manifest refresh failure never bricks the mint itself.
+      try {
+        await conceptMetaService.writeManifest(repo_id, nextVersion, repo.cloned_from || null);
+      } catch (err) {
+        logger.warn('Bundle manifest refresh at mint failed (non-fatal)', {
+          repo_id,
+          bundle_version: nextVersion,
+          error: err.message
+        });
+      }
       return {
         repo_id,
         bundle_version: nextVersion,

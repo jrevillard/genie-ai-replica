@@ -405,7 +405,11 @@ async function main() {
     ).all();
     if (scratchRows[0] > 0) {
       console.log(
-        '  cleanup: removed ' + scratchRows[0] + ' control-plane scratch meta rows (repo ' + REPO_ID + ') — worker-race guard'
+        '  cleanup: removed ' +
+          scratchRows[0] +
+          ' control-plane scratch meta rows (repo ' +
+          REPO_ID +
+          ') — worker-race guard'
       );
     }
   }
@@ -788,7 +792,9 @@ async function ingestPhase(db) {
     // WP-A: bad_concept is hard-rejected at 4c and NEVER enqueued — the sad
     // bundle enqueues EXPECTED_CONCEPTS - 1 (the conforming concepts).
     if (r1.body.enqueued !== EXPECTED_CONCEPTS - 1)
-      fail('summary.enqueued expected ' + (EXPECTED_CONCEPTS - 1) + ' (WP-A rejects bad_concept), got ' + r1.body.enqueued);
+      fail(
+        'summary.enqueued expected ' + (EXPECTED_CONCEPTS - 1) + ' (WP-A rejects bad_concept), got ' + r1.body.enqueued
+      );
     if (r1.body.enqueue_errors.length !== 0)
       fail('unexpected enqueue_errors: ' + JSON.stringify(r1.body.enqueue_errors));
     if (r1.body.success !== true) fail('summary.success expected true');
@@ -957,9 +963,7 @@ async function ingestPhase(db) {
     if (!statuses[cid]) {
       statuses[cid] = 'timeout';
       fail(
-        'drain ' +
-          cid +
-          ' never reached a terminal meta state (worker interval 15s — is OKF_INGEST_WORKER_ENABLED?)'
+        'drain ' + cid + ' never reached a terminal meta state (worker interval 15s — is OKF_INGEST_WORKER_ENABLED?)'
       );
     } else if (statuses[cid].split(':')[0] !== 'indexed') {
       fail('drain ' + cid + ' ended "' + statuses[cid] + '"');
@@ -1008,9 +1012,7 @@ async function ingestPhase(db) {
     metaAfter.some((m) => m.concept_id === 'bad_concept' && m.index_status === 'rejected') &&
     goodRows.every((m) => m.index_status === 'indexed');
   allIndexed
-    ? pass(
-        'worker transition: 5 conforming meta rows indexed + bad_concept rejected (parsed→indexed / hard-gate)'
-      )
+    ? pass('worker transition: 5 conforming meta rows indexed + bad_concept rejected (parsed→indexed / hard-gate)')
     : fail('worker transition: ' + JSON.stringify(metaAfter.map((m) => [m.concept_id, m.index_status])));
   const allStamped = goodRows.every((m) => typeof m.last_good_index_at === 'string' && m.last_good_index_at);
   allStamped
@@ -1048,9 +1050,7 @@ async function ingestPhase(db) {
   // poll briefly for the manifest to appear.
   let happyManifest = null;
   for (let i = 0; i < 20; i++) {
-    happyManifest = (
-      await aqlAll("FOR d IN okf_bundle_manifest FILTER d._key == '" + INGEST_REPO + "' RETURN d")
-    )[0];
+    happyManifest = (await aqlAll("FOR d IN okf_bundle_manifest FILTER d._key == '" + INGEST_REPO + "' RETURN d"))[0];
     if (happyManifest) break;
     await new Promise((r) => setTimeout(r, 3000));
   }
@@ -1076,17 +1076,26 @@ async function ingestPhase(db) {
           mfLinks.length +
           ' author links, root=index (summary lazy)'
       )
-    : fail('manifest (B+C): ' + JSON.stringify(happyManifest && {
-        concepts: mfConcepts.length,
-        links: mfLinks.length,
-        root_id: happyManifest.root_id
-      }));
+    : fail(
+        'manifest (B+C): ' +
+          JSON.stringify(
+            happyManifest && {
+              concepts: mfConcepts.length,
+              links: mfLinks.length,
+              root_id: happyManifest.root_id
+            }
+          )
+      );
   const authorEdges = await aqlAll(
-    "FOR e IN `" + OKF_GRAPH + "_LINKS_TO` FILTER e.source == 'author' RETURN KEEP(e, ['from_concept_id','to_concept_id','source'])"
+    'FOR e IN `' +
+      OKF_GRAPH +
+      "_LINKS_TO` FILTER e.source == 'author' RETURN KEEP(e, ['from_concept_id','to_concept_id','source'])"
   );
   authorEdges.length === (happyManifest ? mfLinks.length : -1)
     ? pass(
-        "author links (B): " + authorEdges.length + " source='author' edges mirrored into _LINKS_TO (graph IS the bundle's structure)"
+        'author links (B): ' +
+          authorEdges.length +
+          " source='author' edges mirrored into _LINKS_TO (graph IS the bundle's structure)"
       )
     : fail(
         'author links (B): graph has ' +
@@ -1098,10 +1107,12 @@ async function ingestPhase(db) {
   // resolve to a real ENTITY vertex — the collections are not graph-bound, so
   // nothing else enforces it. A dangling edge silently breaks tier-3 walks.
   const danglingAuthor = await aqlAll(
-    "FOR e IN `" +
+    'FOR e IN `' +
       OKF_GRAPH +
       "_LINKS_TO` FILTER e.source == 'author' " +
-      "FILTER LENGTH(FOR v IN `" + OKF_GRAPH + "_ENTITY` FILTER v._id == e._to LIMIT 1 RETURN 1) == 0 " +
+      'FILTER LENGTH(FOR v IN `' +
+      OKF_GRAPH +
+      '_ENTITY` FILTER v._id == e._to LIMIT 1 RETURN 1) == 0 ' +
       'COLLECT WITH COUNT INTO n RETURN n'
   );
   (danglingAuthor[0] || 0) === 0
@@ -1160,9 +1171,7 @@ async function ingestPhase(db) {
       )
     : fail(
         'bundle ingestion log incomplete: ' +
-          JSON.stringify(
-            Object.fromEntries(Object.entries(stagesByConcept).map(([k, v]) => [k, [...v]]))
-          )
+          JSON.stringify(Object.fromEntries(Object.entries(stagesByConcept).map(([k, v]) => [k, [...v]])))
       );
 
   // ── (viii) re-ingest AFTER indexing — the 4e DEDUP rule fires LIVE ──
@@ -1187,7 +1196,11 @@ async function ingestPhase(db) {
     { sub: 'smoke-run', source_ip: null }
   );
   r2.skipped_dedup === EXPECTED_CONCEPTS - 1 && r2.enqueued === 0
-    ? pass('DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' + (EXPECTED_CONCEPTS - 1) + ', enqueued=0')
+    ? pass(
+        'DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' +
+          (EXPECTED_CONCEPTS - 1) +
+          ', enqueued=0'
+      )
     : fail(
         'dedup summary: ' +
           JSON.stringify({ skipped_dedup: r2.skipped_dedup, enqueued: r2.enqueued, errors: r2.enqueue_errors })
@@ -1221,11 +1234,15 @@ async function ingestPhase(db) {
   // "No invalid concept reaches published."
   let sadGateRefused = null;
   try {
-    await versionService.mintVersion(INGEST_REPO, { trigger: 'publish', source_ref: 'smoke://sad/v1' }, { sub: 'smoke-run' });
+    await versionService.mintVersion(
+      INGEST_REPO,
+      { trigger: 'publish', source_ref: 'smoke://sad/v1' },
+      { sub: 'smoke-run' }
+    );
     fail('WP-A publish gate: sad-repo mint SUCCEEDED — the gate did not enforce');
   } catch (e) {
     sadGateRefused = e;
-    (e.code === 'PUBLISH_GATE_BLOCKED' || /gate|conform|rejected|indexed/i.test(e.message))
+    e.code === 'PUBLISH_GATE_BLOCKED' || /gate|conform|rejected|indexed/i.test(e.message)
       ? pass('WP-A publish gate: sad-repo mint REFUSED (' + (e.code || e.message).toString().slice(0, 80) + ')')
       : fail('sad-repo mint refused for the WRONG reason: ' + e.message.slice(0, 120));
   }
@@ -1242,7 +1259,11 @@ async function ingestPhase(db) {
     "FOR r IN okf_repositories FILTER r.name == '" + HAPPY_NAME + "' RETURN KEEP(r, ['repo_id'])"
   );
   for (const ph of priorHappy) {
-    try { await repositoryServiceLate.remove(ph.repo_id, { sub: 'smoke-run' }); } catch (e) { /* best-effort */ }
+    try {
+      await repositoryServiceLate.remove(ph.repo_id, { sub: 'smoke-run' });
+    } catch (e) {
+      /* best-effort */
+    }
   }
   const happyRepo = await repositoryServiceLate.create(
     { name: HAPPY_NAME, domain: 'smoke', acl: { required_scopes: [] } },
@@ -1259,15 +1280,17 @@ async function ingestPhase(db) {
   );
   rh.total === 5 && rh.parsed === 5 && rh.rejected === 0 && rh.enqueued === 5
     ? pass('happy ingest: 202-equivalent summary (total=5 parsed=5 rejected=0 enqueued=5)')
-    : fail('happy ingest summary: ' + JSON.stringify({ total: rh.total, parsed: rh.parsed, rejected: rh.rejected, enqueued: rh.enqueued }));
+    : fail(
+        'happy ingest summary: ' +
+          JSON.stringify({ total: rh.total, parsed: rh.parsed, rejected: rh.rejected, enqueued: rh.enqueued })
+      );
   // Worker drains the happy repo's 5 concepts (settle-wait, same poll shape).
   console.log('  happy drain: 5 concepts (WORKER-paced)...');
   let happySettled = false;
   for (let i = 0; i < 100 && !happySettled; i++) {
     await new Promise((r) => setTimeout(r, 15000));
     const rows = await aqlAll(
-      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-        INGEST_REPO + "' RETURN KEEP(m, ['index_status'])"
+      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" + INGEST_REPO + "' RETURN KEEP(m, ['index_status'])"
     );
     happySettled = rows.length === 5 && rows.every((m) => m.index_status === 'indexed' || m.index_status === 'failed');
   }
@@ -1279,7 +1302,9 @@ async function ingestPhase(db) {
   for (let i = 0; i < 20; i++) {
     happyBundle = (
       await aqlAll(
-        "FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' AND f.is_bundle == true RETURN KEEP(f, ['file_id','dataprep'])"
+        "FOR f IN files FILTER f.repo_id == '" +
+          INGEST_REPO +
+          "' AND f.is_bundle == true RETURN KEEP(f, ['file_id','dataprep'])"
       )
     )[0];
     if (happyBundle && happyBundle.dataprep && happyBundle.dataprep.status === 'Ingested') break;
@@ -1337,10 +1362,10 @@ async function ingestPhase(db) {
     ? pass('manifest v1: okf:v1 + trigger + minted_at recorded')
     : fail('manifest v1 metadata: ' + JSON.stringify(manifest1));
 
-  // ── (x) MODIFIED re-ingest → version threading onto files docs + CHUNKS ──
+  // ── (x) MODIFIED re-ingest → version threading onto meta rows + CHUNKS ──
   // Change ONE concept (service_directory): the other 5 dedup-skip (unchanged +
   // indexed), the changed one enqueues carrying bundle_version=1 + the okf:v1
-  // tag — the worker drains it and datapretreat stamps bundle_version onto its
+  // tag — the worker drains it and dataprep stamps bundle_version onto its
   // chunk docs (ADR-031 "threaded everywhere").
   const modifiedConcepts = concepts.map((c) =>
     c.path === 'service_directory.md'
@@ -1381,7 +1406,8 @@ async function ingestPhase(db) {
     const row = (
       await aqlAll(
         "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-          INGEST_REPO + "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['index_status','content_hash','chunk_count'])"
+          INGEST_REPO +
+          "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['index_status','content_hash','chunk_count'])"
       )
     )[0];
     versionedSettled = !!row && row.index_status === 'indexed';
@@ -1392,7 +1418,9 @@ async function ingestPhase(db) {
   // CHUNK version stamps (content-only: chunks key on metadata.concept_id).
   const versionedChunks = (
     await aqlAll(
-      'FOR c IN `' + OKF_GRAPH + '_SOURCE` FILTER c.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
+      'FOR c IN `' +
+        OKF_GRAPH +
+        '_SOURCE` FILTER c.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
     )
   )[0];
   const versionedChunkStamps = (
@@ -1449,7 +1477,7 @@ async function ingestPhase(db) {
         // P2, live-caught v13b: the projection stripped the very fields the
         // per-source well-formedness assert branches on, failing every author
         // edge as if it were a malformed parser edge).
-        "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version', 'source', 'from_concept_id', 'to_concept_id', 'weight'])"
+        "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'repo_id', 'bundle_version', 'source', 'from_concept_id', 'to_concept_id', 'weight'])"
     );
     if (myEdges.some((e) => e.bundle_version === 1)) break;
     await new Promise((r) => setTimeout(r, 3000));
@@ -1464,9 +1492,11 @@ async function ingestPhase(db) {
       )
     : fail("edges: ZERO concept edges (the worker's post-index edge write did not fire)");
   // Well-formedness differs by edge source: parser edges (source undefined or
-  // 'parser') carry label + file_id; author edges (source='author', B) carry
+  // 'parser') carry label; author edges (source='author', B) carry
   // from/to_concept_id + weight instead. Both must have within-repo c_
-  // endpoints + repo_id.
+  // endpoints + repo_id. (WP-C: parser edges no longer carry a files-doc
+  // file_id — concepts are NOT files docs; the callback passes concept_id in
+  // that slot, so it is deliberately not asserted here.)
   const edgesWellFormed = myEdges.every(
     (e) =>
       String(e._from).startsWith(OKF_GRAPH + '_ENTITY/c_') &&
@@ -1474,11 +1504,11 @@ async function ingestPhase(db) {
       e.repo_id === INGEST_REPO &&
       (e.source === 'author'
         ? typeof e.from_concept_id === 'string' && typeof e.to_concept_id === 'string'
-        : typeof e.label === 'string' && typeof e.file_id === 'string')
+        : typeof e.label === 'string')
   );
   edgesWellFormed
     ? pass(
-        'edges: ALL concept edges well-formed — within-repo c_ endpoints + repo_id; parser edges carry label+file_id, author edges carry from/to+weight (per source)'
+        'edges: ALL concept edges well-formed — within-repo c_ endpoints + repo_id; parser edges carry label, author edges carry from/to+weight (per source)'
       )
     : fail('edges malformed: ' + JSON.stringify(myEdges.slice(0, 3)));
   const versionedEdge = myEdges.some((e) => e.bundle_version === 1);
@@ -1523,25 +1553,15 @@ async function ingestPhase(db) {
       "' RETURN KEEP(r, ['repo_id'])"
   );
   for (const pc of priorClones) {
-    // A prior crashed run may have left the clone's files mid-drain — retract
-    // them via doc-repo FIRST so the worker never writes into collections this
-    // cleanup is about to drop (mirrors the ingest phase's re-run retract).
-    const priorFiles = await aqlAll(
-      "FOR f IN files FILTER f.repo_id == '" + pc.repo_id + "' RETURN KEEP(f, ['file_id','file_name','dataprep'])"
-    );
-    for (const pf of priorFiles) {
-      const retr = await call('POST', DOCREPO + '/api/files/' + pf.file_id + '/retract', await serviceToken());
-      if (retr.status !== 200) {
-        console.log('    NOTE clone-cleanup retract ' + pf.file_name + ' -> ' + retr.status + ' (best-effort)');
-      }
-    }
+    // WP-C: only the bundle zip is a files doc and remove() → retractRepoGraph
+    // DROPS the graph collections + cleans the files/meta/versions rows — no
+    // per-concept doc-repo retract exists (or is needed) for a clone.
     try {
       await repositoryService.remove(pc.repo_id, { sub: 'smoke-run' });
     } catch (e) {
       /* best-effort — already removed */
     }
     await aqlAll("FOR m IN okf_concepts_meta FILTER m.repo_id == '" + pc.repo_id + "' REMOVE m IN okf_concepts_meta");
-    await aqlAll("FOR f IN files FILTER f.repo_id == '" + pc.repo_id + "' REMOVE f IN files");
     await aqlAll("FOR v IN okf_versions FILTER v.repo_id == '" + pc.repo_id + "' REMOVE v IN okf_versions");
     await aqlAll("REMOVE '" + pc.repo_id + "' IN okf_repositories");
   }
@@ -1635,7 +1655,8 @@ async function ingestPhase(db) {
     const row = (
       await aqlAll(
         "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-          CLONE_ID + "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['index_status'])"
+          CLONE_ID +
+          "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['index_status'])"
       )
     )[0];
     cStatus = row && row.index_status;
@@ -1644,7 +1665,8 @@ async function ingestPhase(db) {
   const cloneGraphRow = (
     await aqlAll(
       "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-        CLONE_ID + "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['graph_name'])"
+        CLONE_ID +
+        "' AND m.concept_id == 'service_directory' RETURN KEEP(m, ['graph_name'])"
     )
   )[0];
   cloneGraphRow && cloneGraphRow.graph_name === CLONE_GRAPH
@@ -1656,11 +1678,14 @@ async function ingestPhase(db) {
 
   // Physical isolation: the modified concept's chunks in the CLONE graph ONLY,
   // and the SOURCE's chunks + edges are UNCHANGED (the original is never touched).
-  const cloneChunks = (
-    await aqlAll(
-      'FOR c IN `' + CLONE_GRAPH + '_SOURCE` FILTER c.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
-    )
-  )[0] || 0;
+  const cloneChunks =
+    (
+      await aqlAll(
+        'FOR c IN `' +
+          CLONE_GRAPH +
+          '_SOURCE` FILTER c.concept_id == "service_directory" COLLECT WITH COUNT INTO n RETURN n'
+      )
+    )[0] || 0;
   cloneChunks > 0
     ? pass(
         'clone: modified concept indexed into the CLONE graph (' +
@@ -1777,9 +1802,7 @@ async function ingestPhase(db) {
   const badChunks =
     (
       await aqlAll(
-        'FOR c IN `' +
-          OKF_GRAPH +
-          '_SOURCE` FILTER c.concept_id == "bad_concept" COLLECT WITH COUNT INTO n RETURN n'
+        'FOR c IN `' + OKF_GRAPH + '_SOURCE` FILTER c.concept_id == "bad_concept" COLLECT WITH COUNT INTO n RETURN n'
       )
     )[0] || 0;
   badChunks === 0
@@ -1815,89 +1838,15 @@ async function ingestPhase(db) {
   // CLEANUP=none the repo, its bundle docs, and the OKF_{repo} graph PERSIST for
   // inspection (the user inspects the results, then runs OKF_SMOKE_CLEANUP=only).
   if (CLEANUP === 'full') {
-    // ── (ix) BUNDLE RETRACTION — VERIFIED, not just a 200 ──
-    // History lesson (G5): retract once returned success while deleting NOTHING
-    // (wrong-graph fallback). A retract is only proven when the concept's chunks
-    // are physically GONE from the per-repo graph and the other concepts'
-    // chunks survive. Retract ONE concept (bad_concept — deliberately
-    // non-conforming, the natural deletion candidate).
-    const retractFile = okfFiles.find((p) => p.file_name === 'bad_concept.md') || okfFiles[0];
-    const retractChunksBefore = (
-      await aqlAll(
-        'FOR c IN `' +
-          OKF_GRAPH +
-          '_SOURCE` FILTER c.file_id == "' +
-          retractFile.file_id +
-          '" COLLECT WITH COUNT INTO n RETURN n'
-      )
-    )[0];
-    const retr = await call('POST', DOCREPO + '/api/files/' + retractFile.file_id + '/retract', await serviceToken());
-    if (retr.status !== 200) {
-      fail('retract ' + retractFile.file_name + ' -> ' + retr.status + ' ' + JSON.stringify(retr.body).slice(0, 120));
-    } else {
-      // Poll the files doc to the terminal 'retracted' state (retract also runs
-      // cascading LINKS_TO/HAS_SOURCE cleanup in the graph — give it time).
-      let rStatus = null;
-      for (let i = 0; i < 24; i++) {
-        await new Promise((r) => setTimeout(r, 5000));
-        const row = (
-          await aqlAll(
-            "FOR x IN files FILTER x.file_id == '" +
-              retractFile.file_id +
-              "' RETURN KEEP(x, ['dataprep','chunk_count'])"
-          )
-        )[0];
-        rStatus = row && row.dataprep && (row.dataprep.status || '').toLowerCase();
-        if (rStatus === 'retracted') break;
-      }
-      (rStatus === 'retracted' ? pass : fail)(
-        'retract: files doc -> ' + (rStatus || 'never-terminal') + ' (' + retractFile.file_name + ')'
-      );
-      // THE physical proof: that concept's chunks are GONE from the per-repo graph.
-      const chunksAfter = (
-        await aqlAll(
-          'FOR c IN `' +
-            OKF_GRAPH +
-            '_SOURCE` FILTER c.file_id == "' +
-            retractFile.file_id +
-            '" COLLECT WITH COUNT INTO n RETURN n'
-        )
-      )[0];
-      retractChunksBefore > 0 && (chunksAfter || 0) === 0
-        ? pass(
-            'retract VERIFIED: ' +
-              retractChunksBefore +
-              ' chunks of ' +
-              retractFile.file_name +
-              ' physically removed from ' +
-              OKF_GRAPH +
-              '_SOURCE (right graph, real delete)'
-          )
-        : fail(
-            'retract NOT verified: before=' +
-              retractChunksBefore +
-              ' after=' +
-              (chunksAfter || 0) +
-              ' in ' +
-              OKF_GRAPH +
-              '_SOURCE (silent no-op?)'
-          );
-      // The rest of the bundle must be untouched.
-      const survivors = await aqlAll(
-        'FOR c IN `' +
-          OKF_GRAPH +
-          '_SOURCE` FILTER c.file_id IN ' +
-          JSON.stringify(okfIds.filter((id) => id !== retractFile.file_id)) +
-          ' COLLECT fid = c.file_id WITH COUNT INTO n RETURN {fid, n}'
-      );
-      survivors.length === HAPPY_COUNT - 1 && survivors.every((r) => r.n > 0)
-        ? pass(
-            'retract VERIFIED: the other ' +
-              (EXPECTED_CONCEPTS - 1) +
-              ' concepts keep their chunks (no collateral damage)'
-          )
-        : fail('retract collateral: survivors=' + JSON.stringify(survivors));
-    }
+    // ── (ix) PER-CONCEPT RETRACTION — REMOVED (WP-C, 2026-08-24) ──
+    // Pre-WP-C this retracted ONE concept via doc-repo POST /api/files/{id}/retract.
+    // Post-WP-C (content-only chunking) concepts are NOT files docs (only the
+    // bundle zip is), so the old block selected from an empty list and threw.
+    // No per-concept retract API exists in okf-server (only retractRepoGraph),
+    // and the natural candidate (bad_concept) is REJECTED at ingest with 0
+    // chunks — there is nothing per-concept to retract. Per-concept deletion
+    // lands with Story 4.3 (lifecycle states). Bundle-level retraction below
+    // remains the verified physical proof.
 
     // ── (x) BUNDLE-LEVEL RETRACTION — repo delete DROPS the graph ──
     // A per-repo graph serves exactly ONE bundle: the simplest correct

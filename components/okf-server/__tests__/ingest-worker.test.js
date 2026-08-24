@@ -137,12 +137,22 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
   });
 
-  test('dataprep transport error → outcome error', async () => {
+  test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
     programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
     authedAxios.post.mockRejectedValue(new Error('dataprep down'));
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('error');
-    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    // 2-9-5 atomicity pass: the error touch stamps updated_at (the patch also
+    // records last_worker_error) so claimNextJob's SORT updated_at ASC claims
+    // the NEXT concept next cycle — a poison concept never starves the queue.
+    // Crucially NO index_status transition: the row stays 'parsed' (retried).
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      REPO,
+      { concept_id: 'a', repo_id: REPO },
+      { patch: { last_worker_error: 'dataprep POST failed: dataprep down' } }
+    );
+    const patches = conceptMeta.upsertConceptMeta.mock.calls.map((c) => c[2] && c[2].patch).filter(Boolean);
+    expect(patches.every((p) => p.index_status === undefined)).toBe(true);
   });
 
   test('non-200 dataprep kick → outcome error with status', async () => {
@@ -187,6 +197,47 @@ describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
     authedAxios.post.mockRejectedValue(Object.assign(new Error('503'), { response: { status: 503 } }));
     const res = await worker._sweepOnce();
     expect(res).toEqual({ cleaned: 0, victims: [] });
+  });
+});
+
+describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — dead-letter rows past the grace window)', () => {
+  test('dead-letters a stuck parsed row to failed with last_error', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'stuck' }], []);
+    const res = await worker._reapStuckParsed();
+    expect(res).toEqual({ reaped: 1, victims: [`${REPO}/stuck`] });
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      REPO,
+      { concept_id: 'stuck', repo_id: REPO },
+      {
+        patch: {
+          index_status: 'failed',
+          last_error: 'stuck in parsed queue past the grace window (reaper dead-letter)'
+        }
+      }
+    );
+  });
+
+  test('no stuck rows → no-op', async () => {
+    programQueries([]);
+    const res = await worker._reapStuckParsed();
+    expect(res).toEqual({ reaped: 0, victims: [] });
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+  });
+
+  test('a dead-letter failure is isolated (other victims still processed)', async () => {
+    programQueries(
+      [
+        { repo_id: REPO, concept_id: 'a' },
+        { repo_id: REPO, concept_id: 'b' }
+      ],
+      []
+    );
+    conceptMeta.upsertConceptMeta
+      .mockRejectedValueOnce(new Error('write failed'))
+      .mockResolvedValue({ action: 'updated', doc: {} });
+    const res = await worker._reapStuckParsed();
+    expect(res.reaped).toBe(1); // 'b' dead-lettered; 'a' failed isolation-logged
+    expect(res.victims).toEqual([`${REPO}/b`]);
   });
 });
 

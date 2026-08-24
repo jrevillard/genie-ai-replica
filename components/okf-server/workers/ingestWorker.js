@@ -246,11 +246,33 @@ async function _processOneJob() {
         recordJob('busy');
         return { outcome: 'busy', concept_id: conceptId };
       }
+      // 2-9-5 atomicity pass (2026-08-24): TOUCH the row (the patch stamps
+      // updated_at) so claimNextJob's SORT updated_at ASC advances to the NEXT
+      // concept next cycle — a poison concept must never starve the queue
+      // head-of-line. The row stays 'parsed' and is retried on a later cycle.
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          job.repo_id,
+          { concept_id: conceptId, repo_id: job.repo_id },
+          { patch: { last_worker_error: `dataprep POST failed: ${err.message}`.slice(0, 500) } }
+        );
+      } catch {
+        /* best-effort — the error log below still records it */
+      }
       recordJob('error');
       logger.error('Ingest worker: dataprep POST failed', { concept_id: conceptId, error: err.message });
       return { outcome: 'error', concept_id: conceptId, error: err.message };
     }
     if (kick.status !== 200 && kick.status !== 202) {
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          job.repo_id,
+          { concept_id: conceptId, repo_id: job.repo_id },
+          { patch: { last_worker_error: `dataprep status ${kick.status}`.slice(0, 500) } }
+        );
+      } catch {
+        /* best-effort */
+      }
       recordJob('error');
       logger.error('Ingest worker: dataprep rejected', { concept_id: conceptId, status: kick.status });
       return { outcome: 'error', concept_id: conceptId, error: `dataprep status ${kick.status}` };
@@ -387,6 +409,65 @@ async function _sweepOnce() {
   return { cleaned, victims };
 }
 
+/**
+ * Reap stuck 'parsed' meta rows (2-9-5 atomicity pass, 2026-08-24).
+ *
+ * WHY: settle fires only when ZERO parsed rows remain and mintVersion's D1
+ * gate refuses while any parsed row exists — a concept whose drain died
+ * without a terminal callback (okf-server restart between kick and callback,
+ * dataprep crash, repeated POST errors with the row touched out of the queue
+ * head) would block BOTH forever, with no retry deadline and no visibility.
+ *
+ * Semantics: a parsed row older than the grace window (default 1h — well
+ * above the 10-min JOB_TIMEOUT, so an in-flight drain is never reaped) is
+ * dead-lettered to index_status='failed' with last_error set. Recovery for a
+ * reaped concept is a re-ingest (the standard failed-path contract).
+ *
+ * @returns {Promise<{reaped: number, victims: string[]}>}
+ */
+async function _reapStuckParsed() {
+  const db = await getDb();
+  const graceMs = safeIntOrZero('OKF_INGEST_WORKER_REAP_GRACE_MS', 3600000);
+  const stuck = await (
+    await db.query(aql`
+    FOR m IN okf_concepts_meta
+      FILTER m.index_status == 'parsed'
+      FILTER m.updated_at != null AND m.updated_at != '' AND DATE_TIMESTAMP(m.updated_at) < DATE_NOW() - ${graceMs}
+      LIMIT 10
+      RETURN KEEP(m, ['repo_id', 'concept_id'])
+  `)
+  ).all();
+  const victims = [];
+  for (const m of stuck) {
+    try {
+      await conceptMetaService.upsertConceptMeta(
+        m.repo_id,
+        { concept_id: m.concept_id, repo_id: m.repo_id },
+        {
+          patch: {
+            index_status: 'failed',
+            last_error: 'stuck in parsed queue past the grace window (reaper dead-letter)'
+          }
+        }
+      );
+      victims.push(`${m.repo_id}/${m.concept_id}`);
+      writeBundleIngestionLog(
+        m.repo_id,
+        m.concept_id,
+        'ERROR',
+        'System',
+        'Concept dead-lettered by the stuck-parsed reaper (no terminal callback within the grace window)'
+      );
+    } catch (err) {
+      logger.warn(`Ingest worker reaper: failed to dead-letter ${m.repo_id}/${m.concept_id} (${err.message})`);
+    }
+  }
+  if (victims.length > 0) {
+    logger.warn(`Ingest worker reaper dead-lettered ${victims.length} stuck-parsed concept(s): ${victims.join(', ')}`);
+  }
+  return { reaped: victims.length, victims };
+}
+
 /** One drain cycle (guarded against overlap — the timer never stacks). */
 async function _drainCycle() {
   if (_draining) return;
@@ -428,6 +509,7 @@ function start() {
     _sweeping = true;
     try {
       await _sweepOnce();
+      await _reapStuckParsed();
     } catch (err) {
       logger.error('Ingest worker sweep error', { error: err.message });
     } finally {
@@ -445,4 +527,4 @@ function stop() {
   _sweepTimer = null;
 }
 
-module.exports = { start, stop, _processOneJob, _sweepOnce, claimNextJob, getBundleFileId };
+module.exports = { start, stop, _processOneJob, _sweepOnce, _reapStuckParsed, claimNextJob, getBundleFileId };

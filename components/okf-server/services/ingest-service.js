@@ -27,6 +27,7 @@ const piiService = require('./pii-service');
 const repositoryService = require('./repository-service');
 const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
+const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
 
 const DEFAULT_MAX_CONCEPTS = 200;
@@ -469,13 +470,48 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   recordOp('ingest', allEnqueuesFailed ? 'error' : summary.enqueue_errors.length === 0 ? 'accepted' : 'partial');
   logger.info('OKF repo ingest orchestrated', { repo_id, total: summary.total, enqueued: summary.enqueued });
 
-  // Audit (best-effort, actor = sub string — AC 9).
+  // 2-9-5 atomicity pass (2026-08-24): surface the per-bundle totals on the
+  // repo doc — a PARTIAL ingest (per-concept isolation means the 202 stays
+  // valid even when concepts fail 4a/4b) was previously visible only in the
+  // orchestrator's return value; the repo registry now carries the last
+  // ingest's outcome so the admin UI / discovery can show it. Best-effort +
+  // capped: a store failure never fails the ingest, and the error detail is
+  // bounded (first 10 concepts, 200-char messages).
+  const lastIngestSummary = {
+    at: new Date().toISOString(),
+    total: summary.total,
+    parsed: summary.parsed,
+    enqueued: summary.enqueued,
+    skipped_dedup: summary.skipped_dedup,
+    rejected: summary.rejected,
+    error_count: summary.enqueue_errors.length,
+    errors: summary.enqueue_errors.slice(0, 10).map((e) => ({
+      concept_id: e.concept_id,
+      stage: e.stage,
+      error: String(e.error || '').slice(0, 200)
+    })),
+    bundle_stored: summary.bundle_stored || null
+  };
+  try {
+    const db = await dbService.getConnection('default');
+    await db.collection('okf_repositories').update(repo_id, { last_ingest_summary: lastIngestSummary });
+  } catch (err) {
+    logger.warn('Ingest summary surfacing failed (non-fatal)', { repo_id, error: err.message });
+  }
+
+  // Audit (best-effort, actor = sub string — AC 9) — carries the totals so a
+  // partial ingest is visible in the audit trail too.
   auditService
     .writeAudit({
       action: 'repo.ingest',
       actor: (actor && actor.sub) || null,
       repo_id,
-      source_ip: (actor && actor.source_ip) || null
+      source_ip: (actor && actor.source_ip) || null,
+      total: summary.total,
+      enqueued: summary.enqueued,
+      skipped_dedup: summary.skipped_dedup,
+      rejected: summary.rejected,
+      error_count: summary.enqueue_errors.length
     })
     .catch(() => {
       /* best-effort */

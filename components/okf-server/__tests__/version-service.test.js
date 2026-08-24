@@ -20,10 +20,14 @@ jest.mock('../shared-lib/db-connection-service', () => {
 jest.mock('../services/audit-service', () => ({
   writeAudit: jest.fn().mockResolvedValue(null)
 }));
+jest.mock('../services/concept-meta-service', () => ({
+  writeManifest: jest.fn().mockResolvedValue(null)
+}));
 
 const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const versionService = require('../services/version-service');
 const { writeAudit } = require('../services/audit-service');
+const { writeManifest } = require('../services/concept-meta-service');
 
 const REPO = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
@@ -52,11 +56,12 @@ function seedMeta(concept_id, content_hash) {
 }
 
 /** The service queries via db.query (AQL strings) — program the cursor.
- * The mint's FIRST query is the D1 Pending-gate (expects no Pending files
- * unless a test seeds one) — auto-prepend [] so every programmed row goes to
- * the snapshot/other queries. */
+ * The mint's FIRST TWO queries are the D1 drain gates (Pending bundle-zip
+ * files doc, then meta rows at index_status='parsed' — WP-C queue) —
+ * auto-prepend [] [] so every programmed row goes to the snapshot query. */
 function programQuery(rows) {
-  mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // gate: no pending
+  mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // gate 1: no pending files
+  mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // gate 2: no parsed meta rows
   mockDb.query.mockResolvedValueOnce({ all: async () => rows });
 }
 
@@ -198,9 +203,40 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
 
   test('D1: mint proceeds when no Pending files exist', async () => {
     seedRepo({ version: 2 });
-    programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]); // gate [](auto) + snapshot
+    programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]); // gates [](auto) + snapshot
     const result = await versionService.mintVersion(REPO);
     expect(result.bundle_version).toBe(3);
+  });
+
+  test('D1 (WP-C): refuses mint while a meta row sits at index_status=parsed (the content-only queue) → 409', async () => {
+    seedRepo({ version: 2 });
+    // Gate 1 (files) empty; gate 2 (parsed meta rows) non-empty.
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ repo_id: REPO, concept_id: 'stuck', index_status: 'parsed' }]
+    });
+    await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
+      code: 'DRAIN_IN_PROGRESS',
+      status: 409
+    });
+    expect(mockDb._stores.okf_repositories[REPO].version).toBe(2); // no bump
+  });
+
+  test('B+C+E follow-up: mint REFRESHES okf_bundle_manifest with the minted version', async () => {
+    seedRepo({ version: 1, cloned_from: { repo_id: 'src', version: 1 } });
+    programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]);
+    const result = await versionService.mintVersion(REPO, { trigger: 'publish' });
+    expect(result.bundle_version).toBe(2);
+    expect(writeManifest).toHaveBeenCalledWith(REPO, 2, { repo_id: 'src', version: 1 });
+  });
+
+  test('B+C+E follow-up: a manifest refresh failure does NOT fail the mint (isolated)', async () => {
+    seedRepo({ version: 1 });
+    writeManifest.mockRejectedValueOnce(new Error('manifest store down'));
+    programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]);
+    const result = await versionService.mintVersion(REPO, { trigger: 'publish' });
+    expect(result.bundle_version).toBe(2); // mint succeeded despite the refresh failure
+    expect(mockDb._stores.okf_repositories[REPO].version).toBe(2);
   });
 
   test('PUBLISH GATE: refuses mint while a concept is non-indexed (rejected) → 409 PUBLISH_GATE_BLOCKED', async () => {

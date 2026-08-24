@@ -18,10 +18,10 @@
             {{ notification.message }}
           </div>
         </div>
-        <button 
-          class="notification-close" 
-          @click="removeNotification(notification.id)"
+        <button
+          class="notification-close"
           aria-label="Close"
+          @click="removeNotification(notification.id)"
         >
           &times;
         </button>

@@ -19,7 +19,7 @@
     "buffer-browserify": "^0.2.5",
     "crypto-browserify": "^3.12.1",
     "d3": "^7.9.0",
-    "dompurify": "^3.2.6",
+    "dompurify": "^3.4.13",
     "jsdom": "^26.1.0",
     "jspdf": "^4.2.1",
     "@lucide/vue": "^1.28.0",
@@ -55,6 +55,10 @@
   },
   "overrides": {
     "execa": "9.5.0",
-    "uuid": "11.1.0"
+    "uuid": "^11.1.1",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "^7.0.3",
+    "fast-uri": "^3.1.5",
+    "js-yaml": "^4.3.1"
   }
 }

@@ -19,6 +19,28 @@ variables:
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
+  # --- SAST exclusions: dev/test-only paths and known-not-relevant targets ---
+  # Variable consumed by both semgrep-sast and kics-iac-sast (both honor
+  # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
+  # any official GitLab SAST template and will be silently dropped.
+  # - mobile/**/windows/: Windows desktop CMake runner, not deployed to Docker Swarm prod
+  # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
+  # - **/scripts/**: dev/migration scripts NOT shipped in container. We list specific
+  #   sub-patterns (rather than the broad **/scripts/) so the production entrypoint
+  #   `components/document-repository/scripts/clamav-node.sh` stays scanned.
+  # - **/seed-*.js: synthetic data generators, never executed at runtime
+  # - **/__tests__/, **/__mocks__/, **/tests/, **/coverage/: test code + generated reports
+  SAST_EXCLUDED_PATHS: >-
+    mobile/**/windows/**,
+    genie-ai-overlay/contracts/**,
+    **/seed-*.js,
+    **/scripts/seed-*.js,
+    **/scripts/migrations/**,
+    **/scripts/new-schema-scripts/**,
+    **/__tests__/**,
+    **/__mocks__/**,
+    **/tests/**,
+    **/coverage/**
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
@@ -580,6 +602,14 @@ secret_detection:
   rules: *security_run_rules
 semgrep-sast:
   rules: *security_run_rules
+  # SAST_EXCLUDED_PATHS (set in global variables) hides:
+  #   mobile/**/windows/** — Windows desktop CMake runner, not deployed
+  #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
+  #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
+  #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code
+  # Production entrypoint components/document-repository/scripts/clamav-node.sh
+  # is INTENTIONALLY left scanned (clamav-node.sh is the CMD of the prod image)
+  # Re-enable other excluded paths only if they become shipping code
 # nodejs-scan-sast is DEPRECATED (GitLab 16.8, removed 17.0) — the template
 # ships it as an exit-1 stub. semgrep-sast covers JS. Disable it explicitly.
 nodejs-scan-sast:

@@ -26,6 +26,7 @@ const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('../services/audit-service');
 const { authedAxios } = require('../services/service-token');
+const conceptMetaService = require('../services/concept-meta-service');
 const config = require('../config');
 
 const DEFAULT_INTERVAL_MS = 15000;
@@ -89,7 +90,7 @@ async function claimNextJob(db) {
       FILTER m.index_status == 'parsed' AND m.repo_id != null
       SORT m.updated_at ASC
       LIMIT 1
-      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at'])
+      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry'])
   `)
   ).all();
   return rows[0] || null;
@@ -265,6 +266,28 @@ async function _processOneJob() {
     // 3. Report (the callback owns the meta transition + the edge write — the
     //    worker only observes the outcome).
     const outcome = terminal.status === 'Ingested' ? 'ingested' : terminal.status === 'timeout' ? 'timeout' : 'failed';
+
+    // D4-b SELF-HEAL (review decision 2026-08-24): a RE-INDEX that retracted
+    // the old chunks and then FAILED leaves the concept with ZERO chunks —
+    // previously-valid content was destroyed (blind+edge findings). Reset the
+    // meta row to 'parsed' ONCE so the next worker cycle retries the ingest
+    // (restoring the chunks); the reindex_retry guard prevents an infinite
+    // poison-concept loop — a second consecutive failure dead-letters.
+    if (outcome === 'failed' && job.last_good_index_at && !job.reindex_retry) {
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          job.repo_id,
+          { concept_id: conceptId, repo_id: job.repo_id },
+          { patch: { index_status: 'parsed', reindex_retry: true } }
+        );
+        logger.warn('Ingest worker: re-index failed after retract — reset to parsed for ONE retry', {
+          concept_id: conceptId,
+          repo_id: job.repo_id
+        });
+      } catch (err) {
+        logger.error('Ingest worker: re-index retry reset failed', { concept_id: conceptId, error: err.message });
+      }
+    }
     recordJob(outcome);
     // Mirror ONLY failure/timeout verdicts — dataprep's per-stage logs (incl.
     // the System start/complete lines) already mirror to the bundle zip;

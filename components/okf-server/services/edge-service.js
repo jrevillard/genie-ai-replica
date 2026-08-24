@@ -212,12 +212,19 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
 
     const sourceEntity = `${graph}_ENTITY/${safeKey('c', cid)}`;
 
-    // 3. Replace: remove this concept's existing outgoing edges (by key). Runs
-    // for EVERY transition — including N→0 (REVIEW FIX P2: the old code skipped
-    // cleanup when the new link set was empty, leaking stale edges).
+    // 3. Replace: remove this concept's existing outgoing PARSER edges (by key).
+    // Runs for EVERY transition — including N→0 (REVIEW FIX P2: the old code
+    // skipped cleanup when the new link set was empty, leaking stale edges).
+    // Review P11: the filter now excludes source='author' edges — the settle
+    // path's writeRepoAuthorLinks owns those; a re-index must not delete the
+    // bundle's author-stated structure (they are re-written at the NEXT settle,
+    // leaving a window where the graph silently loses author edges).
     try {
       const existing = await (
-        await db.query('FOR e IN `' + graph + '_LINKS_TO` FILTER e._from == @src RETURN e._key', { src: sourceEntity })
+        await db.query(
+          'FOR e IN `' + graph + "_LINKS_TO` FILTER e._from == @src AND e.source != 'author' RETURN e._key",
+          { src: sourceEntity }
+        )
       ).all();
       for (const key of existing) {
         await edgeCol.remove(key).catch(() => {});

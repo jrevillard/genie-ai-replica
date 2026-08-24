@@ -405,10 +405,11 @@ async function buildManifestDoc(repo_id, version, cloned_from) {
 async function ensureSummary(repo_id, opts = {}) {
   const m = await readManifest(repo_id);
   if (!m) return null;
-  if (m.summary_text && !opts.force) return m;
-  if (m.summary_stale) {
-    // Steward-flagged stale → regenerate.
-  }
+  // Review P4 (live-flagged): the stale flag must be honored BEFORE the
+  // cached-text early return — the old order returned a stale-flagged summary
+  // unchanged and the stale branch below was dead code. A summary is served
+  // from cache only when it exists, is NOT stale-flagged, and force is unset.
+  if (m.summary_text && !m.summary_stale && !opts.force) return m;
   const timeout = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 5000;
   const llmPrompt = buildSummaryPrompt(m);
   let summary_text = null;
@@ -451,59 +452,62 @@ function buildSummaryPrompt(m) {
     .join('\n\n');
 }
 
-/** Out-of-process LLM call (vLLM-compatible chat/completions). Uses the
- * service-account client_credentials token (mirrors the controller's
- * OKF_SERVER_URL flow). Short timeout — the summary is best-effort, not on
- * the bundle-ingestion hot path; a slow/timed-out call is fine (we cache
- * null). */
+/** Out-of-process LLM call (vLLM-compatible chat/completions). Review P8
+ * (live-flagged): vLLM's OpenAI-compatible server has NO token endpoint and
+ * takes the STATIC VLLM_API_KEY bearer directly — the old client_credentials
+ * dance against an invented `/v1/auth/token` 404'd silently on every call
+ * (summaries永远 null). Also normalizes the base: VLLM_ENDPOINT in this
+ * stack conventionally ends in `/v1`, so appending `/v1/chat/completions`
+ * verbatim produced `/v1/v1/...`. Short timeout — best-effort, off the
+ * ingestion hot path. */
 async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
-  const base = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
-  if (!base) return null;
+  const rawBase = config?.llm?.endpoint || process.env.VLLM_ENDPOINT;
+  if (!rawBase) return null;
   const model = config?.llm?.model || process.env.VLLM_MODEL_ID;
   if (!model) return null;
-  // Service-account token (mirrors the okf-server controller's auth pattern).
-  let token = null;
-  try {
-    const auth = process.env.OKF_LLM_CLIENT_ID && process.env.OKF_LLM_CLIENT_SECRET;
-    if (auth) {
-      const r = await axios.post(
-        `${base.replace(/\/$/, '')}/v1/auth/token`,
-        new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: process.env.OKF_LLM_CLIENT_ID,
-          client_secret: process.env.OKF_LLM_CLIENT_SECRET
-        }).toString(),
-        { timeout: 2000 }
-      );
-      token = r.data?.access_token;
-    }
-  } catch {
-    /* no service account configured; fall through */
-  }
+  // Normalize: strip a trailing /v1 (and any trailing slash) so the
+  // /v1/chat/completions append is exactly right for both endpoint shapes.
+  const base = rawBase.replace(/\/+$/, '').replace(/\/v1$/, '');
+  const headers = {};
+  const apiKey = process.env.VLLM_API_KEY || config?.llm?.apiKey;
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const r = await axios.post(
-    `${base.replace(/\/$/, '')}/v1/chat/completions`,
+    `${base}/v1/chat/completions`,
     {
       model,
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 200,
       temperature: 0.0
     },
-    {
-      timeout: timeoutMs,
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    }
+    { timeout: timeoutMs, headers }
   );
   return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
 }
 
 /** Write (overwrite) the manifest doc for a repo. Called from the controller's
- * settle path (once per bundle lifecycle — see settleBundleIfComplete).
- * Idempotent: same _key. The deterministic body is written; the lazy summary
- * is filled on first discovery read (see ensureSummary). */
+ * settle path (see settleBundleIfComplete — may fire more than once per
+ * lifecycle: re-settles after a re-index). Idempotent: same _key. The
+ * deterministic body is overwritten; the LLM summary cache is PRESERVED
+ * across re-settles (review P3, live-flagged: the unconditional replace
+ * nulled summary_text on every re-settle, breaking the "one LLM call per
+ * bundle" contract) unless the steward flagged it stale. */
 async function writeManifest(repo_id, version, cloned_from) {
   const doc = await buildManifestDoc(repo_id, version, cloned_from);
   if (!doc) return null;
   const db = await getDb();
+  // Carry the cached summary forward on re-settle (P3): if a previous
+  // ensureSummary generated + cached one and it is not stale-flagged, keep it
+  // (a fresh steward override on the repo row already wins via buildManifestDoc).
+  const existing = await readManifest(repo_id);
+  if (
+    existing &&
+    existing.summary_text &&
+    !existing.summary_stale &&
+    !doc.summary_text // no override in play
+  ) {
+    doc.summary_text = existing.summary_text;
+    doc.summary_generated_at = existing.summary_generated_at;
+  }
   await db.collection('okf_bundle_manifest').save(doc, { overwrite: true });
   return doc;
 }
@@ -527,7 +531,9 @@ async function readManifest(repo_id) {
 async function discoverRepos(query, opts = {}) {
   const q = (query && query.tokens) || [];
   const qLabels = (query && query.labels) || [];
-  const k = Number.isInteger(opts.k) ? opts.k : 5;
+  // Review P10: clamp k — the old Number.isInteger check accepted 0, negatives
+  // (slice(0,-3) silently drops the LAST 3), and unbounded values.
+  const k = Math.min(Math.max(Number.isInteger(opts.k) ? opts.k : 5, 1), 50);
   const domainFilter = (query && query.domain) || null;
   const db = await getDb();
   const manifests = await (await db.query('FOR d IN okf_bundle_manifest RETURN d')).all();
@@ -535,20 +541,27 @@ async function discoverRepos(query, opts = {}) {
   const qTokenSet = new Set(q.map((t) => String(t).toLowerCase()).filter(Boolean));
   const qLabelSet = new Set(qLabels.map((l) => String(l).toLowerCase()));
   for (const m of manifests) {
-    if (domainFilter && m.domain && m.domain !== domainFilter) continue;
+    // Review P9: a domain-scoped query excludes null-domain manifests — the
+    // old `m.domain &&` guard let undomained repos bypass every filter.
+    if (domainFilter && m.domain !== domainFilter) continue;
     let score = 0;
     // Label overlap is the dominant signal (matches the retriever's tier 2
     // discriminator — repos whose bundle labels match the query are most likely
-    // to contain the answer chunks).
+    // to contain the answer chunks). Review P6: BOTH sides lowercased — the
+    // old comparison lowercased the query but not the stored labels, so
+    // mixed-case taxonomy labels never matched.
     const rLabels = new Set(
-      Array.isArray(m.concepts) ? m.concepts.flatMap((c) => (Array.isArray(c.labels) ? c.labels : [])) : []
+      (Array.isArray(m.concepts) ? m.concepts.flatMap((c) => (Array.isArray(c.labels) ? c.labels : [])) : []).map((l) =>
+        String(l).toLowerCase()
+      )
     );
-    for (const ql of qLabelSet) if (rLabels.has(ql.toLowerCase())) score += 3;
+    for (const ql of qLabelSet) if (rLabels.has(ql)) score += 3;
     // Name + domain token match (lower weight — covers queries that name the
     // domain explicitly).
     const text = `${m.name || ''} ${m.domain || ''}`.toLowerCase();
     for (const t of qTokenSet) if (text.includes(t)) score += 1;
-    scored.push({ repo_id: m.repo_id, name: m.name, domain: m.domain, summary: m.summary, score });
+    // Review P5: the manifest field is summary_text (m.summary was always undefined).
+    scored.push({ repo_id: m.repo_id, name: m.name, domain: m.domain, summary_text: m.summary_text || null, score });
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, k);

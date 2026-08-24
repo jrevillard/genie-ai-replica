@@ -1111,20 +1111,38 @@ async function ingestPhase(db) {
   // Bundle ingestion-log completeness: EVERY stage for EVERY conforming
   // concept, keyed on the BUNDLE file (the UI surface) with the concept file
   // name in the message (David's 4th/5th-time directives).
-  const bundleLogs = await aqlAll(
-    "FOR log IN ingestion_log FILTER log.file_id == '" +
-      (bundleAfter && bundleAfter.file_id) +
-      "' RETURN KEEP(log, ['stage','message'])"
-  );
+  // Settle-wait (review P1c, live-caught v13b): the LAST concept's final
+  // System stage can mirror just after the bundle status lands Ingested —
+  // poll until all conforming concepts carry all required stages (max 60s).
+  const REQUIRED_STAGES = ['System', 'Chunking', 'Labeling', 'Graph'];
+  let bundleLogs = [];
+  for (let i = 0; i < 20; i++) {
+    bundleLogs = await aqlAll(
+      "FOR log IN ingestion_log FILTER log.file_id == '" +
+        (bundleAfter && bundleAfter.file_id) +
+        "' RETURN KEEP(log, ['stage','message'])"
+    );
+    const seen = {};
+    bundleLogs.forEach((l) => {
+      const m = l.message.match(/\[([^\]]+)\]/);
+      const cid = m ? m[1].replace(/\.md$/, '') : '(unknown)';
+      (seen[cid] = seen[cid] || new Set()).add(l.stage);
+    });
+    const complete = GOOD_FILES.map((f) => f.replace(/\.md$/, '')).every((id) => {
+      const st = seen[id] || new Set();
+      return REQUIRED_STAGES.every((s) => st.has(s));
+    });
+    if (complete) break;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
   const stagesByConcept = {};
   bundleLogs.forEach((l) => {
     const m = l.message.match(/\[([^\]]+)\]/);
-    const cid = m ? m[1] : '(unknown)';
+    const cid = m ? m[1].replace(/\.md$/, '') : '(unknown)';
     if (!stagesByConcept[cid]) stagesByConcept[cid] = new Set();
     stagesByConcept[cid].add(l.stage);
   });
-  const REQUIRED_STAGES = ['System', 'Chunking', 'Labeling', 'Graph'];
-  const conceptFiles = GOOD_FILES;
+  const conceptFiles = GOOD_FILES.map((f) => f.replace(/\.md$/, ''));
   const allComplete =
     conceptFiles.every((f) => {
       const stages = stagesByConcept[f] || new Set();
@@ -1427,7 +1445,11 @@ async function ingestPhase(db) {
         OKF_GRAPH +
         "_LINKS_TO` FILTER STARTS_WITH(e._from, '" +
         OKF_GRAPH +
-        "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version'])"
+        // KEEP includes source/from/to — author edges branch on them (review
+        // P2, live-caught v13b: the projection stripped the very fields the
+        // per-source well-formedness assert branches on, failing every author
+        // edge as if it were a malformed parser edge).
+        "_ENTITY/c_') RETURN KEEP(e, ['_from', '_to', 'label', 'file_id', 'repo_id', 'bundle_version', 'source', 'from_concept_id', 'to_concept_id', 'weight'])"
     );
     if (myEdges.some((e) => e.bundle_version === 1)) break;
     await new Promise((r) => setTimeout(r, 3000));

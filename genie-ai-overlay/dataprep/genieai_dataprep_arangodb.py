@@ -300,20 +300,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """Resolve the doc-repo URL that mirrors an ingestion log into the
         bundle zip's ingestion_log (file-centric UI). Returns None when no
         bundle exists for the current repo or the doc-repo query fails."""
-        # Cache hit
-        if file_id in self._bundle_file_id_cache:
-            cached = self._bundle_file_id_cache[file_id]
-            if not cached:
-                return None
+        # Cache hit — POSITIVE results only are cached. Review P1a (live-caught
+        # v13b): the old code permanently cached "" on ANY failure (transient
+        # doc-repo hiccup, bundle row not yet queryable) with no retry — the
+        # first concept dispatched could lose its ENTIRE mirrored log history
+        # for the run while its siblings logged every stage. Failures are now
+        # retried on the next log write (the lookup is one cheap GET).
+        cached = self._bundle_file_id_cache.get(file_id)
+        if cached:
             return f"{DOCUMENT_REPOSITORY_URL}/api/files/{cached}/ingestion-log"
         # Single-file (non-concept_id-keyed) requests: the file_id IS the
-        # bundle — no mirror needed.
+        # bundle — no mirror needed. (Deterministic, safe to cache.)
         if not (file_id and self._is_concept_id(file_id)):
-            self._bundle_file_id_cache[file_id] = ""
             return None
         repo_id = getattr(self, "_current_repo_id", None)
         if not repo_id:
-            self._bundle_file_id_cache[file_id] = ""
             return None
         # Look up the bundle zip via doc-repo's getFiles (Story 4.8-amend +
         # ce9d825 supports repo_id + is_bundle=true filters).
@@ -321,8 +322,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             url = f"{DOCUMENT_REPOSITORY_URL}/api/files?repo_id={repo_id}&is_bundle=true&limit=1"
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
                 if r.status != 200:
-                    self._bundle_file_id_cache[file_id] = ""
-                    return None
+                    return None  # transient — retried on the next write
                 data = await r.json()
                 items = (
                     data.get("data")
@@ -330,19 +330,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     else (data if isinstance(data, list) else [])
                 )
                 if not items:
-                    self._bundle_file_id_cache[file_id] = ""
-                    return None
+                    return None  # bundle not yet queryable — retried (P1a race)
                 bundle_file_id = items[0].get("file_id")
                 if not bundle_file_id:
-                    self._bundle_file_id_cache[file_id] = ""
                     return None
                 self._bundle_file_id_cache[file_id] = bundle_file_id
                 return f"{DOCUMENT_REPOSITORY_URL}/api/files/{bundle_file_id}/ingestion-log"
         except Exception as e:
             if logflag:
                 logger.warning(f"Bundle-log URL resolve failed for concept {file_id}: {e}")
-            self._bundle_file_id_cache[file_id] = ""
-            return None
+            return None  # transient — NOT cached (P1a)
 
     def _is_concept_id(self, value: str) -> bool:
         """Heuristic: an OKF concept id is a non-UUID bare id (e.g.
@@ -1353,11 +1350,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         # ACL preserve for the non-LLM strategies (the removed skip used to be
         # their only mechanism — live-flagged 2026-08-23): the embedding/bm25
-        # per-chunk selections get ONLY the ACL-prefixed file_labels unioned
-        # verbatim (t:/r:/d: + okf:v{N} — access scoping + version pinning).
+        # per-chunk selections get ONLY the verbatim-union tokens — ACL prefixes
+        # (t:/r:/d:) AND the minted version tags (okf:v{N} — review P7,
+        # live-flagged: the tag is NOT in _ACL_LABEL_PREFIXES, so version-pinned
+        # retrieval returned zero OKF chunks under these strategies).
         # The non-ACL bundle labels are NOT forced (candidate-pool semantics);
         # for those strategies the whole taxonomy is the pool.
-        _acl_tokens = [l for l in (file_labels or []) if _is_acl_label(l)]
+        _acl_tokens = [
+            l for l in (file_labels or []) if _is_acl_label(l) or (isinstance(l, str) and re.match(r"^okf:v\d+$", l))
+        ]
 
         def _with_acl(results: list[dict]) -> list[dict]:
             if not _acl_tokens:
@@ -1649,11 +1650,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 if tasks:
                     await asyncio.gather(*tasks)
 
-                # 6. Final Status Update
+                # 6. Final log BEFORE the terminal status callback (review P1b,
+                # live-caught v13b): the 'Ingested' callback transitions the meta
+                # row and can SETTLE the bundle (status PATCH to Ingested) — a
+                # consumer polling the bundle status then reading the logs would
+                # see the settle before this final stage row landed. Log first,
+                # then announce completion.
+                await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
                 await self._update_doc_status(
                     input.file_id, "Ingested", chunk_count=len(chunks), concept_id=getattr(input, "concept_id", None)
                 )
-                await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
 
                 return {
                     "status": 200,

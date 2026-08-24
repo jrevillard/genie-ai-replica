@@ -19,6 +19,13 @@ variables:
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
+  # --- SAST exclusions: dev/test-only paths and known-not-relevant targets ---
+  # - mobile/**/windows/: Windows desktop CMake runner, not deployed to Docker Swarm prod
+  # - genie-ai-overlay/contracts/: real-comps contract tests (test code, NOT shipped in image)
+  # - **/scripts/, **/seed-*.js, **/__tests__/: synthetic data + test fixtures
+  # - components/*/__mocks__/: jest module mocks
+  SAST_EXCLUDED_PATHS: "mobile/**/windows/**, genie-ai-overlay/contracts/**, **/scripts/**, **/seed-*.js, **/__tests__/**, **/__mocks__/**, **/coverage/**"
+  SEARCH_IGNORED: "mobile/**/windows/**, genie-ai-overlay/contracts/**, **/scripts/**, **/seed-*.js, **/__tests__/**, **/__mocks__/**, **/coverage/**"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
@@ -580,6 +587,11 @@ secret_detection:
   rules: *security_run_rules
 semgrep-sast:
   rules: *security_run_rules
+  # SAST_EXCLUDED_PATHS (set in global variables) hides:
+  #   mobile/**/windows/** — Windows desktop CMake runner, not deployed
+  #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
+  #   **/scripts/, **/seed-*.js, **/__tests__/**, **/__mocks__/**, **/coverage/**
+  # Re-enable if those paths become shipping code
 # nodejs-scan-sast is DEPRECATED (GitLab 16.8, removed 17.0) — the template
 # ships it as an exit-1 stub. semgrep-sast covers JS. Disable it explicitly.
 nodejs-scan-sast:

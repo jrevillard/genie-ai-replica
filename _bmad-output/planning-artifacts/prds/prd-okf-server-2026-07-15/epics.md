@@ -229,7 +229,7 @@ So that **fan-out code is not built on an unverified assumption**.
 As a **chat user**,
 I want **my query to ground in the *relevant* authorized graphs, not all of them**,
 So that **grounding stays fast and precise as the deployment grows to many repositories**.
-**Acceptance Criteria:** **Given** the authorized graph set (from Story 6.1b) + the query, **When** the Graph Router (in ChatQnA) runs, **Then** it (a) binds the query to a domain (service-category classifier or `okf_repositories.domain` exact match), (b) ranks candidate repos by repo-metadata BM25 over `okf_concepts_meta` (`title/type/tags/summary`), (c) intersects with the authorized set and caps at `MAX_FANOUT_GRAPHS` (default 5, configurable), **and** selection latency ≤20ms is **CI-gated** against seed fixtures (Story 8.1); AC: seed 4 repos across 3 domains, assert only the relevant graphs are traversed. *(FR-35; ADR-okf-024; G6.)*
+**Acceptance Criteria:** **Given** the authorized graph set (from Story 6.1b) + the query, **When** the Graph Router (in ChatQnA) runs, **Then** it (a) binds the query to a domain (service-category classifier or `okf_repositories.domain` exact match), (b) ranks candidate repos via **tier-1 manifest discovery** — `POST /api/okf/repos/discovery` (label-overlap + name/domain token scoring over `okf_bundle_manifest`, O(repos), built+live per [ADR-okf-035](../../../../../docs/adr/okf-035-bundle-manifest-and-author-graph.md); the manifest summaries may augment domain binding) — superseding the BM25-over-meta approach, (c) intersects with the authorized set and caps at `MAX_FANOUT_GRAPHS` (default 5, configurable), **and** selection latency ≤20ms is **CI-gated** against seed fixtures (Story 8.1); AC: seed 4 repos across 3 domains, assert only the relevant graphs are traversed. *(FR-35; ADR-okf-024; tier-1 per ADR-okf-035; G6.)*
 
 ### Story 1.4: Parallel fan-out — bounded concurrency + per-graph timeout + partial-failure *(NEW 2026-08-13; gated; G14)*
 As an **SRE**,
@@ -626,7 +626,7 @@ So that **I can follow relationships without arbitrary AQL access**.
 **Acceptance Criteria:**
 **Given** a concept in a repo graph,
 **When** the agent calls `/api/okf/neighbors?depth=`,
-**Then** it returns neighbors/backlinks via parameterized traversal over `OKF_{repo}_LINKS_TO` (retaining anchor-text `label`),
+**Then** it returns neighbors/backlinks via parameterized traversal over `OKF_{repo}_LINKS_TO` (retaining anchor-text `label`; traversal reads the dual-source edges — `source='author'` (the bundle author's declared structure) and `source='parser'` (markdown cross-links) — indiscriminately unless the caller filters by `source` per [ADR-okf-035](../../../../../docs/adr/okf-035-bundle-manifest-and-author-graph.md)),
 **And** no raw AQL is ever exposed to agents. *(FR-7 traversal, FR-17; ADR-okf-011; **2026-08-13**: traversal is **single-repo-scoped** (`OKF_{repo}_LINKS_TO`) — agents select a repo first (via search or explicit `repo_id`), then traverse; multi-graph traversal fusion is out of scope for v1 (ADR-okf-028) — G22/G23.)*
 
 ### Story 5.6: MCP-ready handlers

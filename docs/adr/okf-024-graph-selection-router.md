@@ -1,6 +1,6 @@
 # ADR okf-024: Graph selection — the Graph Router (intelligent selection, not dumb fan-out)
 
-- **Status**: Proposed
+- **Status**: Proposed — **tier-1 mechanism amended 2026-08-24 by [ADR-okf-035](okf-035-bundle-manifest-and-author-graph.md)**: candidate ranking uses manifest discovery (`POST /repos/discovery` over `okf_bundle_manifest`) instead of BM25 over `okf_concepts_meta`. The router's scope/cap/latency-budget decisions below are unchanged; only the tier-1 ranking source is superseded.
 - **Date**: 2026-08-13
 - **Decision owners**: Genie.ai Dev (architect)
 

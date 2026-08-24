@@ -108,7 +108,7 @@ authors: Genie.ai Dev
 | **Conformance** | `okf-server` | Validates structure, records issues on `okf_concepts_meta` | Exists (needs UPSERT writer — Story 2.9.2) |
 | **PII** | `okf-server` (**NEW**) | Presidio scan, `pii_state`, redaction (publish prerequisite) | **NEW — Story 2.8** |
 | **Authz Resolver** (`authz-resolver.js`) | `okf-server` governance (**NEW**) | Token → `{graph_names, per_graph_labels, domains}`; per-session cache; default-deny | **NEW — Story 6.1b** ([ADR-okf-025](../../../../docs/adr/okf-025-authz-resolver.md)) |
-| **Graph Router** | `genie-ai-overlay/chatqna` (**NEW**) | Selects relevant graphs from the authorized set (domain binding + repo-metadata BM25), capped at `MAX_FANOUT_GRAPHS`, ≤20ms | **NEW — Story 1.3** ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md)) |
+| **Graph Router** | `genie-ai-overlay/chatqna` (**NEW**) | Selects relevant graphs from the authorized set: tier-1 manifest discovery (`POST /repos/discovery` over `okf_bundle_manifest` — label-overlap + token scoring, O(repos); [ADR-okf-035](../../../../docs/adr/okf-035-bundle-manifest-and-author-graph.md)), capped at `MAX_FANOUT_GRAPHS`, ≤20ms | **NEW — Story 1.3** ([ADR-okf-024](../../../../docs/adr/okf-024-graph-selection-router.md); tier-1 mechanism per ADR-okf-035) |
 | **Retriever** | `genie-ai-overlay/retriever` | Per-graph dense+BM25, ACL filter (all `search_start`), parallel fan-out, 2-level RRF, provenance materialization | Exists (6 changes — Stories 1.0/1.1/1.4/1.5) |
 | **Serving API** | `okf-server` (Epic 5) | search / get-concept / neighbors — two read paths | Epic 5 |
 | **Control Plane** | `okf-server` (Epics 3,4,6) | Repos CRUD, lifecycle state machine, version minting, audit, retention | Exists (6 fixes) |
@@ -118,7 +118,7 @@ authors: Genie.ai Dev
 **Per-repo graph (created on first ingest, dropped on retire — `OKF_{repo_id}`):**
 - `OKF_{repo_id}_SOURCE` — chunks. Fields: `text`, `embedding`, `file_id`, `chunk_labels` (incl. `t:`/`r:`/`d:` ACL), `concept_id`, `repo_id`, `bundle_version`, `trust_tier` (**denormalized** — [ADR-okf-026](../../../../docs/adr/okf-026-trust-locality-staleness.md)), `stale_after`, `source_type`.
 - `OKF_{repo_id}_HAS_SOURCE` — edge: chunk → source doc.
-- `OKF_{repo_id}_LINKS_TO` — edge: concept → concept (**within-repo only in v1** — [ADR-okf-028](../../../../docs/adr/okf-028-cross-repo-structural-links.md)).
+- `OKF_{repo_id}_LINKS_TO` — edge: concept → concept (**within-repo only in v1** — [ADR-okf-028](../../../../docs/adr/okf-028-cross-repo-structural-links.md)). Edges carry `source`: `'author'` (the bundle author's frontmatter `links:` — written at settle, G22-enforced) | `'parser'` (markdown cross-links with anchor text). Graph walks read either; `source` discriminates ([ADR-okf-035](../../../../docs/adr/okf-035-bundle-manifest-and-author-graph.md)).
 - `OKF_{repo_id}_ENTITY` — (optional) concept entities; carries `chunk_labels`; ACL enforced on all paths.
 - `OKF_{repo_id}_BM25_VIEW` — ArangoSearch, lazy on first query (existing behavior).
 
@@ -126,6 +126,7 @@ authors: Genie.ai Dev
 - `okf_repositories` — repo record. Fields: `repo_id`, `name`, `domain`, `source`, `graph_name`, `okf_version`, `lifecycle_state`, `version` (= `bundle_version`, minted on publish), `curator`, ACL (`required_scopes`, `sensitivity`), `retention` (schema'd), `delete_after`, timestamps.
 - `okf_concepts_meta` — **first-class indexed fields** ([ADR-okf-021](../../../../docs/adr/okf-021-write-side-orchestration.md) G9 fix): `repo_id`, `concept_id`, `title`, `type`, `tags[]`, `labels[]`, `summary`, `frontmatter`, `content_hash`, `lifecycle_status` (`draft|stable|deprecated`), `index_status` (`parsed|indexed|failed`), `trust_tier`, `stale_after`, `verified`, `pii_state`, `bundle_version`, `last_good_index_at`, `conformance_issues`. **Unique persistent index `(repo_id, concept_id)`**.
 - `okf_versions` (**NEW** — [ADR-okf-031](../../../../docs/adr/okf-031-versioning-strategy.md)) — keyed `[repo_id, bundle_version]`, immutable manifest (concept list + hashes + source ref + curator + ts). INSERT-only.
+- `okf_bundle_manifest` (**NEW** — [ADR-okf-035](../../../../docs/adr/okf-035-bundle-manifest-and-author-graph.md)) — one doc per repo (`_key=repo_id`, written/overwritten at bundle settle): concepts[], author links[], root_id, summary_stats, cloned_from, version; `summary_text` = LLM-authored LAZILY on first discovery read (cached; steward override wins). Indexed on `domain`. The tier-1 discovery index for the Graph Router.
 - `okf_sources` (**NEW writer** — Story 2.9.8) — `repo_id`, `last_commit_sha`, `last_sync_at`, `origin_reachable`, `last_error`.
 - `okf_audit` (**schema fix** — [ADR-okf-029](../../../../docs/adr/okf-029-audit-integrity.md)) — add `tenant`, `actor_roles[]`, `deletion_reason`, `prev_hash`; index `tenant` + compound `(repo_id, ts)`; INSERT-only DB user.
 
@@ -139,20 +140,19 @@ The answer to the store→pending→worker→graph model. The HTTP ingest call *
 [3] Orchestrator fetches + unzips bundle (zip of *.md — D2)
 [4] FOR EACH concept (sequential, cheap Node work):
       a. parser-service.parseConcept() → {frontmatter, body, links[], concept_id}
-      b. UPSERT okf_concepts_meta (first-class fields, content_hash, lifecycle_status, trust_tier, stale_after, bundle_version, index_status='parsed', pii_state='unknown')
-      c. conformance-service.validateConcept() → UPSERT issues onto meta
+      b. UPSERT okf_concepts_meta (first-class fields, content_hash, lifecycle_status, trust_tier, stale_after, bundle_version, index_status='parsed', pii_state='unknown', body + ingest_labels — content-only)
+      c. conformance-service.validateConcept() → UPSERT issues onto meta. HARD errors (MISSING_TYPE, BAD_ACTOR_PREFIX) → index_status='rejected', never enqueued (WP-A gate)
       d. pii-service.scan(body) → set pii_state, redact if hit
       e. content-hash dedup: hash unchanged AND index_status='indexed' → skip
-      f. ELSE enqueue per-concept index job → Redis Streams; create/update files doc: dataprep.status='Pending'
+      f. content-only enqueue: NO files doc for a concept — the meta row (index_status='parsed') IS the queue
+   [4g] bundle zip stored as the ONLY doc-repo file (is_bundle=true, dataprep.status='Pending')
     ── HTTP returns 202 Accepted here ──
-[5] ingestionWorker (concurrency 1, configurable): polls files FILTER dataprep.status=='Pending'
-      i.  doc-repo._ingestFileById({ base64, graph_name, file_labels:[t:,r:,d:], concept_id, repo_id, bundle_version })
-     ii.  dataprep reads graph_name from BODY → chunks per-concept body (frontmatter stripped) → _finalize_chunk_labels PRESERVES t:/r:/d: → writes OKF_{repo_id}_SOURCE + _HAS_SOURCE
-    iii. Orchestrator writes OKF_{repo_id}_LINKS_TO edges (within-repo validated)
-     iv. UPSERT okf_concepts_meta: index_status='indexed', last_good_index_at=now(), trust_tier denormalized onto chunks
-      v.  on failure: status='Failed' + DLQ + audit row
+[5] ingestionWorker (concurrency 1, configurable): polls okf_concepts_meta FILTER index_status='parsed'
+      i.   re-index retract: a previously-indexed concept's stale chunks retracted first (one retry on failure — reindex_retry)
+     ii.  POST concept markdown DIRECTLY to dataprep (fileId=concept_id, conceptId, graphName, bundleVersion, fileLabels) — no doc-repo round-trip
+    iii. dataprep chunks + labels per-chunk by applicability (candidate-pool semantics) → writes the graph; completion callback hits the okf-server internal endpoint (secret-gated): meta → 'indexed' | 'failed', parser edges written, bundle state machine advanced
 [6] Orchestrator sweeper (scheduled): reconcile orphan chunks (concept_id with no okf_concepts_meta → retract)
-[7] All concepts indexed → lifecycle transition (state machine — ADR-okf-030): validate → review; repo.lifecycle_state updated, audit row written (write-before-respond)
+[7] SETTLE (every concept terminal): bundle doc Pending → Ingesting → Ingested | Ingestion Error (okf-server controller owns transitions); bundle manifest written; author links mirrored into _LINKS_TO (source='author'); Manifest + AuthorLinks stages logged on the bundle's ingestion log; lifecycle transition (state machine — ADR-okf-030)
 ```
 
 Key properties: HTTP ingest never blocks on dataprep; idempotent re-ingest via content-hash; **no distributed transaction — compensation via sweeper + per-concept `index_status`**; ACL labels injected by the orchestrator (sole owner of repo→tenant/domain) and preserved end-to-end.
@@ -188,6 +188,7 @@ Authorization is **not** selection. The current design fanned out to *all* autho
 - A **repository** (`okf_repositories` doc): `repo_id`, `name`, `domain` (service-category key), `source` (Git/S3 ref), `graph_name = OKF_{repo_id}`, `okf_version` (defaults to `"0.2"`; v0.1 bundles consumed via fallback — [ADR-okf-017](../../../../docs/adr/okf-017-okf-v02-trust-lifecycle-provenance.md)), lifecycle state, `version`, `curator`, ACL (`required_scopes`, `sensitivity`), retention, timestamps.
 - On first ingest, `langchain-arangodb ArangoGraph.add_graph_documents(graph_name=OKF_{repo_id})` auto-creates the graph + four collections; the retriever lazily creates `OKF_{repo_id}_BM25_VIEW` on first query (existing behavior).
 - ACL is encoded as **chunk labels** on every chunk/edge: `t:<tenant>`, `r:<repo_id>`, `d:<domain>` — reusing the retriever's existing `chunk_labels` filter (zero retriever change for the filter itself).
+- **Labeling is candidate-pool semantics** (2026-08-23 revision, [ADR-okf-035](../../../../docs/adr/okf-035-bundle-manifest-and-author-graph.md) era — the ACL skip is removed): bundle `file_labels` scope the candidates; the strategy (llm/embedding/bm25) assigns **per-chunk by content applicability** — labels are never blanket-stamped. ACL tokens (`t:/r:/d:`) AND minted version tags (`okf:v{N}`) ride **verbatim on every chunk on ALL strategies**; the LLM logs its raw recommendations per chunk (recommendation → decision in the ingestion log); non-taxonomy suggestions surface as steward-vetting WARNs.
 
 ## 3. Multi-graph grounding (CORE — [ADR-okf-012](../../../../docs/adr/okf-012-multi-graph-grounding.md) *revised 2026-08-13*, [ADR-okf-013](../../../../docs/adr/okf-013-graph-name-wiring.md) *revised 2026-08-13*)
 

@@ -30,6 +30,9 @@ variables:
   #   `components/document-repository/scripts/clamav-node.sh` stays scanned.
   # - **/seed-*.js: synthetic data generators, never executed at runtime
   # - **/__tests__/, **/__mocks__/, **/tests/, **/coverage/: test code + generated reports
+  # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
+  #   production code; YAML files use BMAD-specific syntax that semgrep can't
+  #   parse, generating "Parsing errors" UI noise in the security dashboard.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
     genie-ai-overlay/contracts/**,
@@ -40,7 +43,8 @@ variables:
     **/__tests__/**,
     **/__mocks__/**,
     **/tests/**,
-    **/coverage/**
+    **/coverage/**,
+    .claude/**
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:

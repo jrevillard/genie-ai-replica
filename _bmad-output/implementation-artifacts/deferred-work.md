@@ -456,3 +456,11 @@ Items deferred during code reviews. Revisit when the related component is next m
 
 - **Parser `conceptIdFromPath` does not strip a `concepts/` prefix** (parser-service.js:63-81) — the ROOT of the canonicalization gap that 2.9.3's edge-service now papers over (normalizing at the write boundary). A proper fix canonicalizes concept_id at ingestion (parser or zipToRawInputs) so meta stores bare ids everywhere, which would ALSO fix the 2.9.4 worker's `transitionMeta` for subdirectory bundles (same latent mismatch). Out of 2.9.3 scope (R5 additive-first; touches parser + ingest-service + the worker).
 - **ENTITY node `_key` is a sha256 hash, not the literal concept_id** — self-consistent and idempotent (ArangoDB `_key` forbids `/` and other chars), but deviates from AC1's literal form. Accept as-is; revisit only if a consumer needs human-readable entity keys.
+
+## Deferred from: 2-9-5 atomicity/compensation review pass (2026-08-25, commit 469b13b)
+
+- **ACCEPTED semantics (documented, no change)**: bundle ingest is per-concept isolated, NOT transactional — a partial 202 (some concepts failed 4a/4b) is the contract; no rollback/compensation. Partial failures now surface via `okf_repositories.last_ingest_summary` + the repo.ingest audit row totals (this pass); recovery = re-ingest.
+- **ACCEPTED**: content-hash dedup on the PRE-upsert doc (body-only hash stays the contract — resolves the 2.9.2-era open question above; frontmatter changes alone do not re-enqueue, by design).
+- Fixed in-pass (not deferred): stuck-parsed reaper (`_reapStuckParsed`, 1h grace default, env `OKF_INGEST_WORKER_REAP_GRACE_MS`); worker-error touch advances the claim queue (no head-of-line starvation); mint refreshes `okf_bundle_manifest`; D1 mint gate also checks parsed meta rows.
+- **DEFERRED**: cross-bundle all-or-nothing ingest (steward opts into a transactional bundle) — revisit if a use case demands it; would need a two-phase settle.
+- **DEFERRED**: per-concept retract/delete surface (smoke section ix removed — no API exists; lands with Story 4.3 lifecycle states).

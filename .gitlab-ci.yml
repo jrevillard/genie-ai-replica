@@ -652,6 +652,20 @@ container_scanning:
   stage: scan
   allow_failure: false
   rules: *security_run_rules
+  # Override the natif template's artifact upload. The natif
+  # `container_scanning` job uploads `gl-container-scanning-report.json`
+  # automatically to GitLab's vulnerability tracker. We disable that upload
+  # (the `gtcs scan` artifact remains as a build path — promote_template
+  # fetches it via `needs: [scan:IMAGE, artifacts: true]`). The single
+  # GitLab-schema-compliant upload happens in `promote:IMAGE` after the
+  # `sed` rewrite from `tmp/IMAGE:cand` to `IMAGE:primary_tag` (so the
+  # vulnerability report tracks the released image, not the tmp/ scratch
+  # ref). We keep the CycloneDX SBOM upload here for the SBOM tab.
+  artifacts:
+    paths:
+      - gl-container-scanning-report.json
+    reports:
+      cyclonedx: "**/gl-sbom-*.cdx.json"
 
 .build_template: &build_template
   stage: build

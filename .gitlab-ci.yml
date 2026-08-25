@@ -654,18 +654,21 @@ container_scanning:
   rules: *security_run_rules
   # Override the natif template's artifact upload. The natif
   # `container_scanning` job uploads `gl-container-scanning-report.json`
-  # automatically to GitLab's vulnerability tracker. We disable that upload
-  # (the `gtcs scan` artifact remains as a build path — promote_template
-  # fetches it via `needs: [scan:IMAGE, artifacts: true]`). The single
-  # GitLab-schema-compliant upload happens in `promote:IMAGE` after the
-  # `sed` rewrite from `tmp/IMAGE:cand` to `IMAGE:primary_tag` (so the
-  # vulnerability report tracks the released image, not the tmp/ scratch
-  # ref). We keep the CycloneDX SBOM upload here for the SBOM tab.
+  # and `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) automatically. We
+  # disable BOTH uploads here:
+  #  - The vulnerability report stays as a job artifact path so that
+  #    `promote:IMAGE` can fetch it via `artifacts: true` and rewrite the
+  #    image name (`tmp/IMAGE:cand` → `IMAGE:primary_tag`) before doing
+  #    the single GitLab-schema-compliant upload.
+  #  - The CycloneDX SBOM goes through the same path — promote fetches,
+  #    rewrites the image reference inside the SBOM JSON, then re-uploads
+  #    so the SBOM tab tracks the released image, not the tmp/ scratch
+  #    ref. Without this, users would see a SBOM whose `metadata.component`
+  #    references `tmp/genie-ai-frontend:mr-123-abc` — a deleted image.
   artifacts:
     paths:
       - gl-container-scanning-report.json
-    reports:
-      cyclonedx: "**/gl-sbom-*.cdx.json"
+      - "**/gl-sbom-*.cdx.json"
 
 .build_template: &build_template
   stage: build
@@ -774,25 +777,43 @@ container_scanning:
     # Uses the first (primary) tag from the promote step (e.g. main-<sha>, v2.1.0, vX.Y-<sha>).
     # Scan failures block promotion (security policy). Promote handles missing reports gracefully
     - |
-      # The natif Container-Scanning template (used by scan:IMAGE via extends)
-      # produces gl-container-scanning-report.json directly at the schema 15.x.x
-      # format. We only need to rewrite the image name from the temporary
-      # `tmp/<IMAGE>:<cand>` ref to the final promoted `<IMAGE>:<primary_tag>`
-      # ref so the GitLab vulnerability report tracks the released image, not
-      # the tmp/ scratch tag. The natif report schema is preserved (no other
-      # post-processing required).
+      # Both the container-scanning report (schema 15.x.x) and the CycloneDX
+      # SBOM were produced by the natif gtcs scan in scan:IMAGE with image=
+      # `tmp/<IMAGE>:<cand>`. We rewrite BOTH to point at the final promoted
+      # image (`<IMAGE>:<primary_tag>`), then upload as the single GitLab-
+      # schema-compliant reports. Doing this once (in promote, not in scan)
+      # avoids GitLab seeing duplicate vulnerability sets / SBOM entries with
+      # different fingerprints per image name.
+      PRIMARY_TAG="${FINAL_TAGS%% *}"
       if [ -f gl-container-scanning-report.json ]; then
-        PRIMARY_TAG="${FINAL_TAGS%% *}"
-        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" gl-container-scanning-report.json > gl-container-scanning-report.json.tmp \
+        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
+          gl-container-scanning-report.json > gl-container-scanning-report.json.tmp \
           && mv gl-container-scanning-report.json.tmp gl-container-scanning-report.json
-        echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
+        echo "Rewrote container_scanning report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
       else
         echo "ERROR: gl-container-scanning-report.json not found (scan:IMAGE did not produce one) — blocking promotion (NFR-S1 supply-chain integrity)"
         exit 1
       fi
+      # CycloneDX SBOMs produced by the natif container-scanning analyzer are
+      # named `gl-sbom-<cand>.cdx.json`. The image reference appears in
+      # `metadata.component.name` and component purls. We rewrite
+      # `tmp/<IMAGE>:<cand>` → `<IMAGE>:<primary_tag>` everywhere.
+      SBOM_FILE=$(ls gl-sbom-*.cdx.json 2>/dev/null | head -1)
+      if [ -n "$SBOM_FILE" ] && [ -f "$SBOM_FILE" ]; then
+        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
+          "$SBOM_FILE" > "$SBOM_FILE.tmp" \
+          && mv "$SBOM_FILE.tmp" "$SBOM_FILE"
+        echo "Rewrote SBOM ${SBOM_FILE}: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
+      else
+        echo "WARN: gl-sbom-*.cdx.json not found — SBOM tab will not be populated for ${IMAGE_NAME}"
+      fi
   artifacts:
+    paths:
+      - gl-container-scanning-report.json
+      - gl-sbom-*.cdx.json
     reports:
       container_scanning: gl-container-scanning-report.json
+      cyclonedx: gl-sbom-*.cdx.json
 
 # ---------------------------------------------------------------------------
 # Contract tests vs REAL vendored comps — run INSIDE the built image (D3)

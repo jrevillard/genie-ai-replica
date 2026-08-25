@@ -744,6 +744,18 @@ container_scanning:
       fi
       export CS_IMAGE="${CI_REGISTRY_IMAGE}/tmp/${IMAGE_NAME}:${CANDIDATE_TAG}"
       echo "Scanning $CS_IMAGE"
+  # Drop the natif `reports.container_scanning` + `reports.cyclonedx` uploads.
+  # We override each report with an empty string — GitLab CI deep-merges
+  # `extends:` artifacts, so an empty `reports: {}` keeps the parent's
+  # reports intact (it just adds nothing). Setting each report path to
+  # `''` actually neutralizes the corresponding upload. The single
+  # GitLab-schema-compliant upload happens in `promote:IMAGE` after the
+  # sed rewrite from `tmp/<IMAGE>:cand` → `<IMAGE>:primary_tag`. Paths
+  # are preserved (natif) so promote can still fetch via `artifacts: true`.
+  artifacts:
+    reports:
+      container_scanning: ""
+      cyclonedx: ""
 
 
 .promote_template: &promote_template

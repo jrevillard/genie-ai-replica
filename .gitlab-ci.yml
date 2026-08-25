@@ -651,6 +651,12 @@ kics-iac-sast:
 container_scanning:
   stage: scan
   allow_failure: false
+  variables:
+    # Trivy scan timeout — some images (e.g. genie-ai-retriever-arango, which
+    # carries the full OPEA overlay Python deps tree) hit the default 5m
+    # deadline on the GPU runner. Bump to 30m (Trivy's own default if
+    # TRIVY_TIMEOUT is unset is 5m per the docs).
+    TRIVY_TIMEOUT: "30m"
   rules:
     - when: never
   # The artifact paths override remains so `promote:IMAGE` can still

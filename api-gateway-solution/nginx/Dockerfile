@@ -1,6 +1,6 @@
 FROM nginx:1.28-alpine
 
-RUN apk add --no-cache openssl=3.3.7-r0 gettext=0.22.5-r0
+RUN apk add --no-cache openssl gettext
 
 # Copy nginx configuration
 COPY conf/default.conf.template /etc/nginx/conf.d/default.conf.template

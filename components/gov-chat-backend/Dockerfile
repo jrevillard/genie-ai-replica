@@ -2,9 +2,9 @@ FROM node:22 AS builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3=3.11.2-1+b1 \
-        make=4.3-4.1 \
-        build-essential=12.9 \
+        python3 \
+        make \
+        build-essential \
         && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -2,9 +2,9 @@ FROM node:22 AS builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        python3 \
-        make \
-        build-essential \
+        python3=3.11.2-1+b1 \
+        make=4.3-4.1 \
+        build-essential=12.9 \
         && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -13,9 +13,7 @@ COPY gov-chat-backend/package*.json ./
 COPY shared/lib ./shared-lib
 
 RUN npm config set registry https://registry.npmjs.org/ && \
-    npm install --verbose --fetch-timeout 600000 || \
-    npm install --prefer-offline || \
-    npm ci
+    npm ci --verbose --fetch-timeout 600000
 RUN rm -rf /app/node_modules/shared-lib
 
 COPY gov-chat-backend/ ./

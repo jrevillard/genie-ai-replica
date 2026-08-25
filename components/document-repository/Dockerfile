@@ -3,7 +3,7 @@ FROM node:22
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y clamav clamav-daemon && \
+    apt-get install -y clamav=1.4.3+dfsg-1~deb12u2 clamav-daemon=1.4.3+dfsg-1~deb12u2 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -27,12 +27,10 @@ WORKDIR /app
 COPY document-repository/package*.json ./
 COPY shared/lib ./shared-lib
 
-# 2. Run 'npm install' (root + shared-lib)
+# 2. Run 'npm ci' (root + shared-lib) — uses pinned package-lock.json
 RUN npm config set registry https://registry.npmjs.org/ && \
-    npm install --verbose --fetch-timeout 600000 || \
-    npm install --prefer-offline || \
-    npm ci
-RUN cd shared-lib && npm install
+    npm ci --verbose --fetch-timeout 600000
+RUN cd shared-lib && npm ci
 RUN rm -rf /app/node_modules/shared-lib
 
 # 3. Copy the rest of the application source

@@ -3,7 +3,7 @@ FROM node:22
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y clamav=1.4.3+dfsg-1~deb12u2 clamav-daemon=1.4.3+dfsg-1~deb12u2 && \
+    apt-get install -y clamav clamav-daemon && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

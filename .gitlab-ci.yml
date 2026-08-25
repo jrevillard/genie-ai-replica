@@ -651,7 +651,15 @@ kics-iac-sast:
 container_scanning:
   stage: scan
   allow_failure: false
-  rules: *security_run_rules
+  rules:
+    - when: never
+  # The artifact paths override remains so `promote:IMAGE` can still
+  # fetch the report and SBOM as paths via
+  # `needs: [scan:IMAGE, artifacts: true]`.
+  artifacts:
+    paths:
+      - gl-container-scanning-report.json
+      - "**/gl-sbom-*.cdx.json"
   # Override the natif template's artifact upload. The natif
   # `container_scanning` job uploads `gl-container-scanning-report.json`
   # and `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) automatically. We

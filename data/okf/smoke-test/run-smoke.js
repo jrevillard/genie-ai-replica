@@ -154,6 +154,21 @@ async function assertZeroOkfArtifacts(db) {
   const graphs = await listOkfGraphs(db);
   const cols = await db.listCollections();
   const okfCols = cols.filter((c) => String(c.name).startsWith('OKF_'));
+  // Orphan-manifest check (live-caught 2026-08-25): every okf_bundle_manifest
+  // doc must reference a LIVE repo — a deleted repo's lingering manifest
+  // crowds discoverRepos' k-clamped candidate slice (non-smoke repos are fine;
+  // the assert is the dangling reference, not the doc count).
+  const orphanManifests = await (
+    await db.query('FOR d IN okf_bundle_manifest FILTER !DOCUMENT(okf_repositories, d._key) RETURN d._key')
+  ).all();
+  if (orphanManifests.length > 0) {
+    fail(
+      'cleanup NOT clean: ' +
+        orphanManifests.length +
+        ' ORPHAN okf_bundle_manifest docs (repo gone): ' +
+        orphanManifests.join(',')
+    );
+  }
   if (graphs.length === 0 && okfCols.length === 0) {
     pass('cleanup VERIFIED: ZERO OKF_* graphs + collections remain in ArangoDB');
     return true;
@@ -1269,6 +1284,11 @@ async function ingestPhase(db) {
     { name: HAPPY_NAME, domain: 'smoke', acl: { required_scopes: [] } },
     { sub: 'smoke-run', source_ip: null }
   );
+  // The SAD repo's id — captured BEFORE the reassignment so CLEANUP=full can
+  // remove it at the end (the (x) retraction phase below now targets the HAPPY
+  // repo; without this the sad repo's graph survived full-mode runs —
+  // live-caught 2026-08-25, runs 5+6).
+  const SAD_REPO = INGEST_REPO;
   INGEST_REPO = happyRepo.repo_id;
   OKF_GRAPH = happyRepo.graph_name;
   pass('happy path: second repo created (' + INGEST_REPO + ' graph ' + OKF_GRAPH + ')');
@@ -1563,7 +1583,9 @@ async function ingestPhase(db) {
     }
     await aqlAll("FOR m IN okf_concepts_meta FILTER m.repo_id == '" + pc.repo_id + "' REMOVE m IN okf_concepts_meta");
     await aqlAll("FOR v IN okf_versions FILTER v.repo_id == '" + pc.repo_id + "' REMOVE v IN okf_versions");
-    await aqlAll("REMOVE '" + pc.repo_id + "' IN okf_repositories");
+    // FILTER-based (not by-key): remove() already deletes the registry entry —
+    // a by-key REMOVE on the missing doc throws 'document not found'.
+    await aqlAll("FOR r IN okf_repositories FILTER r.repo_id == '" + pc.repo_id + "' REMOVE r IN okf_repositories");
   }
   // Snapshot the source's physical state — the isolation baseline.
   const srcChunksBefore =
@@ -1908,6 +1930,14 @@ async function ingestPhase(db) {
     repoGone
       ? pass('bundle retract VERIFIED: the repository registry entry is removed (delete service cleans everything)')
       : fail('bundle retract: registry doc still present');
+    // The SAD repo (WP-A gate proof) is ALSO removed — the phases above
+    // targeted the happy repo, so without this its graph survives full mode.
+    try {
+      await repositoryService.remove(SAD_REPO, { sub: 'smoke-run' });
+      pass('bundle retract: sad repo (' + SAD_REPO + ') removed — graph + rows cascaded');
+    } catch (e) {
+      fail('sad repo remove failed: ' + e.message);
+    }
     await assertZeroOkfArtifacts(db);
   } else {
     console.log(

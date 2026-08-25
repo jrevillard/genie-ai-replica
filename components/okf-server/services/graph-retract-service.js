@@ -128,6 +128,23 @@ async function retractRepoGraph(repo_id, actor) {
     } catch (err) {
       logger.warn('Graph retract: version-manifest removal failed', { repo_id, error: err.message });
     }
+    // 6. The repo's bundle manifest (B+C+E, 2026-08-24): the okf_bundle_manifest
+    // doc is repo-scoped (_key = repo_id) — it goes with the teardown. Without
+    // this purge a deleted repo's manifest lingers in discoverRepos and crowds
+    // the k-clamped candidate slice (live-caught 2026-08-25: stale manifests
+    // from crashed smoke runs displaced the live repos).
+    let manifestRemoved = 0;
+    try {
+      const removed = await (
+        await db.query(aql`
+        FOR d IN okf_bundle_manifest FILTER d._key == ${repo_id}
+          REMOVE d IN okf_bundle_manifest RETURN OLD
+      `)
+      ).all();
+      manifestRemoved = removed.length;
+    } catch (err) {
+      logger.warn('Graph retract: bundle-manifest removal failed', { repo_id, error: err.message });
+    }
 
     span.setAttribute('okf.graph.retracted', true);
     span.setAttribute('okf.graph.dropped', dropped.length);
@@ -155,7 +172,8 @@ async function retractRepoGraph(repo_id, actor) {
       dropped,
       meta_removed: metaRemoved,
       files_removed: filesRemoved,
-      versions_removed: versionsRemoved
+      versions_removed: versionsRemoved,
+      manifest_removed: manifestRemoved
     };
   });
 }

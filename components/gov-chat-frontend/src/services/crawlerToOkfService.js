@@ -100,16 +100,28 @@ const crawlerToOkfService = {
       throw err;
     }
 
-    // 1. Create the draft repo. lifecycle_state: 'draft' is the D-V5/4.8 default
-    //    for fresh clones (and now crawls). name + domain + acl are required
-    //    by createSchema (repository-validator.js:26-32).
+    // 1. Create the repo. Per createSchema (repository-validator.js:26-32) we
+    //    must send name + domain + acl. The HTTP route doesn't expose the
+    //    service-layer lifecycle_state opt (no .unknown(true) on createSchema),
+    //    so the repo comes back with the default lifecycle_state='register'.
+    //    The wizard opens at Step 5 (Curate) and the dashboard's bucket
+    //    mapping (store/modules/okf.js:160) treats 'register' as the
+    //    'draft' lane — the steward can curate and mint normally.
+    //
+    //    Do NOT send `source: 'crawl'` — createSchema's sourceSchema is a
+    //    structured object (type='git'|'s3'), not a free string. Crawl
+    //    provenance is captured on the concept via provenance.sources[].kind.
+    //
+    //    ACL: only `required_scopes` + `sensitivity` are accepted by
+    //    aclSchema. We default required_scopes to a domain-scoped admin
+    //    scope (matches the test fixture in repos-routes.test.js:31).
     const repoName = slugify(filename || url);
     const repoDomain = domain || 'general';
-    const acl = { tools_admin_scope: 'rw', user_scopes: { 'self': 'rw' } };
+    const acl = { required_scopes: [`okf:t:${repoDomain}:admin`] };
     const headers = actor && actor.sub ? { 'x-actor-sub': actor.sub } : {};
     const created = await httpService.post(
       '/okf/repos',
-      { name: repoName, domain: repoDomain, acl, source: 'crawl' },
+      { name: repoName, domain: repoDomain, acl },
       { headers }
     );
     const repo = created && created.data ? created.data : null;
@@ -135,14 +147,27 @@ const crawlerToOkfService = {
     const conceptBody = deriveConceptBody(body);
     if (conceptBody) {
       try {
+        // Ingest payload shape (ingest-service.test.js:90): each concept is
+        // { frontmatter: { type, title, sources, ... }, body } — NOT
+        // { title, body, provenance } at the top level. ingestRepoConcepts
+        // (ingest-service.js:131) wraps it via gray-matter
+        // `matter.stringify(body, frontmatter)` → parserService.parseConcept.
+        //
+        // B2 hard error if frontmatter.type is missing (conformance-service.js:74).
+        // type='topic' is the most permissive default — the steward's Step 5
+        // Curate panel can re-classify per-concept via the okf.curator API.
+        const path = `${slugify(conceptTitle)}.md`;
         await httpService.post(
           `/okf/repos/${encodeURIComponent(repoId)}/ingest`,
           {
             concepts: [{
-              concept_id: slugify(conceptTitle),
-              title: conceptTitle,
-              body: conceptBody,
-              provenance: { sources: [{ kind: 'crawl', url, crawl_job_id: crawlJobId, file_id: fileId }] }
+              path,
+              frontmatter: {
+                type: 'topic',
+                title: conceptTitle,
+                sources: url ? [{ kind: 'crawl', resource: url, crawl_job_id: crawlJobId, file_id: fileId }] : []
+              },
+              body: conceptBody
             }]
           },
           { headers }

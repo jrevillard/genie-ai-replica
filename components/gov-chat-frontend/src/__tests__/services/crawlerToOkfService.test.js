@@ -140,19 +140,37 @@ describe('crawlerToOkfService.convertCrawlToOkf', () => {
     expect(mockPost.mock.calls[0][1]).toMatchObject({
       name: 'wikipedia-ml',
       domain: 'education',
-      acl: expect.any(Object),
-      source: 'crawl'
+      acl: { required_scopes: ['okf:t:education:admin'] }
+      // source is intentionally NOT sent: createSchema's source field is a
+      // structured object (type='git'|'s3'), not a free string. Crawl
+      // provenance lives on the concept itself via ingest.
+      // Also: only `required_scopes` + `sensitivity` are accepted by
+      // aclSchema; my v1 sent invented `tools_admin_scope`/`user_scopes` keys
+      // that the validator rejected (verified live 2026-08-26).
     });
+    // Also assert no source key leaks into the payload
+    expect(Object.prototype.hasOwnProperty.call(mockPost.mock.calls[0][1], 'source')).toBe(false);
     // actor.sub → x-actor-sub header
     expect(mockPost.mock.calls[0][2]).toEqual({ headers: { 'x-actor-sub': 'crawler-to-okf' } });
     // Second call: POST /okf/repos/:id/ingest with one concept (header stripped)
     expect(mockPost.mock.calls[1][0]).toBe('/okf/repos/r-new-1/ingest');
+    // Ingest payload shape (ingest-service.test.js:90): { frontmatter, body, path }
+    // — NOT { title, body, provenance } at the top level. B2 hard error
+    // when frontmatter.type is missing.
     expect(mockPost.mock.calls[1][1]).toMatchObject({
       concepts: [{
-        concept_id: 'wikipedia-ml',
-        title: 'wikipedia-ml',
-        body: '# Machine learning\n\nIntro body.',
-        provenance: { sources: [{ kind: 'crawl', url: 'https://en.wikipedia.org/wiki/Machine_learning', crawl_job_id: 'job-1', file_id: 'file-1' }] }
+        path: 'wikipedia-ml.md',
+        frontmatter: {
+          type: 'topic',
+          title: 'wikipedia-ml',
+          sources: [{
+            kind: 'crawl',
+            resource: 'https://en.wikipedia.org/wiki/Machine_learning',
+            crawl_job_id: 'job-1',
+            file_id: 'file-1'
+          }]
+        },
+        body: '# Machine learning\n\nIntro body.'
       }]
     });
     expect(result).toMatchObject({ repo_id: 'r-new-1', concept_count: 1 });

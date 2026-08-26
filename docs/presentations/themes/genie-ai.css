@@ -361,6 +361,153 @@ section.closing p {
   font-size: 1.2rem;
 }
 
+/* Session divider — large numeric + title + tagline, no background image.
+   Uses the brand-blue background gradient so dividers read as visual anchors. */
+/* Inline visual card — wrap PPTX illustrations in a soft panel. */
+section img {
+  max-width: 100%;
+  max-height: 60vh;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+/* Image inside a 2-col layout — cap so it never dwarfs the text column. */
+section .columns img {
+  max-height: 50vh;
+}
+section .visual-card {
+  background: var(--genie-surface);
+  border-radius: 12px;
+  border: 1px solid var(--genie-border);
+  padding: 0.8rem;
+  box-shadow: 0 2px 8px oklch(20% 0.02 250 / 0.06), 0 8px 24px oklch(20% 0.02 250 / 0.04);
+}
+section .visual-card img {
+  margin: 0 auto;
+}
+section .visual-card .caption {
+  font-size: 0.75rem;
+  color: var(--genie-muted);
+  text-align: center;
+  margin-top: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Two-column split where one side is a visual (right column auto-fits image). */
+section .columns.has-visual > div:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Pillar / capability cards — used for the "5 brand pillars" slide. */
+.pillar-row {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+.pillar {
+  flex: 1;
+  text-align: center;
+  padding: 1rem 0.8rem;
+  background: var(--genie-surface);
+  border-radius: 12px;
+  border: 1px solid var(--genie-border);
+  box-shadow: 0 1px 3px oklch(20% 0.02 250 / 0.06);
+}
+.pillar .num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--genie-blue);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.pillar .name {
+  color: var(--genie-blue-dark);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-top: 0.2rem;
+}
+
+/* Comparison rows — used on the "business as usual vs GENIE" slide. */
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1.5fr;
+  gap: 0.4rem 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.6rem;
+}
+.compare .head {
+  font-weight: 700;
+  color: var(--genie-blue-dark);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--genie-blue);
+}
+.compare .label {
+  color: var(--genie-muted);
+  font-weight: 600;
+}
+.compare .ba {
+  color: oklch(45% 0.18 25);
+}
+.compare .genie {
+  color: oklch(40% 0.16 162);
+}
+.compare .cell {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--genie-border);
+}
+section.session-divider {
+  --genie-content-gap: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  text-align: left;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 100% 0%, oklch(42% 0.18 265 / 0.25), transparent 50%),
+    radial-gradient(circle at 0% 100%, oklch(42% 0.14 162 / 0.18), transparent 55%),
+    linear-gradient(135deg, var(--genie-blue) 0%, var(--genie-blue-dark) 100%);
+  padding: 2.5rem 3.5rem;
+}
+section.session-divider h1 {
+  color: #ffffff;
+  font-size: 2.6rem;
+  letter-spacing: -0.02em;
+  max-width: 75%;
+}
+section.session-divider .eyebrow {
+  color: oklch(85% 0.10 162);
+  font-size: 1.15rem;
+}
+section.session-divider .tagline {
+  color: oklch(96% 0.02 250);
+  font-size: 1.3rem;
+  font-weight: 400;
+  margin-top: 0.6rem;
+  max-width: 70%;
+}
+section.session-divider .session-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 6rem;
+  font-weight: 700;
+  color: oklch(85% 0.10 162);
+  line-height: 1;
+  opacity: 0.85;
+  margin-bottom: 0.5rem;
+}
+/* Hide footer + pagination on dividers — the slide is its own anchor. */
+section.session-divider footer,
+section.session-divider::after {
+  display: none !important;
+}
+
 /* Brand pill + hero band — used in the title slide.
    Both pull images from sibling files in the themes/ directory, so decks
    do not need to inline assets. Add `--allow-local-files` to the marp-cli

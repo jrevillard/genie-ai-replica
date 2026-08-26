@@ -19,7 +19,7 @@ const conceptService = {
     const qs = opts.since ? `?since=${encodeURIComponent(opts.since)}` : '';
     try {
       const res = await httpService.get(
-        `/api/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`
+        `/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`
       );
       return res && res.data ? res.data : [];
     } catch (err) {
@@ -31,7 +31,7 @@ const conceptService = {
   async get(repoId, conceptId) {
     try {
       const res = await httpService.get(
-        `/api/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`
+        `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`
       );
       return res && res.data ? res.data : null;
     } catch (err) {

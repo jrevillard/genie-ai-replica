@@ -8,8 +8,11 @@
 </template>
 
 <script>
+import translateMixin from '../../../mixins/translateMixin';
+
 export default {
   name: 'OkfStepAutocorrect',
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } }
 };
 </script>

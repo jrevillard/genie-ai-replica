@@ -5,7 +5,7 @@
   Renders the narrative text from okf.narrative.* i18n keys.
 -->
 <template>
-  <aside class="okf-narrative" role="note" v-if="visible">
+  <aside v-if="visible" class="okf-narrative" role="note">
     <p class="okf-narrative__text">{{ translated }}</p>
     <button type="button" class="okf-narrative__hide" @click="dismiss">{{ hideLabel }}</button>
   </aside>

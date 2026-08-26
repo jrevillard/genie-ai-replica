@@ -50,8 +50,8 @@
               class="okf-dashboard__card-checkbox"
               :checked="isSelected(r.repo_id)"
               :disabled="r.lifecycle_state !== 'review' && r.lifecycle_state !== 'approve'"
-              @click.stop="toggleSelected(r.repo_id)"
               :aria-label="translate('okf.dashboard.select', 'Select {name} for bulk publish').replace('{name}', r.name || r.repo_id)"
+              @click.stop="toggleSelected(r.repo_id)"
             />
             <span class="okf-dashboard__card-name">{{ r.name || r.repo_id }}</span>
           </span>
@@ -101,6 +101,7 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
 import DsDialog from '../ds/Dialog.vue';
 import DsInput from '../ds/Input.vue';
@@ -131,6 +132,7 @@ export default {
   components: {
     DsButton, DsDialog, DsInput, DsSelect, DsStatusTag, DsHealthRing, DsTable
   },
+  mixins: [translateMixin],
   emits: ['new', 'resume'],
   data() {
     return {

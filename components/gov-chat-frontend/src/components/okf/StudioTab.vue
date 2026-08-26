@@ -49,6 +49,7 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
 import DsDialog from '../ds/Dialog.vue';
 import DsModeSwitch from '../ds/ModeSwitch.vue';
@@ -59,6 +60,7 @@ import OkfStudioWizard from './StudioWizard.vue';
 export default {
   name: 'OkfStudioTab',
   components: { DsButton, DsDialog, DsModeSwitch, OkfNarrative, OkfStudioDashboard, OkfStudioWizard },
+  mixins: [translateMixin],
   data() {
     return {
       view: 'dashboard',

@@ -24,7 +24,7 @@
         @drop="onDrop(idx)"
       >
         {{ l }}
-        <button type="button" class="okf-label-editor__chip-remove" @click="remove(idx)" :aria-label="translate('okf.curator.labels.remove', 'Remove')">×</button>
+        <button type="button" class="okf-label-editor__chip-remove" :aria-label="translate('okf.curator.labels.remove', 'Remove')" @click="remove(idx)">×</button>
       </span>
       <span v-if="local.length === 0" class="okf-label-editor__empty">{{ translate('okf.curator.labels.empty', 'No labels yet.') }}</span>
     </div>
@@ -39,10 +39,12 @@
 import DsDialog from '../ds/Dialog.vue';
 import DsInput from '../ds/Input.vue';
 import DsButton from '../ds/Button.vue';
+import translateMixin from '../../mixins/translateMixin';
 
 export default {
   name: 'OkfLabelEditor',
   components: { DsDialog, DsInput, DsButton },
+  mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },
     repoId: { type: String, default: '' },

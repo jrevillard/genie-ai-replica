@@ -13,7 +13,7 @@ import httpService from './httpService';
 const studioService = {
   async getDraft(repoId) {
     try {
-      const res = await httpService.get(`/api/okf/repos/${encodeURIComponent(repoId)}/draft`);
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/draft`);
       return res && res.data ? res.data : null;
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501)) {
@@ -29,7 +29,7 @@ const studioService = {
   async saveDraft(repoId, body) {
     try {
       const res = await httpService.put(
-        `/api/okf/studio_drafts/${encodeURIComponent(repoId)}`,
+        `/okf/studio_drafts/${encodeURIComponent(repoId)}`,
         body
       );
       return res && res.data ? res.data : { ok: true };
@@ -46,7 +46,7 @@ const studioService = {
 
   async clearDraft(repoId) {
     try {
-      await httpService.delete(`/api/okf/studio_drafts/${encodeURIComponent(repoId)}`);
+      await httpService.delete(`/okf/studio_drafts/${encodeURIComponent(repoId)}`);
       return { ok: true };
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501)) return { ok: true };
@@ -55,12 +55,12 @@ const studioService = {
   },
 
   async fetchProducerJob(jobId) {
-    const res = await httpService.get(`/api/okf/jobs/${encodeURIComponent(jobId)}`);
+    const res = await httpService.get(`/okf/jobs/${encodeURIComponent(jobId)}`);
     return res && res.data ? res.data : null;
   },
 
   async killProducerJob(jobId) {
-    const res = await httpService.post(`/api/okf/jobs/${encodeURIComponent(jobId)}/kill`);
+    const res = await httpService.post(`/okf/jobs/${encodeURIComponent(jobId)}/kill`);
     return res && res.data ? res.data : { ok: true };
   }
 };

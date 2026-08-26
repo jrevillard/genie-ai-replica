@@ -13,8 +13,11 @@
 </template>
 
 <script>
+import translateMixin from '../../../mixins/translateMixin';
+
 export default {
   name: 'OkfStepReview',
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   computed: {
     labelList() {

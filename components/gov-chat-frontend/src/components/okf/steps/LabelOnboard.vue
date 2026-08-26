@@ -19,10 +19,12 @@
 import DsTag from '../../ds/Tag.vue';
 import DsInput from '../../ds/Input.vue';
 import DsButton from '../../ds/Button.vue';
+import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepLabel',
   components: { DsTag, DsInput, DsButton },
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   data() {
     return {

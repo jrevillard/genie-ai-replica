@@ -94,6 +94,7 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import translateMixin from '../../mixins/translateMixin';
 import DsStepper from '../ds/Stepper.vue';
 import DsButton from '../ds/Button.vue';
 import DsStatusTag from '../ds/StatusTag.vue';
@@ -144,6 +145,7 @@ export default {
     OkfStepReview,
     OkfStepPublish
   },
+  mixins: [translateMixin],
   props: {
     draft: { type: Object, default: null }
   },

@@ -68,10 +68,12 @@ import DsPill from '../../ds/Pill.vue';
 import DsOkfMarkdownEditor from '../../ds/OkfMarkdownEditor.vue';
 import OkfLabelEditor from '../LabelEditor.vue';
 import conceptService from '../../../services/conceptService';
+import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepCurate',
   components: { DsInput, DsButton, DsPill, DsOkfMarkdownEditor, OkfLabelEditor },
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   data() {
     return {

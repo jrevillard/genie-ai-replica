@@ -340,5 +340,55 @@ describe('WeatherService', () => {
       const result = await service.getWeather({ latitude: 47.37, longitude: 8.54 });
       expect(result.location).toBe('Zurich, Switzerland');
     });
+
+    // Bug fix: WeatherService crashed with 500 when init() never ran (e.g. ipapi.co
+    // unreachable at boot) — `weatherRequests` stayed null and `.save()` threw
+    // `Cannot read properties of null (reading 'save')`. The service must now
+    // return weather data and skip persistence with a clear log line.
+    it('should return weather data and skip persistence when weatherRequests is null', async () => {
+      // Simulate init() never ran successfully
+      service.initialized = true;
+      service.weatherRequests = null;
+      service.serverLocation = { latitude: 46.2, longitude: 6.15, city: 'Geneva, Switzerland' };
+      axios.get.mockResolvedValueOnce(openMeteoResponse);
+
+      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+
+      expect(result).toBeDefined();
+      expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('persistence_unavailable'),
+        expect.any(Object)
+      );
+    });
+
+    // Bug fix: if .save() itself throws (e.g. transient Arango error), the
+    // service must still return the weather data — persistence is best-effort.
+    it('should return weather data when weatherRequests.save throws', async () => {
+      mockWeatherRequests.save.mockRejectedValueOnce(new Error('Arango unavailable'));
+      axios.get.mockResolvedValueOnce(openMeteoResponse);
+
+      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+
+      expect(result).toBeDefined();
+      expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('save_request_failed'),
+        expect.any(Object)
+      );
+    });
+
+    // Bug fix: analytics must NOT be recorded when persistence failed
+    // (no requestId to log against).
+    it('should skip analytics recording when persistence fails', async () => {
+      const mockAnalytics = { recordWeatherRequest: jest.fn().mockResolvedValue({}) };
+      service.setAnalyticsService(mockAnalytics);
+      mockWeatherRequests.save.mockRejectedValueOnce(new Error('Arango unavailable'));
+      axios.get.mockResolvedValueOnce(openMeteoResponse);
+
+      await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+
+      expect(mockAnalytics.recordWeatherRequest).not.toHaveBeenCalled();
+    });
   });
 });

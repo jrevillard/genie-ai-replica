@@ -22,6 +22,7 @@
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsInput from '../../ds/Input.vue';
 import DsSelect from '../../ds/Select.vue';
+import translateMixin from '../../../mixins/translateMixin';
 
 const DOMAINS = [
   { value: 'transport',       label: 'Transport' },
@@ -36,6 +37,7 @@ const DOMAINS = [
 export default {
   name: 'OkfStepEntry',
   components: { DsFormGroup, DsInput, DsSelect },
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   data() {
     return {

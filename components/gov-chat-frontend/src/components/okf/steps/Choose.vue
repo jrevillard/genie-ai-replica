@@ -20,6 +20,8 @@
 </template>
 
 <script>
+import translateMixin from '../../../mixins/translateMixin';
+
 const SOURCES = [
   {
     value: 'documents',
@@ -53,6 +55,7 @@ const SOURCES = [
 
 export default {
   name: 'OkfStepChoose',
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   data() {
     return {

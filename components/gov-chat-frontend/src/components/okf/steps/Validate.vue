@@ -39,6 +39,7 @@
 <script>
 import { mapGetters } from 'vuex';
 import DsHealthRing from '../../ds/HealthRing.vue';
+import translateMixin from '../../../mixins/translateMixin';
 
 const ISSUE_GROUPS = [
   { code: 'MISSING_TYPE',          label: 'Concept type missing',         count: 0, items: [] },
@@ -51,6 +52,7 @@ const ISSUE_GROUPS = [
 export default {
   name: 'OkfStepValidate',
   components: { DsHealthRing },
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   data() {
     return {

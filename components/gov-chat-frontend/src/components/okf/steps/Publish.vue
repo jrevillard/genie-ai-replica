@@ -13,10 +13,12 @@
 
 <script>
 import DsStatusTag from '../../ds/StatusTag.vue';
+import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepPublish',
   components: { DsStatusTag },
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } },
   computed: {
     checklistVariants() {

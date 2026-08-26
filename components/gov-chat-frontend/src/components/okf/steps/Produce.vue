@@ -12,10 +12,12 @@
 
 <script>
 import DsProgress from '../../ds/Progress.vue';
+import translateMixin from '../../../mixins/translateMixin';
 
 export default {
   name: 'OkfStepProduce',
   components: { DsProgress },
+  mixins: [translateMixin],
   props: { draft: { type: Object, default: null }, expert: { type: Boolean, default: false } }
 };
 </script>

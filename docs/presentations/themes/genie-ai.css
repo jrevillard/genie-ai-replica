@@ -212,7 +212,8 @@ section li {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 0.7rem;
+  font-size: 1.05rem; /* up from 0.7rem for stronger visual hierarchy */
+  font-weight: 500;
   color: var(--genie-muted);
   margin-top: 0;
   margin-bottom: 0.25rem;

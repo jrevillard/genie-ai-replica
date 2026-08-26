@@ -475,10 +475,60 @@ export default {
               ).replace('{fileName}', fileName);
 
         this.showNotification(successMsg, 'success');
-        // Story 3-7: when target is OKF repository, pre-seed the wizard with
-        // the crawl seed URL and switch to the Studio tab. We do this BEFORE
-        // emitting link-submitted so the parent can stop the default flow.
+        // Story 3-7 (fixed in #977): when target is OKF repository, create a
+        // draft OKF repo from the crawled .md and ingest it as a concept. The
+        // freeform (Document) path is untouched — the file is still saved as
+        // today and the parent AdminDashboard handles the link-submitted
+        // emission as before.
+        //
+        // Single-page crawl returns the file synchronously (response.data.file
+        // contains file_name + file_id); full-site crawl is async (file_id +
+        // crawl_job_id) — for the async path we only persist the seed and
+        // dispatch the seed event so the user lands in Studio and the actual
+        // repo creation happens when the crawl finishes (the FileDetailsDialog
+        // has its own 'Create OKF repository from this crawl' button that
+        // invokes createFromCrawl when the crawl_job.status === 'Succeeded').
+        if (this.okfTarget === 'okf_repo' && this.crawlMode === 'single_page') {
+          const fileId = response.data?.file?._key
+              || response.data?.file_id
+              || response.data?.data?._key
+              || null;
+          const filename = response.data?.file?.file_name
+              || response.data?.file_name
+              || response.data?.data?.file_name
+              || null;
+          if (fileId) {
+            const result = await this.$store.dispatch('okf/createFromCrawl', {
+              fileId,
+              url: this.url.trim(),
+              crawlMode: this.crawlMode,
+              crawlDepth: this.crawlDepth,
+              filename,
+              actor: { sub: 'crawler-to-okf' }
+            });
+            if (!result || !result.ok) {
+              // Partial success (repo created but ingest failed) is still
+              // surfaced — the user gets a clear message and the dashboard
+              // shows the empty repo so they can retry ingest from the wizard.
+              this.errorMessage = this.translate(
+                'okf.crawl.partialSuccess',
+                'Crawl saved as an OKF repository, but the concept ingestion failed. Open it from the Studio to retry.'
+              );
+            }
+          } else {
+            this.errorMessage = this.translate(
+              'okf.crawl.missingFile',
+              'Crawl finished but no file_id was returned. The Studio will not be opened.'
+            );
+          }
+          // Always close the dialog on the OKF path (success + partial).
+          this.$emit('link-submitted', response.data);
+          this.$emit('close');
+          return;
+        }
         if (this.okfTarget === 'okf_repo') {
+          // Async full-site crawl: seed the wizard with the URL, let the
+          // FileDetailsDialog drive createFromCrawl when the crawl finishes.
           await this.$store.dispatch('okf/setSelection', { crawlSeeds: [this.url.trim()] });
           window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
             detail: { url: this.url.trim(), crawlMode: this.crawlMode, crawlDepth: this.crawlDepth }

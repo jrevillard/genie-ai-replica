@@ -245,15 +245,64 @@ const actions = {
 
   clearSelection({ commit }) {
     commit('clearSelection');
+  },
+
+  /**
+   * Story 3-7 (fixed in #977): convert a crawled document into a draft OKF
+   * repository. Wraps `crawlerToOkfService.convertCrawlToOkf` and upserts the
+   * resulting repo into the store so the Studio dashboard sees it immediately.
+   * Emits the `okf:okf-repo-created` window event so the StudioTab handler
+   * can switch to the wizard at Step 5 (Curate) with the new repo loaded.
+   *
+   * Additive: the existing crawler freeform path (target=freeform) is
+   * untouched — this action is only invoked from AddFromLinkDialog /
+   * FileDetailsDialog when the steward explicitly selects OKF as the target.
+   *
+   * @param {Object} payload
+   * @param {string} payload.fileId       doc-repo file_id of the crawled .md
+   * @param {string} [payload.url]        crawled URL (slug + title source)
+   * @param {string} [payload.crawlJobId] crawl_job _key (audit)
+   * @param {string} [payload.filename]   original file_name (preferred title)
+   * @param {Object} [payload.actor]      auth hints (sub → x-actor-sub)
+   * @param {string} [payload.domain]     subject area (defaults to 'general')
+   * @returns {Promise<Object>} { ok, repo?, code?, message? }
+   */
+  async createFromCrawl({ commit }, payload = {}) {
+    commit('setError', null);
+    try {
+      const repo = await crawlerToOkfService.convertCrawlToOkf(payload);
+      if (repo && repo.repo_id) {
+        commit('upsertRepo', repo);
+        const byStage = this.state?.okf?.reposByStage || { draft: [], in_review: [], published: [] };
+        const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
+        if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
+        commit('setReposByStage', { ...byStage, draft: draftLane });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('okf:okf-repo-created', { detail: { repo_id: repo.repo_id, repo } }));
+        }
+      }
+      return { ok: true, repo };
+    } catch (err) {
+      const code = err && err.code ? err.code : 'CRAWL_TO_OKF_FAILED';
+      if (err && err.repo && err.repo.repo_id) {
+        commit('upsertRepo', err.repo);
+        commit('setError', err.message);
+        return { ok: false, partial: true, repo: err.repo, code, message: err.message };
+      }
+      commit('setError', err.message || 'createFromCrawl failed');
+      return { ok: false, code, message: err.message };
+    }
   }
 };
 
 // Lazy require so the module loads in test environments without the services.
 let studioService;
 let repoOkfService;
+let crawlerToOkfService;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
+  if (!crawlerToOkfService) crawlerToOkfService = require('@/services/crawlerToOkfService').default;
 }
 
 const actionsWithServices = {};

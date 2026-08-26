@@ -274,19 +274,21 @@ describe('AdminDashboard', () => {
       expect(mockGetSystemHealth).toHaveBeenCalledTimes(1);
     });
 
-    it('initializes all nine admin tabs (incl. OKF Studio)', () => {
+    it('initializes all nine admin tabs (incl. OKF Studio, sitting next to Document Management)', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabIds = wrapper.vm.tabs.map((t) => t.id);
+      // Story 3-7 fix (#977): OKF Studio tab moved to sit immediately after
+      // Document Management so the crawler→OKF workflow is a one-step click.
       expect(tabIds).toEqual([
         'overview',
         'hierarchy',
         'documents',
+        'studio',
         'database',
         'logs',
         'queryInspector',
         'security',
-        'users',
-        'studio'
+        'users'
       ]);
     });
   });

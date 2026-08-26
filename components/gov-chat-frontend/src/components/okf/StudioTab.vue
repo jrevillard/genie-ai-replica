@@ -83,10 +83,15 @@ export default {
     // okf/selection (set by the source component before the event).
     window.addEventListener('okf:create-from-documents', this.onCreateFromDocuments);
     window.addEventListener('okf:create-from-crawl', this.onCreateFromCrawl);
+    // Story 3-7 (fix #977): when the crawler flow creates a fresh OKF repo,
+    // switch to the wizard view with a 'crawl'-source draft at Step 5 (Curate)
+    // — mirrors the Clone amendment's UX (clone skips Produce → opens at Curate).
+    window.addEventListener('okf:okf-repo-created', this.onOkfRepoCreated);
   },
   beforeUnmount() {
     window.removeEventListener('okf:create-from-documents', this.onCreateFromDocuments);
     window.removeEventListener('okf:create-from-crawl', this.onCreateFromCrawl);
+    window.removeEventListener('okf:okf-repo-created', this.onOkfRepoCreated);
   },
   methods: {
     onExpertChange(mode) {
@@ -105,6 +110,36 @@ export default {
     onCreateFromCrawl() {
       // AddFromLinkDialog / FileDetailsDialog preloaded crawlSeeds; the wizard
       // surfaces Step 1 (Choose workflow) with the crawl source pre-selected.
+      this.view = 'wizard';
+    },
+    onOkfRepoCreated(evt) {
+      // Story 3-7 fix (#977): the crawler flow just produced a draft OKF
+      // repo. Switch to the wizard view with the new repo as the active
+      // draft, source='crawl', and the saved-step pinned to 5 (Curate) so the
+      // steward lands directly on the concept list — the StudioWizard's
+      // `mounted()` reads draft.source and bumps activeStep to >= 5 for
+      // clone/crawl sources (mirrors the Clone amendment).
+      const repoId = evt && evt.detail && evt.detail.repo_id;
+      const repo = evt && evt.detail && evt.detail.repo;
+      if (repoId) {
+        this.$store.dispatch('okf/saveDraft', {
+          repoId,
+          draft: {
+            studio_step: 5,
+            source: 'crawl',
+            repo_id: repoId,
+            name: repo && repo.name,
+            concept_count: (repo && repo.concept_count) || 1,
+            updated_at: Date.now()
+          }
+        });
+        this.activeDraft = {
+          ...(this.$store.getters['okf/activeDraft'](repoId) || {}),
+          repo_id: repoId,
+          studio_step: 5,
+          source: 'crawl'
+        };
+      }
       this.view = 'wizard';
     },
     resetWizard() {

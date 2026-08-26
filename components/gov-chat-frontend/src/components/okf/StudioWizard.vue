@@ -232,8 +232,9 @@ export default {
     if (this.draft && typeof this.draft.studio_step === 'number') {
       this.activeStep = Math.min(this.draft.studio_step, 9);
     }
-    if (this.draft && this.draft.source === 'clone') {
-      // Clone jumps to Step 5 (Curate) per UX design.
+    if (this.draft && (this.draft.source === 'clone' || this.draft.source === 'crawl')) {
+      // Clone and crawler-sourced repos skip Produce and open at Step 5
+      // (Curate) per UX design (3-4 Clone amendment, 3-7 #977 crawler fix).
       this.activeStep = Math.max(this.activeStep, 5);
     }
   },

@@ -673,17 +673,74 @@ export default {
   methods: {
     formatFileSize,
     /**
-     * Story 3-7: companion action — pre-load the crawl as a wizard seed,
-     * close the dialog, dispatch a global event the Studio tab listens for.
+     * Story 3-7 (fixed in #977): create a draft OKF repository from this
+     * crawl, ingest the crawled content as a concept, and switch to the
+     * Studio tab. The wizard opens at Step 5 (Curate) with the new repo
+     * already loaded (mirrors the Clone amendment's UX).
+     *
+     * Additive: the existing freeform/document path (this dialog's other
+     * actions) is untouched.
      */
     async onCreateOkfFromCrawl() {
       if (!this.crawlJob || this.crawlJob.status !== 'Succeeded' || this.file?.okf_repo_id) return;
-      const seed = this.file && this.file.file_name ? this.file.file_name : (this.crawlJob && this.crawlJob.config && this.crawlJob.config.url) || '';
-      await this.$store.dispatch('okf/setSelection', { crawlSeeds: [seed] });
-      window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
-        detail: { file_id: this.file && this.file._key, crawl_job_id: this.crawlJob && this.crawlJob._key, seed }
-      }));
-      this.$emit('close');
+      const fileId = this.file && (this.file._key || this.file.file_id);
+      const filename = this.file && this.file.file_name;
+      const url = this.crawlJob && this.crawlJob.config && this.crawlJob.config.url;
+      const crawlJobId = this.crawlJob && (this.crawlJob._key || this.crawlJob.crawl_job_id);
+      if (!fileId) {
+        // No file to ingest from — fall back to the legacy seed behaviour so
+        // the steward can at least land in the Studio with the seed URL.
+        const seed = filename || url || '';
+        await this.$store.dispatch('okf/setSelection', { crawlSeeds: [seed] });
+        window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
+          detail: { file_id: null, crawl_job_id: crawlJobId, seed }
+        }));
+        this.$emit('close');
+        return;
+      }
+      // Mark the dialog busy while we create the repo (no UI spinner — the
+      // dialog closes immediately on success and the Studio tab is the
+      // visible feedback).
+      this.isDownloading = true;
+      this.downloadMessage = this.translate('okf.crawl.creating', 'Creating OKF repository...');
+      try {
+        const result = await this.$store.dispatch('okf/createFromCrawl', {
+          fileId,
+          url,
+          crawlJobId,
+          filename,
+          actor: { sub: 'crawler-to-okf' }
+        });
+        if (!result || !result.ok) {
+          this.showNotification(
+            this.translate(
+              'okf.crawl.createFailed',
+              'Could not create the OKF repository from this crawl.'
+            ),
+            'error'
+          );
+        } else {
+          this.showNotification(
+            this.translate(
+              'okf.crawl.createOk',
+              'OKF repository created. Opening the Studio to curate.'
+            ),
+            'success'
+          );
+        }
+      } catch {
+        this.showNotification(
+          this.translate(
+            'okf.crawl.createFailed',
+            'Could not create the OKF repository from this crawl.'
+          ),
+          'error'
+        );
+      } finally {
+        this.isDownloading = false;
+        this.downloadMessage = '';
+        this.$emit('close');
+      }
     },
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {

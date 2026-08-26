@@ -1637,12 +1637,12 @@ export default {
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
         { id: 'documents', label: 'Document Management' },
+        { id: 'studio', label: 'OKF Studio' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
         { id: 'queryInspector', label: 'Query Inspector' },
         { id: 'security', label: 'Security' },
-        { id: 'users', label: 'Users' },
-        { id: 'studio', label: 'OKF Studio' }
+        { id: 'users', label: 'Users' }
       ],
 
       // Loading state

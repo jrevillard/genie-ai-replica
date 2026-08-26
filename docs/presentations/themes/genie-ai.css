@@ -55,6 +55,9 @@ section {
   --genie-border: #cdd1d6;
   --genie-accent: oklch(62% 0.17 162);
 
+  /* Layout tokens */
+  --genie-content-gap: 0.85rem;  /* gap between header (eyebrow + h1) and first content block */
+
   /* Mermaid theme tokens (picked up by beautiful-mermaid at render time) */
   --marp-mermaid-background: var(--genie-bg);
   --marp-mermaid-foreground: var(--genie-fg);
@@ -100,6 +103,18 @@ section h1 {
   color: var(--genie-blue);
   letter-spacing: -0.02em;
   font-size: 2.2rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0;
+}
+
+/* Consistent content gap after the header block (eyebrow + h1).
+   Every direct child of <section> that follows the h1 gets the same
+   top margin via the --genie-content-gap token. This avoids enumerating
+   each possible content type (ul, ol, p, table, .columns, mermaid SVG,
+   future additions) and keeps the design system extensible. */
+section > h1 + *,
+section > h1 + .eyebrow + * {
+  margin-top: var(--genie-content-gap);
 }
 
 section h2 {
@@ -199,7 +214,8 @@ section li {
   letter-spacing: 0.08em;
   font-size: 0.7rem;
   color: var(--genie-muted);
-  margin-bottom: 0.5rem;
+  margin-top: 0;
+  margin-bottom: 0.25rem;
 }
 
 /* Metric cards row. Wrap as < <div class="metric-row"> <div class="metric">… */

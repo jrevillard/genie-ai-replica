@@ -37,7 +37,6 @@ RUN apt-get update -y && \
     libcairo2 \
     libgl1 \
     libglib2.0-0 \
-    libjemalloc-dev \
     libmariadb-dev \
     libpq-dev \
     libreoffice \

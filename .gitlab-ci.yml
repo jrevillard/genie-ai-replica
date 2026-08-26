@@ -589,6 +589,17 @@ include:
   - template: Jobs/SAST.gitlab-ci.yml               # source-code vulns (JS/Vue, Python, Dart)
   - template: Jobs/Dependency-Scanning.gitlab-ci.yml # known vulns in npm/pip/pub deps
   - template: Jobs/SAST-IaC.gitlab-ci.yml           # misconfigs in docker-compose / ansible / k8s
+  - template: Jobs/Container-Scanning.gitlab-ci.yml # image vulns (uses $CS_IMAGE; schema 15.x.x)
+  # GitLab's container-scanning template defines one `container_scanning` job that
+  # scans one image (CS_IMAGE). We override it below to run in the `scan` stage
+  # (instead of `test`), block promotion on failure, and inherit a per-image
+  # anchor (`.container_scanning_per_image_template`) that each `scan:IMAGE`
+  # job uses via `extends: container_scanning`. Each scan:IMAGE job sets its
+  # own CS_IMAGE to the corresponding `tmp/...` registry tag built in stage
+  # `build`. The produced `gl-container-scanning-report.json` artifact conforms
+  # to the v15.x.x schema (the previous custom Trivy-only script produced
+  # `SchemaVersion: <int>` at the report root instead of `version: "<semver>"`,
+  # which the GitLab UI rejected as "Report version not provided").
 
 # Override the security templates' default rules (which run on branch pipelines
 # only via `if: $CI_COMMIT_BRANCH`) so they ALSO run on MR + release branches —
@@ -631,6 +642,47 @@ gemnasium-python-dependency_scanning:
   rules: *security_run_rules
 kics-iac-sast:
   rules: *security_run_rules
+# Container scanning: override the template's default `test` stage and
+# `allow_failure: true` so scans block promotion (the promote:IMAGE job
+# `needs:` the scan:IMAGE job and fails if it didn't produce a valid
+# container_scanning report). Per-image CS_IMAGE is set by each scan:IMAGE
+# job that extends `container_scanning`. Rules follow the security_run_rules
+# so scans run on MR + main + release branches.
+container_scanning:
+  stage: scan
+  allow_failure: false
+  variables:
+    # Trivy scan timeout — some images (e.g. genie-ai-retriever-arango, which
+    # carries the full OPEA overlay Python deps tree) hit the default 5m
+    # deadline on the GPU runner. Bump to 30m (Trivy's own default if
+    # TRIVY_TIMEOUT is unset is 5m per the docs).
+    TRIVY_TIMEOUT: "30m"
+  rules:
+    - when: never
+  # The artifact paths override remains so `promote:IMAGE` can still
+  # fetch the report and SBOM as paths via
+  # `needs: [scan:IMAGE, artifacts: true]`.
+  artifacts:
+    paths:
+      - gl-container-scanning-report.json
+      - "**/gl-sbom-*.cdx.json"
+  # Override the natif template's artifact upload. The natif
+  # `container_scanning` job uploads `gl-container-scanning-report.json`
+  # and `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) automatically. We
+  # disable BOTH uploads here:
+  #  - The vulnerability report stays as a job artifact path so that
+  #    `promote:IMAGE` can fetch it via `artifacts: true` and rewrite the
+  #    image name (`tmp/IMAGE:cand` → `IMAGE:primary_tag`) before doing
+  #    the single GitLab-schema-compliant upload.
+  #  - The CycloneDX SBOM goes through the same path — promote fetches,
+  #    rewrites the image reference inside the SBOM JSON, then re-uploads
+  #    so the SBOM tab tracks the released image, not the tmp/ scratch
+  #    ref. Without this, users would see a SBOM whose `metadata.component`
+  #    references `tmp/genie-ai-frontend:mr-123-abc` — a deleted image.
+  artifacts:
+    paths:
+      - gl-container-scanning-report.json
+      - "**/gl-sbom-*.cdx.json"
 
 .build_template: &build_template
   stage: build
@@ -660,61 +712,50 @@ kics-iac-sast:
         "$CONTEXT"
 
 
+# Per-image container scan anchor. Inherits the GitLab Container-Scanning
+# template's `container_scanning` job (defined in Jobs/Container-Scanning.gitlab-ci.yml,
+# included above). The template produces gl-container-scanning-report.json
+# conforming to schema 15.x.x — the previous custom Trivy-only script produced
+# `SchemaVersion: <int>` at the report root instead of the required `version: "<semver>"`,
+# which the GitLab UI rejected as "Report version not provided" (security
+# dashboard "Parsing errors" in pipelines 6385 and 6402).
+#
+# Each scan:IMAGE job extends container_scanning via this alias (kept for
+# backward compatibility with the 16 existing scan:IMAGE jobs), sets its own
+# CS_IMAGE to the corresponding tmp/... image built in stage `build`, and adds
+# rules so the scan only runs when relevant files change. The
+# global container_scanning override above moves the stage from `test` to
+# `scan` and disables allow_failure.
 .scan_template: &scan_template
-  stage: scan
-  image:
-    name: $TRIVY_IMAGE_TAG
-    entrypoint: [""]
-  tags: [docker]
-  interruptible: true
-  variables:
-    TRIVY_NO_PROGRESS: "true"
-    TRIVY_TIMEOUT: "30m"
-    TRIVY_CACHE_DIR: "/cache/.trivycache/"
-    TRIVY_SEVERITY: "HIGH,CRITICAL"
-    TMPDIR: "/cache"
+  extends: container_scanning
+  # Compute the dynamic CS_IMAGE in before_script. The build_template pushes
+  # two possible tag shapes: mr-{iid}-{short} on MR pipelines and
+  # pending-{short} on branch/tag pipelines. We resolve which one exists at
+  # scan time, falling back to pending-{short} (which always exists post-build).
+  # The override is required because GitLab CI variables can't do conditional
+  # assignment based on $CI_PIPELINE_SOURCE inline — the natif gtcs scan only
+  # reads $CS_IMAGE literally.
   before_script:
-    - mkdir -p ~/.docker
-    - |
-      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
-      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > ~/.docker/config.json
-    # syft only powers the optional SBOM artifact. Its installer pulls the
-    # binary from GitHub releases, which is flaky from the CI runner container
-    # ("socket hang up" / "Resource temporarily unavailable" on the release CDN)
-    # — never let that hard-fail the scan. The script step already WARN-falls-back
-    # when syft is absent, and trivy image scanning does not need syft. Retry a
-    # few times, then continue regardless of outcome.
-    - |
-      for i in 1 2 3; do
-        # Download to a file first so wget's own exit code decides the retry —
-        # piping straight into sh masks a wget failure (sh reads empty stdin and
-        # exits 0), which would otherwise break the loop on the very first flake.
-        if wget -qO /tmp/syft-install.sh -t 2 -T 30 https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-          && sh /tmp/syft-install.sh -b /usr/local/bin "$SYFT_VERSION"; then
-          break
-        fi
-        echo "WARN: syft install attempt $i/3 failed (GitHub flaky) — retrying"
-        sleep 5
-      done || true
-    - trivy image --download-db-only
-  script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         CANDIDATE_TAG="mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
       else
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      IMAGE="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
-      echo "Scanning $IMAGE"
-      syft --scope squashed -o cyclonedx-json "$IMAGE" > sbom.cyclonedx.json || echo "WARN: syft SBOM failed for $IMAGE - continuing with trivy scan"
-      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format json --output gl-scan-tmp.json --exit-code 0 "$IMAGE"
-      trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --ignorefile .trivyignore --format table --exit-code 1 "$IMAGE"
+      export CS_IMAGE="${CI_REGISTRY_IMAGE}/tmp/${IMAGE_NAME}:${CANDIDATE_TAG}"
+      echo "Scanning $CS_IMAGE"
+  # Drop the natif `reports.container_scanning` + `reports.cyclonedx` uploads.
+  # We override each report with an empty string — GitLab CI deep-merges
+  # `extends:` artifacts, so an empty `reports: {}` keeps the parent's
+  # reports intact (it just adds nothing). Setting each report path to
+  # `''` actually neutralizes the corresponding upload. The single
+  # GitLab-schema-compliant upload happens in `promote:IMAGE` after the
+  # sed rewrite from `tmp/<IMAGE>:cand` → `<IMAGE>:primary_tag`. Paths
+  # are preserved (natif) so promote can still fetch via `artifacts: true`.
   artifacts:
-    when: always
-    expire_in: 1 year
-    paths:
-      - sbom.cyclonedx.json
-      - gl-scan-tmp.json
+    reports:
+      container_scanning: ""
+      cyclonedx: ""
 
 
 .promote_template: &promote_template
@@ -762,17 +803,43 @@ kics-iac-sast:
     # Uses the first (primary) tag from the promote step (e.g. main-<sha>, v2.1.0, vX.Y-<sha>).
     # Scan failures block promotion (security policy). Promote handles missing reports gracefully
     - |
-      if [ -f gl-scan-tmp.json ]; then
-        PRIMARY_TAG="${FINAL_TAGS%% *}"
-        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" gl-scan-tmp.json > gl-container-scanning-report.json
-        echo "Rewrote scan report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
+      # Both the container-scanning report (schema 15.x.x) and the CycloneDX
+      # SBOM were produced by the natif gtcs scan in scan:IMAGE with image=
+      # `tmp/<IMAGE>:<cand>`. We rewrite BOTH to point at the final promoted
+      # image (`<IMAGE>:<primary_tag>`), then upload as the single GitLab-
+      # schema-compliant reports. Doing this once (in promote, not in scan)
+      # avoids GitLab seeing duplicate vulnerability sets / SBOM entries with
+      # different fingerprints per image name.
+      PRIMARY_TAG="${FINAL_TAGS%% *}"
+      if [ -f gl-container-scanning-report.json ]; then
+        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
+          gl-container-scanning-report.json > gl-container-scanning-report.json.tmp \
+          && mv gl-container-scanning-report.json.tmp gl-container-scanning-report.json
+        echo "Rewrote container_scanning report: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
       else
-        echo "ERROR: gl-scan-tmp.json not found (scan produced no report) — blocking promotion (NFR-S1 supply-chain integrity)"
+        echo "ERROR: gl-container-scanning-report.json not found (scan:IMAGE did not produce one) — blocking promotion (NFR-S1 supply-chain integrity)"
         exit 1
       fi
+      # CycloneDX SBOMs produced by the natif container-scanning analyzer are
+      # named `gl-sbom-<cand>.cdx.json`. The image reference appears in
+      # `metadata.component.name` and component purls. We rewrite
+      # `tmp/<IMAGE>:<cand>` → `<IMAGE>:<primary_tag>` everywhere.
+      SBOM_FILE=$(ls gl-sbom-*.cdx.json 2>/dev/null | head -1)
+      if [ -n "$SBOM_FILE" ] && [ -f "$SBOM_FILE" ]; then
+        sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
+          "$SBOM_FILE" > "$SBOM_FILE.tmp" \
+          && mv "$SBOM_FILE.tmp" "$SBOM_FILE"
+        echo "Rewrote SBOM ${SBOM_FILE}: tmp/${IMAGE_NAME}:* → ${IMAGE_NAME}:${PRIMARY_TAG}"
+      else
+        echo "WARN: gl-sbom-*.cdx.json not found — SBOM tab will not be populated for ${IMAGE_NAME}"
+      fi
   artifacts:
+    paths:
+      - gl-container-scanning-report.json
+      - gl-sbom-*.cdx.json
     reports:
       container_scanning: gl-container-scanning-report.json
+      cyclonedx: gl-sbom-*.cdx.json
 
 # ---------------------------------------------------------------------------
 # Contract tests vs REAL vendored comps — run INSIDE the built image (D3)

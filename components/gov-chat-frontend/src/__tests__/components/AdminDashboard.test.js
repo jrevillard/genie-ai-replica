@@ -274,7 +274,7 @@ describe('AdminDashboard', () => {
       expect(mockGetSystemHealth).toHaveBeenCalledTimes(1);
     });
 
-    it('initializes all eight admin tabs', () => {
+    it('initializes all nine admin tabs (incl. OKF Studio)', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabIds = wrapper.vm.tabs.map((t) => t.id);
       expect(tabIds).toEqual([
@@ -285,7 +285,8 @@ describe('AdminDashboard', () => {
         'logs',
         'queryInspector',
         'security',
-        'users'
+        'users',
+        'studio'
       ]);
     });
   });
@@ -374,7 +375,7 @@ describe('AdminDashboard', () => {
     it('adminTabs computed maps each tab to { label, value }', () => {
       const wrapper = createAdminDashboardWrapper();
       const tabs = wrapper.vm.adminTabs;
-      expect(tabs.length).toBe(8);
+      expect(tabs.length).toBe(9);
       expect(tabs[0].value).toBe('overview');
       expect(tabs[0].label).toBe('System Health'); // translate() returns the fallback label from tabs data
       expect(tabs.every((t) => typeof t.label === 'string' && typeof t.value === 'string')).toBe(true);

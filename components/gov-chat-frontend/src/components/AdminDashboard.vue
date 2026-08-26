@@ -570,6 +570,9 @@
                   </div>
                 </div>
 
+                <div v-if="activeTab === 'studio'" class="dashboard-card" style="grid-column: span 2">
+                  <OkfStudioTab />
+                </div>
                 <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
                   <div class="card-header">
                     <div class="card-title">
@@ -1563,6 +1566,7 @@ import DsSpinner from './ds/Spinner.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
+import OkfStudioTab from './okf/StudioTab.vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
@@ -1588,6 +1592,7 @@ export default {
     DsStateDisplay,
     DsTabs,
     DsSelect,
+    OkfStudioTab,
     Loader2
   },
   emits: [],
@@ -1628,7 +1633,8 @@ export default {
         { id: 'logs', label: 'Logs' },
         { id: 'queryInspector', label: 'Query Inspector' },
         { id: 'security', label: 'Security' },
-        { id: 'users', label: 'Users' }
+        { id: 'users', label: 'Users' },
+        { id: 'studio', label: 'OKF Studio' }
       ],
 
       // Loading state

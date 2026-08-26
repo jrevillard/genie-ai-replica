@@ -1,0 +1,78 @@
+/**
+ * repoOkfService — read-mostly OKF repo CRUD client.
+ *
+ * Backed by the existing /api/okf/repos routes on okf-server. Some methods
+ * (manifest, metrics, clone) reference routes already shipped; mintVersion
+ * already exists (Story 2.9.7). Update + clone are server-live from 2.9.7
+ * and 4.8.
+ */
+
+import httpService from './httpService';
+
+function notReady(reason) {
+  const err = new Error('NOT_READY');
+  err.code = 'NOT_READY';
+  err.message = reason;
+  return err;
+}
+
+const repoOkfService = {
+  async list({ stage = 'all' } = {}) {
+    const res = await httpService.get(`/api/okf/repos?lifecycle=${encodeURIComponent(stage)}`);
+    return res && res.data ? res.data : [];
+  },
+
+  async get(repoId) {
+    const res = await httpService.get(`/api/okf/repos/${encodeURIComponent(repoId)}`);
+    return res && res.data ? res.data : null;
+  },
+
+  async create(body) {
+    const res = await httpService.post('/api/okf/repos', body);
+    return res && res.data ? res.data : null;
+  },
+
+  async update(repoId, patch) {
+    const res = await httpService.patch(`/api/okf/repos/${encodeURIComponent(repoId)}`, patch);
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  async getManifest(repoId) {
+    try {
+      const res = await httpService.get(`/api/okf/repos/${encodeURIComponent(repoId)}/manifest`);
+      return res && res.data ? res.data : null;
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) throw notReady('okf.repos.manifest.notReady');
+      throw err;
+    }
+  },
+
+  async getMetrics(repoId) {
+    try {
+      const res = await httpService.get(`/api/okf/repos/${encodeURIComponent(repoId)}/metrics`);
+      return res && res.data ? res.data : null;
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) return null;
+      throw err;
+    }
+  },
+
+  async mintVersion(repoId, body = {}, actor = {}) {
+    const res = await httpService.post(
+      `/api/okf/repos/${encodeURIComponent(repoId)}/versions`,
+      body,
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  async clone(sourceId, body = {}) {
+    const res = await httpService.post(
+      `/api/okf/repos/${encodeURIComponent(sourceId)}/clone`,
+      body
+    );
+    return res && res.data ? res.data : null;
+  }
+};
+
+export default repoOkfService;

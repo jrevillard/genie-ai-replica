@@ -2,12 +2,14 @@
 import { createStore } from 'vuex';
 import chatHistoryStore from './chatHistoryStore';
 import auth from './modules/auth';
+import okf from './modules/okf';
 
 // Create and export the store
 export default createStore({
   modules: {
     chatHistory: chatHistoryStore,
-    auth
+    auth,
+    okf
   },
 
   plugins: [

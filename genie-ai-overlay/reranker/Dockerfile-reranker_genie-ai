@@ -18,8 +18,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends --fix-missin
     git \
     curl \
     libgl1 \
-    libglx-mesa0 \
-    libjemalloc-dev && \
+    libglx-mesa0 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

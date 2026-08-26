@@ -356,6 +356,14 @@
         </DsTabs>
 
         <div class="dialog-footer">
+          <DsButton
+            v-if="activeTab === 'dashboard' && crawlJob && crawlJob.status === 'Succeeded' && !file?.okf_repo_id"
+            variant="primary"
+            :disabled="!crawlJob"
+            @click="onCreateOkfFromCrawl"
+          >
+            {{ translate('okf.crawl.createOkfFromCrawl', 'Create OKF repository from this crawl') }}
+          </DsButton>
           <DsButton variant="danger" :disabled="isFileLocked" @click="handleDelete">
             {{ translate('common.delete', 'Delete') }}
           </DsButton>
@@ -664,6 +672,19 @@ export default {
   },
   methods: {
     formatFileSize,
+    /**
+     * Story 3-7: companion action — pre-load the crawl as a wizard seed,
+     * close the dialog, dispatch a global event the Studio tab listens for.
+     */
+    async onCreateOkfFromCrawl() {
+      if (!this.crawlJob || this.crawlJob.status !== 'Succeeded' || this.file?.okf_repo_id) return;
+      const seed = this.file && this.file.file_name ? this.file.file_name : (this.crawlJob && this.crawlJob.config && this.crawlJob.config.url) || '';
+      await this.$store.dispatch('okf/setSelection', { crawlSeeds: [seed] });
+      window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
+        detail: { file_id: this.file && this.file._key, crawl_job_id: this.crawlJob && this.crawlJob._key, seed }
+      }));
+      this.$emit('close');
+    },
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {
         const translation = this.$i18n.t(key, this.currentLocale);

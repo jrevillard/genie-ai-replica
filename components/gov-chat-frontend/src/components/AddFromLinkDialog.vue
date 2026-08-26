@@ -31,6 +31,22 @@
 
       <div class="dialog-body">
         <div class="form-group">
+          <label>{{ translate('okf.crawl.targetLabel', 'Where should this go?') }}</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input v-model="okfTarget" type="radio" value="freeform" />
+              {{ translate('okf.crawl.target.freeform', 'Crawl to free-form corpus') }}
+            </label>
+            <label class="radio-label">
+              <input v-model="okfTarget" type="radio" value="okf_repo" />
+              {{ translate('okf.crawl.target.okfRepo', 'OKF repository') }}
+            </label>
+          </div>
+          <p v-if="okfTarget === 'okf_repo'" class="form-hint">
+            {{ translate('okf.crawl.targetHint', "We'll show you the topics we found before we save anything.") }}
+          </p>
+        </div>
+        <div class="form-group">
           <label for="url-input">{{ translate('link.label', 'Website URL') }}</label>
           <DsInput
             id="url-input"
@@ -319,6 +335,8 @@ export default {
       url: '',
       crawlMode: 'single_page',
       crawlDepth: 5,
+      // Story 3-7: which target should the crawl feed?
+      okfTarget: 'freeform',
       isLoading: false,
       errorMessage: '',
       // Advanced Config State
@@ -457,6 +475,15 @@ export default {
               ).replace('{fileName}', fileName);
 
         this.showNotification(successMsg, 'success');
+        // Story 3-7: when target is OKF repository, pre-seed the wizard with
+        // the crawl seed URL and switch to the Studio tab. We do this BEFORE
+        // emitting link-submitted so the parent can stop the default flow.
+        if (this.okfTarget === 'okf_repo') {
+          await this.$store.dispatch('okf/setSelection', { crawlSeeds: [this.url.trim()] });
+          window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
+            detail: { url: this.url.trim(), crawlMode: this.crawlMode, crawlDepth: this.crawlDepth }
+          }));
+        }
         this.$emit('link-submitted', response.data);
         this.$emit('close');
       } catch (error) {

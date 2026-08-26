@@ -76,6 +76,15 @@ export default {
     this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {
       /* repository list unavailable; the dashboard shows its empty state */
     });
+    // Story 3-6 / 3-7 entry points fire these custom events; the studio tab
+    // switches to the wizard view with the preloaded selection already in
+    // okf/selection (set by the source component before the event).
+    window.addEventListener('okf:create-from-documents', this.onCreateFromDocuments);
+    window.addEventListener('okf:create-from-crawl', this.onCreateFromCrawl);
+  },
+  beforeUnmount() {
+    window.removeEventListener('okf:create-from-documents', this.onCreateFromDocuments);
+    window.removeEventListener('okf:create-from-crawl', this.onCreateFromCrawl);
   },
   methods: {
     onExpertChange(mode) {
@@ -84,6 +93,16 @@ export default {
     onResume(repoId) {
       // Phase 3 wiring: load the draft + switch to wizard view at the saved step.
       this.activeDraft = this.$store.getters['okf/activeDraft'](repoId);
+      this.view = 'wizard';
+    },
+    onCreateFromDocuments() {
+      // AdminDashboard already set the active tab to 'studio' + dispatched
+      // this event with the documents preloaded into okf/selection.
+      this.view = 'wizard';
+    },
+    onCreateFromCrawl() {
+      // AddFromLinkDialog / FileDetailsDialog preloaded crawlSeeds; the wizard
+      // surfaces Step 1 (Choose workflow) with the crawl source pre-selected.
       this.view = 'wizard';
     },
     resetWizard() {

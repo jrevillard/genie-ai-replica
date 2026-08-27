@@ -539,6 +539,33 @@ sequenceDiagram
 
 ---
 
+<div class="eyebrow">Session 2 · Demo break</div>
+
+# Live Demo — Multilingual Retrieval
+
+<div class="columns" style="margin-top: 0.6rem;">
+<div>
+
+### What we'll show
+- A question asked in **Spanish** against an English-only corpus.
+- Retrieval happens on the **English** index (translated query).
+- Answer is generated in **English** and re-translated back to **Spanish** (streamed).
+
+</div>
+<div>
+
+### What to watch for
+- **Latency** of the translation round-trip (~1–2s on top of RAG).
+- **Citation faithfulness** — the same chunk is cited, regardless of language.
+- **No re-indexing** when adding a new locale (config change only).
+
+</div>
+</div>
+
+<div class="ops-benefit"><strong>Demo:</strong> 5 min · live · assistant answers in 14 UI languages from a single English knowledge base.</div>
+
+---
+
 <!-- _class: session-divider -->
 <!-- _paginate: false -->
 
@@ -644,6 +671,33 @@ sequenceDiagram
 <div class="ops-benefit"><strong>Key idea:</strong> every hop emits a span — same trace ID follows the question from browser to LLM. One request, one timeline.</div>
 <div class="ops-benefit"><strong>Inspectable by design:</strong> the same trace ID lets legal officers see the exact document chunk that produced an answer — and SREs see the latency of every hop in the same view.</div>
 
+---
+
+<div class="eyebrow">Session 3 · Demo break</div>
+
+# Live Demo — Trace + Abstention
+
+<div class="columns" style="margin-top: 0.6rem;">
+<div>
+
+### What we'll show
+- A real **chat question** in the deployed instance.
+- Open **Grafana** → see the full trace.
+- Click a span → see the **exact chunk** cited by the LLM (coupled with logs etc...).
+- **Query Inspector** to keep trace of different queries
+
+</div>
+<div>
+
+### What to watch for
+- **Latency per hop** — vector search vs LLM generation.
+- **Citation** — the answer shows which document chunk was used.
+- **RAG efficiency** — no hallucinations, the model answer properly.
+
+</div>
+</div>
+
+<div class="ops-benefit"><strong>Demo:</strong> 5 min · live · bring your own question · we trace it from browser to LLM in real time.</div>
 
 ---
 

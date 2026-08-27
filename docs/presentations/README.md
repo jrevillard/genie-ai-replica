@@ -52,6 +52,12 @@ npx @marp-team/marp-cli <deck>.md \
 
 ## Embed images (self-contained HTML)
 
+The deck markdown references images via relative paths
+(`assets/genie-*.png`). The generated HTML keeps those relative
+references — which means **the HTML needs the assets alongside it to
+render**. For sharing a single self-contained HTML file (e.g. by email),
+post-process the output to inline the PNG/JPG assets as `data:` URIs:
+
 ```bash
 python3 << 'PYEOF'
 import base64, re

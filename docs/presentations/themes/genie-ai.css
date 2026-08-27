@@ -203,6 +203,20 @@ section li {
 .columns > div {
   flex: 1;
 }
+/* Asymmetric columns: 30/70 split (e.g. narrow rails + wide flow). */
+.columns > div.narrow {
+  flex: 0 0 30%;
+}
+.columns > div.wide {
+  flex: 0 0 68%;
+}
+/* Asymmetric columns: 25/75 split for very narrow side (e.g. diagram labels). */
+.columns > div.x-narrow {
+  flex: 0 0 22%;
+}
+.columns > div.x-wide {
+  flex: 0 0 75%;
+}
 .columns ul {
   margin-top: 0;
 }
@@ -386,6 +400,7 @@ section .visual-card {
 section .visual-card img {
   margin: 0 auto;
 }
+section .caption,
 section .visual-card .caption {
   font-size: 0.75rem;
   color: var(--genie-muted);
@@ -403,32 +418,55 @@ section .columns.has-visual > div:last-child {
 }
 
 /* Pillar / capability cards — used for the "5 brand pillars" slide. */
-.pillar-row {
+.card-row {
   display: flex;
   gap: 0.8rem;
-  justify-content: space-between;
+  justify-content: center;
+  flex-wrap: wrap;
   margin-top: 1rem;
 }
-.pillar {
-  flex: 1;
+.card {
+  flex: 1 1 28%;
+  min-width: 220px;
+  max-width: 320px;
   text-align: center;
   padding: 1rem 0.8rem;
   background: var(--genie-surface);
   border-radius: 12px;
   border: 1px solid var(--genie-border);
-  box-shadow: 0 1px 3px oklch(20% 0.02 250 / 0.06);
+  box-shadow: 0 2px 8px oklch(20% 0.02 250 / 0.06), 0 8px 24px oklch(20% 0.02 250 / 0.04);
 }
-.pillar .num {
+.card::before {
+  content: '';
+  display: block;
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  margin: 0 auto 0.6rem auto;
+  background: linear-gradient(90deg, var(--genie-blue), var(--genie-accent));
+}
+.card-num {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   color: var(--genie-blue);
   font-weight: 700;
   font-size: 0.95rem;
 }
-.pillar .name {
+.card-name {
   color: var(--genie-blue-dark);
   font-weight: 600;
   font-size: 0.95rem;
   margin-top: 0.2rem;
+}
+.card p,
+.card-body {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 0.3rem 0;
+  color: var(--genie-fg);
+}
+.card em {
+  font-size: 0.72rem;
+  color: var(--genie-blue-dark);
 }
 
 /* Comparison rows — used on the "business as usual vs GENIE" slide. */
@@ -653,6 +691,15 @@ section svg[data-marp-mermaid] {
   max-height: 70vh;
   height: auto;
   width: auto;
+}
+/* Mermaid size variants — narrower column for compact diagrams (e.g. rails). */
+section .mermaid-narrow svg[data-marp-mermaid] {
+  max-width: 100%;
+  max-height: 50vh;
+}
+section .mermaid-wide svg[data-marp-mermaid] {
+  max-width: 100%;
+  max-height: 65vh;
 }
 section svg[data-marp-mermaid] .node rect,
 section svg[data-marp-mermaid] .node polygon,

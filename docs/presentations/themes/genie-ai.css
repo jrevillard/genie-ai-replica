@@ -284,6 +284,15 @@ section li {
 .ops-benefit strong {
   color: oklch(42% 0.14 162);
 }
+/* Variant: blue "info" tone for second ops-benefit on the same slide. */
+.ops-benefit.is-info {
+  background: oklch(95% 0.02 265 / 0.6);
+  border-left-color: var(--genie-blue);
+  margin-top: 0.4rem;
+}
+.ops-benefit.is-info strong {
+  color: var(--genie-blue-dark);
+}
 
 /* Agenda item — for the "Agenda" slide. */
 .agenda-item {

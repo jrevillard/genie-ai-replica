@@ -97,6 +97,7 @@ Runs on **government-controlled infrastructure**: Intel/NVIDIA stacks, Docker Sw
 
 ---
 
+
 <div class="eyebrow">Session 1 · The GENIE.AI mandate</div>
 
 # A Strategic Approach to Public Value
@@ -237,7 +238,7 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 
 # Sovereignty Guarantees
 
-<div class="compare" style="margin-top: 1.2rem;">
+<div class="compare">
   <div class="head"></div>
   <div class="head">Business as usual</div>
   <div class="head">GENIE.AI</div>
@@ -263,39 +264,44 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
   <div class="genie">Open weights, open source (DPG)</div>
 </div>
 
-<div class="columns" style="margin-top: 1rem;">
+<br>
+
+<div class="columns">
 <div>
 
-### All artefacts in your jurisdiction
-- Docker images · models · ArangoDB · vector store · logs
 
-### Open weights, open source
+### - All artefacts in your jurisdiction
+- Docker images · models · vector store · auth/autz · traces · logs metrics
+
+### - Open weights, open source
 - Apache-2.0 / MIT. Compliant with the **OSI Open Source AI Definition**.
 - No proprietary model APIs. **Digital Public Good** (DPG) registered.
 
 </div>
 <div>
 
-### Hardware-agnostic
+### - Hardware-agnostic
 - Intel &amp; NVIDIA stacks validated. vLLM + TEI inference.
 
-### No vendor lock-in
+### - No vendor lock-in
 - Same compose file: laptop PoC → Docker Swarm production.
-- Kubernetes manifests planned (same images, different orchestrator).
+- _Kubernetes manifests planned (same images, different orchestrator)._
 
 </div>
 </div>
-
-<div class="ops-benefit"><strong>Takeaway:</strong> "sovereign" is structural here, not contractual. Every layer runs inside your perimeter.</div>
-
 
 ---
+
 
 <div class="eyebrow">Session 1 · The five principles guiding every GENIE.AI build</div>
 
 # The Five Brand Pillars
 
+<br>
+
 ![The five GENIE.AI brand pillars](assets/genie-brand-pillars.png)
+
+<br>
 
 <div class="card-row">
 <div class="card">
@@ -319,7 +325,7 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 <div class="card">
   <div class="card-num">04</div>
   <div class="card-name">Scalability &amp; Accessibility</div>
-  <p>11+ UI languages · web + mobile clients.</p>
+  <p>14+ UI languages · web + mobile clients.</p>
   <p><em>Laptop PoC → Docker Swarm. Kubernetes (roadmap).</em></p>
 </div>
 <div class="card">
@@ -329,8 +335,6 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
   <p><em>6 active country pilots · 100+ stakeholders.</em></p>
 </div>
 </div>
-
-<div class="ops-benefit"><strong>Workshop tie-in:</strong> Session 3 zooms into pillar #1 (Local Ownership → Keycloak + W3C trace) and pillar #3 (Zero-Hallucination → grounding &amp; abstention).</div>
 
 
 ---
@@ -354,72 +358,37 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 
 <div class="columns">
 <div>
+<br>
 
-**1. Deploy** a GENIE.AI instance in cloud or on-premise.
+**1. Deploy** Spin up a GENIE.AI instance — cloud or on-premise, Docker Swarm production.
 
-**2. Select data** — drag-and-drop, plus custom integrations.
+**2. Select data** Drag-and-drop documents, plus custom integrations to existing systems.
 
-**3. Tune** RAG macro-parameters and configure the UI (or connect to a custom UI / messenger app).
+**3. Tune** Configure RAG macro-parameters, UI locale, and connectors.
 
-**4. Launch** the pilot, gather feedback, iterate — **with full control at every step**.
+**4. Launch & iterate** Deploy the pilot, gather feedback, re-tune. _With full control at every step_.
 
 </div>
 <div>
-
-![GENIE.AI four-step workflow](assets/genie-how-it-works.png)
-<div class="caption">Deploy → Configure → Tune → Pilot</div>
-
-</div>
-</div>
-
-<div class="ops-benefit"><strong>Key idea:</strong> the pilot is in your hands. No vendor in the loop. No external API calls.</div>
-
-
----
-
-<div class="eyebrow">Session 2 · One index, many languages</div>
-
-# Multilingual Engine
 
 ```mermaid
-sequenceDiagram
-  participant U as 👤 User (EN / FR / SW / ES / …)
-  participant TQ as Translate query → EN
-  participant R as RAG (English index)
-  participant TA as Translate answer → UI lang
+flowchart TD
+  D["🚀<br/>Deploy"]:::core
+  S["📄<br/>Select data"]:::core
+  T["⚙<br/>Tune"]:::core
+  P["🎯<br/>Pilot"]:::ok
 
-  U->>TQ: "Bei ya msimu wa mvua ni ngapi?"
-  TQ->>R: Query (EN)
-  R-->>R: Retrieve + generate (EN)
-  R->>TA: Answer (EN)
-  TA->>U: "The average rainfall this season is 320 mm."
+  D --> S --> T --> P
+
+classDef core fill:#ffffff,stroke:#34373d,stroke-width:1.5px,color:#34373d;
+classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:2px,color:#166534;
 ```
 
-<div class="columns" style="margin-top: 0.6rem;">
-<div>
-
-### One canonical index
-- Knowledge base stored in **English** (canonical SSoT).
-- Chunking, embedding, labeling — all English-native.
-
-</div>
-<div>
-
-### 11+ UI languages
-- Query translation + answer translation on the fly.
-- **Swahili · French · Arabic · Spanish · Portuguese** + 6 more.
-
 </div>
 </div>
 
-<div class="metric-row">
-  <div class="metric"><div class="number">11+</div><div class="label">UI languages out-of-the-box</div></div>
-  <div class="metric"><div class="number">1</div><div class="label">Canonical English index</div></div>
-  <div class="metric"><div class="number">+1</div><div class="label">Add a language = config change</div></div>
-  <div class="metric"><div class="number">0</div><div class="label">Re-indexing when extending</div></div>
-</div>
+<div class="ops-benefit"><strong>Key idea:</strong> the pilot is in your hands — no vendor in the loop, no external API calls, full control at every iteration.</div>
 
-<div class="ops-benefit"><strong>Key idea:</strong> one English index, consistent behaviour across languages. New language = add translator config, no re-index.</div>
 
 ---
 
@@ -448,8 +417,35 @@ classDef risk fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
 ```
 
-<div class="ops-benefit"><strong>Key idea:</strong> one standard pipeline — no ministry-specific glue scripts. Context prefix + late labeling happen after ClamAV clears the file.</div>
+<div class="ops-benefit is-info">
+  <strong>Tunable at every step</strong> — contextual retrieval on/off, late-label mode, batch concurrency, label prompts, taxonomy — all overridable per deployment.
+</div>
 
+
+<div class="columns" style="margin-top: 0.6rem; gap: 1.5rem;">
+<div>
+
+### What each stage does
+- **ClamAV scan** — virus-check before any parsing.
+- **Docling + OCR** — scans become structured text.
+- **Context-aware chunking** — preserves document hierarchy.
+- **Context prefix** — LLM one-liner per chunk.
+- **Late labeling** — taxonomy + ACL after chunking.
+
+</div>
+<div>
+
+### What comes out
+- **Chunks** with document-level context prefix.
+- **Vector embeddings** (TEI) for similarity search.
+- **Graph links** (parent / child / references) in ArangoDB.
+- **Per-chunk ACL** tags — ready for Keycloak-enforced retrieval.
+- **Trace** of the ingestion pipeline, visible in OTel.
+
+</div>
+</div>
+
+<div class="ops-benefit"><strong>Key idea:</strong> one standard pipeline — no ministry-specific glue scripts. Context prefix + late labeling happen after ClamAV clears the file.</div>
 
 ---
 
@@ -460,8 +456,8 @@ classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
 ```mermaid
 flowchart LR
   Q["🔍 Query"] --> E["TEI embed"]:::core
-  E --> V["Top-k<br/>vector ANN<br/>(ArangoDB)"]:::ai
-  V --> G["Graph expand<br/>parents · refs · defs"]:::data
+  E --> V["Retriever<br/>vector search<br/>(ArangoDB)"]:::ai
+  V --> G["Retriever<br/>Graph expand<br/>parents · refs · defs"]:::data
   G --> R["Rerank<br/>TEI cross-encoder"]:::ai
   R --> L["LLM<br/>grounded answer"]:::ok
 
@@ -475,24 +471,71 @@ classDef risk fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
 ```
 
+<div class="ops-benefit is-info">
+  <strong>Tunable at every step</strong> — pure vector or hybrid BM25+RRF, graph traversal depth, reranking strategy (slice / threshold / knee / adaptive), reranker model — all overridable per deployment.
+</div>
+
+<div class="columns" style="margin-top: 0.6rem; gap: 1.5rem;">
+<div>
+
+### Why hybrid (not pure vector or pure graph)?
+- **Pure vector** fails on **government legalese** — similar embeddings are **not the same as** same meaning.
+- **Pure graph** captures entity links but misses semantic similarity.
+- **Vector + graph** retrieves the article **and** its carve-outs together.
+
+</div>
+<div>
+
+### What GENIE does ?
+1. **Embed** the query (TEI).
+2. **Vector search** over ArangoDB (similar chunks).
+3. **Graph expansion** (by the retriever over ArangoDB graph) — pull parents, refs, definitions.
+4. **TEI cross-encoder rerank** — re-score, then keep Top-N (slice/threshold) or adaptive utility-cost.
+5. **Grounded LLM answer** — ChatQnA streams citation-backed response.
+
+</div>
+</div>
+
+<div class="ops-benefit"><strong>Key idea:</strong> the article, its carve-outs, and its definitions — pulled together in one retrieval. Every answer cites its source chunks.</div>
+
+---
+
+<div class="eyebrow">Session 2 · One index, many languages</div>
+
+# Multilingual Engine / Streaming API
+
+
+```mermaid
+sequenceDiagram
+  participant U as 👤 User (any of 14+ langs)
+  participant TQ as Translate → EN
+  participant R as RAG (EN index)
+  participant TA as Translate → UI lang
+
+  U->>TQ: query 🇹🇿
+  TQ->>R: Query (🏴󠁧󠁢󠁥󠁮󠁧󠁿)
+  R->>TA: Answer (🏴󠁧󠁢󠁥󠁮󠁧󠁿)
+  TA->>U: Answer (🇹🇿)
+```
+
 <div class="columns" style="margin-top: 0.6rem;">
 <div>
 
-### Why hybrid?
-**Pure vector** misses entity links, fails on legalese.
-**Pure graph** misses semantic similarity.
+### One canonical index
+- Knowledge base stored in **English** (canonical SSoT).
+- Chunking, embedding, labeling — all English-native.
 
 </div>
 <div>
 
-### What GENIE does
-Vector top-k → graph expansion (parents · refs · defs) → TEI cross-encoder rerank → grounded LLM answer.
+### 14 UI languages
+- Query translation + answer translation **streamed** on the fly.
+- Swahili · French · Arabic · Spanish · Portuguese + 9 more.
 
 </div>
 </div>
 
-<div class="ops-benefit"><strong>Key idea:</strong> retrieve the article, its exceptions, and its definitions — together.</div>
-
+<div class="ops-benefit"><strong>Key idea:</strong> one English index, consistent behaviour across languages. New language = add translator config, no re-index.</div>
 
 ---
 
@@ -509,18 +552,19 @@ Vector top-k → graph expansion (parents · refs · defs) → TEI cross-encoder
 
 ---
 
-<div class="eyebrow">Session 3 · Pillar 1 → "Local Ownership" made technical</div>
+<div class="eyebrow">Session 3 · Pillar 1 → "Local Ownership" — identity is the perimeter</div>
 
-# Identity: Keycloak 26 + OIDC / SAML / Entra
+# Authentication & Authorisation
 
 ```mermaid
 flowchart LR
-  U["👤 User"] --> IDP["🛡️ Identity Provider<br/>Keycloak 26 / Entra / SAML"]
-  IDP -->|OIDC token| K["Kong<br/>OIDC plugin"]
-  K -->|JWT| B["⚙️ Backend<br/>JWT verify (JWKS)"]
-  B -->|user claims + ACL| ACL["📑 Document ACL<br/>just-in-time claims"]
-  ACL --> Q["🧠 ChatQnA<br/>scoped to user entitlements"]
-  Q --> A["🗄️ ArangoDB<br/>scoped query"]
+
+  B["⚙️ Backend (Express)<br/>JWT verify via JWKS<br/>(jose library)"] -->|JWT| Q["🧠 ChatQnA<br/>(authenticated)"]
+  K["🌐 Kong API Gateway<br/>(rate-limit, logs,<br/>metrics only)"] -->|JWT| B
+  U["👤 User"] -->|JWT| K
+  U -.->|OIDC flow| K
+  K -.->|OIDC flow| IDP["🛡️ Identity Provider<br/>Keycloak"]
+  Q --> A["🗄️ ArangoDB<br/>(trusted network)"]
 
 classDef client fill:#ffffff,stroke:#94a3b8,stroke-width:1px,color:#475569;
 classDef gateway fill:#ffffff,stroke:#1b3fad,stroke-width:2px,color:#1b3fad;
@@ -529,104 +573,76 @@ classDef data fill:#eef3ff,stroke:#1b3fad,stroke-width:1.5px,color:#122f87;
 classDef ai fill:#f0fdf6,stroke:#2b855b,stroke-width:1.5px,color:#1f5e3f;
 classDef orch fill:#ffffff,stroke:#7c3aed,stroke-width:1.5px,stroke-dasharray:4 3,color:#5b21b6;
 classDef risk fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
-classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
+classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:2px,color:#166534;
 ```
 
-<div class="columns" style="margin-top: 0.6rem;">
+<div class="columns">
 <div>
 
 ### What Keycloak handles
 - **Federation**: SAML, Entra ID, OIDC, generic OIDC providers.
-- **JWT access tokens** validated via **JWKS** (rotated keys).
-- **Just-In-Time (JIT) provisioning**: user claims → per-document ACL tags on first hit.
-- **Document-level ACL** evaluated at retrieval time.
+- **Single Sign-On**: one login for all GENIE.AI surfaces (web, mobile, admin).
+- **Role/group mapping**: Keycloak groups can be propagated as claims into GENIE.AI metadata.
 
 </div>
 <div>
 
 ### What this means for you
-- "No rights → no chunk" — enforced, not promised.
-- Every document carries per-chunk entitlement tags.
-- IDP swap is a config change, not a code change.
+- **OIDC at the edge** — login flow handled by Keycloak, tokens issued via standard OIDC.
+- **JWT verified in depth** — Not only inb backend but also in OPEA.
+- **IDP swap is config** — change provider, keep the same JWT contract on the backend.
 
 </div>
 </div>
 
-<div class="ops-benefit"><strong>Key idea:</strong> identity is the perimeter. Document-level ACL makes governance enforceable, not aspirational.</div>
-
-
----
-
-<div class="eyebrow">Session 3 · Pillar 3 → "Zero-Hallucination"</div>
-
-# Grounding: Zero-Hallucination Decision
-
-```mermaid
-flowchart TB
-  Q["🔍 User query"] --> R["Retrieve<br/>relevant chunks<br/>(ArangoDB)"]:::core
-  R --> D{"Sufficient<br/>evidence?"}:::risk
-  D -->|Yes + confident| A["✓ Grounded answer<br/>+ citations"]:::ok
-  D -->|No| N["✗ Abstain<br/>'I cannot answer from<br/>available documents'"]:::risk
-
-classDef client fill:#ffffff,stroke:#94a3b8,stroke-width:1px,color:#475569;
-classDef gateway fill:#ffffff,stroke:#1b3fad,stroke-width:2px,color:#1b3fad;
-classDef core fill:#ffffff,stroke:#34373d,stroke-width:1px,color:#34373d;
-classDef data fill:#eef3ff,stroke:#1b3fad,stroke-width:1.5px,color:#122f87;
-classDef ai fill:#f0fdf6,stroke:#2b855b,stroke-width:1.5px,color:#1f5e3f;
-classDef orch fill:#ffffff,stroke:#7c3aed,stroke-width:1.5px,stroke-dasharray:4 3,color:#5b21b6;
-classDef risk fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
-classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
-```
-
-<div style="margin-top: 0.4rem; padding: 1rem 1.2rem; background: oklch(98% 0.005 160 / 0.6); border-left: 3px solid oklch(62% 0.17 162 / 0.6); border-radius: 0 10px 10px 0; font-size: 1rem;">
-"<strong>If the answer is not in your documents, the system abstains.</strong> It does not improvise."
-</div>
-
-<div class="ops-benefit"><strong>Key idea:</strong> safer than "best-effort guessing." The model refuses to answer rather than fabricate — and every answered question ships with citations.</div>
-
+<div class="ops-benefit"><strong>Key idea:</strong> standard protocols end-to-end — OIDC at Keycloak, JWT (RS256) verified in each backend via JWKS. No proprietary auth scheme.</div>
 
 ---
 
 <div class="eyebrow">Session 3 · Observability across every hop</div>
 
-# Observability: End-to-End Trace Context
+# Observability: Trace Context Across Every Hop
+
+<div class="columns">
+<div>
 
 ```mermaid
 sequenceDiagram
   participant U as 👤 User
-  participant FE as Vue
   participant K as Kong
   participant BE as Backend
   participant CQ as ChatQnA
   participant DB as ArangoDB
-  participant OT as OTel
 
-  U->>FE: question
-  FE->>K: HTTP + traceparent
+  K->>K: HTTP + traceparent
   K->>BE: propagate
   BE->>CQ: chat (trace ctx)
   CQ->>DB: retrieve (ACL-scoped)
   DB-->>CQ: chunks
-  CQ->>OT: span (retrieve)
   CQ->>BE: answer + chunks
-  CQ->>OT: span (generate)
-  BE->>FE: streamed answer
-  FE->>U: response
+  BE->>U: streamed answer
 
-  Note over U,OT: Every hop emits a span via W3C traceparent.<br/>10 Grafana dashboards surface latency, errors, retrieval quality.
+  Note over U,DB: Every hop emits a span via W3C traceparent.
 ```
 
+</div>
+<div>
+
 <div class="metric-row" style="margin-top: 0.4rem;">
-  <div class="metric"><div class="number">OTel</div><div class="label">W3C traceparent · every hop</div></div>
-  <div class="metric"><div class="number">10</div><div class="label">Pre-built Grafana dashboards</div></div>
-  <div class="metric"><div class="number">1 env var</div><div class="label">Enable the full obs stack</div></div>
+  <div class="metric"><div class="number">OpenTelemetry</div><div class="label">W3C traceparent · every hop</div></div>
+  <div class="metric"><div class="number">RFC</div><div class="label">W3C Trace Context standard</div></div>
 </div>
 
-<div style="margin-top: 0.4rem; padding: 1rem 1.2rem; background: oklch(98% 0.005 160 / 0.6); border-left: 3px solid oklch(62% 0.17 162 / 0.6); border-radius: 0 10px 10px 0; font-size: 1rem;">
-"<strong>Inspectable by design.</strong> Every answer carries the exact document chunk that produced it — auditable end-to-end via W3C <code>traceparent</code>."
+### Laverage: 
+- **VictoriaMetrics**, **VictoriaLogs** and **VictoriaTrace** solution for storage
+- **grafana** for dashboards
+
+</div>
 </div>
 
-<div class="ops-benefit"><strong>Key idea:</strong> legal officers, compliance and SREs see the same data — the exact chunk that synthesized an answer, plus the latency of every hop. Built on the <strong>W3C trace context</strong> standard.</div>
+<br>
+<div class="ops-benefit"><strong>Key idea:</strong> every hop emits a span — same trace ID follows the question from browser to LLM. One request, one timeline.</div>
+<div class="ops-benefit"><strong>Inspectable by design:</strong> the same trace ID lets legal officers see the exact document chunk that produced an answer — and SREs see the latency of every hop in the same view.</div>
 
 
 ---

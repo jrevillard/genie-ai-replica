@@ -714,65 +714,180 @@ sequenceDiagram
 
 ---
 
-<div class="eyebrow">Session 4 · Operational deployment</div>
+<div class="eyebrow">Session 4 · Deployment paths</div>
 
-# docker-compose Profiles
+# One Stack, Four Deployment Paths
 
 <div class="columns">
 <div>
 
-### Core stack — always on
-- Frontend · Backend · Kong · Keycloak
-- ArangoDB · Redis · Document repository
-- ClamAV · Dataprep
+### Local PoC — `docker compose`
+- Single `docker-compose.yaml`, opt-in profiles.
+- `opea` · `gpu-models` · `observability`.
+- One-command setup on a laptop.
 
 </div>
 <div>
 
-### Three opt-in profiles
-- **`opea`** → activates AI/ML services (ChatQnA, Dataprep).
-- **`gpu-models`** → adds vLLM + TEI inference on GPU.
-- **`observability`** → enables OTel + Grafana + Victoria stack.
+### Production — Ansible + Swarm
+- **`deploy/ansible/`** playbooks with per-environment secrets.
+- Images pulled from GitLab Container Registry (pre-built CI).
+- Jinja2 templating + `ansible-vault` for secrets.
+
+</div>
+</div>
+
+<div class="columns" style="margin-top: 0.4rem; gap: 1rem;">
+<div>
+
+### Kubernetes (roadmap)
+- Same images, different orchestrator.
+- Helm charts planned.
+
+</div>
+<div>
+
+### Remote GPU
+- *See dedicated next slide.*
 
 </div>
 </div>
 
 <div class="metric-row">
-  <div class="metric"><div class="number">1</div><div class="label">Same compose file</div></div>
-  <div class="metric"><div class="number">3</div><div class="label">Opt-in profiles</div></div>
-  <div class="metric"><div class="number">∞</div><div class="label">Scales horizontally (Swarm)</div></div>
+  <div class="metric"><div class="number">1</div><div class="label">Same image, 3 paths</div></div>
+  <div class="metric"><div class="number">3</div><div class="label">Compose profiles</div></div>
+  <div class="metric"><div class="number">∞</div><div class="label">Scales horizontally</div></div>
 </div>
 
-<div class="ops-benefit"><strong>Key idea:</strong> you choose your own complexity. PoC on a laptop, production on Docker Swarm. Kubernetes is on the roadmap (same images, different orchestrator).</div>
+<div class="ops-benefit"><strong>Key idea:</strong> one image, four deployment paths. Start local with `docker compose up`, scale to Swarm via Ansible, migrate to K8s when you need it. No code changes.</div>
+
+---
+
+<div class="eyebrow">Session 4 · Remote GPU</div>
+
+# Air-Gapped GPU Deployment
+
+```mermaid
+flowchart LR
+  subgraph CPU ["🖥️ CPU Node — app services"]
+    direction TB
+    Q["🌐 Query<br/>(user message)"]:::q
+    R["🔍 Retrieve<br/>(vector + graph)"]:::r
+    L["🧠 LLM Call<br/>(via GPU)"]:::l
+    D["📄 Document<br/>(ingest path)"]:::q
+  end
+
+  subgraph GPU ["⚡ GPU Node — AI services"]
+    direction TB
+    V["💬 vLLM<br/>(LLM + translation)"]:::gpu
+    E["📐 TEI<br/>(embed)"]:::gpu
+    RR["🔀 TEI<br/>(rerank)"]:::gpu
+    DOC["📄 docling-serve<br/>(OCR / parse)"]:::gpu
+  end
+
+  subgraph LINK ["🛰️ Encrypted CPU↔GPU channel"]
+    direction TB
+    TLS["🔒 HTTPS + WSS<br/>Bearer VLLM_API_KEY"]
+  end
+
+  CPU ==> LINK ==> GPU
+
+  classDef q fill:#eef3ff,stroke:#1b3fad,stroke-width:1.5px,color:#122f87;
+  classDef gpu fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
+  class Q,R,L,D q
+  class V,E,RR,DOC gpu
+```
+
+<div class="metric-row">
+  <div class="metric"><div class="number">TLS</div><div class="label">Encrypted CPU↔GPU</div></div>
+  <div class="metric"><div class="number">Auth</div><div class="label">VLLM_API_KEY</div></div>
+  <div class="metric"><div class="number">Air-gap</div><div class="label">Sovereign option</div></div>
+</div>
+
+<div class="ops-benefit"><strong>Key idea:</strong> CPU node runs app services (Query, Retrieve, LLM call). GPU node runs AI services (vLLM, TEI, docling). All AI calls go over HTTPS + API key, no internet required at runtime.</div>
+
+---
+
+<div class="eyebrow">Session 4 · Configuration</div>
+
+# Tunable at Every Layer
+
+<div class="columns">
+<div>
+
+### Secrets (required, no defaults)
+- `ARANGO_PASSWORD` · `KEYCLOAK_*` · `EMAIL_*` (SMTP)
+- `HUGGING_FACE_HUB_TOKEN` · `VLLM_API_KEY`
+- Server **fails fast** if missing — no silent insecure fallback.
+
+### Deployment-specific
+- `VLLM_LLM_MODEL_ID` · `EMBEDDING_MODEL_ID` · `RERANKER_MODEL_ID`
+- `RERANKING_STRATEGY` (slice / threshold / knee / adaptive)
+- `VLLM_MAX_MODEL_LEN` per GPU file (`env.t4`, `env.rtx6000`)
+
+</div>
+<div>
+
+### Runtime toggles
+- `ENABLE_OBSERVABILITY=1` (off by default — zero overhead)
+- `STREAMING_TRANSLATION_ENABLED` · `MULTI_TURN_BLEND_ENABLED`
+- `CHATQNA_ENFORCE_ABSTENTION=true`
+- `VICTORIAMETRICS_RETENTION` · `VICTORIATRACES_RETENTION` (data lifecycle)
+
+### Prompt overrides
+- `CHATQNA_SYSTEM_PROMPT` (env var beats built-in default)
+- `LABEL_SELECTOR_SYSTEM_PROMPT` · `CONTEXTUAL_RETRIEVAL_PROMPT`
+
+</div>
+</div>
+
+<div class="ops-benefit"><strong>Two-tier priority:</strong> every config has a built-in default in code; env vars override per deployment. <strong>~60 env vars</strong> documented in `env` — groups: secrets (~10), deployment-specific (~15), runtime toggles (~15), prompt overrides (~3), plus URLs, ports, GPU tuning. Switch models, retuning, obs stack — without touching code.</div>
 
 
 ---
 
-<div class="eyebrow">Session 4 · Active deployments</div>
+<div class="eyebrow">Session 4 · Frontend design system</div>
+
+# Your Brand, Same Codebase
+
+<div class="columns">
+<div>
+
+### CSS custom properties
+- Every colour is a `--ds-*` token (light + dark modes).
+- Override variables in your `.env` — same Docker image, different look.
+- **Typography-driven**: Inter body, JetBrains Mono for code/labels.
+- **Self-hosted fonts** — DPG compliant, no external CDN.
+
+</div>
+<div>
+
+### Theming examples (from existing deployments)
+- Brand colours, logo, and typography — per deployment.
+- Dark mode via Bootstrap 5.3 `data-bs-theme` (no JS).
+- Component restyle without forking the codebase.
+- Mobile + web parity via `KeycloakConfig.supportedLocaleCodes`.
+
+</div>
+</div>
+
+<div class="metric-row">
+  <div class="metric"><div class="number">14</div><div class="label">UI languages</div></div>
+  <div class="metric"><div class="number">DS</div><div class="label">CSS custom properties</div></div>
+  <div class="metric"><div class="number">0</div><div class="label">External CDN</div></div>
+  <div class="metric"><div class="number">1</div><div class="label">Same source code, all brands</div></div>
+</div>
+
+<div class="ops-benefit"><strong>Key idea:</strong> per-deployment branding without forking the codebase. 14 languages at strict key parity — locale whitelist controls web, mobile, and Keycloak from a single config file.</div>
+
+---
+
+<div class="eyebrow">Session 4 · Live in the field &amp; Q&amp;A</div>
 
 # GENIE.AI in the Field
 
 ![GENIE.AI country deployments — Kenya, Lesotho, The Gambia, Bangladesh, El Salvador, Mauritius](assets/genie-country-deployments.png)
 <div class="caption">6 active country pilots · 100+ stakeholders · 1 global mission</div>
-
-<div class="ops-benefit"><strong>Kenya's pilot focus:</strong> public-administration chatbot — service discovery, task automation, citizen-centric experience.</div>
-
-
----
-
-<div class="eyebrow">Session 4 · Use cases &amp; Q&amp;A</div>
-
-# Use Cases × Building Blocks × Live-In
-
-<div style="margin-top: 0.6rem;">
-
-| Use case | Building block | Data class | Live in |
-|----------|---------------|------------|---------|
-| **Agriculture extension** | Hybrid retrieval · late label | Public docs + ministry corpus | El Salvador, The Gambia, Bangladesh |
-| **Preventive health** | Keycloak ACL · grounding | Public-health guidelines | The Gambia, Mauritius |
-| **Climate-risk advisories** | Vector+graph · trace context | Weather + policy docs | El Salvador, Bangladesh, Kenya (pilot) |
-
-</div>
 
 <div style="margin-top: 1rem; padding: 1rem 1.2rem; background: oklch(98% 0.005 160 / 0.6); border-left: 3px solid oklch(62% 0.17 162 / 0.6); border-radius: 0 10px 10px 0;">
 <strong>Q&amp;A — open floor.</strong> Bring your hardest data-sovereignty question.

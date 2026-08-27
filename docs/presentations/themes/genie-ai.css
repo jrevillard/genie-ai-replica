@@ -384,6 +384,84 @@ section.closing p {
   font-size: 1.2rem;
 }
 
+/* Demo break slide — vibrant gradient backdrop with a center "play" badge
+   to signal live demo to the audience. Use via <!-- _class: demo -->. */
+section.demo {
+  background:
+    radial-gradient(circle at 18% 22%, oklch(72% 0.20 25 / 0.30), transparent 45%),
+    radial-gradient(circle at 82% 28%, oklch(68% 0.22 295 / 0.28), transparent 45%),
+    radial-gradient(circle at 50% 100%, oklch(75% 0.18 162 / 0.20), transparent 60%),
+    var(--genie-surface);
+  color: var(--genie-fg);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+section.demo::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60vh;
+  height: 60vh;
+  margin: -30vh 0 0 -30vh;
+  background: radial-gradient(circle, oklch(75% 0.18 295 / 0.18) 0%, transparent 60%);
+  animation: pulse 3s ease-in-out infinite;
+  z-index: 0;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+section.demo h1 {
+  color: var(--genie-blue);
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  z-index: 1;
+  margin: 0;
+}
+section.demo .eyebrow {
+  color: var(--genie-blue-dark);
+  font-size: 1.05rem;
+  z-index: 1;
+  margin-bottom: 0.4rem;
+}
+section.demo .columns {
+  z-index: 1;
+  max-width: 80%;
+  margin-top: 1rem;
+}
+section.demo .ops-benefit {
+  z-index: 1;
+  background: oklch(100% 0 0 / 0.85);
+  margin-top: 1.5rem;
+  border: 1px solid var(--genie-border);
+}
+section.demo .brand-pill {
+  position: absolute;
+  z-index: 2;
+  top: 1rem;
+  right: 1.5rem;
+  left: auto;
+}
+section.demo .columns > div {
+  background: oklch(100% 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid var(--genie-border);
+  text-align: left;
+}
+section.demo .columns h3 {
+  color: var(--genie-blue);
+  font-size: 1.05rem;
+}
+
 /* Session divider — large numeric + title + tagline, no background image.
    Uses the brand-blue background gradient so dividers read as visual anchors. */
 /* Inline visual card — wrap PPTX illustrations in a soft panel. */

@@ -12,43 +12,58 @@ helpers, and Mermaid styling.
 | `v2.0.0-release.md` | v2.0.0 release overview | ❌ |
 | `genie-ai-sovereign-architecture.md` | Sovereign AI architecture & fundamentals briefing (~30 slides) | ✅ |
 
-Render output is written to `output/`. Build artifacts (`*.pdf`, `*.html`) are
-gitignored.
+Render output is written **next to the source `.md`** (e.g. `v2.0.0-release.pdf`,
+`genie-ai-sovereign-architecture.html`) so that all internal links and
+asset references resolve correctly. The PDF is generated **from the
+HTML** (not directly from markdown) because the Marp PDF renderer
+applies a stricter XSS sanitiser that strips some `style="..."`
+attributes. Going through HTML gives a faithful PDF that matches the
+browser preview. Build artifacts are gitignored.
 
 ## Build a deck
 
-The build command is identical for every deck in this directory:
+The build runs **two steps** from this directory (`docs/presentations/`):
 
 ```bash
-# From this directory (docs/presentations/)
+# 1. Generate HTML next to the source .md (links resolve)
+npx @marp-team/marp-cli <deck>.md \
+  --theme-set themes/genie-ai.css \
+  --engine @marp-team/marp-core/full \
+  --html --allow-local-files --no-stdin \
+  -o <deck>.html
+
+# 2. Generate PDF (also from the .md, output next to the source)
 npx @marp-team/marp-cli <deck>.md \
   --theme-set themes/genie-ai.css \
   --engine @marp-team/marp-core/full \
   --pdf --allow-local-files --no-stdin \
-  -o output/<deck>.pdf
+  -o <deck>.pdf
+
+# 2. Generate PDF from html
+chromium \
+  --headless \
+  --disable-gpu \
+  --print-to-pdf=<deck>.pdf \
+  "file://$(pwd)/<deck>.html"
 ```
+
+Both commands read from the **same** `<deck>.md`. The HTML step is run
+first so you can visually verify the build in a browser (which renders
+inline styles faithfully); the PDF step then re-renders from markdown.
+Outputting to a separate `output/` dir would break every internal asset
+reference — keep both files next to the source.
 
 **Flags explained:**
 
 - `--theme-set themes/genie-ai.css` — load the shared GENIE.AI theme.
   Each deck declares `theme: genie-ai` in its frontmatter, which Marp
   resolves against this set.
-- `--engine @marp-team/marp-core/full` — use the v5 "full" build that ships
-  with the Mermaid plugin. **Required** for any deck containing
+- `--engine @marp-team/marp-core/full` — use the v5 "full" build that
+  ships with the Mermaid plugin. **Required** for any deck containing
   ```mermaid fences. For prose-only decks you can drop this flag.
 - `--allow-local-files` — let the renderer read local image references
   (logo, hero band, etc.).
 - `--no-stdin` — required for non-interactive rendering.
-
-For HTML output, swap `--pdf` for `--html` and update the `-o` extension:
-
-```bash
-npx @marp-team/marp-cli <deck>.md \
-  --theme-set themes/genie-ai.css \
-  --engine @marp-team/marp-core/full \
-  --html --allow-local-files --no-stdin \
-  -o output/<deck>.html
-```
 
 ## Embed images (self-contained HTML)
 
@@ -60,16 +75,47 @@ post-process the output to inline the PNG/JPG assets as `data:` URIs:
 
 ```bash
 python3 << 'PYEOF'
-import base64, re
+import base64
+import mimetypes
+import re
 from pathlib import Path
-html = Path('output/<deck>.html')
-content = html.read_text()
-for ref, img in [('genie-ai-logo-24.png', 'genie-ai-logo-24.png'),
-                 ('hero-visual.jpg', 'hero-visual.jpg')]:
-    data = base64.b64encode(Path(img).read_bytes()).decode()
-    mime = 'image/png' if img.endswith('.png') else 'image/jpeg'
-    content = content.replace(ref, f'data:{mime};base64,{data}')
-html.write_text(content)
+from urllib.parse import unquote
+
+html_path = Path("<deck>.html")
+
+# Répertoire racine où rechercher les images
+image_root = Path(".")
+
+content = html_path.read_text(encoding="utf-8")
+
+# Index des images PNG trouvées récursivement
+images = {}
+
+for image_path in image_root.rglob("*.png"):
+    if image_path.resolve() == html_path.resolve():
+        continue
+
+    data = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    data_uri = f"data:image/png;base64,{data}"
+
+    # Différentes références possibles dans le HTML
+    relative_path = image_path.as_posix()
+    filename = image_path.name
+
+    images[filename] = data_uri
+    images[relative_path] = data_uri
+    images[f"./{relative_path}"] = data_uri
+
+print(f"{len(images)} références d'images indexées")
+
+# Remplace les références connues, en commençant par les chemins les plus longs
+for reference, data_uri in sorted(images.items(), key=lambda item: len(item[0]), reverse=True):
+    content = content.replace(reference, data_uri)
+    content = content.replace(unquote(reference), data_uri)
+
+html_path.write_text(content, encoding="utf-8")
+
+print(f"HTML mis à jour : {html_path}")
 PYEOF
 ```
 

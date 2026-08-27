@@ -50,7 +50,7 @@ Government of Kenya · ITU Technical Working Group
 
 <br><br><br><br>
 
-Part 2 — Agile Scoping (1 h) follows after the break.
+Part 2 — Agile Scoping (1 h) follows.
 
 
 ---
@@ -74,6 +74,7 @@ Runs on **government-controlled infrastructure**: Intel/NVIDIA stacks, Docker Sw
 <div>
 
 ![GENIE.AI logo mark](assets/genie-logo-mark.png)
+
 <div class="caption">ITU · Open Source</div>
 
 </div>
@@ -539,6 +540,10 @@ sequenceDiagram
 
 ---
 
+<!-- _class: demo -->
+
+<div style="text-align:center; font-size: 6rem; margin: 0.6rem 0; z-index: 1; line-height: 1;">💻</div>
+
 <div class="eyebrow">Session 2 · Demo break</div>
 
 # Live Demo — Multilingual Retrieval
@@ -662,7 +667,7 @@ sequenceDiagram
 
 ### Laverage: 
 - **VictoriaMetrics**, **VictoriaLogs** and **VictoriaTrace** solution for storage
-- **grafana** for dashboards
+- **Grafana** for dashboards
 
 </div>
 </div>
@@ -672,6 +677,10 @@ sequenceDiagram
 <div class="ops-benefit"><strong>Inspectable by design:</strong> the same trace ID lets legal officers see the exact document chunk that produced an answer — and SREs see the latency of every hop in the same view.</div>
 
 ---
+
+<!-- _class: demo -->
+
+<div style="text-align:center; font-size: 6rem; margin: 0.6rem 0; z-index: 1; line-height: 1;">💻</div>
 
 <div class="eyebrow">Session 3 · Demo break</div>
 
@@ -882,16 +891,39 @@ flowchart LR
 
 ---
 
-<div class="eyebrow">Session 4 · Live in the field &amp; Q&amp;A</div>
+<div class="eyebrow">Session 4 · Live in the field</div>
 
 # GENIE.AI in the Field
 
 ![GENIE.AI country deployments — Kenya, Lesotho, The Gambia, Bangladesh, El Salvador, Mauritius](assets/genie-country-deployments.png)
 <div class="caption">6 active country pilots · 100+ stakeholders · 1 global mission</div>
 
-<div style="margin-top: 1rem; padding: 1rem 1.2rem; background: oklch(98% 0.005 160 / 0.6); border-left: 3px solid oklch(62% 0.17 162 / 0.6); border-radius: 0 10px 10px 0;">
-<strong>Q&amp;A — open floor.</strong> Bring your hardest data-sovereignty question.
-<br>After the break: <strong>Part 2 — Agile Scoping</strong> (Marketplace of Skills · Impact Mapping · Dot-vote).
+---
+
+<div class="eyebrow">Session 4 · Q&amp;A &amp; next steps</div>
+
+# Open Floor
+
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 1.5rem;">
+  <div>
+  <div class="metric-row" style="justify-content: center;">
+    <div class="metric" style="background: oklch(95% 0.02 265 / 0.4); border: 1px solid var(--genie-blue); max-width: 500px; margin: 0 auto;">
+      <div class="number" style="color: var(--genie-blue);">QUESTIONS ?</div>
+      <div class="label">Bring your hardest data-sovereignty question</div>
+    </div>
+  </div>
 </div>
 
-<div class="ops-benefit"><strong>Workshop tie-in:</strong> in Part 2, we'll down-select ONE of these use cases (or a new one from your team) for the Kenya pilot — keeping it low-risk and zero-PII.</div>
+<div style="margin-top: 3rem; padding: 1rem 1.5rem; background: oklch(98% 0.005 265 / 0.5); border-left: 4px solid var(--genie-blue); border-radius: 0 12px 12px 0; max-width: 600px; margin-left: auto; margin-right: auto;">
+  <div style="font-size: 1.05rem;">
+    <strong>Next:</strong> <span style="color: var(--genie-blue); font-weight: 600;">Part 2 — Agile Scoping</span><br>
+    Marketplace of Skills · Impact Mapping · Dot-vote
+  </div>
+</div>
+</div>
+
+<div style="text-align: center; margin-top: 4rem;">
+  <div style="font-size: 4rem; font-weight: 700; color: var(--genie-blue); letter-spacing: -0.03em; line-height: 1.1;">
+    Thank You!
+  </div>
+</div>

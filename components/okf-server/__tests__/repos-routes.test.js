@@ -11,6 +11,11 @@ jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
 jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn() }));
+// Auto-mock (no factory) so all exports become jest.fn() and tests can stub.
+jest.mock('../services/concept-meta-service');
+jest.mock('../services/parser-service');
+// ingest-service is mocked further down (line 296) — that factory is the
+// authoritative one and already includes `resplitRepo` for Story #978.
 
 const request = require('supertest');
 const { createApp } = require('../index');
@@ -291,6 +296,7 @@ describe('getRepo denial audit (AC7 review fix)', () => {
 
 jest.mock('../services/ingest-service', () => ({
   ingestRepoConcepts: jest.fn(),
+  resplitRepo: jest.fn(), // Story #978 — Editor "Re-split from source"
   maxConceptsFromEnv: jest.fn(() => 200)
 }));
 jest.mock('../services/version-service', () => ({
@@ -684,5 +690,215 @@ describe('POST /api/okf/repos/:source_id/clone (Story 4.8 — D-V5)', () => {
     repoService.getById.mockResolvedValue({ repo_id: 'repoA', domain: 'smoke' });
     const res = await request(createApp()).post('/api/okf/repos/repoA/clone').set('Authorization', TOKEN).send({});
     expect(res.status).toBe(201);
+  });
+});
+
+// ─── Story #978 — Editor surface (Wizard | Editor sub-tabs) ───────────────
+//
+// Three new admin-scope routes: PATCH concept, POST resplit, POST autocorrect.
+// HTTP-layer concerns only — services are mocked at module level above.
+
+const parserService = require('../services/parser-service');
+const conceptMetaService = require('../services/concept-meta-service');
+
+describe('PATCH /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 admin scope + valid markdown — updates the concept', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    parserService.parseConcept.mockResolvedValue({
+      concept_id: 'conceptA', repo_id: 'repoA', path: 'conceptA.md',
+      frontmatter: { type: 'topic', title: 'Concept A v2' },
+      body: '# Body v2'
+    });
+    conceptMetaService.patchConceptMeta.mockResolvedValue({
+      concept_id: 'conceptA', repo_id: 'repoA', content_hash: 'NEWHASH', index_status: 'parsed', updated_at: '2026-08-27T10:00:00Z'
+    });
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/conceptA')
+      .set('Authorization', TOKEN)
+      .send({ markdown: '---\ntype: topic\ntitle: Concept A v2\n---\n# Body v2' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true, concept_id: 'conceptA', content_hash: 'NEWHASH', index_status: 'parsed'
+    });
+    expect(conceptMetaService.patchConceptMeta).toHaveBeenCalledWith(
+      'repoA', 'conceptA',
+      expect.objectContaining({ body: '# Body v2', frontmatter: expect.any(Object) })
+    );
+  });
+
+  test('404 when the concept does not exist in the repo', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.patchConceptMeta.mockResolvedValue(null);
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/missing')
+      .set('Authorization', TOKEN)
+      .send({ markdown: '# x' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('CONCEPT_NOT_FOUND');
+  });
+
+  test('400 when markdown is missing', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/conceptA')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  test('400 when parser fails (malformed frontmatter)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    parserService.parseConcept.mockRejectedValue(Object.assign(new Error('bad'), { code: 'PARSE_ERROR', status: 400 }));
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/conceptA')
+      .set('Authorization', TOKEN)
+      .send({ markdown: 'no frontmatter' });
+    expect(res.status).toBe(400);
+  });
+
+  test('403 when scoped-read-only (no admin)', async () => {
+    authScoped(['okf:t1:repoA:read']); // read scope, not admin
+    const res = await request(createApp())
+      .patch('/api/okf/repos/repoA/concepts/conceptA')
+      .set('Authorization', TOKEN)
+      .send({ markdown: '# x' });
+    expect(res.status).toBe(403);
+    expect(conceptMetaService.patchConceptMeta).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/okf/repos/:repo_id/resplit (Story #978)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 admin scope + mode B + file_id → returns the ingest summary', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    ingestService.resplitRepo.mockResolvedValue({
+      total: 3, parsed: 3, created: 3, updated: 0, skipped_dedup: 0, rejected: 0, enqueued: 3
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/resplit')
+      .set('Authorization', TOKEN)
+      .send({ mode: 'B', file_id: 'file-1' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, mode: 'B', total: 3, enqueued: 3 });
+    expect(ingestService.resplitRepo).toHaveBeenCalledWith(
+      'repoA', 'B', expect.objectContaining({ file_id: 'file-1', sub: 'steward-1' })
+    );
+  });
+
+  test('400 when mode is unknown', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/resplit')
+      .set('Authorization', TOKEN)
+      .send({ mode: 'Z' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  test('400 MODE_NOT_IMPLEMENTED when mode=C (Story 10.6 deferred)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    ingestService.resplitRepo.mockRejectedValue(
+      Object.assign(new Error('not implemented'), { code: 'MODE_NOT_IMPLEMENTED', status: 400 })
+    );
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/resplit')
+      .set('Authorization', TOKEN)
+      .send({ mode: 'C', file_id: 'file-1' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('MODE_NOT_IMPLEMENTED');
+  });
+
+  test('404 FILE_NOT_FOUND when no file_id is provided', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    ingestService.resplitRepo.mockRejectedValue(
+      Object.assign(new Error('no file'), { code: 'FILE_NOT_FOUND', status: 404 })
+    );
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/resplit')
+      .set('Authorization', TOKEN)
+      .send({ mode: 'B' });
+    expect(res.status).toBe(404);
+  });
+
+  test('403 when read-scope only', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/resplit')
+      .set('Authorization', TOKEN)
+      .send({ mode: 'B', file_id: 'file-1' });
+    expect(res.status).toBe(403);
+    expect(ingestService.resplitRepo).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 dry_run=true returns the planned changes without applying', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [{ concept_id: 'conceptA', changes: [{ field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' }] }],
+      warnings: [],
+      applied: 0,
+      total_concepts: 1
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: true,
+      changes: expect.any(Array),
+      applied: 0,
+      total_concepts: 1
+    });
+    expect(conceptMetaService.autocorrectRepo).toHaveBeenCalledWith('repoA', true, expect.anything());
+  });
+
+  test('200 dry_run=false applies changes (applied > 0)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({
+      changes: [{ concept_id: 'conceptA', changes: [{ field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }] }],
+      warnings: [{ concept_id: 'conceptA', warnings: [{ rule: 'INVALID_TYPE', severity: 'warning', message: 'bad' }] }],
+      applied: 1,
+      total_concepts: 1
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: false });
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(1);
+    expect(res.body.warnings).toHaveLength(1);
+  });
+
+  test('200 with no body — defaults to dry_run=true', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });
+    await request(createApp()).post('/api/okf/repos/repoA/autocorrect').set('Authorization', TOKEN).send({});
+    expect(conceptMetaService.autocorrectRepo).toHaveBeenCalledWith('repoA', true, expect.anything());
+  });
+
+  test('403 when read-scope only', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(403);
   });
 });

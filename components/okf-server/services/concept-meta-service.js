@@ -29,6 +29,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const { isArangoNotFound, isArangoUniqueViolation } = require('./arango-errors');
+const { aql } = require('arangojs');
 
 const COLLECTION = 'okf_concepts_meta';
 
@@ -567,10 +568,148 @@ async function discoverRepos(query, opts = {}) {
   return scored.slice(0, k);
 }
 
+/**
+ * Story #978 (Editor / PATCH concept): update a single concept's meta row
+ * with new frontmatter + body. Recomputes `content_hash` from the trimmed
+ * body. If the hash CHANGED, resets `index_status='parsed'` so the worker
+ * re-indexes the concept on the next poll (4e dedup re-runs against the new
+ * hash; a previously 'indexed' concept becomes 'parsed' → enqueued).
+ *
+ * Idempotent — same body hash → noop + returns the existing doc. Concept_id
+ * is immutable (path is path).
+ *
+ * @param {string} repo_id
+ * @param {string} concept_id
+ * @param {{frontmatter: Object, body: string}} parsed  (parser-service output)
+ * @returns {Promise<Object|null>} the updated meta doc, or null if absent
+ */
+async function patchConceptMeta(repo_id, concept_id, parsed) {
+  if (!repo_id || !concept_id || !parsed) {
+    const err = new Error('patchConceptMeta: repo_id, concept_id, parsed are required');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+  const db = await getDb();
+  const col = db.collection(COLLECTION);
+  const existing = await findConceptDoc(col, repo_id, concept_id);
+  if (!existing) {
+    return null; // 404 at the controller layer
+  }
+  const newHash = contentHash(parsed.body || '');
+  const hashChanged = existing.content_hash && existing.content_hash !== newHash;
+  const patch = {
+    frontmatter: parsed.frontmatter || {},
+    body: parsed.body || '',
+    sources: Array.isArray(parsed.sources) ? parsed.sources : existing.sources || [],
+    links: Array.isArray(parsed.links) ? parsed.links : existing.links || [],
+    status: parsed.status || existing.status,
+    stale_after: parsed.stale_after || null,
+    trust_tier: parsed.trust_tier || existing.trust_tier,
+    content_hash: newHash,
+    // Hash change → reset to 'parsed' so the worker re-indexes. Otherwise
+    // leave index_status alone — preserving 'indexed' when only frontmatter
+    // (e.g. labels) changed avoids re-embedding unnecessarily.
+    index_status: hashChanged ? 'parsed' : existing.index_status,
+    updated_at: nowIso()
+  };
+  await col.update(existing._key, patch);
+  return { ...existing, ...patch };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story #978 — Editor "Autocorrect" (frontmatter-only, per David Q8)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AUTOCORRECT_TYPE_ENUM = ['topic', 'entity', 'process', 'event', 'source'];
+const AUTOCORRECT_STATUS_ENUM = ['active', 'draft', 'retired'];
+
+/** Plan an autocorrect pass for one concept's frontmatter. Pure — no DB. */
+function planAutocorrectForConcept(meta) {
+  const changes = [];
+  const warnings = [];
+  const fm = meta.frontmatter || {};
+
+  // 1. type — set 'topic' if missing; warn (don't change) if outside enum.
+  if (!fm.type) {
+    changes.push({ field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' });
+  } else if (!AUTOCORRECT_TYPE_ENUM.includes(fm.type)) {
+    warnings.push({ rule: 'INVALID_TYPE', severity: 'warning', message: `type "${fm.type}" not in ${AUTOCORRECT_TYPE_ENUM.join('|')}` });
+  }
+
+  // 2. title — derive from first H1 in body or path.
+  if (!fm.title) {
+    const derived = deriveTitleFromBody(meta.body || '') || (meta.path || '').replace(/\.md$/, '').split('/').pop() || meta.concept_id;
+    changes.push({ field: 'title', before: null, after: derived, reason: 'MISSING_TITLE' });
+  }
+
+  // 3. sources — ensure array exists (empty is fine; OKF spec doesn't require sources).
+  if (!Array.isArray(fm.sources)) {
+    changes.push({ field: 'sources', before: null, after: [], reason: 'MISSING_SOURCES' });
+  }
+
+  // 4. status — default 'draft'; warn if outside enum.
+  if (!meta.status) {
+    changes.push({ field: 'status', before: null, after: 'draft', reason: 'MISSING_STATUS' });
+  } else if (!AUTOCORRECT_STATUS_ENUM.includes(meta.status)) {
+    warnings.push({ rule: 'INVALID_STATUS', severity: 'warning', message: `status "${meta.status}" not in ${AUTOCORRECT_STATUS_ENUM.join('|')}` });
+  }
+
+  return { changes, warnings };
+}
+
+function deriveTitleFromBody(body) {
+  if (!body) return null;
+  const m = body.match(/^#{1,2}\s+(.+?)\s*$/m);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Story #978 — Editor "Autocorrect" action. Scans every concept in this
+ * repo, plans changes per the frontmatter rules, applies them when dry_run
+ * is false. Atomic per-concept — partial failures don't roll back earlier
+ * successes.
+ *
+ * @param {string} repo_id
+ * @param {boolean} dry_run
+ * @param {object} actor (unused — audit is per-concept in the patch path)
+ * @returns {Promise<{changes, warnings, applied}>}
+ */
+async function autocorrectRepo(repo_id, dry_run = true) {
+  const db = await getDb();
+  const col = db.collection(COLLECTION);
+  const cursor = await db.query(aql`FOR m IN ${col} FILTER m.repo_id == ${repo_id} RETURN m`);
+  const concepts = await cursor.all();
+  const allChanges = [];
+  const allWarnings = [];
+  let appliedCount = 0;
+  for (const meta of concepts) {
+    const { changes, warnings } = planAutocorrectForConcept(meta);
+    if (changes.length > 0) {
+      allChanges.push({ concept_id: meta.concept_id, changes });
+    }
+    if (warnings.length > 0) {
+      allWarnings.push({ concept_id: meta.concept_id, warnings });
+    }
+    if (!dry_run && changes.length > 0) {
+      const patch = { updated_at: nowIso() };
+      for (const c of changes) {
+        if (c.field === 'sources') patch.frontmatter = { ...(meta.frontmatter || {}), sources: c.after };
+        else patch.frontmatter = { ...(meta.frontmatter || {}), [c.field]: c.after };
+      }
+      await col.update(meta._key, patch);
+      appliedCount += 1;
+    }
+  }
+  return { changes: allChanges, warnings: allWarnings, applied: appliedCount, total_concepts: concepts.length };
+}
+
 module.exports = {
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,
+  patchConceptMeta,
+  autocorrectRepo,
   buildMetaDoc,
   contentHash,
   countByIndexStatus,

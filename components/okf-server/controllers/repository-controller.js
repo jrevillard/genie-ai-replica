@@ -9,7 +9,19 @@ const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
 const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
+const parserService = require('../services/parser-service');
+const { getMeter } = require('../shared-lib/metrics');
 const { createSchema, updateSchema, cloneSchema } = require('../validators/repository-validator');
+
+// Story #978 — metrics helpers (fail-soft if OTel collector is unavailable).
+// Lazy + try/catch because getMeter() may throw at module-load when the SDK
+// is uninitialized (notably in jest unit tests that mock the shared-lib).
+let meter = null;
+try {
+  meter = getMeter('okf.controller');
+} catch {
+  meter = { counter: () => ({ add: () => {} }) }; // no-op shim
+}
 
 class ValidationError extends Error {
   constructor(details) {
@@ -68,7 +80,16 @@ function validate(schema, body) {
 async function createRepo(req, res, next) {
   try {
     const input = validate(createSchema, req.body);
-    const repo = await repoService.create(input, actorFrom(req));
+    // Story #978 (crawler→OKF): forward optional lifecycle_state to the
+    // service opts (the service validates it against LIFECYCLE_STATES). Joi
+    // already validated the string shape via createSchema; the service
+    // enforces the enum. R5-additive — default behaviour (no body field) is
+    // unchanged.
+    const opts = {};
+    if (typeof input.lifecycle_state === 'string' && input.lifecycle_state) {
+      opts.lifecycle_state = input.lifecycle_state;
+    }
+    const repo = await repoService.create(input, actorFrom(req), opts);
     res.status(201).json(repo);
   } catch (err) {
     next(err);
@@ -373,6 +394,120 @@ async function discoverFromManifests(req, res, next) {
   }
 }
 
+/**
+ * Story #978 — PATCH /api/okf/repos/:repo_id/concepts/:concept_id.
+ * Body: { markdown: string } (full markdown — frontmatter + body, parsed
+ * via gray-matter). Updates the meta row in place; if the body hash CHANGED,
+ * resets index_status='parsed' so the worker re-indexes on the next poll.
+ *
+ * - 404 if the concept doesn't exist in this repo
+ * - 400 if markdown is missing/malformed
+ * - 200 with { ok, concept_id, content_hash, index_status, updated_at }
+ */
+async function patchConcept(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    const { markdown } = req.body || {};
+    if (typeof markdown !== 'string') {
+      throw new ValidationError(['markdown (string) is required']);
+    }
+    // Parse the markdown — gray-matter splits frontmatter from body.
+    const parsed = await parserService.parseConcept(markdown, {
+      repo_id,
+      path: `${concept_id}.md` // path determines concept_id (unchanged on patch)
+    });
+    const updated = await conceptMetaService.patchConceptMeta(repo_id, concept_id, parsed);
+    if (!updated) {
+      return res.status(404).json({
+        error: 'CONCEPT_NOT_FOUND',
+        message: `Concept '${concept_id}' not found in repo '${repo_id}'`
+      });
+    }
+    // Audit + counter (best-effort — audit failure is non-fatal)
+    try {
+      await auditService.writeAudit({
+        action: 'concept.patch',
+        actor: (req.actor && req.actor.sub) || null,
+        repo_id,
+        source_ip: req.ip,
+        concept_id,
+        content_hash: updated.content_hash,
+        index_status: updated.index_status
+      });
+    } catch {
+      /* ignore — audit is best-effort */
+    }
+    try {
+      meter.counter('okf.concept.patch').add(1);
+    } catch {
+      /* metrics are best-effort */
+    }
+    res.status(200).json({
+      ok: true,
+      concept_id: updated.concept_id,
+      content_hash: updated.content_hash,
+      index_status: updated.index_status,
+      updated_at: updated.updated_at
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story #978 — POST /api/okf/repos/:repo_id/resplit.
+ * Body: { mode: 'A'|'B'|'C' }.
+ * Deletes all concepts for this repo + clears the per-repo graph collections,
+ * then re-ingests from the linked doc-repo file (looked up via files.okf_repo_id).
+ *
+ * - 400 if mode is unknown
+ * - 404 if no doc-repo file is linked to the repo
+ * - 200 with the ingest summary { total, parsed, created, rejected, enqueued, mode }
+ */
+async function resplitRepo(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const { mode, file_id } = req.body || {};
+    if (!['A', 'B', 'C'].includes(mode)) {
+      throw new ValidationError(["mode must be one of 'A', 'B', 'C'"]);
+    }
+    // Story #978 — pass file_id from the body to ingestService.resplitRepo
+    // so the service can fetch the right .md from doc-repo. Today the link
+    // lives in the frontend (we tracked it at create time); once we wire
+    // `files.okf_repo_id` server-side, the service can look it up itself and
+    // file_id becomes optional.
+    const opts = { ...actorFrom(req), file_id };
+    const summary = await ingestService.resplitRepo(repo_id, mode, opts);
+    res.status(200).json({ ok: true, mode, ...summary });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story #978 — POST /api/okf/repos/:repo_id/autocorrect.
+ * Body: { dry_run?: boolean }.
+ * Scans all concepts and applies frontmatter-only autocorrect rules. With
+ * dry_run=true, returns the planned changes without applying. With dry_run=false
+ * (default), applies atomically.
+ *
+ * Returns { ok, changes, warnings }.
+ */
+async function autocorrectRepo(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const { dry_run } = req.body || {};
+    const result = await conceptMetaService.autocorrectRepo(
+      repo_id,
+      typeof dry_run === 'boolean' ? dry_run : true,
+      actorFrom(req)
+    );
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   cloneRepo,
@@ -387,5 +522,8 @@ module.exports = {
   getRepoVersion,
   getRepoManifest,
   discoverFromManifests,
+  patchConcept,
+  resplitRepo,
+  autocorrectRepo,
   ValidationError
 };

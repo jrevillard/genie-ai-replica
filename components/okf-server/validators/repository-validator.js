@@ -23,13 +23,20 @@ const sourceSchema = Joi.object({
 
 const retentionSchema = Joi.object().unknown(true).allow(null);
 
+// Story #978 (crawler→OKF): `.unknown(true)` lets `lifecycle_state` (and any
+// other harmless key the 3.x UI sends) flow through to repoService.create()
+// via opts. The service validates the enum (LIFECYCLE_STATES). Mirrors
+// updateSchema below.
 const createSchema = Joi.object({
   name: Joi.string().min(1).max(200).required(),
   domain: Joi.string().min(1).max(200).required(),
   source: sourceSchema.optional(),
   acl: aclSchema.required(),
-  retention: retentionSchema.optional()
-}).required();
+  retention: retentionSchema.optional(),
+  lifecycle_state: Joi.string().optional()
+})
+  .unknown(true)
+  .required();
 
 // .unknown(true) lets graph_name/repo_id/domain through so the service can 409.
 const updateSchema = Joi.object({

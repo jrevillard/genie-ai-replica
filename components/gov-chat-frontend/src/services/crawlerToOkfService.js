@@ -80,6 +80,98 @@ function deriveConceptBody(rawMarkdown) {
   return withoutHeader.trim();
 }
 
+/**
+ * Story #978 — split the combined crawler .md into per-page concepts.
+ * Mirrors the OKF ingest server's split: the crawler writes `## Source: <url>`
+ * + body sections separated by `---`, so we split on that marker. One
+ * concept per page; each carries its own `frontmatter.sources[0].resource`.
+ *
+ * Falls back to `buildMegaConcept` when no `## Source:` markers are found
+ * (single-page crawl output).
+ *
+ * @param {string} raw  the full .md text from the crawler
+ * @returns {Array<{path, frontmatter, body}>}
+ */
+function splitBySourceMarkers(raw) {
+  if (!raw) return [];
+  // Split on `## Source:` line boundaries (multiline). The URL is on the
+  // marker line; the body is everything until the next marker (or EOF).
+  // Simpler than a single lookahead-heavy regex — first split, then parse.
+  const lines = raw.split('\n');
+  const sections = []; // [{ url, bodyLines: [] }]
+  let current = null;
+  for (const line of lines) {
+    const marker = line.match(/^## Source:\s*(.*?)\s*$/);
+    if (marker) {
+      if (current) sections.push(current);
+      current = { url: marker[1].trim(), bodyLines: [] };
+    } else if (current) {
+      current.bodyLines.push(line);
+    }
+  }
+  if (current) sections.push(current);
+
+  const out = [];
+  for (const s of sections) {
+    // Drop the `---` separator the crawler writes between pages; then strip
+    // lines that are just `---` (a body that's ONLY the separator is empty).
+    const raw = s.bodyLines.join('\n');
+    const stripped = raw.replace(/^---\s*\n?/, '');
+    // Also drop any line that's ONLY '---' (the page separator) — that means
+    // the section had no real content beyond the separator.
+    const body = stripped
+      .split('\n')
+      .filter((line) => line.trim() !== '---')
+      .join('\n')
+      .trim();
+    if (!body) continue;
+    const path = urlToConceptPath(s.url);
+    const title = deriveTitleFromBody(body) || s.url || path.replace(/\.md$/, '');
+    out.push({
+      path: path.endsWith('.md') ? path : `${path}.md`,
+      frontmatter: {
+        type: 'topic',
+        title,
+        sources: s.url ? [{ kind: 'crawl', resource: s.url }] : []
+      },
+      body
+    });
+  }
+  if (out.length === 0) return buildMegaConcept(raw);
+  return out;
+}
+
+function buildMegaConcept(raw) {
+  const body = deriveConceptBody(raw);
+  if (!body) return [];
+  return [{
+    path: 'crawl-mega.md',
+    frontmatter: {
+      type: 'topic',
+      title: 'Crawled corpus',
+      sources: []
+    },
+    body
+  }];
+}
+
+function urlToConceptPath(url) {
+  if (!url) return 'crawl-concept';
+  try {
+    const u = new URL(url);
+    const slug = (u.hostname + u.pathname).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return slug || 'crawl-concept';
+  } catch {
+    return 'crawl-concept';
+  }
+}
+
+function deriveTitleFromBody(body) {
+  if (!body) return null;
+  const m = body.match(/^#{1,2}\s+(.+?)\s*$/m);
+  return m ? m[1].trim() : null;
+}
+
 const crawlerToOkfService = {
   /**
    * Create an OKF repo from a crawled document. See file header for the flow.
@@ -91,9 +183,10 @@ const crawlerToOkfService = {
    * @param {string} [input.filename]   The original file_name (preferred for title)
    * @param {Object} [input.actor]      Auth hints (sub → x-actor-sub header)
    * @param {string} [input.domain]     Subject area (defaults to 'general')
+   * @param {string} [input.splitMode]  'A' (mega-concept) | 'B' (split per page, default) | 'C' (LLM, deferred)
    * @returns {Promise<Object>} The created + ingested OKF repo document
    */
-  async convertCrawlToOkf({ fileId, url, crawlJobId, filename, actor, domain } = {}) {
+  async convertCrawlToOkf({ fileId, url, crawlJobId, filename, actor, domain, splitMode } = {}) {
     if (!fileId) {
       const err = new Error('fileId is required to convert a crawl into an OKF repo');
       err.code = 'VALIDATION_ERROR';
@@ -142,34 +235,53 @@ const crawlerToOkfService = {
       console.warn('[crawlerToOkfService] downloadFile failed; returning repo without concepts', downloadErr);
     }
 
-    // 3. Build + ingest the concept (single-page = 1 concept for v1).
-    const conceptTitle = deriveConceptTitle(filename, url);
-    const conceptBody = deriveConceptBody(body);
-    if (conceptBody) {
+    // 3. Build + ingest the concept(s). Story #978 — splitMode:
+    //    'A' → one mega-concept (whole body)
+    //    'B' → split on `## Source:` markers (one per crawled page, default)
+    //    'C' → reserved for Story 10.6 LLM topic extraction (not built)
+    // Per concept the ingest shape is
+    // { path, frontmatter: { type, title, sources }, body } (matches
+    // ingest-service.test.js:90). B2 hard error if frontmatter.type is
+    // missing — type='topic' is the most permissive default.
+    const mode = splitMode || 'B';
+    let concepts;
+    if (mode === 'A') {
+      concepts = buildMegaConcept(body);
+    } else if (mode === 'B') {
+      concepts = splitBySourceMarkers(body);
+    } else {
+      // 'C' — Story 10.6 not built. Fail fast so the steward sees the gap.
+      throw Object.assign(new Error('Split mode C (LLM extraction) is not yet shipped'), {
+        code: 'MODE_NOT_IMPLEMENTED',
+        partial: true,
+        repo
+      });
+    }
+    if (concepts.length > 0) {
       try {
-        // Ingest payload shape (ingest-service.test.js:90): each concept is
-        // { frontmatter: { type, title, sources, ... }, body } — NOT
-        // { title, body, provenance } at the top level. ingestRepoConcepts
-        // (ingest-service.js:131) wraps it via gray-matter
-        // `matter.stringify(body, frontmatter)` → parserService.parseConcept.
-        //
-        // B2 hard error if frontmatter.type is missing (conformance-service.js:74).
-        // type='topic' is the most permissive default — the steward's Step 5
-        // Curate panel can re-classify per-concept via the okf.curator API.
-        const path = `${slugify(conceptTitle)}.md`;
+        // Inject the crawl metadata (file_id + crawl_job_id) into each concept's
+        // sources[] so the manifest + retract paths can trace back. Mode A and B
+        // both produce concepts[]; mode B produces N per-page concepts.
+        const conceptsWithMeta = concepts.map((c) => ({
+          ...c,
+          frontmatter: {
+            ...c.frontmatter,
+            sources: [
+              ...(c.frontmatter.sources || []),
+              ...(crawlJobId || fileId
+                ? [{
+                    kind: 'crawl',
+                    resource: (c.frontmatter.sources && c.frontmatter.sources[0] && c.frontmatter.sources[0].resource) || url,
+                    crawl_job_id: crawlJobId,
+                    file_id: fileId
+                  }]
+                : [])
+            ].filter((s, i, arr) => i === arr.findIndex((x) => x.resource === s.resource && x.kind === s.kind))
+          }
+        }));
         await httpService.post(
           `/okf/repos/${encodeURIComponent(repoId)}/ingest`,
-          {
-            concepts: [{
-              path,
-              frontmatter: {
-                type: 'topic',
-                title: conceptTitle,
-                sources: url ? [{ kind: 'crawl', resource: url, crawl_job_id: crawlJobId, file_id: fileId }] : []
-              },
-              body: conceptBody
-            }]
-          },
+          { concepts: conceptsWithMeta },
           { headers }
         );
       } catch (ingestErr) {
@@ -195,4 +307,11 @@ const crawlerToOkfService = {
 };
 
 export default crawlerToOkfService;
-export { slugify, deriveConceptTitle, deriveConceptBody };
+export {
+  slugify,
+  deriveConceptTitle,
+  deriveConceptBody,
+  splitBySourceMarkers,
+  buildMegaConcept,
+  urlToConceptPath
+};

@@ -54,4 +54,32 @@ router.get('/:repo_id/manifest', requireRepoScope('repo_id', 'read'), ctrl.getRe
 // manifest metadata only; per-repo drills stay behind their own scopes).
 router.post('/discovery', requireRole('tools-admin'), ctrl.discoverFromManifests);
 
+// Story #978 — Editor surface (Wizard | Editor sub-tabs).
+// PATCH a single concept (frontmatter + body markdown). Admin-scope — this is
+// a mutation. The body is the full markdown (frontmatter + body); the server
+// splits it via gray-matter (parser-service).
+router.patch(
+  '/:repo_id/concepts/:concept_id',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.patchConcept
+);
+
+// Story #978 — Editor "Re-split from source" action. Deletes all concepts for
+// this repo + clears the per-repo graph collections + re-ingests from the
+// linked doc-repo file. Admin-scope. Returns the same shape as ingestRepo.
+router.post(
+  '/:repo_id/resplit',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.resplitRepo
+);
+
+// Story #978 — Editor "Autocorrect" action. Scans all concepts and applies
+// frontmatter-only autocorrect rules. Admin-scope. dry_run=true returns the
+// planned changes without applying; dry_run=false applies atomically.
+router.post(
+  '/:repo_id/autocorrect',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.autocorrectRepo
+);
+
 module.exports = router;

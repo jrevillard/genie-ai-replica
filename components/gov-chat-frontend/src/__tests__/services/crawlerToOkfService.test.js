@@ -100,13 +100,108 @@ describe('crawlerToOkfService — slug helpers', () => {
   });
 });
 
+describe('crawlerToOkfService.splitBySourceMarkers (mode B)', () => {
+  const { splitBySourceMarkers, buildMegaConcept } = require('@/services/crawlerToOkfService');
+
+  it('returns one concept per `## Source:` section', () => {
+    const raw = [
+      '## Source: https://example.com/p1',
+      '',
+      '# Page one',
+      'Body one.',
+      '',
+      '---',
+      '',
+      '## Source: https://example.com/p2',
+      '',
+      '# Page two',
+      'Body two.',
+      ''
+    ].join('\n');
+    const out = splitBySourceMarkers(raw);
+    expect(out).toHaveLength(2);
+    expect(out[0].frontmatter.title).toBe('Page one');
+    expect(out[0].frontmatter.sources[0]).toMatchObject({ kind: 'crawl', resource: 'https://example.com/p1' });
+    expect(out[0].body).toContain('Body one');
+    expect(out[1].frontmatter.title).toBe('Page two');
+  });
+
+  it('falls back to mega when no markers present (single-page)', () => {
+    const out = splitBySourceMarkers('# Single page body');
+    expect(out).toHaveLength(1);
+    expect(out[0].path).toBe('crawl-mega.md');
+  });
+
+  it('skips empty sections', () => {
+    const raw = '## Source: https://example.com/empty\n\n\n\n---\n\n## Source: https://example.com/full\n\n# Body';
+    const out = splitBySourceMarkers(raw);
+    expect(out).toHaveLength(1);
+    expect(out[0].frontmatter.title).toBe('Body');
+  });
+
+  it('handles a single page without a `---` separator', () => {
+    const out = splitBySourceMarkers('## Source: https://example.com/x\n\n# X\n\nThe X page.');
+    expect(out).toHaveLength(1);
+    expect(out[0].frontmatter.title).toBe('X');
+  });
+});
+
+describe('crawlerToOkfService — splitMode param (integration)', () => {
+  it('mode B produces one concept per page when the crawler wrote `## Source:` markers', async () => {
+    const createdRepo = { repo_id: 'r-mode-b', name: 'multi-page', domain: 'general' };
+    mockPost
+      .mockResolvedValueOnce({ data: createdRepo })
+      .mockResolvedValueOnce({ data: { ok: true, total: 3 } });
+    mockDownloadFile.mockResolvedValueOnce(
+      '## Source: https://example.com/p1\n\n# P1\n\nbody1\n\n---\n\n## Source: https://example.com/p2\n\n# P2\n\nbody2\n\n---\n\n## Source: https://example.com/p3\n\n# P3\n\nbody3\n'
+    );
+    mockRepoOkfService.get.mockResolvedValueOnce({ ...createdRepo, concept_count: 3 });
+
+    await crawlerToOkfService.convertCrawlToOkf({
+      fileId: 'file-multi',
+      url: 'https://example.com/',
+      crawlJobId: 'job-multi',
+      filename: 'multi-page.md',
+      splitMode: 'B'
+    });
+
+    // Ingest payload should have 3 concepts
+    const ingestCall = mockPost.mock.calls.find((c) => c[0] === '/okf/repos/r-mode-b/ingest');
+    expect(ingestCall).toBeDefined();
+    expect(ingestCall[1].concepts).toHaveLength(3);
+    expect(ingestCall[1].concepts[0].frontmatter.title).toBe('P1');
+    expect(ingestCall[1].concepts[1].frontmatter.title).toBe('P2');
+    expect(ingestCall[1].concepts[2].frontmatter.title).toBe('P3');
+    // Each carries the per-page URL on frontmatter.sources
+    expect(ingestCall[1].concepts[0].frontmatter.sources[0].resource).toBe('https://example.com/p1');
+    expect(ingestCall[1].concepts[1].frontmatter.sources[0].resource).toBe('https://example.com/p2');
+  });
+
+  it('mode C (LLM, deferred) throws MODE_NOT_IMPLEMENTED with partial repo info', async () => {
+    const createdRepo = { repo_id: 'r-mode-c', name: 'c', domain: 'general' };
+    mockPost.mockResolvedValueOnce({ data: createdRepo });
+    mockDownloadFile.mockResolvedValueOnce('# Body');
+
+    await expect(crawlerToOkfService.convertCrawlToOkf({
+      fileId: 'file-c',
+      url: 'https://example.com/c',
+      filename: 'c.md',
+      splitMode: 'C'
+    })).rejects.toMatchObject({
+      code: 'MODE_NOT_IMPLEMENTED',
+      partial: true,
+      repo: { repo_id: 'r-mode-c' }
+    });
+  });
+});
+
 describe('crawlerToOkfService.convertCrawlToOkf', () => {
   it('rejects calls without a fileId', async () => {
     await expect(crawlerToOkfService.convertCrawlToOkf({ url: 'x' }))
       .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
-  it('happy path: creates repo, downloads content, ingests one concept', async () => {
+  it('happy path: creates repo, downloads content, ingests one concept (mode A mega)', async () => {
     const createdRepo = {
       repo_id: 'r-new-1',
       name: 'wikipedia-ml',
@@ -131,7 +226,8 @@ describe('crawlerToOkfService.convertCrawlToOkf', () => {
       crawlJobId: 'job-1',
       filename: 'wikipedia-ml.md',
       actor: { sub: 'crawler-to-okf' },
-      domain: 'education'
+      domain: 'education',
+      splitMode: 'A'
     });
 
     expect(mockPost).toHaveBeenCalledTimes(2);
@@ -159,10 +255,10 @@ describe('crawlerToOkfService.convertCrawlToOkf', () => {
     // when frontmatter.type is missing.
     expect(mockPost.mock.calls[1][1]).toMatchObject({
       concepts: [{
-        path: 'wikipedia-ml.md',
+        path: 'crawl-mega.md',
         frontmatter: {
           type: 'topic',
-          title: 'wikipedia-ml',
+          title: 'Crawled corpus',
           sources: [{
             kind: 'crawl',
             resource: 'https://en.wikipedia.org/wiki/Machine_learning',

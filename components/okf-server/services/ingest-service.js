@@ -17,6 +17,7 @@
 
 const AdmZip = require('adm-zip');
 const matter = require('gray-matter');
+const { aql } = require('arangojs');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
@@ -520,8 +521,181 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   return summary;
 }
 
+/**
+ * Story #978 — Editor "Re-split from source" action.
+ *
+ * Workflow:
+ *   1. Look up the doc-repo file by file_id (the frontend passes the file_id
+ *      it tracked when the OKF repo was created; eventually we'll wire
+ *      `files.okf_repo_id` to remove that contract — see #978 risk section).
+ *   2. Fetch the raw .md bytes from doc-repo via `authedAxios`.
+ *   3. Delete all `okf_concepts_meta` rows for this repo + clear the per-repo
+ *      graph collections (`OKF_<rid>_SOURCE`/`_ENTITY`/`_HAS_SOURCE`/`_LINKS_TO`)
+ *      to avoid stale chunks re-referenced after split.
+ *   4. Build the concepts[] payload from the .md per `mode`:
+ *        A — 1 concept = the whole body (mega-concept).
+ *        B — split on the `## Source: <url>` markers the crawler writes;
+ *            each section becomes one concept with `sources[0].resource = <url>`.
+ *        C — reserved for Story 10.6 LLM topic extraction. Today returns
+ *            MODE_NOT_IMPLEMENTED.
+ *   5. Call the existing `ingestRepoConcepts` (4a–4f) and return the summary.
+ *
+ * Errors:
+ *   - 404 FILE_NOT_FOUND: no file_id provided or doc-repo returned 404.
+ *   - 400 MODE_NOT_IMPLEMENTED: mode === 'C'.
+ *
+ * @param {string} repo_id
+ * @param {'A'|'B'|'C'} mode
+ * @param {{file_id?: string}} opts
+ * @returns {Promise<Object>} ingest summary {total, parsed, created, rejected, enqueued, mode, file_id}
+ */
+async function resplitRepo(repo_id, mode, opts = {}) {
+  const fileId = opts.file_id;
+  if (!fileId) {
+    const e = new Error('resplitRepo requires opts.file_id');
+    e.code = 'FILE_NOT_FOUND';
+    e.status = 404;
+    throw e;
+  }
+  if (mode === 'C') {
+    const e = new Error("mode 'C' (LLM topic extraction) is not yet shipped (Story 10.6)");
+    e.code = 'MODE_NOT_IMPLEMENTED';
+    e.status = 400;
+    throw e;
+  }
+  if (!['A', 'B'].includes(mode)) {
+    const e = new Error(`mode must be 'A', 'B', or 'C' (got ${JSON.stringify(mode)})`);
+    e.code = 'VALIDATION_ERROR';
+    e.status = 400;
+    throw e;
+  }
+
+  // Fetch the raw markdown from doc-repo via the existing fetchFileBytes helper
+  // (same path used by PII discovery — DRY).
+  const { fetchFileBytes } = require('./pii-service');
+  const bytes = await fetchFileBytes(fileId);
+  const raw = bytes ? bytes.toString('utf-8') : '';
+
+  // Delete existing concepts + per-repo graph collections.
+  await clearRepoConceptsAndGraph(repo_id);
+
+  // Build the concepts[] payload per mode.
+  const concepts = mode === 'A' ? buildMegaConcept(raw, fileId) : splitBySourceMarkers(raw, fileId);
+  if (concepts.length === 0) {
+    return {
+      mode,
+      file_id: fileId,
+      total: 0,
+      parsed: 0,
+      created: 0,
+      updated: 0,
+      skipped_dedup: 0,
+      rejected: 0,
+      enqueued: 0,
+      enqueue_errors: [],
+      not_found: []
+    };
+  }
+
+  // Run the existing 4a–4f sequence.
+  const summary = await ingestRepoConcepts(repo_id, { concepts }, opts.actor || null);
+  return { ...summary, mode, file_id: fileId };
+}
+
+/** Delete all concepts for a repo + drop the 4 per-repo graph collections.
+ * Idempotent — safe to call when the repo has no concepts yet. */
+async function clearRepoConceptsAndGraph(repo_id) {
+  const db = await dbService.getConnection('default');
+  const meta = db.collection('okf_concepts_meta');
+  await db.query(aql`FOR m IN ${meta} FILTER m.repo_id == ${repo_id} REMOVE m IN ${meta}`);
+
+  const repo = await repositoryService.getById(repo_id).catch(() => null);
+  const graphName = (repo && repo.graph_name) || `OKF_${repo_id}`;
+  const collections = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'].map((s) => `${graphName}${s}`);
+  for (const collName of collections) {
+    try {
+      const c = db.collection(collName);
+      // Truncate (faster than REMOVE each row; both are fine since the
+      // collection will be re-populated by the worker).
+      await c.truncate();
+    } catch {
+      /* collection may not exist yet on a fresh repo — that's fine */
+    }
+  }
+}
+
+/** Build a single mega-concept from the full markdown body (mode A). */
+function buildMegaConcept(raw, fileId) {
+  // Strip the leading "## Source: <url>" header the crawler prepends (so the
+  // concept's body starts at the actual content; the provenance goes on
+  // frontmatter.sources).
+  const body = raw.replace(/^## Source:[^\n]*\n+/i, '').trim();
+  if (!body) return [];
+  return [
+    {
+      path: `crawl-${fileId}.md`,
+      frontmatter: {
+        type: 'topic',
+        title: 'Crawled page',
+        sources: [{ kind: 'crawl', resource: null, file_id: fileId }]
+      },
+      body
+    }
+  ];
+}
+
+/** Split the combined .md on `## Source: <url>` markers (mode B).
+ * Each section becomes one concept. */
+function splitBySourceMarkers(raw, fileId) {
+  if (!raw) return [];
+  // Split on the marker — keep the URL captured so we can attribute it.
+  const re = /^## Source:\s*([^\n]*)\s*\n([\s\S]*?)(?=^## Source:|$)/gm;
+  const concepts = [];
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const url = (m[1] || '').trim();
+    const body = (m[2] || '').replace(/^---\s*\n/, '').trim(); // strip the page separator
+    if (!body) continue;
+    const path = urlToConceptPath(url) || `crawl-${fileId}-${concepts.length + 1}.md`;
+    const title = deriveTitleFromBody(body) || url;
+    concepts.push({
+      path,
+      frontmatter: {
+        type: 'topic',
+        title,
+        sources: url ? [{ kind: 'crawl', resource: url, file_id: fileId }] : [{ kind: 'crawl', file_id: fileId }]
+      },
+      body
+    });
+  }
+  // If no `## Source:` markers are present (single-page crawl), fall back to
+  // mode-A behavior — the body becomes one concept.
+  if (concepts.length === 0) return buildMegaConcept(raw, fileId);
+  return concepts;
+}
+
+/** Derive a path-safe concept_id from a URL. */
+function urlToConceptPath(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const slug = (u.hostname + u.pathname).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return `${slug || 'concept'}.md`;
+  } catch {
+    return null;
+  }
+}
+
+/** Pull a sensible title from the first H1/H2 in the body. */
+function deriveTitleFromBody(body) {
+  if (!body) return null;
+  const m = body.match(/^#{1,2}\s+(.+?)\s*$/m);
+  return m ? m[1].trim() : null;
+}
+
 module.exports = {
   ingestRepoConcepts,
+  resplitRepo,
   _ingestWithCap,
   deriveAclLabels,
   maxConceptsFromEnv,
@@ -531,5 +705,8 @@ module.exports = {
   markdownFor,
   zipToRawInputs,
   findDuplicateEntryNames,
+  clearRepoConceptsAndGraph,
+  buildMegaConcept,
+  splitBySourceMarkers,
   IngestError
 };

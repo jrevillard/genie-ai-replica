@@ -356,10 +356,7 @@ describe('WeatherService', () => {
 
       expect(result).toBeDefined();
       expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('persistence_unavailable'),
-        expect.any(Object)
-      );
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('persistence_unavailable'), expect.any(Object));
     });
 
     // Bug fix: if .save() itself throws (e.g. transient Arango error), the
@@ -372,10 +369,7 @@ describe('WeatherService', () => {
 
       expect(result).toBeDefined();
       expect(result.current).toEqual(expect.objectContaining({ temperature: 22 }));
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('save_request_failed'),
-        expect.any(Object)
-      );
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('save_request_failed'), expect.any(Object));
     });
 
     // Bug fix: analytics must NOT be recorded when persistence failed

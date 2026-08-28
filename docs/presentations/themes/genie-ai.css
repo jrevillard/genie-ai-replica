@@ -661,7 +661,7 @@ section.section-divider::after {
   display: inline-block;
   width: 22px;
   height: 22px;
-  background-image: url(genie-ai-logo-24.png);
+  background-image: url(themes/genie-ai-logo-24.png);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
@@ -677,7 +677,7 @@ section.section-divider::after {
   overflow: hidden;
   z-index: 0;
   opacity: 0.70;
-  background-image: url(hero-visual.jpg);
+  background-image: url(themes/hero-visual.jpg);
   background-size: cover;
   background-position: center 65%;
   background-repeat: no-repeat;
@@ -714,7 +714,7 @@ footer::before {
   display: inline-block;
   width: 18px;
   height: 18px;
-  background-image: url(genie-ai-logo-24.png);
+  background-image: url(themes/genie-ai-logo-24.png);
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;

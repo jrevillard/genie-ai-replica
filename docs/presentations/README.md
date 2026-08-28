@@ -71,49 +71,63 @@ post-process the output to inline the PNG/JPG assets as `data:` URIs:
 
 ```bash
 python3 << 'PYEOF'
-import base64
-import mimetypes
-import re
+import base64, hashlib, json, mimetypes, re
 from pathlib import Path
 from urllib.parse import unquote
 
 html_path = Path("<deck>.html")
+html = html_path.read_text(encoding="utf-8")
 
-# Répertoire racine où rechercher les images
-image_root = Path(".")
+# 1. Collect local image references from <img src> and CSS url().
+refs = set(unquote(m) for m in re.findall(r'src="([^"]+\.(?:png|jpe?g|gif|webp))"', html, re.I))
+refs |= set(unquote(m) for m in re.findall(r'url\(["\']?([^"\')]+\.(?:png|jpe?g|gif|webp))["\']?\)', html, re.I))
+refs = {r for r in refs if not r.startswith(("http", "data:")) and Path(r).is_file()}
 
-content = html_path.read_text(encoding="utf-8")
+# 2. One embed id per unique file content (md5) — identical files embed once.
+ids, payload = {}, {}
+for ref in sorted(refs):
+    p = Path(ref)
+    eid = "e" + hashlib.md5(p.read_bytes()).hexdigest()[:10]
+    ids[ref] = eid
+    if eid not in payload:
+        mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+        payload[eid] = f"data:{mime};base64,{base64.b64encode(p.read_bytes()).decode('ascii')}"
 
-# Index des images PNG trouvées récursivement
-images = {}
+# 3. CSS url() -> custom property declared once on section.
+varcss = []
+for ref, eid in ids.items():
+    if f"url({ref})" in html:
+        varcss.append(f'--img-{eid}:url("{payload[eid]}")')
+        html = html.replace(f"url({ref})", f"var(--img-{eid})")
+if varcss:
+    html = html.replace("</head>", "<style>section{" + ";".join(varcss) + "}</style></head>", 1)
 
-for image_path in image_root.rglob("*.png"):
-    if image_path.resolve() == html_path.resolve():
-        continue
+# 4. <img src> -> data-embed reference (longest paths first).
+for ref, eid in sorted(ids.items(), key=lambda kv: -len(kv[0])):
+    html = html.replace(f'src="{ref}"', f'src="" data-embed="{eid}"')
 
-    data = base64.b64encode(image_path.read_bytes()).decode("ascii")
-    data_uri = f"data:image/png;base64,{data}"
+# 5. Single JSON manifest + tiny loader before </body>.
+if payload:
+    loader = (
+        '<script type="application/json" id="embed-manifest">' + json.dumps(payload) + '</script>'
+        '<script>(function(){var m=JSON.parse(document.getElementById("embed-manifest").textContent);'
+        'document.querySelectorAll("img[data-embed]").forEach(function(i){i.src=m[i.dataset.embed];});})();</script>')
+    html = html.replace("</body>", loader + "</body>", 1)
 
-    # Différentes références possibles dans le HTML
-    relative_path = image_path.as_posix()
-    filename = image_path.name
-
-    images[filename] = data_uri
-    images[relative_path] = data_uri
-    images[f"./{relative_path}"] = data_uri
-
-print(f"{len(images)} références d'images indexées")
-
-# Remplace les références connues, en commençant par les chemins les plus longs
-for reference, data_uri in sorted(images.items(), key=lambda item: len(item[0]), reverse=True):
-    content = content.replace(reference, data_uri)
-    content = content.replace(unquote(reference), data_uri)
-
-html_path.write_text(content, encoding="utf-8")
-
-print(f"HTML mis à jour : {html_path}")
+html_path.write_text(html, encoding="utf-8")
+print(f"unique images embedded once: {len(payload)}")
+print(f"HTML size: {len(html)//1024} KB")
 PYEOF
 ```
+
+Each image is embedded **exactly once**, no matter how many times it is
+referenced: `<img>` tags get a `data-embed` id resolved at load time from a
+single JSON manifest, and CSS `url()` references (theme brand pill, hero
+band) become custom properties declared once on `section`. Note the loader
+runs on `load`, so JS must be enabled (fine for browsers and slidesfly;
+headless print-to-PDF also executes it). If a deck still exceeds the
+upload limit, the dominant cost is usually single-use PNGs — quantizing or
+downscaling those in `assets/` saves far more than deduplication can.
 
 ## Authoring a new deck
 

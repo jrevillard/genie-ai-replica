@@ -332,6 +332,8 @@ Disabled by default. Enable: `docker compose --profile observability up -d` or `
 
 → Debugging recipes (query traces/logs to debug the dataprep/RAG pipeline): `.claude/rules/DEBUGGING-TRACING.md`
 
+→ CVE triage, verification and mitigation playbook (GitLab 18.2.8-ee GraphQL APIs, triple-source verification, dismissal semantics, image-slimming checklist): `.claude/rules/CVE-REMEDIATION.md`
+
 ## i18n System
 
 - English (`nameEN`) is the source of truth for RAG compatibility

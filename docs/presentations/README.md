@@ -142,7 +142,7 @@ downscaling those in `assets/` saves far more than deduplication can.
    theme: genie-ai
    paginate: true
    size: 16:9
-   footer: '![h:18](genie-ai-logo-24.png) GENIE.AI'
+   footer: 'GENIE.AI'
    ---
    ```
 3. Use the layout helpers defined in the theme (`.eyebrow`, `.columns`,

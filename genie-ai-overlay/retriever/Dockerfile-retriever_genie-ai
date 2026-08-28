@@ -45,10 +45,12 @@ RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-c
 FROM python:3.11-slim
 
 # Current Debian security updates so the shipped image does not lag
-# distro point-releases between upstream rebuilds.
+# distro point-releases between upstream rebuilds. curl backs the compose
+# healthcheck (docker-compose.yaml retriever service).
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
+    curl \
     libcairo2 \
     libglib2.0-0 \
     libmariadb3 \

@@ -27,7 +27,13 @@ FROM node:22-slim
 # removing the linux-libc-dev kernel-headers CVE surface from the scan.
 RUN apt-get update && \
     apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        wget \
+        ca-certificates && \
     rm -rf /var/lib/apt/lists/*
+# wget: docker-entrypoint.sh waits for ArangoDB with a wget probe, and the
+# compose healthcheck (docker-compose.yaml backend service) uses wget --spider.
+# The full node:22 image shipped it; node:22-slim does not.
 
 WORKDIR /app
 

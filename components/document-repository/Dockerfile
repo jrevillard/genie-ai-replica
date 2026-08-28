@@ -21,10 +21,13 @@ RUN rm -rf /app/node_modules/shared-lib
 # ======== Runtime ========
 FROM node:22-slim
 
-# System dependencies: ClamAV for upload scanning (+ current security updates)
+# System dependencies: ClamAV for upload scanning (+ current security updates).
+# clamdscan is a Recommends of clamav-daemon but the app's scanner preference
+# and clamav-node.sh's readiness loop both invoke it explicitly. curl backs the
+# compose healthcheck (docker-compose.yaml doc-repo service).
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends clamav clamav-daemon && \
+    apt-get install -y --no-install-recommends clamav clamav-daemon clamdscan curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -42,9 +45,13 @@ RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
 # Create app directory
 WORKDIR /app
 
-# Application: node_modules from the builder stage + source
+# Application: node_modules from the builder stage + source.
+# shared-lib ships as a real directory (sources + its own nested node_modules
+# from the builder's `cd shared-lib && npm ci`) — ~12 src files require() it
+# via relative paths (e.g. require('../shared-lib')), so it must exist on disk.
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/shared-lib ./shared-lib
 COPY document-repository/src/ ./src/
 COPY document-repository/scripts/clamav-node.sh ./
 RUN chmod +x clamav-node.sh

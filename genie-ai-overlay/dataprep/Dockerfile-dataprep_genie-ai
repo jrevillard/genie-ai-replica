@@ -81,12 +81,15 @@ WORKDIR /app
 # Step A: Runtime system dependencies (+ current Debian security updates so the
 # shipped image does not lag distro point-releases). Runtime libs only — no
 # build-essential, no -dev headers: mariadb/psycopg link against the shared
-# runtime libraries libmariadb3 / libpq5. default-jre (full, headless is enough
-# for pyspark but libreoffice pulls the full JRE anyway), libreoffice + the
-# document-conversion toolchain, opencv's libgl1/libglib2.0-0, tesseract.
+# runtime libraries libmariadb3 / libpq5. JRE is headless (pyspark only needs a
+# JVM; soffice conversions are headless too — no AWT). curl backs the compose
+# healthcheck (docker-compose.yaml dataprep service) and in-container
+# debugging recipes; libreoffice + the document-conversion toolchain;
+# opencv's libgl1/libglib2.0-0; tesseract.
 RUN apt-get update -y && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends --fix-missing \
+    curl \
     default-jre-headless \
     ffmpeg \
     libcairo2 \
@@ -118,6 +121,11 @@ COPY --from=deps_builder /usr/local/bin /usr/local/bin
 RUN mkdir -p /home/user/.EasyOCR
 COPY --from=deps_builder /opt/easyocr/model /home/user/.EasyOCR/model
 COPY --from=deps_builder /opt/easyocr/config /home/user/.EasyOCR/config
+
+# Runtime smoke test: same heavy imports as the builder, but now against the
+# FINAL environment (copied site-packages + the runtime apt set) so a missing
+# runtime library fails the build instead of the first ingest.
+RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok (runtime)')"
 
 # Copy custom utils to its new correct location (matches your structure)
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py

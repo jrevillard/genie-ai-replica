@@ -19,7 +19,21 @@ RUN rm -rf /app/node_modules/shared-lib
 COPY gov-chat-backend/ ./
 RUN mkdir -p /app/Uploads
 
-FROM node:22
+FROM node:22-slim
+
+# Security-patch the runtime base and keep the shipped image at current Debian
+# point-releases. The slim base drops the build toolchain (build-essential,
+# python3, make) that the full node:22 image ships but the runtime never needs —
+# removing the linux-libc-dev kernel-headers CVE surface from the scan.
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        wget \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+# wget: docker-entrypoint.sh waits for ArangoDB with a wget probe, and the
+# compose healthcheck (docker-compose.yaml backend service) uses wget --spider.
+# The full node:22 image shipped it; node:22-slim does not.
 
 WORKDIR /app
 

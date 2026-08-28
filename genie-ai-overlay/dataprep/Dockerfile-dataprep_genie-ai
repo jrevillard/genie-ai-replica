@@ -11,6 +11,64 @@ WORKDIR /src
 # Clone only the specified branch/tag, with no history for speed
 RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
+# ======== Stage 2: Dependency Builder ========
+# Compiles the hash-pinned Python dependency tree (the 'mariadb' wheel has no
+# manylinux build and compiles against libmariadb-dev) and pre-downloads the
+# EasyOCR models. Nothing in this stage ships: build-essential and the -dev
+# headers stay here, cutting the linux-libc-dev kernel-header CVE surface out
+# of the final image.
+FROM python:3.11-slim AS deps_builder
+
+WORKDIR /app
+
+# Compile-time only: build-essential (C extensions), libmariadb-dev + libpq-dev
+# (mariadb/psycopg wheel linkage), libgl1 + libglib2.0-0 (opencv import in the
+# smoke test below), default-jre (pyspark import needs a JVM), wget/unzip (the
+# EasyOCR model download).
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends --fix-missing \
+    build-essential \
+    default-jre-headless \
+    libgl1 \
+    libglib2.0-0 \
+    libmariadb-dev \
+    libpq-dev \
+    wget \
+    unzip \
+    ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip/setuptools/wheel BEFORE any install.
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install dependencies from the committed hash-pinned lock.
+# The lock is compiled with `make lock-dataprep` (uv pip compile
+# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
+# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
+# reproducible and supply-chain-pinned: every wheel's SHA256 is verified at
+# install time, with no re-resolution against live PyPI.
+COPY genie-ai-overlay/dataprep/requirements-cpu.txt /app/requirements-cpu.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+
+# Post-import smoke test for heavy dependencies.
+# Catches import failures (missing shared libs, ABI mismatches, bad wheels) at
+# BUILD time rather than at first runtime request. These four packages are the
+# heaviest / most failure-prone in the lock (pyspark requires JVM at runtime,
+# unstructured links opencv + tesseract, graspologic pulls networkx + scipy stacks,
+# openai-whisper pulls torch). If any import fails the build stops here —
+# runtime ingest would fail the same way with a far more opaque traceback.
+RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok')"
+
+# Pre-download the EasyOCR models (prevents a one-time model download hang on
+# the first runtime request). Copied into the runtime stage below.
+RUN mkdir -p /tmp/easyocr /opt/easyocr/model /opt/easyocr/config && \
+    wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
+    wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
+    unzip -o /tmp/easyocr/english_g2.zip -d /opt/easyocr/model && \
+    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /opt/easyocr/model && \
+    rm -rf /tmp/easyocr
+
 # ======== Final Stage: Assembly ========
 # Match OPEA v1.5's dataprep base (python:3.11-slim). No GPU is granted to
 # dataprep in docker-compose.yaml (only gpu-models profile services get one),
@@ -18,33 +76,30 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # update-alternatives python3.10 machinery in one stroke.
 FROM python:3.11-slim
 
-# ARG for Hugging Face token is NO LONGER NEEDED.
 WORKDIR /app
 
-# Step A: Install System Dependencies
-# All required system libraries for OPEA dataprep (matches OPEA v1.5's apt list,
-# plus GENIE.AI additions: libgl1 + libglib2.0-0 for opencv (the lock installs
-# non-headless opencv-python transitively via unstructured-inference; its cv2
-# extension links libgthread-2.0.so.0/libglib-2.0.so.0, which python:3.11-slim
-# does not ship), unzip + ca-certificates for the EasyOCR model pre-download
-# below). libmariadb-dev is required because the 'mariadb' python package has
-# no manylinux wheel and compiles against it.
+# Step A: Runtime system dependencies (+ current Debian security updates so the
+# shipped image does not lag distro point-releases). Runtime libs only — no
+# build-essential, no -dev headers: mariadb/psycopg link against the shared
+# runtime libraries libmariadb3 / libpq5. JRE is headless (pyspark only needs a
+# JVM; soffice conversions are headless too — no AWT). curl backs the compose
+# healthcheck (docker-compose.yaml dataprep service) and in-container
+# debugging recipes; libreoffice + the document-conversion toolchain;
+# opencv's libgl1/libglib2.0-0; tesseract.
 RUN apt-get update -y && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends --fix-missing \
-    build-essential \
-    default-jre \
+    curl \
+    default-jre-headless \
     ffmpeg \
     libcairo2 \
     libgl1 \
     libglib2.0-0 \
-    libmariadb-dev \
-    libpq-dev \
+    libmariadb3 \
+    libpq5 \
     libreoffice \
     poppler-utils \
     tesseract-ocr \
-    wget \
-    curl \
-    unzip \
     ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -56,26 +111,21 @@ ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/dataprep/src:/app/comps/dataprep/s
 # Step B: Copy the entire OPEA 'comps' directory from the clone
 COPY --from=opea_base /src/comps/ /app/comps/
 
-# Step C: Upgrade pip/setuptools/wheel BEFORE any install.
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+# Step C/D: Bring the compiled Python dependency tree from the builder stage
+# (site-packages + console scripts). The interpreter itself (/usr/local/python)
+# comes from the same python:3.11-slim lineage, so the copied tree is ABI-compatible.
+COPY --from=deps_builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=deps_builder /usr/local/bin /usr/local/bin
 
-# Step D: Install dependencies from the committed hash-pinned lock.
-# The lock is compiled with `make lock-dataprep` (uv pip compile
-# --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
-# v1.5's requirements.in. --require-hashes makes the build bit-for-bit
-# reproducible and supply-chain-pinned: every wheel's SHA256 is verified at
-# install time, with no re-resolution against live PyPI.
-COPY genie-ai-overlay/dataprep/requirements-cpu.txt /app/requirements-cpu.txt
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+# EasyOCR models from the builder stage (served from /home/user/.EasyOCR at runtime)
+RUN mkdir -p /home/user/.EasyOCR
+COPY --from=deps_builder /opt/easyocr/model /home/user/.EasyOCR/model
+COPY --from=deps_builder /opt/easyocr/config /home/user/.EasyOCR/config
 
-# Step D.5: Post-import smoke test for heavy dependencies.
-# Catches import failures (missing shared libs, ABI mismatches, bad wheels) at
-# BUILD time rather than at first runtime request. These four packages are the
-# heaviest / most failure-prone in the lock (pyspark requires JVM at runtime,
-# unstructured links opencv + tesseract, graspologic pulls networkx + scipy stacks,
-# openai-whisper pulls torch). If any import fails the build stops here —
-# runtime ingest would fail the same way with a far more opaque traceback.
-RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok')"
+# Runtime smoke test: same heavy imports as the builder, but now against the
+# FINAL environment (copied site-packages + the runtime apt set) so a missing
+# runtime library fails the build instead of the first ingest.
+RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok (runtime)')"
 
 # Copy custom utils to its new correct location (matches your structure)
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py
@@ -85,19 +135,6 @@ COPY genie-ai-overlay/tracing.py /app/tracing.py
 
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
-
-# Step G: Pre-install EasyOCR models (auto-download during build)
-# This prevents the service from hanging on its one-time model download at runtime.
-RUN mkdir -p /tmp/easyocr /home/user/.EasyOCR/model /home/user/.EasyOCR/config && \
-# 1. Download the 'en' (English) recognition model
-    wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
-# 2. Download the text detection model
-    wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
-# 3. Unzip the models
-    unzip -o /tmp/easyocr/english_g2.zip -d /home/user/.EasyOCR/model && \
-    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /home/user/.EasyOCR/model && \
-# 4. Cleanup
-    rm -rf /tmp/easyocr
 
 # Step H: Fix docarray circular import (proactive fix, shared with retriever/reranker)
 # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI

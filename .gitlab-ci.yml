@@ -1017,6 +1017,7 @@ build:frontend:
     CONTEXT: "components/gov-chat-frontend/"
     DOCKERFILE: "components/gov-chat-frontend/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1041,6 +1042,7 @@ scan:frontend:
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1065,6 +1067,7 @@ promote:frontend:
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1089,6 +1092,7 @@ build:backend:
     CONTEXT: "components/"
     DOCKERFILE: "components/gov-chat-backend/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1113,6 +1117,7 @@ scan:backend:
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1137,6 +1142,7 @@ promote:backend:
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1161,6 +1167,7 @@ build:db-migrations:
     CONTEXT: "."
     DOCKERFILE: "components/gov-chat-backend/Dockerfile.migrations"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1185,6 +1192,7 @@ scan:db-migrations:
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1209,6 +1217,7 @@ promote:db-migrations:
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1233,6 +1242,7 @@ build:document-repository:
     CONTEXT: "components/"
     DOCKERFILE: "components/document-repository/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1257,6 +1267,7 @@ scan:document-repository:
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1281,6 +1292,7 @@ promote:document-repository:
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1305,6 +1317,7 @@ build:nginx:
     CONTEXT: "api-gateway-solution/nginx/"
     DOCKERFILE: "api-gateway-solution/nginx/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1329,6 +1342,7 @@ scan:nginx:
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1353,6 +1367,7 @@ promote:nginx:
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1377,6 +1392,7 @@ build:kong-config:
     CONTEXT: "api-gateway-solution/new-config/"
     DOCKERFILE: "api-gateway-solution/new-config/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1401,6 +1417,7 @@ scan:kong-config:
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1425,6 +1442,7 @@ promote:kong-config:
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1449,6 +1467,7 @@ build:chatqna-server:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1473,6 +1492,7 @@ scan:chatqna-server:
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1497,6 +1517,7 @@ promote:chatqna-server:
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1521,6 +1542,7 @@ build:dataprep-arango:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1589,6 +1611,7 @@ scan:dataprep-arango:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1613,6 +1636,7 @@ promote:dataprep-arango:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1637,6 +1661,7 @@ build:retriever-arango:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1661,6 +1686,7 @@ scan:retriever-arango:
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1685,6 +1711,7 @@ promote:retriever-arango:
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1709,6 +1736,7 @@ build:reranker:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1733,6 +1761,7 @@ scan:reranker:
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1757,6 +1786,7 @@ promote:reranker:
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1781,6 +1811,7 @@ build:embedding:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1805,6 +1836,7 @@ scan:embedding:
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1829,6 +1861,7 @@ promote:embedding:
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1853,6 +1886,7 @@ build:textgen:
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1877,6 +1911,7 @@ scan:textgen:
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1901,6 +1936,7 @@ promote:textgen:
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1925,6 +1961,7 @@ build:postgres-init:
     CONTEXT: "configs/postgres/"
     DOCKERFILE: "configs/postgres/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1949,6 +1986,7 @@ scan:postgres-init:
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1973,6 +2011,7 @@ promote:postgres-init:
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -1997,6 +2036,7 @@ build:keycloak:
     CONTEXT: "configs/keycloak/"
     DOCKERFILE: "configs/keycloak/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2021,6 +2061,7 @@ scan:keycloak:
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2045,6 +2086,7 @@ promote:keycloak:
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2069,6 +2111,7 @@ build:keycloak-config:
     CONTEXT: "configs/keycloak/"
     DOCKERFILE: "configs/keycloak/Dockerfile.config-cli"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2093,6 +2136,7 @@ scan:keycloak-config:
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2117,6 +2161,7 @@ promote:keycloak-config:
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2141,6 +2186,7 @@ build:tempo-proxy:
     CONTEXT: "tools/tempo-proxy/"
     DOCKERFILE: "tools/tempo-proxy/Dockerfile"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2165,6 +2211,7 @@ scan:tempo-proxy:
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
@@ -2189,6 +2236,7 @@ promote:tempo-proxy:
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:
+    - if: $FORCE_IMAGE_REBUILD == "true"
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"

@@ -101,7 +101,7 @@ describe('crawlerToOkfService — slug helpers', () => {
 });
 
 describe('crawlerToOkfService.splitBySourceMarkers (mode B)', () => {
-  const { splitBySourceMarkers, buildMegaConcept } = require('@/services/crawlerToOkfService');
+  const { splitBySourceMarkers } = require('@/services/crawlerToOkfService');
 
   it('returns one concept per `## Source:` section', () => {
     const raw = [

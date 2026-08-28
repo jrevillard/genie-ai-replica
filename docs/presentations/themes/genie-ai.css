@@ -1,0 +1,831 @@
+/*!
+ * GENIE.AI — Marp theme for sovereign-AI briefings, release overviews,
+ * architecture deep-dives, and onboarding decks.
+ *
+ * Usage in a deck:
+ *   ---
+ *   marp: true
+ *   theme: genie-ai
+ *   ---
+ *
+ * Build:
+ *   npx @marp-team/marp-cli <deck>.md \
+ *     --theme-set themes/genie-ai.css \
+ *     --engine @marp-team/marp-core/full \
+ *     --pdf --allow-local-files --no-stdin \
+ *     -o output/<deck>.pdf
+ *
+ * The `--engine @marp-team/marp-core/full` flag is required for Mermaid
+ * diagrams. Drop it for plain prose decks.
+ *
+ * @theme genie-ai
+ * @author GENIE.AI team
+ *
+ * @auto-scaling true
+ * @size 16:9 1280px 720px
+ */
+
+/* ============================================================================
+ * 1. Fonts
+ * ============================================================================
+ * Inter for body & headings, JetBrains Mono for code/eyebrows.
+ * Web fetch keeps the theme standalone for local rendering; in production,
+ * self-host under `site/static/fonts/` and replace these imports.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+
+/* ============================================================================
+ * 2. Design tokens
+ * ============================================================================
+ * Marp Core v5 requires CSS variables to be scoped inside `section {}`.
+ * Using `:root { ... }` breaks the XSS sanitizer (`Ke is not a function`).
+ * Mermaid theme variables (`--marp-mermaid-*`) are declared here so every
+ * diagram inherits the GENIE.AI palette automatically.
+ */
+section {
+  /* Brand palette */
+  --genie-blue: #1b3fad;
+  --genie-blue-dark: #122f87;
+  --genie-blue-light: oklch(42% 0.18 265 / 0.12);
+  --genie-bg: #f7f8fa;
+  --genie-surface: #ffffff;
+  --genie-fg: #34373d;
+  --genie-muted: #787e89;
+  --genie-border: #cdd1d6;
+  --genie-accent: oklch(62% 0.17 162);
+
+  /* Layout tokens */
+  --genie-content-gap: 0.85rem;  /* gap between header (eyebrow + h1) and first content block */
+
+  /* Mermaid theme tokens (picked up by beautiful-mermaid at render time) */
+  --marp-mermaid-background: var(--genie-bg);
+  --marp-mermaid-foreground: var(--genie-fg);
+  --marp-mermaid-surface: var(--genie-surface);
+  --marp-mermaid-border: var(--genie-border);
+  --marp-mermaid-line: #c8ccd3;
+  --marp-mermaid-accent: var(--genie-blue);
+  --marp-mermaid-muted: var(--genie-muted);
+
+  /* Marp Core v5 Shiki tokens (code highlighting) */
+  --marp-shiki-foreground: var(--genie-fg);
+  --marp-shiki-background: var(--genie-surface);
+  --marp-shiki-line-highlight: oklch(95% 0.02 250 / 0.7);
+  --marp-shiki-token-constant: #0b7285;
+  --marp-shiki-token-string: #2b8a3e;
+  --marp-shiki-token-comment: var(--genie-muted);
+  --marp-shiki-token-keyword: var(--genie-blue-dark);
+  --marp-shiki-token-parameter: #e67700;
+  --marp-shiki-token-function: #ae3ec9;
+  --marp-shiki-token-string-expression: #2b8a3e;
+  --marp-shiki-token-punctuation: #495057;
+  --marp-shiki-token-link: #1971c2;
+
+  /* Typography & layout defaults */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--genie-fg);
+  background:
+    radial-gradient(circle at 100% 0%, oklch(42% 0.18 265 / 0.04), transparent 50%),
+    var(--genie-surface);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  padding: 2.5rem 3.5rem;
+}
+
+
+/* ============================================================================
+ * 3. Headings
+ * ============================================================================
+ */
+section h1 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  color: var(--genie-blue);
+  letter-spacing: -0.02em;
+  font-size: 2.2rem;
+  margin-top: 0.2rem;
+  margin-bottom: 0;
+}
+
+/* Consistent content gap after the header block (eyebrow + h1).
+   Every direct child of <section> that follows the h1 gets the same
+   top margin via the --genie-content-gap token. This avoids enumerating
+   each possible content type (ul, ol, p, table, .columns, mermaid SVG,
+   future additions) and keeps the design system extensible. */
+section > h1 + *,
+section > h1 + .eyebrow + * {
+  margin-top: var(--genie-content-gap);
+}
+
+section h2 {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  color: var(--genie-fg);
+  letter-spacing: -0.01em;
+  font-size: 1.6rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.2rem;
+  position: relative;
+}
+section h2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 3rem;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--genie-blue), var(--genie-accent));
+}
+
+section h3 {
+  font-weight: 600;
+  color: var(--genie-blue-dark);
+  font-size: 1.3rem;
+}
+section strong {
+  color: var(--genie-blue);
+}
+
+
+/* ============================================================================
+ * 4. Code & tables
+ * ============================================================================
+ */
+section code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.85em;
+  background: var(--genie-blue-light);
+  color: var(--genie-blue-dark);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+section table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+section th {
+  background: var(--genie-blue);
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+section td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--genie-border);
+}
+section tr:nth-child(even) td {
+  background: var(--genie-bg);
+}
+
+section ul,
+section ol {
+  padding-left: 1.5em;
+}
+section li {
+  margin-bottom: 0.3em;
+}
+
+
+/* ============================================================================
+ * 5. Layout helpers
+ * ============================================================================
+ */
+
+/* Two-column body. Each direct <div> child is one column. */
+.columns {
+  display: flex;
+  gap: 2rem;
+}
+.columns > div {
+  flex: 1;
+}
+/* Asymmetric columns: 30/70 split (e.g. narrow rails + wide flow). */
+.columns > div.narrow {
+  flex: 0 0 30%;
+}
+.columns > div.wide {
+  flex: 0 0 68%;
+}
+/* Asymmetric columns: 25/75 split for very narrow side (e.g. diagram labels). */
+.columns > div.x-narrow {
+  flex: 0 0 22%;
+}
+.columns > div.x-wide {
+  flex: 0 0 75%;
+}
+.columns ul {
+  margin-top: 0;
+}
+
+/* Eyebrow: small uppercase label above a slide title. */
+.eyebrow {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 1.05rem; /* up from 0.7rem for stronger visual hierarchy */
+  font-weight: 500;
+  color: var(--genie-muted);
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+
+/* Metric cards row. Wrap as < <div class="metric-row"> <div class="metric">… */
+.metric-row {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin: 2rem 0;
+}
+.metric {
+  text-align: center;
+  padding: 1.3rem 1.5rem;
+  background: var(--genie-surface);
+  border-radius: 12px;
+  border: 1px solid var(--genie-border);
+  box-shadow: 0 2px 8px oklch(20% 0.02 250 / 0.06), 0 8px 24px oklch(20% 0.02 250 / 0.04);
+}
+.metric .number {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--genie-blue);
+  line-height: 1.1;
+}
+.metric .label {
+  font-size: 0.75rem;
+  color: var(--genie-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 0.3rem;
+}
+.metric::before {
+  content: '';
+  display: block;
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  margin: 0 auto 0.6rem auto;
+  background: linear-gradient(90deg, var(--genie-blue), var(--genie-accent));
+}
+
+/* Operational benefit / "Key idea" callout. */
+.ops-benefit {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: oklch(98% 0.005 160 / 0.6);
+  border-left: 3px solid oklch(62% 0.17 162 / 0.6);
+  border-radius: 0 10px 10px 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.ops-benefit strong {
+  color: oklch(42% 0.14 162);
+}
+/* Variant: blue "info" tone for second ops-benefit on the same slide. */
+.ops-benefit.is-info {
+  background: oklch(95% 0.02 265 / 0.6);
+  border-left-color: var(--genie-blue);
+  margin-top: 0.4rem;
+}
+.ops-benefit.is-info strong {
+  color: var(--genie-blue-dark);
+}
+
+/* Agenda item — for the "Agenda" slide. */
+.agenda-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--genie-fg);
+}
+.agenda-item span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--genie-blue-light);
+  color: var(--genie-blue);
+  font-weight: 700;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+
+/* ============================================================================
+ * 6. Title & closing slide layouts
+ * ============================================================================
+ * Apply via the spot directive: <!-- _class: title --> or <!-- _class: closing -->.
+ */
+section.title {
+  background:
+    radial-gradient(circle at 18% 22%, oklch(42% 0.18 265 / 0.18), transparent 45%),
+    radial-gradient(circle at 82% 28%, oklch(62% 0.17 162 / 0.12), transparent 45%),
+    radial-gradient(circle at 50% 100%, oklch(42% 0.18 265 / 0.10), transparent 60%),
+    var(--genie-bg);
+  color: var(--genie-fg);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+section.title > .columns {
+  align-self: stretch;
+}
+section.title h1 {
+  color: var(--genie-blue);
+  font-size: 2.8rem;
+  letter-spacing: -0.03em;
+}
+section.title .subtitle {
+  color: var(--genie-muted);
+  font-size: 1.3rem;
+  margin-top: 0.5rem;
+  font-weight: 400;
+}
+section.title .date {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.9rem;
+  margin-top: 1.5rem;
+  color: var(--genie-muted);
+}
+section.title .eyebrow {
+  color: var(--genie-muted);
+  margin-bottom: 0.5rem;
+}
+
+section.closing {
+  background:
+    radial-gradient(circle at 18% 22%, oklch(42% 0.18 265 / 0.18), transparent 45%),
+    radial-gradient(circle at 82% 28%, oklch(62% 0.17 162 / 0.12), transparent 45%),
+    radial-gradient(circle at 50% 100%, oklch(42% 0.18 265 / 0.10), transparent 60%),
+    var(--genie-bg);
+  color: var(--genie-fg);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+section.closing h1 {
+  color: var(--genie-blue);
+  font-size: 2.8rem;
+}
+section.closing p {
+  color: var(--genie-muted);
+  font-size: 1.2rem;
+}
+
+/* Demo break slide — vibrant gradient backdrop with a center "play" badge
+   to signal live demo to the audience. Use via <!-- _class: demo -->. */
+section.demo {
+  background:
+    radial-gradient(circle at 18% 22%, oklch(72% 0.20 25 / 0.30), transparent 45%),
+    radial-gradient(circle at 82% 28%, oklch(68% 0.22 295 / 0.28), transparent 45%),
+    radial-gradient(circle at 50% 100%, oklch(75% 0.18 162 / 0.20), transparent 60%),
+    var(--genie-surface);
+  color: var(--genie-fg);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+section.demo::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60cqh;
+  height: 60cqh;
+  margin: -30cqh 0 0 -30cqh;
+  background: radial-gradient(circle, oklch(75% 0.18 295 / 0.18) 0%, transparent 60%);
+  animation: pulse 3s ease-in-out infinite;
+  z-index: 0;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+section.demo h1 {
+  color: var(--genie-blue);
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  z-index: 1;
+  margin: 0;
+}
+section.demo .eyebrow {
+  color: var(--genie-blue-dark);
+  font-size: 1.05rem;
+  z-index: 1;
+  margin-bottom: 0.4rem;
+}
+section.demo .columns {
+  z-index: 1;
+  max-width: 80%;
+  margin-top: 1rem;
+}
+section.demo .ops-benefit {
+  z-index: 1;
+  background: oklch(100% 0 0 / 0.85);
+  margin-top: 1.5rem;
+  border: 1px solid var(--genie-border);
+}
+section.demo .brand-pill {
+  position: absolute;
+  z-index: 2;
+  top: 1rem;
+  right: 1.5rem;
+  left: auto;
+}
+section.demo .columns > div {
+  background: oklch(100% 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid var(--genie-border);
+  text-align: left;
+}
+section.demo .columns h3 {
+  color: var(--genie-blue);
+  font-size: 1.05rem;
+}
+
+/* Session divider — large numeric + title + tagline, no background image.
+   Uses the brand-blue background gradient so dividers read as visual anchors. */
+/* Inline visual card — wrap PPTX illustrations in a soft panel. */
+section img {
+  max-width: 100%;
+  max-height: 80cqh;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+/* Image inside a 2-col layout — cap height so it never dwarfs the text column. */
+section .columns img {
+  max-height: 50cqh;
+}
+section .visual-card {
+  background: var(--genie-surface);
+  border-radius: 12px;
+  border: 1px solid var(--genie-border);
+  padding: 0.8rem;
+  box-shadow: 0 2px 8px oklch(20% 0.02 250 / 0.06), 0 8px 24px oklch(20% 0.02 250 / 0.04);
+}
+section .visual-card img {
+  margin: 0 auto;
+}
+section .caption,
+section .visual-card .caption {
+  font-size: 0.75rem;
+  color: var(--genie-muted);
+  text-align: center;
+  margin-top: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Two-column split where one side is a visual (right column auto-fits image). */
+section .columns.has-visual > div:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Pillar / capability cards — used for the "5 brand pillars" slide. */
+.card-row {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+.card {
+  flex: 1 1 28%;
+  min-width: 220px;
+  max-width: 320px;
+  text-align: center;
+  padding: 1rem 0.8rem;
+  background: var(--genie-surface);
+  border-radius: 12px;
+  border: 1px solid var(--genie-border);
+  box-shadow: 0 2px 8px oklch(20% 0.02 250 / 0.06), 0 8px 24px oklch(20% 0.02 250 / 0.04);
+}
+.card::before {
+  content: '';
+  display: block;
+  width: 2rem;
+  height: 3px;
+  border-radius: 2px;
+  margin: 0 auto 0.6rem auto;
+  background: linear-gradient(90deg, var(--genie-blue), var(--genie-accent));
+}
+.card-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--genie-blue);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.card-name {
+  color: var(--genie-blue-dark);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-top: 0.2rem;
+}
+.card p,
+.card-body {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 0.3rem 0;
+  color: var(--genie-fg);
+}
+.card em {
+  font-size: 0.72rem;
+  color: var(--genie-blue-dark);
+}
+
+/* Comparison rows — used on the "business as usual vs GENIE" slide. */
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1.5fr;
+  gap: 0.4rem 1rem;
+  font-size: 0.95rem;
+  margin-top: 0.6rem;
+}
+.compare .head {
+  font-weight: 700;
+  color: var(--genie-blue-dark);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--genie-blue);
+}
+.compare .label {
+  color: var(--genie-muted);
+  font-weight: 600;
+}
+.compare .ba {
+  color: oklch(45% 0.18 25);
+}
+.compare .genie {
+  color: oklch(40% 0.16 162);
+}
+.compare .cell {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--genie-border);
+}
+section.section-divider {
+  --genie-content-gap: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  text-align: left;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 100% 0%, oklch(42% 0.18 265 / 0.25), transparent 50%),
+    radial-gradient(circle at 0% 100%, oklch(42% 0.14 162 / 0.18), transparent 55%),
+    linear-gradient(135deg, var(--genie-blue) 0%, var(--genie-blue-dark) 100%);
+  padding: 2.5rem 3.5rem;
+}
+section.section-divider h1 {
+  color: #ffffff;
+  font-size: 2.6rem;
+  letter-spacing: -0.02em;
+  max-width: 75%;
+}
+section.section-divider .eyebrow {
+  color: oklch(85% 0.10 162);
+  font-size: 1.15rem;
+}
+section.section-divider .tagline {
+  color: oklch(96% 0.02 250);
+  font-size: 1.3rem;
+  font-weight: 400;
+  margin-top: 0.6rem;
+  max-width: 70%;
+}
+section.section-divider .section-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 6rem;
+  font-weight: 700;
+  color: oklch(85% 0.10 162);
+  line-height: 1;
+  opacity: 0.85;
+  margin-bottom: 0.5rem;
+}
+/* Hide footer + pagination on dividers — the slide is its own anchor. */
+section.section-divider footer,
+section.section-divider::after {
+  display: none !important;
+}
+
+/* Brand pill + hero band — used in the title slide.
+   Both pull images from sibling files in the themes/ directory, so decks
+   do not need to inline assets. Add `--allow-local-files` to the marp-cli
+   invocation so the renderer can read them at build time. */
+.brand-pill {
+  position: absolute;
+  top: 2rem;
+  left: 2.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: oklch(100% 0 0 / 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 10px;
+  padding: 0.5rem 1rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: -0.02em;
+  color: var(--genie-blue-dark);
+  box-shadow: 0 1px 3px oklch(20% 0.02 250 / 0.06);
+  z-index: 1;
+}
+.brand-pill::before {
+  content: '';
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  background-image: url(themes/genie-ai-logo-24.png);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.hero-band {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28%;
+  overflow: hidden;
+  z-index: 0;
+  opacity: 0.70;
+  background-image: url(themes/hero-visual.jpg);
+  background-size: cover;
+  background-position: center 65%;
+  background-repeat: no-repeat;
+}
+
+
+/* ============================================================================
+ * 7. Footer
+ * ============================================================================
+ * The footer text is set via the `footer:` frontmatter key.
+ */
+/* Pattern borrowed from marp-core's default theme:
+   https://github.com/marp-team/marp-core/blob/main/themes/default.scss
+   Position both <footer> (logo + brand text) and section::after (page
+   number) at the same `bottom` so they line up vertically. The logo is
+   injected via a ::before pseudo-element so decks only need to set the
+   footer text in their frontmatter. */
+footer {
+  position: absolute;
+  left: 1.875rem;
+  bottom: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: -0.02em;
+  color: var(--genie-muted);
+}
+footer::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background-image: url(themes/genie-ai-logo-24.png);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+/* Page number — inherits Marpit scaffold's `content: attr(...)` and
+   `right: 0; bottom: 0`. Override padding/font so it matches the footer. */
+section::after {
+  right: 1.875rem !important;
+  bottom: 1.3rem !important;
+  padding: 0 !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 0.7rem !important;
+  letter-spacing: -0.02em !important;
+  color: var(--genie-muted) !important;
+}
+
+/* Hide pagination when `_paginate: false` (Marpit already does this, but
+   pinning here in case the scaffold rule is overridden later). */
+section:not([data-marpit-pagination])::after {
+  display: none !important;
+}
+
+/* Title and closing slides have `display: flex; flex-direction: column;
+   justify-content: center;`. An absolutely-positioned <footer> still works
+   (it's pulled out of the flex flow), but we hide it on these layouts to
+   keep the visual clean — the brand pill in the corner is enough branding. */
+section.title footer,
+section.closing footer {
+  display: none;
+}
+
+
+/* ============================================================================
+ * 8. Mermaid diagrams
+ * ============================================================================
+ * Rendered via the Mermaid plugin loaded by `@marp-team/marp-core/full`
+ * (pass --engine @marp-team/marp-core/full to marp-cli). Diagrams pick up
+ * the `--marp-mermaid-*` variables defined above. Per-node styling uses
+ * `:::role` markers plus matching `classDef` lines pasted at the end of
+ * each Mermaid block (see §9).
+ *
+ * Roles:
+ *   :::client  external user / consumer
+ *   :::gateway entry point (Kong, proxy, LB)
+ *   :::core    platform / business-logic services
+ *   :::data    storage / persistence
+ *   :::ai      AI / ML services
+ *   :::orch    orchestration layer (dashed border)
+ *   :::risk    failure / warning node (red)
+ *   :::ok      success / safety node (green)
+ */
+
+/* Layout: center the SVG, cap its size, soften node shapes. */
+section svg[data-marp-mermaid] {
+  display: block;
+  margin: 1.4rem auto 1.2rem auto;
+  max-width: 92%;
+  max-height: 70cqh;
+  height: auto;
+  width: auto;
+}
+/* Mermaid size variants — narrower column for compact diagrams (e.g. rails). */
+section .mermaid-narrow svg[data-marp-mermaid] {
+  max-width: 100%;
+  max-height: 50cqh;
+}
+section .mermaid-wide svg[data-marp-mermaid] {
+  max-width: 100%;
+  max-height: 65cqh;
+}
+section svg[data-marp-mermaid] .node rect,
+section svg[data-marp-mermaid] .node polygon,
+section svg[data-marp-mermaid] .node ellipse,
+section svg[data-marp-mermaid] .node path {
+  rx: 6;
+  ry: 6;
+}
+
+/* Subgraph / group label — subtle GENIE blue tint. */
+section svg[data-marp-mermaid] .node[data-shape="subgraph"] rect,
+section svg[data-marp-mermaid] g.node[data-shape="subgraph"] rect {
+  fill: var(--genie-blue-light);
+  stroke: var(--genie-blue);
+}
+
+/* Strong labels inside nodes (Mermaid **...**) render bold; default weight. */
+section svg[data-marp-mermaid] text tspan {
+  font-weight: inherit;
+}
+section svg[data-marp-mermaid] g.node text {
+  font-weight: 600;
+}
+
+
+/* ============================================================================
+ * 9. Standard Mermaid classDef — copy/paste into Mermaid fences
+ * ============================================================================
+ * Paste these lines at the end of any Mermaid block that uses `:::role`
+ * annotations. We do not auto-apply them via CSS because beautiful-mermaid
+ * injects inline fill/stroke styles on <rect> nodes — CSS-only override is
+ * unreliable.
+ *
+ *   classDef client fill:#ffffff,stroke:#94a3b8,stroke-width:1px,color:#475569;
+ *   classDef gateway fill:#ffffff,stroke:#1b3fad,stroke-width:2px,color:#1b3fad;
+ *   classDef core fill:#ffffff,stroke:#34373d,stroke-width:1px,color:#34373d;
+ *   classDef data fill:#eef3ff,stroke:#1b3fad,stroke-width:1.5px,color:#122f87;
+ *   classDef ai fill:#f0fdf6,stroke:#2b855b,stroke-width:1.5px,color:#1f5e3f;
+ *   classDef orch fill:#ffffff,stroke:#7c3aed,stroke-width:1.5px,stroke-dasharray:4 3,color:#5b21b6;
+ *   classDef risk fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
+ *   classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
+ */

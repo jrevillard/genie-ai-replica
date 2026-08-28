@@ -406,9 +406,9 @@ section.demo::before {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 60vh;
-  height: 60vh;
-  margin: -30vh 0 0 -30vh;
+  width: 60cqh;
+  height: 60cqh;
+  margin: -30cqh 0 0 -30cqh;
   background: radial-gradient(circle, oklch(75% 0.18 295 / 0.18) 0%, transparent 60%);
   animation: pulse 3s ease-in-out infinite;
   z-index: 0;
@@ -467,15 +467,15 @@ section.demo .columns h3 {
 /* Inline visual card — wrap PPTX illustrations in a soft panel. */
 section img {
   max-width: 100%;
-  max-height: 60vh;
+  max-height: 80cqh;
   height: auto;
   display: block;
   margin: 0 auto;
   border-radius: 8px;
 }
-/* Image inside a 2-col layout — cap so it never dwarfs the text column. */
+/* Image inside a 2-col layout — cap height so it never dwarfs the text column. */
 section .columns img {
-  max-height: 50vh;
+  max-height: 50cqh;
 }
 section .visual-card {
   background: var(--genie-surface);
@@ -775,18 +775,18 @@ section svg[data-marp-mermaid] {
   display: block;
   margin: 1.4rem auto 1.2rem auto;
   max-width: 92%;
-  max-height: 70vh;
+  max-height: 70cqh;
   height: auto;
   width: auto;
 }
 /* Mermaid size variants — narrower column for compact diagrams (e.g. rails). */
 section .mermaid-narrow svg[data-marp-mermaid] {
   max-width: 100%;
-  max-height: 50vh;
+  max-height: 50cqh;
 }
 section .mermaid-wide svg[data-marp-mermaid] {
   max-width: 100%;
-  max-height: 65vh;
+  max-height: 65cqh;
 }
 section svg[data-marp-mermaid] .node rect,
 section svg[data-marp-mermaid] .node polygon,

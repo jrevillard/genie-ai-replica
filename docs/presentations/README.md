@@ -32,14 +32,7 @@ npx @marp-team/marp-cli <deck>.md \
   --html --allow-local-files --no-stdin \
   -o <deck>.html
 
-# 2. Generate PDF (also from the .md, output next to the source)
-npx @marp-team/marp-cli <deck>.md \
-  --theme-set themes/genie-ai.css \
-  --engine @marp-team/marp-core/full \
-  --pdf --allow-local-files --no-stdin \
-  -o <deck>.pdf
-
-# 2. Generate PDF from html
+# 2. Generate PDF from the HTML (Chromium print-to-PDF)
 chromium \
   --headless \
   --disable-gpu \
@@ -47,11 +40,14 @@ chromium \
   "file://$(pwd)/<deck>.html"
 ```
 
-Both commands read from the **same** `<deck>.md`. The HTML step is run
-first so you can visually verify the build in a browser (which renders
-inline styles faithfully); the PDF step then re-renders from markdown.
+The first command generates HTML from the `.md`; the second prints
+that HTML to PDF via headless Chromium. This two-step process avoids
+the Marp PDF renderer - its XSS sanitiser strips some `style="..."`
+attributes, so the direct `.md -> .pdf` path loses inline styles.
+Going through HTML keeps the PDF faithful to the browser preview.
 Outputting to a separate `output/` dir would break every internal asset
-reference — keep both files next to the source.
+reference - keep both files next to the source. Requires
+Chromium/Chrome installed locally (or a Docker image with Chromium).
 
 **Flags explained:**
 

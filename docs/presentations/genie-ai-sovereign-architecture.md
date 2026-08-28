@@ -12,15 +12,13 @@ footer: 'GENIE.AI'
 <div class="hero-band"></div>
 <div class="brand-pill">GENIE.AI</div>
 
-<div class="eyebrow">GENIE.AI — Sovereign RAG Framework</div>
+<div class="eyebrow">Sovereign RAG Framework</div>
 
-# Sovereign AI for<br>the Public Sector
+# GENIE.AI<br>Discovery Workshop
 
-<div class="subtitle">Discovery Workshop — Part 1 of 2 · GENIE.AI Deep Dive</div>
 <div class="subtitle" style="font-size: 1rem; margin-top: 0.3rem;">
-Government of Kenya · ITU Technical Working Group
+Government of Kenya & ITU Technical Working Group
 </div>
-
 
 ---
 
@@ -29,77 +27,35 @@ Government of Kenya · ITU Technical Working Group
 
 <div class="brand-pill">GENIE.AI</div>
 
-<div class="eyebrow">Workshop — Part 1 · 60 min</div>
+<div class="eyebrow">Master Workshop Agenda</div>
 
 # Agenda
 
-<div class="columns">
-<div>
-
-<div class="agenda-item"><span>1</span> Sovereign AI &amp; Architecture Fundamentals</div>
-<div class="agenda-item"><span>2</span> Hybrid Ingestion, Vector-Graph RAG &amp; Multilingual</div>
-
-</div>
-<div>
-
-<div class="agenda-item"><span>3</span> Security, IAM &amp; Zero-Hallucination Governance</div>
-<div class="agenda-item"><span>4</span> Live Architecture Walkthrough &amp; Case Studies</div>
-
-</div>
-</div>
-
-<br><br><br><br>
-
-Part 2 — Agile Scoping (1 h) follows.
+<div style="text-align:left; margin: 0.6rem 0; z-index: 1; line-height: 1;">
 
 
----
+### Introduction (30 min)
+- **Welcome address** (10 min)
+- **Around the table** (20 min)
 
-<div class="eyebrow">Before we start · 60-second shared definition</div>
+### Part 1 — Technical & Sovereign Overview (30 min)
+- **Session 1** — Sovereign AI & Architecture Fundamentals
+- **Session 2** — Ingestion, Graph-RAG & Multilingual
+- **Session 3** — Security, IAM (Keycloak) & Governance
+- **Session 4** — Live Architecture Walkthrough & Case Studies
 
-# What is GENIE.AI
-
-<div class="columns"">
-
-<div>
-<br>
-
-**ITU GENIE.AI** — *Global Empowerment through Intelligence and Equity.*
-
-An **open-source framework** for public institutions to prototype, deploy and run custom generative AI solutions — chatbots, assistants, content tools — **at low cost, with full control, and without external API calls.**
-
-Runs on **government-controlled infrastructure**: Intel/NVIDIA stacks, Docker Swarm or Kubernetes. **An ITU initiative**.
+### Part 2 — Agile Scoping & Use Case Alignment (1 h 30 min)
+- **Practice 1** — Marketplace of Skills (Capability Mapping)
+- **Practice 2** — Lean Impact Mapping (Corpus Discovery)
+- **Practice 3** — Ease vs. Value Matrix & Dot Voting
+- Action Items & Phase 1 Deliverables
 
 </div>
-<div>
-
-![GENIE.AI logo mark](assets/genie-logo-mark.png)
-
-<div class="caption">ITU · Open Source</div>
-
-</div>
-</div>
-
-<div class="ops-benefit"><strong>Why now:</strong> governments want AI but most can't afford proprietary solutions, lack sovereign data control, and depend on vendors locked to non-local languages.</div>
-
-
----
-
-<!-- _class: session-divider -->
-<!-- _paginate: false -->
-
-<div class="session-num">01</div>
-<div class="eyebrow">Session 1</div>
-
-# Why Sovereign AI &amp;<br>Architecture
-
-<div class="tagline">Public-sector AI under government control — from silicon to UI.</div>
-
 
 ---
 
 
-<div class="eyebrow">Session 1 · The GENIE.AI mandate</div>
+<div class="eyebrow">The GENIE.AI mandate</div>
 
 # A Strategic Approach to Public Value
 
@@ -137,12 +93,17 @@ Runs on **government-controlled infrastructure**: Intel/NVIDIA stacks, Docker Sw
 </div>
 </div>
 
-
 ---
 
-<div class="eyebrow">Session 1 · Mandate alignment</div>
+<div class="eyebrow">Mandate alignment</div>
 
 # Aligned with ITU-D Resolutions
+
+<style scoped>
+section .columns img {
+  max-height: 62cqh;
+}
+</style>
 
 <div class="columns">
 <div>
@@ -159,6 +120,7 @@ All operationalized through the **Baku Declaration &amp; Baku Action Plan (2026�
 <div>
 
 ![ITU-D priorities and AFR Flagship — Kenya](assets/genie-itud-priorities.png)
+
 <div class="caption">ITU-D priorities · AFR Flagship = Kenya</div>
 
 </div>
@@ -166,6 +128,92 @@ All operationalized through the **Baku Declaration &amp; Baku Action Plan (2026�
 
 <div class="ops-benefit"><strong>AFR Flagship — Kenya:</strong> GENIE.AI is the designated AI framework for the ITU Africa Regional Initiative.</div>
 
+
+---
+
+<div class="eyebrow">60-second shared definition</div>
+
+# What is GENIE.AI
+
+<div class="columns">
+
+<div>
+<br>
+
+**ITU GENIE.AI** — *Global Empowerment through Intelligence and Equity.*
+
+An **open-source framework** for public institutions to prototype, deploy and run custom generative AI solutions — chatbots, assistants, content tools — **at low cost, with full control, and without external API calls.**
+
+Runs on **government-controlled infrastructure**: Intel/NVIDIA stacks, Docker Swarm or Kubernetes. **An ITU initiative**.
+
+</div>
+<div>
+
+![GENIE.AI logo mark](assets/genie-logo-mark.png)
+
+<div class="caption">ITU · Open Source</div>
+
+</div>
+</div>
+
+<div class="ops-benefit"><strong>Why now:</strong> governments want AI but most can't afford proprietary solutions, lack sovereign data control, and depend on vendors locked to non-local languages.</div>
+
+
+
+---
+
+<!-- _class: title -->
+<!-- _paginate: false -->
+
+<div class="hero-band"></div>
+<div class="brand-pill">GENIE.AI</div>
+
+<div class="eyebrow">GENIE.AI — Sovereign RAG Framework</div>
+
+# Part 1 of 2 · GENIE.AI Deep Dive
+
+
+---
+
+<!-- _class: title -->
+<!-- _paginate: false -->
+
+<div class="brand-pill">GENIE.AI</div>
+
+<div class="eyebrow">Workshop — Part 1 · 30 min</div>
+
+# Agenda
+
+<div class="columns">
+<div>
+
+<div class="agenda-item"><span>1</span> Sovereign AI &amp; Architecture Fundamentals</div>
+<div class="agenda-item"><span>2</span> Hybrid Ingestion, Vector-Graph RAG &amp; Multilingual</div>
+
+</div>
+<div>
+
+<div class="agenda-item"><span>3</span> Security, IAM &amp; Governance</div>
+<div class="agenda-item"><span>4</span> Live Architecture Walkthrough &amp; Case Studies</div>
+
+</div>
+</div>
+
+<br><br><br><br>
+
+Part 2 — Agile Scoping (1 h 30 min) follows.
+
+---
+
+<!-- _class: session-divider -->
+<!-- _paginate: false -->
+
+<div class="session-num">01</div>
+<div class="eyebrow">Session 1</div>
+
+# Sovereign AI & Architecture
+
+<div class="tagline">Public-sector AI under government control — from silicon to UI.</div>
 
 ---
 
@@ -193,8 +241,6 @@ All operationalized through the **Baku Declaration &amp; Baku Action Plan (2026�
 </div>
 </div>
 
-</div>
-
 <div class="columns">
 <div style="flex: 5;">
 
@@ -220,9 +266,9 @@ classDef ai fill:#f0fdf6,stroke:#2b855b,stroke-width:1.5px,color:#1f5e3f;
 
 ```mermaid
 flowchart LR
-  subgraph RAILS ["🔐 Identity & 📡 Observability"]
-    KC["🔐 Keycloak 26<br/>JWKS validation"]:::rail
-    OTEL["📡 OTel Collector<br/>W3C traceparent"]:::rail
+  subgraph RAILS ["🔐 Security & 📡 Observability"]
+    KC["🔐 OpenId Connect<br/>Keycloak JWKS validation"]:::rail
+    OTEL["📡 OpenTelemetry Collector<br/>W3C traceparent"]:::rail
   end
 
 classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
@@ -231,7 +277,7 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 </div>
 </div>
 
-<div class="ops-benefit"><strong>Key idea:</strong> the data flow lives entirely on your stack. Identity (Keycloak 26) and observability (OTel + W3C traceparent) are <em>rails</em> across every hop — not bolt-ons.</div>
+<div class="ops-benefit"><strong>Key idea:</strong> every layer — gateway, app, retrieval, inference — is open-source and runs on government infrastructure. No external API calls, no data leaves your stack.</div>
 
 ---
 
@@ -258,38 +304,63 @@ classDef rail fill:#fef2f2,stroke:#dc2626,stroke-width:1.5px,color:#991b1b;
 
   <div class="label">UI languages</div>
   <div class="ba">1 (English) or expensive add-on</div>
-  <div class="genie">11+ from a single English index</div>
+  <div class="genie">14+ from a single English index</div>
 
   <div class="label">Vendor lock-in</div>
   <div class="ba">Proprietary weights + APIs</div>
   <div class="genie">Open weights, open source (DPG)</div>
 </div>
 
-<br>
+<style scoped>
+section .compare {
+  font-size: 1.15rem;
+  gap: 0.7rem 1rem;
+  margin-bottom: 1.2rem;
+}
+section .compare .head {
+  font-size: 0.95rem;
+  padding-bottom: 0.5rem;
+}
+section .columns {
+  font-size: 1rem;
+}
+section .columns h3 {
+  font-size: 1.15rem;
+  margin: 0.4rem 0 0.15rem 0;
+}
+section .columns ul {
+  margin: 0.15rem 0 0.45rem 0;
+}
+section .ops-benefit {
+  font-size: 0.95rem;
+  margin-top: 0.9rem;
+}
+</style>
 
 <div class="columns">
 <div>
 
+### All artefacts in your jurisdiction
+- Docker images · models · vector store · auth/autz · telemetry
 
-### - All artefacts in your jurisdiction
-- Docker images · models · vector store · auth/autz · traces · logs metrics
-
-### - Open weights, open source
-- Apache-2.0 / MIT. Compliant with the **OSI Open Source AI Definition**.
-- No proprietary model APIs. **Digital Public Good** (DPG) registered.
+### Open weights, open source
+- Apache-2.0 / MIT — compliant with the **OSI Open Source AI Definition**.
+- No proprietary model APIs. **Digital Public Good** (DPG) compliant.
 
 </div>
 <div>
 
-### - Hardware-agnostic
+### Hardware-agnostic
 - Intel &amp; NVIDIA stacks validated. vLLM + TEI inference.
 
-### - No vendor lock-in
+### No vendor lock-in
 - Same compose file: laptop PoC → Docker Swarm production.
 - _Kubernetes manifests planned (same images, different orchestrator)._
 
 </div>
 </div>
+
+<div class="ops-benefit"><strong>Takeaway:</strong> sovereignty is measurable — cost, timeline, data residency, languages, lock-in — and every row improves at once.</div>
 
 ---
 
@@ -454,6 +525,22 @@ classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
 
 # Hybrid Vector–Graph Retrieval
 
+<style scoped>
+section svg[data-marp-mermaid] {
+  margin: 0.3rem auto;
+}
+section .ops-benefit {
+  margin-top: 0.25rem;
+  padding: 0.4rem 0.9rem;
+}
+section .columns h3 {
+  margin: 0.25rem 0 0.1rem 0;
+}
+section .columns ul {
+  margin: 0.1rem 0 0.15rem 0;
+}
+</style>
+
 ```mermaid
 flowchart LR
   Q["🔍 Query"] --> E["TEI embed"]:::core
@@ -487,7 +574,7 @@ classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:1.5px,color:#166534;
 </div>
 <div>
 
-### What GENIE does ?
+### What GENIE.AI does:
 1. **Embed** the query (TEI).
 2. **Vector search** over ArangoDB (similar chunks).
 3. **Graph expansion** (by the retriever over ArangoDB graph) — pull parents, refs, definitions.
@@ -514,8 +601,8 @@ sequenceDiagram
   participant TA as Translate → UI lang
 
   U->>TQ: query 🇹🇿
-  TQ->>R: Query (🏴󠁧󠁢󠁥󠁮󠁧󠁿)
-  R->>TA: Answer (🏴󠁧󠁢󠁥󠁮󠁧󠁿)
+  TQ->>R: Query (🇬🇧)
+  R->>TA: Answer (🇬🇧)
   TA->>U: Answer (🇹🇿)
 ```
 
@@ -621,7 +708,7 @@ classDef ok fill:#f0fdf6,stroke:#16a34a,stroke-width:2px,color:#166534;
 
 ### What this means for you
 - **OIDC at the edge** — login flow handled by Keycloak, tokens issued via standard OIDC.
-- **JWT verified in depth** — Not only inb backend but also in OPEA.
+- **JWT verified in depth** — verified not only in the backend but also in the OPEA services.
 - **IDP swap is config** — change provider, keep the same JWT contract on the backend.
 
 </div>
@@ -665,8 +752,8 @@ sequenceDiagram
   <div class="metric"><div class="number">RFC</div><div class="label">W3C Trace Context standard</div></div>
 </div>
 
-### Laverage: 
-- **VictoriaMetrics**, **VictoriaLogs** and **VictoriaTrace** solution for storage
+### Leverage:
+- **VictoriaMetrics**, **VictoriaLogs** and **VictoriaTraces** solution for storage
 - **Grafana** for dashboards
 
 </div>
@@ -701,7 +788,7 @@ sequenceDiagram
 ### What to watch for
 - **Latency per hop** — vector search vs LLM generation.
 - **Citation** — the answer shows which document chunk was used.
-- **RAG efficiency** — no hallucinations, the model answer properly.
+- **Grounding** — the model answers from cited chunks only.
 
 </div>
 </div>
@@ -726,6 +813,21 @@ sequenceDiagram
 <div class="eyebrow">Session 4 · Deployment paths</div>
 
 # One Stack, Four Deployment Paths
+
+<style scoped>
+section .columns h3 {
+  margin: 0.25rem 0 0.1rem 0;
+}
+section .columns ul {
+  margin: 0.1rem 0 0.25rem 0;
+}
+section .metric-row {
+  margin-top: 0.5rem;
+}
+section .ops-benefit {
+  margin-top: 0.5rem;
+}
+</style>
 
 <div class="columns">
 <div>
@@ -763,7 +865,7 @@ sequenceDiagram
 </div>
 
 <div class="metric-row">
-  <div class="metric"><div class="number">1</div><div class="label">Same image, 3 paths</div></div>
+  <div class="metric"><div class="number">1</div><div class="label">Same image, all paths</div></div>
   <div class="metric"><div class="number">3</div><div class="label">Compose profiles</div></div>
   <div class="metric"><div class="number">∞</div><div class="label">Scales horizontally</div></div>
 </div>
@@ -850,7 +952,7 @@ flowchart LR
 </div>
 </div>
 
-<div class="ops-benefit"><strong>Two-tier priority:</strong> every config has a built-in default in code; env vars override per deployment. <strong>~60 env vars</strong> documented in `env` — groups: secrets (~10), deployment-specific (~15), runtime toggles (~15), prompt overrides (~3), plus URLs, ports, GPU tuning. Switch models, retuning, obs stack — without touching code.</div>
+<div class="ops-benefit"><strong>Two-tier priority:</strong> every config has a built-in default in code; env vars override per deployment. <strong>~60 env vars</strong> documented in `env` — groups: secrets (~10), deployment-specific (~15), runtime toggles (~15), prompt overrides (~3), plus URLs, ports, GPU tuning. Switch models, re-tune, add the observability stack — without touching code.</div>
 
 
 ---
@@ -895,8 +997,11 @@ flowchart LR
 
 # GENIE.AI in the Field
 
-![GENIE.AI country deployments — Kenya, Lesotho, The Gambia, Bangladesh, El Salvador, Mauritius](assets/genie-country-deployments.png)
-<div class="caption">6 active country pilots · 100+ stakeholders · 1 global mission</div>
+<div style="text-align: center;">
+
+![h:512 GENIE.AI country deployments](assets/genie-country-deployments.png)
+
+</div>
 
 ---
 

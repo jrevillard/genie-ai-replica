@@ -10,29 +10,20 @@ ARG OPEA_VERSION
 WORKDIR /src
 RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 
-# ======== Final Stage: Assembly ========
-# Match OPEA v1.5's base image (python:3.11-slim).
-FROM python:3.11-slim
+# ======== Stage 2: Dependency Builder ========
+# Compiles the hash-pinned Python dependency tree (the 'mariadb' wheel has no
+# manylinux build and compiles against libmariadb-dev). Nothing in this stage
+# ships: build-essential and the -dev headers stay here, cutting the
+# linux-libc-dev kernel-header CVE surface out of the final image.
+FROM python:3.11-slim AS deps_builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libcairo2 \
-    libglib2.0-0 \
-    libjemalloc-dev \
     libmariadb-dev \
-    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Add /app (for 'comps'), the retriever 'src' (for entrypoint),
-# and 'proto' (for api_protocol) to PYTHONPATH
-ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/retrievers/src:/app/comps/cores/proto"
-
-# Step A: Copy the entire OPEA 'comps' directory from the clone
-COPY --from=opea_base /src/comps/ /app/comps/
-
-# Step B: Install dependencies from the committed hash-pinned lock.
+# Install dependencies from the committed hash-pinned lock.
 # The lock is compiled with `make lock-retriever` (uv pip compile
 # --generate-hashes --python-version 3.11) from the GENIE.AI fork of OPEA
 # v1.5's requirements.in. --require-hashes makes the build bit-for-bit
@@ -47,6 +38,37 @@ COPY --from=opea_base /src/comps/ /app/comps/
 # The OpenTelemetry deps are likewise pinned in the lock (no unhashed install).
 COPY genie-ai-overlay/retriever/requirements-cpu.txt /app/requirements-cpu.txt
 RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+
+# ======== Final Stage: Assembly ========
+# Match OPEA v1.5's base image (python:3.11-slim). Runtime libraries only —
+# mariadb links against the shared libmariadb3, no build toolchain ships.
+FROM python:3.11-slim
+
+# Current Debian security updates so the shipped image does not lag
+# distro point-releases between upstream rebuilds.
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    libcairo2 \
+    libglib2.0-0 \
+    libmariadb3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Add /app (for 'comps'), the retriever 'src' (for entrypoint),
+# and 'proto' (for api_protocol) to PYTHONPATH
+ENV PYTHONPATH="${PYTHONPATH}:/app:/app/comps/retrievers/src:/app/comps/cores/proto"
+
+# Step A: Copy the entire OPEA 'comps' directory from the clone
+COPY --from=opea_base /src/comps/ /app/comps/
+
+# Step B: Bring the compiled Python dependency tree from the builder stage
+# (site-packages + console scripts). The interpreter itself comes from the same
+# python:3.11-slim lineage, so the copied tree is ABI-compatible.
+COPY --from=deps_builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=deps_builder /usr/local/bin /usr/local/bin
 
 # Step D: Fix docarray circular import
 # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI

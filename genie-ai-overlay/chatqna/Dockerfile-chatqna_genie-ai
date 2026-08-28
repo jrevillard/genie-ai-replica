@@ -53,6 +53,13 @@ ARG OPEA_VERSION="v1.5"
 
 # Switch back to root to create /app and install packages
 USER root
+
+# Security-patch the base: pull current Debian security updates so the shipped
+# image does not lag distro point-releases between upstream rebuilds.
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Tell Python to include all our custom code paths.

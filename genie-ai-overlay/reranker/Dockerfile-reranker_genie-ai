@@ -13,8 +13,11 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # ======== Final Stage: Assembly ========
 FROM python:3.11-slim
 
-# Install system dependencies required by the original reranker
-RUN apt-get update -y && apt-get install -y --no-install-recommends --fix-missing \
+# Install system dependencies required by the original reranker (upgrade pulls
+# current Debian security updates so the image does not lag point-releases)
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends --fix-missing \
     git \
     curl \
     libgl1 \

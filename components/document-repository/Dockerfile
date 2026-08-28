@@ -1,9 +1,30 @@
-# Use Node.js 22.14.0 as the base image
-FROM node:22
+# document-repository — multi-stage build
+# Stage 1 (builder, full node:22) compiles native npm modules with the full
+# toolchain. Stage 2 (node:22-slim runtime) ships no build toolchain: the slim
+# base drops build-essential/python3/make and their linux-libc-dev kernel-header
+# dependency chain, removing that CVE surface from the scan. An apt upgrade
+# pulls current Debian security updates so the image never lags point-releases.
+FROM node:22 AS builder
 
-# Install system dependencies
+WORKDIR /app
+
+# 1. Copy files needed for 'npm install'
+COPY document-repository/package*.json ./
+COPY shared/lib ./shared-lib
+
+# 2. Run 'npm ci' (root + shared-lib) — uses pinned package-lock.json
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --verbose --fetch-timeout 600000
+RUN cd shared-lib && npm ci
+RUN rm -rf /app/node_modules/shared-lib
+
+# ======== Runtime ========
+FROM node:22-slim
+
+# System dependencies: ClamAV for upload scanning (+ current security updates)
 RUN apt-get update && \
-    apt-get install -y clamav clamav-daemon && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends clamav clamav-daemon && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -21,24 +42,12 @@ RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
 # Create app directory
 WORKDIR /app
 
-# --- FIX: Match the backend's working logic ---
-
-# 1. Copy files needed for 'npm install'
-COPY document-repository/package*.json ./
-COPY shared/lib ./shared-lib
-
-# 2. Run 'npm ci' (root + shared-lib) — uses pinned package-lock.json
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --verbose --fetch-timeout 600000
-RUN cd shared-lib && npm ci
-RUN rm -rf /app/node_modules/shared-lib
-
-# 3. Copy the rest of the application source
+# Application: node_modules from the builder stage + source
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY document-repository/src/ ./src/
 COPY document-repository/scripts/clamav-node.sh ./
 RUN chmod +x clamav-node.sh
-
-# --- End of fix ---
 
 # Create directories for uploads and logs
 RUN mkdir -p uploads logs

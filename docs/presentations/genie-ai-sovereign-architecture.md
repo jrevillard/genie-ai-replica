@@ -205,10 +205,10 @@ Part 2 — Agile Scoping (1 h 30 min) follows.
 
 ---
 
-<!-- _class: session-divider -->
+<!-- _class: section-divider -->
 <!-- _paginate: false -->
 
-<div class="session-num">01</div>
+<div class="section-num">01</div>
 <div class="eyebrow">Session 1</div>
 
 # Sovereign AI & Architecture
@@ -411,10 +411,10 @@ section .ops-benefit {
 
 ---
 
-<!-- _class: session-divider -->
+<!-- _class: section-divider -->
 <!-- _paginate: false -->
 
-<div class="session-num">02</div>
+<div class="section-num">02</div>
 <div class="eyebrow">Session 2</div>
 
 # How GENIE.AI Works
@@ -658,10 +658,10 @@ sequenceDiagram
 
 ---
 
-<!-- _class: session-divider -->
+<!-- _class: section-divider -->
 <!-- _paginate: false -->
 
-<div class="session-num">03</div>
+<div class="section-num">03</div>
 <div class="eyebrow">Session 3</div>
 
 # Trust, Identity &amp;<br>Observability
@@ -797,10 +797,10 @@ sequenceDiagram
 
 ---
 
-<!-- _class: session-divider -->
+<!-- _class: section-divider -->
 <!-- _paginate: false -->
 
-<div class="session-num">04</div>
+<div class="section-num">04</div>
 <div class="eyebrow">Session 4</div>
 
 # Deployments &amp;<br>Country Use Cases

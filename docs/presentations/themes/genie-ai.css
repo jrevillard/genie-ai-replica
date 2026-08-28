@@ -587,7 +587,7 @@ section .columns.has-visual > div:last-child {
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--genie-border);
 }
-section.session-divider {
+section.section-divider {
   --genie-content-gap: 0.85rem;
   display: flex;
   flex-direction: column;
@@ -601,24 +601,24 @@ section.session-divider {
     linear-gradient(135deg, var(--genie-blue) 0%, var(--genie-blue-dark) 100%);
   padding: 2.5rem 3.5rem;
 }
-section.session-divider h1 {
+section.section-divider h1 {
   color: #ffffff;
   font-size: 2.6rem;
   letter-spacing: -0.02em;
   max-width: 75%;
 }
-section.session-divider .eyebrow {
+section.section-divider .eyebrow {
   color: oklch(85% 0.10 162);
   font-size: 1.15rem;
 }
-section.session-divider .tagline {
+section.section-divider .tagline {
   color: oklch(96% 0.02 250);
   font-size: 1.3rem;
   font-weight: 400;
   margin-top: 0.6rem;
   max-width: 70%;
 }
-section.session-divider .session-num {
+section.section-divider .section-num {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 6rem;
   font-weight: 700;
@@ -628,8 +628,8 @@ section.session-divider .session-num {
   margin-bottom: 0.5rem;
 }
 /* Hide footer + pagination on dividers — the slide is its own anchor. */
-section.session-divider footer,
-section.session-divider::after {
+section.section-divider footer,
+section.section-divider::after {
   display: none !important;
 }
 

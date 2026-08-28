@@ -142,7 +142,7 @@ PYEOF
 ## Publish
 
 ```bash
-slidesfly publish output/<deck>.html --title "GENIE.AI — <deck title>"
+slidesfly publish <deck>.html --title "GENIE.AI — <deck title>"
 ```
 
 Install slidesfly: `curl -fsSL https://slidesfly.com/install.sh | sh`.

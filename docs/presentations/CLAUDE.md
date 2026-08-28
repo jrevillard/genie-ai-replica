@@ -49,24 +49,10 @@ is available. The patch is documented in `README.md` section "Marp v5 notes".
 ## Path: post-process HTML for self-contained sharing
 
 To share a single self-contained HTML (e.g. via email), inline the
-PNG/JPG assets as `data:` URIs:
-
-```python
-import base64
-from pathlib import Path
-deck = 'genie-ai-sovereign-architecture'
-html = Path(f'{deck}.html')
-content = html.read_text()
-for ref, img in [('genie-ai-logo-24.png', 'genie-ai-logo-24.png'),
-                 ('hero-visual.jpg', 'hero-visual.jpg')]:
-    data = base64.b64encode(Path(img).read_bytes()).decode()
-    mime = 'image/png' if img.endswith('.png') else 'image/jpeg'
-    content = content.replace(ref, f'data:{mime};base64,{data}')
-html.write_text(content)
-```
-
-The script lives in the human-facing `README.md` and is meant to be
-copy-pasted, not committed as a build step.
+PNG/JPG assets as `data:` URIs — copy-paste the script from the
+"Embed images (self-contained HTML)" section of `README.md`. It indexes
+every PNG under the directory and rewrites relative references; it is
+meant to be run ad hoc, not committed as a build step.
 
 ## Layout class vocabulary (theme `genie-ai.css`)
 
@@ -80,7 +66,7 @@ Reusable layout helpers - copy/paste from the theme:
 - `.brand-pill`, `.hero-band` - title-slide elements
 - `.pillbar`, `.pillbtn` - used on cover/closing
 - `section.title`, `section.closing` - cover and thank-you layouts
-- `section.session-divider` - big numeric + section title divider
+- `section.section-divider` - big numeric + section title divider
 - `.card`, `.card-num`, `.card-name` - visual cards for capability lists
 - `.pillar-row`, `.pillar` - used for "5 brand pillars" card layout
 - `.compare`, `.head`, `.label`, `.ba`, `.genie` - comparison grid
@@ -144,7 +130,7 @@ raw `<img>` tags. Prefer the markdown annotation so decks stay readable.
 - `<!-- _class: title -->` - cover layout (centred, gradient bg, brand pill)
 - `<!-- _class: closing -->` - thank-you layout (centred, gradient bg)
 - `<!-- _class: demo -->` - demo break layout (vibrant gradient, centered)
-- `<!-- _class: session-divider -->` - big numeric + section title
+- `<!-- _class: section-divider -->` - big numeric + section title
 - `<!-- _class: title -->` + `<!-- _paginate: false -->` - disable footer
   on a specific slide
 

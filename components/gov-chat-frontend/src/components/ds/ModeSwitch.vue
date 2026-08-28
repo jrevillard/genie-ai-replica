@@ -11,20 +11,19 @@
       :class="{ 'ds-mode-switch__btn--active': mode === 'basic' }"
       :aria-pressed="mode === 'basic'"
       @click="set('basic')"
-    >{{ basicLabel }}</button>
+    >
+      {{ basicLabel }}
+    </button>
     <button
       type="button"
       class="ds-mode-switch__btn"
       :class="{ 'ds-mode-switch__btn--active': mode === 'expert' }"
       :aria-pressed="mode === 'expert'"
       @click="set('expert')"
-    >{{ expertLabel }}</button>
-    <button
-      type="button"
-      class="ds-mode-switch__help"
-      :aria-label="helpAriaLabel"
-      @click="$emit('help')"
-    >?</button>
+    >
+      {{ expertLabel }}
+    </button>
+    <button type="button" class="ds-mode-switch__help" :aria-label="helpAriaLabel" @click="$emit('help')">?</button>
   </div>
 </template>
 

@@ -28,9 +28,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-if="rows.length === 0 && !loading"
-        >
+        <tr v-if="rows.length === 0 && !loading">
           <td :colspan="columns.length" class="ds-table__empty">
             <slot name="empty">{{ emptyText }}</slot>
           </td>
@@ -71,7 +69,8 @@ export default {
     columns: {
       type: Array,
       required: true,
-      validator: (arr) => Array.isArray(arr) && arr.every((c) => typeof c.key === 'string' && typeof c.label === 'string')
+      validator: (arr) =>
+        Array.isArray(arr) && arr.every((c) => typeof c.key === 'string' && typeof c.label === 'string')
     },
     rows: { type: Array, default: () => [] },
     rowKey: { type: [String, Function], default: '_key' },
@@ -149,21 +148,42 @@ export default {
   cursor: pointer;
   user-select: none;
 }
-.ds-table__th--sortable:hover { background: var(--accent-muted); }
-.ds-table__th--right  { text-align: right; }
-.ds-table__th--center { text-align: center; }
-.ds-table__sort-indicator { color: var(--muted); font-size: var(--text-xs); }
+.ds-table__th--sortable:hover {
+  background: var(--accent-muted);
+}
+.ds-table__th--right {
+  text-align: right;
+}
+.ds-table__th--center {
+  text-align: center;
+}
+.ds-table__sort-indicator {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
 
 .ds-table tbody td {
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border-light);
 }
-.ds-table tbody tr:last-child td { border-bottom: 0; }
-.ds-table--striped tbody tr:nth-child(odd) td { background: var(--bg); }
-.ds-table__row--hoverable { cursor: pointer; }
-.ds-table__row--hoverable:hover td { background: var(--accent-muted); }
-.ds-table__td--right  { text-align: right; }
-.ds-table__td--center { text-align: center; }
+.ds-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.ds-table--striped tbody tr:nth-child(odd) td {
+  background: var(--bg);
+}
+.ds-table__row--hoverable {
+  cursor: pointer;
+}
+.ds-table__row--hoverable:hover td {
+  background: var(--accent-muted);
+}
+.ds-table__td--right {
+  text-align: right;
+}
+.ds-table__td--center {
+  text-align: center;
+}
 .ds-table__empty {
   text-align: center;
   color: var(--muted);

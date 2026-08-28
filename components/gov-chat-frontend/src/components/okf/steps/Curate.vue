@@ -39,14 +39,11 @@
             {{ translate('okf.curator.labels.edit', 'Adjust labels') }}
           </DsButton>
         </header>
-        <DsOkfMarkdownEditor
-          v-model="selectedBody"
-          :expert="expert"
-          :issues="conceptIssues"
-          mode="split"
-        />
+        <DsOkfMarkdownEditor v-model="selectedBody" :expert="expert" :issues="conceptIssues" mode="split" />
       </div>
-      <p v-else class="okf-step-curate__placeholder">{{ translate('okf.curator.placeholder', 'Pick a topic on the left to view + edit.') }}</p>
+      <p v-else class="okf-step-curate__placeholder">
+        {{ translate('okf.curator.placeholder', 'Pick a topic on the left to view + edit.') }}
+      </p>
     </div>
 
     <OkfLabelEditor
@@ -102,12 +99,26 @@ export default {
       const c = this.selectedConcept;
       if (!c) return [];
       const out = [];
-      if (!c.type) out.push({ line: 1, rule: 'MISSING_TYPE', severity: 'error', message: this.translate('okf.curator.issue.missingType', 'Concept is missing a type.') });
+      if (!c.type)
+        out.push({
+          line: 1,
+          rule: 'MISSING_TYPE',
+          severity: 'error',
+          message: this.translate('okf.curator.issue.missingType', 'Concept is missing a type.')
+        });
       if (Array.isArray(c.sources)) {
         c.sources.forEach((s, i) => {
           if (!s.author || !s.author.startsWith('human:')) {
             if (!s.author || !/^(agent|tool|process|human):/.test(s.author)) {
-              out.push({ line: 1 + i, rule: 'BAD_ACTOR_PREFIX', severity: 'error', message: this.translate('okf.curator.issue.badActor', 'Source actor must start with agent:/human:/tool:/process:.') });
+              out.push({
+                line: 1 + i,
+                rule: 'BAD_ACTOR_PREFIX',
+                severity: 'error',
+                message: this.translate(
+                  'okf.curator.issue.badActor',
+                  'Source actor must start with agent:/human:/tool:/process:.'
+                )
+              });
             }
           }
         });
@@ -131,12 +142,15 @@ export default {
   mounted() {
     const repoId = this.draft && this.draft.repo_id;
     if (repoId) {
-      conceptService.listForRepo(repoId).then((rows) => {
-        this.concepts = rows || [];
-        if (this.concepts.length > 0) this.selected = this.concepts[0].concept_id;
-      }).catch(() => {
-        this.concepts = [];
-      });
+      conceptService
+        .listForRepo(repoId)
+        .then((rows) => {
+          this.concepts = rows || [];
+          if (this.concepts.length > 0) this.selected = this.concepts[0].concept_id;
+        })
+        .catch(() => {
+          this.concepts = [];
+        });
     }
   },
   methods: {
@@ -146,7 +160,7 @@ export default {
       if (c) c.labels = labels.slice();
       this.openLabels = false;
       try {
-        await conceptService.update((this.draft && this.draft.repo_id) || '', c && c.concept_id || '', { labels });
+        await conceptService.update((this.draft && this.draft.repo_id) || '', (c && c.concept_id) || '', { labels });
       } catch {
         // NOT_READY — labels persist locally until the server endpoint lands.
       }
@@ -156,7 +170,12 @@ export default {
 </script>
 
 <style scoped>
-.okf-step-curate { display: grid; grid-template-columns: 320px 1fr; gap: var(--space-md); min-height: 320px; }
+.okf-step-curate {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: var(--space-md);
+  min-height: 320px;
+}
 .okf-step-curate__tree {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -164,8 +183,17 @@ export default {
   padding: var(--space-sm);
   overflow-y: auto;
 }
-.okf-step-curate__tree-header { margin-bottom: var(--space-sm); }
-.okf-step-curate__tree-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.okf-step-curate__tree-header {
+  margin-bottom: var(--space-sm);
+}
+.okf-step-curate__tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .okf-step-curate__tree-row {
   display: flex;
   align-items: center;
@@ -180,13 +208,43 @@ export default {
   font: inherit;
   color: var(--fg);
 }
-.okf-step-curate__tree-row:hover { background: var(--accent-muted); }
-.okf-step-curate__tree-row--selected { background: var(--accent-muted); color: var(--accent); }
-.okf-step-curate__tree-row-title { font-weight: 500; }
-.okf-step-curate__empty { color: var(--muted); padding: var(--space-md); text-align: center; }
-.okf-step-curate__detail { display: flex; flex-direction: column; }
-.okf-step-curate__detail-inner { display: flex; flex-direction: column; gap: var(--space-sm); }
-.okf-step-curate__detail-header { display: flex; justify-content: space-between; align-items: center; }
-.okf-step-curate__detail-header h4 { margin: 0; font-size: var(--text-md); font-weight: 600; }
-.okf-step-curate__placeholder { color: var(--muted); padding: var(--space-xl); text-align: center; }
+.okf-step-curate__tree-row:hover {
+  background: var(--accent-muted);
+}
+.okf-step-curate__tree-row--selected {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+.okf-step-curate__tree-row-title {
+  font-weight: 500;
+}
+.okf-step-curate__empty {
+  color: var(--muted);
+  padding: var(--space-md);
+  text-align: center;
+}
+.okf-step-curate__detail {
+  display: flex;
+  flex-direction: column;
+}
+.okf-step-curate__detail-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.okf-step-curate__detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.okf-step-curate__detail-header h4 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.okf-step-curate__placeholder {
+  color: var(--muted);
+  padding: var(--space-xl);
+  text-align: center;
+}
 </style>

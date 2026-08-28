@@ -68,13 +68,13 @@ describe('crawlerToOkfService — slug helpers', () => {
 
   describe('deriveConceptTitle', () => {
     it('prefers the filename basename over the URL', () => {
-      expect(deriveConceptTitle('wikipedia-ml.md', 'https://en.wikipedia.org/wiki/Machine_learning'))
-        .toBe('wikipedia-ml');
+      expect(deriveConceptTitle('wikipedia-ml.md', 'https://en.wikipedia.org/wiki/Machine_learning')).toBe(
+        'wikipedia-ml'
+      );
     });
 
     it('falls back to a slugified URL when filename is absent', () => {
-      expect(deriveConceptTitle(null, 'https://example.com/Some Path/'))
-        .toBe('example-com-some-path');
+      expect(deriveConceptTitle(null, 'https://example.com/Some Path/')).toBe('example-com-some-path');
     });
 
     it('returns "Crawled page" when nothing is supplied', () => {
@@ -149,9 +149,7 @@ describe('crawlerToOkfService.splitBySourceMarkers (mode B)', () => {
 describe('crawlerToOkfService — splitMode param (integration)', () => {
   it('mode B produces one concept per page when the crawler wrote `## Source:` markers', async () => {
     const createdRepo = { repo_id: 'r-mode-b', name: 'multi-page', domain: 'general' };
-    mockPost
-      .mockResolvedValueOnce({ data: createdRepo })
-      .mockResolvedValueOnce({ data: { ok: true, total: 3 } });
+    mockPost.mockResolvedValueOnce({ data: createdRepo }).mockResolvedValueOnce({ data: { ok: true, total: 3 } });
     mockDownloadFile.mockResolvedValueOnce(
       '## Source: https://example.com/p1\n\n# P1\n\nbody1\n\n---\n\n## Source: https://example.com/p2\n\n# P2\n\nbody2\n\n---\n\n## Source: https://example.com/p3\n\n# P3\n\nbody3\n'
     );
@@ -182,12 +180,14 @@ describe('crawlerToOkfService — splitMode param (integration)', () => {
     mockPost.mockResolvedValueOnce({ data: createdRepo });
     mockDownloadFile.mockResolvedValueOnce('# Body');
 
-    await expect(crawlerToOkfService.convertCrawlToOkf({
-      fileId: 'file-c',
-      url: 'https://example.com/c',
-      filename: 'c.md',
-      splitMode: 'C'
-    })).rejects.toMatchObject({
+    await expect(
+      crawlerToOkfService.convertCrawlToOkf({
+        fileId: 'file-c',
+        url: 'https://example.com/c',
+        filename: 'c.md',
+        splitMode: 'C'
+      })
+    ).rejects.toMatchObject({
       code: 'MODE_NOT_IMPLEMENTED',
       partial: true,
       repo: { repo_id: 'r-mode-c' }
@@ -197,8 +197,9 @@ describe('crawlerToOkfService — splitMode param (integration)', () => {
 
 describe('crawlerToOkfService.convertCrawlToOkf', () => {
   it('rejects calls without a fileId', async () => {
-    await expect(crawlerToOkfService.convertCrawlToOkf({ url: 'x' }))
-      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(crawlerToOkfService.convertCrawlToOkf({ url: 'x' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
   });
 
   it('happy path: creates repo, downloads content, ingests one concept (mode A mega)', async () => {
@@ -254,20 +255,24 @@ describe('crawlerToOkfService.convertCrawlToOkf', () => {
     // — NOT { title, body, provenance } at the top level. B2 hard error
     // when frontmatter.type is missing.
     expect(mockPost.mock.calls[1][1]).toMatchObject({
-      concepts: [{
-        path: 'crawl-mega.md',
-        frontmatter: {
-          type: 'topic',
-          title: 'Crawled corpus',
-          sources: [{
-            kind: 'crawl',
-            resource: 'https://en.wikipedia.org/wiki/Machine_learning',
-            crawl_job_id: 'job-1',
-            file_id: 'file-1'
-          }]
-        },
-        body: '# Machine learning\n\nIntro body.'
-      }]
+      concepts: [
+        {
+          path: 'crawl-mega.md',
+          frontmatter: {
+            type: 'topic',
+            title: 'Crawled corpus',
+            sources: [
+              {
+                kind: 'crawl',
+                resource: 'https://en.wikipedia.org/wiki/Machine_learning',
+                crawl_job_id: 'job-1',
+                file_id: 'file-1'
+              }
+            ]
+          },
+          body: '# Machine learning\n\nIntro body.'
+        }
+      ]
     });
     expect(result).toMatchObject({ repo_id: 'r-new-1', concept_count: 1 });
   });
@@ -307,16 +312,16 @@ describe('crawlerToOkfService.convertCrawlToOkf', () => {
 
   it('surfaces INGEST_FAILED with the created repo when ingest itself throws', async () => {
     const createdRepo = { repo_id: 'r-ingest-fail', name: 'x', domain: 'general' };
-    mockPost
-      .mockResolvedValueOnce({ data: createdRepo })
-      .mockRejectedValueOnce(new Error('dataprep 503'));
+    mockPost.mockResolvedValueOnce({ data: createdRepo }).mockRejectedValueOnce(new Error('dataprep 503'));
     mockDownloadFile.mockResolvedValueOnce('# Body');
 
-    await expect(crawlerToOkfService.convertCrawlToOkf({
-      fileId: 'file-ingest-fail',
-      url: 'https://example.com/ingest-fail',
-      filename: 'ingest-fail.md'
-    })).rejects.toMatchObject({
+    await expect(
+      crawlerToOkfService.convertCrawlToOkf({
+        fileId: 'file-ingest-fail',
+        url: 'https://example.com/ingest-fail',
+        filename: 'ingest-fail.md'
+      })
+    ).rejects.toMatchObject({
       code: 'INGEST_FAILED',
       repo: { repo_id: 'r-ingest-fail' }
     });
@@ -325,11 +330,13 @@ describe('crawlerToOkfService.convertCrawlToOkf', () => {
   it('throws CREATE_FAILED when the server returns no repo_id', async () => {
     mockPost.mockResolvedValueOnce({ data: { name: 'x' } });
 
-    await expect(crawlerToOkfService.convertCrawlToOkf({
-      fileId: 'file-1',
-      url: 'https://example.com',
-      filename: 'x.md'
-    })).rejects.toMatchObject({ code: 'CREATE_FAILED' });
+    await expect(
+      crawlerToOkfService.convertCrawlToOkf({
+        fileId: 'file-1',
+        url: 'https://example.com',
+        filename: 'x.md'
+      })
+    ).rejects.toMatchObject({ code: 'CREATE_FAILED' });
   });
 
   it('skips ingest entirely when the downloaded body is empty', async () => {

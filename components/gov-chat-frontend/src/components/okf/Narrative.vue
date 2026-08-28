@@ -9,12 +9,9 @@
     <p class="okf-narrative__text">{{ translated }}</p>
     <button type="button" class="okf-narrative__hide" @click="dismiss">{{ hideLabel }}</button>
   </aside>
-  <button
-    v-else-if="canShowCollapsed"
-    type="button"
-    class="okf-narrative__collapsed"
-    @click="reopen"
-  >{{ whatIsThisLabel }}</button>
+  <button v-else-if="canShowCollapsed" type="button" class="okf-narrative__collapsed" @click="reopen">
+    {{ whatIsThisLabel }}
+  </button>
 </template>
 
 <script>
@@ -109,7 +106,9 @@ export default {
   flex-shrink: 0;
   text-decoration: underline;
 }
-.okf-narrative__hide:hover { color: var(--fg); }
+.okf-narrative__hide:hover {
+  color: var(--fg);
+}
 
 .okf-narrative__collapsed {
   border: 0;
@@ -122,5 +121,7 @@ export default {
   margin-bottom: var(--space-md);
   display: inline-block;
 }
-.okf-narrative__collapsed:hover { color: var(--accent); }
+.okf-narrative__collapsed:hover {
+  color: var(--accent);
+}
 </style>

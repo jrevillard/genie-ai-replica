@@ -18,9 +18,7 @@ const conceptService = {
   async listForRepo(repoId, opts = {}) {
     const qs = opts.since ? `?since=${encodeURIComponent(opts.since)}` : '';
     try {
-      const res = await httpService.get(
-        `/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`
-      );
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`);
       return res && res.data ? res.data : [];
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501)) return [];

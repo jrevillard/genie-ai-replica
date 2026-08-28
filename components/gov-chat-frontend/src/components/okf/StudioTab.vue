@@ -11,11 +11,7 @@
     <header class="okf-studio-tab__header">
       <h2 class="okf-studio-tab__title">{{ translate('okf.studio.title', 'OKF Studio') }}</h2>
       <div class="okf-studio-tab__modes">
-        <DsModeSwitch
-          :model-value="expertMode"
-          @update:model-value="onExpertChange"
-          @help="helpOpen = true"
-        />
+        <DsModeSwitch :model-value="expertMode" @update:model-value="onExpertChange" @help="helpOpen = true" />
         <DsButton variant="ghost" small @click="helpOpen = true">{{ translate('okf.studio.help', 'Help') }}</DsButton>
       </div>
     </header>
@@ -42,7 +38,14 @@
       @close="helpOpen = false"
       @action="helpOpen = false"
     >
-      <p>{{ translate('okf.studio.help.body', 'OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.') }}</p>
+      <p>
+        {{
+          translate(
+            'okf.studio.help.body',
+            'OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.'
+          )
+        }}
+      </p>
     </DsDialog>
   </div>
 </template>

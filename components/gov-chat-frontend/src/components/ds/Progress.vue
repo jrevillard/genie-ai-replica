@@ -4,13 +4,17 @@
   Supports size xs|sm|md and optional inline label.
 -->
 <template>
-  <div class="ds-progress" :class="classes" role="progressbar" :aria-valuenow="clampedValue" aria-valuemin="0" :aria-valuemax="max" :aria-label="ariaLabel">
+  <div
+    class="ds-progress"
+    :class="classes"
+    role="progressbar"
+    :aria-valuenow="clampedValue"
+    aria-valuemin="0"
+    :aria-valuemax="max"
+    :aria-label="ariaLabel"
+  >
     <div class="ds-progress__track">
-      <div
-        class="ds-progress__bar"
-        :class="{ 'ds-progress__bar--indeterminate': indeterminate }"
-        :style="barStyle"
-      />
+      <div class="ds-progress__bar" :class="{ 'ds-progress__bar--indeterminate': indeterminate }" :style="barStyle" />
     </div>
     <span v-if="showLabel" class="ds-progress__label">{{ displayLabel }}</span>
   </div>
@@ -80,13 +84,25 @@ export default {
   transition: width 0.2s ease;
 }
 
-.ds-progress--success .ds-progress__bar { background: var(--success); }
-.ds-progress--warning .ds-progress__bar { background: var(--warning); }
-.ds-progress--danger  .ds-progress__bar { background: var(--danger); }
+.ds-progress--success .ds-progress__bar {
+  background: var(--success);
+}
+.ds-progress--warning .ds-progress__bar {
+  background: var(--warning);
+}
+.ds-progress--danger .ds-progress__bar {
+  background: var(--danger);
+}
 
-.ds-progress--xs .ds-progress__track { height: 2px; }
-.ds-progress--sm .ds-progress__track { height: 6px; }
-.ds-progress--md .ds-progress__track { height: 10px; }
+.ds-progress--xs .ds-progress__track {
+  height: 2px;
+}
+.ds-progress--sm .ds-progress__track {
+  height: 6px;
+}
+.ds-progress--md .ds-progress__track {
+  height: 10px;
+}
 
 .ds-progress__label {
   flex: 0 0 auto;
@@ -101,11 +117,18 @@ export default {
 }
 
 @keyframes ds-progress-indeterminate {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ds-progress__bar--indeterminate { animation: none; width: 60%; }
+  .ds-progress__bar--indeterminate {
+    animation: none;
+    width: 60%;
+  }
 }
 </style>

@@ -489,14 +489,9 @@ export default {
         // has its own 'Create OKF repository from this crawl' button that
         // invokes createFromCrawl when the crawl_job.status === 'Succeeded').
         if (this.okfTarget === 'okf_repo' && this.crawlMode === 'single_page') {
-          const fileId = response.data?.file?._key
-              || response.data?.file_id
-              || response.data?.data?._key
-              || null;
-          const filename = response.data?.file?.file_name
-              || response.data?.file_name
-              || response.data?.data?.file_name
-              || null;
+          const fileId = response.data?.file?._key || response.data?.file_id || response.data?.data?._key || null;
+          const filename =
+            response.data?.file?.file_name || response.data?.file_name || response.data?.data?.file_name || null;
           if (fileId) {
             const result = await this.$store.dispatch('okf/createFromCrawl', {
               fileId,
@@ -530,9 +525,11 @@ export default {
           // Async full-site crawl: seed the wizard with the URL, let the
           // FileDetailsDialog drive createFromCrawl when the crawl finishes.
           await this.$store.dispatch('okf/setSelection', { crawlSeeds: [this.url.trim()] });
-          window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
-            detail: { url: this.url.trim(), crawlMode: this.crawlMode, crawlDepth: this.crawlDepth }
-          }));
+          window.dispatchEvent(
+            new CustomEvent('okf:create-from-crawl', {
+              detail: { url: this.url.trim(), crawlMode: this.crawlMode, crawlDepth: this.crawlDepth }
+            })
+          );
         }
         this.$emit('link-submitted', response.data);
         this.$emit('close');

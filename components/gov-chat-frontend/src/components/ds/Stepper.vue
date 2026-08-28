@@ -35,7 +35,13 @@
           </span>
           <span class="ds-stepper__body">
             <span class="ds-stepper__label">
-              <slot name="step-label" :step="step" :index="index" :active="index === modelValue" :locked="isLocked(index)">
+              <slot
+                name="step-label"
+                :step="step"
+                :index="index"
+                :active="index === modelValue"
+                :locked="isLocked(index)"
+              >
                 {{ step.label }}
               </slot>
               <DsPill v-if="step.optional" variant="info" class="ds-stepper__optional">optional</DsPill>
@@ -64,7 +70,8 @@ export default {
     steps: {
       type: Array,
       required: true,
-      validator: (arr) => Array.isArray(arr) && arr.every((s) => typeof s.value !== 'undefined' && typeof s.label === 'string')
+      validator: (arr) =>
+        Array.isArray(arr) && arr.every((s) => typeof s.value !== 'undefined' && typeof s.label === 'string')
     },
     modelValue: {
       type: Number,

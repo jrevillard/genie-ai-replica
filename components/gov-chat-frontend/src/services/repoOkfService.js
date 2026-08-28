@@ -58,19 +58,14 @@ const repoOkfService = {
   },
 
   async mintVersion(repoId, body = {}, actor = {}) {
-    const res = await httpService.post(
-      `/okf/repos/${encodeURIComponent(repoId)}/versions`,
-      body,
-      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
-    );
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(repoId)}/versions`, body, {
+      headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {}
+    });
     return res && res.data ? res.data : { ok: true };
   },
 
   async clone(sourceId, body = {}) {
-    const res = await httpService.post(
-      `/okf/repos/${encodeURIComponent(sourceId)}/clone`,
-      body
-    );
+    const res = await httpService.post(`/okf/repos/${encodeURIComponent(sourceId)}/clone`, body);
     return res && res.data ? res.data : null;
   }
 };

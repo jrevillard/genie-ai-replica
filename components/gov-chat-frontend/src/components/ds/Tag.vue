@@ -13,7 +13,9 @@
       class="ds-tag__remove"
       :aria-label="$attrs['remove-label'] || 'Remove tag'"
       @click.stop="$emit('remove')"
-    >&times;</button>
+    >
+      &times;
+    </button>
   </span>
 </template>
 
@@ -56,13 +58,36 @@ export default {
   font-family: var(--font-body);
   white-space: nowrap;
 }
-.ds-tag--md { padding: 4px 10px; font-size: var(--text-sm); }
+.ds-tag--md {
+  padding: 4px 10px;
+  font-size: var(--text-sm);
+}
 
-.ds-tag--accent  { background: var(--accent-muted);  color: var(--accent);  border-color: var(--accent); }
-.ds-tag--success { background: var(--success-bg);    color: var(--success); border-color: var(--success); }
-.ds-tag--warning { background: var(--warning-bg);    color: var(--warning); border-color: var(--warning); }
-.ds-tag--danger  { background: var(--danger-bg);     color: var(--danger);  border-color: var(--danger); }
-.ds-tag--info    { background: var(--info-bg);       color: var(--info);    border-color: var(--info); }
+.ds-tag--accent {
+  background: var(--accent-muted);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.ds-tag--success {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success);
+}
+.ds-tag--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+.ds-tag--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.ds-tag--info {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: var(--info);
+}
 
 .ds-tag__remove {
   border: 0;
@@ -74,5 +99,7 @@ export default {
   line-height: 1;
   border-radius: var(--radius-sm);
 }
-.ds-tag__remove:hover { background: color-mix(in srgb, currentColor 15%, transparent); }
+.ds-tag__remove:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+}
 </style>

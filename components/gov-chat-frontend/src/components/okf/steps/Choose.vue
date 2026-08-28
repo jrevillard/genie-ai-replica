@@ -1,8 +1,12 @@
 <!-- Step 1: Choose workflow — Crawl / Documents / Manual / Clone. -->
 <template>
   <div class="okf-step">
-    <h3 class="okf-step__title">{{ translate('okf.steps.choose.title', 'Where should this OKF repository start?') }}</h3>
-    <p class="okf-step__hint">{{ translate('okf.steps.choose.hint', 'Pick how you want to seed this repository. You can change it later.') }}</p>
+    <h3 class="okf-step__title">
+      {{ translate('okf.steps.choose.title', 'Where should this OKF repository start?') }}
+    </h3>
+    <p class="okf-step__hint">
+      {{ translate('okf.steps.choose.hint', 'Pick how you want to seed this repository. You can change it later.') }}
+    </p>
     <div class="okf-step__cards">
       <button
         v-for="src in sources"
@@ -67,10 +71,26 @@ export default {
 </script>
 
 <style scoped>
-.okf-step { display: flex; flex-direction: column; gap: var(--space-md); }
-.okf-step__title { margin: 0; font-size: var(--text-md); font-weight: 600; }
-.okf-step__hint { margin: 0; color: var(--muted); font-size: var(--text-sm); }
-.okf-step__cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+.okf-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.okf-step__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.okf-step__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-step__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
 .okf-step__card {
   display: flex;
   flex-direction: column;
@@ -84,8 +104,19 @@ export default {
   font: inherit;
   color: var(--fg);
 }
-.okf-step__card:hover { border-color: var(--accent); background: var(--accent-muted); }
-.okf-step__card--selected { border-color: var(--accent); background: var(--accent-muted); }
-.okf-step__card-title { font-weight: 600; }
-.okf-step__card-desc { color: var(--muted); font-size: var(--text-sm); }
+.okf-step__card:hover {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+.okf-step__card--selected {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+.okf-step__card-title {
+  font-weight: 600;
+}
+.okf-step__card-desc {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
 </style>

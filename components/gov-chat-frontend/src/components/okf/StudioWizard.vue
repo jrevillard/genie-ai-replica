@@ -52,7 +52,11 @@
         </DsButton>
         <span class="okf-wizard__step-counter">{{ activeStep + 1 }} / 10</span>
         <DsButton variant="primary" @click="onAdvance">
-          {{ activeStep === 9 ? translate('okf.wizard.publish', 'Publish repository') : translate('okf.wizard.continue', 'Continue') }}
+          {{
+            activeStep === 9
+              ? translate('okf.wizard.publish', 'Publish repository')
+              : translate('okf.wizard.continue', 'Continue')
+          }}
         </DsButton>
       </footer>
     </main>
@@ -60,7 +64,9 @@
     <aside class="okf-wizard__rail okf-wizard__rail--right" aria-label="Repository context">
       <div class="okf-wizard__context-card">
         <header class="okf-wizard__context-header">{{ translate('okf.wizard.context.title', 'Repository') }}</header>
-        <p class="okf-wizard__context-name">{{ draft?.name || translate('okf.wizard.context.untitled', 'Untitled repository') }}</p>
+        <p class="okf-wizard__context-name">
+          {{ draft?.name || translate('okf.wizard.context.untitled', 'Untitled repository') }}
+        </p>
         <p class="okf-wizard__context-domain">{{ draft?.domain || '—' }}</p>
 
         <DsStatusTag :variant="statusVariant">{{ statusLabel }}</DsStatusTag>
@@ -163,8 +169,16 @@ export default {
     ...mapGetters('okf', ['isExpert']),
     stepComponents() {
       return [
-        OkfStepEntry, OkfStepChoose, OkfStepInput, OkfStepProduce, OkfStepLabel,
-        OkfStepCurate, OkfStepValidate, OkfStepAutocorrect, OkfStepReview, OkfStepPublish
+        OkfStepEntry,
+        OkfStepChoose,
+        OkfStepInput,
+        OkfStepProduce,
+        OkfStepLabel,
+        OkfStepCurate,
+        OkfStepValidate,
+        OkfStepAutocorrect,
+        OkfStepReview,
+        OkfStepPublish
       ];
     },
     stepProps() {
@@ -182,7 +196,8 @@ export default {
       return 'info';
     },
     statusLabel() {
-      if (this.activeStep === 9 && this.draft?.published) return this.translate('okf.wizard.status.published', 'published');
+      if (this.activeStep === 9 && this.draft?.published)
+        return this.translate('okf.wizard.status.published', 'published');
       if (this.activeStep >= 8) return this.translate('okf.wizard.status.inReview', 'in review');
       return this.translate('okf.wizard.status.draft', 'in progress');
     },
@@ -276,15 +291,17 @@ export default {
     },
     publishRepo() {
       if (!this.draft || !this.draft.repo_id) return;
-      this.$store.dispatch('okf/mintVersion', {
-        repoId: this.draft.repo_id,
-        body: { trigger: 'publish', source_ref: 'smoke://studio/wizard' },
-        actor: { sub: 'studio-wizard' }
-      }).then((result) => {
-        if (result && result.ok) {
-          this.$emit('reset');
-        }
-      });
+      this.$store
+        .dispatch('okf/mintVersion', {
+          repoId: this.draft.repo_id,
+          body: { trigger: 'publish', source_ref: 'smoke://studio/wizard' },
+          actor: { sub: 'studio-wizard' }
+        })
+        .then((result) => {
+          if (result && result.ok) {
+            this.$emit('reset');
+          }
+        });
     }
   }
 };

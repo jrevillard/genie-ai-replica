@@ -692,9 +692,11 @@ export default {
         // the steward can at least land in the Studio with the seed URL.
         const seed = filename || url || '';
         await this.$store.dispatch('okf/setSelection', { crawlSeeds: [seed] });
-        window.dispatchEvent(new CustomEvent('okf:create-from-crawl', {
-          detail: { file_id: null, crawl_job_id: crawlJobId, seed }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('okf:create-from-crawl', {
+            detail: { file_id: null, crawl_job_id: crawlJobId, seed }
+          })
+        );
         this.$emit('close');
         return;
       }
@@ -713,27 +715,18 @@ export default {
         });
         if (!result || !result.ok) {
           this.showNotification(
-            this.translate(
-              'okf.crawl.createFailed',
-              'Could not create the OKF repository from this crawl.'
-            ),
+            this.translate('okf.crawl.createFailed', 'Could not create the OKF repository from this crawl.'),
             'error'
           );
         } else {
           this.showNotification(
-            this.translate(
-              'okf.crawl.createOk',
-              'OKF repository created. Opening the Studio to curate.'
-            ),
+            this.translate('okf.crawl.createOk', 'OKF repository created. Opening the Studio to curate.'),
             'success'
           );
         }
       } catch {
         this.showNotification(
-          this.translate(
-            'okf.crawl.createFailed',
-            'Could not create the OKF repository from this crawl.'
-          ),
+          this.translate('okf.crawl.createFailed', 'Could not create the OKF repository from this crawl.'),
           'error'
         );
       } finally {

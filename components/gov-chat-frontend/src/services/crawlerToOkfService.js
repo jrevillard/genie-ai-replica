@@ -39,14 +39,16 @@ import httpService from './httpService';
  */
 function slugify(input) {
   if (!input) return 'crawled-repository';
-  return String(input)
-    .toLowerCase()
-    .replace(/^https?:\/\/(www\.)?/, '') // strip scheme + www.
-    .replace(/\.(md|html|htm|txt)$/i, '') // strip extension if filename
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 200) || 'crawled-repository';
+  return (
+    String(input)
+      .toLowerCase()
+      .replace(/^https?:\/\/(www\.)?/, '') // strip scheme + www.
+      .replace(/\.(md|html|htm|txt)$/i, '') // strip extension if filename
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 200) || 'crawled-repository'
+  );
 }
 
 /**
@@ -144,22 +146,27 @@ function splitBySourceMarkers(raw) {
 function buildMegaConcept(raw) {
   const body = deriveConceptBody(raw);
   if (!body) return [];
-  return [{
-    path: 'crawl-mega.md',
-    frontmatter: {
-      type: 'topic',
-      title: 'Crawled corpus',
-      sources: []
-    },
-    body
-  }];
+  return [
+    {
+      path: 'crawl-mega.md',
+      frontmatter: {
+        type: 'topic',
+        title: 'Crawled corpus',
+        sources: []
+      },
+      body
+    }
+  ];
 }
 
 function urlToConceptPath(url) {
   if (!url) return 'crawl-concept';
   try {
     const u = new URL(url);
-    const slug = (u.hostname + u.pathname).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = (u.hostname + u.pathname)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
     return slug || 'crawl-concept';
   } catch {
     return 'crawl-concept';
@@ -212,11 +219,7 @@ const crawlerToOkfService = {
     const repoDomain = domain || 'general';
     const acl = { required_scopes: [`okf:t:${repoDomain}:admin`] };
     const headers = actor && actor.sub ? { 'x-actor-sub': actor.sub } : {};
-    const created = await httpService.post(
-      '/okf/repos',
-      { name: repoName, domain: repoDomain, acl },
-      { headers }
-    );
+    const created = await httpService.post('/okf/repos', { name: repoName, domain: repoDomain, acl }, { headers });
     const repo = created && created.data ? created.data : null;
     if (!repo || !repo.repo_id) {
       const err = new Error('OKF repo creation returned no repo_id');
@@ -269,12 +272,15 @@ const crawlerToOkfService = {
             sources: [
               ...(c.frontmatter.sources || []),
               ...(crawlJobId || fileId
-                ? [{
-                    kind: 'crawl',
-                    resource: (c.frontmatter.sources && c.frontmatter.sources[0] && c.frontmatter.sources[0].resource) || url,
-                    crawl_job_id: crawlJobId,
-                    file_id: fileId
-                  }]
+                ? [
+                    {
+                      kind: 'crawl',
+                      resource:
+                        (c.frontmatter.sources && c.frontmatter.sources[0] && c.frontmatter.sources[0].resource) || url,
+                      crawl_job_id: crawlJobId,
+                      file_id: fileId
+                    }
+                  ]
                 : [])
             ].filter((s, i, arr) => i === arr.findIndex((x) => x.resource === s.resource && x.kind === s.kind))
           }
@@ -307,11 +313,4 @@ const crawlerToOkfService = {
 };
 
 export default crawlerToOkfService;
-export {
-  slugify,
-  deriveConceptTitle,
-  deriveConceptBody,
-  splitBySourceMarkers,
-  buildMegaConcept,
-  urlToConceptPath
-};
+export { slugify, deriveConceptTitle, deriveConceptBody, splitBySourceMarkers, buildMegaConcept, urlToConceptPath };

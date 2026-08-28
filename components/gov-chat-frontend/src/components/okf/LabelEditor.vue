@@ -12,7 +12,14 @@
     @close="$emit('close')"
     @action="onAction"
   >
-    <p class="okf-label-editor__hint">{{ translate('okf.curator.labels.body', 'Labels are the categorical axes of your ontology — what kind of thing is this topic?') }}</p>
+    <p class="okf-label-editor__hint">
+      {{
+        translate(
+          'okf.curator.labels.body',
+          'Labels are the categorical axes of your ontology — what kind of thing is this topic?'
+        )
+      }}
+    </p>
     <div class="okf-label-editor__chips">
       <span
         v-for="(l, idx) in local"
@@ -24,13 +31,28 @@
         @drop="onDrop(idx)"
       >
         {{ l }}
-        <button type="button" class="okf-label-editor__chip-remove" :aria-label="translate('okf.curator.labels.remove', 'Remove')" @click="remove(idx)">×</button>
+        <button
+          type="button"
+          class="okf-label-editor__chip-remove"
+          :aria-label="translate('okf.curator.labels.remove', 'Remove')"
+          @click="remove(idx)"
+        >
+          ×
+        </button>
       </span>
-      <span v-if="local.length === 0" class="okf-label-editor__empty">{{ translate('okf.curator.labels.empty', 'No labels yet.') }}</span>
+      <span v-if="local.length === 0" class="okf-label-editor__empty">{{
+        translate('okf.curator.labels.empty', 'No labels yet.')
+      }}</span>
     </div>
     <div class="okf-label-editor__add">
-      <DsInput v-model="newLabel" :placeholder="translate('okf.curator.labels.addPh', 'e.g. Permits')" @enter="addNew" />
-      <DsButton variant="primary" :disabled="!newLabel.trim()" @click="addNew">{{ translate('okf.curator.labels.add', 'Add') }}</DsButton>
+      <DsInput
+        v-model="newLabel"
+        :placeholder="translate('okf.curator.labels.addPh', 'e.g. Permits')"
+        @enter="addNew"
+      />
+      <DsButton variant="primary" :disabled="!newLabel.trim()" @click="addNew">{{
+        translate('okf.curator.labels.add', 'Add')
+      }}</DsButton>
     </div>
   </DsDialog>
 </template>
@@ -102,8 +124,17 @@ export default {
 </script>
 
 <style scoped>
-.okf-label-editor__hint { margin: 0 0 var(--space-md) 0; color: var(--muted); font-size: var(--text-sm); }
-.okf-label-editor__chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.okf-label-editor__hint {
+  margin: 0 0 var(--space-md) 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-label-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
 .okf-label-editor__chip {
   display: inline-flex;
   align-items: center;
@@ -124,6 +155,13 @@ export default {
   font: inherit;
   padding: 0;
 }
-.okf-label-editor__empty { color: var(--muted); font-size: var(--text-sm); }
-.okf-label-editor__add { display: flex; gap: var(--space-sm); align-items: center; }
+.okf-label-editor__empty {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-label-editor__add {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
 </style>

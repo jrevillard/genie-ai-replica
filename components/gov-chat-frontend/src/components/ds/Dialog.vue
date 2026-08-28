@@ -6,13 +6,7 @@
     - loading overlay
 -->
 <template>
-  <DsModal
-    :visible="visible"
-    :title="title"
-    :size="size"
-    :scrollable="true"
-    @close="onBackdrop"
-  >
+  <DsModal :visible="visible" :title="title" :size="size" :scrollable="true" @close="onBackdrop">
     <template v-if="$slots.header" #header>
       <slot name="header" />
     </template>
@@ -30,7 +24,8 @@
             :variant="a.variant || 'secondary'"
             :disabled="a.disabled"
             @click="$emit('action', a.key)"
-          >{{ a.label }}</DsButton>
+            >{{ a.label }}</DsButton
+          >
         </slot>
       </div>
     </template>
@@ -75,7 +70,9 @@ export default {
 </script>
 
 <style scoped>
-.ds-dialog__body { position: relative; }
+.ds-dialog__body {
+  position: relative;
+}
 .ds-dialog__actions {
   display: flex;
   gap: var(--space-sm);

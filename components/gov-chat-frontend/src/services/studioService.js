@@ -28,10 +28,7 @@ const studioService = {
 
   async saveDraft(repoId, body) {
     try {
-      const res = await httpService.put(
-        `/okf/studio_drafts/${encodeURIComponent(repoId)}`,
-        body
-      );
+      const res = await httpService.put(`/okf/studio_drafts/${encodeURIComponent(repoId)}`, body);
       return res && res.data ? res.data : { ok: true };
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501)) {

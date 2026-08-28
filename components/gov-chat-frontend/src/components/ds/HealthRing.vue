@@ -105,14 +105,28 @@ export default {
   position: relative;
   line-height: 1;
 }
-.ds-health-ring__svg { display: block; }
-.ds-health-ring__track { stroke: var(--border-light); }
-.ds-health-ring__bar { transition: stroke-dashoffset 0.4s ease; }
+.ds-health-ring__svg {
+  display: block;
+}
+.ds-health-ring__track {
+  stroke: var(--border-light);
+}
+.ds-health-ring__bar {
+  transition: stroke-dashoffset 0.4s ease;
+}
 
-.ds-health-ring__bar--ok    { stroke: var(--success); }
-.ds-health-ring__bar--warn  { stroke: var(--warning); }
-.ds-health-ring__bar--fail  { stroke: var(--danger); }
-.ds-health-ring__bar--muted { stroke: var(--muted); }
+.ds-health-ring__bar--ok {
+  stroke: var(--success);
+}
+.ds-health-ring__bar--warn {
+  stroke: var(--warning);
+}
+.ds-health-ring__bar--fail {
+  stroke: var(--danger);
+}
+.ds-health-ring__bar--muted {
+  stroke: var(--muted);
+}
 
 .ds-health-ring__label {
   position: absolute;
@@ -120,10 +134,16 @@ export default {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.ds-health-ring--sm .ds-health-ring__label { font-size: 8px; }
-.ds-health-ring--lg .ds-health-ring__label { font-size: var(--text-sm); }
+.ds-health-ring--sm .ds-health-ring__label {
+  font-size: 8px;
+}
+.ds-health-ring--lg .ds-health-ring__label {
+  font-size: var(--text-sm);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .ds-health-ring__bar { transition: none; }
+  .ds-health-ring__bar {
+    transition: none;
+  }
 }
 </style>

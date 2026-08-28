@@ -157,7 +157,12 @@ const actions = {
       repos.forEach((r) => commit('upsertRepo', r));
       const byStage = { draft: [], in_review: [], published: [] };
       repos.forEach((r) => {
-        const stageKey = r.lifecycle_state === 'published' ? 'published' : (r.lifecycle_state === 'review' || r.lifecycle_state === 'approve' ? 'in_review' : 'draft');
+        const stageKey =
+          r.lifecycle_state === 'published'
+            ? 'published'
+            : r.lifecycle_state === 'review' || r.lifecycle_state === 'approve'
+              ? 'in_review'
+              : 'draft';
         if (byStage[stageKey]) byStage[stageKey].push(r.repo_id);
       });
       commit('setReposByStage', byStage);

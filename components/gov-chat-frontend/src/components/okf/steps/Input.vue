@@ -23,20 +23,38 @@ export default {
         manual: 'okf.steps.input.manual',
         clone: 'okf.steps.input.clone'
       };
-      return this.translate(keys[s] || 'okf.steps.input.documents', 'Pick the documents that should seed the topic list.');
+      return this.translate(
+        keys[s] || 'okf.steps.input.documents',
+        'Pick the documents that should seed the topic list.'
+      );
     },
     placeholderText() {
       const s = (this.draft && this.draft.source) || 'documents';
-      return this.translate('okf.steps.input.placeholder', `Phase 4 wires the ${s} selection UI; for now this step is a placeholder.`);
+      return this.translate(
+        'okf.steps.input.placeholder',
+        `Phase 4 wires the ${s} selection UI; for now this step is a placeholder.`
+      );
     }
   }
 };
 </script>
 
 <style scoped>
-.okf-step { display: flex; flex-direction: column; gap: var(--space-md); }
-.okf-step__title { margin: 0; font-size: var(--text-md); font-weight: 600; }
-.okf-step__hint { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.okf-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.okf-step__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.okf-step__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
 .okf-step__placeholder {
   margin: 0;
   padding: var(--space-md);

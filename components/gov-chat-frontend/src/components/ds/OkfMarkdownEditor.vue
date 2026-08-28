@@ -24,10 +24,39 @@
     </div>
 
     <div class="ds-okf-md__toolbar">
-      <button type="button" class="ds-okf-md__mode" :class="{ 'ds-okf-md__mode--active': mode === 'preview' }" @click="setMode('preview')">Preview</button>
-      <button type="button" class="ds-okf-md__mode" :class="{ 'ds-okf-md__mode--active': mode === 'split' }" @click="setMode('split')">Split</button>
-      <button v-if="!readonly && (expert || sourceShown)" type="button" class="ds-okf-md__mode" :class="{ 'ds-okf-md__mode--active': mode === 'source' }" @click="setMode('source')">Source only</button>
-      <button v-if="!expert && !readonly && !sourceShown" type="button" class="ds-okf-md__show-source" @click="revealSource">{{ showSourceLabel }}</button>
+      <button
+        type="button"
+        class="ds-okf-md__mode"
+        :class="{ 'ds-okf-md__mode--active': mode === 'preview' }"
+        @click="setMode('preview')"
+      >
+        Preview
+      </button>
+      <button
+        type="button"
+        class="ds-okf-md__mode"
+        :class="{ 'ds-okf-md__mode--active': mode === 'split' }"
+        @click="setMode('split')"
+      >
+        Split
+      </button>
+      <button
+        v-if="!readonly && (expert || sourceShown)"
+        type="button"
+        class="ds-okf-md__mode"
+        :class="{ 'ds-okf-md__mode--active': mode === 'source' }"
+        @click="setMode('source')"
+      >
+        Source only
+      </button>
+      <button
+        v-if="!expert && !readonly && !sourceShown"
+        type="button"
+        class="ds-okf-md__show-source"
+        @click="revealSource"
+      >
+        {{ showSourceLabel }}
+      </button>
     </div>
 
     <div class="ds-okf-md__panes" :class="panesClass">
@@ -58,11 +87,7 @@
           <DsInput id="fm-okf-version" v-model="draftFrontmatter.okf_version" :readonly="true" />
         </DsFormGroup>
         <DsFormGroup :label="statusLabel" input-id="fm-status">
-          <DsSelect
-            id="fm-status"
-            v-model="draftFrontmatter.lifecycle.status"
-            :options="statusOptions"
-          />
+          <DsSelect id="fm-status" v-model="draftFrontmatter.lifecycle.status" :options="statusOptions" />
         </DsFormGroup>
         <DsFormGroup :label="staleAfterLabel" input-id="fm-stale">
           <DsInput id="fm-stale" v-model="draftFrontmatter.lifecycle.stale_after" type="date" />
@@ -104,8 +129,8 @@ hljs.registerLanguage('yaml', yaml);
 
 const MODES = ['preview', 'split', 'source'];
 const STATUS_OPTIONS = [
-  { value: 'draft',     label: 'draft' },
-  { value: 'stable',    label: 'stable' },
+  { value: 'draft', label: 'draft' },
+  { value: 'stable', label: 'stable' },
   { value: 'deprecated', label: 'deprecated' }
 ];
 
@@ -179,17 +204,39 @@ export default {
         { key: 'uri', label: 'uri' }
       ];
     },
-    sourcesLabel() { return this.$t ? this.$t('okf.curator.frontmatter.sources', 'provenance.sources') : 'provenance.sources'; },
-    attestationLabel() { return this.$t ? this.$t('okf.curator.frontmatter.attestation', 'attestation') : 'attestation'; },
-    statusLabel() { return this.$t ? this.$t('okf.curator.frontmatter.status', 'lifecycle.status') : 'lifecycle.status'; },
-    staleAfterLabel() { return this.$t ? this.$t('okf.curator.frontmatter.staleAfter', 'lifecycle.stale_after') : 'lifecycle.stale_after'; },
-    trustTierLabel() { return this.$t ? this.$t('okf.curator.frontmatter.trustTier', 'trust_tier') : 'trust_tier'; },
-    okfVersionLabel() { return this.$t ? this.$t('okf.curator.frontmatter.okfVersion', 'okf_version') : 'okf_version'; },
-    editFrontmatterLabel() { return this.$t ? this.$t('okf.curator.frontmatter.edit', 'Edit frontmatter') : 'Edit frontmatter'; },
-    editFrontmatterTitle() { return this.$t ? this.$t('okf.curator.frontmatter.dialogTitle', 'Edit frontmatter') : 'Edit frontmatter'; },
-    frontmatterLabel() { return this.$t ? this.$t('okf.curator.frontmatter.label', 'Frontmatter') : 'Frontmatter'; },
-    showSourceLabel() { return this.$t ? this.$t('okf.curator.showSource', 'Show source') : 'Show source'; },
-    sourceAriaLabel() { return this.ariaLabel + ' — source'; },
+    sourcesLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.sources', 'provenance.sources') : 'provenance.sources';
+    },
+    attestationLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.attestation', 'attestation') : 'attestation';
+    },
+    statusLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.status', 'lifecycle.status') : 'lifecycle.status';
+    },
+    staleAfterLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.staleAfter', 'lifecycle.stale_after') : 'lifecycle.stale_after';
+    },
+    trustTierLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.trustTier', 'trust_tier') : 'trust_tier';
+    },
+    okfVersionLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.okfVersion', 'okf_version') : 'okf_version';
+    },
+    editFrontmatterLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.edit', 'Edit frontmatter') : 'Edit frontmatter';
+    },
+    editFrontmatterTitle() {
+      return this.$t ? this.$t('okf.curator.frontmatter.dialogTitle', 'Edit frontmatter') : 'Edit frontmatter';
+    },
+    frontmatterLabel() {
+      return this.$t ? this.$t('okf.curator.frontmatter.label', 'Frontmatter') : 'Frontmatter';
+    },
+    showSourceLabel() {
+      return this.$t ? this.$t('okf.curator.showSource', 'Show source') : 'Show source';
+    },
+    sourceAriaLabel() {
+      return this.ariaLabel + ' — source';
+    },
     frontmatterActions() {
       return [
         { key: 'cancel', label: 'Cancel', variant: 'secondary' },
@@ -212,8 +259,11 @@ export default {
       typographer: false,
       highlight(str, lang) {
         if (lang && hljs.getLanguage(lang)) {
-          try { return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`; }
-          catch { /* fallthrough */ }
+          try {
+            return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang, ignoreIllegals: true }).value}</code></pre>`;
+          } catch {
+            /* fallthrough */
+          }
         }
         return `<pre class="hljs"><code>${MarkdownIt.prototype.utils.escapeHtml(str)}</code></pre>`;
       }
@@ -253,11 +303,20 @@ export default {
           attestation: parsed.data?.attestation || { type: '', executor: '', attester: '' }
         };
       } catch {
-        return { okf_version: '', lifecycle: { status: 'draft', stale_after: '' }, provenance: { sources: [] }, trust_tier: '', attestation: { type: '', executor: '', attester: '' } };
+        return {
+          okf_version: '',
+          lifecycle: { status: 'draft', stale_after: '' },
+          provenance: { sources: [] },
+          trust_tier: '',
+          attestation: { type: '', executor: '', attester: '' }
+        };
       }
     },
     onFrontmatterAction(key) {
-      if (key !== 'save') { this.frontmatterDialog = false; return; }
+      if (key !== 'save') {
+        this.frontmatterDialog = false;
+        return;
+      }
       // Re-serialize frontmatter; preserve unknowns by re-parsing the body.
       const fm = {
         ...this.parsedData,
@@ -332,8 +391,12 @@ export default {
   gap: 1px;
   background: var(--border);
 }
-.ds-okf-md__panes--preview { grid-template-columns: 1fr; }
-.ds-okf-md__panes--source  { grid-template-columns: 1fr; }
+.ds-okf-md__panes--preview {
+  grid-template-columns: 1fr;
+}
+.ds-okf-md__panes--source {
+  grid-template-columns: 1fr;
+}
 
 .ds-okf-md__preview {
   padding: var(--space-md);
@@ -350,7 +413,10 @@ export default {
   padding: var(--space-sm);
   overflow-x: auto;
 }
-.ds-okf-md__preview :deep(code) { font-family: var(--font-mono); font-size: 0.85em; }
+.ds-okf-md__preview :deep(code) {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
 .ds-okf-md__preview :deep([data-conformance-issue]) {
   border-bottom: 2px solid var(--warning);
   background: color-mix(in srgb, var(--warning-bg) 60%, transparent);

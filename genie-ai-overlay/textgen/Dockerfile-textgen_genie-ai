@@ -11,6 +11,13 @@ FROM ${UPSTREAM_IMAGE}
 # must write into the interpreter's site-packages, so run the install as root
 # then restore the base image's runtime user.
 USER root
+# Security-patch the pinned OPEA base snapshot (Debian 13.2): pull current
+# security updates from the trixie repo. The upstream image's openssl
+# (3.5.4-1~deb13u1) lags the repo (3.5.7-1~deb13u2, fixes CVE-2026-31789); the
+# distro upgrade touches only apt-managed packages, not the /usr/local Python.
+RUN apt-get update -y \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
 COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
 RUN /app/install_site_startup.sh

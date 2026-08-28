@@ -710,12 +710,18 @@ describe('PATCH /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () =
   test('200 admin scope + valid markdown — updates the concept', async () => {
     authScoped(['okf:t1:repoA:admin']);
     parserService.parseConcept.mockResolvedValue({
-      concept_id: 'conceptA', repo_id: 'repoA', path: 'conceptA.md',
+      concept_id: 'conceptA',
+      repo_id: 'repoA',
+      path: 'conceptA.md',
       frontmatter: { type: 'topic', title: 'Concept A v2' },
       body: '# Body v2'
     });
     conceptMetaService.patchConceptMeta.mockResolvedValue({
-      concept_id: 'conceptA', repo_id: 'repoA', content_hash: 'NEWHASH', index_status: 'parsed', updated_at: '2026-08-27T10:00:00Z'
+      concept_id: 'conceptA',
+      repo_id: 'repoA',
+      content_hash: 'NEWHASH',
+      index_status: 'parsed',
+      updated_at: '2026-08-27T10:00:00Z'
     });
     const res = await request(createApp())
       .patch('/api/okf/repos/repoA/concepts/conceptA')
@@ -723,10 +729,14 @@ describe('PATCH /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () =
       .send({ markdown: '---\ntype: topic\ntitle: Concept A v2\n---\n# Body v2' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
-      ok: true, concept_id: 'conceptA', content_hash: 'NEWHASH', index_status: 'parsed'
+      ok: true,
+      concept_id: 'conceptA',
+      content_hash: 'NEWHASH',
+      index_status: 'parsed'
     });
     expect(conceptMetaService.patchConceptMeta).toHaveBeenCalledWith(
-      'repoA', 'conceptA',
+      'repoA',
+      'conceptA',
       expect.objectContaining({ body: '# Body v2', frontmatter: expect.any(Object) })
     );
   });
@@ -773,6 +783,76 @@ describe('PATCH /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () =
   });
 });
 
+describe('GET /api/okf/repos/:repo_id/concepts (Story #978 — editor list)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 read scope — returns the concept list (errors-first sort in service)', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    conceptMetaService.listConceptsMeta.mockResolvedValue([
+      { concept_id: 'c-failed', title: 'Broken', index_status: 'failed' },
+      { concept_id: 'c-ok', title: 'Fine', index_status: 'indexed' }
+    ]);
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(2);
+    expect(conceptMetaService.listConceptsMeta).toHaveBeenCalledWith('repoA');
+  });
+
+  test('404 when the repo is foreign (anti-enumeration pre-gate)', async () => {
+    authScoped(['okf:t1:otherRepo:read']);
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    expect(conceptMetaService.listConceptsMeta).not.toHaveBeenCalled();
+  });
+
+  test('403 when unauthenticated', async () => {
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/okf/repos/:repo_id/concepts/:concept_id (Story #978 — editor read)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 read scope — returns the full meta row (frontmatter + body)', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    conceptMetaService.getConceptMeta.mockResolvedValue({
+      concept_id: 'conceptA',
+      repo_id: 'repoA',
+      title: 'Concept A',
+      index_status: 'indexed',
+      frontmatter: { type: 'topic', title: 'Concept A', sources: [] },
+      body: '# Concept A\n\nBody.'
+    });
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ concept_id: 'conceptA', body: '# Concept A\n\nBody.' });
+    expect(conceptMetaService.getConceptMeta).toHaveBeenCalledWith('repoA', 'conceptA');
+  });
+
+  test('404 when the concept does not exist in this repo', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    conceptMetaService.getConceptMeta.mockResolvedValue(null);
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts/missing').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('CONCEPT_NOT_FOUND');
+  });
+
+  test('404 when the repo is foreign', async () => {
+    authScoped(['okf:t1:otherRepo:read']);
+    const res = await request(createApp()).get('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    expect(conceptMetaService.getConceptMeta).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/okf/repos/:repo_id/resplit (Story #978)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -782,7 +862,13 @@ describe('POST /api/okf/repos/:repo_id/resplit (Story #978)', () => {
   test('200 admin scope + mode B + file_id → returns the ingest summary', async () => {
     authScoped(['okf:t1:repoA:admin']);
     ingestService.resplitRepo.mockResolvedValue({
-      total: 3, parsed: 3, created: 3, updated: 0, skipped_dedup: 0, rejected: 0, enqueued: 3
+      total: 3,
+      parsed: 3,
+      created: 3,
+      updated: 0,
+      skipped_dedup: 0,
+      rejected: 0,
+      enqueued: 3
     });
     const res = await request(createApp())
       .post('/api/okf/repos/repoA/resplit')
@@ -791,7 +877,9 @@ describe('POST /api/okf/repos/:repo_id/resplit (Story #978)', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, mode: 'B', total: 3, enqueued: 3 });
     expect(ingestService.resplitRepo).toHaveBeenCalledWith(
-      'repoA', 'B', expect.objectContaining({ file_id: 'file-1', sub: 'steward-1' })
+      'repoA',
+      'B',
+      expect.objectContaining({ file_id: 'file-1', sub: 'steward-1' })
     );
   });
 
@@ -850,7 +938,9 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
   test('200 dry_run=true returns the planned changes without applying', async () => {
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({
-      changes: [{ concept_id: 'conceptA', changes: [{ field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' }] }],
+      changes: [
+        { concept_id: 'conceptA', changes: [{ field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' }] }
+      ],
       warnings: [],
       applied: 0,
       total_concepts: 1
@@ -872,7 +962,12 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
   test('200 dry_run=false applies changes (applied > 0)', async () => {
     authScoped(['okf:t1:repoA:admin']);
     conceptMetaService.autocorrectRepo.mockResolvedValue({
-      changes: [{ concept_id: 'conceptA', changes: [{ field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }] }],
+      changes: [
+        {
+          concept_id: 'conceptA',
+          changes: [{ field: 'title', before: null, after: 'Derived', reason: 'MISSING_TITLE' }]
+        }
+      ],
       warnings: [{ concept_id: 'conceptA', warnings: [{ rule: 'INVALID_TYPE', severity: 'warning', message: 'bad' }] }],
       applied: 1,
       total_concepts: 1

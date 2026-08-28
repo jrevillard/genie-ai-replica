@@ -275,6 +275,25 @@ async function getConceptMeta(repo_id, concept_id) {
   return findConceptDoc(db.collection(COLLECTION), repo_id, concept_id);
 }
 
+/** Story #978 — list a repo's concept meta rows for the Studio editor's left
+ * rail. KEEP the fields the UI consumes (no body — that rides on the
+ * per-concept GET). Sorted: failed first (needs attention), then parsed
+ * (pending index), then the rest; title ascending within each band. */
+async function listConceptsMeta(repo_id) {
+  if (!repo_id) return [];
+  const db = await getDb();
+  return (
+    await db.query(
+      `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid
+       SORT (m.index_status == 'failed' ? 0 : (m.index_status == 'parsed' ? 1 : 2)), m.title
+       RETURN KEEP(m, ["repo_id", "concept_id", "path", "title", "type", "labels", "tags", "summary",
+         "is_index", "index_status", "content_hash", "trust_tier", "sources", "chunk_count",
+         "lifecycle_status", "created_at", "updated_at"])`,
+      { rid: repo_id }
+    )
+  ).all();
+}
+
 /** Resolve a concept's meta row by concept_id across ALL repos (the dataprep
  * completion callback knows only the concept_id — Story 4.8-amend content-only
  * chunking). null when absent or ambiguous. */
@@ -634,12 +653,19 @@ function planAutocorrectForConcept(meta) {
   if (!fm.type) {
     changes.push({ field: 'type', before: null, after: 'topic', reason: 'MISSING_TYPE' });
   } else if (!AUTOCORRECT_TYPE_ENUM.includes(fm.type)) {
-    warnings.push({ rule: 'INVALID_TYPE', severity: 'warning', message: `type "${fm.type}" not in ${AUTOCORRECT_TYPE_ENUM.join('|')}` });
+    warnings.push({
+      rule: 'INVALID_TYPE',
+      severity: 'warning',
+      message: `type "${fm.type}" not in ${AUTOCORRECT_TYPE_ENUM.join('|')}`
+    });
   }
 
   // 2. title — derive from first H1 in body or path.
   if (!fm.title) {
-    const derived = deriveTitleFromBody(meta.body || '') || (meta.path || '').replace(/\.md$/, '').split('/').pop() || meta.concept_id;
+    const derived =
+      deriveTitleFromBody(meta.body || '') ||
+      (meta.path || '').replace(/\.md$/, '').split('/').pop() ||
+      meta.concept_id;
     changes.push({ field: 'title', before: null, after: derived, reason: 'MISSING_TITLE' });
   }
 
@@ -652,7 +678,11 @@ function planAutocorrectForConcept(meta) {
   if (!meta.status) {
     changes.push({ field: 'status', before: null, after: 'draft', reason: 'MISSING_STATUS' });
   } else if (!AUTOCORRECT_STATUS_ENUM.includes(meta.status)) {
-    warnings.push({ rule: 'INVALID_STATUS', severity: 'warning', message: `status "${meta.status}" not in ${AUTOCORRECT_STATUS_ENUM.join('|')}` });
+    warnings.push({
+      rule: 'INVALID_STATUS',
+      severity: 'warning',
+      message: `status "${meta.status}" not in ${AUTOCORRECT_STATUS_ENUM.join('|')}`
+    });
   }
 
   return { changes, warnings };
@@ -708,6 +738,7 @@ module.exports = {
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,
+  listConceptsMeta,
   patchConceptMeta,
   autocorrectRepo,
   buildMetaDoc,

@@ -395,6 +395,47 @@ async function discoverFromManifests(req, res, next) {
 }
 
 /**
+ * Story #978 — GET /api/okf/repos/:repo_id/concepts.
+ * Lists the repo's concept meta rows for the Studio editor's left rail
+ * (read scope). Errors-first sort + no bodies — bodies ride on the
+ * per-concept GET below.
+ */
+async function listConcepts(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const concepts = await conceptMetaService.listConceptsMeta(repo_id);
+    res.status(200).json(concepts);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story #978 — GET /api/okf/repos/:repo_id/concepts/:concept_id.
+ * Full meta row — frontmatter + body included — so the editor can round-trip
+ * the markdown (body is persisted on the meta doc since Story 4.8-amend
+ * content-only chunking).
+ */
+async function getConcept(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
+    if (!concept) {
+      return res.status(404).json({
+        error: 'CONCEPT_NOT_FOUND',
+        message: `Concept '${concept_id}' not found in repo '${repo_id}'`
+      });
+    }
+    res.status(200).json(concept);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story #978 — PATCH /api/okf/repos/:repo_id/concepts/:concept_id.
  * Body: { markdown: string } (full markdown — frontmatter + body, parsed
  * via gray-matter). Updates the meta row in place; if the body hash CHANGED,
@@ -517,6 +558,8 @@ module.exports = {
   deleteRepo,
   piiScan,
   ingestRepo,
+  listConcepts,
+  getConcept,
   mintRepoVersion,
   listRepoVersions,
   getRepoVersion,

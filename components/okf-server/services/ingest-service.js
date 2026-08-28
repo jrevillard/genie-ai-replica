@@ -679,7 +679,10 @@ function urlToConceptPath(url) {
   if (!url) return null;
   try {
     const u = new URL(url);
-    const slug = (u.hostname + u.pathname).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = (u.hostname + u.pathname)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
     return `${slug || 'concept'}.md`;
   } catch {
     return null;

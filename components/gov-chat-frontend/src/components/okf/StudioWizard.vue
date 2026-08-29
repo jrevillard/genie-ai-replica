@@ -247,9 +247,14 @@ export default {
     if (this.draft && typeof this.draft.studio_step === 'number') {
       this.activeStep = Math.min(this.draft.studio_step, 9);
     }
-    if (this.draft && (this.draft.source === 'clone' || this.draft.source === 'crawl')) {
-      // Clone and crawler-sourced repos skip Produce and open at Step 5
-      // (Curate) per UX design (3-4 Clone amendment, 3-7 #977 crawler fix).
+    if (
+      this.draft &&
+      (this.draft.source === 'clone' || this.draft.source === 'crawl' || this.draft.source === 'editor')
+    ) {
+      // Clone/crawler-sourced repos skip Produce and open at Step 5 (Curate)
+      // per UX design (3-4 Clone amendment, 3-7 #977). 'editor'-sourced drafts
+      // (Story #978 — a repo opened from the Editor shell) start at Curate
+      // too, with all steps unlocked (studio_step 9 set by StudioTab).
       this.activeStep = Math.max(this.activeStep, 5);
     }
   },

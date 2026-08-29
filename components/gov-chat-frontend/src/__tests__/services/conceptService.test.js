@@ -54,3 +54,39 @@ describe('conceptService', () => {
     });
   });
 });
+
+describe('conceptService.update — Story #978 (wired to the live PATCH endpoint)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('fetches the row, splices frontmatter and PATCHes composed markdown', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        concept_id: 'c-1',
+        frontmatter: { type: 'topic', title: 'T' },
+        body: '# Body'
+      }
+    });
+    mockPatch.mockResolvedValue({ data: { ok: true, content_hash: 'H2', index_status: 'parsed' } });
+
+    const result = await conceptService.update('r-1', 'c-1', { labels: ['Health'] });
+
+    expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-1/concepts/c-1');
+    expect(mockPatch).toHaveBeenCalledWith('/okf/repos/r-1/concepts/c-1', {
+      markdown: expect.stringContaining('labels:')
+    });
+    // The composed markdown carries BOTH the spliced label AND the body.
+    const sent = mockPatch.mock.calls[0][1].markdown;
+    expect(sent).toContain('# Body');
+    expect(sent).toContain('Health');
+    expect(result.ok).toBe(true);
+  });
+
+  it('throws CONCEPT_NOT_FOUND when the row is absent', async () => {
+    mockGet.mockResolvedValue({ data: null });
+    await expect(conceptService.update('r-1', 'ghost', { labels: ['x'] })).rejects.toMatchObject({
+      code: 'CONCEPT_NOT_FOUND'
+    });
+  });
+});

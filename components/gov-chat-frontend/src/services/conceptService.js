@@ -6,6 +6,7 @@
  */
 
 import httpService from './httpService';
+import matter from 'gray-matter';
 
 function notReady(reason) {
   const err = new Error('NOT_READY');
@@ -38,8 +39,27 @@ const conceptService = {
     }
   },
 
-  async update(_repoId, _conceptId, _body) {
-    throw notReady('okf.curator.update.notReady');
+  /**
+   * Story #978 — inline concept update, now wired to the live PATCH endpoint.
+   * The endpoint takes full markdown, so a partial patch (e.g. { labels })
+   * fetches the current row, splices frontmatter, and round-trips the
+   * markdown. Returns { ok, content_hash, index_status }.
+   */
+  async update(repoId, conceptId, patch = {}) {
+    const row = await this.get(repoId, conceptId);
+    if (!row) {
+      const err = new Error(`Concept '${conceptId}' not found in repo '${repoId}'`);
+      err.code = 'CONCEPT_NOT_FOUND';
+      err.status = 404;
+      throw err;
+    }
+    const frontmatter = { ...(row.frontmatter || {}), ...patch };
+    const markdown = matter.stringify(row.body || '', frontmatter);
+    const res = await httpService.patch(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      { markdown }
+    );
+    return res && res.data ? res.data : { ok: true };
   },
 
   async validate(_repoId, _conceptId) {

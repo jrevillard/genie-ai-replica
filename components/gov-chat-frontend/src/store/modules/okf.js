@@ -26,6 +26,15 @@ const initialState = () => ({
     okfRepoButton: { visible: false, reasonKey: null, reasonParams: {} }
   },
   bulkPublish: { inFlight: false, results: [] },
+  // Story #978 — Studio editor state: which sub-tab (Wizard | Editor), which
+  // repo is open, per-repo concept lists (left rail), the selected concept.
+  editor: {
+    subTab: 'editor', // 'editor' is the default per the UX design
+    repoId: null,
+    conceptsByRepo: {},
+    selectedConceptId: null,
+    loading: false
+  },
   ui: {
     expertMode: readExpertModeFromStorage()
   },
@@ -55,6 +64,14 @@ const getters = {
   gate: (state) => (name) => state.gates[name] || { visible: false, reasonKey: null },
   bulkPublishResults: (state) => state.bulkPublish.results,
   bulkPublishInFlight: (state) => state.bulkPublish.inFlight,
+  // Story #978 — editor getters.
+  editorSubTab: (state) => state.editor.subTab,
+  editorRepoId: (state) => state.editor.repoId,
+  conceptsByRepo: (state) => (repoId) => state.editor.conceptsByRepo[repoId] || [],
+  conceptById: (state) => (repoId, conceptId) =>
+    (state.editor.conceptsByRepo[repoId] || []).find((c) => c.concept_id === conceptId) || null,
+  selectedConceptId: (state) => state.editor.selectedConceptId,
+  editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
   selection: (state) => state.selection,
   error: (state) => state.error
@@ -104,6 +121,25 @@ const mutations = {
   },
   endBulkPublish(state) {
     state.bulkPublish = { ...state.bulkPublish, inFlight: false };
+  },
+  // Story #978 — editor mutations.
+  setEditorSubTab(state, subTab) {
+    state.editor = { ...state.editor, subTab: subTab === 'wizard' ? 'wizard' : 'editor' };
+  },
+  setEditorRepo(state, repoId) {
+    state.editor = { ...state.editor, repoId: repoId || null };
+  },
+  setConcepts(state, { repoId, concepts }) {
+    state.editor = {
+      ...state.editor,
+      conceptsByRepo: { ...state.editor.conceptsByRepo, [repoId]: concepts || [] }
+    };
+  },
+  setSelectedConcept(state, conceptId) {
+    state.editor = { ...state.editor, selectedConceptId: conceptId || null };
+  },
+  setConceptsLoading(state, loading) {
+    state.editor = { ...state.editor, loading: !!loading };
   },
   setExpertMode(state, value) {
     state.ui = { ...state.ui, expertMode: !!value };
@@ -283,7 +319,11 @@ const actions = {
         if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
         commit('setReposByStage', { ...byStage, draft: draftLane });
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('okf:okf-repo-created', { detail: { repo_id: repo.repo_id, repo } }));
+          window.dispatchEvent(
+            new CustomEvent('okf:okf-repo-created', {
+              detail: { repo_id: repo.repo_id, repo, file_id: payload.fileId || null }
+            })
+          );
         }
       }
       return { ok: true, repo };
@@ -297,6 +337,113 @@ const actions = {
       commit('setError', err.message || 'createFromCrawl failed');
       return { ok: false, code, message: err.message };
     }
+  },
+
+  // ─── Story #978 — Studio Editor (Wizard | Editor sub-tabs) ───────────────
+
+  /**
+   * Open the editor for a repo: pins the repo, resets the selection and
+   * fetches the concept list (errors-first sort served by the backend).
+   */
+  async openEditor({ commit, dispatch }, { repoId } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
+    commit('setEditorRepo', repoId);
+    commit('setSelectedConcept', null);
+    return dispatch('fetchConcepts', repoId);
+  },
+
+  /** Fetch (or refetch) the concept list for the editor's left rail. */
+  async fetchConcepts({ commit }, repoId) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
+    commit('setConceptsLoading', true);
+    try {
+      const concepts = await conceptService.listForRepo(repoId);
+      commit('setConcepts', { repoId, concepts: Array.isArray(concepts) ? concepts : [] });
+      return { ok: true, concepts };
+    } catch (err) {
+      commit('setError', err.message || 'fetchConcepts failed');
+      commit('setConcepts', { repoId, concepts: [] });
+      return { ok: false, code: 'FETCH_FAILED', message: err.message };
+    } finally {
+      commit('setConceptsLoading', false);
+    }
+  },
+
+  /** Full meta row (frontmatter + body) for the center pane. */
+  async getConcept(_ctx, { repoId, conceptId } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      const concept = await conceptService.get(repoId, conceptId);
+      return { ok: !!concept, concept };
+    } catch (err) {
+      return { ok: false, code: 'FETCH_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * PATCH one concept's markdown. On success the row's content_hash +
+   * index_status ride back on the response — refresh the row in place so the
+   * left rail reflects the new state without a refetch.
+   */
+  async patchConcept({ commit, state }, { repoId, conceptId, markdown, actor } = {}) {
+    if (!repoId || !conceptId || typeof markdown !== 'string') {
+      return { ok: false, code: 'VALIDATION_ERROR' };
+    }
+    try {
+      const result = await repoOkfService.patchConcept(repoId, conceptId, markdown, actor);
+      const rows = (state.editor.conceptsByRepo[repoId] || []).slice();
+      const idx = rows.findIndex((c) => c.concept_id === conceptId);
+      if (idx !== -1) {
+        rows[idx] = {
+          ...rows[idx],
+          content_hash: result.content_hash,
+          index_status: result.index_status,
+          updated_at: result.updated_at
+        };
+        commit('setConcepts', { repoId, concepts: rows });
+      }
+      return { ok: true, ...result };
+    } catch (err) {
+      commit('setError', err.message || 'patchConcept failed');
+      return { ok: false, code: 'PATCH_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * Re-split from source: deletes all concepts + graph, re-ingests per mode.
+   * Refreshes the concept list afterwards (the old rows are all stale).
+   */
+  async resplitRepo({ commit, dispatch }, { repoId, mode, fileId, actor } = {}) {
+    if (!repoId || !mode) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      const summary = await repoOkfService.resplit(repoId, mode, fileId, actor);
+      await dispatch('fetchConcepts', repoId);
+      return { ok: true, ...summary };
+    } catch (err) {
+      commit('setError', err.message || 'resplitRepo failed');
+      return { ok: false, code: 'RESPLIT_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * Frontmatter autocorrect. dryRun=true (default) → { changes, warnings }
+   * preview only; dryRun=false applies. Always refetches when applying so the
+   * rows reflect the written frontmatter.
+   */
+  async autocorrectRepo({ commit, dispatch }, { repoId, dryRun = true, actor } = {}) {
+    if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      const result = await repoOkfService.autocorrect(repoId, { dryRun }, actor);
+      if (!dryRun) await dispatch('fetchConcepts', repoId);
+      return { ok: true, ...result };
+    } catch (err) {
+      commit('setError', err.message || 'autocorrectRepo failed');
+      return { ok: false, code: 'AUTOCORRECT_FAILED', message: err.message };
+    }
+  },
+
+  setEditorSubTab({ commit }, subTab) {
+    commit('setEditorSubTab', subTab === 'wizard' ? 'wizard' : 'editor');
   }
 };
 
@@ -304,10 +451,12 @@ const actions = {
 let studioService;
 let repoOkfService;
 let crawlerToOkfService;
+let conceptService;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
   if (!crawlerToOkfService) crawlerToOkfService = require('@/services/crawlerToOkfService').default;
+  if (!conceptService) conceptService = require('@/services/conceptService').default;
 }
 
 const actionsWithServices = {};

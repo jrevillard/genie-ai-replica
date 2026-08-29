@@ -356,14 +356,35 @@
         </DsTabs>
 
         <div class="dialog-footer">
-          <DsButton
+          <div
             v-if="activeTab === 'dashboard' && crawlJob && crawlJob.status === 'Succeeded' && !file?.okf_repo_id"
-            variant="primary"
-            :disabled="!crawlJob"
-            @click="onCreateOkfFromCrawl"
+            class="okf-split-footer"
           >
-            {{ translate('okf.crawl.createOkfFromCrawl', 'Create OKF repository from this crawl') }}
-          </DsButton>
+            <div
+              class="okf-split-radios"
+              role="radiogroup"
+              :aria-label="translate('okf.crawl.splitLabel', 'Concept split')"
+            >
+              <label class="radio-label">
+                <input v-model="okfSplitMode" type="radio" value="B" />
+                {{ translate('okf.crawl.splitB', 'One concept per page (recommended)') }}
+              </label>
+              <label class="radio-label">
+                <input v-model="okfSplitMode" type="radio" value="A" />
+                {{ translate('okf.crawl.splitA', 'One concept for the whole crawl') }}
+              </label>
+              <label
+                class="radio-label radio-label--disabled"
+                :title="translate('okf.crawl.splitCHint', 'Story 10.6 — coming soon')"
+              >
+                <input v-model="okfSplitMode" type="radio" value="C" disabled />
+                {{ translate('okf.crawl.splitC', 'Use LLM topic extraction') }}
+              </label>
+            </div>
+            <DsButton variant="primary" :disabled="!crawlJob" @click="onCreateOkfFromCrawl">
+              {{ translate('okf.crawl.createOkfFromCrawl', 'Create OKF repository from this crawl') }}
+            </DsButton>
+          </div>
           <DsButton variant="danger" :disabled="isFileLocked" @click="handleDelete">
             {{ translate('common.delete', 'Delete') }}
           </DsButton>
@@ -483,6 +504,9 @@ export default {
       currentLocale: this.$i18n?.locale || 'en',
       // Removed 'areAllLabelsSelected' from data as it's now computed
       activeTab: 'details',
+      // Story #978 — split mode for "Create OKF repository from this crawl"
+      // (B per-page default | A mega | C LLM deferred, disabled).
+      okfSplitMode: 'B',
       ingestionLogs: [],
       isLogLoading: false,
       confirmDialog: {
@@ -711,6 +735,7 @@ export default {
           url,
           crawlJobId,
           filename,
+          splitMode: this.okfSplitMode,
           actor: { sub: 'crawler-to-okf' }
         });
         if (!result || !result.ok) {

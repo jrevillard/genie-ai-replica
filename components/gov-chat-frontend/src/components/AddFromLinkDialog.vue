@@ -83,6 +83,28 @@
           </div>
         </div>
 
+        <div v-if="okfTarget === 'okf_repo'" class="form-group">
+          <label>{{ translate('okf.crawl.splitLabel', 'Concept split') }}</label>
+          <div class="split-group">
+            <label class="radio-label">
+              <input v-model="splitMode" type="radio" value="B" />
+              {{ translate('okf.crawl.splitB', 'One concept per page (recommended)') }}
+            </label>
+            <label class="radio-label">
+              <input v-model="splitMode" type="radio" value="A" />
+              {{ translate('okf.crawl.splitA', 'One concept for the whole crawl') }}
+            </label>
+            <label
+              class="radio-label radio-label--disabled"
+              :title="translate('okf.crawl.splitCHint', 'Story 10.6 — coming soon')"
+            >
+              <input v-model="splitMode" type="radio" value="C" disabled />
+              {{ translate('okf.crawl.splitC', 'Use LLM topic extraction') }}
+              <span class="radio-hint">{{ translate('okf.crawl.splitCHint', 'Story 10.6 — coming soon') }}</span>
+            </label>
+          </div>
+        </div>
+
         <template v-if="crawlMode === 'full_site'">
           <div class="form-group">
             <label for="depth-input">{{ translate('link.crawlDepth', 'Crawl Depth') }}</label>
@@ -337,6 +359,9 @@ export default {
       crawlDepth: 5,
       // Story 3-7: which target should the crawl feed?
       okfTarget: 'freeform',
+      // Story #978: how to split the crawled markdown into OKF concepts —
+      // 'B' per-page (default) | 'A' mega-concept | 'C' LLM (deferred, 10.6).
+      splitMode: 'B',
       isLoading: false,
       errorMessage: '',
       // Advanced Config State
@@ -499,6 +524,7 @@ export default {
               crawlMode: this.crawlMode,
               crawlDepth: this.crawlDepth,
               filename,
+              splitMode: this.splitMode,
               actor: { sub: 'crawler-to-okf' }
             });
             if (!result || !result.ok) {
@@ -645,6 +671,25 @@ export default {
   cursor: pointer;
   width: 1.1rem;
   height: 1.1rem;
+}
+
+/* Story #978 — concept split radios (visible when target = OKF repository). */
+.split-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+.radio-label--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.radio-label--disabled input[type='radio'] {
+  cursor: not-allowed;
+}
+.radio-hint {
+  font-size: var(--text-xs);
+  color: var(--muted-soft);
 }
 
 /* Advanced Toggle */

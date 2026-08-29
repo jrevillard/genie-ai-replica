@@ -28,6 +28,14 @@
     </nav>
 
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" />
+    <OkfRepoEditorShell
+      v-else-if="view === 'repo' && activeRepoId"
+      :repo-id="activeRepoId"
+      :draft="activeDraft"
+      :source-file-id="activeSourceFileId"
+      @back="onBackToDashboard"
+      @refresh="onRepoRefresh"
+    />
     <OkfStudioWizard v-else :draft="activeDraft" @reset="resetWizard" />
 
     <DsDialog
@@ -59,16 +67,27 @@ import DsModeSwitch from '../ds/ModeSwitch.vue';
 import OkfNarrative from './Narrative.vue';
 import OkfStudioDashboard from './StudioDashboard.vue';
 import OkfStudioWizard from './StudioWizard.vue';
+import OkfRepoEditorShell from './editor/RepoEditorShell.vue';
 
 export default {
   name: 'OkfStudioTab',
-  components: { DsButton, DsDialog, DsModeSwitch, OkfNarrative, OkfStudioDashboard, OkfStudioWizard },
+  components: {
+    DsButton,
+    DsDialog,
+    DsModeSwitch,
+    OkfNarrative,
+    OkfStudioDashboard,
+    OkfStudioWizard,
+    OkfRepoEditorShell
+  },
   mixins: [translateMixin],
   data() {
     return {
-      view: 'dashboard',
+      view: 'dashboard', // 'dashboard' | 'repo' (shell) | 'wizard' (create flows)
       helpOpen: false,
-      activeDraft: null
+      activeDraft: null,
+      activeRepoId: null,
+      activeSourceFileId: null
     };
   },
   computed: {
@@ -101,9 +120,39 @@ export default {
       this.$store.dispatch('okf/setExpertMode', mode === 'expert');
     },
     onResume(repoId) {
-      // Phase 3 wiring: load the draft + switch to wizard view at the saved step.
-      this.activeDraft = this.$store.getters['okf/activeDraft'](repoId);
-      this.view = 'wizard';
+      // Story #978: a repo card click opens the Editor shell — Wizard | Editor
+      // sub-tabs, Editor default (UX design AC5). The wizard sub-tab mounts
+      // the existing 10-step flow; a repo without a stored draft gets a
+      // permissive one (studio_step 9 → no locked steps, start at Curate).
+      const draft = this.$store.getters['okf/activeDraft'](repoId);
+      this.activeRepoId = repoId;
+      this.activeSourceFileId = null;
+      if (draft) {
+        this.activeDraft = draft;
+        this.activeSourceFileId = draft.source_file_id || null;
+      } else {
+        const repo = this.$store.getters['okf/repoById'](repoId) || {};
+        this.activeDraft = {
+          repo_id: repoId,
+          name: repo.name,
+          domain: repo.domain,
+          concept_count: repo.concept_count || 0,
+          studio_step: 9, // everything unlocked — an existing repo isn't step-locked
+          source: 'editor'
+        };
+      }
+      this.$store.dispatch('okf/setEditorSubTab', 'editor');
+      this.view = 'repo';
+    },
+    onBackToDashboard() {
+      this.activeDraft = null;
+      this.activeRepoId = null;
+      this.view = 'dashboard';
+      this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
+    },
+    onRepoRefresh() {
+      // Resplit changed the concept set — refresh dashboard counts.
+      this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
     },
     onCreateFromDocuments() {
       // AdminDashboard already set the active tab to 'studio' + dispatched
@@ -124,6 +173,7 @@ export default {
       // clone/crawl sources (mirrors the Clone amendment).
       const repoId = evt && evt.detail && evt.detail.repo_id;
       const repo = evt && evt.detail && evt.detail.repo;
+      const fileId = evt && evt.detail && evt.detail.file_id;
       if (repoId) {
         this.$store.dispatch('okf/saveDraft', {
           repoId,
@@ -133,6 +183,7 @@ export default {
             repo_id: repoId,
             name: repo && repo.name,
             concept_count: (repo && repo.concept_count) || 1,
+            source_file_id: fileId || null,
             updated_at: Date.now()
           }
         });
@@ -140,10 +191,17 @@ export default {
           ...(this.$store.getters['okf/activeDraft'](repoId) || {}),
           repo_id: repoId,
           studio_step: 5,
-          source: 'crawl'
+          source: 'crawl',
+          source_file_id: fileId || null
         };
+        this.activeRepoId = repoId;
+        this.activeSourceFileId = fileId || null;
+        // Land in the shell on the Wizard sub-tab at Step 5 (Curate) — the
+        // crawl flow's designed post-create UX (#977); the Editor is one
+        // sub-tab click away.
+        this.$store.dispatch('okf/setEditorSubTab', 'wizard');
       }
-      this.view = 'wizard';
+      this.view = 'repo';
     },
     resetWizard() {
       this.activeDraft = null;

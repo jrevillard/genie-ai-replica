@@ -115,3 +115,65 @@ describe('repoOkfService', () => {
     });
   });
 });
+
+describe('repoOkfService — Story #978 editor methods', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('patchConcept', () => {
+    it('PATCHes /okf/repos/:rid/concepts/:cid with { markdown } and x-actor-sub header', async () => {
+      mockPatch.mockResolvedValue({
+        data: { ok: true, concept_id: 'c-1', content_hash: 'h1', index_status: 'parsed' }
+      });
+      await repoOkfService.patchConcept('r-1', 'c-1', '---\ntype: topic\n---\n# body', { sub: 'steward-1' });
+      expect(mockPatch).toHaveBeenCalledWith(
+        '/okf/repos/r-1/concepts/c-1',
+        { markdown: '---\ntype: topic\n---\n# body' },
+        { headers: { 'x-actor-sub': 'steward-1' } }
+      );
+    });
+
+    it('omits the actor header when no actor is given', async () => {
+      mockPatch.mockResolvedValue({ data: { ok: true } });
+      await repoOkfService.patchConcept('r-1', 'c-1', '# body');
+      expect(mockPatch.mock.calls[0][2]).toEqual({ headers: {} });
+    });
+  });
+
+  describe('resplit', () => {
+    it('POSTs /okf/repos/:rid/resplit with { mode, file_id }', async () => {
+      mockPost.mockResolvedValue({ data: { ok: true, mode: 'B', total: 3 } });
+      await repoOkfService.resplit('r-1', 'B', 'file-9', { sub: 'steward-1' });
+      expect(mockPost).toHaveBeenCalledWith(
+        '/okf/repos/r-1/resplit',
+        { mode: 'B', file_id: 'file-9' },
+        { headers: { 'x-actor-sub': 'steward-1' } }
+      );
+    });
+
+    it('omits file_id when not provided', async () => {
+      mockPost.mockResolvedValue({ data: { ok: true, mode: 'A' } });
+      await repoOkfService.resplit('r-1', 'A');
+      expect(mockPost.mock.calls[0][1]).toEqual({ mode: 'A' });
+    });
+  });
+
+  describe('autocorrect', () => {
+    it('POSTs /okf/repos/:rid/autocorrect with dry_run=true by default', async () => {
+      mockPost.mockResolvedValue({ data: { ok: true, changes: [], warnings: [] } });
+      await repoOkfService.autocorrect('r-1');
+      expect(mockPost).toHaveBeenCalledWith('/okf/repos/r-1/autocorrect', { dry_run: true }, { headers: {} });
+    });
+
+    it('sends dry_run=false when applying', async () => {
+      mockPost.mockResolvedValue({ data: { ok: true, changes: [] } });
+      await repoOkfService.autocorrect('r-1', { dryRun: false }, { sub: 's-1' });
+      expect(mockPost).toHaveBeenCalledWith(
+        '/okf/repos/r-1/autocorrect',
+        { dry_run: false },
+        { headers: { 'x-actor-sub': 's-1' } }
+      );
+    });
+  });
+});

@@ -195,7 +195,9 @@ class DatabaseOperationsService {
         backupExtensions.push(`${this.backupFormat}.gz`);
       }
 
-      const backupPattern = new RegExp(`^${this.appName.toLowerCase()}_backup_.*\\.(${backupExtensions.join('|')})$`);
+      const backupPattern = new RegExp(
+        `^${this.appName.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_backup_.*\\.(${backupExtensions.map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`
+      );
       const backupFiles = files
         .filter((file) => backupPattern.test(file))
         .map((file) => ({

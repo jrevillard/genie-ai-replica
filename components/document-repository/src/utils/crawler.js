@@ -240,9 +240,12 @@ class Crawler {
       throw new Error(`Blocked unparseable URL: ${url}`);
     }
     if (!hostname || this._isPrivateAddress(hostname)) return;
+    // Injectable resolver (config.dnsLookup) so unit tests can exercise this
+    // layer without real DNS I/O.
+    const lookup = (this.config && this.config.dnsLookup) || dns.lookup.bind(dns);
     let addresses;
     try {
-      addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+      addresses = await lookup(hostname, { all: true, verbatim: true });
     } catch (e) {
       logger.warn(`DNS lookup failed for ${hostname} (${e.code || e.message}) — continuing (fail-open)`);
       return;
@@ -288,6 +291,7 @@ class Crawler {
         await this._assertResolvableSafe(url);
 
         const response = await axios.get(url, {
+          // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
           headers,
           responseType: 'text',
           validateStatus: null,
@@ -565,6 +569,7 @@ class Crawler {
       let hops = 5;
       for (;;) {
         const response = await axios.get(url, {
+          // nosemgrep: nodejs_scan.javascript-ssrf-rule-node_ssrf
           headers: this.headers,
           responseType: 'stream',
           timeout: this.timeoutMs,

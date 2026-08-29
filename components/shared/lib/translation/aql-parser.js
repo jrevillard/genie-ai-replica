@@ -163,7 +163,7 @@ class AqlParser {
     } else if (token) {
       // Token comes from parsed AQL text — escape it so a metacharacter in
       // the source query cannot crash the regex construction (or ReDoS).
-      this.consume(new RegExp(`^${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
+      this.consume(new RegExp(`^${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')); // nosemgrep: eslint.detect-non-literal-regexp
 
       this.skipExpression();
       return null;

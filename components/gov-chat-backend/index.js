@@ -820,6 +820,26 @@ async function initializeServices() {
       }
     }
 
+    // Start BullMQ notification workers (in-process by default). Set
+    // NOTIFICATION_WORKER_ENABLED=false to run them in a separate container
+    // via `node workers/notification-worker.js` from the same image.
+    if (process.env.NOTIFICATION_WORKER_ENABLED !== 'false') {
+      try {
+        const { startWorkers } = require('./workers/notification-worker');
+        await startWorkers({
+          tokenRepository: services.notificationService.tokenRepository,
+          broadcastRepository: services.notificationService.broadcastRepository,
+          fcmSender: services.notificationService.fcmSender,
+        });
+        logger.info('Notification workers started in-process');
+      } catch (workerError) {
+        logger.error('Failed to start notification workers — broadcasts will queue but not send', {
+          error: workerError.message,
+          stack: workerError.stack,
+        });
+      }
+    }
+
     logger.info('Setting UserProfileService.setSessionService');
     try {
       services.userProfileService.setSessionService(services.sessionService);
@@ -1215,6 +1235,33 @@ process.on('unhandledRejection', (reason, promise) => {
   });
   process.exit(1);
 });
+
+// Graceful shutdown: drain BullMQ workers (in-flight chunk jobs finish or
+// are recovered as stalled), close queue connections, then the HTTP server.
+// Without this a redeploy mid-broadcast relies solely on stalled-job recovery.
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info(`Received ${signal} — shutting down gracefully`);
+  const forceExit = setTimeout(() => {
+    logger.error('Graceful shutdown timed out — forcing exit');
+    process.exit(1);
+  }, 25000);
+  forceExit.unref();
+  try {
+    const { stopWorkers } = require('./workers/notification-worker');
+    await stopWorkers();
+  } catch (error) {
+    logger.warn('Error stopping notification workers during shutdown', { error: error.message });
+  }
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start the application
 try {

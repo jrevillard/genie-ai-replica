@@ -4,7 +4,7 @@ Notifier — tier-keyed alert dispatch.
 Channel assignment (WMO colour-code aligned):
   Tier 0  Normal     → structured log only
   Tier 1  Advisory   → log (digest collected end-of-day by ops)
-  Tier 2  Warning    → Firebase FCM push to district topic subscribers
+  Tier 2  Warning    → FCM push via backend token registry (async broadcast)
   Tier 3  Severe     → FCM push  +  Twilio SMS
   Tier 4  Emergency  → FCM push  +  Twilio SMS  +  voice call  +  broadcast webhook
 
@@ -14,13 +14,17 @@ to activate each channel; missing keys are logged and skipped gracefully.
 Deduplication: Notifier checks StorageLayer.was_alert_sent() before dispatching
 and records each send via StorageLayer.record_alert_sent().
 """
+import hashlib
 import json
 import logging
 import os
+from datetime import date
 
 import requests as _requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-from app.core.models import RiskAssessment, TIER_COLOURS
+from app.core.models import RiskAssessment
 from app.core.storage import StorageLayer
 
 logger = logging.getLogger(__name__)
@@ -29,13 +33,26 @@ logger = logging.getLogger(__name__)
 class Notifier:
     def __init__(self, storage: StorageLayer) -> None:
         self._storage = storage
-        self._fcm_key         = os.getenv("FCM_SERVER_KEY", "")
         self._twilio_sid      = os.getenv("TWILIO_ACCOUNT_SID", "")
         self._twilio_token    = os.getenv("TWILIO_AUTH_TOKEN", "")
         self._twilio_from     = os.getenv("TWILIO_PHONE_FROM", "")
         self._broadcast_url   = os.getenv("BROADCAST_WEBHOOK_URL", "")
         self._notification_url = self._resolve_notification_broadcast_url()
         self._notification_secret = os.getenv("NOTIFICATION_BROADCAST_SECRET", "")
+        # Retrying session for the backend broadcast endpoint. Retrying POST is
+        # safe only because every request carries an idempotency key — the
+        # backend dedups on it. allowed_methods must name POST explicitly:
+        # urllib3 excludes it by default.
+        retry = Retry(
+            total=3,
+            backoff_factor=1.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(["POST"]),
+            respect_retry_after_header=True,
+        )
+        self._session = _requests.Session()
+        self._session.mount("http://", HTTPAdapter(max_retries=retry))
+        self._session.mount("https://", HTTPAdapter(max_retries=retry))
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -117,38 +134,17 @@ class Notifier:
                 "assessed_at": a.assessed_at,
             },
         }
-        if self._post_notification_broadcast(backend_payload, f"weather alert for {a.location}"):
-            return
-
-        if not self._fcm_key:
-            logger.info("[NOTIFY] FCM_SERVER_KEY not set — push skipped for %s", a.location)
-            return
-
-        topic_slug = a.location.lower().replace(" ", "_").replace("'", "").replace("\u2019", "")
-        topic = f"/topics/weather_{topic_slug}"
-        payload = {
-            "to": topic,
-            "notification": {
-                "title": f"Weather {a.tier_label} — {a.location}",
-                "body": a.reasoning[:200],
-                "color": TIER_COLOURS[a.tier],
-            },
-            "data": backend_payload["data"],
-        }
-        try:
-            resp = _requests.post(
-                "https://fcm.googleapis.com/fcm/send",
-                headers={
-                    "Authorization": f"key={self._fcm_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=10,
+        bucket = str(getattr(a, "assessed_at", "") or "")[:10] or date.today().isoformat()
+        broadcast_id = self._post_notification_broadcast(
+            backend_payload,
+            f"weather alert for {a.location}",
+            self._idempotency_key("weather_warning", a.location, a.tier, bucket),
+        )
+        if not broadcast_id:
+            logger.warning(
+                "[NOTIFY] Backend notification URL not configured or failed — weather push for %s not sent",
+                a.location,
             )
-            resp.raise_for_status()
-            logger.info("[NOTIFY] FCM push sent to %s (topic %s)", a.location, topic)
-        except Exception as exc:
-            logger.error("[NOTIFY] FCM push failed for %s: %s", a.location, exc)
 
     def dispatch_potato_alert(self, assessment: dict) -> bool:
         """Broadcast a potato EWS alert through the backend token registry."""
@@ -180,7 +176,12 @@ class Notifier:
                 "disease_risks": json.dumps(assessment.get("disease_risks", [])),
             },
         }
-        if self._post_notification_broadcast(payload, f"potato alert for {location}"):
+        bucket = assessment.get("forecast_date") or date.today().isoformat()
+        if self._post_notification_broadcast(
+            payload,
+            f"potato alert for {location}",
+            self._idempotency_key("potato_ews", location, tier, bucket),
+        ):
             return True
 
         logger.warning(
@@ -221,7 +222,12 @@ class Notifier:
                 "report_filename": report_filename,
             },
         }
-        if self._post_notification_broadcast(payload, f"drought alert for {location}"):
+        bucket = assessment.get("assessment_date") or date.today().isoformat()
+        if self._post_notification_broadcast(
+            payload,
+            f"drought alert for {location}",
+            self._idempotency_key("drought_alert", location, tier, bucket),
+        ):
             return True
 
         logger.warning(
@@ -263,7 +269,16 @@ class Notifier:
                 "danger_terms":   json.dumps(danger_terms),
             },
         }
-        if self._post_notification_broadcast(payload, f"BAMIS special bulletin {bulletin.get('source_id', '')}"):
+        bulletin_ref = (
+            bulletin.get("source_id")
+            or bulletin.get("url")
+            or f"{bulletin.get('published_date', '')}|{title}"
+        )
+        if self._post_notification_broadcast(
+            payload,
+            f"BAMIS special bulletin {bulletin.get('source_id', '')}",
+            self._idempotency_key("special_bulletin", str(bulletin_ref), tier, bulletin.get("published_date") or date.today().isoformat()),
+        ):
             return True
 
         logger.warning("[NOTIFY] Backend notification URL not configured — BAMIS special bulletin not pushed")
@@ -390,27 +405,57 @@ class Notifier:
             (assessment.get("triggers") or assessment.get("disease_risks") or [])[:2]
         ) or "New potato early warning alert"
 
-    def _post_notification_broadcast(self, payload: dict, context: str) -> bool:
-        if not self._notification_url:
-            return False
+    @staticmethod
+    def _idempotency_key(kind: str, location: str, tier, bucket: str) -> str:
+        """Date-bucketed dedup key. APScheduler has no persistent jobstore, so a
+        container restart re-runs the daily pipeline — this key makes the
+        backend suppress the re-run's duplicate push instead of double-notifying.
+        """
+        raw = f"{kind}|{location}|{tier}|{bucket}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
-        headers = {"Content-Type": "application/json"}
+    def _post_notification_broadcast(
+        self, payload: dict, context: str, idempotency_key: str | None = None
+    ) -> str | None:
+        """POST to the backend broadcast endpoint (now async server-side).
+
+        Returns the broadcastId on success (202 queued / 200 duplicate),
+        None on failure. Truthiness preserves the old bool call sites.
+        """
+        if not self._notification_url:
+            return None
+
+        headers = {"Content-Type": "application/json", "x-notification-source": "warning_system_engine"}
         if self._notification_secret:
             headers["x-notification-secret"] = self._notification_secret
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+            payload = {**payload, "idempotencyKey": idempotency_key}
 
         try:
-            resp = _requests.post(
+            resp = self._session.post(
                 self._notification_url,
                 headers=headers,
                 json=payload,
-                timeout=10,
+                timeout=(5, 30),
             )
             resp.raise_for_status()
-            logger.info("[NOTIFY] Backend broadcast sent for %s", context)
-            return True
+            body = resp.json() if resp.content else {}
+            broadcast_id = body.get("broadcastId") or ""
+            if body.get("duplicate"):
+                logger.info(
+                    "[NOTIFY] Backend broadcast duplicate-suppressed for %s (broadcastId=%s)",
+                    context, broadcast_id,
+                )
+            else:
+                logger.info(
+                    "[NOTIFY] Backend broadcast queued for %s (broadcastId=%s, status=%s)",
+                    context, broadcast_id, body.get("status", "unknown"),
+                )
+            return broadcast_id or "queued"
         except Exception as exc:
             logger.error("[NOTIFY] Backend broadcast failed for %s: %s", context, exc)
-            return False
+            return None
 
     @staticmethod
     def _resolve_notification_broadcast_url() -> str:

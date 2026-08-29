@@ -53,7 +53,30 @@ OPENWEATHERMAP_API_KEY=b115ccced35ade4c9a1077b6e5a210dd
 # FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 GOOGLE_APPLICATION_CREDENTIALS=
 FIREBASE_SERVICE_ACCOUNT_JSON=
+# REQUIRED for broadcasts: the /api/notifications/broadcast endpoint now fails
+# closed — an unset secret returns 503 for every broadcast. Generate with:
+#   openssl rand -hex 32
+# and set the SAME value in components/warning_system_engine/.env
 NOTIFICATION_BROADCAST_SECRET=
+
+# Notification fan-out (BullMQ on the redis-cache instance, logical db 1).
+# Redis connection falls back to TRANSLATION_CACHE_* when unset.
+NOTIFICATION_REDIS_HOST=
+NOTIFICATION_REDIS_PORT=
+NOTIFICATION_REDIS_PASSWORD=
+NOTIFICATION_REDIS_DB=1
+# Chunk jobs processed in parallel (each = up to 500 FCM messages)
+NOTIFICATION_SEND_CONCURRENCY=4
+# Queue rate limit: chunk jobs started per second (8 x 500 = 4000 msg/s ceiling)
+NOTIFICATION_CHUNKS_PER_SEC=8
+NOTIFICATION_CHUNK_SIZE=500
+NOTIFICATION_JOB_ATTEMPTS=5
+# Android message TTL in seconds (default 6h) — stale weather alerts expire
+NOTIFICATION_TTL_SECONDS=21600
+# Set to false to run workers in a separate container (node workers/notification-worker.js)
+NOTIFICATION_WORKER_ENABLED=true
+# real | mock — mock simulates FCM for load testing without burning quota
+FCM_TRANSPORT=real
 
 # Frontend Translation Service configuration
 TRANSLATION_THREADS=4

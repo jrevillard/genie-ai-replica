@@ -1,17 +1,36 @@
 require('dotenv').config();
-const axios = require('axios');
-const crypto = require('crypto');
-const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { TokenRepository } = require('./notification/token-repository');
+const { BroadcastRepository } = require('./notification/broadcast-repository');
+const { FcmSender } = require('./notification/fcm-sender');
+const { notificationQueue } = require('./notification/queue');
 
+const VALID_PLATFORMS = new Set(['android', 'ios', 'web']);
+const TOKEN_PATTERN = /^[A-Za-z0-9_:.\-]+$/;
+const MAX_PREFERENCE_ENTRIES = 64;
+
+/**
+ * Facade over the notification subsystem.
+ *
+ * Broadcasts are asynchronous: enqueueBroadcast() persists a broadcast
+ * document, drops a job on BullMQ, and returns immediately. The actual
+ * FCM fan-out happens in workers/notification-worker.js, with running
+ * counters in Redis and the durable record in ArangoDB.
+ */
 class NotificationService {
   constructor() {
     this.db = null;
-    this.deviceTokens = null;
-    this.admin = null;
+    this.tokenRepository = new TokenRepository();
+    this.broadcastRepository = new BroadcastRepository();
+    this.fcmSender = new FcmSender();
+    this.queue = notificationQueue;
+    this.queueEnabled = false;
     this.initialized = false;
-    this.firebaseEnabled = false;
     logger.info('NotificationService constructor called');
+  }
+
+  get firebaseEnabled() {
+    return this.fcmSender.enabled;
   }
 
   async init() {
@@ -21,13 +40,23 @@ class NotificationService {
     }
 
     this.db = await dbService.getConnection('default');
-    this.deviceTokens = await this._ensureCollection('notificationDeviceTokens');
-    this._initFirebaseAdmin();
-    this.initialized = true;
+    await this.tokenRepository.init(this.db);
+    await this.broadcastRepository.init(this.db);
+    this.fcmSender.init();
 
+    try {
+      this.queue.init();
+      this.queueEnabled = true;
+    } catch (error) {
+      logger.error('NotificationService: queue unavailable — broadcasts will be rejected', {
+        error: error.message,
+      });
+    }
+
+    this.initialized = true;
     logger.info('NotificationService initialized', {
       firebaseEnabled: this.firebaseEnabled,
-      collection: 'notificationDeviceTokens',
+      queueEnabled: this.queueEnabled,
     });
   }
 
@@ -39,38 +68,53 @@ class NotificationService {
     if (!userId || !fcmToken) {
       throw new Error('userId and fcmToken are required');
     }
-
-    const now = new Date().toISOString();
-    const key = this._tokenKey(userId, fcmToken);
-    const doc = {
-      _key: key,
-      userId,
-      fcmToken,
-      platform: payload.platform || 'android',
-      preferences: this._normalizePreferences(payload.preferences),
-      deviceInfo: payload.deviceInfo || {},
-      active: true,
-      updatedAt: now,
-      lastSeenAt: now,
-    };
-
-    const exists = await this.deviceTokens.documentExists(key).catch(() => false);
-    if (exists) {
-      await this.deviceTokens.update(key, doc, { mergeObjects: true });
-    } else {
-      await this.deviceTokens.save({ ...doc, createdAt: now });
+    if (fcmToken.length > 4096 || !TOKEN_PATTERN.test(fcmToken)) {
+      throw new Error('fcmToken is malformed');
+    }
+    const platform = String(payload.platform || 'android').toLowerCase();
+    if (!VALID_PLATFORMS.has(platform)) {
+      throw new Error(`platform must be one of: ${[...VALID_PLATFORMS].join(', ')}`);
     }
 
+    const doc = {
+      userId,
+      fcmToken,
+      platform,
+      preferences: this._normalizePreferences(payload.preferences),
+      deviceInfo: payload.deviceInfo || {},
+    };
+
+    const result = await this.tokenRepository.upsertToken(doc);
     logger.info('NotificationService.device_token_registered', {
       userId,
-      platform: doc.platform,
-      tokenKey: key,
+      platform,
+      tokenKey: result.key,
+      created: result.created,
     });
-
-    return { success: true, tokenKey: key };
+    return { success: true, tokenKey: result.key };
   }
 
-  async broadcast(payload) {
+  async unregisterDeviceToken({ userId, fcmToken = null, all = false }) {
+    this._assertInitialized();
+    const normalizedUserId = this._normalizeUserId(userId);
+    if (!normalizedUserId) {
+      throw new Error('userId is required');
+    }
+    if (!all && !fcmToken) {
+      throw new Error('fcmToken is required unless all=true');
+    }
+    const deactivated = await this.tokenRepository.deactivateByUser(
+      normalizedUserId,
+      all ? null : String(fcmToken).trim(),
+    );
+    return { success: true, deactivated };
+  }
+
+  /**
+   * Validates, persists, and enqueues a broadcast. Returns fast — the caller
+   * polls GET /broadcasts/:broadcastId for progress.
+   */
+  async enqueueBroadcast(payload, { idempotencyKey = null, requestedBy = null, source = null } = {}) {
     this._assertInitialized();
 
     const title = String(payload.title || 'MEWA Alert').trim();
@@ -78,158 +122,119 @@ class NotificationService {
     if (!body) {
       throw new Error('body is required');
     }
-
-    const tokens = await this._findMatchingTokens(payload);
-    if (tokens.length === 0) {
-      logger.warn('NotificationService.broadcast_no_tokens', {
-        type: payload.type,
-        districts: payload.districts || [],
-        crops: payload.crops || [],
-        alertTypes: payload.alertTypes || [],
-      });
-      return { success: true, sent: 0, failed: 0, tokenCount: 0 };
+    if (!this.queueEnabled) {
+      const err = new Error('Notification queue is unavailable');
+      err.statusCode = 503;
+      throw err;
+    }
+    if (!this.firebaseEnabled) {
+      const err = new Error('Firebase Admin credentials are not configured');
+      err.statusCode = 503;
+      throw err;
     }
 
-    if (this.firebaseEnabled) {
-      return this._sendWithFirebaseAdmin(tokens, payload, title, body);
-    }
-
-    if (process.env.FCM_SERVER_KEY) {
-      return this._sendWithLegacyFcm(tokens, payload, title, body);
-    }
-
-    logger.warn('NotificationService.broadcast_skipped_no_firebase_config');
-    return {
-      success: false,
-      sent: 0,
-      failed: tokens.length,
-      tokenCount: tokens.length,
-      message: 'Firebase Admin credentials or FCM_SERVER_KEY are required',
+    const audience = {
+      districts: this._stringArray(payload.districts || (payload.location ? [payload.location] : [])),
+      crops: this._stringArray(payload.crops),
+      alertTypes: this._stringArray(payload.alertTypes || (payload.type ? [payload.type] : [])),
     };
-  }
 
-  async _findMatchingTokens(payload) {
-    const districts = this._stringArray(payload.districts || (payload.location ? [payload.location] : []));
-    const crops = this._stringArray(payload.crops);
-    const alertTypes = this._stringArray(payload.alertTypes || (payload.type ? [payload.type] : []));
-
-    const cursor = await this.db.query(aql`
-      FOR token IN notificationDeviceTokens
-        FILTER token.active == true
-        FILTER token.fcmToken != null && token.fcmToken != ""
-        FILTER LENGTH(${districts}) == 0
-          OR LENGTH(INTERSECTION(token.preferences.districts || [], ${districts})) > 0
-        FILTER LENGTH(${crops}) == 0
-          OR LENGTH(INTERSECTION(token.preferences.crops || [], ${crops})) > 0
-        FILTER LENGTH(${alertTypes}) == 0
-          OR LENGTH(INTERSECTION(token.preferences.alertTypes || [], ${alertTypes})) > 0
-        RETURN DISTINCT token.fcmToken
-    `);
-
-    return cursor.all();
-  }
-
-  async _sendWithFirebaseAdmin(tokens, payload, title, body) {
-    const chunks = this._chunks(tokens, 500);
-    let sent = 0;
-    let failed = 0;
-
-    for (const chunk of chunks) {
-      const response = await this.admin.messaging().sendEachForMulticast({
-        tokens: chunk,
-        notification: { title, body },
-        data: this._buildMessageData(payload),
-        android: {
-          priority: 'high',
-          notification: {
-            channelId: 'weather_alerts',
-            priority: 'high',
-          },
-        },
-      });
-      sent += response.successCount;
-      failed += response.failureCount;
-    }
-
-    logger.info('NotificationService.firebase_broadcast_sent', {
-      sent,
-      failed,
-      tokenCount: tokens.length,
+    const { doc, duplicate } = await this.broadcastRepository.create({
+      idempotencyKey: idempotencyKey || payload.idempotencyKey || null,
+      payload: { ...payload, title, body },
+      audience,
+      source,
+      requestedBy,
     });
 
-    return { success: failed === 0, sent, failed, tokenCount: tokens.length };
-  }
-
-  async _sendWithLegacyFcm(tokens, payload, title, body) {
-    let sent = 0;
-    let failed = 0;
-    const data = this._buildMessageData(payload);
-
-    for (const token of tokens) {
-      try {
-        await axios.post(
-          'https://fcm.googleapis.com/fcm/send',
-          {
-            to: token,
-            notification: { title, body },
-            data,
-          },
-          {
-            headers: {
-              Authorization: `key=${process.env.FCM_SERVER_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 10000,
-          },
-        );
-        sent += 1;
-      } catch (error) {
-        failed += 1;
-        logger.error('NotificationService.legacy_fcm_send_failed', {
-          error: error.message,
-          status: error.response?.status,
-        });
-      }
-    }
-
-    return { success: failed === 0, sent, failed, tokenCount: tokens.length };
-  }
-
-  _initFirebaseAdmin() {
-    try {
-      const admin = require('firebase-admin');
-      if (admin.apps.length === 0) {
-        const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-        if (serviceAccountJson) {
-          admin.initializeApp({
-            credential: admin.credential.cert(JSON.parse(serviceAccountJson)),
-          });
-        } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-          admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-          });
-        } else {
-          logger.warn('NotificationService Firebase Admin credentials not configured');
-          return;
-        }
-      }
-      this.admin = admin;
-      this.firebaseEnabled = true;
-    } catch (error) {
-      logger.warn('NotificationService Firebase Admin unavailable', {
-        error: error.message,
+    if (duplicate) {
+      logger.info('NotificationService.broadcast_duplicate', {
+        broadcastId: doc.broadcastId,
+        idempotencyKey: doc.idempotencyKey,
+        status: doc.status,
       });
+      return { duplicate: true, broadcastId: doc.broadcastId, status: doc.status };
     }
+
+    await this.queue.broadcastQueue.add(
+      'broadcast',
+      { key: doc._key, broadcastId: doc.broadcastId, payload: doc.payload, audience },
+      {
+        jobId: `bc-${doc._key}`,
+        attempts: 3,
+        backoff: { type: 'custom' },
+        removeOnComplete: { age: 3600, count: 100 },
+        removeOnFail: { age: 86400 },
+      },
+    );
+
+    logger.info('NotificationService.broadcast_enqueued', {
+      broadcastId: doc.broadcastId,
+      audience,
+      source,
+    });
+    return { duplicate: false, broadcastId: doc.broadcastId, status: 'queued' };
   }
 
-  async _ensureCollection(name) {
-    const collection = this.db.collection(name);
-    const exists = await collection.exists().catch(() => false);
-    if (!exists) {
-      await this.db.createCollection(name);
-      logger.info('NotificationService.collection_created', { name });
+  /** Status document, overlaid with live Redis counters while still sending. */
+  async getBroadcastStatus(broadcastId) {
+    this._assertInitialized();
+    const doc = await this.broadcastRepository.getByBroadcastId(broadcastId);
+    if (!doc) return null;
+
+    const view = {
+      broadcastId: doc.broadcastId,
+      status: doc.status,
+      source: doc.source,
+      audience: doc.audience,
+      counts: { ...doc.counts },
+      errorSummary: doc.errorSummary || {},
+      lastError: doc.lastError,
+      createdAt: doc.createdAt,
+      startedAt: doc.startedAt,
+      finishedAt: doc.finishedAt,
+    };
+
+    if (['resolving', 'sending'].includes(doc.status) && this.queueEnabled) {
+      try {
+        const live = await this.queue.connection.hgetall(this.queue.countersKey(doc.broadcastId));
+        for (const field of ['sent', 'failed', 'pruned', 'chunksDone']) {
+          if (live[field] !== undefined) view.counts[field] = parseInt(live[field], 10) || 0;
+        }
+      } catch (_) { /* live overlay is best-effort */ }
     }
-    return this.db.collection(name);
+    return view;
+  }
+
+  async listBroadcasts({ status = null, limit = 25 } = {}) {
+    this._assertInitialized();
+    return this.broadcastRepository.list({ status, limit });
+  }
+
+  async getHealth() {
+    this._assertInitialized();
+    const health = {
+      firebaseEnabled: this.firebaseEnabled,
+      transport: this.fcmSender.transport,
+      queueConnected: false,
+      waiting: null,
+      active: null,
+      failed: null,
+      activeTokenCount: null,
+    };
+    try {
+      health.activeTokenCount = await this.tokenRepository.countActive();
+    } catch (_) { /* leave null */ }
+    if (this.queueEnabled) {
+      try {
+        health.queueConnected = await this.queue.isConnected();
+        const counts = await this.queue.chunkQueue.getJobCounts('waiting', 'active', 'failed');
+        health.waiting = counts.waiting;
+        health.active = counts.active;
+        health.failed = counts.failed;
+      } catch (_) { /* leave nulls */ }
+    }
+    return health;
   }
 
   _assertInitialized() {
@@ -240,10 +245,6 @@ class NotificationService {
 
   _normalizeUserId(value) {
     return String(value || '').trim().replace(/^users\//, '');
-  }
-
-  _tokenKey(userId, fcmToken) {
-    return crypto.createHash('sha256').update(`${userId}:${fcmToken}`).digest('hex');
   }
 
   _normalizePreferences(preferences = {}) {
@@ -258,29 +259,10 @@ class NotificationService {
     if (!Array.isArray(value)) {
       return [];
     }
-    return value.map(item => String(item || '').trim()).filter(Boolean);
-  }
-
-  _buildMessageData(payload) {
-    return {
-      type: String(payload.type || 'weather_warning'),
-      location: String(payload.location || ''),
-      tier: String(payload.tier ?? ''),
-      tierLabel: String(payload.tierLabel || payload.tier_label || ''),
-      crop: Array.isArray(payload.crops) ? String(payload.crops[0] || '') : String(payload.crop || ''),
-      alertTypes: JSON.stringify(payload.alertTypes || []),
-      districts: JSON.stringify(payload.districts || []),
-      crops: JSON.stringify(payload.crops || []),
-      ...(payload.data || {}),
-    };
-  }
-
-  _chunks(items, size) {
-    const chunks = [];
-    for (let i = 0; i < items.length; i += size) {
-      chunks.push(items.slice(i, i + size));
-    }
-    return chunks;
+    return value
+      .slice(0, MAX_PREFERENCE_ENTRIES)
+      .map(item => String(item || '').trim())
+      .filter(Boolean);
   }
 }
 

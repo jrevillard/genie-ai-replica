@@ -240,9 +240,12 @@ class Crawler {
       throw new Error(`Blocked unparseable URL: ${url}`);
     }
     if (!hostname || this._isPrivateAddress(hostname)) return;
+    // Injectable resolver (config.dnsLookup) so unit tests can exercise this
+    // layer without real DNS I/O.
+    const lookup = (this.config && this.config.dnsLookup) || dns.lookup.bind(dns);
     let addresses;
     try {
-      addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+      addresses = await lookup(hostname, { all: true, verbatim: true });
     } catch (e) {
       logger.warn(`DNS lookup failed for ${hostname} (${e.code || e.message}) — continuing (fail-open)`);
       return;

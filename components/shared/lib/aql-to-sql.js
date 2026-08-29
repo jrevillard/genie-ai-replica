@@ -155,12 +155,12 @@ class AqlToSqlTranslator {
       );
       if (joinCondition) {
         const direction = joinCondition[1];
-        filter1 = filter1.replace(new RegExp(`${escapeRegExp(edgeVar)}\\.`, 'g'), `${edgeVar}.`); // nosemgrep: eslint.detect-non-literal-regexp
+        filter1 = filter1.replaceAll(`${edgeVar}.`, `${edgeVar}.`);
         filter2 = filter2.replace(joinCondition[0], '');
         if (filter2.trim().startsWith('AND')) {
           filter2 = filter2.trim().substring(3).trim();
         }
-        filter2 = filter2.replace(new RegExp(`${escapeRegExp(docVar)}\\.`, 'g'), `${docVar}.`); // nosemgrep: eslint.detect-non-literal-regexp
+        filter2 = filter2.replaceAll(`${docVar}.`, `${docVar}.`); // nosemgrep: eslint.detect-non-literal-regexp
         const whereClause = filter2 ? ` AND ${filter2}` : '';
         let returnProcessed = this._translateExpression(ret);
         returnProcessed = returnProcessed.replace(/\{([^}]+)\}/, (m, fields) => {
@@ -249,7 +249,7 @@ class AqlToSqlTranslator {
         );
         if (remMatch) {
           const filter = remMatch[1]
-            ? ` AND ${this._translateExpression(remMatch[1]).replace(new RegExp(`${escapeRegExp(docVar)}\\.`, 'g'), docVar + '.')}` // nosemgrep: eslint.detect-non-literal-regexp
+            ? ` AND ${this._translateExpression(remMatch[1]).replaceAll(`${docVar}.`, docVar + '.')}`
             : '';
           const sort = remMatch[2] ? ` ORDER BY ${this._translateExpression(remMatch[2])}` : '';
           const limit = remMatch[3] || '';
@@ -575,7 +575,7 @@ class AqlToSqlTranslator {
             .join(', ');
           finalSql =
             `UPDATE ${updateColl} SET ${setPairs}` + finalSql.replace(` FROM ${coll} LET ${varName} = @this`, '');
-          finalSql = finalSql.replace(new RegExp(`${escapeRegExp(varName)}\\.`, 'g'), ''); // nosemgrep: eslint.detect-non-literal-regexp
+          finalSql = finalSql.replaceAll(`${varName}.`, '');
           type = 'update';
         }
       } else if (clause.type === 'REMOVE') {
@@ -583,7 +583,7 @@ class AqlToSqlTranslator {
         if (match) {
           const removeColl = match[2];
           finalSql = `DELETE FROM ${removeColl}` + finalSql.replace(` FROM ${coll} LET ${varName} = @this`, '');
-          finalSql = finalSql.replace(new RegExp(`${escapeRegExp(varName)}\\.`, 'g'), ''); // nosemgrep: eslint.detect-non-literal-regexp
+          finalSql = finalSql.replaceAll(`${varName}.`, '');
           type = 'delete';
         }
       }

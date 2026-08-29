@@ -745,6 +745,60 @@ describe('Crawler', () => {
 
   // --- download ---
 
+  describe('_assertResolvableSafe (DNS safety layer)', () => {
+    // Injected resolver: exercises the DNS-safety layer without real I/O,
+    // so fake timers cannot stall it.
+    function crawlerWithDns(stub) {
+      return new Crawler(null, 5000, { dnsLookup: stub });
+    }
+
+    it('allows a hostname resolving to public addresses', async () => {
+      const c = crawlerWithDns(jest.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }]));
+      await expect(c._assertResolvableSafe('http://example.com/x')).resolves.toBeUndefined();
+    });
+
+    it('blocks a hostname resolving to a private IPv4 address', async () => {
+      const c = crawlerWithDns(jest.fn().mockResolvedValue([{ address: '10.0.0.5', family: 4 }]));
+      await expect(c._assertResolvableSafe('http://evil.example.com/x')).rejects.toThrow(/private address/);
+    });
+
+    it('blocks when ANY resolved address is private (multi-record)', async () => {
+      const c = crawlerWithDns(
+        jest.fn().mockResolvedValue([
+          { address: '93.184.216.34', family: 4 },
+          { address: '192.168.1.10', family: 4 }
+        ])
+      );
+      await expect(c._assertResolvableSafe('http://mixed.example.com/x')).rejects.toThrow(/private address/);
+    });
+
+    it('blocks IPv6 unique-local resolved addresses (fc00::/7)', async () => {
+      const c = crawlerWithDns(jest.fn().mockResolvedValue([{ address: 'fd00::1', family: 6 }]));
+      await expect(c._assertResolvableSafe('http://v6.example.com/x')).rejects.toThrow(/private address/);
+    });
+
+    it('fails open on unresolvable hostnames (site temporarily down)', async () => {
+      const c = crawlerWithDns(jest.fn().mockRejectedValue(Object.assign(new Error('nope'), { code: 'ENOTFOUND' })));
+      await expect(c._assertResolvableSafe('http://down.example.com/x')).resolves.toBeUndefined();
+    });
+
+    it('skips DNS for a literal private IP (blocked earlier by _validateUrl)', async () => {
+      const lookup = jest.fn();
+      const c = crawlerWithDns(lookup);
+      // short-circuit, not a throw: the literal-IP block lives in _validateUrl
+      await expect(c._assertResolvableSafe('http://192.168.1.10/x')).resolves.toBeUndefined();
+      expect(lookup).not.toHaveBeenCalled();
+      expect(() => c._validateUrl('http://192.168.1.10/x')).toThrow(/internal address/);
+    });
+
+    it('skips entirely when dnsSafetyCheck is false', async () => {
+      const lookup = jest.fn();
+      const c = new Crawler(null, 5000, { dnsLookup: lookup, dnsSafetyCheck: false });
+      await expect(c._assertResolvableSafe('http://anything.example.com/x')).resolves.toBeUndefined();
+      expect(lookup).not.toHaveBeenCalled();
+    });
+  });
+
   describe('download', () => {
     it('should pipe response to write stream', async () => {
       crawler.config.dnsSafetyCheck = false; // skip real-DNS SSRF layer (mocked axios)

@@ -108,6 +108,30 @@ const repoOkfService = {
       { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
     );
     return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — ingest N concepts (also the primitive behind "create repo
+   * from scratch" and "+ Add concept"). Same shape as the crawler path.
+   */
+  async ingest(repoId, concepts, actor = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/ingest`,
+      { concepts },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — delete ONE concept (meta row + indexed chunks + graph).
+   */
+  async deleteConcept(repoId, conceptId, actor = {}) {
+    const res = await httpService.delete(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}`,
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
   }
 };
 

@@ -28,8 +28,32 @@
     </nav>
 
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
+
+    <DsDialog
+      :visible="createOpen"
+      :title="translate('okf.create.title', 'New OKF repository')"
+      size="sm"
+      :actions="createActions"
+      @close="createOpen = false"
+      @action="onCreateAction"
+    >
+      <p class="okf-studio-tab__create-hint">
+        {{
+          translate('okf.create.hint', 'Creates an empty repository with an index.md you edit in the Studio editor.')
+        }}
+      </p>
+      <DsFormGroup :label="translate('okf.create.name', 'Repository name')" input-id="okf-create-name">
+        <DsInput id="okf-create-name" v-model="createName" size="sm" />
+      </DsFormGroup>
+      <DsFormGroup :label="translate('okf.create.domain', 'Subject area')" input-id="okf-create-domain">
+        <DsSelect id="okf-create-domain" v-model="createDomain" size="sm">
+          <option v-for="opt in domainOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </DsSelect>
+      </DsFormGroup>
+      <p v-if="createError" class="okf-studio-tab__create-error">{{ createError }}</p>
+    </DsDialog>
     <OkfRepoEditorShell
-      v-else-if="view === 'repo' && activeRepoId"
+      v-if="view === 'repo' && activeRepoId"
       :repo-id="activeRepoId"
       :draft="activeDraft"
       :source-file-id="activeSourceFileId"
@@ -64,6 +88,9 @@ import translateMixin from '../../mixins/translateMixin';
 import DsButton from '../ds/Button.vue';
 import DsDialog from '../ds/Dialog.vue';
 import DsModeSwitch from '../ds/ModeSwitch.vue';
+import DsFormGroup from '../ds/FormGroup.vue';
+import DsInput from '../ds/Input.vue';
+import DsSelect from '../ds/Select.vue';
 import OkfNarrative from './Narrative.vue';
 import OkfStudioDashboard from './StudioDashboard.vue';
 import OkfStudioWizard from './StudioWizard.vue';
@@ -73,6 +100,9 @@ export default {
   name: 'OkfStudioTab',
   components: {
     DsButton,
+    DsFormGroup,
+    DsInput,
+    DsSelect,
     DsDialog,
     DsModeSwitch,
     OkfNarrative,
@@ -87,11 +117,44 @@ export default {
       helpOpen: false,
       activeDraft: null,
       activeRepoId: null,
-      activeSourceFileId: null
+      activeSourceFileId: null,
+      createOpen: false,
+      createName: '',
+      createDomain: 'general',
+      createError: '',
+      creating: false
     };
   },
   computed: {
     ...mapGetters('okf', ['isExpert']),
+    domainOptions() {
+      return [
+        { value: 'general', label: 'General' },
+        { value: 'transport', label: 'Transport' },
+        { value: 'health', label: 'Health' },
+        { value: 'education', label: 'Education' },
+        { value: 'social-services', label: 'Social services' },
+        { value: 'agriculture', label: 'Agriculture' },
+        { value: 'housing', label: 'Housing' },
+        { value: 'civil-registry', label: 'Civil registry' }
+      ];
+    },
+    createActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.creating
+        },
+        {
+          key: 'create',
+          label: this.translate('okf.create.create', 'Create repository'),
+          variant: 'primary',
+          disabled: this.creating || !(this.createName || '').trim()
+        }
+      ];
+    },
     expertMode() {
       return this.isExpert ? 'expert' : 'basic';
     }
@@ -151,12 +214,42 @@ export default {
       this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
     },
     onNew() {
-      // Dashboard's "+ New repository" — fresh create flow: the 10-step
-      // wizard from Step 0 with no draft. (This button previously emitted
-      // `new` with no listener — dead since Story 3-5.)
-      this.activeDraft = null;
-      this.activeRepoId = null;
-      this.view = 'wizard';
+      // "+ New repository": minimal create dialog, then straight into the
+      // Editor with an index.md skeleton (Story #978 dialog-then-editor UX).
+      this.createOpen = true;
+    },
+    async onCreateAction(key) {
+      if (key === 'cancel') {
+        this.createOpen = false;
+        return;
+      }
+      if (key !== 'create' || this.creating) return;
+      this.creating = true;
+      this.createError = '';
+      const result = await this.$store.dispatch('okf/createRepo', {
+        name: this.createName,
+        domain: this.createDomain
+      });
+      this.creating = false;
+      if (!result.ok) {
+        this.createError = result.message || this.translate('okf.create.failed', 'Repository creation failed');
+        return;
+      }
+      this.createOpen = false;
+      this.createName = '';
+      const repoId = result.repo.repo_id;
+      this.activeRepoId = repoId;
+      this.activeSourceFileId = null;
+      this.activeDraft = {
+        repo_id: repoId,
+        name: result.repo.name,
+        domain: result.repo.domain,
+        concept_count: 1,
+        studio_step: 9,
+        source: 'editor'
+      };
+      this.$store.dispatch('okf/setEditorSubTab', 'editor');
+      this.view = 'repo';
     },
     onRepoRefresh() {
       // Resplit changed the concept set — refresh dashboard counts.

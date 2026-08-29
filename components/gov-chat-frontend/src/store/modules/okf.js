@@ -342,9 +342,69 @@ const actions = {
   // ─── Story #978 — Studio Editor (Wizard | Editor sub-tabs) ───────────────
 
   /**
-   * Open the editor for a repo: pins the repo, resets the selection and
-   * fetches the concept list (errors-first sort served by the backend).
+   * Create an EMPTY repo from scratch (Studio "+ New repository" dialog).
+   * Delegates to the shared okfRepoOps library (equal features for the
+   * wizard and editor UIs) and updates the dashboard lanes.
    */
+  async createRepo({ commit }, { name, domain } = {}) {
+    if (!name || typeof name !== 'string') {
+      return { ok: false, code: 'VALIDATION_ERROR', message: 'name required' };
+    }
+    try {
+      const repo = await okfRepoOps.createRepo({ name, domain });
+      commit('upsertRepo', repo);
+      const byStage = this.state?.okf?.reposByStage || { draft: [], in_review: [], published: [] };
+      const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
+      if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
+      commit('setReposByStage', { ...byStage, draft: draftLane });
+      return { ok: true, repo };
+    } catch (err) {
+      commit('setError', err.message || 'createRepo failed');
+      return { ok: false, code: 'CREATE_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * "+ Add concept": normalized paste + auto-append to the index TOC via
+   * the shared okfRepoOps library.
+   */
+  async createConcept(
+    { commit, dispatch, state },
+    { repoId, title, type = 'topic', body = '', updateIndex = true } = {}
+  ) {
+    if (!repoId || !title) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      const rows = state.editor.conceptsByRepo[repoId] || [];
+      const result = await okfRepoOps.addConcept({
+        repoId,
+        title,
+        type,
+        body,
+        existingIds: rows.map((c) => c.concept_id),
+        indexRow: updateIndex ? rows.find((c) => c.is_index) || null : null
+      });
+      await dispatch('fetchConcepts', repoId);
+      return { ok: true, ...result };
+    } catch (err) {
+      commit('setError', err.message || 'createConcept failed');
+      return { ok: false, code: 'CREATE_FAILED', message: err.message };
+    }
+  },
+
+  /** Delete ONE concept (meta + chunks + graph) and refresh the rail. */
+  async deleteConcept({ commit, dispatch, state }, { repoId, conceptId } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      await okfRepoOps.deleteConcept(repoId, conceptId);
+      if (state.editor.selectedConceptId === conceptId) commit('setSelectedConcept', null);
+      await dispatch('fetchConcepts', repoId);
+      return { ok: true };
+    } catch (err) {
+      commit('setError', err.message || 'deleteConcept failed');
+      return { ok: false, code: 'DELETE_FAILED', message: err.message };
+    }
+  },
+
   async openEditor({ commit, dispatch }, { repoId } = {}) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
     commit('setEditorRepo', repoId);
@@ -452,11 +512,13 @@ let studioService;
 let repoOkfService;
 let crawlerToOkfService;
 let conceptService;
+let okfRepoOps;
 function ensureServices() {
   if (!studioService) studioService = require('@/services/studioService').default;
   if (!repoOkfService) repoOkfService = require('@/services/repoOkfService').default;
   if (!crawlerToOkfService) crawlerToOkfService = require('@/services/crawlerToOkfService').default;
   if (!conceptService) conceptService = require('@/services/conceptService').default;
+  if (!okfRepoOps) okfRepoOps = require('@/services/okfRepoOps');
 }
 
 const actionsWithServices = {};

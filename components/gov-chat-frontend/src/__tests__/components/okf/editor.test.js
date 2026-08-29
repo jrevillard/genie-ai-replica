@@ -65,13 +65,38 @@ describe('OkfConceptList', () => {
     expect(wrapper.findAll('.okf-cl__row')).toHaveLength(1);
   });
 
-  it('emits select on row click and resplit from the footer button', async () => {
+  it('renders a TREE (index root + children) and emits select from both', async () => {
     const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: base });
-    await wrapper.findAll('.okf-cl__row')[0].trigger('click');
-    expect(wrapper.emitted('select')).toEqual([['c-1']]);
-    const resplitBtn = wrapper.findAll('button').find((b) => b.text().includes('Re-split'));
-    await resplitBtn.trigger('click');
-    expect(wrapper.emitted('resplit')).toHaveLength(1);
+    const rows = wrapper.findAll('.okf-cl__row');
+    expect(rows).toHaveLength(2); // root + one child
+    await rows[0].trigger('click'); // root = the index concept (c-2)
+    expect(wrapper.emitted('select')).toEqual([['c-2']]);
+    await rows[1].trigger('click'); // child = c-1
+    expect(wrapper.emitted('select')[1]).toEqual(['c-1']);
+  });
+
+  it('emits add from the footer and delete per row action', async () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: base });
+    const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add concept'));
+    await addBtn.trigger('click');
+    expect(wrapper.emitted('add')).toHaveLength(1);
+    const delBtn = wrapper.find('.okf-cl__action--danger');
+    await delBtn.trigger('click');
+    expect(wrapper.emitted('delete')).toHaveLength(1);
+    expect(wrapper.emitted('delete')[0][0].concept_id).toBe('c-2');
+  });
+
+  it('emits label with the picked Knowledge-Hierarchy value', async () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), {
+      concepts: base,
+      labelOptions: [{ value: 'Health', label: 'Health' }]
+    });
+    const labelBtn = wrapper.find('.okf-cl__action');
+    await labelBtn.trigger('click'); // opens the inline picker
+    const select = wrapper.find('.okf-cl__label-edit select');
+    expect(select.exists()).toBe(true);
+    await select.setValue('Health');
+    expect(wrapper.emitted('label')).toEqual([[{ conceptId: 'c-2', label: 'Health' }]]);
   });
 });
 

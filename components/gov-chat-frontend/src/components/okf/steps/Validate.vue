@@ -72,6 +72,12 @@ export default {
       return this.expert;
     },
     healthScore() {
+      // Prefer server metrics when the fetch succeeded; else derive from issues.
+      const m = this._metrics;
+      if (m && typeof m.concept_count === 'number' && m.concept_count > 0) {
+        const issues = (m.conformance_issue_count || 0) + (m.stale_concept_count || 0);
+        return Math.max(0, Math.min(100, Math.round(100 * (1 - issues / Math.max(m.concept_count, 1)))));
+      }
       const total = this.issueGroups.reduce((acc, g) => acc + g.count, 0);
       const concepts = (this.draft && this.draft.concept_count) || 1;
       return Math.max(0, Math.min(100, Math.round(100 * (1 - total / Math.max(concepts, 5)))));
@@ -105,6 +111,52 @@ export default {
         .replace('{clean}', clean)
         .replace('{warnings}', warnings)
         .replace('{blockers}', blockers);
+    }
+  },
+  mounted() {
+    // Story #978: populate the issue groups from REAL data - the
+    // autocorrect dry-run (frontmatter conformance), per-concept index
+    // status, and the repo metrics. No more hard-coded zeros.
+    this.refresh();
+  },
+  methods: {
+    async refresh() {
+      this._metrics = null;
+      const repoId = this.draft && this.draft.repo_id;
+      if (!repoId) return;
+      const [ac, concepts, metrics] = await Promise.allSettled([
+        this.$store.dispatch('okf/autocorrectRepo', { repoId, dryRun: true }),
+        this.$store.dispatch('okf/fetchConcepts', repoId),
+        this.$store.dispatch('okf/fetchRepoMetrics', repoId)
+      ]);
+      const groups = new Map();
+      const addIssue = (code, label, item) => {
+        if (!groups.has(code)) groups.set(code, { code, label, count: 0, items: [] });
+        const g = groups.get(code);
+        g.count += 1;
+        g.items.push(item);
+      };
+      // 1. Autocorrect dry-run: planned frontmatter fixes + warnings.
+      const acVal = ac.status === 'fulfilled' ? ac.value : null;
+      const changes = (acVal && acVal.changes) || [];
+      const warnings = (acVal && acVal.warnings) || [];
+      for (const ch of changes) {
+        addIssue(ch.reason || ch.field || 'AUTOCORRECT', ch.reason || ch.field || 'Fixable', {
+          label: ch.concept_id + ': ' + (ch.before == null ? '(none)' : String(ch.before)) + ' -> ' + ch.after
+        });
+      }
+      for (const w of warnings) {
+        addIssue(w.rule || 'WARNING', w.rule || 'Warning', { label: w.concept_id + ' - ' + (w.message || '') });
+      }
+      // 2. Index failures (per-concept index_status from the concept list).
+      const rows = (concepts.status === 'fulfilled' && concepts.value && concepts.value.concepts) || [];
+      for (const row of rows) {
+        if (row.index_status === 'failed') {
+          addIssue('INDEX_FAILED', 'Index failed', { label: row.concept_id + ' - re-index failed; edit or re-split' });
+        }
+      }
+      this.issueGroups = Array.from(groups.values());
+      this._metrics = metrics.status === 'fulfilled' ? metrics.value : null;
     }
   }
 };

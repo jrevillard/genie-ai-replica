@@ -18,17 +18,38 @@
       :concepts="concepts"
       :selected-id="selectedId"
       :loading="loading"
+      :label-options="labelOptions"
       @select="onSelect"
+      @add="addOpen = true"
       @resplit="resplitOpen = true"
+      @delete="onDeleteAsk"
+      @label="onTreeLabel"
     />
 
     <div class="okf-re__center">
-      <template v-if="selectedId">
-        <OkfConceptEditor ref="conceptEditor" :repo-id="repoId" :concept-id="selectedId" @saved="onConceptSaved" />
+      <div class="okf-re__view-toggle" role="tablist" :aria-label="translate('okf.editor.pane', 'View pane')">
+        <DsButton :variant="centerView === 'files' ? 'primary' : 'secondary'" small @click="centerView = 'files'">
+          {{ translate('okf.editor.pane.files', 'Files') }}
+        </DsButton>
+        <DsButton :variant="centerView === 'graph' ? 'primary' : 'secondary'" small @click="centerView = 'graph'">
+          {{ translate('okf.editor.pane.graph', 'Graph') }}
+        </DsButton>
+      </div>
+      <template v-if="centerView === 'files'">
+        <template v-if="selectedId">
+          <OkfConceptEditor ref="conceptEditor" :repo-id="repoId" :concept-id="selectedId" @saved="onConceptSaved" />
+        </template>
+        <p v-else class="okf-re__placeholder">
+          {{ translate('okf.editor.pickConcept', 'Select a concept from the list to start editing.') }}
+        </p>
       </template>
-      <p v-else class="okf-re__placeholder">
-        {{ translate('okf.editor.pickConcept', 'Select a concept from the list to start editing.') }}
-      </p>
+      <OkfRepoGraphView
+        v-show="centerView === 'graph'"
+        :repo-id="repoId"
+        :concepts="concepts"
+        :selected-id="selectedId"
+        @select="onGraphNodeSelect"
+      />
     </div>
 
     <aside class="okf-re__meta" :aria-label="translate('okf.editor.meta.label', 'Concept metadata')">
@@ -82,6 +103,33 @@
       </footer>
     </aside>
 
+    <OkfAddConceptModal
+      :visible="addOpen"
+      :repo-id="repoId"
+      :has-index="hasIndex"
+      @close="addOpen = false"
+      @created="onConceptCreated"
+    />
+
+    <DsDialog
+      :visible="deleteAsk !== null"
+      :title="translate('okf.editor.delete.title', 'Delete file')"
+      size="sm"
+      :actions="deleteActions"
+      @close="deleteAsk = null"
+      @action="onDeleteAction"
+    >
+      <p>
+        {{
+          translate(
+            'okf.editor.delete.body',
+            'This permanently removes the file, its indexed chunks and its graph links.'
+          )
+        }}
+        <strong>{{ deleteAsk && (deleteAsk.title || deleteAsk.concept_id) }}</strong>
+      </p>
+    </DsDialog>
+
     <OkfResplitModal
       :visible="resplitOpen"
       :repo-id="repoId"
@@ -110,6 +158,10 @@ import DsSelect from '../../ds/Select.vue';
 import OkfConceptList from './ConceptList.vue';
 import OkfConceptEditor from './ConceptEditor.vue';
 import OkfResplitModal from './ResplitModal.vue';
+import OkfAddConceptModal from './AddConceptModal.vue';
+import OkfRepoGraphView from './RepoGraphView.vue';
+import DsDialog from '../../ds/Dialog.vue';
+import okfRepoOps from '../../../services/okfRepoOps';
 import OkfAutocorrectPanel from './AutocorrectPanel.vue';
 
 const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
@@ -118,12 +170,15 @@ export default {
   name: 'OkfRepoEditor',
   components: {
     DsButton,
+    DsDialog,
     DsFormGroup,
     DsInput,
     DsSelect,
     OkfConceptList,
     OkfConceptEditor,
     OkfResplitModal,
+    OkfAddConceptModal,
+    OkfRepoGraphView,
     OkfAutocorrectPanel
   },
   mixins: [translateMixin],
@@ -138,7 +193,11 @@ export default {
     return {
       typeOptions: TYPE_OPTIONS,
       labelOptions: [],
+      centerView: 'files',
       resplitOpen: false,
+      addOpen: false,
+      deleteAsk: null,
+      deleting: false,
       autocorrectOpen: false,
       // Right-rail bindings — synced from the selected row, written immediately.
       metaType: '',
@@ -162,6 +221,25 @@ export default {
     },
     repo() {
       return this.repoById(this.repoId) || {};
+    },
+    hasIndex() {
+      return this.concepts.some((c) => c.is_index);
+    },
+    deleteActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.deleting
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.editor.delete.confirm', 'Delete'),
+          variant: 'danger',
+          disabled: this.deleting
+        }
+      ];
     },
     selectedRow() {
       return this.concepts.find((c) => c.concept_id === this.selectedId) || null;
@@ -244,6 +322,41 @@ export default {
         this.metaError = err.message || this.translate('okf.editor.meta.saveFailed', 'Metadata save (meta.saveFailed)');
       }
     },
+    async onTreeLabel({ conceptId, label }) {
+      // Quick label write straight from the tree (Knowledge Hierarchy).
+      try {
+        await okfRepoOps.applyLabel(this.repoId, conceptId, label ? [label] : []);
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      } catch (err) {
+        this.metaError = err.message || this.translate('okf.editor.meta.saveFailed', 'Metadata save failed');
+      }
+    },
+    onGraphNodeSelect(conceptId) {
+      // Graph node click -> open that file in the Files pane.
+      this.centerView = 'files';
+      this.onSelect(conceptId);
+    },
+    onConceptCreated(conceptId) {
+      this.onSelect(conceptId);
+    },
+    onDeleteAsk(node) {
+      this.deleteAsk = node;
+    },
+    async onDeleteAction(key) {
+      if (key === 'cancel') {
+        this.deleteAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.deleteAsk || this.deleting) return;
+      this.deleting = true;
+      const result = await this.$store.dispatch('okf/deleteConcept', {
+        repoId: this.repoId,
+        conceptId: this.deleteAsk.concept_id
+      });
+      this.deleting = false;
+      this.deleteAsk = null;
+      if (!result.ok) this.metaError = result.message;
+    },
     onConceptSaved() {
       // Body changed — index_status/content_hash were patched into the row by
       // the store action. Nothing else to do here.
@@ -270,6 +383,11 @@ export default {
 }
 .okf-re__rail {
   max-height: 640px;
+}
+.okf-re__view-toggle {
+  display: inline-flex;
+  gap: var(--space-xs);
+  align-self: flex-start;
 }
 .okf-re__center {
   display: flex;

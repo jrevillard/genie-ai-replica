@@ -189,3 +189,33 @@ describe('OkfStepValidate - real data wiring (was hard-coded zeros)', () => {
     expect(text).toContain('c3');
   });
 });
+
+const OkfRepoEditor = require('@/components/okf/editor/RepoEditor.vue').default;
+
+describe('OkfRepoEditor - fresh-repo regression (syncMetaFields null row)', () => {
+  it('mounts cleanly with an EMPTY concept list (fresh repo), then syncs on arrival', async () => {
+    const store = realStore();
+    const listMock = require('@/services/conceptService').default.listForRepo;
+    listMock.mockResolvedValueOnce([]); // first fetch: empty (fresh repo)
+    const wrapper = mount(OkfRepoEditor, {
+      global: { plugins: [store] },
+      props: { repoId: 'r-new' }
+    });
+    await wrapper.vm.$nextTick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(wrapper.find('.okf-re__placeholder').exists()).toBe(true);
+    // concepts arrive -> auto-select fires -> right rail syncs without throwing
+    listMock.mockResolvedValueOnce([
+      { concept_id: 'index', title: 'Index', is_index: true, frontmatter: { type: 'index', title: 'Index' } },
+      { concept_id: 'w', title: 'Wildlife', frontmatter: { type: 'topic' }, labels: ['Health'] }
+    ]);
+    await store.dispatch('okf/fetchConcepts', 'r-new');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.metaType).toBe('index'); // index row has no label
+    expect(wrapper.vm.metaLabel).toBe('');
+    // selecting the labeled file syncs its label into the rail
+    await store.commit('okf/setSelectedConcept', 'w');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.metaLabel).toBe('Health');
+  });
+});

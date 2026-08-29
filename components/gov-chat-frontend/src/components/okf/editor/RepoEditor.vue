@@ -246,6 +246,18 @@ export default {
     }
   },
   watch: {
+    /** Auto-open the index file (else the first) once the list arrives —
+     *  mounted() is too early on a fresh repo, where fetchConcepts resolves
+     *  AFTER mount. */
+    concepts: {
+      immediate: true,
+      handler(rows) {
+        if (!this.selectedId && rows.length > 0) {
+          const indexRow = rows.find((c) => c.is_index);
+          this.onSelect((indexRow || rows[0]).concept_id);
+        }
+      }
+    },
     selectedRow: {
       immediate: true,
       handler(row) {
@@ -255,11 +267,6 @@ export default {
   },
   async mounted() {
     await this.$store.dispatch('okf/openEditor', { repoId: this.repoId });
-    // Auto-select the index concept when present, else the first row.
-    if (!this.selectedId && this.concepts.length > 0) {
-      const indexRow = this.concepts.find((c) => c.is_index);
-      this.onSelect((indexRow || this.concepts[0]).concept_id);
-    }
     this.loadLabelOptions();
   },
   methods: {
@@ -270,7 +277,18 @@ export default {
     },
     syncMetaFields(row) {
       this.metaSyncing = true;
-      const fm = (row && row.frontmatter) || {};
+      // row is NULL while the concept list is loading (fresh repo) — clear
+      // the fields instead of dereferencing.
+      if (!row) {
+        this.metaType = '';
+        this.metaTitle = '';
+        this.metaLabel = '';
+        this.$nextTick(() => {
+          this.metaSyncing = false;
+        });
+        return;
+      }
+      const fm = row.frontmatter || {};
       this.metaType = fm.type || row.type || '';
       this.metaTitle = row.title || fm.title || '';
       this.metaLabel = (fm.labels && fm.labels[0]) || (row.labels && row.labels[0]) || '';

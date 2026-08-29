@@ -15,7 +15,9 @@ COPY shared/lib ./shared-lib
 # 2. Run 'npm ci' (root + shared-lib) — uses pinned package-lock.json
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --verbose --fetch-timeout 600000
-RUN cd shared-lib && npm ci
+WORKDIR /app/shared-lib
+RUN npm ci
+WORKDIR /app
 RUN rm -rf /app/node_modules/shared-lib
 
 # ======== Runtime ========

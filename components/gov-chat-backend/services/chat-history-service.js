@@ -1,4 +1,5 @@
 require('dotenv').config();
+const nodeCrypto = require('crypto');
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { NotFoundError, ForbiddenError } = require('../middleware/errors');
@@ -92,11 +93,10 @@ class ChatHistoryService {
         logger.info(`Resolved categoryId ${conversationData.categoryId} to name: ${categoryName}`);
       }
 
-      // Generate _key in a format similar to existing documents (numeric string)
+      // Generate _key in a format similar to existing documents (numeric string).
+      // crypto.randomInt: unpredictable and race-safe versus Math.random.
       const timestamp = Date.now().toString();
-      const randomSuffix = Math.floor(Math.random() * 10000)
-        .toString()
-        .padStart(4, '0');
+      const randomSuffix = nodeCrypto.randomInt(0, 10000).toString().padStart(4, '0');
       const generatedKey = `${timestamp}${randomSuffix}`; // e.g., "1747653190597"
 
       // Compute messageCount by counting existing messages for this conversation

@@ -39,10 +39,12 @@
           <DsSelect
             id="okf-meta-type"
             v-model="metaType"
-            :options="typeOptions"
+            :placeholder="translate('okf.editor.meta.typePlaceholder', 'Select type…')"
             size="sm"
             @update:model-value="onMetaChange"
-          />
+          >
+            <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </DsSelect>
         </DsFormGroup>
 
         <DsFormGroup :label="translate('okf.editor.meta.title', 'Title')" input-id="okf-meta-title">
@@ -53,14 +55,12 @@
           :label="translate('okf.editor.meta.labelLabel', 'Label (Knowledge Hierarchy)')"
           input-id="okf-meta-label"
         >
-          <DsSelect
-            id="okf-meta-label"
-            v-model="metaLabel"
-            :options="labelOptions"
-            :placeholder="translate('okf.editor.meta.labelPlaceholder', 'Select a service…')"
-            size="sm"
-            @update:model-value="onMetaChange"
-          />
+          <!-- Options via slot (DsSelect has no options prop); a selectable
+               empty first option lets the steward UNassign a label. -->
+          <DsSelect id="okf-meta-label" v-model="metaLabel" size="sm" @update:model-value="onMetaChange">
+            <option value="">{{ translate('okf.editor.meta.noLabel', 'No label') }}</option>
+            <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </DsSelect>
         </DsFormGroup>
 
         <dl class="okf-re__meta-facts">

@@ -27,7 +27,15 @@
     </header>
 
     <div v-if="expertMode" class="okf-dashboard__filters">
-      <DsSelect v-model="filters.domain" :options="domainFilterOptions" />
+      <!-- DsSelect takes options via slot (no options prop) — the previous
+           :options binding landed in $attrs and rendered an EMPTY select. -->
+      <DsSelect
+        v-model="filters.domain"
+        class="okf-dashboard__filter-domain"
+        :aria-label="translate('okf.dashboard.filter.domain', 'Filter by subject area')"
+      >
+        <option v-for="opt in domainFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+      </DsSelect>
       <DsInput v-model="filters.search" :placeholder="translate('okf.dashboard.search', 'Search...')" />
     </div>
 
@@ -323,6 +331,9 @@ export default {
 .okf-dashboard__filters {
   display: flex;
   gap: var(--space-sm);
+}
+.okf-dashboard__filter-domain {
+  max-width: 260px;
 }
 .okf-dashboard__lanes {
   display: grid;

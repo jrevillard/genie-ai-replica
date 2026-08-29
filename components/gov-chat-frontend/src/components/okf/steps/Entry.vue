@@ -14,7 +14,9 @@
         />
       </DsFormGroup>
       <DsFormGroup :label="translate('okf.steps.entry.domainLabel', 'Subject area')" input-id="okf-entry-domain">
-        <DsSelect id="okf-entry-domain" v-model="local.domain" :options="domainOptions" />
+        <DsSelect id="okf-entry-domain" v-model="local.domain">
+          <option v-for="opt in domainOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </DsSelect>
       </DsFormGroup>
     </div>
   </div>

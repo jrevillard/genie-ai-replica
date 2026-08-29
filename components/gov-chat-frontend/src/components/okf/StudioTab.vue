@@ -27,7 +27,7 @@
       </DsButton>
     </nav>
 
-    <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" />
+    <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
     <OkfRepoEditorShell
       v-else-if="view === 'repo' && activeRepoId"
       :repo-id="activeRepoId"
@@ -149,6 +149,14 @@ export default {
       this.activeRepoId = null;
       this.view = 'dashboard';
       this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
+    },
+    onNew() {
+      // Dashboard's "+ New repository" — fresh create flow: the 10-step
+      // wizard from Step 0 with no draft. (This button previously emitted
+      // `new` with no listener — dead since Story 3-5.)
+      this.activeDraft = null;
+      this.activeRepoId = null;
+      this.view = 'wizard';
     },
     onRepoRefresh() {
       // Resplit changed the concept set — refresh dashboard counts.

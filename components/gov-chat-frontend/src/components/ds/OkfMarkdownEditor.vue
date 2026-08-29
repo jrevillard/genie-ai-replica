@@ -87,7 +87,9 @@
           <DsInput id="fm-okf-version" v-model="draftFrontmatter.okf_version" :readonly="true" />
         </DsFormGroup>
         <DsFormGroup :label="statusLabel" input-id="fm-status">
-          <DsSelect id="fm-status" v-model="draftFrontmatter.lifecycle.status" :options="statusOptions" />
+          <DsSelect id="fm-status" v-model="draftFrontmatter.lifecycle.status">
+            <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </DsSelect>
         </DsFormGroup>
         <DsFormGroup :label="staleAfterLabel" input-id="fm-stale">
           <DsInput id="fm-stale" v-model="draftFrontmatter.lifecycle.stale_after" type="date" />

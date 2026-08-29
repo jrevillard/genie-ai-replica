@@ -33,6 +33,8 @@ variables:
   # - .claude/**: Claude Code agent skills, hooks, BMAD orchestration YAML. Not
   #   production code; YAML files use BMAD-specific syntax that semgrep can't
   #   parse, generating "Parsing errors" UI noise in the security dashboard.
+  # - _bmad/**: BMAD/WDS agent framework modules (build tooling for AI agents,
+  #   never shipped or executed in production).
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
     genie-ai-overlay/contracts/**,
@@ -44,7 +46,8 @@ variables:
     **/__mocks__/**,
     **/tests/**,
     **/coverage/**,
-    .claude/**
+    .claude/**,
+    _bmad/**
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
@@ -622,6 +625,7 @@ semgrep-sast:
   #   genie-ai-overlay/contracts/** — real-comps contract tests, not shipped
   #   **/scripts/{seed-*.js,migrations/**,new-schema-scripts/**} — dev scripts
   #   **/__tests__/**, **/__mocks__/**, **/tests/**, **/coverage/** — test code
+  #   _bmad/** — BMAD/WDS agent framework modules, never shipped
   # Production entrypoint components/document-repository/scripts/clamav-node.sh
   # is INTENTIONALLY left scanned (clamav-node.sh is the CMD of the prod image)
   # Re-enable other excluded paths only if they become shipping code

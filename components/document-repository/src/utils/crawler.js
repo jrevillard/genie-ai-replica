@@ -3,6 +3,7 @@ const cheerio = require('cheerio');
 const { URL: UrlParser } = require('url');
 const http = require('http');
 const https = require('https');
+const dns = require('dns').promises;
 const { logger } = require('../../shared-lib');
 
 const httpAgent = new http.Agent({ keepAlive: true });
@@ -181,21 +182,92 @@ class Crawler {
   }
 
   _validateUrl(url) {
-    // Block non-HTTP schemes, internal IPs, and DNS rebinding to private networks
+    // Block non-HTTP schemes, internal IPs, and DNS rebinding to private networks.
+    // The WHATWG URL parser normalizes encoded IPv4 literals (hex/octal/decimal
+    // such as 0x7f000001) to dotted form, so the ranges below catch them.
     const parsed = new UrlParser(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       throw new Error(`Blocked URL scheme: ${parsed.protocol || '(none)'}`);
     }
     const hostname = parsed.hostname || '';
-    // Block raw IPv4 private / loopback / link-local
-    if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/.test(hostname)) {
-      throw new Error(`Blocked internal IP: ${hostname}`);
-    }
-    // Block IPv6 loopback and link-local
-    if (hostname === '::1' || hostname === '[::1]' || hostname.startsWith('fe80:')) {
-      throw new Error(`Blocked internal IPv6: ${hostname}`);
+    if (this._isPrivateAddress(hostname)) {
+      throw new Error(`Blocked internal address: ${hostname}`);
     }
     return parsed;
+  }
+
+  _isPrivateAddress(address) {
+    if (!address) return false;
+    const host = String(address)
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '');
+    // IPv4 private / loopback / link-local / this-network (hostname is
+    // normalized by the WHATWG URL parser, so encoded literals land here too)
+    if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)/.test(host)) {
+      return true;
+    }
+    // IPv6 loopback, link-local (fe80::/10), unique-local (fc00::/7),
+    // IPv4-mapped loopback/private (::ffff:127.0.0.1 etc.)
+    if (
+      host === '::1' ||
+      host === '::' ||
+      host.startsWith('fe80:') ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      host.startsWith('::ffff:127.') ||
+      host.startsWith('::ffff:10.') ||
+      host.startsWith('::ffff:192.168.') ||
+      host.startsWith('::ffff:172.1') ||
+      host.startsWith('::ffff:169.254.')
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // Secondary SSRF layer: resolve the hostname and reject any private IP it
+  // points at (DNS rebinding / hostnames resolving into the swarm network).
+  // Fails open on unresolvable hostnames (site may be temporarily down) but
+  // fails closed when the address resolves into a private range. Skippable
+  // for unit tests (config.dnsSafetyCheck = false) since they mock axios and
+  // use fake timers that stall real DNS I/O.
+  async _assertResolvableSafe(url) {
+    if (this.config && this.config.dnsSafetyCheck === false) return;
+    let hostname;
+    try {
+      hostname = new UrlParser(url).hostname;
+    } catch {
+      throw new Error(`Blocked unparseable URL: ${url}`);
+    }
+    if (!hostname || this._isPrivateAddress(hostname)) return;
+    let addresses;
+    try {
+      addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    } catch (e) {
+      logger.warn(`DNS lookup failed for ${hostname} (${e.code || e.message}) — continuing (fail-open)`);
+      return;
+    }
+    for (const { address } of addresses) {
+      if (this._isPrivateAddress(address)) {
+        throw new Error(`Blocked hostname resolving to a private address: ${hostname} -> ${address}`);
+      }
+    }
+  }
+
+  // Follow a redirect chain manually so every hop is re-validated (axios
+  // follows redirects internally without re-checking SSRF rules).
+  async _validatedRedirect(response, currentUrl, maxHops = 5) {
+    const location = response.headers && response.headers.location;
+    if (!location || ![301, 302, 303, 307, 308].includes(response.status)) {
+      return null;
+    }
+    if (maxHops <= 0) {
+      throw new Error(`Too many redirects fetching ${currentUrl}`);
+    }
+    const nextUrl = new UrlParser(location, currentUrl).href;
+    this._validateUrl(nextUrl);
+    await this._assertResolvableSafe(nextUrl);
+    return nextUrl;
   }
 
   async fetch(url, headers = null, maxTimes = 5) {
@@ -210,17 +282,28 @@ class Crawler {
         if (!/^https?:\/\//i.test(url)) {
           url = 'http://' + url;
         }
-        // Validate URL before making the request — prevents SSRF
+        // Validate URL before making the request — prevents SSRF (literal
+        // checks + DNS-resolution safety on every attempt/redirect hop)
         this._validateUrl(url);
+        await this._assertResolvableSafe(url);
 
         const response = await axios.get(url, {
           headers,
           responseType: 'text',
           validateStatus: null,
           timeout: this.timeoutMs,
+          maxRedirects: 0,
           httpAgent: httpAgent,
           httpsAgent: httpsAgent
         });
+
+        // Manual redirect handling: re-validate every hop (axios internal
+        // redirect following skips the SSRF checks above)
+        const redirectUrl = await this._validatedRedirect(response, url);
+        if (redirectUrl) {
+          url = redirectUrl;
+          continue;
+        }
 
         if (response.status !== 200) {
           lastError = new Error(`fail to fetch ${url}, response status code: ${response.status}`);
@@ -474,23 +557,43 @@ class Crawler {
   async download(url, fileName) {
     logger.info(`Downloading ${url} to ${fileName}...`);
     try {
-      const response = await axios.get(url, {
-        headers: this.headers,
-        responseType: 'stream',
-        timeout: this.timeoutMs,
-        httpAgent: httpAgent,
-        httpsAgent: httpsAgent
-      });
-      const fs = require('fs');
-      const writer = fs.createWriteStream(fileName);
-      response.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', () => {
-          logger.info(`Successfully downloaded and saved ${fileName}.`);
-          resolve();
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'http://' + url;
+      }
+      this._validateUrl(url);
+      await this._assertResolvableSafe(url);
+      let hops = 5;
+      for (;;) {
+        const response = await axios.get(url, {
+          headers: this.headers,
+          responseType: 'stream',
+          timeout: this.timeoutMs,
+          maxRedirects: 0,
+          httpAgent: httpAgent,
+          httpsAgent: httpsAgent
         });
-        writer.on('error', (error) => reject(error));
-      });
+        const redirectUrl = await this._validatedRedirect(response, url, hops);
+        if (redirectUrl) {
+          url = redirectUrl;
+          hops -= 1;
+          continue;
+        }
+        if (response.status !== 200) {
+          logger.error(`Failed to download ${url}: status code ${response.status}`);
+          return;
+        }
+        const fs = require('fs');
+        const writer = fs.createWriteStream(fileName);
+        response.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+          writer.on('finish', () => {
+            logger.info(`Successfully downloaded and saved ${fileName}.`);
+            resolve();
+          });
+          writer.on('error', (error) => reject(error));
+        });
+        return;
+      }
     } catch (e) {
       logger.error(`Failed to download ${url}: ${e.message}`);
     }

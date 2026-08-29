@@ -394,6 +394,7 @@ describe('Crawler', () => {
 
     it('should add delay on 403 then retry successfully', async () => {
       jest.useFakeTimers();
+      crawler.config.dnsSafetyCheck = false; // fake timers stall real DNS I/O
       axios.get
         .mockResolvedValueOnce({ status: 403, data: '' })
         .mockResolvedValueOnce({ status: 200, data: '<html></html>' });
@@ -660,6 +661,7 @@ describe('Crawler', () => {
 
     it('should pause and re-queue when all URLs are rate-limited', async () => {
       jest.useFakeTimers();
+      crawler.config.dnsSafetyCheck = false; // fake timers stall real DNS I/O
       const seed$ = makeMock$([{ attribs: { href: '/page1' } }]);
       void makeMock$([]);
       cheerio.load.mockReturnValue(seed$);
@@ -745,6 +747,7 @@ describe('Crawler', () => {
 
   describe('download', () => {
     it('should pipe response to write stream', async () => {
+      crawler.config.dnsSafetyCheck = false; // skip real-DNS SSRF layer (mocked axios)
       const mockResponse = {
         data: { pipe: jest.fn() },
         status: 200

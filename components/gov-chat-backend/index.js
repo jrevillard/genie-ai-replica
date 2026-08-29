@@ -418,8 +418,16 @@ const corsOptions = {
 
     const isAllowed = allowlist.some((allowedOrigin) => {
       if (allowedOrigin.startsWith('/') && allowedOrigin.endsWith('/')) {
-        const regex = new RegExp(allowedOrigin.slice(1, -1));
-        return regex.test(origin);
+        // Operator-configured regex entry (CORS_ALLOWED_ORIGINS "/pattern/").
+        // A malformed pattern must not throw on every request — fall back to
+        // strict equality so a bad entry can only ever be more restrictive.
+        try {
+          const regex = new RegExp(allowedOrigin.slice(1, -1));
+          return regex.test(origin);
+        } catch (e) {
+          logger.warn(`Invalid CORS regex entry "${allowedOrigin}": ${e.message}`);
+          return origin === allowedOrigin;
+        }
       }
       return origin === allowedOrigin;
     });

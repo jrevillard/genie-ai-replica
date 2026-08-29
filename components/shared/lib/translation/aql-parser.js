@@ -161,7 +161,9 @@ class AqlParser {
           return this.parseLetStatement();
       }
     } else if (token) {
-      this.consume(new RegExp(`^${token}\\b`, 'i'));
+      // Token comes from parsed AQL text — escape it so a metacharacter in
+      // the source query cannot crash the regex construction (or ReDoS).
+      this.consume(new RegExp(`^${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
 
       this.skipExpression();
       return null;

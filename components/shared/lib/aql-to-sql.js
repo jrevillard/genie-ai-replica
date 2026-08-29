@@ -1,6 +1,16 @@
 const { logger } = require('./logger');
 
 /**
+ * Escape regex special characters in a string interpolated into a RegExp
+ * source. Interpolated values are AQL identifiers (\w+ captures) today, so
+ * metacharacters cannot appear in practice — this keeps the dynamic RegExp
+ * construction crash-proof if that invariant ever changes.
+ */
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * AqlToSqlTranslator Class
  *
  * Translates ArangoDB AQL to ArcadeDB-compatible SQL with improved handling for:
@@ -140,15 +150,17 @@ class AqlToSqlTranslator {
       let filter2 = this._translateExpression(match[6]);
       const ret =
         match[7] || `{ _id: ${docVar}._id, nameEN: ${docVar}.nameEN, relevanceScore: ${edgeVar}.relevanceScore }`;
-      const joinCondition = filter2.match(new RegExp(`${docVar}\\._id\\s*==\\s*${edgeVar}\\._(to|from)`, 'i'));
+      const joinCondition = filter2.match(
+        new RegExp(`${escapeRegExp(docVar)}\\._id\\s*==\\s*${escapeRegExp(edgeVar)}\\._(to|from)`, 'i')
+      );
       if (joinCondition) {
         const direction = joinCondition[1];
-        filter1 = filter1.replace(new RegExp(`${edgeVar}\\.`, 'g'), `${edgeVar}.`);
+        filter1 = filter1.replace(new RegExp(`${escapeRegExp(edgeVar)}\\.`, 'g'), `${edgeVar}.`);
         filter2 = filter2.replace(joinCondition[0], '');
         if (filter2.trim().startsWith('AND')) {
           filter2 = filter2.trim().substring(3).trim();
         }
-        filter2 = filter2.replace(new RegExp(`${docVar}\\.`, 'g'), `${docVar}.`);
+        filter2 = filter2.replace(new RegExp(`${escapeRegExp(docVar)}\\.`, 'g'), `${docVar}.`);
         const whereClause = filter2 ? ` AND ${filter2}` : '';
         let returnProcessed = this._translateExpression(ret);
         returnProcessed = returnProcessed.replace(/\{([^}]+)\}/, (m, fields) => {
@@ -193,7 +205,7 @@ class AqlToSqlTranslator {
         translatedExpr = `(${translatedExpr})[0]`;
       }
       withClauses.push(`${varName} AS (${translatedExpr})`);
-      returnExpr = returnExpr.replace(new RegExp('\\b' + varName + '\\b', 'g'), varName);
+      returnExpr = returnExpr.replace(new RegExp(`\\b${escapeRegExp(varName)}\\b`, 'g'), varName);
       current = current.substring(match.index + match[0].length).trim();
     }
     const translatedReturn = returnExpr.replace(/\{([^}]+)\}/, (m, fields) => {
@@ -237,7 +249,7 @@ class AqlToSqlTranslator {
         );
         if (remMatch) {
           const filter = remMatch[1]
-            ? ` AND ${this._translateExpression(remMatch[1]).replace(new RegExp(`${docVar}\\.`, 'g'), docVar + '.')}`
+            ? ` AND ${this._translateExpression(remMatch[1]).replace(new RegExp(`${escapeRegExp(docVar)}\\.`, 'g'), docVar + '.')}`
             : '';
           const sort = remMatch[2] ? ` ORDER BY ${this._translateExpression(remMatch[2])}` : '';
           const limit = remMatch[3] || '';
@@ -333,7 +345,7 @@ class AqlToSqlTranslator {
     if (match) {
       const varName = match[1];
       const coll = match[2];
-      const filters = this._translateExpression(match[3]).replace(new RegExp(`${varName}\\.`, 'gi'), '');
+      const filters = this._translateExpression(match[3]).replace(new RegExp(`${escapeRegExp(varName)}\\.`, 'gi'), '');
       let finalSql = `DELETE FROM ${coll} WHERE ${filters}`;
       if (match[4] === 'OLD') {
         finalSql += ' RETURN BEFORE';
@@ -563,7 +575,7 @@ class AqlToSqlTranslator {
             .join(', ');
           finalSql =
             `UPDATE ${updateColl} SET ${setPairs}` + finalSql.replace(` FROM ${coll} LET ${varName} = @this`, '');
-          finalSql = finalSql.replace(new RegExp(varName + '\\.', 'g'), '');
+          finalSql = finalSql.replace(new RegExp(`${escapeRegExp(varName)}\\.`, 'g'), '');
           type = 'update';
         }
       } else if (clause.type === 'REMOVE') {
@@ -571,7 +583,7 @@ class AqlToSqlTranslator {
         if (match) {
           const removeColl = match[2];
           finalSql = `DELETE FROM ${removeColl}` + finalSql.replace(` FROM ${coll} LET ${varName} = @this`, '');
-          finalSql = finalSql.replace(new RegExp(varName + '\\.', 'g'), '');
+          finalSql = finalSql.replace(new RegExp(`${escapeRegExp(varName)}\\.`, 'g'), '');
           type = 'delete';
         }
       }
@@ -585,12 +597,12 @@ class AqlToSqlTranslator {
       if (returnContent === groupVar) {
         selectClause = groupExpr;
       } else {
-        selectClause = selectClause.replace(new RegExp('\\b' + groupVar + '\\b'), groupExpr);
+        selectClause = selectClause.replace(new RegExp(`\\b${escapeRegExp(groupVar)}\\b`), groupExpr);
       }
     }
 
     postCollectLets.forEach(({ letVar, translatedExpr }) => {
-      selectClause = selectClause.replace(new RegExp('\\b' + letVar + '\\b'), translatedExpr);
+      selectClause = selectClause.replace(new RegExp(`\\b${escapeRegExp(letVar)}\\b`), translatedExpr);
     });
 
     if (postWithClauses.length) {
@@ -662,7 +674,7 @@ class AqlToSqlTranslator {
     do {
       oldExpr = expr;
       for (const [key, value] of Object.entries(this.functionMap)) {
-        const regex = new RegExp(`${key}\\s*\\(\\s*([^)]*)\\s*\\)`, 'gi');
+        const regex = new RegExp(`${escapeRegExp(key)}\\s*\\(\\s*([^)]*)\\s*\\)`, 'gi');
         expr = expr.replace(regex, (m, argsStr) => {
           const argArr = this._parseArgs(argsStr);
           const translatedArgs = argArr.map((arg) => this._translateExpression(arg.trim()));

@@ -3,7 +3,6 @@
 // extension checking and magic-byte validation on uploaded files
 
 const mime = require('mime-types');
-const { fileTypeFromBuffer } = require('file-type');
 const config = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 
@@ -37,6 +36,8 @@ const validateFileType = async (file) => {
 
     // Double-check MIME type by reading file buffer
     logger.debug('3. Validating MIME type from file buffer...');
+    // file-type 17+ is pure ESM — dynamic import inside the async validator
+    const { fileTypeFromBuffer } = await import('file-type');
     const detectedType = await fileTypeFromBuffer(file.buffer);
     logger.debug(`Detected buffer MIME type: ${detectedType ? detectedType.mime : 'unknown'}`);
 

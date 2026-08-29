@@ -1,13 +1,12 @@
+jest.unstable_mockModule('file-type', () => ({
+  fileTypeFromBuffer: jest.fn().mockResolvedValue(null)
+}));
 const {
   getFileExtension,
   getMimeType,
   getFileCategory,
   isTextExtractable
 } = require('../../../utils/mimeTypeValidator');
-
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn().mockResolvedValue(null)
-}));
 
 describe('mimeTypeValidator', () => {
   describe('getFileExtension', () => {

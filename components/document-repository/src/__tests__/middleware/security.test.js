@@ -34,16 +34,20 @@ jest.mock('../../config/appConfig', () => ({
   }
 }));
 
-// Mock file-type library (dependency of mimeTypeValidator)
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn()
+// file-type 21 is ESM-only: the module is mocked via unstable_mockModule (Jest
+// runs under --experimental-vm-modules). The factory reads the shared jest.fn
+// lazily through a getter, so per-test mockResolvedValue calls are visible.
+const fileTypeFromBuffer = jest.fn();
+jest.unstable_mockModule('file-type', () => ({
+  get fileTypeFromBuffer() {
+    return fileTypeFromBuffer;
+  }
 }));
+const { validateFileType } = require('../../utils/mimeTypeValidator');
 
 const fs = require('fs');
 const path = require('path');
 const securityService = require('../../services/securityService');
-const { validateFileType } = require('../../utils/mimeTypeValidator');
-const { fileTypeFromBuffer } = require('file-type');
 const { cleanClamAV, infectedClamAV } = require('../mocks/clamav');
 
 describe('Security Middleware Tests', () => {

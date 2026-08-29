@@ -35,6 +35,7 @@ variables:
   #   parse, generating "Parsing errors" UI noise in the security dashboard.
   # - _bmad/**: BMAD/WDS agent framework modules (build tooling for AI agents,
   #   never shipped or executed in production).
+  # - update_quickhelp.js: repo-root dev script (hardcoded locale paths), never shipped.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
     genie-ai-overlay/contracts/**,
@@ -47,7 +48,8 @@ variables:
     **/tests/**,
     **/coverage/**,
     .claude/**,
-    _bmad/**
+    _bmad/**,
+    update_quickhelp.js
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:

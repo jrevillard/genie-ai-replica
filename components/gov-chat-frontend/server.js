@@ -73,7 +73,7 @@ http.createServer((req, res) => {
 
   const filePath = path.join(DIST, urlPath);
 
-  if (filePath.startsWith(DIST) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+  if (filePath.startsWith(DIST + path.sep) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
     const ext = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
       'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',

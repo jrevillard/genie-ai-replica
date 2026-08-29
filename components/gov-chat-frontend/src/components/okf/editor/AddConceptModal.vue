@@ -26,7 +26,7 @@
       </DsFormGroup>
       <DsFormGroup :label="translate('okf.editor.meta.type', 'Type')" input-id="okf-acn-type">
         <DsSelect id="okf-acn-type" v-model="type" size="sm">
-          <option v-if="hasIndex" value="index">index</option>
+          <option v-if="!hasIndex" value="index">index</option>
           <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
         </DsSelect>
       </DsFormGroup>

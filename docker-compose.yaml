@@ -367,6 +367,10 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -404,6 +408,11 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -576,6 +585,12 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
@@ -633,6 +648,12 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging

@@ -1,18 +1,12 @@
+jest.unstable_mockModule('file-type', () => ({
+  fileTypeFromBuffer: jest.fn().mockResolvedValue(null)
+}));
 const {
   getFileExtension,
   getMimeType,
   getFileCategory,
   isTextExtractable
 } = require('../../../utils/mimeTypeValidator');
-
-jest.mock(
-  'file-type',
-  () => ({
-    // virtual: file-type 21 is ESM-only and cannot be resolved by the CJS resolver
-    fileTypeFromBuffer: jest.fn().mockResolvedValue(null)
-  }),
-  { virtual: true }
-);
 
 describe('mimeTypeValidator', () => {
   describe('getFileExtension', () => {

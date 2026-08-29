@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:contract": "jest --testPathPattern='src/__tests__/unit/(controllers|middlewares)/'",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

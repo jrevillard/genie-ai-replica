@@ -2,9 +2,27 @@
 // Used by validateFiles middleware in fileUpload.js to perform
 // extension checking and magic-byte validation on uploaded files
 
+console.log('VALIDATOR_FILE', __filename);
 const mime = require('mime-types');
 const config = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
+
+// file-type 17+ is pure ESM: CJS consumers load it via dynamic import. The
+// loader is injectable so unit tests can stub it without touching the Jest
+// module registry (dynamic imports are not interceptable in the CJS VM).
+// The registry lives on globalThis because Jest's resetModules() can produce
+// a second module instance whose closure would otherwise ignore the injection.
+const LOADER_KEY = '__GENIE_FILE_TYPE_LOADER__';
+const loadFileTypeModule = async () => {
+  if (globalThis[LOADER_KEY]) return globalThis[LOADER_KEY];
+  return import('file-type');
+};
+const setFileTypeLoader = (loader) => {
+  globalThis[LOADER_KEY] = loader;
+};
+const resetFileTypeLoader = () => {
+  delete globalThis[LOADER_KEY];
+};
 
 /**
  * Validate file type based on MIME type and extension
@@ -36,8 +54,7 @@ const validateFileType = async (file) => {
 
     // Double-check MIME type by reading file buffer
     logger.debug('3. Validating MIME type from file buffer...');
-    // file-type 17+ is pure ESM — dynamic import inside the async validator
-    const { fileTypeFromBuffer } = await import('file-type');
+    const { fileTypeFromBuffer } = await loadFileTypeModule();
     const detectedType = await fileTypeFromBuffer(file.buffer);
     logger.debug(`Detected buffer MIME type: ${detectedType ? detectedType.mime : 'unknown'}`);
 
@@ -120,6 +137,8 @@ const isTextExtractable = (mimeType) => {
 };
 
 module.exports = {
+  setFileTypeLoader,
+  resetFileTypeLoader,
   validateFileType,
   getFileExtension,
   getMimeType,

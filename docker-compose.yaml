@@ -86,6 +86,17 @@ services:
   # ===========================================================================
 
   postgres:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     image: postgres:16
     networks:
@@ -117,6 +128,11 @@ services:
 
   # Kong database migrations (one-shot init, runs automatically on first start)
   kong-migrations:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     image: kong:3.9.3
     restart: "no"
@@ -150,6 +166,11 @@ services:
 
   # Kong routes/services/plugins configuration (one-shot init, runs after Kong is ready)
   kong-config:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     restart: "no"
     depends_on:
@@ -177,6 +198,11 @@ services:
         max_attempts: 5
 
   kong:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     depends_on:
       postgres:
@@ -235,6 +261,16 @@ services:
         max_attempts: 10
 
   nginx:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     depends_on:
       kong:
@@ -289,6 +325,14 @@ services:
   # Requires: CERTBOT_EMAIL set in .env
 
   certbot:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [letsencrypt]
     restart: unless-stopped
@@ -320,6 +364,11 @@ services:
   # ===========================================================================
 
   frontend:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
     build: components/gov-chat-frontend/
@@ -352,6 +401,11 @@ services:
         max_attempts: 10
 
   redis-cache:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
     image: redis:7-alpine
@@ -381,6 +435,11 @@ services:
         max_attempts: 10
 
   db-migrations:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     restart: "no"
     depends_on:
@@ -408,6 +467,11 @@ services:
         max_attempts: 3
 
   backend:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     depends_on:
       arango-vector-db:
@@ -509,6 +573,11 @@ services:
         max_attempts: 10
 
   document-repository:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     depends_on:
       arango-vector-db:
@@ -561,6 +630,11 @@ services:
         max_attempts: 10
 
   clamav:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
     image: clamav/clamav:stable-debian
@@ -586,6 +660,17 @@ services:
         max_attempts: 10
 
   arango-vector-db:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     restart: unless-stopped
     image: arangodb/arangodb:3.12.4
@@ -624,6 +709,11 @@ services:
   # ===========================================================================
 
   vllm:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
@@ -665,6 +755,11 @@ services:
         max_attempts: 30
 
   textgen:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
@@ -699,6 +794,11 @@ services:
         max_attempts: 30
 
   vllm-translation-guardrail:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
@@ -743,6 +843,11 @@ services:
         max_attempts: 30
 
   translation:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
@@ -772,6 +877,11 @@ services:
         max_attempts: 30
 
   guardrail:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
@@ -803,6 +913,11 @@ services:
         max_attempts: 30
 
   tei:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
@@ -835,6 +950,11 @@ services:
         max_attempts: 30
 
   embedding:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
@@ -872,6 +992,11 @@ services:
         max_attempts: 30
 
   tei_reranker:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
@@ -904,6 +1029,11 @@ services:
         max_attempts: 30
 
   reranker:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
@@ -949,6 +1079,11 @@ services:
         max_attempts: 30
 
   dataprep-arango-service:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     depends_on:
@@ -1039,6 +1174,11 @@ services:
         max_attempts: 30
 
   retriever-arango-service:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     depends_on:
@@ -1123,6 +1263,11 @@ services:
         max_attempts: 30
 
   chatqna-xeon-backend-server:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     depends_on:
@@ -1225,6 +1370,11 @@ services:
   # OPEA UI/Nginx - disabled by default via profiles: [opea] (compose up) / replicas: 0 (Swarm).
   # Activate for OPEA debugging: compose up --profile opea / Swarm: change replicas to 1.
   chatqna-xeon-ui-server:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: "no"
@@ -1253,6 +1403,15 @@ services:
         max_attempts: 30
 
   chatqna-xeon-nginx-server:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
     restart: "no"
@@ -1288,6 +1447,11 @@ services:
 
   # PostgreSQL initialization (creates dedicated databases and users for each service)
   postgres-init:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     build: configs/postgres/
     image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
@@ -1313,6 +1477,13 @@ services:
 
   # Keycloak Identity Provider
   keycloak:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     build: configs/keycloak/
     image: ${GENIE_AI_KEYCLOAK_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak}:${GENIE_AI_KEYCLOAK_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
@@ -1364,6 +1535,11 @@ services:
 
   # Keycloak realm configuration via keycloak-config-cli (runs once after Keycloak is healthy)
   keycloak-config:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     build:
       context: configs/keycloak/
@@ -1445,6 +1621,11 @@ services:
   # In Swarm mode, depends_on is removed by Ansible — the Collector's
   # restart policy handles the race condition until init completes.
   otel-collector-init:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     profiles: [observability]
     image: busybox:1.38.0
     command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
@@ -1461,6 +1642,11 @@ services:
         condition: none
 
   otel-collector:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     profiles: [observability]
     restart: unless-stopped
     image: otel/opentelemetry-collector-contrib:0.152.0
@@ -1500,6 +1686,11 @@ services:
         max_attempts: 5
 
   victoriametrics:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped
@@ -1529,6 +1720,11 @@ services:
         max_attempts: 5
 
   victorialogs:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped
@@ -1558,6 +1754,11 @@ services:
         max_attempts: 5
 
   victoriatraces:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped
@@ -1587,6 +1788,11 @@ services:
         max_attempts: 5
 
   tempo-proxy:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped
@@ -1618,6 +1824,11 @@ services:
         delay: 5s
         max_attempts: 10
   grafana:
+    # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *fluent-logging
     profiles: [observability]
     restart: unless-stopped

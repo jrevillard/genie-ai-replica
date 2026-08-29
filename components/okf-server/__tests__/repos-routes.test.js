@@ -297,6 +297,7 @@ describe('getRepo denial audit (AC7 review fix)', () => {
 jest.mock('../services/ingest-service', () => ({
   ingestRepoConcepts: jest.fn(),
   resplitRepo: jest.fn(), // Story #978 — Editor "Re-split from source"
+  deleteConcept: jest.fn(), // Story #978 — delete one concept (meta+chunks+edges)
   maxConceptsFromEnv: jest.fn(() => 200)
 }));
 jest.mock('../services/version-service', () => ({
@@ -995,5 +996,46 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
       .set('Authorization', TOKEN)
       .send({});
     expect(res.status).toBe(403);
+  });
+});
+
+describe('DELETE /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 admin scope — removes the concept (meta + chunks + edges)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    ingestService.deleteConcept.mockResolvedValue({
+      meta: { concept_id: 'conceptA' },
+      chunks: 4,
+      has_source: 4,
+      links_to: 1,
+      entity: 1
+    });
+    const res = await request(createApp()).delete('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, concept_id: 'conceptA', chunks: 4 });
+    expect(ingestService.deleteConcept).toHaveBeenCalledWith(
+      'repoA',
+      'conceptA',
+      expect.objectContaining({ actor: expect.any(Object) })
+    );
+  });
+
+  test('404 when the concept is absent', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    ingestService.deleteConcept.mockResolvedValue(null);
+    const res = await request(createApp()).delete('/api/okf/repos/repoA/concepts/ghost').set('Authorization', TOKEN);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('CONCEPT_NOT_FOUND');
+  });
+
+  test('403 when scoped-read-only (no admin)', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp()).delete('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(ingestService.deleteConcept).not.toHaveBeenCalled();
   });
 });

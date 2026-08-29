@@ -696,9 +696,102 @@ function deriveTitleFromBody(body) {
   return m ? m[1].trim() : null;
 }
 
+/**
+ * Story #978 — delete ONE concept: meta row + indexed chunks + graph edges.
+ * Chunk rows carry `file_id == concept_id` (content-only chunking: "the
+ * file_id IS the concept_id" — dataprep), so the SOURCE sweep keys off that.
+ * LINKS_TO is ENTITY→ENTITY with vertex key safeKey('c', concept_id), so the
+ * edge sweep filters on either endpoint. Returns removal counts (0-safe for
+ * repos whose graph collections don't exist yet).
+ */
+async function deleteConcept(repo_id, concept_id, opts = {}) {
+  if (!repo_id || !concept_id) {
+    const err = new Error('deleteConcept requires repo_id and concept_id');
+    err.code = 'VALIDATION_ERROR';
+    err.status = 400;
+    throw err;
+  }
+  const removed = { meta: null, chunks: 0, has_source: 0, links_to: 0, entity: 0 };
+
+  // 1. Meta row first — the worker's dedup (4e) reads it; once gone, an
+  // in-flight re-index of this concept resolves to null and is skipped.
+  removed.meta = await conceptMetaService.deleteConceptMeta(repo_id, concept_id);
+  if (!removed.meta) return null; // 404 at the controller layer
+
+  // 2. Graph content (best-effort — a fresh repo may have no collections).
+  try {
+    const db = await dbService.getConnection('default');
+    const repo = await repositoryService.getById(repo_id).catch(() => null);
+    const graphName = (repo && repo.graph_name) || `OKF_${repo_id}`;
+
+    // SOURCE chunks for this concept + the HAS_SOURCE edges touching them,
+    // in one pass each (bounded by the concept's own chunk count).
+    const chunks = await (
+      await db.query(
+        aql`FOR doc IN ${db.collection(graphName + '_SOURCE')}
+            FILTER doc.file_id == ${concept_id} OR doc.metadata.file_id == ${concept_id}
+            RETURN doc._id`
+      )
+    ).all();
+    if (chunks.length > 0) {
+      const r1 = await db.query(
+        aql`FOR edge IN ${db.collection(graphName + '_HAS_SOURCE')}
+            FILTER edge._to IN ${chunks}
+            REMOVE edge IN ${db.collection(graphName + '_HAS_SOURCE')}`
+      );
+      removed.has_source = r1.extra ? r1.extra.deleted || 0 : 0;
+      const r2 = await db.query(
+        aql`FOR doc IN ${db.collection(graphName + '_SOURCE')}
+            FILTER doc._id IN ${chunks}
+            REMOVE doc IN ${db.collection(graphName + '_SOURCE')}`
+      );
+      removed.chunks = r2.extra ? r2.extra.deleted || 0 : 0;
+    }
+
+    // LINKS_TO edges touching the concept's ENTITY vertex, then the vertex.
+    const vertexId = `${graphName}_ENTITY/c:${concept_id}`;
+    const r3 = await db.query(
+      aql`FOR edge IN ${db.collection(graphName + '_LINKS_TO')}
+          FILTER edge._from == ${vertexId} || edge._to == ${vertexId}
+          REMOVE edge IN ${db.collection(graphName + '_LINKS_TO')}`
+    );
+    removed.links_to = r3.extra ? r3.extra.deleted || 0 : 0;
+    const r4 = await db.query(
+      aql`FOR v IN ${db.collection(graphName + '_ENTITY')}
+          FILTER v._id == ${vertexId}
+          REMOVE v IN ${db.collection(graphName + '_ENTITY')}`
+    );
+    removed.entity = r4.extra ? r4.extra.deleted || 0 : 0;
+  } catch (err) {
+    // Meta row is already gone (source of truth) — graph leftovers are
+    // orphaned-but-harmless; log and succeed. Mirrors clearRepoConceptsAndGraph's
+    // tolerance of missing collections.
+    logger.warn('deleteConcept: graph cleanup partial', {
+      repo_id,
+      concept_id,
+      error: err.message
+    });
+  }
+
+  try {
+    await auditService.writeAudit({
+      action: 'concept.delete',
+      actor: (opts.actor && opts.actor.sub) || null,
+      repo_id,
+      concept_id,
+      source_ip: (opts.actor && opts.actor.source_ip) || null,
+      removed
+    });
+  } catch {
+    /* audit is best-effort */
+  }
+  return removed;
+}
+
 module.exports = {
   ingestRepoConcepts,
   resplitRepo,
+  deleteConcept,
   _ingestWithCap,
   deriveAclLabels,
   maxConceptsFromEnv,

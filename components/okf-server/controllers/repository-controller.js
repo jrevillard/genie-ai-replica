@@ -496,6 +496,28 @@ async function patchConcept(req, res, next) {
 }
 
 /**
+ * Story #978 — DELETE /api/okf/repos/:repo_id/concepts/:concept_id.
+ * Removes the concept's meta row + indexed chunks + graph edges (admin
+ * scope). 404 when the concept doesn't exist in this repo.
+ */
+async function deleteConcept(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const removed = await ingestService.deleteConcept(repo_id, concept_id, { actor: actorFrom(req) });
+    if (!removed) {
+      return res.status(404).json({
+        error: 'CONCEPT_NOT_FOUND',
+        message: `Concept '${concept_id}' not found in repo '${repo_id}'`
+      });
+    }
+    res.status(200).json({ ok: true, concept_id, ...removed });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Story #978 — POST /api/okf/repos/:repo_id/resplit.
  * Body: { mode: 'A'|'B'|'C' }.
  * Deletes all concepts for this repo + clears the per-repo graph collections,
@@ -560,6 +582,7 @@ module.exports = {
   ingestRepo,
   listConcepts,
   getConcept,
+  deleteConcept,
   mintRepoVersion,
   listRepoVersions,
   getRepoVersion,

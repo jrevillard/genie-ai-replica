@@ -69,6 +69,10 @@ router.get('/:repo_id/concepts/:concept_id', ctrl.getConcept);
 // splits it via gray-matter (parser-service).
 router.patch('/:repo_id/concepts/:concept_id', requireRepoScope('repo_id', 'admin'), ctrl.patchConcept);
 
+// Story #978 — delete ONE concept (meta row + indexed chunks + graph edges).
+// Admin-scope mutation; 404 when the concept isn't in this repo.
+router.delete('/:repo_id/concepts/:concept_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteConcept);
+
 // Story #978 — Editor "Re-split from source" action. Deletes all concepts for
 // this repo + clears the per-repo graph collections + re-ingests from the
 // linked doc-repo file. Admin-scope. Returns the same shape as ingestRepo.

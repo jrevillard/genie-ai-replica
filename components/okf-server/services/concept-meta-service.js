@@ -310,6 +310,18 @@ async function getConceptMetaFromAnyRepo(concept_id) {
   return rows[0];
 }
 
+/** Story #978 — remove ONE concept's meta row. Returns the removed doc (or
+ * null when absent → 404 at the controller). The graph/content sweep lives in
+ * ingest-service.deleteConcept (which owns the repositoryService import). */
+async function deleteConceptMeta(repo_id, concept_id) {
+  if (!repo_id || !concept_id) return null;
+  const db = await getDb();
+  const doc = await findConceptDoc(db.collection(COLLECTION), repo_id, concept_id);
+  if (!doc) return null;
+  await db.collection(COLLECTION).remove(doc._key);
+  return doc;
+}
+
 /** Count a repo's meta rows at a given index_status (bundle completion
  * check — the internal controller asks "are any concepts still parsed?"). */
 async function countByIndexStatus(repo_id, index_status) {
@@ -740,6 +752,7 @@ module.exports = {
   getConceptMetaFromAnyRepo,
   listConceptsMeta,
   patchConceptMeta,
+  deleteConceptMeta,
   autocorrectRepo,
   buildMetaDoc,
   contentHash,

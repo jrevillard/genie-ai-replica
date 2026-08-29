@@ -35,9 +35,14 @@ jest.mock('../../config/appConfig', () => ({
 }));
 
 // Mock file-type library (dependency of mimeTypeValidator)
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn()
-}));
+// virtual: file-type 21 is ESM-only, the CJS resolver cannot resolve it
+jest.mock(
+  'file-type',
+  () => ({
+    fileTypeFromBuffer: jest.fn()
+  }),
+  { virtual: true }
+);
 
 const fs = require('fs');
 const path = require('path');

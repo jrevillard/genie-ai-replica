@@ -165,3 +165,17 @@ describe('okfRepoOps.applyLabel / deleteConcept', () => {
     expect(res.chunks).toBe(3);
   });
 });
+
+describe('okfRepoOps.createRepo — DUPLICATE_REPO mapping', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('maps a 409 from the service to code DUPLICATE_REPO (handled, user-facing)', async () => {
+    mockCreate.mockRejectedValue({ status: 409, data: { error: 'DUPLICATE_REPO' } });
+    await expect(ops.createRepo({ name: 'Exists' })).rejects.toMatchObject({ code: 'DUPLICATE_REPO' });
+  });
+
+  it('leaves other failures as-is', async () => {
+    mockCreate.mockRejectedValue({ status: 500, message: 'boom' });
+    await expect(ops.createRepo({ name: 'X' })).rejects.toMatchObject({ status: 500 });
+  });
+});

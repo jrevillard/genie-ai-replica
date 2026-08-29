@@ -232,7 +232,13 @@ export default {
       });
       this.creating = false;
       if (!result.ok) {
-        this.createError = result.message || this.translate('okf.create.failed', 'Repository creation failed');
+        this.createError =
+          result.code === 'DUPLICATE_REPO'
+            ? this.translate(
+                'okf.create.duplicate',
+                'A repository with this name already exists - open it from the dashboard or pick another name.'
+              )
+            : result.message || this.translate('okf.create.failed', 'Repository creation failed');
         return;
       }
       this.createOpen = false;

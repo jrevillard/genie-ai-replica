@@ -43,12 +43,23 @@ export async function createRepo({ name, domain }) {
     throw err;
   }
   const d = domain || 'general';
-  const repo = await repoOkfService.create({
-    name: name.trim(),
-    domain: d,
-    acl: { required_scopes: [`okf:t:${d}:admin`] },
-    lifecycle_state: 'draft'
-  });
+  let repo;
+  try {
+    repo = await repoOkfService.create({
+      name: name.trim(),
+      domain: d,
+      acl: { required_scopes: [`okf:t:${d}:admin`] },
+      lifecycle_state: 'draft'
+    });
+  } catch (err) {
+    // 409 DUPLICATE_REPO is a HANDLED, user-facing outcome (the create dialog
+    // tells the steward to pick another name) — surface it as its own code,
+    // not a generic CREATE_FAILED.
+    if (err && (err.status === 409 || (err.data && err.data.error === 'DUPLICATE_REPO'))) {
+      err.code = 'DUPLICATE_REPO';
+    }
+    throw err;
+  }
   if (!repo || !repo.repo_id) {
     const err = new Error('repo creation returned no repo_id');
     err.code = 'CREATE_FAILED';

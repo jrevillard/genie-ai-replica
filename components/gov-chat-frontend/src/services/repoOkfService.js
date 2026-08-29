@@ -28,7 +28,9 @@ const repoOkfService = {
   },
 
   async create(body) {
-    const res = await httpService.post('/okf/repos', body);
+    // silent: the create dialog owns the outcome display (e.g. a friendly
+    // DUPLICATE_REPO message) — no global toast, no console.error.
+    const res = await httpService.post('/okf/repos', body, { silent: true });
     return res && res.data ? res.data : null;
   },
 

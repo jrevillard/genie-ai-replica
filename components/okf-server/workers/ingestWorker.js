@@ -127,6 +127,12 @@ async function waitForTerminal(db, repoId, conceptId) {
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
 const _bundleFileCache = new Map(); // repo_id -> bundle file_id (one bundle per repo)
+/** Story #978 lifecycle: publish SUPERSEDES the old bundle zip — the worker's
+ * cache must not keep pointing at a deleted doc (its ingestion-log mirror
+ * would 404 forever). Called by bundle-export-service after a supersede. */
+function invalidateBundleCache(repoId) {
+  _bundleFileCache.delete(repoId);
+}
 async function getBundleFileId(repoId) {
   const cached = _bundleFileCache.get(repoId);
   if (cached) return cached;
@@ -527,4 +533,13 @@ function stop() {
   _sweepTimer = null;
 }
 
-module.exports = { start, stop, _processOneJob, _sweepOnce, _reapStuckParsed, claimNextJob, getBundleFileId };
+module.exports = {
+  start,
+  stop,
+  _processOneJob,
+  _sweepOnce,
+  _reapStuckParsed,
+  claimNextJob,
+  getBundleFileId,
+  invalidateBundleCache
+};

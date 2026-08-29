@@ -20,12 +20,17 @@
 const initialState = () => ({
   drafts: {},
   reposById: {},
-  reposByStage: { draft: [], in_review: [], published: [] },
+  // Lifecycle lanes (David, 2026-08-28): five columns — In progress /
+  // In review / Published / Ingested / Retracted. Published ≠ Ingested:
+  // 'publish' + serving flag (ingested_at/ingested_version) drives the last
+  // two; 'retracted' is its own visible state, never folded into Published.
+  reposByStage: { draft: [], in_review: [], published: [], ingested: [], retracted: [] },
   selection: { documents: [], crawlSeeds: [], clonedFrom: null },
   gates: {
     okfRepoButton: { visible: false, reasonKey: null, reasonParams: {} }
   },
   bulkPublish: { inFlight: false, results: [] },
+  versionsByRepo: {},
   // Story #978 — Studio editor state: which sub-tab (Wizard | Editor), which
   // repo is open, per-repo concept lists (left rail), the selected concept.
   editor: {
@@ -40,6 +45,28 @@ const initialState = () => ({
   },
   error: null
 });
+
+/**
+ * Lifecycle lane mapping (David, 2026-08-28) — the SINGLE definition of which
+ * lane a repo lands in, used by fetchRepos AND the transition action. The
+ * serving flag (ingested_at) separates Published from Ingested; 'retracted'
+ * is its own lane. The old mapping compared against 'published' — a value the
+ * server NEVER sets (the state is 'publish') — so published repos landed in
+ * the wrong lane.
+ */
+function laneFor(repos) {
+  const byStage = { draft: [], in_review: [], published: [], ingested: [], retracted: [] };
+  (repos || []).forEach((r) => {
+    let key = 'draft';
+    if (r.lifecycle_state === 'review' || r.lifecycle_state === 'approve') key = 'in_review';
+    else if (r.lifecycle_state === 'publish' && r.ingested_at) key = 'ingested';
+    else if (r.lifecycle_state === 'publish') key = 'published';
+    else if (r.lifecycle_state === 'retracted') key = 'retracted';
+    else if (['version', 'deprecate', 'retire'].includes(r.lifecycle_state)) key = 'published'; // reserved → Published
+    if (byStage[key]) byStage[key].push(r.repo_id);
+  });
+  return byStage;
+}
 
 function readExpertModeFromStorage() {
   try {
@@ -71,6 +98,7 @@ const getters = {
   conceptById: (state) => (repoId, conceptId) =>
     (state.editor.conceptsByRepo[repoId] || []).find((c) => c.concept_id === conceptId) || null,
   selectedConceptId: (state) => state.editor.selectedConceptId,
+  versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
   selection: (state) => state.selection,
@@ -89,6 +117,11 @@ const mutations = {
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
     state.reposById = { ...state.reposById, [repo.repo_id]: repo };
+  },
+  removeRepo(state, repoId) {
+    const next = { ...state.reposById };
+    delete next[repoId];
+    state.reposById = next;
   },
   setReposByStage(state, byStage) {
     state.reposByStage = byStage;
@@ -137,6 +170,9 @@ const mutations = {
   },
   setSelectedConcept(state, conceptId) {
     state.editor = { ...state.editor, selectedConceptId: conceptId || null };
+  },
+  setVersions(state, { repoId, versions }) {
+    state.versionsByRepo = { ...state.versionsByRepo, [repoId]: versions || [] };
   },
   setConceptsLoading(state, loading) {
     state.editor = { ...state.editor, loading: !!loading };
@@ -191,17 +227,7 @@ const actions = {
     try {
       const repos = await repoOkfService.list({ stage });
       repos.forEach((r) => commit('upsertRepo', r));
-      const byStage = { draft: [], in_review: [], published: [] };
-      repos.forEach((r) => {
-        const stageKey =
-          r.lifecycle_state === 'published'
-            ? 'published'
-            : r.lifecycle_state === 'review' || r.lifecycle_state === 'approve'
-              ? 'in_review'
-              : 'draft';
-        if (byStage[stageKey]) byStage[stageKey].push(r.repo_id);
-      });
-      commit('setReposByStage', byStage);
+      commit('setReposByStage', laneFor(repos));
       return { ok: true, repos };
     } catch (err) {
       commit('setError', err.message || 'fetchRepos failed');
@@ -499,6 +525,73 @@ const actions = {
     } catch (err) {
       commit('setError', err.message || 'autocorrectRepo failed');
       return { ok: false, code: 'AUTOCORRECT_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * Story #978 lifecycle (David, 2026-08-28) — apply ONE lifecycle transition
+   * via the shared okfRepoOps wrappers (wizard + editor + dashboard all go
+   * through here), then refresh the repo row from the server so the lanes,
+   * version + bundle info update immediately.
+   */
+  async lifecycleTransition({ commit }, { repoId, action, actor } = {}) {
+    try {
+      const result = await okfRepoOps.lifecycle(repoId, action, actor || {});
+      const repo = await repoOkfService.get(repoId).catch(() => null);
+      if (repo) commit('upsertRepo', repo);
+      return { ok: true, result };
+    } catch (err) {
+      return {
+        ok: false,
+        code: (err && err.code) || 'LIFECYCLE_FAILED',
+        message: err.message || 'lifecycle transition failed'
+      };
+    }
+  },
+
+  /**
+   * Story #978 — delete the whole repository (cascade). The server refuses
+   * while an ingested version is serving (INGESTED_DELETE_BLOCKED).
+   */
+  async deleteRepoAction({ commit, state }, { repoId } = {}) {
+    try {
+      await okfRepoOps.deleteRepo(repoId);
+      commit('removeRepo', repoId);
+      // Recompute the lanes from the remaining repos — a stale lane entry
+      // would keep rendering a deleted card (live-caught by the store test).
+      commit('setReposByStage', laneFor(Object.values(state.reposById)));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, code: (err && err.code) || 'DELETE_FAILED', message: err.message };
+    }
+  },
+
+  /**
+   * Story #978 (David, 2026-08-28) — import a zip bundle as a NEW draft repo
+   * via the shared library, cache the repo, and recompute the lanes.
+   */
+  async upsertImported({ commit, state }, { file, name, domain } = {}) {
+    try {
+      const repo = await okfRepoOps.importRepoZip({ file, name, domain });
+      commit('upsertRepo', repo);
+      const repos = Object.values(state.reposById);
+      commit('setReposByStage', laneFor(repos));
+      return { ok: true, repo };
+    } catch (err) {
+      const code = (err && err.code) || 'IMPORT_FAILED';
+      if (err && err.repo) commit('upsertRepo', err.repo); // repo exists — openable
+      return { ok: false, code, message: err.message, repo: err && err.repo };
+    }
+  },
+
+  /** Story #978 — fetch the repo's version manifests for the versions panel. */
+  async fetchVersions({ commit }, repoId) {
+    try {
+      const versions = await okfRepoOps.listVersions(repoId);
+      commit('setVersions', { repoId, versions });
+      return { ok: true, versions };
+    } catch (err) {
+      return { ok: false, code: 'VERSIONS_FAILED', message: err.message };
     }
   },
 

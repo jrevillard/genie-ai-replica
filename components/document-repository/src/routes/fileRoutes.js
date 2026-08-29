@@ -583,7 +583,10 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *       '404':
  *         description: File not found
  */
-router.delete('/:fileId', authorizeRole(['Admin']), fileController.deleteFile);
+// Story #978 lifecycle: the okf-server service account deletes SUPERSEDED
+// bundle zips at publish (one live bundle per repo) — same trust as the
+// ingest-bundle route above.
+router.delete('/:fileId', authorizeRole(['Admin', 'okf-service']), fileController.deleteFile);
 
 /**
  * @swagger

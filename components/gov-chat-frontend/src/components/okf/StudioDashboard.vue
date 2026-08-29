@@ -1,23 +1,16 @@
-<!--
-  OkfStudioDashboard.vue — Story 3-5.
-
-  Multi-repo kanban: 3 lanes (in_progress / in_review / published). Each card
-  shows the THREE things the UX rule #5 mandates — health ring, topic count,
-  stage. Domain, lifecycle status, last edited, who edited, conformance
-  breakdown all live in the card hover popover.
-
-  Bulk-publish toolbar (DsDialog pattern, rule #4): a multi-select footer that
-  appears when ≥2 cards selected. Per-repo result list shows per-row outcomes;
-  never force-publishes past a gate.
-
-  Expert-mode filters (rule #7): hidden when toggle is Basic.
--->
+<!-- OkfStudioDashboard.vue — Story #978 lifecycle edition (David, 2026-08-28).
+  Five lifecycle lanes — In progress / In review / Published / Ingested /
+  Retracted. Published != Ingested: the serving flag separates them.
+  Each card carries the repo's contextual lifecycle action, Versions, Export
+  and Delete (hidden while an ingested version is serving — retract first).
+  Card click opens the editor; action buttons never trigger the open. -->
 <template>
   <div class="okf-dashboard">
     <header class="okf-dashboard__bar">
       <div class="okf-dashboard__bar-left">
         <h3 class="okf-dashboard__title">{{ translate('okf.dashboard.title', 'Repositories') }}</h3>
         <span class="okf-dashboard__count">{{ totalCount }}</span>
+        <span v-if="actionError" class="okf-dashboard__action-error">{{ actionError }}</span>
       </div>
       <div class="okf-dashboard__bar-right">
         <DsButton variant="primary" @click="$emit('new')">{{
@@ -26,9 +19,7 @@
       </div>
     </header>
 
-    <div v-if="expertMode" class="okf-dashboard__filters">
-      <!-- DsSelect takes options via slot (no options prop) — the previous
-           :options binding landed in $attrs and rendered an EMPTY select. -->
+    <div v-if="expertMode" class="s">
       <DsSelect
         v-model="filters.domain"
         class="okf-dashboard__filter-domain"
@@ -37,6 +28,7 @@
         <option v-for="opt in domainFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </DsSelect>
       <DsInput v-model="filters.search" :placeholder="translate('okf.dashboard.search', 'Search...')" />
+      <DsButton variant="ghost" small @click="refreshAll">{{ translate('common.refresh', 'Refresh') }}</DsButton>
     </div>
 
     <div class="okf-dashboard__lanes">
@@ -46,90 +38,92 @@
           <span class="okf-dashboard__lane-count">{{ reposInLane(lane.key).length }}</span>
         </header>
         <p v-if="reposInLane(lane.key).length === 0" class="okf-dashboard__empty">{{ lane.emptyText }}</p>
-        <button
-          v-for="r in reposInLane(lane.key)"
-          :key="r.repo_id"
-          type="button"
-          class="okf-dashboard__card"
-          :class="cardClasses(r)"
-          @click="onCardClick(r)"
-        >
-          <span class="okf-dashboard__card-row">
-            <input
-              type="checkbox"
-              class="okf-dashboard__card-checkbox"
-              :checked="isSelected(r.repo_id)"
-              :disabled="r.lifecycle_state !== 'review' && r.lifecycle_state !== 'approve'"
-              :aria-label="
-                translate('okf.dashboard.select', 'Select {name} for bulk publish').replace(
-                  '{name}',
-                  r.name || r.repo_id
-                )
-              "
-              @click.stop="toggleSelected(r.repo_id)"
-            />
-            <span class="okf-dashboard__card-name">{{ r.name || r.repo_id }}</span>
-          </span>
-          <span class="okf-dashboard__card-row">
-            <DsHealthRing :score="healthScore(r)" :size="'sm'" :aria-label="healthAria(r)" />
-            <span class="okf-dashboard__card-count"
-              >{{ r.concept_count || 0 }} {{ translate('okf.dashboard.topics', 'topics') }}</span
+        <div v-for="r in reposInLane(lane.key)" :key="r.repo_id" class="okf-dashboard__card-wrap">
+          <button type="button" class="okf-dashboard__card" :class="cardClasses(r)" @click="onCardClick(r)">
+            <span class="okf-dashboard__card-row">
+              <input
+                v-if="canBulk(r)"
+                type="checkbox"
+                class="okf-dashboard__card-checkbox"
+                :checked="isSelected(r.repo_id)"
+                :aria-label="selectAria(r)"
+                @click.stop="toggleSelected(r.repo_id)"
+              />
+              <span class="okf-dashboard__card-name">{{ r.name || r.repo_id }}</span>
+              <span v-if="r.version" class="okf-dashboard__card-version">v{{ r.version }}</span>
+            </span>
+            <span class="okf-dashboard__card-row">
+              <DsHealthRing :score="healthScore(r)" :size="'sm'" :aria-label="healthAria(r)" />
+              <span class="okf-dashboard__card-count">
+                {{ r.concept_count || 0 }} {{ translate('okf.dashboard.topics', 'topics') }}
+              </span>
+              <span class="okf-dashboard__card-stage">{{ stageLabel(r) }}</span>
+            </span>
+          </button>
+          <div class="okf-dashboard__card-actions" role="group" :aria-label="actionsAria(r)">
+            <DsButton variant="secondary" small :disabled="actionBusy" @click.stop="onLifecycle(r)">
+              {{ contextualLabel(r) }}
+            </DsButton>
+            <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onVersions(r)">
+              {{ translate('okf.dashboard.card.versions', 'Versions') }}
+            </DsButton>
+            <DsButton variant="ghost" small :disabled="exportBusy" @click.stop="onExport(r)">
+              {{ translate('okf.dashboard.card.export', 'Export') }}
+            </DsButton>
+            <DsButton
+              v-if="!isServing(r)"
+              variant="ghost"
+              small
+              :disabled="actionBusy"
+              class="okf-dashboard__card-delete"
+              @click.stop="onDeleteAsk(r)"
             >
-            <span class="okf-dashboard__card-stage">{{ stageLabel(r) }}</span>
-          </span>
-          <span v-if="isStale(r)" class="okf-dashboard__card-stale">{{
-            translate('okf.dashboard.stale', 'stale')
-          }}</span>
-        </button>
+              {{ translate('okf.dashboard.card.delete', 'Delete') }}
+            </DsButton>
+          </div>
+        </div>
       </section>
     </div>
 
-    <nav v-if="selectedIds.length >= 2" class="okf-dashboard__bulk" aria-label="Bulk actions">
-      <span>{{ translate('okf.dashboard.bulk.selected', '{n} selected').replace('{n}', selectedIds.length) }}</span>
-      <DsButton variant="primary" @click="bulkOpen = true">{{
-        translate('okf.dashboard.bulk.publish', 'Publish selected')
-      }}</DsButton>
-      <DsButton variant="ghost" @click="selectedIds = []">{{ translate('common.clear', 'Clear') }}</DsButton>
-    </nav>
+    <!-- Publish confirm: mints vN+1 + supersedes the previous bundle zip. -->
+    <DsDialog
+      :visible="publishAsk !== null"
+      :title="translate('okf.dashboard.publish.title', 'Publish')"
+      size="sm"
+      :actions="publishActions"
+      @close="publishAsk = null"
+      @action="onPublishAction"
+    >
+      <p>{{ publishBodyText }}</p>
+      <p v-if="publishError" class="okf-dashboard__dialog-error">{{ publishError }}</p>
+    </DsDialog>
 
     <DsDialog
-      :visible="bulkOpen"
-      :title="translate('okf.dashboard.bulk.title', 'Publish selected repositories')"
-      size="lg"
-      :actions="bulkActions"
-      @close="bulkOpen = false"
-      @action="onBulkAction"
+      :visible="deleteAsk !== null"
+      :title="translate('okf.dashboard.delete.title', 'Delete repository')"
+      size="sm"
+      :actions="deleteActions"
+      @close="deleteAsk = null"
+      @action="onDeleteAction"
     >
       <p>
         {{
           translate(
-            'okf.dashboard.bulk.body',
-            'Once published, downstream chat answers can use them. Each repository below lists its final outcome.'
+            'okf.dashboard.delete.body',
+            'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.'
           )
         }}
+        <strong>{{ deleteAsk && (deleteAsk.name || deleteAsk.repo_id) }}</strong>
       </p>
-      <DsTable :columns="bulkColumns" :rows="selectedRows">
-        <template #cell-name="{ row }">{{ row.name || row.repo_id }}</template>
-        <template #cell-status="{ row }">
-          <DsStatusTag
-            :variant="row.lifecycle_state === 'review' || row.lifecycle_state === 'approve' ? 'pending' : 'info'"
-          >
-            {{ translate('okf.dashboard.bulk.status.ready', 'Ready') }}
-          </DsStatusTag>
-        </template>
-        <template #cell-topics="{ row }">{{ row.concept_count || 0 }}</template>
-      </DsTable>
-      <p v-if="bulkResults.length" class="okf-dashboard__bulk-results">
-        {{ translate('okf.dashboard.bulk.results', 'Results') }}:
-        <span
-          v-for="r in bulkResults"
-          :key="r.repo_id"
-          :class="{ 'okf-dashboard__bulk-results-ok': r.ok, 'okf-dashboard__bulk-results-fail': !r.ok }"
-        >
-          {{ r.name || r.repo_id }} — {{ r.ok ? '✓' : '✗ ' + (r.code || 'failed') }}
-        </span>
-      </p>
+      <p v-if="deleteError" class="okf-dashboard__dialog-error">{{ deleteError }}</p>
     </DsDialog>
+
+    <OkfVersionsDialog
+      :visible="versionsRepo !== null"
+      :repo="versionsRepo"
+      @close="versionsRepo = null"
+      @changed="onVersionsChanged"
+    />
   </div>
 </template>
 
@@ -140,14 +134,16 @@ import DsButton from '../ds/Button.vue';
 import DsDialog from '../ds/Dialog.vue';
 import DsInput from '../ds/Input.vue';
 import DsSelect from '../ds/Select.vue';
-import DsStatusTag from '../ds/StatusTag.vue';
 import DsHealthRing from '../ds/HealthRing.vue';
-import DsTable from '../ds/Table.vue';
+import OkfVersionsDialog from './editor/VersionsDialog.vue';
+import okfRepoOps from '../../services/okfRepoOps';
 
 const LANES = [
   { key: 'draft', label: 'In progress', emptyText: 'No drafts yet' },
   { key: 'in_review', label: 'In review', emptyText: 'Nothing in review' },
-  { key: 'published', label: 'Published', emptyText: 'No published repositories yet' }
+  { key: 'published', label: 'Published', emptyText: 'No published repositories yet' },
+  { key: 'ingested', label: 'Ingested', emptyText: 'Nothing ingested yet' },
+  { key: 'retracted', label: 'Retracted', emptyText: 'Nothing retracted' }
 ];
 
 const DOMAIN_OPTIONS = [
@@ -161,17 +157,17 @@ const DOMAIN_OPTIONS = [
   { value: 'civil-registry', label: 'Civil registry' }
 ];
 
+const CONTEXTUAL_LABELS = {
+  submit: 'Submit for review',
+  approve: 'Approve',
+  publish: 'Publish',
+  ingest: 'Ingest',
+  retract: 'Retract'
+};
+
 export default {
   name: 'OkfStudioDashboard',
-  components: {
-    DsButton,
-    DsDialog,
-    DsInput,
-    DsSelect,
-    DsStatusTag,
-    DsHealthRing,
-    DsTable
-  },
+  components: { DsButton, DsDialog, DsInput, DsSelect, DsHealthRing, OkfVersionsDialog },
   mixins: [translateMixin],
   emits: ['new', 'resume'],
   data() {
@@ -181,7 +177,15 @@ export default {
       bulkOpen: false,
       bulkResults: [],
       filters: { domain: '', search: '' },
-      domainFilterOptions: DOMAIN_OPTIONS
+      domainFilterOptions: DOMAIN_OPTIONS,
+      actionBusy: false,
+      exportBusy: false,
+      actionError: '',
+      publishAsk: null,
+      publishError: '',
+      deleteAsk: null,
+      deleteError: '',
+      versionsRepo: null
     };
   },
   computed: {
@@ -192,27 +196,27 @@ export default {
     totalCount() {
       return this.lanes.reduce((acc, l) => acc + this.reposInLane(l.key).length, 0);
     },
+    publishBodyText() {
+      if (!this.publishAsk) return '';
+      const next = (this.publishAsk.version || 0) + 1;
+      const file = (this.publishAsk.name || this.publishAsk.repo_id) + '-v' + next + '.zip';
+      return this.translate(
+        'okf.dashboard.publish.body',
+        'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.'
+      )
+        .replace('{n}', String(next))
+        .replace('{file}', file);
+    },
     selectedRows() {
       return this.selectedIds
         .map((id) => this.$store.getters['okf/repoById'](id))
         .filter(Boolean)
         .filter((r) => this.matchesFilters(r));
     },
-    bulkColumns() {
-      return [
-        { key: 'name', label: this.translate('okf.dashboard.bulk.col.name', 'Name') },
-        { key: 'status', label: this.translate('okf.dashboard.bulk.col.status', 'Status') },
-        { key: 'topics', label: this.translate('okf.dashboard.bulk.col.topics', 'Topics') }
-      ];
-    },
-    bulkActions() {
+    deleteActions() {
       return [
         { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
-        {
-          key: 'publish',
-          label: this.translate('okf.dashboard.bulk.publishConfirm', `Publish ${this.selectedIds.length}`),
-          variant: 'primary'
-        }
+        { key: 'confirm', label: this.translate('okf.dashboard.delete.confirm', 'Delete'), variant: 'danger' }
       ];
     }
   },
@@ -220,6 +224,9 @@ export default {
     this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
   },
   methods: {
+    refreshAll() {
+      this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
+    },
     reposInLane(key) {
       const ids = (this.reposByStage && this.reposByStage[key]) || [];
       return ids
@@ -235,30 +242,49 @@ export default {
     },
     stageLabel(r) {
       const s = r.lifecycle_state;
-      if (s === 'published') return `Published v${r.version || 1}`;
+      if (s === 'publish' && r.ingested_at) {
+        return this.translate('okf.dashboard.stage.ingested', 'Ingested v{n}').replace('{n}', String(r.version || ''));
+      }
+      if (s === 'publish') {
+        return this.translate('okf.dashboard.stage.published', 'Published v{n}').replace(
+          '{n}',
+          String(r.version || '')
+        );
+      }
+      if (s === 'retracted') return this.translate('okf.dashboard.stage.retracted', 'Retracted');
       if (s === 'review' || s === 'approve') return this.translate('okf.dashboard.stage.inReview', 'In review');
       const step = r.studio_step;
       return step != null
-        ? this.translate('okf.dashboard.stage.stepOf', `Step ${step + 1} of 10`)
+        ? this.translate('okf.dashboard.stage.stepOf', 'Step ' + (step + 1) + ' of 10')
         : this.translate('okf.dashboard.stage.draft', 'Draft');
     },
-    healthScore(r) {
-      const m = r.metrics;
-      if (!m || typeof m.concept_count !== 'number' || m.concept_count === 0) return 0;
-      const issues = (m.conformance_issue_count || 0) + (m.stale_concept_count || 0);
-      const ratio = issues / Math.max(m.concept_count, 1);
-      return Math.max(0, Math.min(100, Math.round(100 * (1 - ratio))));
+    contextualAction(r) {
+      const s = r.lifecycle_state;
+      if (s === 'review') return 'approve';
+      if (s === 'approve') return 'publish';
+      if (s === 'publish' && r.ingested_at) return 'retract';
+      if (s === 'publish') return 'ingest';
+      if (s === 'retracted') return 'ingest';
+      return 'submit';
     },
-    healthAria(r) {
-      const pct = this.healthScore(r);
-      const m = r.metrics;
-      if (!m) return 'No metrics yet';
-      return `Health: ${pct} percent, ${m.concept_count || 0} concepts`;
+    contextualLabel(r) {
+      const action = this.contextualAction(r);
+      return this.translate('okf.lifecycle.' + action, CONTEXTUAL_LABELS[action]);
     },
-    isStale(r) {
-      const s = r.lifecycle?.stale_after;
-      if (!s) return false;
-      return Date.parse(s) <= Date.now();
+    isServing(r) {
+      return !!(r.lifecycle_state === 'publish' && r.ingested_at);
+    },
+    canBulk(r) {
+      return ['approve', 'publish', 'retracted'].includes(r.lifecycle_state);
+    },
+    selectAria(r) {
+      return this.translate('okf.dashboard.select', 'Select {name} for bulk publish').replace(
+        '{name}',
+        r.name || r.repo_id
+      );
+    },
+    actionsAria(r) {
+      return this.translate('okf.dashboard.card.actions', 'Actions for {name}').replace('{name}', r.name || r.repo_id);
     },
     cardClasses(r) {
       return { 'okf-dashboard__card--selected': this.isSelected(r.repo_id) };
@@ -273,28 +299,95 @@ export default {
     onCardClick(r) {
       this.$emit('resume', r.repo_id);
     },
-    onBulkAction(key) {
-      if (key === 'publish') this.runBulkPublish();
-      else this.bulkOpen = false;
+    async onLifecycle(r) {
+      const action = this.contextualAction(r);
+      if (action === 'publish') {
+        this.publishError = '';
+        this.publishAsk = r;
+        return;
+      }
+      this.actionBusy = true;
+      this.actionError = '';
+      const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: r.repo_id, action });
+      this.actionBusy = false;
+      if (!res.ok) this.actionError = res.message || 'Action failed';
+    },
+    onVersions(r) {
+      this.versionsRepo = r;
+    },
+    onVersionsChanged() {
+      this.refreshAll();
+    },
+    async onExport(r) {
+      this.exportBusy = true;
+      this.actionError = '';
+      try {
+        await okfRepoOps.exportRepoZip(r);
+      } catch (err) {
+        this.actionError = err.message || 'Export failed';
+      } finally {
+        this.exportBusy = false;
+      }
+    },
+    onDeleteAsk(r) {
+      this.deleteError = '';
+      this.deleteAsk = r;
+    },
+    async onDeleteAction(key) {
+      if (key === 'cancel') {
+        this.deleteAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.deleteAsk) return;
+      this.actionBusy = true;
+      this.deleteError = '';
+      const res = await this.$store.dispatch('okf/deleteRepoAction', { repoId: this.deleteAsk.repo_id });
+      this.actionBusy = false;
+      this.deleteAsk = null;
+      if (!res.ok) this.actionError = res.message || 'Delete failed';
+    },
+    async onPublishAction(key) {
+      if (key === 'cancel') {
+        this.publishAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.publishAsk) return;
+      this.actionBusy = true;
+      this.publishError = '';
+      const res = await this.$store.dispatch('okf/lifecycleTransition', {
+        repoId: this.publishAsk.repo_id,
+        action: 'publish'
+      });
+      this.actionBusy = false;
+      this.publishAsk = null;
+      if (!res.ok) this.actionError = res.message || 'Publish failed';
+    },
+    healthScore(r) {
+      const m = r.metrics;
+      if (!m || typeof m.concept_count !== 'number' || m.concept_count === 0) return 0;
+      const issues = (m.conformance_issue_count || 0) + (m.stale_concept_count || 0);
+      const ratio = issues / Math.max(m.concept_count, 1);
+      return Math.max(0, Math.min(100, Math.round(100 * (1 - ratio))));
+    },
+    healthAria(r) {
+      const pct = this.healthScore(r);
+      const m = r.metrics;
+      if (!m) return 'No metrics';
+      return 'Health: ' + pct + ' percent, ' + (m.concept_count || 0) + ' concepts';
     },
     async runBulkPublish() {
       const repoIds = this.selectedRows.map((r) => r.repo_id);
       this.bulkResults = [];
       for (const repoId of repoIds) {
-        const result = await this.$store.dispatch('okf/mintVersion', {
-          repoId,
-          body: { trigger: 'publish' },
-          actor: { sub: 'studio-bulk' }
-        });
+        const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId, action: 'publish' });
         const r = this.$store.getters['okf/repoById'](repoId);
-        this.bulkResults.push({
-          repo_id: repoId,
-          name: r ? r.name : repoId,
-          ok: !!(result && result.ok),
-          code: result && result.code
-        });
+        this.bulkResults.push({ repo_id: repoId, name: r ? r.name : repoId, ok: !!res.ok, code: res.code });
       }
-      this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
+      this.refreshAll();
+    },
+    onBulkAction(key) {
+      if (key === 'publish') this.runBulkPublish();
+      else this.bulkOpen = false;
     }
   }
 };
@@ -316,29 +409,15 @@ export default {
   gap: var(--space-sm);
   align-items: baseline;
 }
-.okf-dashboard__title {
-  margin: 0;
-  font-size: var(--text-md);
-  font-weight: 600;
-}
-.okf-dashboard__count {
-  background: var(--accent-muted);
-  color: var(--accent);
-  padding: 2px 10px;
-  border-radius: 100px;
-  font-size: var(--text-xs);
-}
-.okf-dashboard__filters {
-  display: flex;
-  gap: var(--space-sm);
-}
-.okf-dashboard__filter-domain {
-  max-width: 260px;
+.okf-dashboard__action-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 .okf-dashboard__lanes {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: var(--space-md);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-sm);
+  overflow-x: auto;
 }
 .okf-dashboard__lane {
   background: var(--bg);
@@ -346,17 +425,13 @@ export default {
   border-radius: var(--radius-md);
   padding: var(--space-md);
   min-height: 240px;
+  min-width: 180px;
 }
 .okf-dashboard__lane-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin: 0 0 var(--space-sm);
-}
-.okf-dashboard__lane-header h4 {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: 600;
 }
 .okf-dashboard__lane-count {
   background: var(--accent-muted);
@@ -371,6 +446,9 @@ export default {
   padding: var(--space-md);
   text-align: center;
 }
+.okf-dashboard__card-wrap {
+  margin-bottom: var(--space-xs);
+}
 .okf-dashboard__card {
   display: flex;
   flex-direction: column;
@@ -381,17 +459,11 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--space-sm);
-  margin-bottom: var(--space-xs);
   font: inherit;
   color: var(--fg);
   cursor: pointer;
-  position: relative;
 }
 .okf-dashboard__card:hover {
-  border-color: var(--accent);
-  background: var(--accent-muted);
-}
-.okf-dashboard__card--selected {
   border-color: var(--accent);
   background: var(--accent-muted);
 }
@@ -400,51 +472,29 @@ export default {
   align-items: center;
   gap: var(--space-xs);
 }
-.okf-dashboard__card-checkbox {
-  margin: 0;
-}
 .okf-dashboard__card-name {
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.okf-dashboard__card-count {
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
-.okf-dashboard__card-stage {
+.okf-dashboard__card-version {
   margin-left: auto;
   font-size: var(--text-xs);
   color: var(--muted);
 }
-.okf-dashboard__card-stale {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  background: var(--warning-bg);
-  color: var(--warning);
-  font-size: 9px;
-  padding: 1px 6px;
-  border-radius: 100px;
-}
-.okf-dashboard__bulk {
+.okf-dashboard__card-actions {
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  background: var(--accent-muted);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm) var(--space-md);
-}
-.okf-dashboard__bulk-results {
-  margin: var(--space-md) 0 0 0;
-  font-size: var(--text-sm);
-  display: flex;
-  gap: var(--space-sm);
   flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
 }
-.okf-dashboard__bulk-results-ok {
-  color: var(--success);
+.okf-dashboard__card-delete {
+  --ds-btn-ghost-color: var(--danger);
 }
-.okf-dashboard__bulk-results-fail {
+.okf-dashboard__dialog-error {
   color: var(--danger);
+  font-size: var(--text-sm);
+  margin: var(--space-sm) 0 0;
 }
 </style>

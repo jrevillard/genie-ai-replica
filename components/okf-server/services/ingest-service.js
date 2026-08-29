@@ -495,9 +495,21 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   };
   try {
     const db = await dbService.getConnection('default');
-    await db.collection('okf_repositories').update(repo_id, { last_ingest_summary: lastIngestSummary });
-  } catch (err) {
-    logger.warn('Ingest summary surfacing failed (non-fatal)', { repo_id, error: err.message });
+    // Story #978 (David, 2026-08-28): refresh concept_count in the same write —
+    // the dashboard's topic counts went STALE the moment the editor added
+    // concepts (the count was written only at create/crawl time, so a
+    // populated repo showed "0 topics" forever).
+    const countRows = await (
+      await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid COLLECT WITH COUNT INTO c RETURN c', {
+        rid: repo_id
+      })
+    ).all();
+    await db.collection('okf_repositories').update(repo_id, {
+      last_ingest_summary: lastIngestSummary,
+      concept_count: countRows[0] || 0
+    });
+  } catch (countErr) {
+    logger.warn('Ingest summary surfacing failed (non-fatal)', { repo_id, error: countErr.message });
   }
 
   // Audit (best-effort, actor = sub string — AC 9) — carries the totals so a

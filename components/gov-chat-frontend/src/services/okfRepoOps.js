@@ -17,6 +17,7 @@
 
 import repoOkfService from './repoOkfService';
 import conceptService from './conceptService';
+import httpService from './httpService';
 import matter from 'gray-matter';
 
 /** Slug for new concept paths (same rules as crawlerToOkfService.slugify). */
@@ -156,3 +157,145 @@ export async function applyLabel(repoId, conceptId, labels) {
 export async function deleteConcept(repoId, conceptId) {
   return repoOkfService.deleteConcept(repoId, conceptId);
 }
+
+// ─── Lifecycle (David, 2026-08-28) ───────────────────────────────────────────
+// The full publish lifecycle is shared by BOTH UI approaches (wizard Step 9
+// and the editor shell / dashboard cards) via these thin wrappers — one
+// implementation, equal features.
+
+/** draft/register/validate → review. */
+export function submitForReview(repoId, actor = {}) {
+  return repoOkfService.lifecycle(repoId, 'submit', actor);
+}
+
+/** review → approve. */
+export function approve(repoId, actor = {}) {
+  return repoOkfService.lifecycle(repoId, 'approve', actor);
+}
+
+/**
+ * approve|publish → publish: mints the next version (the server's publish
+ * gates run: PII-complete, all-indexed, conformance-clean) and exports the
+ * bundle zip `<name>-v<N>.zip` to the document repository. The previous
+ * version's zip is superseded (deleted); history stays in the version ledger.
+ * The new version is NOT serving until ingest() is called.
+ */
+export function publish(repoId, actor = {}) {
+  return repoOkfService.lifecycle(repoId, 'publish', actor);
+}
+
+/** publish → serving: declares the current version ingested (the Ingested lane). */
+export function ingest(repoId, actor = {}) {
+  return repoOkfService.lifecycle(repoId, 'ingest', actor);
+}
+
+/** publish → not serving: retract the ingested version (Ingested → Published). */
+export function retract(repoId, actor = {}) {
+  return repoOkfService.lifecycle(repoId, 'retract', actor);
+}
+
+/** Delete the whole repository (refused while an ingested version serves). */
+export function deleteRepo(repoId) {
+  return repoOkfService.deleteRepo(repoId);
+}
+
+/** List the repo's version manifests (newest first) for the versions panel. */
+export function listVersions(repoId) {
+  return repoOkfService.listVersions(repoId);
+}
+
+// ─── Zip export / import (David, 2026-08-28) ────────────────────────────────
+// Export: any repo, any state — the okf-server builds the zip on the fly
+// (GET /okf/repos/:id/export) and the browser saves it under the repo+version
+// file name. Import: a zip bundle creates a draft repo + ingests its concepts
+// (the server's 2.9.5 unzip path) — the zip's file doc carries repo_id +
+// is_bundle, so the artifact linkage exists from the first minute.
+
+/** Trigger a browser download of the repo's zip bundle. */
+export async function exportRepoZip(repo) {
+  if (!repo || !repo.repo_id) throw new Error('repo is required');
+  const res = await httpService.get(
+    `/okf/repos/${encodeURIComponent(repo.repo_id)}/export`,
+    {},
+    { responseType: 'blob' }
+  );
+  const headerName = (() => {
+    const cd = (res && res.headers && res.headers['content-disposition']) || '';
+    const m = /filename="?([^";]+)"?/.exec(cd);
+    return m ? m[1] : null;
+  })();
+  const fallback = `${slugifyConcept(repo.name || repo.repo_id)}-v${repo.version || 0}.zip`;
+  const blob = new Blob([res && res.data], { type: 'application/zip' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = headerName || fallback;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return headerName || fallback;
+}
+
+/** Read a File as base64 (no data: prefix). */
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',').pop());
+    reader.onerror = () => reject(new Error('failed to read the selected file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Import a zip bundle as a NEW draft repository: create + ingest the zip.
+ * The server unzips it (one concept per .md entry) and stores the zip itself
+ * as the repo's bundle artifact (is_bundle).
+ */
+export async function importRepoZip({ file, name, domain }) {
+  if (!file) throw Object.assign(new Error('zip file is required'), { code: 'VALIDATION_ERROR' });
+  if (!name || !String(name).trim()) throw Object.assign(new Error('name is required'), { code: 'VALIDATION_ERROR' });
+  const b64 = await fileToBase64(file);
+  const repo = await createRepo({ name: String(name).trim(), domain });
+  try {
+    await repoOkfService.ingest(repo.repo_id, [], null, { zip: b64, bundle_name: file.name });
+  } catch (err) {
+    err.repo = repo; // the repo exists — the caller can still open it in the editor
+    throw err;
+  }
+  return repo;
+}
+
+/** Mint the next version WITHOUT publishing (manual trigger). */
+export function createVersion(repoId, actor = {}) {
+  return repoOkfService.mintVersion(repoId, { trigger: 'manual' }, actor);
+}
+
+/** Generic lifecycle dispatcher — the single entry point for the store's
+ * lifecycleTransition action (wizard + editor + dashboard all route here). */
+export function lifecycle(repoId, action, actor = {}) {
+  return repoOkfService.lifecycle(repoId, action, actor);
+}
+
+/** Default export: the same surface, importable either way (RepoEditor.vue
+ * imports the default binding; tests import named members). */
+export default {
+  slugifyConcept,
+  buildConceptPayload,
+  addConcept,
+  appendToIndexToc,
+  applyLabel,
+  deleteConcept,
+  createRepo,
+  submitForReview,
+  approve,
+  publish,
+  ingest,
+  retract,
+  deleteRepo,
+  listVersions,
+  createVersion,
+  lifecycle,
+  exportRepoZip,
+  importRepoZip
+};

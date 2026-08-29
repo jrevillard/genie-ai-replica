@@ -37,6 +37,7 @@ const LIFECYCLE_STATES = [
   'review',
   'approve',
   'publish',
+  'retracted', // Story #978 lifecycle: a pulled-from-service repo (own lane)
   'version',
   'deprecate',
   'retire'
@@ -567,6 +568,18 @@ async function remove(repo_id, actor) {
     if (!existing || existing.deleted_at) {
       recordOp('delete', 'not_found');
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
+
+    // Story #978 lifecycle (David, 2026-08-28): an INGESTED repository is
+    // serving content — deletion is blocked until the steward retracts it
+    // (retract clears ingested_at; then delete is allowed and cascades fully).
+    if (existing.ingested_at) {
+      recordOp('delete', 'ingested-block');
+      throw new RepoError(
+        'INGESTED_DELETE_BLOCKED',
+        'repository has an ingested version — retract it before deleting',
+        409
+      );
     }
 
     const graceHours = parseInt(process.env.OKF_DELETE_GRACE_HOURS || '168', 10);

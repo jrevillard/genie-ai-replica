@@ -67,6 +67,20 @@
         </DsSelect>
       </DsFormGroup>
       <p v-if="createError" class="okf-studio-tab__create-error">{{ createError }}</p>
+      <hr class="okf-studio-tab__divider" />
+      <p class="okf-studio-tab__create-hint">
+        {{ translate('okf.create.importHint', 'Or import an existing zip bundle as a new repository.') }}
+      </p>
+      <DsFormGroup label="Bundle (.zip)" input-id="okf-create-zip">
+        <input
+          id="okf-create-zip"
+          type="file"
+          accept=".zip,application/zip"
+          class="okf-studio-tab__file"
+          @change="onImportFilePick"
+        />
+      </DsFormGroup>
+      <p v-if="importStatus" class="okf-studio-tab__create-hint">{{ importStatus }}</p>
     </DsDialog>
     <OkfRepoEditorShell
       v-if="view === 'repo' && activeRepoId"
@@ -138,7 +152,9 @@ export default {
       createName: '',
       createDomain: 'general',
       createError: '',
-      creating: false
+      creating: false,
+      importBusy: false,
+      importStatus: ''
     };
   },
   computed: {
@@ -296,6 +312,51 @@ export default {
       this.$store.dispatch('okf/setEditorSubTab', 'editor');
       this.view = 'repo';
     },
+    onImportFilePick(evt) {
+      // Zip import (David, 2026-08-28): a bundle becomes a NEW draft repo +
+      // its concepts are ingested server-side (2.9.5 unzip path).
+      const file = evt && evt.target && evt.target.files ? evt.target.files[0] : null;
+      if (!file || this.importBusy) return;
+      this.importBusy = true;
+      this.createError = '';
+      this.importStatus = this.translate('okf.create.importing', 'Importing bundle…');
+      const suggested = file.name.replace(/.zip$/i, '').replace(/[-_]+/g, ' ').trim();
+      const name =
+        (this.createName || '').trim() ||
+        suggested ||
+        this.translate('okf.create.importDefaultName', 'Imported repository');
+      this.$store
+        .dispatch('okf/upsertImported', { file, name })
+        .then((res) => {
+          if (!res || !res.ok) {
+            this.createError = (res && res.message) || 'Import failed';
+            return;
+          }
+          this.createOpen = false;
+          this.createName = '';
+          const repo = res.repo;
+          this.activeRepoId = repo.repo_id;
+          this.activeSourceFileId = null;
+          this.activeDraft = {
+            repo_id: repo.repo_id,
+            name: repo.name,
+            domain: repo.domain,
+            concept_count: repo.concept_count || 0,
+            studio_step: 9,
+            source: 'editor'
+          };
+          this.$store.dispatch('okf/setEditorSubTab', 'editor');
+          this.view = 'repo';
+        })
+        .catch((err) => {
+          this.createError = (err && err.message) || 'Import failed';
+        })
+        .finally(() => {
+          this.importBusy = false;
+          this.importStatus = '';
+          if (evt && evt.target) evt.target.value = '';
+        });
+    },
     onRepoRefresh() {
       // Resplit changed the concept set — refresh dashboard counts.
       this.$store.dispatch('okf/fetchRepos', { stage: 'all' }).catch(() => {});
@@ -378,6 +439,16 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+}
+.okf-studio-tab__divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-sm) 0;
+  width: 100%;
+}
+.okf-studio-tab__file {
+  font-size: var(--text-sm);
+  color: var(--fg);
 }
 .okf-studio-tab__view-toggle {
   display: inline-flex;

@@ -11,7 +11,9 @@ const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
 const parserService = require('../services/parser-service');
 const { getMeter } = require('../shared-lib/metrics');
-const { createSchema, updateSchema, cloneSchema } = require('../validators/repository-validator');
+const { createSchema, updateSchema, cloneSchema, lifecycleSchema } = require('../validators/repository-validator');
+const lifecycleService = require('../services/lifecycle-service');
+const bundleExportService = require('../services/bundle-export-service');
 
 // Story #978 — metrics helpers (fail-soft if OTel collector is unavailable).
 // Lazy + try/catch because getMeter() may throw at module-load when the SDK
@@ -571,6 +573,43 @@ async function autocorrectRepo(req, res, next) {
   }
 }
 
+/**
+ * Story #978 lifecycle (David, 2026-08-28) — apply ONE lifecycle transition.
+ * Body: { action: 'submit'|'approve'|'publish'|'ingest'|'retract' }.
+ * publish = mint (the real gates) + bundle-zip export + lifecycle flip;
+ * ingest/retract set/clear the serving version. 409 on invalid transitions.
+ */
+async function transitionLifecycle(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const { action } = validate(lifecycleSchema, req.body || {});
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const result = await lifecycleService.transition(repo_id, action, actorFrom(req));
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story #978 (David, 2026-08-28) — EXPORT a repo as a zip bundle (download).
+ * Works in ANY lifecycle state (the on-the-fly zip is built from the current
+ * concept set; the PUBLISHED artifact zip is a separate doc-repo file). Read
+ * scope; response is the zip stream with a repo+version-named file.
+ */
+async function exportRepoZip(req, res, next) {
+  try {
+    const repo = await repoService.getById(req.params.repo_id, { authz: authzForService(req) });
+    const { buffer } = await bundleExportService.buildBundleZip(repo.repo_id);
+    const fileName = bundleExportService.bundleFileName(repo, repo.version || 0);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.status(200).send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   cloneRepo,
@@ -591,5 +630,7 @@ module.exports = {
   patchConcept,
   resplitRepo,
   autocorrectRepo,
+  transitionLifecycle,
+  exportRepoZip,
   ValidationError
 };

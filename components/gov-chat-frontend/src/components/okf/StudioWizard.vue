@@ -47,6 +47,9 @@
       </section>
 
       <footer class="okf-wizard__footer">
+        <DsButton variant="ghost" @click="$emit('reset')">
+          {{ translate('okf.wizard.exit', 'Back to dashboard') }}
+        </DsButton>
         <DsButton variant="secondary" :disabled="activeStep === 0" @click="onBack">
           {{ translate('okf.wizard.back', 'Back') }}
         </DsButton>
@@ -295,11 +298,15 @@ export default {
       });
     },
     publishRepo() {
+      // Story #978 lifecycle (David, 2026-08-28): the wizard publishes through
+      // the SAME transition as the editor/dashboard (mint + bundle zip export
+      // + state flip) — equal features via one shared path. On success the
+      // dashboard shows the repo in the Published lane with its version.
       if (!this.draft || !this.draft.repo_id) return;
       this.$store
-        .dispatch('okf/mintVersion', {
+        .dispatch('okf/lifecycleTransition', {
           repoId: this.draft.repo_id,
-          body: { trigger: 'publish', source_ref: 'smoke://studio/wizard' },
+          action: 'publish',
           actor: { sub: 'studio-wizard' }
         })
         .then((result) => {

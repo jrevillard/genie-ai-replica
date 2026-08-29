@@ -7,6 +7,13 @@
  * the okf module.
  */
 
+const mockList = jest.fn();
+const mockGet = jest.fn();
+const mockLifecycle = jest.fn();
+const mockDeleteRepo = jest.fn();
+const mockListVersions = jest.fn();
+const mockCreate = jest.fn();
+const mockIngest = jest.fn();
 const mockListForRepo = jest.fn();
 const mockConceptGet = jest.fn();
 const mockPatchConcept = jest.fn();
@@ -28,8 +35,14 @@ jest.mock('@/services/repoOkfService', () => ({
     patchConcept: (...a) => mockPatchConcept(...a),
     resplit: (...a) => mockResplit(...a),
     autocorrect: (...a) => mockAutocorrect(...a),
-    list: jest.fn().mockResolvedValue([]),
-    get: jest.fn().mockResolvedValue(null)
+    list: (...a) => mockList(...a),
+    get: (...a) => mockGet(...a),
+    lifecycle: (...a) => mockLifecycle(...a),
+    deleteRepo: (...a) => mockDeleteRepo(...a),
+    listVersions: (...a) => mockListVersions(...a),
+    create: (...a) => mockCreate(...a),
+    ingest: (...a) => mockIngest(...a),
+    mintVersion: jest.fn()
   }
 }));
 
@@ -163,6 +176,85 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.getters['okf/editorSubTab']).toBe('wizard');
       store.dispatch('okf/setEditorSubTab', 'nonsense');
       expect(store.getters['okf/editorSubTab']).toBe('editor');
+    });
+  });
+
+  describe('lifecycle lanes (David, 2026-08-28)', () => {
+    it('maps the five lanes: publish+serving → Ingested, retracted stays visible', async () => {
+      mockList.mockResolvedValue([
+        { repo_id: 'a', lifecycle_state: 'draft' },
+        { repo_id: 'b', lifecycle_state: 'register' },
+        { repo_id: 'c', lifecycle_state: 'review' },
+        { repo_id: 'd', lifecycle_state: 'approve' },
+        { repo_id: 'e', lifecycle_state: 'publish' },
+        { repo_id: 'f', lifecycle_state: 'publish', ingested_at: '2026-08-28T10:00:00Z' },
+        { repo_id: 'g', lifecycle_state: 'retracted' }
+      ]);
+      const store = buildStore();
+      await store.dispatch('okf/fetchRepos', { stage: 'all' });
+      const lanes = store.state.okf.reposByStage;
+      expect(lanes.draft.sort()).toEqual(['a', 'b']);
+      expect(lanes.in_review.sort()).toEqual(['c', 'd']);
+      expect(lanes.published).toEqual(['e']);
+      expect(lanes.ingested).toEqual(['f']);
+      expect(lanes.retracted).toEqual(['g']);
+    });
+
+    it('publish lands in the published lane (the old code compared the NEVER-set "published" value)', async () => {
+      mockList.mockResolvedValue([{ repo_id: 'p1', lifecycle_state: 'publish' }]);
+      const store = buildStore();
+      await store.dispatch('okf/fetchRepos', { stage: 'all' });
+      expect(store.state.okf.reposByStage.published).toEqual(['p1']);
+    });
+  });
+
+  describe('lifecycleTransition / deleteRepoAction / fetchVersions / import', () => {
+    it('lifecycleTransition dispatches to ops and refreshes the repo row', async () => {
+      mockLifecycle.mockResolvedValueOnce({ ok: true, lifecycle_state: 'review' });
+      mockGet.mockResolvedValueOnce({ repo_id: 'r-1', lifecycle_state: 'review', version: 0 });
+      const store = buildStore();
+      const res = await store.dispatch('okf/lifecycleTransition', { repoId: 'r-1', action: 'submit' });
+      expect(res.ok).toBe(true);
+      expect(mockLifecycle).toHaveBeenCalledWith('r-1', 'submit', {});
+      expect(store.state.okf.reposById['r-1'].lifecycle_state).toBe('review');
+    });
+
+    it('lifecycleTransition surfaces gate failures without throwing', async () => {
+      mockLifecycle.mockRejectedValueOnce(Object.assign(new Error('no PII scan'), { code: 'PUBLISH_GATE_BLOCKED' }));
+      const store = buildStore();
+      const res = await store.dispatch('okf/lifecycleTransition', { repoId: 'r-1', action: 'publish' });
+      expect(res).toMatchObject({ ok: false, code: 'PUBLISH_GATE_BLOCKED' });
+    });
+
+    it('deleteRepoAction removes the repo from the cache + lanes', async () => {
+      mockList.mockResolvedValueOnce([{ repo_id: 'r-del', lifecycle_state: 'draft' }]);
+      const store = buildStore();
+      await store.dispatch('okf/fetchRepos', { stage: 'all' });
+      mockDeleteRepo.mockResolvedValueOnce({ status: 'deleted' });
+      const res = await store.dispatch('okf/deleteRepoAction', { repoId: 'r-del' });
+      expect(res.ok).toBe(true);
+      expect(store.state.okf.reposById['r-del']).toBeUndefined();
+      expect(store.state.okf.reposByStage.draft).not.toContain('r-del');
+    });
+
+    it('fetchVersions caches the manifests per repo', async () => {
+      mockListVersions.mockResolvedValue([{ bundle_version: 1, okf_tag: 'okf:v1' }]);
+      const store = buildStore();
+      const res = await store.dispatch('okf/fetchVersions', 'r-1');
+      expect(res.ok).toBe(true);
+      expect(store.getters['okf/versionsByRepo']('r-1')).toHaveLength(1);
+      expect(store.getters['okf/versionsByRepo']('other')).toHaveLength(0);
+    });
+
+    it('upsertImported creates the repo from a zip and refreshes the lanes', async () => {
+      mockCreate.mockResolvedValueOnce({ repo_id: 'r-imp', name: 'Imported', domain: 'general' });
+      mockIngest.mockResolvedValueOnce({ ok: true });
+      const store = buildStore();
+      const file = new File(['zip'], 'bundle.zip', { type: 'application/zip' });
+      const res = await store.dispatch('okf/upsertImported', { file, name: 'Imported', domain: 'general' });
+      expect(res.ok).toBe(true);
+      expect(store.state.okf.reposById['r-imp']).toBeTruthy();
+      expect(store.state.okf.reposByStage.draft).toContain('r-imp');
     });
   });
 });

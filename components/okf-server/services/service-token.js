@@ -134,6 +134,19 @@ const authedAxios = {
       _clearTokenCache();
       return axios.patch(url, body, withAuth(await getServiceToken(), opts));
     }
+  },
+  async delete(url, opts = {}) {
+    // Story #978 lifecycle: publish SUPERSEDES the previous bundle zip — the
+    // stale artifact is deleted from doc-repo (one live bundle per repo).
+    // Same 401-retry shape as get/post.
+    const token = await getServiceToken();
+    try {
+      return await axios.delete(url, withAuth(token, opts));
+    } catch (err) {
+      if (!isUnauthorized(err)) throw err;
+      _clearTokenCache();
+      return axios.delete(url, withAuth(await getServiceToken(), opts));
+    }
   }
 };
 

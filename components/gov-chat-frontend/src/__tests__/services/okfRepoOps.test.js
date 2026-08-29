@@ -19,8 +19,23 @@ jest.mock('@/services/repoOkfService', () => ({
     create: (...a) => mockCreate(...a),
     ingest: (...a) => mockIngest(...a),
     patchConcept: (...a) => mockPatchConcept(...a),
-    deleteConcept: (...a) => mockDeleteConcept(...a)
+    deleteConcept: (...a) => mockDeleteConcept(...a),
+    lifecycle: (...a) => mockLifecycle(...a),
+    deleteRepo: (...a) => mockDeleteRepo(...a),
+    listVersions: (...a) => mockListVersions(...a),
+    mintVersion: (...a) => mockMintVersion(...a)
   }
+}));
+
+const mockLifecycle = jest.fn();
+const mockDeleteRepo = jest.fn();
+const mockListVersions = jest.fn();
+const mockMintVersion = jest.fn();
+const mockHttpGet = jest.fn();
+
+jest.mock('@/services/httpService', () => ({
+  __esModule: true,
+  default: { get: (...a) => mockHttpGet(...a) }
 }));
 
 jest.mock('@/services/conceptService', () => ({
@@ -177,5 +192,96 @@ describe('okfRepoOps.createRepo — DUPLICATE_REPO mapping', () => {
   it('leaves other failures as-is', async () => {
     mockCreate.mockRejectedValue({ status: 500, message: 'boom' });
     await expect(ops.createRepo({ name: 'X' })).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+// ─── Lifecycle + zip export/import (David, 2026-08-28) ──────────────────────
+describe('okfRepoOps lifecycle', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('lifecycle dispatches the action to the service', async () => {
+    mockLifecycle.mockResolvedValue({ ok: true, lifecycle_state: 'review' });
+    const res = await ops.lifecycle('r-1', 'submit', { sub: 'u1' });
+    expect(mockLifecycle).toHaveBeenCalledWith('r-1', 'submit', { sub: 'u1' });
+    expect(res.lifecycle_state).toBe('review');
+  });
+
+  it('publish / ingest / retract route the right action strings', async () => {
+    mockLifecycle.mockResolvedValue({ ok: true });
+    await ops.publish('r-1');
+    await ops.ingest('r-1');
+    await ops.retract('r-1');
+    expect(mockLifecycle).toHaveBeenNthCalledWith(1, 'r-1', 'publish', {});
+    expect(mockLifecycle).toHaveBeenNthCalledWith(2, 'r-1', 'ingest', {});
+    expect(mockLifecycle).toHaveBeenNthCalledWith(3, 'r-1', 'retract', {});
+  });
+
+  it('deleteRepo and listVersions pass through', async () => {
+    mockDeleteRepo.mockResolvedValue({ status: 'deleted' });
+    mockListVersions.mockResolvedValue([{ bundle_version: 1 }]);
+    await ops.deleteRepo('r-1');
+    const versions = await ops.listVersions('r-1');
+    expect(mockDeleteRepo).toHaveBeenCalledWith('r-1');
+    expect(versions).toHaveLength(1);
+  });
+
+  it('createVersion mints with the manual trigger', async () => {
+    mockMintVersion.mockResolvedValue({ bundle_version: 2 });
+    await ops.createVersion('r-1', { sub: 'u' });
+    expect(mockMintVersion).toHaveBeenCalledWith('r-1', { trigger: 'manual' }, { sub: 'u' });
+  });
+});
+
+describe('okfRepoOps zip export / import', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // jsdom does not implement the blob URL API — stub it for the download flow.
+    URL.createObjectURL = jest.fn(() => 'blob:mock');
+    URL.revokeObjectURL = jest.fn();
+  });
+
+  it('exportRepoZip downloads the blob and names it repo+version', async () => {
+    const blob = new Blob(['zip-bytes']);
+    mockHttpGet.mockResolvedValue({
+      data: blob,
+      headers: { 'content-disposition': 'attachment; filename="demo-v3.zip"' }
+    });
+    const name = await ops.exportRepoZip({ repo_id: 'r-1', name: 'Demo', version: 3 });
+    expect(mockHttpGet).toHaveBeenCalledWith(
+      '/okf/repos/r-1/export',
+      {},
+      expect.objectContaining({ responseType: 'blob' })
+    );
+    expect(name).toBe('demo-v3.zip');
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalled();
+  });
+
+  it('exportRepoZip falls back to a name-derived file name without the header', async () => {
+    mockHttpGet.mockResolvedValue({ data: new Blob(['x']), headers: {} });
+    const name = await ops.exportRepoZip({ repo_id: 'r-9', name: 'My Test Repo', version: 1 });
+    expect(name).toBe('my-test-repo-v1.zip');
+  });
+
+  it('importRepoZip creates a draft repo + ingests the zip as base64', async () => {
+    mockCreate.mockResolvedValue({ repo_id: 'r-new', name: 'Imported', domain: 'general' });
+    mockIngest.mockResolvedValue({ ok: true });
+    const file = new File(['fake-zip'], 'my-bundle.zip', { type: 'application/zip' });
+    const repo = await ops.importRepoZip({ file, name: 'Imported', domain: 'general' });
+    expect(repo.repo_id).toBe('r-new');
+    expect(mockIngest).toHaveBeenCalledWith(
+      'r-new',
+      [],
+      null,
+      expect.objectContaining({ bundle_name: 'my-bundle.zip', zip: expect.any(String) })
+    );
+  });
+
+  it('importRepoZip refuses a missing file or name', async () => {
+    await expect(ops.importRepoZip({ file: null, name: 'x' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(ops.importRepoZip({ file: new File(['z'], 'z.zip'), name: '' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });

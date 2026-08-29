@@ -37,6 +37,15 @@ router.post('/:repo_id/versions', requireRepoScope('repo_id', 'admin'), ctrl.min
 router.get('/:repo_id/versions', requireRepoScope('repo_id', 'read'), ctrl.listRepoVersions);
 router.get('/:repo_id/versions/:bundle_version', requireRepoScope('repo_id', 'read'), ctrl.getRepoVersion);
 
+// Story #978 lifecycle (David, 2026-08-28): submit/approve/publish/ingest/
+// retract. publish = mint (the real gates) + bundle-zip export; ingest/
+// retract set/clear the SERVING version. Admin scope on the repo.
+router.post('/:repo_id/lifecycle', requireRepoScope('repo_id', 'admin'), ctrl.transitionLifecycle);
+
+// Story #978 — EXPORT the repo as a zip bundle (download; any lifecycle
+// state). Read scope; the zip is built on the fly from the current concepts.
+router.get('/:repo_id/export', requireRepoScope('repo_id', 'read'), ctrl.exportRepoZip);
+
 // Repository clone (Story 4.8 — D-V5): an ADMIN mutation on the SOURCE repo —
 // the clone reads the source wholesale (registry + meta), so the source's admin
 // scope gates it (mirrors ingest). getById pre-gate (404 foreign) in the controller.

@@ -126,10 +126,10 @@ const repoOkfService = {
    * Story #978 — ingest N concepts (also the primitive behind "create repo
    * from scratch" and "+ Add concept"). Same shape as the crawler path.
    */
-  async ingest(repoId, concepts, actor = {}) {
+  async ingest(repoId, concepts, actor = {}, extras = {}) {
     const res = await httpService.post(
       `/okf/repos/${encodeURIComponent(repoId)}/ingest`,
-      { concepts },
+      { concepts, ...extras },
       { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
     );
     return res && res.data ? res.data : { ok: true };
@@ -144,6 +144,40 @@ const repoOkfService = {
       { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
     );
     return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 lifecycle — apply ONE lifecycle transition (submit / approve /
+   * publish / ingest / retract). publish mints the next version + exports the
+   * bundle zip (<name>-v<N>.zip) to the document repository.
+   */
+  async lifecycle(repoId, action, actor = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/lifecycle`,
+      { action },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — delete the whole repository (cascade: graph + meta rows +
+   * bundle artifacts + manifests). Refused with INGESTED_DELETE_BLOCKED while
+   * an ingested version is serving.
+   */
+  async deleteRepo(repoId) {
+    const res = await httpService.delete(`/okf/repos/${encodeURIComponent(repoId)}`);
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
+   * Story #978 — list the repo's version manifests (newest first). Shape:
+   * { repo_id, versions: [{bundle_version, okf_tag, trigger, curator,
+   * minted_at, concept_count}] }.
+   */
+  async listVersions(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/versions`);
+    return res && res.data && Array.isArray(res.data.versions) ? res.data.versions : [];
   }
 };
 

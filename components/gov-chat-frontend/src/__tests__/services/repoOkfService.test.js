@@ -185,3 +185,23 @@ describe('getManifest silence (Story #978 — expected not-settled 404)', () => 
     expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-9/manifest', {}, { silent: true });
   });
 });
+
+describe('repoOkfService.list — {items} unwrap (dashboard regression)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('unwraps the { items, next_cursor } body the list endpoint returns', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ repo_id: 'a' }, { repo_id: 'b' }], next_cursor: null } });
+    const repos = await repoOkfService.list({ stage: 'all' });
+    expect(repos).toEqual([{ repo_id: 'a' }, { repo_id: 'b' }]);
+  });
+
+  it('still accepts a legacy bare-array body', async () => {
+    mockGet.mockResolvedValue({ data: [{ repo_id: 'a' }] });
+    expect(await repoOkfService.list()).toEqual([{ repo_id: 'a' }]);
+  });
+
+  it('returns [] for any other shape instead of a non-iterable', async () => {
+    mockGet.mockResolvedValue({ data: { unexpected: true } });
+    expect(await repoOkfService.list()).toEqual([]);
+  });
+});

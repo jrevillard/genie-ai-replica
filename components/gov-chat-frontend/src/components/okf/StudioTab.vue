@@ -45,6 +45,22 @@
       <DsFormGroup :label="translate('okf.create.name', 'Repository name')" input-id="okf-create-name">
         <DsInput id="okf-create-name" v-model="createName" size="sm" />
       </DsFormGroup>
+      <!-- Duplicate names are caught HERE, before submit — the steward sees
+           the clash and can open the existing repo in one click instead of
+           discovering it as a 409 after the fact. -->
+      <div v-if="matchingRepo" class="okf-studio-tab__create-dup">
+        <p class="okf-studio-tab__create-dup-text">
+          {{
+            translate(
+              'okf.create.duplicateInline',
+              'A repository with this name already exists. Open it, or pick another name.'
+            )
+          }}
+        </p>
+        <DsButton variant="secondary" small @click="onOpenMatching">
+          {{ translate('okf.create.openExisting', 'Open existing repository') }}
+        </DsButton>
+      </div>
       <DsFormGroup :label="translate('okf.create.domain', 'Subject area')" input-id="okf-create-domain">
         <DsSelect id="okf-create-domain" v-model="createDomain" size="sm">
           <option v-for="opt in domainOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -60,7 +76,7 @@
       @back="onBackToDashboard"
       @refresh="onRepoRefresh"
     />
-    <OkfStudioWizard v-else :draft="activeDraft" @reset="resetWizard" />
+    <OkfStudioWizard v-if="view === 'wizard'" :draft="activeDraft" @reset="resetWizard" />
 
     <DsDialog
       :visible="helpOpen"
@@ -151,9 +167,20 @@ export default {
           key: 'create',
           label: this.translate('okf.create.create', 'Create repository'),
           variant: 'primary',
-          disabled: this.creating || !(this.createName || '').trim()
+          disabled: this.creating || !!this.matchingRepo || !(this.createName || '').trim()
         }
       ];
+    },
+    /**
+     * Existing repo whose name clashes with the dialog input (case-insensitive).
+     * The dashboard loads ALL repos on tab mount (okf/fetchRepos), so this is
+     * evaluated offline of any extra request.
+     */
+    matchingRepo() {
+      const name = (this.createName || '').trim().toLowerCase();
+      if (!name) return null;
+      const repos = Object.values(this.$store.state.okf.reposById || {});
+      return repos.find((r) => (r.name || '').trim().toLowerCase() === name) || null;
     },
     expertMode() {
       return this.isExpert ? 'expert' : 'basic';
@@ -217,6 +244,18 @@ export default {
       // "+ New repository": minimal create dialog, then straight into the
       // Editor with an index.md skeleton (Story #978 dialog-then-editor UX).
       this.createOpen = true;
+    },
+    /**
+     * "Open existing repository" from the create dialog — same path as
+     * clicking the repo card on the dashboard (Editor shell, Editor tab).
+     */
+    onOpenMatching() {
+      if (!this.matchingRepo) return;
+      const repoId = this.matchingRepo.repo_id;
+      this.createOpen = false;
+      this.createName = '';
+      this.createError = '';
+      this.onResume(repoId);
     },
     async onCreateAction(key) {
       if (key === 'cancel') {

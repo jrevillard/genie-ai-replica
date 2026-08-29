@@ -19,7 +19,14 @@ function notReady(reason) {
 const repoOkfService = {
   async list({ stage = 'all' } = {}) {
     const res = await httpService.get(`/okf/repos?lifecycle=${encodeURIComponent(stage)}`);
-    return res && res.data ? res.data : [];
+    const body = res && res.data;
+    // The list endpoint returns { items: [...], next_cursor } — unwrap it.
+    // (Returning the raw body made the store call .forEach on an object,
+    // which threw inside fetchRepos' try/catch and silently left the
+    // dashboard lanes empty: "Repositories 0" no matter what existed.)
+    if (body && Array.isArray(body.items)) return body.items;
+    if (Array.isArray(body)) return body; // legacy array shape
+    return [];
   },
 
   async get(repoId) {

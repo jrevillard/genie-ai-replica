@@ -39,7 +39,10 @@ const repoOkfService = {
 
   async getManifest(repoId) {
     try {
-      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/manifest`);
+      // silent: a fresh repo's bundle is NOT settled until the indexing worker
+      // finishes — the 404 is an expected, handled outcome (the graph view
+      // renders nodes without edges). No toast, no console noise.
+      const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/manifest`, {}, { silent: true });
       return res && res.data ? res.data : null;
     } catch (err) {
       if (err && (err.status === 404 || err.status === 501)) throw notReady('okf.repos.manifest.notReady');

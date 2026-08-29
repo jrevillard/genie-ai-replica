@@ -177,3 +177,11 @@ describe('repoOkfService — Story #978 editor methods', () => {
     });
   });
 });
+
+describe('getManifest silence (Story #978 — expected not-settled 404)', () => {
+  it('passes { silent: true } in the axios OPTIONS (3rd arg), not params', async () => {
+    mockGet.mockRejectedValue({ status: 404 });
+    await expect(repoOkfService.getManifest('r-9')).rejects.toMatchObject({ code: 'NOT_READY' });
+    expect(mockGet).toHaveBeenCalledWith('/okf/repos/r-9/manifest', {}, { silent: true });
+  });
+});

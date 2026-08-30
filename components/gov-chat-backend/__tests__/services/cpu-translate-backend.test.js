@@ -123,6 +123,15 @@ describe('CpuTranslateBackend', () => {
       expect(backend.workerReady).toBe(false);
     });
 
+    it('should record thread-level worker errors for fail-fast init', () => {
+      const errorHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'error')[1];
+      errorHandler(new Error('thread-level failure'));
+
+      expect(backend.workerReady).toBe(false);
+      expect(backend.workerError).toBeInstanceOf(Error);
+      expect(backend.workerError.message).toBe('thread-level failure');
+    });
+
     it('should handle worker exit with non-zero code', () => {
       const exitHandler = mockWorker.on.mock.calls.find((call) => call[0] === 'exit')[1];
       exitHandler(1);
@@ -155,6 +164,19 @@ describe('CpuTranslateBackend', () => {
     it('should handle init failure message', () => {
       messageHandler({ type: 'init', success: false, error: 'Load failed' });
       expect(backend.workerReady).toBe(false);
+    });
+
+    it('should handle fatal worker error message and reject pending translations', () => {
+      const reject = jest.fn();
+      backend.messageQueue.set(7, { resolve: jest.fn(), reject });
+
+      messageHandler({ type: 'error', success: false, error: 'EACCES: cache dir not writable' });
+
+      expect(backend.workerReady).toBe(false);
+      expect(backend.workerError).toBeInstanceOf(Error);
+      expect(backend.workerError.message).toBe('EACCES: cache dir not writable');
+      expect(reject).toHaveBeenCalledWith(expect.any(Error));
+      expect(backend.messageQueue.has(7)).toBe(false);
     });
 
     it('should resolve pending promise on translate success', async () => {
@@ -352,6 +374,15 @@ describe('CpuTranslateBackend', () => {
       backend.workerReady = false;
 
       await expect(backend.init(50)).rejects.toThrow('[CPU-BACKEND] Worker initialization timeout');
+    });
+
+    it('should fail fast when worker reported a fatal error', async () => {
+      backend.initialized = false;
+      backend.workerReady = false;
+      backend.workerError = new Error('EACCES: cache dir not writable');
+
+      // A generous timeout proves the error short-circuits the polling loop
+      await expect(backend.init(60000)).rejects.toThrow('EACCES: cache dir not writable');
     });
   });
 

@@ -101,9 +101,11 @@ export default {
     bundleName() {
       return (this.repo && this.repo.bundle && this.repo.bundle.file_name) || '';
     },
-    /** publish is legal from approve | publish | retracted (the machine). */
+    /** publish is legal from approve | publish | retracted (the machine),
+     * but NEVER while serving — a serving repo is READ ONLY (retract first). */
     canPublish() {
-      return !!this.repo && ['approve', 'publish', 'retracted'].includes(this.repo.lifecycle_state);
+      if (!this.repo || this.repo.ingested_at) return false;
+      return ['approve', 'publish', 'retracted'].includes(this.repo.lifecycle_state);
     },
     actions() {
       return [

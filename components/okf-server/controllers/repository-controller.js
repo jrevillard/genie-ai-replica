@@ -19,6 +19,7 @@ const {
   piiAckSchema
 } = require('../validators/repository-validator');
 const lifecycleService = require('../services/lifecycle-service');
+const { assertWritable } = lifecycleService;
 const bundleExportService = require('../services/bundle-export-service');
 
 // Story #978 — metrics helpers (fail-soft if OTel collector is unavailable).
@@ -186,7 +187,8 @@ async function ingestRepo(req, res, next) {
       });
     }
     // Repo-existence + authorization gate (mirrors every other mutating route).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
     const summary = await ingestService.ingestRepoConcepts(
       repo_id,
       { concepts, file_ids, discover, labels, zip, bundle_name },
@@ -465,6 +467,8 @@ async function patchConcept(req, res, next) {
       repo_id,
       path: `${concept_id}.md` // path determines concept_id (unchanged on patch)
     });
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
     const updated = await conceptMetaService.patchConceptMeta(repo_id, concept_id, parsed);
     if (!updated) {
       return res.status(404).json({
@@ -511,7 +515,8 @@ async function patchConcept(req, res, next) {
 async function deleteConcept(req, res, next) {
   try {
     const { repo_id, concept_id } = req.params;
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
     const removed = await ingestService.deleteConcept(repo_id, concept_id, { actor: actorFrom(req) });
     if (!removed) {
       return res.status(404).json({
@@ -547,6 +552,10 @@ async function resplitRepo(req, res, next) {
     // lives in the frontend (we tracked it at create time); once we wire
     // `files.okf_repo_id` server-side, the service can look it up itself and
     // file_id becomes optional.
+    // READ-ONLY guard: getById pre-gate (anti-enumeration 404, mirrors the
+    // other mutating routes) + serving repos cannot be re-split.
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
     const opts = { ...actorFrom(req), file_id };
     const summary = await ingestService.resplitRepo(repo_id, mode, opts);
     res.status(200).json({ ok: true, mode, ...summary });
@@ -568,6 +577,10 @@ async function autocorrectRepo(req, res, next) {
   try {
     const { repo_id } = req.params;
     const { dry_run } = req.body || {};
+    // READ-ONLY guard: getById pre-gate (anti-enumeration 404) + serving
+    // repos cannot be autocorrected.
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
     const result = await conceptMetaService.autocorrectRepo(
       repo_id,
       typeof dry_run === 'boolean' ? dry_run : true,

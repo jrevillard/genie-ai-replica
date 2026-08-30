@@ -14,20 +14,32 @@
 //   CRAWL-CREATE             -> register
 //   submit   draft|register|validate -> review       (steward submits)
 //   approve  review -> approve                       (reviewer signs off)
-//   publish  approve|publish|retracted -> publish   GUARD: >=1 concept + mint gates
-//                (PII-complete, all-indexed, conformance-clean, no drains).
+//   publish  approve|publish|retracted -> publish   GUARDS: NOT serving (a
+//                serving repo is READ ONLY — retract first, 409
+//                REPO_READ_ONLY), >=1 concept + mint gates (PII-complete,
+//                all-indexed, conformance-clean, no drains).
 //                EFFECTS: version N+1 current; zip <name>-v(N+1).zip stored in
 //                doc-repo supersedes the old zip; serving CLEARED (the new
 //                version is not serving until INGEST).
 //   ingest   publish|retracted(non-serving) -> publish+serving  GUARD: bundle artifact
-//                exists. EFFECTS: ingested_at + ingested_version = N.
+//                exists. EFFECTS: ingested_at + ingested_version = N AND the
+//                per-repo graph is PROMOTED to the versioned serving name
+//                `OKF_<name-slug>_v<N>` (graph-lifecycle-service) — the
+//                serving graph's NAME carries the repo+version it serves
+//                (David, 2026-08-30); the registry records
+//                ingested_graph_name.
 //   retract  publish+serving -> RETRACTED (own state + lane — a pulled repo
 //                must stay visible, never fold back into Published).
+//                EFFECTS: the graph is DEMOTED back to the working name
+//                `OKF_{repo_id}` — the repo becomes editable again.
 //   delete   any state EXCEPT serving (409 INGESTED_DELETE_BLOCKED otherwise);
 //            EFFECTS: full cascade (graph + meta + bundle + manifests).
 //
-// EDITING AFTER PUBLISH: concepts stay editable in every state; changes go
-// live only via publish (mints vN+1) then ingest. No auto state-change.
+// EDITING (David, 2026-08-30): a SERVING repo (ingested_at set) is READ ONLY
+// — concept mutations (ingest/patch/delete/resplit/autocorrect), registry
+// updates and publish all refuse with 409 REPO_READ_ONLY. Retract demotes the
+// graph and re-opens editing; changes then go live via publish (vN+1) +
+// ingest. Concepts stay editable in every non-serving state.
 
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
@@ -36,6 +48,7 @@ const { DateTime } = require('luxon');
 const auditService = require('./audit-service');
 const versionService = require('./version-service');
 const bundleExportService = require('./bundle-export-service');
+const graphLifecycle = require('./graph-lifecycle-service');
 
 const REPOS = 'okf_repositories';
 const META = 'okf_concepts_meta';
@@ -121,6 +134,17 @@ async function transition(repoId, action, actor) {
     }
 
     if (action === 'publish') {
+      // A SERVING repo is READ ONLY (David, 2026-08-30): publishing a new
+      // version requires retracting first — content cannot change while the
+      // graph serves, so a publish-while-serving would mint an identical
+      // version and desync the versioned graph name.
+      if (repo.ingested_at) {
+        throw new LifecycleError(
+          'REPO_READ_ONLY',
+          'repository is serving (ingested) — retract it before publishing a new version',
+          409
+        );
+      }
       // An empty repo must not publish — the mint would snapshot zero concepts.
       const conceptCount = (
         await (
@@ -181,35 +205,84 @@ async function transition(repoId, action, actor) {
       if (repo.ingested_at && repo.ingested_version === repo.version) {
         return { ok: true, action, lifecycle_state: repo.lifecycle_state, already: true }; // idempotent
       }
+      // VERSIONED GRAPH (David, 2026-08-30): physically rename the working
+      // graph to `OKF_<name-slug>_v<N>` BEFORE the serving flags flip — a
+      // failed rename leaves the repo un-serving and simply retryable.
+      const graphName = await graphLifecycle.promoteGraph(repo, actor);
       const ts = nowIso();
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to, // 'publish' (re-ingest from 'retracted')
         ingested_at: ts,
         ingested_version: repo.version || null,
+        ingested_graph_name: graphName,
         updated_at: ts
       });
-      await audit('repo.ingest', repoId, actor, { ingested_version: repo.version || null });
-      logger.info('OKF repository ingested (version serving)', { repo_id: repoId, version: repo.version });
-      return { ok: true, action, lifecycle_state: spec.to, ingested_version: repo.version || null };
+      await audit('repo.ingest', repoId, actor, {
+        ingested_version: repo.version || null,
+        graph_name: graphName
+      });
+      logger.info('OKF repository ingested (version serving)', {
+        repo_id: repoId,
+        version: repo.version,
+        graph_name: graphName
+      });
+      return {
+        ok: true,
+        action,
+        lifecycle_state: spec.to,
+        ingested_version: repo.version || null,
+        graph_name: graphName
+      };
     }
 
     // action === 'retract'
     if (!repo.ingested_at) {
       throw new LifecycleError('NOT_INGESTED', 'repository is not ingested — nothing to retract', 409);
     }
+    // GRAPH DEMOTE (David, 2026-08-30): rename the versioned serving graph
+    // back to the working `OKF_{repo_id}` BEFORE the flags clear — the repo
+    // becomes editable again. A failed rename keeps the state retryable.
+    await graphLifecycle.demoteGraph(repo, actor);
     await db.collection(REPOS).update(repoId, {
       lifecycle_state: spec.to, // 'retracted' — a pulled repo must stay VISIBLE
       ingested_at: null,
       ingested_version: null,
+      ingested_graph_name: null,
       updated_at: nowIso()
     });
-    await audit('repo.retract', repoId, actor, { retracted_version: repo.ingested_version || null });
+    await audit('repo.retract', repoId, actor, {
+      retracted_version: repo.ingested_version || null,
+      graph_name: repo.ingested_graph_name || null
+    });
     logger.info('OKF repository retracted (version out of service)', {
       repo_id: repoId,
-      version: repo.ingested_version
+      version: repo.ingested_version,
+      graph_name: repo.ingested_graph_name || null
     });
     return { ok: true, action, lifecycle_state: spec.to, retracted_version: repo.ingested_version || null };
   });
 }
 
-module.exports = { transition, TRANSITIONS, ACTIONS, LifecycleError };
+/**
+ * READ-ONLY guard (David, 2026-08-30): a SERVING repo (ingested_at set) must
+ * refuse every content mutation. Call after the getById pre-gate in every
+ * mutating handler (concepts, repo update, publish). 409 REPO_READ_ONLY.
+ * @param {object} repo the registry doc
+ */
+function assertWritable(repo) {
+  if (repo && repo.ingested_at) {
+    throw new LifecycleError(
+      'REPO_READ_ONLY',
+      'repository is serving (ingested) and is READ ONLY — retract it to make changes',
+      409
+    );
+  }
+}
+
+module.exports = {
+  transition,
+  assertWritable,
+  TRANSITIONS,
+  ACTIONS,
+  LifecycleError
+};

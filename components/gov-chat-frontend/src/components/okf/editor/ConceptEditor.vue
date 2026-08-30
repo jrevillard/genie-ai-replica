@@ -25,7 +25,7 @@
         {{ saveStatusLabel }}
       </span>
 
-      <DsButton variant="primary" small :disabled="!dirty || saving" @click="saveNow">
+      <DsButton variant="primary" small :disabled="readOnly || !dirty || saving" @click="saveNow">
         {{ translate('okf.editor.save', 'Save') }}
       </DsButton>
     </div>
@@ -38,7 +38,7 @@
       v-else
       :value="markdown"
       :mode="view === 'rendered' ? 'preview' : 'source'"
-      :readonly="view === 'rendered'"
+      :readonly="view === 'rendered' || readOnly"
       :aria-label="conceptTitle"
       @update:value="onEdit"
     />
@@ -59,7 +59,9 @@ export default {
   mixins: [translateMixin],
   props: {
     repoId: { type: String, default: null },
-    conceptId: { type: String, default: null }
+    conceptId: { type: String, default: null },
+    // READ ONLY (serving repo): the steward must retract before editing.
+    readOnly: { type: Boolean, default: false }
   },
   emits: ['saved'],
   data() {

@@ -19,6 +19,7 @@
       :selected-id="selectedId"
       :loading="loading"
       :label-options="labelOptions"
+      :read-only="readOnly"
       @select="onSelect"
       @add="addOpen = true"
       @resplit="resplitOpen = true"
@@ -37,7 +38,13 @@
       </div>
       <template v-if="centerView === 'files'">
         <template v-if="selectedId">
-          <OkfConceptEditor ref="conceptEditor" :repo-id="repoId" :concept-id="selectedId" @saved="onConceptSaved" />
+          <OkfConceptEditor
+            ref="conceptEditor"
+            :repo-id="repoId"
+            :concept-id="selectedId"
+            :read-only="readOnly"
+            @saved="onConceptSaved"
+          />
         </template>
         <p v-else class="okf-re__placeholder">
           {{ translate('okf.editor.pickConcept', 'Select a concept from the list to start editing.') }}
@@ -62,6 +69,7 @@
             v-model="metaType"
             :placeholder="translate('okf.editor.meta.typePlaceholder', 'Select type…')"
             size="sm"
+            :disabled="readOnly"
             @update:model-value="onMetaChange"
           >
             <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -69,7 +77,13 @@
         </DsFormGroup>
 
         <DsFormGroup :label="translate('okf.editor.meta.title', 'Title')" input-id="okf-meta-title">
-          <DsInput id="okf-meta-title" v-model="metaTitle" size="sm" @update:model-value="onMetaChange" />
+          <DsInput
+            id="okf-meta-title"
+            v-model="metaTitle"
+            size="sm"
+            :disabled="readOnly"
+            @update:model-value="onMetaChange"
+          />
         </DsFormGroup>
 
         <DsFormGroup
@@ -78,7 +92,13 @@
         >
           <!-- Options via slot (DsSelect has no options prop); a selectable
                empty first option lets the steward UNassign a label. -->
-          <DsSelect id="okf-meta-label" v-model="metaLabel" size="sm" @update:model-value="onMetaChange">
+          <DsSelect
+            id="okf-meta-label"
+            v-model="metaLabel"
+            size="sm"
+            :disabled="readOnly"
+            @update:model-value="onMetaChange"
+          >
             <option value="">{{ translate('okf.editor.meta.noLabel', 'No label') }}</option>
             <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </DsSelect>
@@ -97,7 +117,7 @@
       <p v-else class="okf-re__meta-empty">{{ translate('okf.editor.meta.none', 'No concept selected') }}</p>
 
       <footer class="okf-re__actions">
-        <DsButton variant="secondary" small @click="autocorrectOpen = true">
+        <DsButton variant="secondary" small :disabled="readOnly" @click="autocorrectOpen = true">
           {{ translate('okf.editor.autocorrect.button', 'Autocorrect') }}
         </DsButton>
       </footer>
@@ -186,7 +206,9 @@ export default {
     repoId: { type: String, required: true },
     // The doc-repo file linked at create time — re-split needs it until the
     // server can resolve the link itself (files.okf_repo_id).
-    sourceFileId: { type: String, default: null }
+    sourceFileId: { type: String, default: null },
+    // READ ONLY (serving repo): concept + metadata mutations are disabled.
+    readOnly: { type: Boolean, default: false }
   },
   emits: ['resplit-done'],
   data() {

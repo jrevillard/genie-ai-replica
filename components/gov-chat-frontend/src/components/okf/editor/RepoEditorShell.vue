@@ -1,9 +1,10 @@
-<!-- OkfRepoEditorShell.vue — Story #978 lifecycle edition (David, 2026-08-28).
-  Header: back-to-studio (ALWAYS visible — navigation audit), repo name,
-  lifecycle state pill (correct state mapping incl. publish/retracted),
-  current version, bundle zip name (the repo+version artifact link), and the
-  contextual lifecycle actions shared with the dashboard. Versions dialog is
-  one click away. Sub-tabs: Wizard | Editor (Editor default). -->
+<!-- OkfRepoEditorShell header (David, 2026-08-30): while SERVING the repo is
+  READ ONLY — READ ONLY pill, the serving graph's NAME chip
+  (ingested_graph_name, `OKF_<name-slug>_v<N>`), and all concept/metadata
+  mutations disabled until Retract. Otherwise the lifecycle header as before:
+  back-to-studio (ALWAYS visible — navigation audit), repo name, state pill,
+  version, bundle zip chip, contextual actions, Versions dialog one click
+  away. Sub-tabs: Wizard | Editor (Editor default). -->
 <template>
   <div class="okf-shell">
     <header class="okf-shell__header">
@@ -16,6 +17,10 @@
         {{ translate('okf.shell.version', 'v{n}').replace('{n}', String(repo.version)) }}
       </span>
       <DsPill v-if="serving" variant="success">{{ translate('okf.shell.serving', 'Serving') }}</DsPill>
+      <DsPill v-if="readOnly" variant="warning">{{ translate('okf.shell.readonly', 'READ ONLY') }}</DsPill>
+      <span v-if="serving && graphName" class="okf-shell__graph" :title="graphName">
+        <code>{{ graphName }}</code>
+      </span>
       <span v-if="bundleName" class="okf-shell__bundle" :title="bundleName">
         <code>{{ bundleName }}</code>
       </span>
@@ -46,7 +51,12 @@
     <DsTabs :tabs="subTabs" :model-value="subTab" @update:model-value="onSubTab">
       <template #default>
         <OkfStudioWizard v-show="subTab === 'wizard'" :draft="draft" @reset="$emit('back')" />
-        <OkfRepoEditor v-show="subTab === 'editor'" :repo-id="repoId" :source-file-id="sourceFileId" />
+        <OkfRepoEditor
+          v-show="subTab === 'editor'"
+          :repo-id="repoId"
+          :source-file-id="sourceFileId"
+          :read-only="readOnly"
+        />
       </template>
     </DsTabs>
 
@@ -170,6 +180,12 @@ export default {
     },
     serving() {
       return !!(this.repo.lifecycle_state === 'publish' && this.repo.ingested_at);
+    },
+    readOnly() {
+      return this.serving;
+    },
+    graphName() {
+      return this.repo.ingested_graph_name || '';
     },
     stateLabel() {
       const s = this.repo.lifecycle_state;
@@ -333,7 +349,8 @@ export default {
   font-size: var(--text-sm);
   color: var(--muted);
 }
-.okf-shell__bundle code {
+.okf-shell__bundle code,
+.okf-shell__graph code {
   background: var(--bg);
   border: 1px solid var(--border);
   padding: 2px 6px;

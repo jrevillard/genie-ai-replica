@@ -292,6 +292,12 @@ export function friendlyLifecycleError(code, message) {
   if (code === 'INVALID_TRANSITION') {
     return message || 'That action is not allowed from the current state.';
   }
+  if (code === 'REPO_READ_ONLY') {
+    return 'This repository is currently serving (ingested) and is READ ONLY — retract it if you want to change it.';
+  }
+  if (code === 'GRAPH_NAME_CONFLICT') {
+    return 'Another repository with the same name and version already owns the serving graph name — rename one of them and retry.';
+  }
   return message || 'Action failed';
 }
 

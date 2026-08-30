@@ -54,7 +54,7 @@
               </span>
               <span v-if="node.sourceUrl" class="okf-cl__row-source">{{ node.sourceUrl }}</span>
             </span>
-            <span class="okf-cl__actions" @click.stop>
+            <span v-if="!readOnly" class="okf-cl__actions" @click.stop>
               <button
                 type="button"
                 class="okf-cl__action"
@@ -99,7 +99,7 @@
                   <span class="okf-cl__row-title">{{ child.title || child.concept_id }}</span>
                   <span v-if="child.sourceUrl" class="okf-cl__row-source">{{ child.sourceUrl }}</span>
                 </span>
-                <span class="okf-cl__actions" @click.stop>
+                <span v-if="!readOnly" class="okf-cl__actions" @click.stop>
                   <button
                     type="button"
                     class="okf-cl__action"
@@ -132,10 +132,10 @@
     </template>
 
     <footer class="okf-cl__footer">
-      <DsButton variant="secondary" small @click="$emit('add')"
+      <DsButton variant="secondary" small :disabled="readOnly" @click="$emit('add')"
         >+ {{ translate('okf.editor.concepts.add', 'Add concept') }}</DsButton
       >
-      <DsButton variant="ghost" small @click="$emit('resplit')">{{
+      <DsButton variant="ghost" small :disabled="readOnly" @click="$emit('resplit')">{{
         translate('okf.editor.concepts.resplit', 'Re-split')
       }}</DsButton>
     </footer>
@@ -158,7 +158,9 @@ export default {
     concepts: { type: Array, default: () => [] },
     selectedId: { type: String, default: null },
     loading: { type: Boolean, default: false },
-    labelOptions: { type: Array, default: () => [] }
+    labelOptions: { type: Array, default: () => [] },
+    // READ ONLY (serving repo): add/delete/re-split/label writes are hidden.
+    readOnly: { type: Boolean, default: false }
   },
   emits: ['select', 'resplit', 'add', 'delete', 'label'],
   data() {

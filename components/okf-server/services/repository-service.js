@@ -501,6 +501,17 @@ async function update(repo_id, patch, actor) {
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
 
+    // READ-ONLY while serving (David, 2026-08-30): a serving repo cannot be
+    // updated (renaming it would desync the versioned serving-graph name).
+    if (existing.ingested_at) {
+      recordOp('update', 'read_only');
+      throw new RepoError(
+        'REPO_READ_ONLY',
+        'repository is serving (ingested) and is READ ONLY — retract it to make changes',
+        409
+      );
+    }
+
     // If renaming, reject collision with another LIVE repo in the same domain.
     if (Object.prototype.hasOwnProperty.call(patch, 'name') && patch.name !== existing.name) {
       const clash = await findExampleOrNull(db.collection(COLLECTION), { name: patch.name, domain: existing.domain });

@@ -71,6 +71,7 @@ async function seedRepos(store, repos) {
 const OkfStudioDashboard = require('@/components/okf/StudioDashboard.vue').default;
 const OkfRepoEditorShell = require('@/components/okf/editor/RepoEditorShell.vue').default;
 const OkfVersionsDialog = require('@/components/okf/editor/VersionsDialog.vue').default;
+const OkfRepoEditor = require('@/components/okf/editor/RepoEditor.vue').default;
 
 const STUBS = { teleport: true };
 
@@ -218,6 +219,41 @@ describe('OkfRepoEditorShell — lifecycle strip', () => {
     expect(wrapper.findAll('button').some((b) => b.text() === 'Retract')).toBe(true);
     expect(wrapper.findAll('button').some((b) => b.text() === 'Delete')).toBe(false);
   });
+
+  it('serving repo: READ ONLY pill + serving-graph chip + readOnly wired to the editor', async () => {
+    const store = buildStore();
+    await seedRepos(store, [
+      {
+        repo_id: 'r-3',
+        name: 'Kenya Government Services',
+        lifecycle_state: 'publish',
+        version: 2,
+        ingested_at: '2026-08-30T10:00:00Z',
+        ingested_graph_name: 'OKF_kenya-government-services_v2',
+        bundle: { file_id: 'f', file_name: 'kenya-government-services-v2.zip' }
+      }
+    ]);
+    await flush();
+    const wrapper = mount(OkfRepoEditorShell, {
+      global: { mocks: { $store: store }, stubs: STUBS },
+      props: { repoId: 'r-3' }
+    });
+    expect(wrapper.text()).toContain('READ ONLY');
+    expect(wrapper.text()).toContain('OKF_kenya-government-services_v2');
+    expect(wrapper.findComponent(OkfRepoEditor).props('readOnly')).toBe(true);
+  });
+
+  it('non-serving repo: no READ ONLY pill, editor is writable', async () => {
+    const store = buildStore();
+    await seedRepos(store, [{ repo_id: 'r-4', name: 'Editable', lifecycle_state: 'approve', version: 1 }]);
+    await flush();
+    const wrapper = mount(OkfRepoEditorShell, {
+      global: { mocks: { $store: store }, stubs: STUBS },
+      props: { repoId: 'r-4' }
+    });
+    expect(wrapper.text()).not.toContain('READ ONLY');
+    expect(wrapper.findComponent(OkfRepoEditor).props('readOnly')).toBe(false);
+  });
 });
 
 describe('OkfVersionsDialog — the versions panel', () => {
@@ -246,6 +282,24 @@ describe('OkfVersionsDialog — the versions panel', () => {
     const wrapper = mount(OkfVersionsDialog, {
       global: { mocks: { $store: store }, stubs: STUBS },
       props: { visible: true, repo: { repo_id: 'r-1', name: 'Demo', lifecycle_state: 'draft', version: 0 } }
+    });
+    expect(wrapper.vm.canPublish).toBe(false);
+  });
+
+  it('publish action is DISABLED while serving (READ ONLY — retract first)', () => {
+    const store = buildStore();
+    const wrapper = mount(OkfVersionsDialog, {
+      global: { mocks: { $store: store }, stubs: STUBS },
+      props: {
+        visible: true,
+        repo: {
+          repo_id: 'r-1',
+          name: 'Demo',
+          lifecycle_state: 'publish',
+          version: 1,
+          ingested_at: '2026-08-30T10:00:00Z'
+        }
+      }
     });
     expect(wrapper.vm.canPublish).toBe(false);
   });

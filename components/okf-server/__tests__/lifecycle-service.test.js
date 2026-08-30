@@ -26,6 +26,13 @@ jest.mock('../services/version-service', () => ({
   mintVersion: jest.fn().mockResolvedValue({ bundle_version: 1, okf_tag: 'okf:v1' })
 }));
 jest.mock('../services/bundle-export-service', () => ({
+  slugFor: (name) =>
+    String(name || 'repo')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80) || 'repo',
   exportBundle: jest.fn().mockResolvedValue({
     file_id: 'file-bundle-1',
     file_name: 'demo-v1.zip',
@@ -246,6 +253,48 @@ describe('ingest / retract — the serving flag', () => {
     seedRepo({ lifecycle_state: 'publish', version: 1 });
     await expect(lifecycleService.transition(REPO, 'retract', {})).rejects.toMatchObject({
       code: 'NOT_INGESTED',
+      status: 409
+    });
+  });
+
+  test('ingest PROMOTES the graph: working → OKF_<slug>_v<N>, registry records it', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      name: 'Demo Repo',
+      bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 }
+    });
+    const res = await lifecycleService.transition(REPO, 'ingest', {});
+    expect(res.graph_name).toBe('OKF_demo-repo_v1');
+    const repo = mockDb._stores.okf_repositories[REPO];
+    expect(repo.ingested_graph_name).toBe('OKF_demo-repo_v1');
+    expect(repo.ingested_version).toBe(1);
+  });
+
+  test('retract DEMOTES the graph: versioned → working, registry field cleared', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      name: 'Demo Repo',
+      ingested_at: 'x',
+      ingested_version: 1,
+      ingested_graph_name: 'OKF_demo-repo_v1'
+    });
+    await lifecycleService.transition(REPO, 'retract', {});
+    const repo = mockDb._stores.okf_repositories[REPO];
+    expect(repo.ingested_graph_name).toBeNull();
+  });
+
+  test('publish while SERVING → 409 REPO_READ_ONLY', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      ingested_at: 'x',
+      ingested_version: 1,
+      ingested_graph_name: 'OKF_demo-repo_v1'
+    });
+    await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({
+      code: 'REPO_READ_ONLY',
       status: 409
     });
   });

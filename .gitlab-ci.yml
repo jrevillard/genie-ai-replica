@@ -2508,9 +2508,6 @@ test:backend:
         path: components/gov-chat-backend/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "components/gov-chat-backend/**/*"
-        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -2540,9 +2537,6 @@ test:frontend:
         path: components/gov-chat-frontend/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "components/gov-chat-frontend/**/*"
-        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -2572,9 +2566,6 @@ test:doc-repo:
         path: components/document-repository/coverage/cobertura-coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "components/document-repository/**/*"
-        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -2618,10 +2609,6 @@ test:python:
         path: genie-ai-overlay/reports/coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "genie-ai-overlay/**/*.py"
-        - "genie-ai-overlay/pyproject.toml"
-        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -2654,10 +2641,6 @@ test:sitecustomize:
         path: reports/coverage.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "configs/ssl/**/*"
-        - "tests/config/ssl/**/*"
-        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
@@ -2693,9 +2676,6 @@ test:flutter:
     expire_in: 7 days
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - "mobile/genie_ai_mobile/**/*"
-        - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success

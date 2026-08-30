@@ -24,6 +24,7 @@ class CpuTranslateBackend {
     this.messageQueue = new Map(); // For tracking in-flight translation requests
     this.messageId = 0;
     this.initialized = false;
+    this.workerError = null;
     this.languageMap = null;
     this.fallbackMap = null;
 
@@ -61,6 +62,9 @@ class CpuTranslateBackend {
       this.worker.on('error', (error) => {
         logger.error(`[CPU-BACKEND] Worker error: ${error.message}`);
         this.workerReady = false;
+        if (!this.workerError) {
+          this.workerError = error;
+        }
       });
 
       // Handle worker exit
@@ -121,6 +125,22 @@ class CpuTranslateBackend {
       return;
     }
 
+    if (type === 'error') {
+      // The worker thread's uncaughtException/unhandledRejection handlers
+      // forward fatal worker errors here. Record the error so init() fails
+      // fast instead of polling until the init timeout, and reject any
+      // in-flight translations — the worker is in a broken state.
+      logger.error(`[CPU-BACKEND] Worker reported a fatal error: ${error}`);
+      this.workerError = new Error(error || 'Worker thread reported a fatal error');
+      this.workerReady = false;
+
+      for (const [pendingId, pending] of this.messageQueue) {
+        pending.reject(this.workerError);
+        this.messageQueue.delete(pendingId);
+      }
+      return;
+    }
+
     logger.warn(`[CPU-BACKEND] Unknown message type from worker: ${type}`);
   }
 
@@ -172,6 +192,9 @@ class CpuTranslateBackend {
       let lastLogTime = startTime;
 
       while (!this.workerReady) {
+        if (this.workerError) {
+          throw this.workerError;
+        }
         if (Date.now() - startTime > timeout) {
           throw new Error('[CPU-BACKEND] Worker initialization timeout');
         }

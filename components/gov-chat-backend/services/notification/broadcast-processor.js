@@ -30,7 +30,7 @@ class BroadcastProcessor {
     await this.broadcasts.markResolving(key);
 
     const chunkSize = CHUNK_SIZE();
-    let buffer = [];
+    const buffer = [];
     let matched = 0;
     let chunkIndex = 0;
     let pending = [];

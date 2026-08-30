@@ -2,6 +2,9 @@ const { logger } = require('../../shared-lib');
 const http = require('http');
 const https = require('https');
 
+// API key for remote GPU node authentication (standard OpenAI Bearer token)
+const VLLM_API_KEY = process.env.VLLM_API_KEY || '';
+
 /**
  * GPU Translation Backend
  *
@@ -22,6 +25,7 @@ class GpuTranslateBackend {
     this.languageMap = null;
     this.fallbackMap = null;
     this.healthCheckPassed = false;
+    this.maxModelLen = 4096; // Will be updated from /v1/models during init
 
     logger.info(`[GPU-BACKEND] Initializing with model: ${this.modelId}`);
     logger.info(`[GPU-BACKEND] Endpoint: ${this.endpoint}`);
@@ -40,7 +44,7 @@ class GpuTranslateBackend {
       const modelToMap = {
         'google/translategemma-4b-it': './language-maps/translategemma-map.js',
         'google/gemma-3-4b-it': './language-maps/gemma-3-map.js',
-        'google/gemma-3-1b-it': './language-maps/gemma-3-map.js',
+        'google/gemma-3-1b-it': './language-maps/gemma-3-map.js'
       };
 
       const mapPath = modelToMap[modelId];
@@ -57,7 +61,7 @@ class GpuTranslateBackend {
       logger.info(`[GPU-BACKEND] Code format: ${this.languageMap.codeFormat}`);
     } catch (error) {
       logger.error(`[GPU-BACKEND] Failed to load language map: ${error.message}`);
-      throw new Error(`Failed to load language map for model ${modelId}`);
+      throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
     }
   }
 
@@ -73,13 +77,13 @@ class GpuTranslateBackend {
     try {
       logger.info('[GPU-BACKEND] Starting initialization: Performing health check...');
 
-      // Perform health check
+      // Perform health check and fetch model info
       await this.healthCheck();
+      await this.fetchModelInfo();
 
       this.initialized = true;
       this.healthCheckPassed = true;
       logger.info('[GPU-BACKEND] Initialized successfully. vLLM service is ready.');
-
     } catch (error) {
       logger.error(`[GPU-BACKEND] Initialization failed: ${error.message}`);
       // Don't throw - allow fallback to CPU backend
@@ -91,19 +95,33 @@ class GpuTranslateBackend {
   /**
    * Health check for vLLM service
    */
+  /**
+   * Build base headers for vLLM requests (injects Authorization: Bearer when VLLM_API_KEY is set).
+   * @returns {Object} Headers object
+   */
+  _buildHeaders(extraHeaders = {}) {
+    const headers = { ...extraHeaders };
+    if (VLLM_API_KEY) {
+      headers['Authorization'] = `Bearer ${VLLM_API_KEY}`;
+    }
+    return headers;
+  }
+
   async healthCheck() {
     try {
       const url = new URL(this.endpoint);
       const isHttps = url.protocol === 'https:';
       const client = isHttps ? https : http;
+      const basePath = url.pathname.replace(/\/$/, '');
 
       return new Promise((resolve, reject) => {
         const options = {
           hostname: url.hostname,
-          port: url.port || this.port,
-          path: '/health', // Try health endpoint first
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `${basePath}/health`,
           method: 'GET',
-          timeout: 5000,
+          headers: this._buildHeaders(),
+          timeout: 5000
         };
 
         const req = client.request(options, (res) => {
@@ -112,7 +130,6 @@ class GpuTranslateBackend {
             resolve(true);
           } else {
             logger.warn(`[GPU-BACKEND] Health check returned status ${res.statusCode}`);
-            // Continue anyway - vLLM might not have a /health endpoint
             resolve(true);
           }
         });
@@ -132,6 +149,66 @@ class GpuTranslateBackend {
     } catch (error) {
       logger.error(`[GPU-BACKEND] Health check error: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch model info (max_model_len) from vLLM /v1/models endpoint
+   */
+  async fetchModelInfo() {
+    try {
+      const url = new URL(this.endpoint);
+      const isHttps = url.protocol === 'https:';
+      const client = isHttps ? https : http;
+      const basePath = url.pathname.replace(/\/$/, '');
+
+      await new Promise((resolve) => {
+        const options = {
+          hostname: url.hostname,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: `${basePath}/v1/models`,
+          method: 'GET',
+          headers: this._buildHeaders(),
+          timeout: 5000
+        };
+
+        const req = client.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              const model = parsed.data?.find((m) => m.id === this.modelId);
+              if (model?.max_model_len) {
+                this.maxModelLen = model.max_model_len;
+                logger.info(`[GPU-BACKEND] Model max context length: ${this.maxModelLen} tokens`);
+              } else {
+                logger.warn(
+                  `[GPU-BACKEND] Model ${this.modelId} not found in /v1/models response, using default max_tokens`
+                );
+              }
+              resolve();
+            } catch (e) {
+              logger.warn(`[GPU-BACKEND] Failed to parse /v1/models response: ${e.message}`);
+              resolve();
+            }
+          });
+        });
+
+        req.on('error', (error) => {
+          logger.warn(`[GPU-BACKEND] Failed to fetch model info: ${error.message}`);
+          resolve(); // Don't fail init — use default max_tokens
+        });
+        req.on('timeout', () => {
+          req.destroy();
+          resolve();
+        });
+        req.end();
+      });
+    } catch (error) {
+      logger.warn(`[GPU-BACKEND] fetchModelInfo error: ${error.message}`);
     }
   }
 
@@ -173,7 +250,7 @@ class GpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && this.languageMap.languageMap.hasOwnProperty(isoCode);
+    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
   }
 
   /**
@@ -193,21 +270,28 @@ class GpuTranslateBackend {
    * @returns {Object} Formatted request body
    */
   formatRequest(modelId, sourceCode, targetCode, text) {
+    // Reserve tokens for the prompt (~128 tokens) so total stays within maxModelLen
+    const maxTokens = Math.max(128, this.maxModelLen - 128);
+
     // TranslateGemma format (structured chat with language codes)
     if (modelId.includes('translategemma')) {
       return {
         model: modelId,
-        messages: [{
-          role: 'user',
-          content: [{
-            type: 'text',
-            source_lang_code: sourceCode,  // ISO 639-1
-            target_lang_code: targetCode,  // ISO 639-1
-            text: text
-          }]
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                source_lang_code: sourceCode, // ISO 639-1
+                target_lang_code: targetCode, // ISO 639-1
+                text: text
+              }
+            ]
+          }
+        ],
         temperature: 0.0,
-        max_tokens: 4096
+        max_tokens: maxTokens
       };
     }
 
@@ -221,24 +305,28 @@ class GpuTranslateBackend {
 
       return {
         model: modelId,
-        messages: [{
-          role: 'user',
-          content: prompt
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
         temperature: 0.3,
-        max_tokens: 4096
+        max_tokens: maxTokens
       };
     }
 
     // Default/fallback format (OpenAI-compatible)
     return {
       model: modelId,
-      messages: [{
-        role: 'user',
-        content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: `Translate from ${sourceCode} to ${targetCode}: ${text}`
+        }
+      ],
       temperature: 0.3,
-      max_tokens: 4096
+      max_tokens: maxTokens
     };
   }
 
@@ -251,20 +339,21 @@ class GpuTranslateBackend {
     const url = new URL(this.endpoint);
     const isHttps = url.protocol === 'https:';
     const client = isHttps ? https : http;
+    const basePath = url.pathname.replace(/\/$/, '');
 
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(requestBody);
 
       const options = {
         hostname: url.hostname,
-        port: url.port || this.port,
-        path: '/v1/chat/completions',
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: `${basePath}/v1/chat/completions`,
         method: 'POST',
-        headers: {
+        headers: this._buildHeaders({
           'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
-        },
-        timeout: 30000, // 30 second timeout
+          'Content-Length': Buffer.byteLength(postData)
+        }),
+        timeout: 30000 // 30 second timeout
       };
 
       const req = client.request(options, (res) => {
@@ -305,6 +394,82 @@ class GpuTranslateBackend {
       req.on('timeout', () => {
         req.destroy();
         reject(new Error('vLLM service request timeout'));
+      });
+
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * Call vLLM service with streaming output (stream:true). Invokes onToken for
+   * each generated delta token and resolves with the full concatenated text.
+   * @param {Object} requestBody - Request body (stream:true is added automatically)
+   * @param {(delta: string) => void} [onToken] - Called for each output delta
+   * @returns {Promise<string>} Full concatenated translated text
+   */
+  async callVllmStream(requestBody, onToken) {
+    const url = new URL(this.endpoint);
+    const isHttps = url.protocol === 'https:';
+    const client = isHttps ? https : http;
+    const basePath = url.pathname.replace(/\/$/, '');
+    const postData = JSON.stringify({ ...requestBody, stream: true });
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: `${basePath}/v1/chat/completions`,
+      method: 'POST',
+      headers: this._buildHeaders({
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }),
+      timeout: 60000
+    };
+
+    return new Promise((resolve, reject) => {
+      let full = '';
+      let buffer = '';
+      const req = client.request(options, (res) => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          let errBody = '';
+          res.on('data', (c) => (errBody += c));
+          res.on('end', () => reject(new Error(`vLLM stream service error: ${res.statusCode} ${errBody}`)));
+          return;
+        }
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+            const payload = trimmed.slice(6);
+            if (payload === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = parsed.choices?.[0]?.delta?.content || '';
+              if (delta) {
+                full += delta;
+                if (onToken) onToken(delta);
+              }
+            } catch {
+              // Ignore non-JSON keepalive/partial lines
+            }
+          }
+        });
+        res.on('end', () => resolve(full));
+      });
+
+      req.on('error', (error) => {
+        logger.error(`[GPU-BACKEND] vLLM stream request failed: ${error.message}`);
+        reject(new Error(`vLLM stream request failed: ${error.message}`));
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('vLLM stream request timeout'));
       });
 
       req.write(postData);
@@ -360,15 +525,56 @@ class GpuTranslateBackend {
       logger.info(`[GPU-BACKEND] Translation completed in ${duration}ms (${texts.length} texts)`);
 
       return translatedTexts;
-
     } catch (error) {
       logger.error(`[GPU-BACKEND] Translation failed: ${error.message}`, {
         stack: error.stack,
         sourceCode: sourceCode,
         targetCode: targetCode
       });
-      throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`);
+      throw new Error(`[GPU-BACKEND] Failed to perform translation: ${error.message}`, { cause: error });
     }
+  }
+
+  /**
+   * Stream-translate a single COMPLETE unit (sentence/paragraph — see
+   * services/translation/stream-boundary.js). The translator streams its output
+   * via onToken. An optional rolling context window (prior units) keeps
+   * terminology/pronouns consistent across units (prompt-based models only).
+   * @param {string} text - Complete unit to translate
+   * @param {string} sourceCode - Source language code (model-specific)
+   * @param {string} targetCode - Target language code (model-specific)
+   * @param {{source: string, target: string}[]} [context] - Prior units EN+target
+   * @param {(delta: string) => void} [onToken] - Streaming callback
+   * @returns {Promise<string>} Full translated text
+   */
+  async translateStream(text, sourceCode, targetCode, context, onToken) {
+    if (!this.initialized) {
+      throw new Error('[GPU-BACKEND] Backend is not ready.');
+    }
+    if (!text || text.trim() === '') return '';
+
+    const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
+
+    // Context window: prepend prior units to formatRequest's EXISTING prompt
+    // (which has "Only return the translation, no explanation"). We AUGMENT
+    // the prompt — never replace it. Replacing would lose the constraint and
+    // the model would add commentary/alternatives, breaking formatting.
+    if (context && context.length > 0 && !this.modelId.includes('translategemma')) {
+      const ctxBlock = context.map((c) => `EN: ${c.source}\n${targetCode.toUpperCase()}: ${c.target}`).join('\n');
+      requestBody.messages[0].content =
+        `Prior context (for terminology consistency only — do NOT translate or repeat it):\n${ctxBlock}\n\n` +
+        requestBody.messages[0].content;
+    }
+
+    // Dynamically cap max_tokens AFTER context injection so input (messages +
+    // context window) + output never exceeds maxModelLen. formatRequest derives
+    // max_tokens from maxModelLen assuming only the text input; the context window
+    // adds extra input tokens that can overflow (vLLM 400).
+    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
+    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+
+    return this.callVllmStream(requestBody, onToken);
   }
 
   /**
@@ -383,8 +589,9 @@ class GpuTranslateBackend {
       codeFormat: this.languageMap?.codeFormat || 'unknown',
       endpoint: this.endpoint,
       port: this.port,
+      maxModelLen: this.maxModelLen,
       initialized: this.initialized,
-      healthCheckPassed: this.healthCheckPassed,
+      healthCheckPassed: this.healthCheckPassed
     };
   }
 }

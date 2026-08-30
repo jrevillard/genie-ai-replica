@@ -1,0 +1,19 @@
+{
+  "name": "kong-config-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Unit tests for Kong declarative configuration",
+  "scripts": {
+    "test": "jest --verbose",
+    "test:ci": "jest --ci --reporters=default --reporters=jest-junit"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-junit": "^17.0.0"
+  },
+  "overrides": {
+    "js-yaml": "^4.3.1",
+    "uuid": "^11.1.1",
+    "brace-expansion": "^5.0.8"
+  }
+}

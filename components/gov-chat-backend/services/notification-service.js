@@ -6,7 +6,7 @@ const { FcmSender } = require('./notification/fcm-sender');
 const { notificationQueue } = require('./notification/queue');
 
 const VALID_PLATFORMS = new Set(['android', 'ios', 'web']);
-const TOKEN_PATTERN = /^[A-Za-z0-9_:.\-]+$/;
+const TOKEN_PATTERN = /^[A-Za-z0-9_:.-]+$/;
 const MAX_PREFERENCE_ENTRIES = 64;
 
 /**
@@ -201,7 +201,7 @@ class NotificationService {
         for (const field of ['sent', 'failed', 'pruned', 'chunksDone']) {
           if (live[field] !== undefined) view.counts[field] = parseInt(live[field], 10) || 0;
         }
-      } catch (_) { /* live overlay is best-effort */ }
+      } catch { /* live overlay is best-effort */ }
     }
     return view;
   }
@@ -224,7 +224,7 @@ class NotificationService {
     };
     try {
       health.activeTokenCount = await this.tokenRepository.countActive();
-    } catch (_) { /* leave null */ }
+    } catch { /* leave null */ }
     if (this.queueEnabled) {
       try {
         health.queueConnected = await this.queue.isConnected();
@@ -232,7 +232,7 @@ class NotificationService {
         health.waiting = counts.waiting;
         health.active = counts.active;
         health.failed = counts.failed;
-      } catch (_) { /* leave nulls */ }
+      } catch { /* leave nulls */ }
     }
     return health;
   }

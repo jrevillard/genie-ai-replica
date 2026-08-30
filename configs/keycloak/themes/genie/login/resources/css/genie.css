@@ -1,0 +1,84 @@
+/* GENIE.AI Keycloak Login Theme — Light Mode (PatternFly v5 variable overrides)
+ * Aligned with the GENIE.AI Design System tokens.
+ * Hex values are pre-converted from OKLch since PatternFly does not support oklch().
+ *
+ * DS token mapping:
+ *   accent  = oklch(42% 0.18 265) ≈ #4071cb
+ *   fg      = oklch(22% 0.02 240)  ≈ #344049
+ *   muted   = oklch(50% 0.018 240) ≈ #818b91
+ *   border  = oklch(82% 0.012 240) ≈ #bdc5cb
+ *   bg      = oklch(98% 0.005 250) ≈ #f9fbfd
+ *   surface = #ffffff
+ */
+
+:root {
+  /* Primary (DS accent) */
+  --pf-v5-global--primary-color--100: #4071cb;
+  --pf-v5-global--primary-color--200: #355fac;
+
+  /* Background (DS bg / surface) */
+  --pf-v5-global--BackgroundColor--100: #f9fbfd;
+  --pf-v5-global--BackgroundColor--200: #ffffff;
+
+  /* Text (DS fg / muted) */
+  --pf-v5-global--Color--100: #344049;
+  --pf-v5-global--Color--200: #818b91;
+  --pf-v5-global--Color--300: #aaafb2;
+
+  /* Borders (DS border) */
+  --pf-v5-global--BorderColor--100: #bdc5cb;
+  --pf-v5-global--BorderColor--200: #f0f2f4;
+
+  /* Status (DS success / warning / danger — same hex, already aligned) */
+  --pf-v5-global--success-color--100: #10b981;
+  --pf-v5-global--warning-color--100: #f59e0b;
+  --pf-v5-global--danger-color--100: #ef4444;
+  --pf-v5-global--danger-color--200: #ef4444;
+
+  /* Info (DS info) */
+  --pf-v5-global--info-color--100: #61b8ed;
+
+  /* Link */
+  --pf-v5-global--link--Color: #4071cb;
+  --pf-v5-global--link--Color--hover: #355fac;
+
+  /* Component-level overrides — buttons, forms, inputs */
+  --pf-v5-c-button--m-primary--BackgroundColor: #4071cb;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #355fac;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #2a5da8;
+  --pf-v5-c-button--m-secondary--BorderColor: #4071cb;
+  --pf-v5-c-button--m-secondary--Color: #4071cb;
+
+  --pf-v5-c-form-control--BackgroundColor: #ffffff;
+  --pf-v5-c-form-control--BorderColor: #bdc5cb;
+  --pf-v5-c-form-control--Color: #344049;
+  --pf-v5-c-form-control--focus--BorderColor: #4071cb;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(64, 113, 203, 0.25);
+
+  /* Login-specific */
+  --pf-v5-c-login__main-header--BorderTopColor: #4071cb;
+  --pf-v5-c-login__main-body--BackgroundColor: #ffffff;
+  --pf-v5-c-login__main-header--BackgroundColor: #f9fbfd;
+
+  /* Page background */
+  --pf-v5-c-page--BackgroundColor: #f9fbfd;
+}
+
+/* Header brand */
+#kc-header-wrapper {
+  color: #4071cb;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+#kc-header-wrapper img {
+  display: block;
+  width: 120px;
+  height: auto;
+  margin-bottom: 0.75rem;
+}
+
+/* Footer */
+#kc-footer-wrapper {
+  color: #818b91;
+}

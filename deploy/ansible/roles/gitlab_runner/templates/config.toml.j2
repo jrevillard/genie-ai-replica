@@ -1,0 +1,42 @@
+concurrent = {{ gitlab_runner_concurrent }}
+check_interval = 0
+shutdown_timeout = 0
+
+[session_server]
+  session_timeout = 1800
+
+[[runners]]
+  name = "{{ gitlab_runner_description }}"
+  url = "{{ gitlab_url }}"
+  token = "{{ gitlab_runner_tokens[inventory_hostname] }}"
+  executor = "{{ gitlab_runner_executor }}"
+  limit = {{ gitlab_runner_limit }}
+  {% if gitlab_runner_use_socket_proxy %}
+  environment = ["DOCKER_HOST=tcp://172.17.0.1:2375"]
+  {% endif %}
+  [runners.docker]
+    tls_verify = false
+    image = "{{ gitlab_runner_docker_image }}"
+    privileged = false
+{% if gitlab_runner_security_opt | length > 0 %}
+    security_opt = [{% for opt in gitlab_runner_security_opt %}"{{ opt }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}
+    disable_entrypoint_overwrite = false
+    oom_kill_disable = false
+    disable_cache = false
+    {% if gitlab_runner_use_socket_proxy %}
+    volumes = ["/cache"]
+    {% else %}
+    volumes = [{% for vol in gitlab_runner_docker_volumes %}"{{ vol }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+    {% endif %}
+    memory = "{{ gitlab_runner_memory_limit }}"
+    cpus = "{{ gitlab_runner_cpu_limit }}"
+    pull_policy = ["if-not-present"]
+{% if gitlab_runner_kvm_device is defined and gitlab_runner_kvm_device %}
+    devices = ["{{ gitlab_runner_kvm_device }}"]
+{% endif %}
+    shm_size = 0
+    network_mtu = 0
+{% if gitlab_runner_docker_runtime | default('') %}
+    runtime = "{{ gitlab_runner_docker_runtime }}"
+{% endif %}

@@ -1,0 +1,88 @@
+---
+# GitLab Runner installation and configuration.
+#
+# Required variables:
+#   gitlab_url            — GitLab instance URL (group_vars/all.yml)
+#   gitlab_runner_tokens  — Dict of runner tokens keyed by inventory hostname (vault)
+#
+# How to get a runner token (one per host):
+#   GitLab > Project > Settings > CI/CD > Runners > New project runner
+#   Configure tags, then copy the glrt-xxx token into the gitlab_runner_tokens
+#   dict in group_vars/gitlab_runners/vault.yml under that host's alias.
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - gitlab_url is defined and gitlab_url | length > 0
+      - gitlab_runner_tokens is defined
+      - gitlab_runner_tokens[inventory_hostname] is defined
+      - gitlab_runner_tokens[inventory_hostname] | length > 0
+    fail_msg: >-
+      Missing required variables: gitlab_url or gitlab_runner_tokens[inventory_hostname].
+      Set gitlab_url in group_vars/all.yml; set each host's glrt- token in the
+      gitlab_runner_tokens dict in group_vars/gitlab_runners/vault.yml.
+    quiet: true
+
+# === Install gitlab-runner binary ===
+
+- name: Ensure gitlab-runner GPG key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gpg.key
+    dest: /etc/apt/keyrings/gitlab-runner.asc
+    mode: "0644"
+    force: true
+
+- name: Ensure gitlab-runner apt repository
+  ansible.builtin.copy:
+    content: |
+      Types: deb
+      URIs: https://packages.gitlab.com/runner/gitlab-runner/ubuntu
+      Suites: {{ ansible_lsb.codename }}
+      Components: main
+      Signed-By: /etc/apt/keyrings/gitlab-runner.asc
+      Architectures: amd64
+    dest: /etc/apt/sources.list.d/gitlab-runner.sources
+    mode: "0644"
+
+- name: Install gitlab-runner
+  ansible.builtin.apt:
+    name: gitlab-runner
+    update_cache: true
+    state: present
+
+- name: Add gitlab-runner user to docker group
+  ansible.builtin.user:
+    name: gitlab-runner
+    groups: docker
+    append: true
+
+- name: Add gitlab-runner user to kvm group
+  ansible.builtin.user:
+    name: gitlab-runner
+    groups: kvm
+    append: true
+  when: gitlab_runner_kvm_device is defined and gitlab_runner_kvm_device | length > 0
+
+- name: Set KVM device permissions (world-readable for userns-remap compatibility)
+  ansible.builtin.copy:
+    content: 'KERNEL=="kvm", NAME="%k", MODE="0666"'
+    dest: /etc/udev/rules.d/99-kvm-permissions.rules
+    mode: "0644"
+  notify: Reload udev rules
+  when: gitlab_runner_kvm_device is defined and gitlab_runner_kvm_device | length > 0
+
+# === Configure and start ===
+
+- name: Deploy gitlab-runner config.toml
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: /etc/gitlab-runner/config.toml
+    mode: "0600"
+    owner: gitlab-runner
+  notify: Restart gitlab-runner
+
+- name: Ensure gitlab-runner service is started and enabled
+  ansible.builtin.systemd:
+    name: gitlab-runner
+    state: started
+    enabled: true

@@ -1,0 +1,34 @@
+---
+# Shared facts for build and deploy plays.
+# Included via include_tasks to avoid duplication across tagged plays.
+
+- name: Set swarm registry URL (GitLab Container Registry by default)
+  ansible.builtin.set_fact:
+    swarm_registry_url: "{{ swarm_registry_url | default('registry.opensource.unicc.org/un/itu/genie-ai') }}"
+
+- name: Set global image tag (promoted CI tag, not git SHA)
+  ansible.builtin.set_fact:
+    genie_ai_global_tag: "{{ genie_ai_global_tag | default('main') }}"
+    # Per-image tag overrides (optional): {genie-ai-frontend: v1.2.3} pins
+    #    one image to a specific version; others use genie_ai_global_tag.
+    image_tag_overrides: "{{ image_tag_overrides | default({}) }}"
+
+- name: Set genieai_images list (16 custom images — used by env.j2 per-service vars)
+  ansible.builtin.set_fact:
+    genieai_images:
+      - { name: "genie-ai-frontend" }
+      - { name: "genie-ai-backend" }
+      - { name: "genie-ai-db-migrations" }
+      - { name: "genie-ai-document-repository" }
+      - { name: "genie-ai-nginx" }
+      - { name: "genie-ai-kong-config" }
+      - { name: "genie-ai-chatqna-server" }
+      - { name: "genie-ai-dataprep-arango" }
+      - { name: "genie-ai-retriever-arango" }
+      - { name: "genie-ai-reranker" }
+      - { name: "genie-ai-embedding" }
+      - { name: "genie-ai-textgen" }
+      - { name: "genie-ai-postgres-init" }
+      - { name: "genie-ai-keycloak" }
+      - { name: "genie-ai-keycloak-config" }
+      - { name: "genie-ai-tempo-proxy" }

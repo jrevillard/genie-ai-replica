@@ -1,0 +1,30 @@
+---
+# GPU-host runner — bb-ai-gpu-01 (10.0.0.110).
+#
+# Docker is already installed and owned by deploy-gpu.yml, so the docker role
+# must NOT touch daemon.json or upgrade packages — either would restart Docker
+# and kill the GPU API. The two flags below disable only those mutations; the
+# role's safe tasks (repo/pin/group/python3-docker) still run for consistency.
+#
+# concurrent=5 with tight per-job limits; runc runtime so CI jobs can never
+# touch the GPU. KVM kept (Android emulator CI).
+
+gitlab_runner_description: "genie-ai-runner-gpu"
+
+# Docker role safety flags — see roles/docker/defaults/main.yml. These are the
+# ONLY two mutation points that restart the daemon; disabling them leaves the
+# GPU host's Docker (and its 7 inference containers) untouched.
+docker_manage_daemon_json: false   # do NOT clobber the NVIDIA daemon.json (Restart Docker)
+docker_upgrade_enabled: false      # do NOT upgrade docker-ce (postinst restarts daemon)
+
+# Runner tuning — cap CI load so it never starves vLLM model loads.
+# Memory aligned to the main runner default (4g) so heavy CI jobs (jest
+# frontend tests) don't OOM on the GPU host. NOTE: concurrent=5 × 4g = 20g
+# worst-case CI memory — watch vLLM under load; reduce concurrent if it starves.
+gitlab_runner_concurrent: 5
+gitlab_runner_limit: 5
+gitlab_runner_memory_limit: "4g"
+gitlab_runner_cpu_limit: "1.0"
+
+# Force runc so CI job containers bypass the daemon's default-runtime: nvidia.
+gitlab_runner_docker_runtime: "runc"

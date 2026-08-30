@@ -88,7 +88,7 @@ class NotificationQueue {
   async isConnected() {
     try {
       return (await this.connection.ping()) === 'PONG';
-    } catch (_) {
+    } catch {
       return false;
     }
   }

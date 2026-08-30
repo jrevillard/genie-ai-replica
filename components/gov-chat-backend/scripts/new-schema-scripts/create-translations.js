@@ -59,7 +59,7 @@ const { Translate } = require('@google-cloud/translate').v2;
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const crypto = require('crypto');
+const nodeCrypto = require('crypto');
 require('dotenv').config();
 
 // --- Internal Translation Service Client ---
@@ -94,12 +94,12 @@ class InternalTranslationClient {
       const response = await fetch(this.loginEndpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           loginName: username,
-          encPassword: encPassword, // Send hashed password
-        }),
+          encPassword: encPassword // Send hashed password
+        })
       });
 
       if (!response.ok) {
@@ -130,10 +130,7 @@ class InternalTranslationClient {
    * @returns {string} The hashed password
    */
   hashPassword(password) {
-    return crypto
-      .createHash('sha256')
-      .update(password)
-      .digest('hex');
+    return nodeCrypto.createHash('sha256').update(password).digest('hex');
   }
 
   /**
@@ -152,19 +149,21 @@ class InternalTranslationClient {
       const response = await fetch(this.translateEndpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           texts: [text],
           source_lang: sourceLang,
-          target_lang: targetLang,
-        }),
+          target_lang: targetLang
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Translation request failed: ${response.status} ${response.statusText}. ${errorData.message || ''}`);
+        throw new Error(
+          `Translation request failed: ${response.status} ${response.statusText}. ${errorData.message || ''}`
+        );
       }
 
       const data = await response.json();
@@ -190,10 +189,10 @@ class InternalTranslationClient {
   askQuestion(query, hidden = false) {
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout,
+      output: process.stdout
     });
 
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       if (hidden) {
         // Hide input for password
         const stdin = process.stdin;
@@ -204,7 +203,7 @@ class InternalTranslationClient {
         });
       }
 
-      rl.question(query, ans => {
+      rl.question(query, (ans) => {
         rl.close();
         resolve(ans);
       });
@@ -218,15 +217,17 @@ class InternalTranslationClient {
  * @returns {Promise<string>} The user's answer.
  */
 function askQuestion(query) {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-  
-    return new Promise(resolve => rl.question(query, ans => {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) =>
+    rl.question(query, (ans) => {
       rl.close();
       resolve(ans);
-    }));
+    })
+  );
 }
 
 class TranslationCreator {
@@ -259,7 +260,7 @@ class TranslationCreator {
       const credentialsRaw = fs.readFileSync(path.resolve(credentialsPath), 'utf8');
       credentials = JSON.parse(credentialsRaw);
     } catch (error) {
-      throw new Error(`Failed to read Google credentials from ${credentialsPath}: ${error.message}`);
+      throw new Error(`Failed to read Google credentials from ${credentialsPath}: ${error.message}`, { cause: error });
     }
 
     // Map service account fields to expected names
@@ -336,7 +337,7 @@ class TranslationCreator {
       }
 
       // Add indexes for serviceCategoryTranslations and serviceTranslations
-      if (!(await this.categoryTranslations.indexes()).some(idx => idx.name === 'idx_category_language')) {
+      if (!(await this.categoryTranslations.indexes()).some((idx) => idx.name === 'idx_category_language')) {
         await this.categoryTranslations.ensureIndex({
           type: 'hash',
           fields: ['serviceCategoryId', 'languageCode'],
@@ -346,7 +347,7 @@ class TranslationCreator {
         console.log('✓ Created index idx_category_language on serviceCategoryTranslations');
       }
 
-      if (!(await this.serviceTranslations.indexes()).some(idx => idx.name === 'idx_service_language')) {
+      if (!(await this.serviceTranslations.indexes()).some((idx) => idx.name === 'idx_service_language')) {
         await this.serviceTranslations.ensureIndex({
           type: 'hash',
           fields: ['serviceId', 'languageCode'],
@@ -412,30 +413,44 @@ class TranslationCreator {
       console.log(`\nCreating category translations for ${lang}...`);
 
       // First, try to fetch English translations from serviceCategoryTranslations
-      let categories = await this.db.query(aql`
+      let categories = await this.db
+        .query(
+          aql`
         FOR trans IN ${this.categoryTranslations}
           FILTER LOWER(trans.languageCode) == "en" AND trans.translation != null
           RETURN { _key: trans.serviceCategoryId, nameEN: trans.translation }
-      `).then(cursor => cursor.all());
+      `
+        )
+        .then((cursor) => cursor.all());
 
       // If no translations found, fall back to nameEN in base collection
       if (categories.length === 0) {
-        console.log('No English translations found in serviceCategoryTranslations, checking serviceCategories.nameEN...');
-        categories = await this.db.query(aql`
+        console.log(
+          'No English translations found in serviceCategoryTranslations, checking serviceCategories.nameEN...'
+        );
+        categories = await this.db
+          .query(
+            aql`
           FOR cat IN ${this.serviceCategories}
             FILTER cat.nameEN != null
             RETURN { _key: cat._key, nameEN: cat.nameEN }
-        `).then(cursor => cursor.all());
+        `
+          )
+          .then((cursor) => cursor.all());
       }
 
       console.log(`Found ${categories.length} categories to translate.`);
 
       // Fetch existing translations for the language (case-insensitive)
-      const existingTranslations = await this.db.query(aql`
+      const existingTranslations = await this.db
+        .query(
+          aql`
         FOR trans IN ${this.categoryTranslations}
           FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
           RETURN trans.serviceCategoryId
-      `).then(cursor => cursor.all());
+      `
+        )
+        .then((cursor) => cursor.all());
 
       // Check if there are existing translations
       if (existingTranslations.length > 0) {
@@ -511,30 +526,42 @@ class TranslationCreator {
       console.log(`\nCreating service translations for ${lang}...`);
 
       // First, try to fetch English translations from serviceTranslations
-      let services = await this.db.query(aql`
+      let services = await this.db
+        .query(
+          aql`
         FOR trans IN ${this.serviceTranslations}
           FILTER LOWER(trans.languageCode) == "en" AND trans.translation != null
           RETURN { _key: trans.serviceId, nameEN: trans.translation }
-      `).then(cursor => cursor.all());
+      `
+        )
+        .then((cursor) => cursor.all());
 
       // If no translations found, fall back to nameEN in base collection
       if (services.length === 0) {
         console.log('No English translations found in serviceTranslations, checking services.nameEN...');
-        services = await this.db.query(aql`
+        services = await this.db
+          .query(
+            aql`
           FOR srv IN ${this.services}
             FILTER srv.nameEN != null
             RETURN { _key: srv._key, nameEN: srv.nameEN }
-        `).then(cursor => cursor.all());
+        `
+          )
+          .then((cursor) => cursor.all());
       }
 
       console.log(`Found ${services.length} services to translate.`);
 
       // Fetch existing translations for the language (case-insensitive)
-      const existingTranslations = await this.db.query(aql`
+      const existingTranslations = await this.db
+        .query(
+          aql`
         FOR trans IN ${this.serviceTranslations}
           FILTER LOWER(trans.languageCode) == ${lang.toLowerCase()}
           RETURN trans.serviceId
-      `).then(cursor => cursor.all());
+      `
+        )
+        .then((cursor) => cursor.all());
 
       // Check if there are existing translations
       if (existingTranslations.length > 0) {
@@ -645,37 +672,39 @@ async function main() {
     process.exit(1);
   }
 
-    // Read configuration from environment variables, with defaults
-    const dbConfig = {
-        url: process.env.ARANGO_URL || "http://localhost:8529",
-        databaseName: process.env.ARANGO_DATABASE || "node-services",
-        auth: {
-            username: process.env.ARANGO_USER || "root",
-            password: process.env.ARANGO_PASSWORD || "test"
-        }
-    };
-
-    // --- Confirmation Prompt ---
-    console.log('--- Database Translation Creation Script ---');
-    console.log(`Translation Engine: ${translationEngine === 'google' ? 'Google Cloud Translate' : 'Internal Translation Service'}`);
-    console.log(`This script will translate categories and services into '${lang.toUpperCase()}'.`);
-    console.log('\nDatabase configuration to be used:');
-    console.log(`  URL:      ${dbConfig.url}`);
-    console.log(`  Database: ${dbConfig.databaseName}`);
-    console.log(`  User:     ${dbConfig.auth.username}`);
-
-    if (translationEngine === 'internal') {
-      const serviceUrl = process.env.TRANSLATION_SERVICE_URL || 'http://localhost:3000';
-      console.log(`\nTranslation Service: ${serviceUrl}`);
+  // Read configuration from environment variables, with defaults
+  const dbConfig = {
+    url: process.env.ARANGO_URL || 'http://localhost:8529',
+    databaseName: process.env.ARANGO_DATABASE || 'node-services',
+    auth: {
+      username: process.env.ARANGO_USER || 'root',
+      password: process.env.ARANGO_PASSWORD || 'test'
     }
+  };
 
-    const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+  // --- Confirmation Prompt ---
+  console.log('--- Database Translation Creation Script ---');
+  console.log(
+    `Translation Engine: ${translationEngine === 'google' ? 'Google Cloud Translate' : 'Internal Translation Service'}`
+  );
+  console.log(`This script will translate categories and services into '${lang.toUpperCase()}'.`);
+  console.log('\nDatabase configuration to be used:');
+  console.log(`  URL:      ${dbConfig.url}`);
+  console.log(`  Database: ${dbConfig.databaseName}`);
+  console.log(`  User:     ${dbConfig.auth.username}`);
 
-    if (answer.toLowerCase() !== 'y') {
-        console.log('Operation cancelled by user. Exiting.');
-        process.exit(0);
-    }
-    // --- End Confirmation Prompt ---
+  if (translationEngine === 'internal') {
+    const serviceUrl = process.env.TRANSLATION_SERVICE_URL || 'http://localhost:3000';
+    console.log(`\nTranslation Service: ${serviceUrl}`);
+  }
+
+  const answer = await askQuestion('\nAre you sure you want to proceed with these settings? (Y/n) ');
+
+  if (answer.toLowerCase() !== 'y') {
+    console.log('Operation cancelled by user. Exiting.');
+    process.exit(0);
+  }
+  // --- End Confirmation Prompt ---
 
   try {
     const creator = new TranslationCreator(dbConfig, translationEngine);

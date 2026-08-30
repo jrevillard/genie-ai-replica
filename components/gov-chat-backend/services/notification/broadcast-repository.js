@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const nodeCrypto = require('crypto');
 const { randomUUID } = require('crypto');
 const { aql } = require('arangojs');
 const { logger } = require('../../shared-lib');
@@ -49,7 +49,7 @@ class BroadcastRepository {
   }
 
   keyFor(idempotencyKey) {
-    return crypto.createHash('sha256').update(String(idempotencyKey)).digest('hex');
+    return nodeCrypto.createHash('sha256').update(String(idempotencyKey)).digest('hex');
   }
 
   /**

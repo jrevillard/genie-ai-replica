@@ -1,0 +1,43 @@
+---
+# GENIE.AI - GitLab Runner Deployment
+#
+# Installs Docker, a Docker socket proxy, and GitLab Runner on target host.
+# CI jobs access Docker through the proxy (filtered API), not the raw socket.
+#
+# Runner authentication token (glrt-xxx) must be set in vault before running.
+# Create the runner in GitLab UI: Settings > CI/CD > Runners > New project runner
+#
+# Usage:
+#   ansible-playbook -i inventory/gitlab-runner.ini gitlab-runner.yml --vault-id gitlab@prompt
+#
+# Prerequisites:
+#   ansible-galaxy collection install -r requirements.yml
+#
+# Tags:
+#   docker  - Install Docker only
+#   proxy   - Deploy Docker socket proxy only
+#   runner  - Install and configure GitLab Runner only
+
+- name: GitLab Runner - Install Docker
+  hosts: gitlab_runners
+  become: true
+  tags: [docker]
+  roles:
+    - role: docker
+
+- name: GitLab Runner - Docker Socket Proxy
+  hosts: gitlab_runners
+  become: true
+  tags: [proxy]
+  tasks:
+    - name: Include docker_socket_proxy role
+      ansible.builtin.include_role:
+        name: docker_socket_proxy
+      when: gitlab_runner_use_socket_proxy | default(true) | bool
+
+- name: GitLab Runner - Install and configure
+  hosts: gitlab_runners
+  become: true
+  tags: [runner]
+  roles:
+    - role: gitlab_runner

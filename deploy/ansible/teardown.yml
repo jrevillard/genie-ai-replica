@@ -1,0 +1,66 @@
+---
+# GENIE.AI - Teardown Playbook
+#
+# Removes the Docker Swarm stack and optionally cleans up volumes and registry.
+#
+# Usage:
+#   ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt
+#   ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt -e "teardown_remove_volumes=true"
+#   ansible-playbook -i inventory/test.ini teardown.yml --vault-id test@prompt -e "teardown_remove_registry=true"
+
+- name: GENIE.AI - Remove Docker Swarm stack
+  hosts: swarm_managers
+  become: true
+  tasks:
+    - name: Check if stack exists
+      ansible.builtin.command: docker stack ls --filter name={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+      register: stack_check
+      changed_when: false
+      failed_when: false
+
+    - name: Remove stack
+      ansible.builtin.command: docker stack rm {{ stack_name }}
+      when: stack_check.stdout | length > 0
+      changed_when: true
+
+    - name: Wait for services to stop
+      ansible.builtin.pause:
+        seconds: 30
+      when: stack_check.stdout | length > 0
+
+    - name: Verify stack is removed
+      ansible.builtin.command: docker stack ls --filter name={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+      register: stack_verify
+      changed_when: false
+
+    - name: Assert stack is removed
+      ansible.builtin.assert:
+        that:
+          - stack_verify.stdout | length == 0
+        fail_msg: "Stack {{ stack_name }} is still running. Check with: docker stack ls"
+        success_msg: "Stack {{ stack_name }} removed successfully"
+
+    - name: List named volumes (dry run)
+      ansible.builtin.command: docker volume ls --filter label=com.docker.stack.namespace={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+      register: volume_list
+      changed_when: false
+
+    - name: Named volumes (not removed)
+      ansible.builtin.debug:
+        msg: "{{ volume_list.stdout_lines }}"
+      when: not teardown_remove_volumes | bool
+
+    - name: Remove named volumes
+      ansible.builtin.command: docker volume rm {{ item }}
+      loop: "{{ volume_list.stdout_lines }}"
+      when:
+        - teardown_remove_volumes | bool
+        - volume_list.stdout_lines | length > 0
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Stop local registry (legacy — only if present from older deployments)
+      community.docker.docker_container:
+        name: registry
+        state: absent
+      when: teardown_remove_registry | bool

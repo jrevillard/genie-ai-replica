@@ -26,12 +26,10 @@ The repository is organized to support modularity, shared libraries, and third-p
 
 ```plaintext
 /unicc-itu-genie-ai
-├── api-gateway-solution/        # API gateway configs (nginx, Kong, Keycloak)
-│   ├── nginx/                   # Nginx configuration files
-│   ├── kong-backups/            # Kong gateway backups
-│   ├── kong-postgres-backups/   # Kong PostgreSQL backups
-│   ├── new-config/              # New configuration files
-│   └── old-config/              # Legacy configuration files
+├── api-gateway-solution/        # API gateway configs (nginx, Kong)
+│   ├── nginx/                   # Nginx configuration (template-based, auto-rendered)
+│   ├── new-config/              # Kong configuration files and scripts
+│   └── scripts/                 # Kong management utilities
 ├── components/                  # Core applications
 │   ├── gov-chat-backend/        # Node.js backend
 │   │   ├── controllers/         # Request handlers
@@ -62,7 +60,6 @@ The repository is organized to support modularity, shared libraries, and third-p
 │   ├── chatqna/                 # ChatQnA component overlays
 │   ├── core/                    # Core OPEA overlays
 │   ├── dataprep/                # Data preparation overlays
-│   ├── http-service/            # HTTP service overlays
 │   ├── retriever/               # Retriever component overlays
 │   ├── reranker/                # Reranker component overlays
 │   └── build-patches/           # Build modification patches
@@ -82,8 +79,8 @@ The repository is organized to support modularity, shared libraries, and third-p
 ├── CONTRIBUTING.md              # Contribution guidelines
 ├── STANDARDS.md                 # Coding standards and practices
 ├── THIRD_PARTY.md               # Third-party integration guidelines
-├── GENIE.AI-Installation-Configuration-Guide.md # Installation guide
-├── GENIE.AI-Data-Labelling-Strategy.md # Data labeling strategy
+├── site/content/en/docs/deployment/install-guide.md # Installation guide
+├── site/content/en/docs/rag/data-labeling.md # Data labeling strategy
 ├── proposed-repo-structure-changes.md # Repository restructuring plan
 ├── README.md                    # Project overview
 ├── docker-compose.yaml          # Main Docker Compose configuration
@@ -342,8 +339,8 @@ For each team branch:
   - **Coding Standards**: Adhere to project style guides (e.g., ESLint for JavaScript, Prettier for formatting) as defined in `STANDARDS.md`.
   - **Third-Party Requirements**: Follow integration patterns specified in `THIRD_PARTY.md`.
   - **Modularity**: Use `/components/shared` for reusable code (e.g., `/components/shared/lib/`).
-  - **Documentation**: Update relevant documentation in root directory files (e.g., `GENIE.AI-Installation-Configuration-Guide.md`) for new features.
-  - **Configuration**: Follow installation and configuration patterns from `GENIE.AI-Installation-Configuration-Guide.md`.
+  - **Documentation**: Update relevant documentation in root directory files (e.g., `site/content/en/docs/deployment/install-guide.md`) for new features.
+  - **Configuration**: Follow installation and configuration patterns from `site/content/en/docs/deployment/install-guide.md`.
 - Create logical commits:
   ```bash
   git add <files>
@@ -363,11 +360,11 @@ For each team branch:
   npm test  # Inside component directory
   ```
 - Add integration tests to `/tests` for cross-component interactions.
-- Verify builds following `GENIE.AI-Installation-Configuration-Guide.md`:
+- Verify builds following `site/content/en/docs/deployment/install-guide.md`:
   ```bash
   docker-compose up
   ```
-- Test environment configurations per `GENIE.AI-Installation-Configuration-Guide.md`.
+- Test environment configurations per `site/content/en/docs/deployment/install-guide.md`.
 - Ensure all tests pass before submitting a merge request.
 
 #### 5. Submitting for Review
@@ -381,7 +378,7 @@ For each team branch:
     - Description of changes
     - Related issue numbers
     - Testing performed
-    - Reference to relevant sections of `GENIE.AI-Installation-Configuration-Guide.md` if applicable
+    - Reference to relevant sections of `site/content/en/docs/deployment/install-guide.md` if applicable
 - Push to GitLab:
   ```bash
   git push origin feature/<description>
@@ -439,7 +436,7 @@ All new contributors must review and agree to:
 - **`THIRD_PARTY.md`**: Third-party integration guidelines and requirements
 - **`STANDARDS.md`**: Coding standards, development practices, and quality requirements
 - **`CONTRIBUTING.md`**: General contribution guidelines and process
-- **`GENIE.AI-Installation-Configuration-Guide.md`**: Technical setup and configuration
+- **`site/content/en/docs/deployment/install-guide.md`**: Technical setup and configuration
 - **This document**: Code management process and workflows
 
 #### Long-Term Partner Setup
@@ -465,7 +462,7 @@ All new contributors must review and agree to:
 - **Challenge teams**: Work in designated team branches, follow challenge-specific timelines and deliverables.
 - Submit merge requests to `main` for integration after thorough testing.
 - Ensure all contributions comply with `STANDARDS.md` and `THIRD_PARTY.md`.
-- Reference `GENIE.AI-Installation-Configuration-Guide.md` for any environment or configuration changes.
+- Reference `site/content/en/docs/deployment/install-guide.md` for any environment or configuration changes.
 
 ### Communication
 - **Sync Meetings**: Bi-weekly meetings to review progress, discuss integration, and address challenges.
@@ -475,7 +472,7 @@ All new contributors must review and agree to:
 - **Documentation**:
   - UNICC ITU documents `main` branch changes affecting third parties in root-level markdown files.
   - Third parties document their contributions in merge requests.
-  - Configuration changes reference `GENIE.AI-Installation-Configuration-Guide.md`.
+  - Configuration changes reference `site/content/en/docs/deployment/install-guide.md`.
   - Standard compliance verified against `STANDARDS.md` and `THIRD_PARTY.md`.
 
 ## Best Practices
@@ -486,7 +483,7 @@ All contributors must be familiar with:
 - **`THIRD_PARTY.md`**: Understand third-party integration requirements
 - **`STANDARDS.md`**: Follow coding standards and development practices
 - **`CONTRIBUTING.md`**: Adhere to contribution guidelines
-- **`GENIE.AI-Installation-Configuration-Guide.md`**: Follow installation and configuration patterns
+- **`site/content/en/docs/deployment/install-guide.md`**: Follow installation and configuration patterns
 
 ### Commit Guidelines
 - Write clear, descriptive messages:
@@ -531,12 +528,12 @@ All contributors must be familiar with:
 - **NOOR-AI-AL-TAFSIR Issues**: `https://gitlab.com/noor-al-tafsir/noor-al-tafsir/-/issues`
 - **Documentation**:
   - `README.md` - Project overview and quick start
-  - `GENIE.AI-Installation-Configuration-Guide.md` - Detailed installation and setup guide
+  - `site/content/en/docs/deployment/install-guide.md` - Detailed installation and setup guide
   - `STANDARDS.md` - Coding standards and development practices
   - `CONTRIBUTING.md` - Contribution guidelines
   - `THIRD_PARTY.md` - Third-party integration guidelines
   - `CLA.md` - Contributor License Agreement
-  - `GENIE.AI-Data-Labelling-Strategy.md` - Data labeling guidelines
+  - `site/content/en/docs/rag/data-labeling.md` - Data labeling guidelines
   - `proposed-repo-structure-changes.md` - Repository restructuring plan
 - **Contact**: [TBD, to be provided by UNICC ITU]
 
@@ -553,7 +550,7 @@ This code management process ensures efficient collaboration, high code quality,
 - **[`CONTRIBUTING.md`](CONTRIBUTING.md)**: General contribution guidelines and workflows
 - **[`THIRD_PARTY.md`](THIRD_PARTY.md)**: Specific requirements for third-party integrations
 - **[`STANDARDS.md`](STANDARDS.md)**: Coding standards and development practices
-- **[`GENIE.AI-Installation-Configuration-Guide.md`](GENIE.AI-Installation-Configuration-Guide.md)**: Technical setup and configuration
+- **[`site/content/en/docs/deployment/install-guide.md`](site/content/en/docs/deployment/install-guide.md)**: Technical setup and configuration
 
 ### Access Models
 - **Long-term Partners**: Dedicated branches with cherry-pick workflow for sustained collaboration

@@ -1,129 +1,11 @@
 require('dotenv').config();
-const axios = require('axios');
-const { Database, aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
+const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 const { Worker } = require('worker_threads');
 const path = require('path');
-const toolRegistry = require('./tool-registry');
-const { runWithTools } = require('./tool-orchestrator');
-
-/**
- * Three-tier hybrid weather router.
- *
- * Tier 1 — hard weather terms:  route to weather immediately, no LLM.
- * Tier 2 — no weather signals:  route to RAG immediately, no LLM.
- * Tier 3 — ambiguous terms:     ask Granite to classify YES/NO; fallback=RAG on timeout/error.
- */
-async function classifyWeatherWithLLM(query) {
-  const vllmBase = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
-  const model    = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-3.3-2b-instruct';
-  try {
-    const resp = await axios.post(
-      `${vllmBase}/v1/chat/completions`,
-      {
-        model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a query classifier. Reply with exactly one word: YES or NO. No punctuation.',
-          },
-          {
-            role: 'user',
-            content:
-              `Is the following query asking about weather conditions or a meteorological ` +
-              `forecast for a specific location or time period (past, present, or future)?\n\nQuery: "${query}"`,
-          },
-        ],
-        max_tokens: 3,
-        temperature: 0,
-      },
-      { timeout: 5000 },
-    );
-    const answer = (resp.data?.choices?.[0]?.message?.content || '').trim().toUpperCase();
-    logger.info(`[WEATHER] LLM classifier → "${answer}"`);
-    return answer.startsWith('YES');
-  } catch (err) {
-    logger.warn(`[WEATHER] LLM classifier failed (${err.message}) — defaulting to RAG`);
-    return false;
-  }
-}
-
-
-function getClientDate(queryData) {
-  const clientContext = queryData.clientContext || {};
-  const iso = clientContext.currentTimeIso || queryData.timestamp || new Date().toISOString();
-  const parsed = new Date(iso);
-  const baseDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  const offset = Number(clientContext.timezoneOffsetMinutes);
-
-  if (!Number.isFinite(offset)) {
-    return { date: baseDate, useUtc: false, clientContext };
-  }
-
-  return {
-    date: new Date(baseDate.getTime() + offset * 60 * 1000),
-    useUtc: true,
-    clientContext,
-  };
-}
-
-function formatClientDate(queryData) {
-  const { date, useUtc, clientContext } = getClientDate(queryData);
-  const locale = clientContext.locale || queryData.language || 'en';
-  const options = {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    ...(useUtc ? { timeZone: 'UTC' } : {}),
-  };
-  const formattedDate = new Intl.DateTimeFormat(locale, options).format(date);
-  const formattedTime = new Intl.DateTimeFormat(locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    ...(useUtc ? { timeZone: 'UTC' } : {}),
-  }).format(date);
-  const timezone = clientContext.timezoneName ||
-    (Number.isFinite(Number(clientContext.timezoneOffsetMinutes))
-      ? `UTC${Number(clientContext.timezoneOffsetMinutes) >= 0 ? '+' : ''}${Number(clientContext.timezoneOffsetMinutes) / 60}`
-      : 'server local time');
-
-  return { formattedDate, formattedTime, timezone };
-}
-
-function isDirectDateTimeQuestion(query) {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return false;
-  return /\b(what|whats|what's)\s+(date|day|time)\b/.test(q) ||
-    /\b(date|day|time)\s+(is\s+it\s+)?(today|now|current)\b/.test(q) ||
-    /\bcurrent\s+(date|day|time)\b/.test(q) ||
-    /আজ\s*(কত\s*)?(তারিখ|বার|সময়|সময়)/.test(query || '');
-}
-
-function buildDirectDateTimeAnswer(queryData, query) {
-  if (!isDirectDateTimeQuestion(query)) return null;
-  const { formattedDate, formattedTime, timezone } = formatClientDate(queryData);
-  const locale = queryData.clientContext?.locale || queryData.language || '';
-  console.log(locale);
-  if (String(locale).startsWith('bn') || /[\u0980-\u09FF]/.test(query || '')) {
-    return `আজ ${formattedDate}। স্থানীয় সময় ${formattedTime} (${timezone})।`;
-  }
-  return `Today is ${formattedDate}. The local time is ${formattedTime} (${timezone}).`;
-}
-
-function buildTemporalSystemMessage(queryData) {
-  const { formattedDate, formattedTime, timezone } = formatClientDate(queryData);
-  const loginTime = queryData.clientContext?.loginTimeIso || 'unknown';
-  return [
-    'User temporal context:',
-    `- User local date: ${formattedDate}`,
-    `- User local time: ${formattedTime} (${timezone})`,
-    `- User login time: ${loginTime}`,
-    `- Server received time: ${new Date().toISOString()}`,
-    'Use this for today, now, tomorrow, current-season, and time-sensitive agricultural advice. Do not say the date is unavailable.',
-  ].join('\n');
-}
+const { NotFoundError } = require('../middleware/errors');
+const api = require('@opentelemetry/api');
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
 class QueryService {
   constructor() {
@@ -184,7 +66,7 @@ class QueryService {
    * @param {Object} payload - The request payload
    * @returns {Promise<Object>} The worker result
    */
-  runOPEAWorker(url, payload) {
+  runOPEAWorker(url, payload, headers = null) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, './opea-worker.js');
       const worker = new Worker(workerPath);
@@ -207,7 +89,7 @@ class QueryService {
         if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
       });
 
-      worker.postMessage({ url, payload });
+      worker.postMessage({ url, payload, headers });
     });
   }
 
@@ -222,51 +104,51 @@ class QueryService {
     const lastMessage = queryData.messages[queryData.messages.length - 1].content.toLowerCase();
 
     let response = `This is a general mock response. You asked about "${lastMessage}" within the context of "${categoryLabel}".`;
-    let metadata = {
+    const metadata = {
       source_documents: [],
-      confidence_score: Math.random() * (0.98 - 0.85) + 0.85,
+      confidence_score: Math.random() * (0.98 - 0.85) + 0.85
     };
 
     // Main theme response based on categoryLabel
     switch (categoryLabel) {
-      case "Identity & Civil Registration":
+      case 'Identity & Civil Registration':
         response = `This is a mock response regarding **Identity & Civil Registration**. This category covers services like applying for National IDs, passports, and birth certificates. What specific service do you need help with?`;
         break;
-      case "Taxes & Revenue":
+      case 'Taxes & Revenue':
         response = `This is a mock response for **Taxes & Revenue**. You can get assistance with filing returns, paying taxes, or getting a tax compliance certificate. Please specify what you need.`;
         break;
-      case "Business & Trade":
+      case 'Business & Trade':
         response = `This is a mock response for **Business & Trade**. We can help with business registration, permits, and licenses. How can I assist you today?`;
         break;
-      case "Healthcare & Social Services":
+      case 'Healthcare & Social Services':
         response = `This is a mock response for **Healthcare & Social Services**. This includes finding hospitals, information on national health insurance, and other social programs.`;
         break;
-      case "Education & Learning":
+      case 'Education & Learning':
         response = `This is a mock response for **Education & Learning**. You can find information on public schools, higher education loans, and curriculum details here.`;
         break;
-      case "Transportation & Mobility":
+      case 'Transportation & Mobility':
         response = `This is a mock response for **Transport & Licenses**. This covers driver's licenses, vehicle registration, and public transport information.`;
         break;
-      case "Housing & Urban Development":
+      case 'Housing & Urban Development':
         response = `This is a mock response for **Housing & Urban Development**. Information about affordable housing programs, land rates, and building permits can be found here.`;
         break;
-      case "Employment & Labor Services":
+      case 'Employment & Labor Services':
         response = `This is a mock response for **Employment & Labor Services**. We can provide information on job searching, labor laws, and workplace safety.`;
         break;
-      case "General":
+      case 'General':
         response = `This is a general mock response as no specific category was selected. I can answer questions about a wide range of government services. What would you like to know?`;
         break;
     }
 
     // Add documents based on serviceLabels
     if (serviceLabels && serviceLabels.length > 0) {
-      serviceLabels.forEach(label => {
+      serviceLabels.forEach((label) => {
         if (label.toLowerCase().includes('id')) {
           metadata.source_documents.push({
             document_id: `doc_id_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/id_application_form.pdf",
-            text: "Official form for National ID card application.",
-            categoryLabel: categoryLabel || "Identity & Civil Registration",
+            url: 'http://example.com/docs/id_application_form.pdf',
+            text: 'Official form for National ID card application.',
+            categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.95
           });
@@ -274,9 +156,9 @@ class QueryService {
         if (label.toLowerCase().includes('birth registration')) {
           metadata.source_documents.push({
             document_id: `doc_birth_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/birth_registration_guide",
-            text: "A step-by-step guide on registering a birth.",
-            categoryLabel: categoryLabel || "Identity & Civil Registration",
+            url: 'http://example.com/docs/birth_registration_guide',
+            text: 'A step-by-step guide on registering a birth.',
+            categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.98
           });
@@ -284,9 +166,9 @@ class QueryService {
         if (label.toLowerCase().includes('passport')) {
           metadata.source_documents.push({
             document_id: `doc_passport_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/passport_application_ecitizen",
-            text: "Link to the eCitizen portal for passport applications.",
-            categoryLabel: categoryLabel || "Identity & Civil Registration",
+            url: 'http://example.com/docs/passport_application_ecitizen',
+            text: 'Link to the eCitizen portal for passport applications.',
+            categoryLabel: categoryLabel || 'Identity & Civil Registration',
             serviceLabels: [label],
             score: 0.93
           });
@@ -294,9 +176,9 @@ class QueryService {
         if (label.toLowerCase().includes('tax')) {
           metadata.source_documents.push({
             document_id: `doc_tax_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/tax_payment_options",
-            text: "Information on various methods to pay your taxes.",
-            categoryLabel: categoryLabel || "Taxes & Revenue",
+            url: 'http://example.com/docs/tax_payment_options',
+            text: 'Information on various methods to pay your taxes.',
+            categoryLabel: categoryLabel || 'Taxes & Revenue',
             serviceLabels: [label],
             score: 0.91
           });
@@ -304,9 +186,9 @@ class QueryService {
         if (label.toLowerCase().includes('business')) {
           metadata.source_documents.push({
             document_id: `doc_biz_${Math.floor(Math.random() * 1000)}`,
-            url: "http://example.com/docs/business_registration_requirements",
-            text: "Checklist of requirements for starting a new business.",
-            categoryLabel: categoryLabel || "Business & Trade",
+            url: 'http://example.com/docs/business_registration_requirements',
+            text: 'Checklist of requirements for starting a new business.',
+            categoryLabel: categoryLabel || 'Business & Trade',
             serviceLabels: [label],
             score: 0.96
           });
@@ -318,9 +200,9 @@ class QueryService {
     if (metadata.source_documents.length === 0 && serviceLabels && serviceLabels.length > 0) {
       metadata.source_documents.push({
         document_id: `doc_generic_${Math.floor(Math.random() * 1000)}`,
-        url: "http://example.com/docs/general_info",
+        url: 'http://example.com/docs/general_info',
         text: `General information document related to your query about ${serviceLabels.join(', ')}.`,
-        categoryLabel: categoryLabel || "General",
+        categoryLabel: categoryLabel || 'General',
         serviceLabels: serviceLabels,
         score: 0.85
       });
@@ -330,21 +212,231 @@ class QueryService {
   }
 
   /**
+   * Parse a raw SSE line from ChatQnA's align_generator output.
+   * ChatQnA outputs Python repr() of bytes: data: b'text'\n\n
+   * @param {string} line - Raw SSE data line (without "data: " prefix)
+   * @returns {Object} Parsed event: { type: 'chunk'|'done'|'error', content?: string }
+   */
+  parseChatQnASSELine(line) {
+    const trimmed = line.trim();
+    if (trimmed === '[DONE]') {
+      return { type: 'done' };
+    }
+    // chatqna metadata event: a raw JSON object (NOT a Python-repr token chunk).
+    // Carries the reranker-grounded source documents, confidence, and is_grounded flag.
+    if (trimmed.startsWith('{')) {
+      try {
+        const obj = JSON.parse(trimmed);
+        if (obj && obj.type === 'metadata') {
+          return {
+            type: 'metadata',
+            source_documents: obj.source_documents ?? [],
+            confidence_score: obj.confidence_score ?? 0,
+            // Raw retrieval confidence (rank-weighted) and LLM self-grade, for
+            // admin/eval (QueryInspector). confidence_score above is the
+            // citizen-facing value (LLM self-grade when enabled, else retrieval).
+            retrieval_confidence_score: obj.retrieval_confidence_score ?? null,
+            self_confidence: Object.prototype.hasOwnProperty.call(obj, 'self_confidence') ? obj.self_confidence : null,
+            is_grounded: obj.is_grounded ?? false
+          };
+        }
+      } catch {
+        // Not valid JSON — fall through to token-chunk handling.
+      }
+    }
+    // Match Python repr: b'...' or b"..."
+    const match = trimmed.match(/^b(['"])(.*)\1$/s);
+    if (match) {
+      const quote = match[1];
+      let content = match[2];
+      // Decode Python repr escape sequences.
+      // Order matters: \\ must be handled before \x to avoid consuming escaped backslashes.
+      // Use placeholder for \\ so \x doesn't match the second backslash in \\xHH.
+      const BS = '\x00BS\x00';
+      content = content
+        .replace(/\\\\/g, BS)
+        .replace(/(?:\\x([0-9a-fA-F]{2}))+/g, (m) => {
+          const hex = m.replace(/\\x/g, '');
+          return Buffer.from(hex, 'hex').toString('utf8');
+        })
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '\t')
+        .replace(/\\r/g, '\r')
+        .replace(quote === "'" ? /\\'/g : /\\"/g, quote === '"' ? '"' : "'")
+        .replace(new RegExp(BS, 'g'), '\\')
+        // eslint-disable-next-line no-control-regex -- intentional: strip control chars from LLM output
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+      return { type: 'chunk', content };
+    }
+    return { type: 'error', raw: trimmed };
+  }
+
+  /**
+   * Initialize a streaming query — validate, save to DB, build OPEA payload.
+   * Returns early without calling ChatQnA (caller handles the stream).
+   * @param {Object} queryData - Query data from the request
+   * @param {Object} authHeaders - Auth headers to forward to OPEA
+   * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
+   */
+  async initStreamQuery(queryData, authHeaders) {
+    logger.info('QueryService.init_stream_query_start');
+
+    // Validation (reuse same logic as createQuery)
+    const missingFields = [];
+    if (!queryData.userId) missingFields.push('userId');
+    if (!queryData.sessionId) missingFields.push('sessionId');
+
+    if (!Array.isArray(queryData.messages) || queryData.messages.length === 0) {
+      if (queryData.text) {
+        queryData.messages = [{ role: 'user', content: queryData.text }];
+      } else {
+        missingFields.push('messages');
+      }
+    }
+
+    if (!queryData.context) {
+      queryData.context = { categoryLabel: null, serviceLabels: [] };
+    } else {
+      if (!Array.isArray(queryData.context.serviceLabels)) {
+        queryData.context.serviceLabels = [];
+      }
+      // Preserve null/undefined categoryLabel — null means "no category filter"
+      // (chatqna treats a missing categoryLabel as no category-level filter).
+      // Do NOT default to 'General' — that would inject a non-matching label.
+      if (queryData.context.categoryLabel === undefined) {
+        queryData.context.categoryLabel = null;
+      }
+    }
+
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
+    }
+
+    const lastMessage = queryData.messages[queryData.messages.length - 1];
+    const queryText = lastMessage ? lastMessage.content : '';
+
+    // Resolve categoryId
+    let categoryId = queryData.categoryId || null;
+    if (queryData.context?.categoryLabel && !categoryId) {
+      try {
+        const categoryQuery = aql`
+            FOR cat IN ${this.serviceCategories}
+              FILTER cat.nameEN == ${queryData.context.categoryLabel}
+              LIMIT 1
+              RETURN cat._key
+          `;
+        const cursor = await this.db.query(categoryQuery);
+        categoryId = await cursor.next();
+      } catch (error) {
+        logger.error(`Error resolving categoryId: ${error.message}`);
+      }
+    }
+
+    // Resolve serviceIds
+    let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];
+    if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
+      try {
+        const servicesQuery = aql`
+            FOR svc IN ${this.services}
+              FILTER svc.nameEN IN ${queryData.context.serviceLabels}
+              RETURN svc._key
+          `;
+        const cursor = await this.db.query(servicesQuery);
+        serviceIds = await cursor.all();
+      } catch (error) {
+        logger.error(`Error resolving serviceIds: ${error.message}`);
+      }
+    }
+
+    const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
+
+    const basicQueryDoc = {
+      userId: queryData.userId,
+      sessionId: queryData.sessionId,
+      timestamp: queryData.timestamp || new Date().toISOString(),
+      isAnswered: false,
+      categoryId,
+      serviceId: serviceIds.length > 0 ? serviceIds : null,
+      responseTime: 0,
+      contextOption: backendMode,
+      messages: queryData.messages,
+      context: queryData.context,
+      text: queryText
+    };
+
+    const query = await this.queries.save(basicQueryDoc);
+    const queryId = query._key;
+    logger.info('QueryService.stream_query_created', { queryId });
+
+    // Build OPEA payload with stream: true
+    const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
+    const opeaPort = process.env.OPEA_PORT || '8888';
+    const opeaUrl = `http://${opeaHost}:${opeaPort}/v1/chatqna`;
+
+    let opeaPayload;
+    if (backendMode === 'single-message') {
+      opeaPayload = { messages: queryText, stream: true };
+    } else {
+      opeaPayload = {
+        messages: queryData.messages,
+        context: {
+          categoryLabel: queryData.context.categoryLabel,
+          serviceLabels: queryData.context.serviceLabels,
+          language: queryData.context.language
+        },
+        stream: true
+      };
+    }
+
+    return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
+  }
+
+  /**
+   * Finalize a streaming query — update DB with response and metadata.
+   * @param {string} queryId - The query ID
+   * @param {string} responseText - The full accumulated response text
+   * @param {number} responseTime - Response time in milliseconds
+   * @param {Object} metadata - Metadata object (source_documents, confidence_score)
+   */
+  async finalizeStreamQuery(queryId, responseText, responseTime, metadata) {
+    logger.info('QueryService.finalize_stream_query_start', { queryId });
+
+    const updateData = {
+      response: responseText,
+      responseTime,
+      isAnswered: true,
+      metadata
+    };
+    await this.queries.update(queryId, updateData);
+
+    // Record analytics
+    if (this.analyticsService) {
+      try {
+        await this.analyticsService.recordQuery(await this.queries.document(queryId));
+      } catch (error) {
+        logger.error('QueryService.stream_analytics_failed', { queryId, error: error.message });
+      }
+    }
+
+    logger.info('QueryService.finalize_stream_query_complete', { queryId, responseTime });
+  }
+
+  /**
    * Create a new query
    * @param {Object} queryData - Query data
    * @returns {Promise<Object>} The created query
    */
-  async createQuery(queryData) {
+  async createQuery(queryData, headers = null) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.create_query_start');
       logger.info(`[DEBUG] Received full request payload from frontend: ${JSON.stringify(queryData, null, 2)}`);
 
-      const backendMode = process.env.CONTEXT_OPTION || 'single-message';
+      const backendMode = process.env.CONTEXT_OPTION || 'conversation-with-context-labels';
       logger.info(`[DEBUG] Backend is configured in "${backendMode}" mode.`);
 
       logger.info('[DEBUG] Starting validation of incoming data...');
-      let missingFields = [];
+      const missingFields = [];
 
       if (!queryData.userId) {
         logger.warn('[DEBUG] Validation FAILED: userId is missing.');
@@ -370,14 +462,15 @@ class QueryService {
           logger.info(`[DEBUG] Validation PASSED: messages array synthesized with 1 item.`);
         } else {
           // Only fail if BOTH messages and text are missing
-          logger.warn('[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.');
+          logger.warn(
+            '[DEBUG] Validation FAILED: messages array is missing or empty and no legacy "text" field found.'
+          );
           missingFields.push('messages');
         }
       } else {
         logger.info(`[DEBUG] Validation PASSED: messages array is present with ${queryData.messages.length} items.`);
       }
       // --- FIX: END messages VALIDATION ---
-
 
       // --- FIX: START context VALIDATION ---
       if (!queryData.context) {
@@ -387,22 +480,23 @@ class QueryService {
         logger.info('[DEBUG] Validation PASSED: Default context object supplied.');
       } else {
         logger.info('[DEBUG] Validation PASSED: context object is present.');
-        
+
         // Also validate the internals of the provided context
         if (!Array.isArray(queryData.context.serviceLabels)) {
           logger.warn('[DEBUG] Validation WARNING: context.serviceLabels is not an array. Defaulting to empty array.');
           queryData.context.serviceLabels = [];
         } else {
-          logger.info(`[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`);
+          logger.info(
+            `[DEBUG] Validation PASSED: context.serviceLabels is present with labels: ${queryData.context.serviceLabels.join(', ')}.`
+          );
         }
-        
+
         if (!queryData.context.categoryLabel) {
-           logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
-           queryData.context.categoryLabel = 'General';
+          logger.warn('[DEBUG] Validation WARNING: context.categoryLabel is missing. Defaulting to "General".');
+          queryData.context.categoryLabel = 'General';
         }
       }
       // --- FIX: END context VALIDATION ---
-
 
       if (missingFields.length > 0) {
         const errorMsg = `Missing required query data from frontend. Fields: ${missingFields.join(', ')}`;
@@ -417,15 +511,6 @@ class QueryService {
       if (!queryText) {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
-
-      const temporalSystemMessage = buildTemporalSystemMessage(queryData);
-      queryData.context = {
-        ...queryData.context,
-        temporalContext: {
-          client: queryData.clientContext || null,
-          serverReceivedAt: new Date().toISOString(),
-        },
-      };
 
       // Resolve categoryLabel to categoryId if not provided
       let categoryId = queryData.categoryId || null;
@@ -450,7 +535,7 @@ class QueryService {
       }
 
       // Optionally resolve serviceLabels to serviceIds (array)
-      let serviceIds = queryData.serviceId ? [queryData.serviceId] : [];  // Preserve if provided (as single or array)
+      let serviceIds = queryData.serviceId ? [queryData.serviceId] : []; // Preserve if provided (as single or array)
       if (queryData.context?.serviceLabels?.length > 0 && serviceIds.length === 0) {
         try {
           const servicesQuery = aql`
@@ -481,7 +566,6 @@ class QueryService {
         contextOption: backendMode,
         messages: queryData.messages,
         context: queryData.context,
-        clientContext: queryData.clientContext || null,
         text: queryText
       };
 
@@ -495,31 +579,13 @@ class QueryService {
       let opeaResponseTime = 0;
       const opeaStartTime = Date.now();
 
-      const directTemporalAnswer = buildDirectDateTimeAnswer(queryData, queryText);
-
       // *** START: TEST MODE LOGIC ***
-      if (directTemporalAnswer) {
-        logger.info('[TIME] Direct date/time query answered without RAG.');
-        opeaResponseContent = directTemporalAnswer;
-        opeaMetadata = {
-          source_documents: [],
-          confidence_score: 1.0,
-          temporal: true,
-          clientContext: queryData.clientContext || null,
-        };
-        opeaResponseTime = Date.now() - opeaStartTime;
-        await this.queries.update(queryId, {
-          response: opeaResponseContent,
-          responseTime: opeaResponseTime,
-          isAnswered: true,
-          metadata: opeaMetadata
-        });
-      } else if (backendMode === 'test-mode') {
+      if (backendMode === 'test-mode') {
         logger.info('[DEBUG] TEST MODE ACTIVATED. Bypassing OPEA call.');
         const mockData = this.getMockOpeaResponse(queryData);
         opeaResponseContent = mockData.response;
         opeaMetadata = mockData.metadata;
-        opeaResponseTime = (Date.now() - opeaStartTime) + Math.floor(Math.random() * 200); // Simulate network delay
+        opeaResponseTime = Date.now() - opeaStartTime + Math.floor(Math.random() * 200); // Simulate network delay
 
         logger.info(`[DEBUG] Mock response generated in ${opeaResponseTime}ms.`);
         logger.info(`[DEBUG] Mock Response Content: ${opeaResponseContent}`);
@@ -532,198 +598,7 @@ class QueryService {
           metadata: opeaMetadata
         };
         await this.queries.update(queryId, updateData);
-
       } else {
-        // ── Weather Query Direct Routing ─────────────────────────────────────
-        // Port 9000 on OPEA does not support OpenAI tool_calls. Weather queries
-        // are detected by the hybrid router above and forwarded to the weather-mcp-service.
-        const weatherEnabled = process.env.WEATHER_ENABLED === 'true';
-        const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://localhost:8000';
-        const lastUserMsg = [...(queryData.messages || [])].reverse().find(m => m.role === 'user')?.content || queryText;
-
-        // Hybrid weather router — five tiers (evaluated in order):
-        //   Tier 0: document/knowledge signals present   → RAG    (overrides everything)
-        //   Tier 1: hard weather event terms present     → weather (no LLM)
-        //   Tier 2: agricultural/knowledge terms present → RAG    (no LLM)
-        //   Tier 3: ambiguous weather terms present      → Granite LLM YES/NO
-        //   Tier 4: no signals at all                   → RAG    (no LLM)
-        //
-        // Tier 0 fires first: words like "uploaded", "listed", "threshold", "calendar"
-        // prove the user is querying a document — never a live forecast request.
-        // "weather" moved to WEATHER_AMBIGUOUS: it appears in document titles
-        // ("Crop Weather Calendar") and is not unambiguous enough for Tier 1.
-        const RAG_OVERRIDE = [
-          'uploaded', 'listed', 'according to', 'in the document', 'from the document',
-          'threshold', 'calendar', 'table', 'chart', 'section', 'page', 'schedule',
-          'what does', 'what is listed', 'what is stated', 'document says',
-        ];
-        // Question-form phrases that are unambiguously live forecast requests — they never
-        // appear in document/knowledge-base queries, so no LLM classification is needed.
-        const WEATHER_FORECAST_PHRASES = [
-          'how is the weather', 'what is the weather', 'what will the weather',
-          'weather today', 'weather tomorrow', 'weather this week', 'weather next week',
-          'weather next month', 'next month', '30 days', 'next 30 days',
-          'weather in 1', 'weather in 2', 'weather in 3', 'weather in 4', 'weather in 5',
-          'weather in 6', 'weather in 7', 'weather forecast', 'current weather',
-          'will it rain', 'will it be hot', 'will it be cold', 'how hot will', 'how cold will',
-        ];
-        const WEATHER_HARD      = ['rainfall', 'storm', 'flood', 'cyclone', 'monsoon', 'typhoon',
-          'bulletin', 'agrometeorological', 'agromet', 'agri advisory', 'national bulletin', 'advisory bulletin',
-          // geo-inference routing — delineation and satellite flood detection
-          'delineat', 'field boundar', 'farm boundar', 'plot boundar', 'field segment',
-          'flood detection', 'flood mapping', 'flood map', 'flood extent', 'flood zone',
-          'satellite flood', 'inundation map', 'detect flood', 'map flood', 'prithvi'];
-        const AGRO_TERMS        = [
-          'soil', 'crop', 'plant', 'pest', 'disease', 'seed', 'harvest', 'fertilizer',
-          'worm', 'insect', 'fungus', 'larvae', 'larva', 'bacteria', 'bacterial', 'viral',
-          'nitrogen', 'phosphorus', 'germination', 'irrigation', 'variety', 'hybrid',
-          'cultivation', 'paddy', 'rice', 'wheat', 'potato', 'maize', 'vegetable',
-          'infestation', 'blight', 'mite', 'aphid', 'thrip', 'nematode',
-        ];
-        const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
-        const PLANTING_DECISION_TERMS = ['sow', 'sowing', 'plant', 'planting', 'transplant', 'good time', 'right time'];
-        const CURRENT_TIME_TERMS = ['now', 'today', 'currently', 'current', 'this week', 'right now'];
-        const LONG_TERM_FORECAST_HORIZON = /\b(?:(?:next|in|for)\s+)?(?:[8-9]|[1-9]\d)\s*days?\b|\b(?:(?:next|in|for)\s+)?(?:two|three|four|five|six|[2-6])\s*weeks?\b|\bfortnight\b|\bnext\s+month\b|\b(?:next\s+)?(?:few|couple\s+of|coming)\s+months?\b/;
-
-        const lowerMsg          = lastUserMsg.toLowerCase();
-        const hasRagOverride    = RAG_OVERRIDE.some(kw => lowerMsg.includes(kw));
-        const hasForecastPhrase = WEATHER_FORECAST_PHRASES.some(kw => lowerMsg.includes(kw));
-        const hasHardSignal     = WEATHER_HARD.some(kw => lowerMsg.includes(kw));
-        const hasAgroTerm       = AGRO_TERMS.some(kw => lowerMsg.includes(kw));
-        const hasAmbiguous      = WEATHER_AMBIGUOUS.some(kw => lowerMsg.includes(kw));
-        const hasLongTermHorizon = LONG_TERM_FORECAST_HORIZON.test(lowerMsg);
-        const asksPlantingDecision =
-          hasAgroTerm &&
-          PLANTING_DECISION_TERMS.some(kw => lowerMsg.includes(kw)) &&
-          CURRENT_TIME_TERMS.some(kw => lowerMsg.includes(kw));
-
-        let isWeatherQuery = false;
-        if (weatherEnabled) {
-          if (hasRagOverride) {
-            // Tier 0: document/knowledge query signals — always RAG, no LLM call needed
-            logger.info('[WEATHER] Tier 0 — document/knowledge signal detected → RAG');
-          } else if (hasForecastPhrase || hasHardSignal || asksPlantingDecision || (hasAmbiguous && hasLongTermHorizon)) {
-            // Tier 1: unambiguous forecast phrase ("how is the weather", "weather tomorrow"…),
-            // hard event keyword (cyclone, flood…), current planting/sowing decision,
-            // or weather term with a long-term horizon beyond the 7-day short forecast.
-            isWeatherQuery = true;
-            logger.info(`[WEATHER] Tier 1 — ${asksPlantingDecision ? 'current planting decision' : (hasLongTermHorizon ? 'long-term forecast horizon' : (hasForecastPhrase ? 'forecast phrase' : 'hard weather keyword'))} → weather`);
-          } else if (hasAgroTerm) {
-            // Tier 2: agricultural/knowledge context — route to RAG without LLM call
-            // Agro terms (soil, pest, crop, worm…) never appear in real forecast queries
-            logger.info('[WEATHER] Tier 2 — agricultural term detected → RAG');
-          } else if (hasAmbiguous) {
-            // Tier 3: ambiguous measurable (weather, temperature, rain…) with no other context
-            // Only here do we call the LLM classifier
-            logger.info('[WEATHER] Tier 3 — ambiguous term, calling LLM classifier …');
-            isWeatherQuery = await classifyWeatherWithLLM(lastUserMsg);
-            logger.info(`[WEATHER] Tier 3 — LLM result → isWeatherQuery=${isWeatherQuery}`);
-          } else {
-            logger.info('[WEATHER] Tier 4 — no weather signals → RAG');
-          }
-        }
-
-        if (isWeatherQuery) {
-          logger.info(`[WEATHER] Weather query detected — routing to weather-mcp-service: "${lastUserMsg}"`);
-          // Geo-inference queries (delineation, flood) can take 3-10 minutes; regular
-          // weather forecasts complete in <5 s. Use a long timeout for the former.
-          const GEO_KEYWORDS = ['delineat', 'field boundar', 'farm boundar', 'flood detection',
-            'flood map', 'flood extent', 'satellite flood', 'inundation', 'prithvi'];
-          const lowerQuery = lastUserMsg.toLowerCase();
-          const isGeoQuery = GEO_KEYWORDS.some(kw => lowerQuery.includes(kw));
-          const wxTimeout  = isGeoQuery ? 660000 : 30000;   // 11 min for geo, 30 s for weather
-          if (isGeoQuery) logger.info('[WEATHER] Geo-inference query — using 11-minute timeout');
-          try {
-            const wResp = await axios.post(`${weatherMcpUrl}/query`, { query: lastUserMsg }, { timeout: wxTimeout });
-            opeaResponseContent = wResp.data.answer;
-            opeaMetadata = {
-              source_documents: [],
-              confidence_score: 1.0,
-              weather: true,
-              location:          wResp.data.location         ?? null,
-              forecast:          wResp.data.forecast         ?? null,
-              field_delineation: wResp.data.field_delineation ?? null,
-              flood_analysis:    wResp.data.flood_analysis    ?? null,
-              risk_tier:         wResp.data.risk_tier         ?? null,
-              risk_label:        wResp.data.risk_label        ?? null,
-            };
-          } catch (wErr) {
-            logger.error(`[WEATHER] weather-mcp-service call failed: ${wErr.message}`);
-            // Surface a more specific message when the geo-inference-worker is the failure point
-            const errBody = wErr.response?.data?.detail || wErr.response?.data || '';
-            const errStr  = typeof errBody === 'string' ? errBody : JSON.stringify(errBody);
-            const isGeoErr = isGeoQuery ||
-                             errStr.includes('geo') || errStr.includes('delineat') ||
-                             errStr.includes('flood') || errStr.includes('inference') ||
-                             wErr.response?.status === 502 ||
-                             wErr.code === 'ECONNABORTED';   // axios timeout
-            opeaResponseContent = isGeoErr
-              ? `The geospatial inference service is not available right now. Make sure the **geo-inference-worker** container is running.\n\n_Error: ${errStr || wErr.message}_`
-              : "I'm sorry, I couldn't fetch the weather information right now. Please try again later.";
-            opeaMetadata = { source_documents: [], confidence_score: 0, weather: true };
-          }
-          opeaResponseTime = Date.now() - opeaStartTime;
-          await this.queries.update(queryId, {
-            response: opeaResponseContent,
-            responseTime: opeaResponseTime,
-            isAnswered: true,
-            metadata: opeaMetadata
-          });
-
-        } else { // non-weather: tool orchestration or OPEA ChatQnA
-        const toolsEnabled = process.env.TOOLS_ENABLED === 'true';
-        const availableTools = toolsEnabled ? toolRegistry.getDefinitions() : [];
-
-        if (toolsEnabled && availableTools.length > 0) {
-          // ── Tool Orchestration via vLLM ──────────────────────────────────
-          const vllmUrl = process.env.VLLM_URL ||
-            `http://${process.env.OPEA_HOST || 'e2e-109-198'}:9000/v1/chat/completions`;
-          const vllmModel = process.env.VLLM_MODEL || 'granite-3.2-2b-instruct';
-
-          // Build OpenAI-compatible messages from queryData
-          const vllmMessages = [
-            { role: 'system', content: temporalSystemMessage },
-            ...queryData.messages.map(m => ({
-              role: m.role || 'user',
-              content: m.content
-            }))
-          ];
-
-          const llmClient = {
-            chat: async ({ messages, tools, tool_choice }) => {
-              const response = await axios.post(vllmUrl, {
-                model: vllmModel,
-                messages,
-                tools,
-                tool_choice: tool_choice || 'auto',
-                stream: false
-              });
-              return response.data;
-            }
-          };
-
-          logger.info('[DEBUG] Sending request via Tool Orchestration (vLLM)...');
-          const result = await runWithTools(llmClient, vllmMessages, availableTools, toolRegistry);
-
-          opeaResponseContent = result.content;
-          opeaMetadata = {
-            toolsUsedCount: result.toolsUsed,
-            source_documents: [],
-            confidence_score: 1.0,
-            orchestrator: true
-          };
-          opeaResponseTime = Date.now() - opeaStartTime;
-
-          const updateData = {
-            response: opeaResponseContent,
-            responseTime: opeaResponseTime,
-            isAnswered: true,
-            metadata: opeaMetadata
-          };
-          await this.queries.update(queryId, updateData);
-
-        } else {
-        // ── Existing: Worker thread → OPEA /v1/chatqna ───────────────────
         // *** EXISTING OPEA CALL LOGIC (NOW USING WORKER THREAD) ***
         const opeaHost = process.env.OPEA_HOST || 'e2e-109-198';
         const opeaPort = process.env.OPEA_PORT || '8888';
@@ -740,23 +615,21 @@ class QueryService {
           }
 
           opeaPayload = {
-            messages: `${temporalSystemMessage}\n\nUser question: ${queryText}`,
-            stream: false
+            messages: queryText,
+            stream: false,
+            context: {
+              language: queryData.context?.language
+            }
           };
         } else {
           logger.info('[DEBUG] Backend mode is "conversation-with-labels". Formatting payload with full context.');
           opeaPayload = {
-            messages: [
-              { role: 'system', content: temporalSystemMessage },
-              ...queryData.messages
-            ],
+            messages: queryData.messages,
             context: {
               categoryLabel: queryData.context.categoryLabel,
               serviceLabels: queryData.context.serviceLabels,
-              language: queryData.context.language,
-              temporalContext: queryData.context.temporalContext
+              language: queryData.context.language
             },
-            user_id: queryData.userId,
             stream: false
           };
         }
@@ -764,8 +637,13 @@ class QueryService {
         logger.info('[DEBUG] Sending request to OPEA via Worker Thread...');
         logger.info(`[DEBUG] OPEA Payload: ${JSON.stringify(opeaPayload, null, 2)}`);
 
+        // Inject traceparent from active OTel context so OPEA services join the distributed trace
+        const traceHeaders = {};
+        api.propagation.inject(api.context.active(), traceHeaders);
+        const workerHeaders = { ...headers, ...traceHeaders };
+
         // *** CHANGED: Use Worker Thread for OPEA Call ***
-        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload);
+        const workerResult = await this.runOPEAWorker(opeaUrl, opeaPayload, workerHeaders);
 
         opeaResponseTime = workerResult.responseTime;
         opeaResponseContent = workerResult.response;
@@ -782,17 +660,11 @@ class QueryService {
           metadata: opeaMetadata
         };
         await this.queries.update(queryId, updateData);
-        } // end else (OPEA worker path)
-        } // end else (non-weather path)
       }
 
-      // Record the query in analytics — non-fatal so large geo responses don't kill the reply
+      // Record the query in analytics
       if (this.analyticsService) {
-        try {
-          await this.analyticsService.recordQuery(await this.queries.document(queryId));
-        } catch (analyticsErr) {
-          logger.warn('QueryService.analytics_record_failed', { queryId, error: analyticsErr.message });
-        }
+        await this.analyticsService.recordQuery(await this.queries.document(queryId));
       }
 
       const totalDuration = Date.now() - startTime;
@@ -809,7 +681,6 @@ class QueryService {
         metadata: opeaMetadata,
         responseTime: opeaResponseTime
       };
-
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       logger.error('QueryService.create_query_failed', {
@@ -846,9 +717,13 @@ class QueryService {
       };
 
       // Update the query with feedback
-      const updatedQuery = await this.queries.update(queryId, {
-        userFeedback
-      }, { returnNew: true });
+      const updatedQuery = await this.queries.update(
+        queryId,
+        {
+          userFeedback
+        },
+        { returnNew: true }
+      );
 
       // Update analytics if service is set
       if (this.analyticsService) {
@@ -916,10 +791,14 @@ class QueryService {
     const startTime = Date.now();
     try {
       logger.info('QueryService.mark_as_answered_start', { queryId, responseTime });
-      const updatedQuery = await this.queries.update(queryId, {
-        isAnswered: true,
-        responseTime
-      }, { returnNew: true });
+      const updatedQuery = await this.queries.update(
+        queryId,
+        {
+          isAnswered: true,
+          responseTime
+        },
+        { returnNew: true }
+      );
 
       logger.info('QueryService.query_marked_answered', {
         queryId,
@@ -955,10 +834,14 @@ class QueryService {
       }
 
       // Update the query with response time
-      const updatedQuery = await this.queries.update(queryId, {
-        responseTime,
-        updatedAt: new Date().toISOString()
-      }, { returnNew: true });
+      const updatedQuery = await this.queries.update(
+        queryId,
+        {
+          responseTime,
+          updatedAt: new Date().toISOString()
+        },
+        { returnNew: true }
+      );
 
       logger.info('QueryService.query_response_time_updated', {
         queryId,
@@ -1056,7 +939,7 @@ class QueryService {
     try {
       logger.info('QueryService.search_queries_start', { criteria, limit, offset });
 
-      let filterConditions = [];
+      const filterConditions = [];
 
       if (criteria.userId) {
         filterConditions.push(aql`q.userId == ${criteria.userId}`);
@@ -1147,7 +1030,7 @@ class QueryService {
           RETURN total
       `;
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       logger.info('QueryService.search_queries_completed', {
         resultCount: queries.length,
@@ -1237,9 +1120,7 @@ class QueryService {
 
       const lowerQueryText = queryText.toLowerCase();
       const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by'];
-      const words = lowerQueryText.split(/\s+/).filter(word =>
-        word.length > 2 && !stopWords.includes(word)
-      );
+      const words = lowerQueryText.split(/\s+/).filter((word) => word.length > 2 && !stopWords.includes(word));
 
       if (words.length === 0) {
         logger.info('QueryService.no_significant_words', { queryText });
@@ -1359,7 +1240,7 @@ class QueryService {
           RETURN total
       `;
       const countCursor = await this.db.query(countQuery);
-      const totalCount = await countCursor.next() || 0;
+      const totalCount = (await countCursor.next()) || 0;
 
       logger.info('QueryService.saved_queries_retrieved', {
         userId,
@@ -1413,21 +1294,17 @@ class QueryService {
       if (recentQueries.length === 0) {
         logger.info('QueryService.no_recent_queries', { userId });
         const popularQueries = await this.getPopularQueries(limit);
-        return popularQueries.map(q => q.text);
+        return popularQueries.map((q) => q.text);
       }
 
-      const categories = recentQueries
-        .filter(q => q.categoryId)
-        .map(q => q.categoryId);
+      const categories = recentQueries.filter((q) => q.categoryId).map((q) => q.categoryId);
 
-      const services = recentQueries
-        .filter(q => q.serviceId)
-        .map(q => q.serviceId);
+      const services = recentQueries.filter((q) => q.serviceId).map((q) => q.serviceId);
 
       if (categories.length === 0 && services.length === 0) {
         logger.info('QueryService.no_categories_or_services', { userId });
         const popularQueries = await this.getPopularQueries(limit);
-        return popularQueries.map(q => q.text);
+        return popularQueries.map((q) => q.text);
       }
 
       const recommendationsQuery = aql`
@@ -1466,7 +1343,7 @@ class QueryService {
           limit
         });
         const popularQueries = await this.getPopularQueries(limit - recommendations.length);
-        return [...recommendations, ...popularQueries.map(q => q.text)];
+        return [...recommendations, ...popularQueries.map((q) => q.text)];
       }
 
       logger.info('QueryService.query_recommendations_found', {
@@ -1482,7 +1359,7 @@ class QueryService {
         stack: error.stack,
         durationMs: Date.now() - startTime
       });
-      return await this.getPopularQueries(limit).then(queries => queries.map(q => q.text));
+      return await this.getPopularQueries(limit).then((queries) => queries.map((q) => q.text));
     }
   }
 
@@ -1540,18 +1417,14 @@ class QueryService {
 
       if (!query) {
         logger.warn('QueryService.query_not_found', { queryId });
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
-      const conversation = await this.chatHistoryService.createConversationFromQuery(
-        queryId,
-        query.userId,
-        {
-          title: options.title || query.text,
-          responseText: options.responseText,
-          tags: options.tags || []
-        }
-      );
+      const conversation = await this.chatHistoryService.createConversationFromQuery(queryId, query.userId, {
+        title: options.title || query.text,
+        responseText: options.responseText,
+        tags: options.tags || []
+      });
 
       logger.info('QueryService.conversation_created', {
         queryId,
@@ -1575,7 +1448,7 @@ class QueryService {
    * @param {String} queryId - Query ID
    * @returns {Promise<Array>} Conversations associated with the query
    */
-  async getConversationsForQuery(queryId) {
+  async getConversationsForQuery(queryId, userId) {
     const startTime = Date.now();
     try {
       logger.info('QueryService.get_conversations_for_query_start', { queryId });
@@ -1585,7 +1458,15 @@ class QueryService {
         throw new Error('Chat history service is not set');
       }
 
-      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId);
+      const relatedMessages = await this.chatHistoryService.findMessagesForQuery(queryId, userId);
+
+      // Handle ownership check returns
+      if (relatedMessages === null) {
+        return []; // Query not found
+      }
+      if (relatedMessages && relatedMessages.forbidden) {
+        throw new Error('Access denied');
+      }
 
       const conversationMap = new Map();
       for (const item of relatedMessages) {
@@ -1623,11 +1504,11 @@ class QueryService {
   }
 
   /**
- * Mark a query as answered
- * @param {String} queryId - Query ID
- * @param {Number} responseTime - Response time in milliseconds
- * @returns {Promise<Object>} Updated query
- */
+   * Mark a query as answered
+   * @param {String} queryId - Query ID
+   * @param {Number} responseTime - Response time in milliseconds
+   * @returns {Promise<Object>} Updated query
+   */
   async markQueryAsAnswered(queryId, responseTime) {
     const startTime = Date.now();
     try {
@@ -1662,7 +1543,7 @@ class QueryService {
       });
 
       if (error.name === 'ArangoError' && error.errorNum === 1202) {
-        throw new Error('Query not found');
+        throw new NotFoundError('Query not found');
       }
 
       throw error;
@@ -1686,31 +1567,29 @@ class QueryService {
         throw new Error('Chat history service is not set');
       }
 
-      const messageCursor = await this.db.query(`
+      const messageCursor = await this.db.query(
+        `
       FOR msg IN messages
         FILTER msg._key == @messageId
         RETURN {
           _key: msg._key,
           conversationId: msg.conversationId
         }
-    `, { messageId });
+    `,
+        { messageId }
+      );
 
       const message = await messageCursor.next();
 
       if (!message) {
         logger.warn('QueryService.message_not_found', { messageId });
-        throw new Error('Message not found');
+        throw new NotFoundError('Message not found');
       }
 
-      const link = await this.chatHistoryService.linkQueryToConversation(
-        queryId,
-        message.conversationId,
-        messageId,
-        {
-          responseType: options.responseType || 'primary',
-          confidenceScore: options.confidenceScore || 1.0
-        }
-      );
+      const link = await this.chatHistoryService.linkQueryToConversation(queryId, message.conversationId, messageId, {
+        responseType: options.responseType || 'primary',
+        confidenceScore: options.confidenceScore || 1.0
+      });
 
       logger.info('QueryService.query_linked_to_message', {
         queryId,
@@ -1723,6 +1602,174 @@ class QueryService {
       logger.error('QueryService.link_query_to_message_failed', {
         queryId,
         messageId,
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  async getQueriesForInspector(options = {}) {
+    const startTime = Date.now();
+    try {
+      const limit = parsePositiveInt(options.limit, 50, { min: 1, max: 100 });
+      const offset = parsePositiveInt(options.offset, 0, { min: 0 });
+
+      logger.info('QueryService.get_queries_for_inspector_start', { options });
+
+      const filterConditions = [];
+
+      if (options.userId) {
+        filterConditions.push(aql`q.userId == ${options.userId}`);
+      }
+
+      if (options.startDate) {
+        const startDate = new Date(options.startDate);
+        if (!isNaN(startDate.getTime())) {
+          filterConditions.push(aql`q.timestamp >= ${startDate.toISOString()}`);
+        }
+      }
+
+      if (options.endDate) {
+        const endDate = new Date(options.endDate);
+        if (!isNaN(endDate.getTime())) {
+          filterConditions.push(aql`q.timestamp <= ${endDate.toISOString()}`);
+        }
+      }
+
+      if (options.minConfidence !== undefined && options.minConfidence !== '') {
+        const minConf = parseFloat(options.minConfidence);
+        if (!isNaN(minConf)) {
+          filterConditions.push(aql`q.metadata.confidence_score >= ${minConf}`);
+        }
+      }
+
+      if (options.maxConfidence !== undefined && options.maxConfidence !== '') {
+        const maxConf = parseFloat(options.maxConfidence);
+        if (!isNaN(maxConf)) {
+          filterConditions.push(aql`q.metadata.confidence_score <= ${maxConf}`);
+        }
+      }
+
+      if (options.searchText) {
+        filterConditions.push(aql`LOWER(q.text) LIKE CONCAT("%", LOWER(${options.searchText}), "%")`);
+      }
+
+      filterConditions.push(aql`q.isAnswered == true`);
+
+      let filterQuery;
+      if (filterConditions.length > 0) {
+        filterQuery = aql`FILTER `;
+        for (let i = 0; i < filterConditions.length; i++) {
+          if (i > 0) {
+            filterQuery = aql`${filterQuery} AND `;
+          }
+          filterQuery = aql`${filterQuery} ${filterConditions[i]}`;
+        }
+      } else {
+        filterQuery = aql``;
+      }
+
+      const query = aql`
+        FOR q IN queries
+          ${filterQuery}
+          SORT q.timestamp DESC
+          LIMIT ${offset}, ${limit}
+          RETURN {
+            _key: q._key,
+            userId: q.userId,
+            timestamp: q.timestamp,
+            text: q.text,
+            response: q.response,
+            responseTime: q.responseTime,
+            context: q.context,
+            metadata: q.metadata,
+            userFeedback: q.userFeedback,
+            contextOption: q.contextOption
+          }
+      `;
+
+      const cursor = await this.db.query(query);
+      const queries = await cursor.all();
+
+      const countQuery = aql`
+        FOR q IN queries
+          ${filterQuery}
+          COLLECT WITH COUNT INTO total
+          RETURN total
+      `;
+      const countCursor = await this.db.query(countQuery);
+      const totalCount = (await countCursor.next()) || 0;
+
+      logger.info('QueryService.get_queries_for_inspector_complete', {
+        resultCount: queries.length,
+        totalCount,
+        durationMs: Date.now() - startTime
+      });
+
+      return {
+        success: true,
+        data: {
+          queries,
+          pagination: {
+            total: totalCount,
+            limit,
+            offset,
+            pages: Math.ceil(totalCount / limit),
+            currentPage: Math.floor(offset / limit) + 1
+          }
+        }
+      };
+    } catch (error) {
+      logger.error('QueryService.get_queries_for_inspector_failed', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  async getQueryInspectorDetails(queryId) {
+    const startTime = Date.now();
+    try {
+      logger.info('QueryService.get_query_inspector_details_start', { queryId });
+
+      const queryDoc = await this.queries.document(queryId);
+
+      let userName = null;
+      if (queryDoc.userId) {
+        try {
+          const userCursor = await this.db.query(aql`
+            FOR u IN users
+              FILTER u._key == ${queryDoc.userId}
+              RETURN { fullName: u.fullName, email: u.email }
+          `);
+          const user = await userCursor.next();
+          if (user) {
+            userName = user.fullName || user.email;
+          }
+        } catch (e) {
+          logger.warn('QueryService.user_lookup_failed', { userId: queryDoc.userId, error: e.message });
+        }
+      }
+
+      logger.info('QueryService.get_query_inspector_details_complete', {
+        queryId,
+        durationMs: Date.now() - startTime
+      });
+
+      return {
+        success: true,
+        data: {
+          ...queryDoc,
+          userName
+        }
+      };
+    } catch (error) {
+      logger.error('QueryService.get_query_inspector_details_failed', {
+        queryId,
         error: error.message,
         stack: error.stack,
         durationMs: Date.now() - startTime

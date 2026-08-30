@@ -1,0 +1,5 @@
+---
+# Dedicated runner host — 10.0.0.100.
+# Full docker role + socket proxy + runner. No overrides needed beyond the
+# display name (defaults come from roles/*/defaults/main.yml).
+gitlab_runner_description: "genie-ai-runner-cpu"

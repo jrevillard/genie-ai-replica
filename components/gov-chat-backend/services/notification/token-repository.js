@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const nodeCrypto = require('crypto');
 const { aql } = require('arangojs');
 const { logger } = require('../../shared-lib');
 
@@ -48,7 +48,7 @@ class TokenRepository {
   }
 
   tokenKey(userId, fcmToken) {
-    return crypto.createHash('sha256').update(`${userId}:${fcmToken}`).digest('hex');
+    return nodeCrypto.createHash('sha256').update(`${userId}:${fcmToken}`).digest('hex');
   }
 
   /** Single-round-trip upsert (replaces the racy documentExists → update/save pair). */

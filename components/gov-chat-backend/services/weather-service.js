@@ -1,5 +1,4 @@
 const axios = require('axios');
-const { Database, aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
 
 class WeatherService {
@@ -25,7 +24,7 @@ class WeatherService {
     try {
       // Fetch server location from ipapi.co
       logger.debug('WeatherService.fetching_server_location');
-      const geoResponse = await axios.get('https://ipapi.co/json/');
+      const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
       logger.debug('WeatherService.server_location_response', {
         status: geoResponse.status,
         data: geoResponse.data
@@ -73,6 +72,7 @@ class WeatherService {
     try {
       logger.debug('WeatherService.fetching_city_name', { latitude, longitude });
       const response = await axios.get(`https://nominatim.openstreetmap.org/reverse`, {
+        timeout: 10000,
         params: {
           format: 'json',
           lat: latitude,
@@ -111,6 +111,11 @@ class WeatherService {
     try {
       logger.info('WeatherService.get_weather_start', { locationData });
 
+      // Fallback if ipapi.co rate-limited us at startup
+      if (!this.serverLocation) {
+        this.serverLocation = { latitude: 0, longitude: 0, city: 'Unknown' };
+      }
+
       // Validate and format coordinates
       let latitude = parseFloat(locationData.latitude) || this.serverLocation.latitude;
       let longitude = parseFloat(locationData.longitude) || this.serverLocation.longitude;
@@ -128,9 +133,10 @@ class WeatherService {
       }
 
       // Get city name for the coordinates
-      const city = latitude !== this.serverLocation.latitude || longitude !== this.serverLocation.longitude
-        ? await this.getCityName(latitude, longitude)
-        : this.serverLocation.city;
+      const city =
+        latitude !== this.serverLocation.latitude || longitude !== this.serverLocation.longitude
+          ? await this.getCityName(latitude, longitude)
+          : this.serverLocation.city;
 
       logger.debug('WeatherService.location_selected', { latitude, longitude, city });
 
@@ -140,7 +146,7 @@ class WeatherService {
 
       // Fetch weather data
       logger.debug('WeatherService.fetching_weather');
-      const response = await axios.get(weatherUrl);
+      const response = await axios.get(weatherUrl, { timeout: 10000 });
       logger.debug('WeatherService.weather_response', {
         status: response.status,
         data: response.data

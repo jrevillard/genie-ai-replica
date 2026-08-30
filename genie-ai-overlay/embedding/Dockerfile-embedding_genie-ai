@@ -1,0 +1,22 @@
+# GENIE.AI — Embedding wrapper (extends upstream OPEA image)
+# Adds genie_ssl_patch.py for SSL bypass (remote GPU node support).
+# Only active when OPEA_SSL_SKIP_VERIFY=1 env var is set.
+# The patch is installed via a .pth site-init hook at a build-derived
+# site-packages path (install_site_startup.sh) — no hardcoded python3.x path.
+
+ARG UPSTREAM_IMAGE=opea/embedding:1.5
+FROM ${UPSTREAM_IMAGE}
+
+# Security-patch the pinned OPEA base snapshot. opea/embedding:1.5 ships a Debian
+# 13.2 snapshot whose openssl (3.5.4-1~deb13u1) lags the current trixie repo
+# (3.5.7-1~deb13u2, fixes CVE-2026-31789). Pulling current security updates at
+# build time clears base-image CVEs without waiting for an upstream OPEA rebase;
+# the distro upgrade touches only apt-managed packages (the interpreter in
+# /usr/local comes from the python:3.11-slim lineage and is unaffected).
+RUN apt-get update -y \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
+COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
+RUN /app/install_site_startup.sh

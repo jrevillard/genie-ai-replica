@@ -1,0 +1,156 @@
+---
+# GENIE.AI - Shared configuration (all environments)
+# Environment-specific config goes in group_vars/<env>.yml
+# Environment-specific secrets go in group_vars/<env>.vault (Ansible Vault encrypted)
+
+# =============================================================================
+# DEPLOYMENT PATHS
+# =============================================================================
+deploy_dir: /opt/genieai
+data_dir: ./data
+
+# =============================================================================
+# DOCKER / NVIDIA — VERSION PINNING
+# =============================================================================
+# Packages are held via dpkg --set-selections to prevent accidental upgrades.
+# To upgrade: change the pin, unhold, run apt upgrade, re-hold.
+docker_version_pin: "5:28.5.*"
+docker_hold_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - docker-ce-rootless-extras
+nvidia_version_pin: "1.18.*"
+nvidia_hold_packages:
+  - nvidia-container-toolkit
+  - nvidia-container-toolkit-base
+  - libnvidia-container-tools
+  - libnvidia-container1
+
+# =============================================================================
+# STACK CONFIGURATION
+# =============================================================================
+stack_name: genieai
+compose_file: docker-compose.yaml
+deploy_stabilization_timeout: 900
+deploy_opea: "1"
+enable_observability: "0"
+grafana_admin_user: "admin"
+victoriametrics_retention: "30d"
+victorialogs_retention: "30d"
+victoriatraces_retention: "30d"
+otel_traces_sampler_rate: "100.0"
+grafana_alert_webhook_url: ""
+grafana_alert_email: ""
+# =============================================================================
+# REPOSITORY
+# =============================================================================
+repo_url: https://opensource.unicc.org/un/itu/genie-ai.git
+repo_branch: main
+
+# =============================================================================
+# API GATEWAY (defaults)
+# =============================================================================
+nginx_public_domain: "localhost"
+nginx_http_port: "80"
+nginx_https_port: "443"
+nginx_permissions_policy: "camera=(), microphone=(), geolocation=()"
+
+# Kong trusted IPs for X-Forwarded-* header passthrough.
+# Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
+# X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Prefix headers set by nginx.
+# Kong is NOT exposed to the host — only containers on the internal Docker network can reach it,
+# so IP spoofing from outside is not possible regardless of the CIDR range.
+# Docker Compose (bridge networks): 172.16.0.0/12 (covers 172.16-172.31)
+# Docker Swarm (overlay networks): 10.0.0.0/8 (default overlay subnet range)
+# Restrict further with: docker network inspect <network> to find the exact subnet.
+kong_trusted_ips: "10.0.0.0/8"
+
+# =============================================================================
+# SSL CERTIFICATES
+# =============================================================================
+# self_signed_certs: true   -> generate self-signed certs if none exist
+# self_signed_certs: false  -> fail if no certs provided in files/certificates/<env>/
+self_signed_certs: true
+
+# =============================================================================
+# TEARDOWN OPTIONS
+# =============================================================================
+teardown_remove_volumes: false
+teardown_remove_registry: false
+
+# =============================================================================
+# GITLAB RUNNER
+# =============================================================================
+# gitlab_url is the GitLab instance URL used in config.toml.
+# gitlab_runner_tokens (dict keyed by inventory hostname) MUST be set in
+# environment-specific vault files — one glrt- token per runner host.
+#
+# To disable the socket proxy (mount docker.sock directly):
+#   gitlab_runner_use_socket_proxy: false
+#   in group_vars/gitlab_runners/vars.yml
+gitlab_url: "https://opensource.unicc.org"
+
+# =============================================================================
+# GPU NODE (defaults — override in group_vars/<env>/vars.yml)
+# =============================================================================
+gpu_deploy_dir: /opt/genieai-gpu
+gpu_data_dir: ./data
+gpu_generated_dir: configs/nginx-gpu
+
+gpu_public_domain: gpu.example.com
+gpu_https_port: "443"
+gpu_self_signed_certs: true
+gpu_env_file: ""
+nvidia_visible_devices: "all"
+
+# Remote GPU node (set in group_vars/<env>/vars.yml to route AI services to a dedicated GPU host)
+gpu_node_host: ""
+vllm_api_key: ""
+
+# OPEA runtime patches (set in group_vars/<env>/vars.yml when needed)
+# These are independent of gpu_node_host. For example:
+#   - Remote GPU node with Let's Encrypt: no need to set opea_ssl_skip_verify
+#   - Remote GPU node with self-signed cert: set opea_ssl_skip_verify = "1"
+opea_ssl_skip_verify: ""
+
+# Keycloak SSL verification (independent of OPEA settings)
+# Set to "1" when Keycloak uses a self-signed certificate.
+# Only affects dataprep's Keycloak service account token fetch.
+keycloak_ssl_skip_verify: ""
+
+# Dataprep LLM labeling tuning (defaults live in code; set in group_vars/<env>/vars.yml to override).
+# LLM labeling is the dominant document-ingestion cost (one vLLM call per chunk).
+#   dataprep_max_concurrent_batches: 20  # concurrent LLM label calls (code default 20; was 5)
+#   dataprep_llm_label_batch_size: 4     # chunks per LLM call (code default 4); raise to 8 on
+#                                        #   capable models (e.g. granite-4.1-8b). Batches fall
+#                                        #   back to per-chunk on parse failure.
+# Contextual Retrieval (optional, default OFF) — per-chunk LLM doc-context prefix
+# prepended before embedding + labeling (Anthropic-style). Adds one vLLM
+# call/chunk at ingest; never blocks ingestion (raw-chunk fallback). Override in
+# group_vars/<env>/vars.yml:
+#   contextual_retrieval_enabled: false   # opt-in; flag-off is a true no-op
+#   dataprep_contextual_model: ""         # empty = reuse vllm_llm_model_id; must support
+#                                         #   guided JSON (response_format=json_object)
+#   dataprep_contextual_doc_budget: 100000  # max chars of doc text fed to the context LLM
+#   dataprep_contextual_max_tokens: 512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk).
+#                                         #   200 truncated the JSON under load → raw-chunk fallback; 512 = safe margin (model stops early ~196).
+#   contextual_strategy: doc_level        # doc_level (one call/doc, cheaper) | per_chunk (default — Anthropic recipe)
+#                                         #   (one call/doc, N× cheaper, same context on all chunks)
+#   contextual_label_raw: false           # decoupled: label RAW chunk, context for embedding only (recommended)
+
+vllm_llm_image: vllm/vllm-openai:v0.10.0
+vllm_translation_image: vllm/vllm-openai:v0.10.0
+tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
+nginx_image: nginx:1.28-alpine
+
+vllm_llm_model_id: ibm-granite/granite-4.1-8b
+vllm_translation_model_id: google/gemma-3-4b-it
+embedding_model_id: BAAI/bge-base-en-v1.5
+reranker_model_id: BAAI/bge-reranker-v2-m3
+# --- Reranker strategy defaults ---
+#   reranking_strategy: slice           # slice (default; top-N by TEI score) | threshold | adaptive | knee_threshold | slice_threshold
+#   reranker_top_n: 3                   # chunks kept for slice/slice_threshold strategies

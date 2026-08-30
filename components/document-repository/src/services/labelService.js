@@ -2,9 +2,10 @@ const config = require('../config/appConfig');
 
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+const { NotFoundError, ConflictError } = require('../middlewares/errorHandler');
 
 class LabelService {
-    constructor() {
+  constructor() {
     this.collectionName = 'labels'; // Name of the labels collection in ArangoDB
     this.allowedLevels = config.labels.allowedLevels;
     this.allowedStatuses = config.labels.allowedStatuses;
@@ -31,7 +32,6 @@ class LabelService {
     return await dbService.getConnection(this.collectionName);
   }
 
-
   /**
    * Get a label by its _key
    * @param {string} labelKey - Label _key
@@ -44,12 +44,11 @@ class LabelService {
       return label;
     } catch (err) {
       if (err.errorNum === 1202) {
-        throw new Error(`Label with key ${labelKey} not found.`);
+        throw new NotFoundError(`Label with key ${labelKey} not found.`, { cause: err });
       }
       throw err;
     }
   }
-
 
   /**
    * Get all labels or filter by level/status/parentId
@@ -102,7 +101,6 @@ class LabelService {
     return await cursor.all();
   }
 
-
   /**
    * Create a new label
    * @param {Object} labelData - Data for the new label
@@ -116,18 +114,17 @@ class LabelService {
 
     // Validate parentId if provided
     if (labelData.parentId) {
-      try{
+      try {
         const parentLabel = await db.collection(this.collectionName).document(labelData.parentId);
         logger.info('🧪 Parent Label:' + JSON.stringify(parentLabel));
         if (!parentLabel || parentLabel.level !== 'category') {
           throw new Error('Invalid parentId: Parent must be a category label.');
         }
-      }
-      catch(err){
+      } catch (err) {
         if (err.errorNum === 1202) {
-          throw new Error(`Parent label with key ${labelData.parentId} not found.`);
+          throw new Error(`Parent label with key ${labelData.parentId} not found.`, { cause: err });
         }
-        throw err.message; 
+        throw err;
       }
     }
 
@@ -137,13 +134,12 @@ class LabelService {
       level: labelData.level,
       parentId: labelData.parentId || null,
       status: labelData.status,
-      publish: labelData.publish || false,
+      publish: labelData.publish || false
     };
 
     const label = await db.collection(this.collectionName).save(newLabel, { returnNew: true });
     return label.new;
   }
-
 
   /**
    * Update a label by ID (_key attribute)
@@ -159,16 +155,16 @@ class LabelService {
     this.validateLevelAndStatus(updates.level, updates.status);
 
     if (currentLabel.level === 'category' && updates.level === 'service') {
-        // Ensure category label has no children before downgrading to service
-        const cursor = await db.query(
-          `FOR label IN ${this.collectionName} FILTER label.parentId == @labelKey RETURN label`,
-          { labelKey }
-        );
-        const childLabels = await cursor.all();
-        if (childLabels.length > 0) {
-          throw new Error('Cannot update category label to service: It has child labels.');
-        }
+      // Ensure category label has no children before downgrading to service
+      const cursor = await db.query(
+        `FOR label IN ${this.collectionName} FILTER label.parentId == @labelKey RETURN label`,
+        { labelKey }
+      );
+      const childLabels = await cursor.all();
+      if (childLabels.length > 0) {
+        throw new Error('Cannot update category label to service: It has child labels.');
       }
+    }
 
     // Validate parentId if provided in updates
     if (updates.parentId) {
@@ -181,7 +177,6 @@ class LabelService {
     const label = await db.collection(this.collectionName).update(labelKey, updates, { returnNew: true });
     return label.new;
   }
-
 
   /**
    * Delete a label by _key attribute
@@ -198,7 +193,7 @@ class LabelService {
     );
     const childLabels = await cursor.all();
     if (childLabels.length > 0) {
-      throw new Error('Cannot delete label: It has child labels.');
+      throw new ConflictError('Cannot delete label: It has child labels.');
     }
 
     await db.collection(this.collectionName).remove(labelKey);

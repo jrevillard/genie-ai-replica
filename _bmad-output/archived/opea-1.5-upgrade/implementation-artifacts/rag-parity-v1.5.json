@@ -1,0 +1,204 @@
+{
+  "artifact": "rag-baseline",
+  "version": "1.0.0",
+  "baseline_stack": "v1.3",
+  "capture_date": "2026-08-17T20:55:03+00:00",
+  "git": {
+    "branch": null,
+    "commit": null,
+    "tree_clean": null
+  },
+  "harness_sha": "7fb8bc2e3f1716c241c4004c397149d10b03f561d01a8b253f105c701dd17610",
+  "stack": {
+    "name": "test-opea-1.5-el-salvador",
+    "services": {
+      "chatqna": {
+        "container": "genieai-el-salvador_chatqna-xeon-backend-server.1.qgltacvw134oauzn30s4oos15",
+        "image": "registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-chatqna-server:test-opea-1.5-el-salvador",
+        "image_id": "sha256:8677a37106b59dc3aa296d8580a42bdcb68f6aaebffe226bcae93f28da408570"
+      },
+      "reranker": {
+        "container": "genieai-el-salvador_reranker.1.zlcte58nfz760o1hve48mbg7z",
+        "image": "registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-reranker:test-opea-1.5-el-salvador",
+        "image_id": "sha256:da78a78b95d37e7a37abf7de222993ff1735cd501066d91b7069fdec61c94dc4"
+      },
+      "retriever": {
+        "container": "genieai-el-salvador_retriever-arango-service.1.yuhpvth86l01bxaqjucupo9wv",
+        "image": "registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-retriever-arango:test-opea-1.5-el-salvador",
+        "image_id": "sha256:460a0eb27faf43ea5e560400be10c137487e44a87d056cdecdf1121debc6cb10"
+      },
+      "embedding": {
+        "container": "genieai-el-salvador_embedding.1.05x2lshnwj1jgz0dwpl91tlg3",
+        "image": "registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-embedding:test-opea-1.5-el-salvador",
+        "image_id": "sha256:9363732992d28d4a5f9c237235be8872517691c2646cce6591eb82d9f4de8db3"
+      },
+      "dataprep": {
+        "container": "genieai-el-salvador_dataprep-arango-service.1.y75a6dc3h5ra0sr03mu1yrooz",
+        "image": "registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-dataprep-arango:test-opea-1.5-el-salvador",
+        "image_id": "sha256:b104280c875651e6eae6eccf4ec867df533640885b26169676519729e4996f86"
+      }
+    }
+  },
+  "runs": {
+    "mode": "anchor",
+    "n": 3,
+    "seed": 42,
+    "temperature": 0,
+    "gold_dataset": "gold_dataset.json",
+    "gold_sha256": "b5145d0d5c5cb369ca5db3f778c1bcd8fddcbce106a6d473689fd9301b845fb4",
+    "semantic_enabled": false
+  },
+  "anchor": {
+    "per_run": [
+      {
+        "run": 1,
+        "aggregate": {
+          "n": 17,
+          "recall": 0.8823529411764706,
+          "precision": 0.3137254901960784,
+          "complete_recall": 0.8823529411764706,
+          "noise": 0.6862745098039216,
+          "retrieval_recall": 1.0
+        }
+      },
+      {
+        "run": 2,
+        "aggregate": {
+          "n": 17,
+          "recall": 0.8823529411764706,
+          "precision": 0.3137254901960784,
+          "complete_recall": 0.8823529411764706,
+          "noise": 0.6862745098039216,
+          "retrieval_recall": 1.0
+        }
+      },
+      {
+        "run": 3,
+        "aggregate": {
+          "n": 17,
+          "recall": 0.8823529411764706,
+          "precision": 0.3137254901960784,
+          "complete_recall": 0.8823529411764706,
+          "noise": 0.6862745098039216,
+          "retrieval_recall": 1.0
+        }
+      }
+    ],
+    "metrics": {
+      "complete_recall": {
+        "min": 0.8823529411764706,
+        "median": 0.8823529411764706,
+        "max": 0.8823529411764706,
+        "mad": 0.0,
+        "tol_low": 0.8823529411764706,
+        "tol_high": 0.8823529411764706,
+        "parity_bound": "low"
+      },
+      "noise": {
+        "min": 0.6862745098039216,
+        "median": 0.6862745098039216,
+        "max": 0.6862745098039216,
+        "mad": 0.0,
+        "tol_low": 0.6862745098039216,
+        "tol_high": 0.6862745098039216,
+        "parity_bound": "high"
+      },
+      "precision": {
+        "min": 0.3137254901960784,
+        "median": 0.3137254901960784,
+        "max": 0.3137254901960784,
+        "mad": 0.0,
+        "tol_low": 0.3137254901960784,
+        "tol_high": 0.3137254901960784,
+        "parity_bound": "low"
+      },
+      "recall": {
+        "min": 0.8823529411764706,
+        "median": 0.8823529411764706,
+        "max": 0.8823529411764706,
+        "mad": 0.0,
+        "tol_low": 0.8823529411764706,
+        "tol_high": 0.8823529411764706,
+        "parity_bound": "low"
+      },
+      "retrieval_recall": {
+        "min": 1.0,
+        "median": 1.0,
+        "max": 1.0,
+        "mad": 0.0,
+        "tol_low": 1.0,
+        "tol_high": 1.0,
+        "parity_bound": "low"
+      }
+    },
+    "tolerance_formula": "median \u00b1 3\u00b7MAD (1.4826-scaled median absolute deviation); parity-relevant bound is tol_low for recall, precision, complete_recall, retrieval_recall (lower is worse) and tol_high for noise (higher is worse).",
+    "tolerance_semantics": "MAD == 0 across all metrics: the anchor is fully deterministic (temperature 0, fixed seed), so the variance-derived tolerance collapses to exact equality with the median. Parity therefore means byte-identical metric values. Story 3.1 MUST re-verify the upgraded stack is itself deterministic (N runs) and MUST NOT use a one-run-vs-one-run comparison as the parity method \u2014 parity is established by comparing N-run distributions (median +/- tolerance) captured on each stack.",
+    "n_missed_traces_total": 0
+  },
+  "semantic": {
+    "skipped": true,
+    "reason": "--semantic not requested"
+  },
+  "config_snapshot": {
+    "resolved": {
+      "values": {
+        "RETRIEVER_ARANGO_LAMBDA_MULT": "0.5",
+        "RERANKER_TOP_N": "3",
+        "RETRIEVER_ARANGO_FETCH_K": "30",
+        "RERANKING_STRATEGY": "slice",
+        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED": "true",
+        "RETRIEVER_ARANGO_SEARCH_START": "chunk",
+        "RETRIEVER_ARANGO_K": "20",
+        "RERANKING_THRESHOLD": "0.75",
+        "EMBEDDING_MODEL_ID": "BAAI/bge-base-en-v1.5"
+      },
+      "missing": [
+        "VLLM_TRANSLATION_MODEL_ID"
+      ],
+      "unresolved": [
+        "ARANGO_GRAPH_NAME",
+        "EMBEDDING_DIM",
+        "RERANKER_MODEL_ID",
+        "VLLM_LLM_MODEL_ID"
+      ],
+      "conflicts": {}
+    },
+    "homes": {
+      "reranker_top_n": {
+        "homes": {
+          "code": {
+            "genie-ai-overlay/chatqna/genieai_chatqna.py": "3",
+            "genie-ai-overlay/reranker/genieai_tei_reranker.py": "3"
+          },
+          "compose": "3",
+          "env_template": "3"
+        },
+        "resolved": "3",
+        "homes_agree": true
+      },
+      "reranking_strategy": {
+        "homes": {
+          "code": {
+            "genie-ai-overlay/chatqna/genieai_chatqna.py": "adaptive",
+            "genie-ai-overlay/reranker/genieai_reranking_microservice.py": "slice"
+          },
+          "compose": "slice",
+          "env_template": "slice"
+        },
+        "resolved": "slice",
+        "homes_agree": false
+      }
+    },
+    "graph": {
+      "arango_graph_name": "GRAPH_TEST",
+      "source_collection": "GRAPH_TEST_SOURCE"
+    },
+    "model_pins": {
+      "embedding_model_id": "BAAI/bge-base-en-v1.5",
+      "reranker_model_id": "BAAI/bge-reranker-v2-m3",
+      "llm_model_id": "ibm-granite/granite-3.3-2b-instruct",
+      "embedding_dim": 768,
+      "translation_model_id": null
+    }
+  }
+}

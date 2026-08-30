@@ -3,25 +3,47 @@ const DailyRotateFile = require('winston-daily-rotate-file');
 const fs = require('fs');
 const path = require('path');
 
+const { trace, context } = require('@opentelemetry/api');
+
+// Winston format that injects trace_id, span_id, and service from the active OTel span
+const traceFormat = format((info) => {
+  const span = trace.getSpan(context.active());
+  if (span) {
+    const { traceId, spanId } = span.spanContext();
+    info.trace_id = traceId;
+    info.span_id = spanId;
+  } else {
+    info.trace_id = '00000000000000000000000000000000';
+    info.span_id = '0000000000000000';
+  }
+  info.service = process.env.SERVICE_NAME || 'genie-backend';
+  return info;
+});
+
 // Default log format
-const logFormat = format.printf(({ level, message, timestamp }) => {
-  return `${timestamp} [${level.toUpperCase()}]: ${message}`;
+const logFormat = format.printf(({ level, message, timestamp, trace_id, span_id }) => {
+  const base = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+  if (trace_id && trace_id !== '00000000000000000000000000000000') {
+    return `${base} trace_id="${trace_id}" span_id="${span_id}"`;
+  }
+  return base;
 });
 
 // Default configuration for the logger
-let loggerConfig = {
-  level: 'info',
+const loggerConfig = {
+  level: process.env.LOG_LEVEL || 'info',
   format: format.combine(
     format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
+    traceFormat(),
     logFormat
   ),
   transports: [
     new transports.Console({
-      handleExceptions: true,  // Log unhandled exceptions
+      handleExceptions: true, // Log unhandled exceptions
       json: false,
-      colorize: true,          // Colorize output for readability
-      stderrLevels: ['error'], // Write error logs to stderr
+      colorize: true, // Colorize output for readability
+      stderrLevels: ['error'] // Write error logs to stderr
     }),
     new DailyRotateFile({
       filename: 'logs/error-%DATE%.log',
@@ -29,35 +51,27 @@ let loggerConfig = {
       level: 'error',
       maxSize: '10m',
       maxFiles: '30d',
-      zippedArchive: true,
+      zippedArchive: true
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: '10m',
       maxFiles: '30d',
-      zippedArchive: true,
+      zippedArchive: true
     }),
     new transports.File({
       filename: 'logs/combined.log',
       maxsize: 5242880, // 5MB
       maxFiles: 1,
-      tailable: true,   // Recreate log file when max size is reached
-      handleExceptions: true,
-    }),
-  ],
+      tailable: true, // Recreate log file when max size is reached
+      handleExceptions: true
+    })
+  ]
 };
 
 // Create the initial logger instance
-let logger = createLogger(loggerConfig);
-
-// Store references to the DailyRotateFile transports for manual rotation
-let errorTransport = logger.transports.find(
-  (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
-);
-let combinedTransport = logger.transports.find(
-  (transport) => transport instanceof DailyRotateFile && !transport.level
-);
+const logger = createLogger(loggerConfig);
 
 // Function to reconfigure the logger
 const reconfigureLogger = (newConfig) => {
@@ -68,7 +82,7 @@ const reconfigureLogger = (newConfig) => {
       handleExceptions: true,
       json: false,
       colorize: true,
-      stderrLevels: ['error'],
+      stderrLevels: ['error']
     }),
     new DailyRotateFile({
       filename: 'logs/error-%DATE%.log',
@@ -76,22 +90,22 @@ const reconfigureLogger = (newConfig) => {
       level: 'error',
       maxSize: newConfig.errorMaxSize || '10m',
       maxFiles: newConfig.errorMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
+      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: newConfig.combinedMaxSize || '10m',
       maxFiles: newConfig.combinedMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true,
+      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
     }),
     new transports.File({
       filename: 'logs/combined.log',
       maxsize: newConfig.combinedLogMaxSize || 5242880, // 5MB
       maxFiles: newConfig.combinedLogMaxFiles || 1,
       tailable: true,
-      handleExceptions: true,
-    }),
+      handleExceptions: true
+    })
   ];
 
   // Clear existing transports
@@ -101,16 +115,8 @@ const reconfigureLogger = (newConfig) => {
   logger.configure({
     level: loggerConfig.level,
     format: loggerConfig.format,
-    transports: loggerConfig.transports,
+    transports: loggerConfig.transports
   });
-
-  // Update references to the new DailyRotateFile transports
-  errorTransport = logger.transports.find(
-    (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
-  );
-  combinedTransport = logger.transports.find(
-    (transport) => transport instanceof DailyRotateFile && !transport.level
-  );
 
   logger.info('Logger configuration updated');
 };
@@ -176,8 +182,9 @@ const flushLogs = () => {
 // Export the logger and the functions
 module.exports = {
   logger,
+  traceFormat: traceFormat(),
   reconfigureLogger,
   triggerLogRollover,
   cleanupCombinedLog,
-  flushLogs,
+  flushLogs
 };

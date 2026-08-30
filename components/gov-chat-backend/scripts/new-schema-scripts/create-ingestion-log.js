@@ -31,17 +31,16 @@ const config = {
 async function initializeDatabase() {
   try {
     console.log(`Connecting to ArangoDB at ${config.url}, database "${config.database}"...`);
-    
+
     db = new Database({
       url: config.url,
       databaseName: config.database,
       auth: config.auth
     });
-    
+
     // Test connection
     const info = await db.get();
     console.log(`✓ Connected to database: ${info.name} (version: ${info.version})`);
-    
   } catch (error) {
     console.error(`✗ Failed to connect to database at ${config.url}.`);
     console.error('Error:', error.message);
@@ -58,7 +57,7 @@ async function createCollectionAndIndexes() {
     console.log('Checking "ingestion_log" collection...');
     const collection = db.collection('ingestion_log');
     const exists = await collection.exists();
-    
+
     if (exists) {
       console.log('⚠ "ingestion_log" collection already exists. Skipping creation.');
     } else {
@@ -68,25 +67,24 @@ async function createCollectionAndIndexes() {
     }
 
     // --- Create Indexes ---
-    
+
     // Index 1: file_id
     console.log('Ensuring "file_id" index exists...');
     await collection.ensureIndex({
-      type: "persistent",
-      fields: ["file_id"],
-      name: "idx_ingestion_log_file_id"
+      type: 'persistent',
+      fields: ['file_id'],
+      name: 'idx_ingestion_log_file_id'
     });
     console.log('✓ "file_id" index is in place.');
 
     // Index 2: timestamp
     console.log('Ensuring "timestamp" index exists...');
     await collection.ensureIndex({
-      type: "persistent",
-      fields: ["timestamp"],
-      name: "idx_ingestion_log_timestamp"
+      type: 'persistent',
+      fields: ['timestamp'],
+      name: 'idx_ingestion_log_timestamp'
     });
     console.log('✓ "timestamp" index is in place.');
-
   } catch (error) {
     console.error('✗ Error creating collection or indexes:', error);
     throw error;
@@ -101,7 +99,7 @@ async function main() {
     await initializeDatabase();
     await createCollectionAndIndexes();
     console.log('\n✅ Setup complete. The "ingestion_log" collection and its indexes are ready.');
-  } catch (error) {
+  } catch {
     console.error('\n✗ Setup failed.');
     process.exit(1); // Exit with an error code
   }
@@ -109,11 +107,12 @@ async function main() {
 
 // Execute the main function if the script is run directly
 if (require.main === module) {
-  main().then(() => {
-    process.exit(0); // Exit successfully
-  }).catch(() => {
-    // Error is already logged in main()
-    process.exit(1);
-  });
+  main()
+    .then(() => {
+      process.exit(0); // Exit successfully
+    })
+    .catch(() => {
+      // Error is already logged in main()
+      process.exit(1);
+    });
 }
-

@@ -1,0 +1,655 @@
+---
+# GENIE.AI - Docker Swarm Deployment Playbook
+#
+# Usage (per environment):
+#   ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@prompt
+#   ansible-playbook -i inventory/production.ini deploy.yml --vault-id production@prompt
+#
+# With password files:
+#   ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@.vault-pass-test
+#
+# Tagged re-runs:
+#   ansible-playbook -i inventory/test.ini deploy.yml --tags install --vault-id test@prompt
+#   ansible-playbook -i inventory/test.ini deploy.yml --tags build,deploy --vault-id test@prompt
+#   ansible-playbook -i inventory/test.ini deploy.yml --tags deploy --vault-id test@prompt
+#
+# Tags:
+#   install  - Docker, NVIDIA toolkit, Swarm init
+#   prepare  - Git clone, directories, SSL certs
+#   build    - Docker login to GitLab Container Registry (images pre-built by CI)
+#   deploy   - Generate .env, validate, deploy stack, verify
+
+- name: GENIE.AI - Detect environment
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Display deployment environment
+      ansible.builtin.debug:
+        msg: "Deploying to {{ inventory_hostname }} (groups: {{ group_names | join(', ') }})"
+
+- name: GENIE.AI - System preparation and Docker installation
+  hosts: all
+  tags: [install]
+  become: true
+  roles:
+    - role: docker
+
+- name: GENIE.AI - NVIDIA Container Toolkit (GPU nodes)
+  hosts: gpu_nodes
+  tags: [install]
+  become: true
+  tasks:
+    - name: Skip NVIDIA toolkit when deploy_opea is 0
+      ansible.builtin.debug:
+        msg: "DEPLOY_OPEA=0 — skipping NVIDIA Container Toolkit installation"
+      when: deploy_opea == "0"
+
+    - block:
+        - name: Ensure NVIDIA Container Toolkit GPG key
+          ansible.builtin.get_url:
+            url: https://nvidia.github.io/libnvidia-container/gpgkey
+            dest: /etc/apt/keyrings/nvidia-container-toolkit.asc
+            mode: '0644'
+            force: true
+
+        - name: Ensure NVIDIA Container Toolkit repository (DEB822 format)
+          ansible.builtin.copy:
+            content: |
+              Types: deb
+              URIs: https://nvidia.github.io/libnvidia-container/stable/deb/amd64
+              Suites: /
+              Components:
+              Signed-By: /etc/apt/keyrings/nvidia-container-toolkit.asc
+            dest: /etc/apt/sources.list.d/nvidia-container-toolkit.sources
+            mode: '0644'
+
+        - name: Pin NVIDIA toolkit package versions
+          ansible.builtin.copy:
+            content: |
+              Package: nvidia-container-toolkit nvidia-container-toolkit-base libnvidia-container-tools libnvidia-container1
+              Pin: version {{ nvidia_version_pin }}
+              Pin-Priority: 900
+            dest: /etc/apt/preferences.d/nvidia-toolkit-pin
+            mode: '0644'
+
+        - name: Check if NVIDIA toolkit packages are up-to-date
+          ansible.builtin.shell: |
+            for pkg in nvidia-container-toolkit nvidia-container-toolkit-base libnvidia-container-tools libnvidia-container1; do
+              installed=$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)
+              candidate=$(apt-cache policy "$pkg" | grep 'Candidate:' | awk '{print $2}')
+              if [ "$installed" != "$candidate" ]; then
+                echo "upgrade"
+                exit 0
+              fi
+            done
+            echo "ok"
+          register: nvidia_upgrade_check
+          changed_when: false
+
+        - name: Unhold NVIDIA toolkit packages (allow upgrade)
+          ansible.builtin.dpkg_selections:
+            name: "{{ item }}"
+            selection: install
+          loop: "{{ nvidia_hold_packages }}"
+          when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
+
+        - name: Install NVIDIA Container Toolkit (pinned version)
+          ansible.builtin.apt:
+            name: nvidia-container-toolkit
+            update_cache: true
+            state: latest
+          when: nvidia_upgrade_check.stdout == "upgrade"
+
+        - name: Hold NVIDIA toolkit packages
+          ansible.builtin.dpkg_selections:
+            name: "{{ item }}"
+            selection: hold
+          loop: "{{ nvidia_hold_packages }}"
+          when: nvidia_upgrade_check.stdout == "upgrade"
+          failed_when: false
+
+        - name: Configure Docker daemon for NVIDIA runtime
+          block:
+            - name: Read existing daemon.json
+              ansible.builtin.slurp:
+                src: /etc/docker/daemon.json
+              register: daemon_json_existing
+              failed_when: false
+
+            - name: Set daemon.json content (merge NVIDIA config)
+              ansible.builtin.set_fact:
+                daemon_json_final: >-
+                  {{ ((daemon_json_existing.content | default('') | b64decode | from_json)
+                      if daemon_json_existing.content is defined else {})
+                    | combine({'runtimes': {'nvidia': {
+                      'path': 'nvidia-container-runtime',
+                      'runtimeArgs': []
+                    }}, 'default-runtime': 'nvidia'}) }}
+
+            - name: Write merged daemon.json
+              ansible.builtin.copy:
+                content: "{{ daemon_json_final | to_nice_json }}"
+                dest: /etc/docker/daemon.json
+                mode: '0644'
+              notify: Restart Docker
+
+        - name: Enable NVIDIA GPU access for unprivileged containers (Swarm)
+          ansible.builtin.lineinfile:
+            path: /etc/nvidia-container-runtime/config.toml
+            regexp: '^#?accept-nvidia-visible-devices-envvar-when-unprivileged'
+            line: accept-nvidia-visible-devices-envvar-when-unprivileged = true
+            state: present
+          notify: Restart Docker
+
+        - name: Verify NVIDIA runtime
+          ansible.builtin.command: docker info --format '{{ "{{" }}.Runtimes{{ "}}" }}'
+          register: nvidia_verify
+          failed_when: "'nvidia' not in nvidia_verify.stdout"
+          changed_when: false
+
+      when: deploy_opea != "0"
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+
+- name: GENIE.AI - Swarm initialization and node labeling
+  hosts: swarm_managers
+  tags: [install]
+  become: true
+  tasks:
+    - name: Check if Swarm is already active
+      ansible.builtin.command: docker info --format '{{ "{{" }}.Swarm.LocalNodeState{{ "}}" }}'
+      register: swarm_status
+      changed_when: false
+      failed_when: false
+
+    - name: Initialize Docker Swarm
+      ansible.builtin.command: docker swarm init --advertise-addr {{ ansible_host }}
+      when: swarm_status.stdout != "active"
+      changed_when: true
+
+    - name: Get node hostname
+      ansible.builtin.command: hostname
+      register: node_hostname
+      changed_when: false
+
+    - name: Get current node labels
+      ansible.builtin.command: docker node inspect {{ node_hostname.stdout }} --format '{{ "{{" }}.Spec.Labels{{ "}}" }}'
+      register: node_labels
+      changed_when: false
+
+    - name: Add gpu=true label (only on nodes with physical GPU)
+      ansible.builtin.command: docker node update --label-add gpu=true {{ node_hostname.stdout }}
+      when:
+        - node_labels.stdout is not search('gpu:')
+        - inventory_hostname in groups.get('gpu_nodes', [])
+      changed_when: true
+
+    - name: Add gateway=true label
+      ansible.builtin.command: docker node update --label-add gateway=true {{ node_hostname.stdout }}
+      when: node_labels.stdout is not search('gateway:')
+      changed_when: true
+
+    - name: Add genieai=true label
+      ansible.builtin.command: docker node update --label-add genieai=true {{ node_hostname.stdout }}
+      when: node_labels.stdout is not search('genieai:')
+      changed_when: true
+
+- name: GENIE.AI - Project sync and directories
+  hosts: swarm_managers
+  tags: [prepare]
+  become: true
+  become_user: "{{ ansible_user }}"
+  tasks:
+    # Images come from GitLab registry; only compose + configs needed on target.
+    # Download individual files via GitLab raw API (reproducible, idempotent).
+    - name: Set raw base URL
+      ansible.builtin.set_fact:
+        _raw_base: "{{ repo_url | regex_replace('\\.git$', '') }}/-/raw/{{ repo_branch }}"
+
+    - name: Define deploy files
+      ansible.builtin.set_fact:
+        _deploy_files: "{{ _deploy_files_default | union(_deploy_files_obs | default([])) | union(_deploy_files_certbot | default([])) }}"
+      vars:
+        _deploy_files_default:
+          - src: "{{ compose_file }}"
+            dest: "{{ deploy_dir }}/{{ compose_file }}"
+        _deploy_files_obs: "{{ [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}] if enable_observability | default('0') == '1' else [] }}"
+        _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh', 'mode': '0755'}] if certbot_replicas | default('0') != '0' else [] }}"
+
+    - name: Ensure deploy directory exists
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Ensure subdirectories exist
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ item.dest | dirname }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ _deploy_files }}"
+
+    - name: Fix ownership before download
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
+
+    - name: Download deploy files from GitLab
+      ansible.builtin.get_url:
+        url: "{{ _raw_base }}/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        force: true
+        mode: "{{ item.mode | default('0644') }}"
+        timeout: 30
+      loop: "{{ _deploy_files }}"
+      loop_control:
+        label: "{{ item.src }}"
+
+    - name: Download Grafana dashboards (observability)
+      when: enable_observability | default('0') == '1'
+      block:
+        - name: Ensure grafana provisioning dir exists
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: "{{ 'absent' if clean_deploy | default(false) | bool else 'directory' }}"
+            mode: '0755'
+
+        - name: Create grafana provisioning dir
+          ansible.builtin.file:
+            path: "{{ deploy_dir }}/configs/grafana/provisioning"
+            state: directory
+            mode: '0755'
+
+        - name: Download Grafana dashboards archive
+          ansible.builtin.get_url:
+            url: "{{ repo_url | regex_replace('\\.git$', '') }}/-/archive/{{ repo_branch }}/grafana.tar.gz?path=configs/grafana/provisioning"
+            dest: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            force: true
+            mode: '0644'
+
+        - name: Extract Grafana dashboards
+          ansible.builtin.unarchive:
+            src: "/tmp/grafana-dashboards-{{ repo_branch | replace('/', '-') }}.tar.gz"
+            dest: "{{ deploy_dir }}"
+            remote_src: true
+            extra_opts:
+              - "--strip-components=1"
+
+    - name: Fix ownership to ansible_user
+      become_user: root
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
+
+    - name: Ensure deploy directories exist with correct ownership
+      become_user: root
+      block:
+        - name: Create deploy directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: "{{ ansible_user }}"
+            group: "{{ ansible_user }}"
+          loop:
+            - "{{ deploy_dir }}/secrets/ssl"
+
+    - name: Check if SSL certificate files exist
+      ansible.builtin.stat:
+        path: "{{ deploy_dir }}/secrets/ssl/{{ item }}"
+      register: ssl_files
+      loop:
+        - server.crt
+        - server.key
+      failed_when: false
+
+    - name: Generate self-signed SSL certificate
+      ansible.builtin.command: >
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048
+        -keyout {{ deploy_dir }}/secrets/ssl/server.key
+        -out {{ deploy_dir }}/secrets/ssl/server.crt
+        -subj "/CN={{ nginx_public_domain | default('localhost') }}"
+        -addext "subjectAltName={{ 'IP' if (nginx_public_domain | default('localhost') | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$')) else 'DNS' }}:{{ nginx_public_domain | default('localhost') }}"
+      when:
+        - self_signed_certs | default(false) | bool
+        - not ssl_files.results[0].stat.exists or not ssl_files.results[1].stat.exists
+      changed_when: true
+
+    - name: Assert SSL certificates exist (self-signed disabled)
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: >-
+          Missing SSL certificate: {{ item.item }}.
+          Place server.crt and server.key in files/certificates/{{ group_names[0] }}/
+          or set self_signed_certs: true in group_vars.
+        quiet: true
+      loop: "{{ ssl_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: not (self_signed_certs | default(false) | bool)
+
+    - name: Create required directories
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ data_dir }}/logs/kong"
+        - "{{ data_dir }}/logs/backend"
+        - "{{ data_dir }}/logs/doc-repo"
+        - "{{ data_dir }}/database_backups"
+        - "{{ data_dir }}/huggingface"
+        - secrets/ssl
+
+- name: GENIE.AI - Copy SSL certificates
+  hosts: swarm_managers
+  tags: [prepare]
+  tasks:
+    - name: Check if local certificate files exist
+      become: false
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/files/certificates/{{ group_names[0] }}/{{ item }}"
+      register: local_certs
+      delegate_to: localhost
+      loop:
+        - server.crt
+        - server.key
+      failed_when: false
+
+    - name: Copy SSL certificate
+      become: true
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/files/certificates/{{ group_names[0] }}/{{ item.item }}"
+        dest: "{{ deploy_dir }}/secrets/ssl/{{ item.item }}"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+      loop: "{{ local_certs.results }}"
+      when: item.stat.exists
+      loop_control:
+        label: "{{ item.item }}"
+
+- name: GENIE.AI - Authenticate to GitLab Container Registry
+  hosts: swarm_managers
+  tags: [build, deploy]
+  become: true
+  tasks:
+    - name: Initialize shared facts (registry URL, image tag)
+      ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
+
+    - name: Docker login to GitLab Container Registry (private registry only)
+      ansible.builtin.shell: |
+        echo "{{ gitlab_deploy_token }}" | docker login -u "{{ gitlab_deploy_token_user }}" --password-stdin {{ swarm_registry_url }}
+      changed_when: false
+      no_log: true
+      when:
+        - gitlab_deploy_token_user is defined
+        - gitlab_deploy_token is defined
+        - gitlab_deploy_token | length > 0
+
+    - name: Skip registry login (public registry)
+      ansible.builtin.debug:
+        msg: "GitLab deploy token not configured — assuming public registry, no login needed"
+      when: >-
+        not (gitlab_deploy_token_user is defined
+        and gitlab_deploy_token is defined
+        and gitlab_deploy_token | length > 0)
+
+  post_tasks:
+    - name: Docker logout from GitLab registry (clean credentials)
+      ansible.builtin.shell: "docker logout {{ swarm_registry_url }}"
+      changed_when: false
+      when:
+        - gitlab_deploy_token_user is defined
+        - gitlab_deploy_token is defined
+        - gitlab_deploy_token | length > 0
+
+- name: GENIE.AI - Generate .env and deploy stack
+  hosts: swarm_managers
+  tags: [deploy]
+  become: true
+  tasks:
+    - name: Validate required vault variables
+      ansible.builtin.assert:
+        that:
+          - arango_password is defined and arango_password | length > 0
+          - translation_cache_password is defined and translation_cache_password | length > 0
+          - postgres_password is defined and postgres_password | length > 0
+          - kong_db_password is defined and kong_db_password | length > 0
+          - keycloak_admin_password is defined and keycloak_admin_password | length > 0
+          - genie_admin_password is defined and genie_admin_password | length > 0
+          - genie_admin_email is defined and genie_admin_email | length > 0
+          - keycloak_db_password is defined and keycloak_db_password | length > 0
+          - keycloak_client_secret is defined and keycloak_client_secret | length > 0
+          - keycloak_proxy_client_secret is defined and keycloak_proxy_client_secret | length > 0
+          - kc_dataprep_client_secret is defined and kc_dataprep_client_secret | length > 0
+          - kc_mobile_client_id is defined and kc_mobile_client_id | length > 0
+          - kc_mobile_redirect_scheme is defined and kc_mobile_redirect_scheme | length > 0
+        fail_msg: >-
+          Missing required vault variable(s).
+          Edit the vault file for your environment (group_vars/&lt;env&gt;.vault) and set all secrets:
+          arango_password, translation_cache_password,
+          postgres_password,
+          kong_db_password, keycloak_admin_password, genie_admin_password, genie_admin_email,
+          keycloak_db_password, keycloak_client_secret, keycloak_proxy_client_secret,
+          kc_dataprep_client_secret, kc_mobile_client_id, kc_mobile_redirect_scheme.
+        quiet: true
+
+    - name: Initialize shared facts (registry URL, image tag)
+      ansible.builtin.include_tasks: tasks/deploy-shared-facts.yml
+
+    - name: Generate .env file from template
+      ansible.builtin.template:
+        src: env.j2
+        dest: "{{ deploy_dir }}/.env"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+
+    - name: Build docker compose profiles list
+      ansible.builtin.set_fact:
+        _compose_profiles: >-
+          {% if deploy_opea is not defined or deploy_opea != '0' %}--profile opea {% endif %}
+          {% if certbot_replicas is defined and certbot_replicas != '0' %}--profile letsencrypt {% endif %}
+          {% if enable_observability is defined and enable_observability == '1' %}--profile observability {% endif %}
+
+    - name: Validate compose configuration
+      ansible.builtin.shell: >
+        docker compose
+        --env-file {{ deploy_dir }}/.env
+        {{ _compose_profiles }}
+        -f {{ deploy_dir }}/{{ compose_file }} config --quiet
+      args:
+        chdir: "{{ deploy_dir }}"
+      register: compose_validate
+      changed_when: false
+
+    - name: Verify critical environment variables in .env file
+      ansible.builtin.shell: |
+        # Verify critical variables exist and are non-empty in .env
+        for var in ARANGO_PASSWORD POSTGRES_PASSWORD KC_DATAPREP_CLIENT_SECRET; do
+          value=$(grep "^${var}=" {{ deploy_dir }}/.env | cut -d'=' -f2-)
+          if [ -z "$value" ]; then
+            echo "ERROR: $var is not set or empty in .env file!"
+            exit 1
+          fi
+          echo "✓ $var is set"
+        done
+      args:
+        executable: /bin/bash
+        chdir: "{{ deploy_dir }}"
+
+    - name: Generate resolved docker-compose file with substituted variables
+      ansible.builtin.shell: |
+        # Generate resolved compose with docker compose, then fix port types
+        # (docker compose config converts port integers to strings, which
+        # docker stack deploy rejects — see docker/cli#1073)
+        docker compose \
+          --env-file {{ deploy_dir }}/.env \
+          {{ _compose_profiles }} \
+          -f {{ deploy_dir }}/{{ compose_file }} config > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Fix port types: convert quoted port numbers to bare integers
+        sed -i 's/published: "\([0-9]*\)"/published: \1/g' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Remove 'name' properties not supported by docker stack deploy
+        sed -i '/^[[:space:]]*name:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Remove 'host_ip' properties not supported by docker stack deploy
+        sed -i '/^[[:space:]]*host_ip:/d' {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Remove 'profiles' blocks not supported by docker stack deploy
+        # (profiles is a multi-line YAML block: 'profiles:' + '- xxx' items)
+        awk '/^[[:space:]]*profiles:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
+          {{ deploy_dir }}/docker-compose.resolved.yaml.tmp > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2 {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Remove depends_on blocks (not supported by docker stack deploy)
+        # docker compose config normalizes depends_on to mapping format which
+        # Swarm rejects. Startup ordering relies on healthchecks + restart policy.
+        awk '/^[[:space:]]*depends_on:/{match($0,/^[[:space:]]*/);n=RLENGTH;next} n{match($0,/^[[:space:]]*/);if(RLENGTH<=n)n=0} !n' \
+          {{ deploy_dir }}/docker-compose.resolved.yaml.tmp > {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2
+        mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp2 {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+
+        # Check if changed and atomically replace
+        if ! diff -q {{ deploy_dir }}/docker-compose.resolved.yaml.tmp {{ deploy_dir }}/docker-compose.resolved.yaml > /dev/null 2>&1; then
+          mv {{ deploy_dir }}/docker-compose.resolved.yaml.tmp {{ deploy_dir }}/docker-compose.resolved.yaml
+          echo "COMPOSE_CHANGED"
+        else
+          rm {{ deploy_dir }}/docker-compose.resolved.yaml.tmp
+          echo "COMPOSE_UNCHANGED"
+        fi
+      args:
+        executable: /bin/bash
+        chdir: "{{ deploy_dir }}"
+      register: resolved_compose
+      changed_when: "'COMPOSE_CHANGED' in resolved_compose.stdout"
+
+    - name: Set permissions on resolved compose file (contains secrets)
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/docker-compose.resolved.yaml"
+        mode: '0600'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Deploy Docker stack
+      ansible.builtin.shell: |
+        docker stack deploy --resolve-image always -c {{ deploy_dir }}/docker-compose.resolved.yaml {{ stack_name }}
+      args:
+        chdir: "{{ deploy_dir }}"
+      register: stack_deploy
+      changed_when: "'Creating' in stack_deploy.stderr or 'Updating' in stack_deploy.stderr"
+
+    - name: Stack deploy output
+      ansible.builtin.debug:
+        var: stack_deploy.stdout_lines
+
+- name: GENIE.AI - Post-deploy verification
+  hosts: swarm_managers
+  tags: [deploy]
+  become: true
+  vars:
+    _compose_changed: "true"
+  tasks:
+    - name: Wait for services to stabilize
+      ansible.builtin.command: docker service ls --filter label=com.docker.stack.namespace={{ stack_name }} --format "{{ '{{' }}.Name{{ '}}' }}"
+      register: service_list
+      until: service_list.stdout_lines | length > 0
+      retries: "{{ (deploy_stabilization_timeout | int) // 10 }}"
+      delay: 10
+      changed_when: false
+      when: _compose_changed | bool
+
+    - name: Show running services
+      ansible.builtin.command: docker service ls
+      register: services_output
+      changed_when: false
+      when: _compose_changed | bool
+
+    - name: Service list
+      ansible.builtin.debug:
+        var: services_output.stdout_lines
+      when: _compose_changed | bool
+
+    - name: Verify all running services are healthy
+      ansible.builtin.shell: >
+        docker service ls
+        --filter label=com.docker.stack.namespace={{ stack_name }}
+        --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Replicas{{ "}}" }}'
+      register: replica_check
+      until: >
+        replica_check.stdout_lines
+        | reject('search', 'kong-config')
+        | reject('search', 'kong-migrations')
+        | reject('search', 'postgres-init')
+        | reject('search', 'keycloak-config')
+        | reject('search', 'db-migrations')
+        | reject('search', 'otel-collector-init')
+        | reject('search', '0/0')
+        | select('search', '0/')
+        | length == 0
+      retries: "{{ (deploy_stabilization_timeout | int) // 30 }}"
+      delay: 30
+      changed_when: false
+      when: _compose_changed | bool
+
+    - name: Smoke test - backend health
+      ansible.builtin.uri:
+        url: "https://localhost:{{ nginx_https_port | default('443') }}/api/health"
+        method: GET
+        validate_certs: false
+        return_content: true
+      register: health_check
+      until: health_check.status == 200
+      retries: 6
+      delay: 15
+      when: _compose_changed | bool
+
+    - name: Smoke test - frontend
+      ansible.builtin.uri:
+        url: "https://localhost:{{ nginx_https_port | default('443') }}/"
+        method: GET
+        validate_certs: false
+        return_content: true
+      register: frontend_check
+      until: frontend_check.status == 200
+      retries: 3
+      delay: 10
+      when: _compose_changed | bool
+
+    - name: Deployment summary
+      ansible.builtin.shell: |
+        echo ""
+        echo "============================================="
+        echo "GENIE.AI deployment complete"
+        echo "============================================="
+        echo "Stack: {{ stack_name }}"
+        echo "Services: {{ service_list.stdout_lines | length }}"
+        echo "Backend health: {{ health_check.status }}"
+        echo "Frontend: {{ frontend_check.status }}"
+        echo "Access: https://{{ nginx_public_domain | default('localhost') }}/"
+        echo "============================================="
+        echo ""
+      changed_when: false
+      when: _compose_changed | bool
+
+    - name: Skip deployment notice
+      ansible.builtin.shell: |
+        echo ""
+        echo "============================================="
+        echo "GENIE.AI - No changes detected, skipping deployment."
+        echo "============================================="
+        echo ""
+      changed_when: false
+      when: not (_compose_changed | bool)
+

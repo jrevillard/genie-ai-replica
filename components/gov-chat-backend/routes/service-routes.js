@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
@@ -9,18 +9,22 @@ module.exports = (serviceCategoryService) => {
     throw new Error('serviceCategoryService is required with getAllCategoriesWithServices');
   }
   logger.debug('service-routes initialized with serviceCategoryService', {
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(m => m !== 'constructor')
+    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(serviceCategoryService)).filter(
+      (m) => m !== 'constructor'
+    )
   });
 
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
-   * /services/categories:
+   * /api/services/categories:
    *   get:
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
    *     tags: [Services]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: locale
@@ -73,18 +77,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(`Error fetching all categories with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error fetching all categories with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /services/categories/{categoryId}:
+   * /api/services/categories/{categoryId}:
    *   get:
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
    *     tags: [Services]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -134,7 +143,7 @@ module.exports = (serviceCategoryService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/categories/:categoryId', async (req, res) => {
+  router.get('/categories/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
@@ -143,23 +152,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Category ${req.params.categoryId} not found`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error fetching category ${req.params.categoryId} with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
+      next(error);
     }
   });
 
   /**
    * @swagger
-   * /services/search:
+   * /api/services/search:
    *   get:
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string
    *     tags: [Services]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: query
@@ -224,10 +233,15 @@ module.exports = (serviceCategoryService) => {
       }
       logger.info(`Searching services with query: "${query}", locale: ${locale}`);
       const results = await serviceCategoryService.searchCategoriesAndServices(query, locale);
-      logger.info(`Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`);
+      logger.info(
+        `Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`
+      );
       res.json(results);
     } catch (error) {
-      logger.error(`Error searching categories and services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error searching categories and services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });

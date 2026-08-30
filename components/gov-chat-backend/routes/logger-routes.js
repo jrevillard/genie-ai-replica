@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { reconfigureLogger, triggerLogRollover } = require('../shared-lib');
 
 module.exports = () => {
@@ -12,7 +12,7 @@ module.exports = () => {
    *     description: Updates the application's logging configuration with new settings.
    *     tags: [Logger]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -94,32 +94,47 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/configure', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  router.post('/configure', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
     try {
       const { level, errorMaxSize, combinedMaxSize, errorMaxFiles, combinedMaxFiles, zippedArchive } = req.body;
 
-      if (!level && !errorMaxSize && !combinedMaxSize && !errorMaxFiles && !combinedMaxFiles && zippedArchive === undefined) {
+      if (
+        !level &&
+        !errorMaxSize &&
+        !combinedMaxSize &&
+        !errorMaxFiles &&
+        !combinedMaxFiles &&
+        zippedArchive === undefined
+      ) {
         return res.status(400).json({ success: false, message: 'At least one configuration parameter is required' });
       }
 
       if (level && !['error', 'warn', 'info', 'debug'].includes(level)) {
-        return res.status(400).json({ success: false, message: 'Invalid log level. Must be one of: error, warn, info, debug' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid log level. Must be one of: error, warn, info, debug' });
       }
 
       const sizeRegex = /^\d+(k|m|g)$/;
       const filesRegex = /^\d+d$/;
 
       if (errorMaxSize && !sizeRegex.test(errorMaxSize)) {
-        return res.status(400).json({ success: false, message: 'Invalid errorMaxSize. Must be in format: 10m, 500k, 1g' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid errorMaxSize. Must be in format: 10m, 500k, 1g' });
       }
       if (combinedMaxSize && !sizeRegex.test(combinedMaxSize)) {
-        return res.status(400).json({ success: false, message: 'Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid combinedMaxSize. Must be in format: 10m, 500k, 1g' });
       }
       if (errorMaxFiles && !filesRegex.test(errorMaxFiles)) {
         return res.status(400).json({ success: false, message: 'Invalid errorMaxFiles. Must be in format: 30d, 14d' });
       }
       if (combinedMaxFiles && !filesRegex.test(combinedMaxFiles)) {
-        return res.status(400).json({ success: false, message: 'Invalid combinedMaxFiles. Must be in format: 30d, 14d' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Invalid combinedMaxFiles. Must be in format: 30d, 14d' });
       }
 
       reconfigureLogger({
@@ -128,12 +143,12 @@ module.exports = () => {
         combinedMaxSize,
         errorMaxFiles,
         combinedMaxFiles,
-        zippedArchive,
+        zippedArchive
       });
 
       res.json({ success: true, message: 'Logger configuration updated successfully' });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Failed to update logger configuration', error: error.message });
+    } catch {
+      res.status(500).json({ success: false, message: 'Failed to update logger configuration' });
     }
   });
 
@@ -145,7 +160,7 @@ module.exports = () => {
    *     description: Forces an immediate log rotation regardless of current file sizes
    *     tags: [Logger]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Log rollover triggered successfully
@@ -180,12 +195,12 @@ module.exports = () => {
    *                 error:
    *                   type: string
    */
-  router.post('/rollover', authMiddleware.authenticate, authMiddleware.isAdmin, (req, res) => {
+  router.post('/rollover', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
     try {
       triggerLogRollover();
       res.json({ success: true, message: 'Log rollover triggered successfully' });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Failed to trigger log rollover', error: error.message });
+    } catch {
+      res.status(500).json({ success: false, message: 'Failed to trigger log rollover' });
     }
   });
 

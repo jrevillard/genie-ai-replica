@@ -1,0 +1,8 @@
+gold_dataset.json
+chunks_registry.json
+chunks_labeling_audit.csv
+eval_report.json
+eval_tuples.json
+ragas_report.json
+__pycache__/
+.ruff_cache/

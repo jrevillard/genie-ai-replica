@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 module.exports = (serviceCategoryService) => {
@@ -10,15 +10,17 @@ module.exports = (serviceCategoryService) => {
   }
   logger.debug('serviceCategory-routes initialized with serviceCategoryService');
 
-  router.use(authMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.authenticate);
 
   /**
    * @swagger
-   * /service-categories/categories:
+   * /api/service-categories/categories:
    *   get:
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: locale
@@ -56,18 +58,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(`Error getting all categories with services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error getting all categories with services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/categories/detailed:
+   * /api/service-categories/categories/detailed:
    *   get:
    *     summary: Get all categories with detailed services for admin
    *     description: Retrieves all categories with their associated services as objects (including keys)
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: locale
@@ -90,18 +97,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${categories.length} detailed categories in ${Date.now() - start}ms`);
       res.json(categories);
     } catch (error) {
-      logger.error(`Error getting all detailed categories: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error getting all detailed categories: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/categories/{categoryId}:
+   * /api/service-categories/categories/{categoryId}:
    *   get:
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -136,7 +148,7 @@ module.exports = (serviceCategoryService) => {
    *       '500':
    *         description: Server error
    */
-  router.get('/categories/:categoryId', async (req, res) => {
+  router.get('/categories/:categoryId', async (req, res, next) => {
     const start = Date.now();
     try {
       const locale = req.query.locale || 'en';
@@ -145,23 +157,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched category ${req.params.categoryId} in ${Date.now() - start}ms`);
       res.json(category);
     } catch (error) {
-      if (error.message.includes('not found')) {
-        logger.warn(`Category ${req.params.categoryId} not found`);
-        res.status(404).json({ message: error.message });
-      } else {
-        logger.error(`Error getting category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
-        res.status(500).json({ message: error.message });
-      }
+      logger.error(`Error getting category ${req.params.categoryId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
+      next(error);
     }
   });
 
   /**
    * @swagger
-   * /service-categories/{categoryId}/translations:
+   * /api/service-categories/{categoryId}/translations:
    *   get:
    *     summary: Get all translations for a category
    *     description: Retrieves all available translations for a specific service category
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -197,18 +209,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${translations.length} translations for category ${categoryId} in ${Date.now() - start}ms`);
       res.json(translations);
     } catch (error) {
-      logger.error(`Error getting translations for category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error getting translations for category ${req.params.categoryId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/services/{serviceId}/translations:
+   * /api/service-categories/services/{serviceId}/translations:
    *   get:
    *     summary: Get all translations for a service
    *     description: Retrieves all available translations for a specific service
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: serviceId
@@ -231,18 +248,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Fetched ${translations.length} translations for service ${serviceId} in ${Date.now() - start}ms`);
       res.json(translations);
     } catch (error) {
-      logger.error(`Error getting translations for service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error getting translations for service ${req.params.serviceId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/search:
+   * /api/service-categories/search:
    *   get:
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: query
@@ -305,21 +327,28 @@ module.exports = (serviceCategoryService) => {
       }
       logger.info(`Searching categories and services with query: "${query}" and locale: ${locale}`);
       const results = await serviceCategoryService.searchCategoriesAndServices(query, locale);
-      logger.info(`Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`);
+      logger.info(
+        `Search completed in ${Date.now() - start}ms: ${results.categories.length} categories, ${results.services.length} services`
+      );
       res.json(results);
     } catch (error) {
-      logger.error(`Error searching categories and services: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error searching categories and services: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories:
+   * /api/service-categories:
    *   post:
    *     summary: Create a new category
    *     description: Creates a new service category with translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     requestBody:
    *       required: true
    *       content:
@@ -356,11 +385,13 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /service-categories/{categoryId}:
+   * /api/service-categories/{categoryId}:
    *   delete:
    *     summary: Delete a category
    *     description: Deletes a service category and its associated services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -389,18 +420,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Category ${req.params.categoryId} deleted successfully in ${Date.now() - start}ms`);
       res.json({ message: `Category ${req.params.categoryId} deleted successfully` });
     } catch (error) {
-      logger.error(`Error deleting category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error deleting category ${req.params.categoryId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/services/{serviceId}:
+   * /api/service-categories/services/{serviceId}:
    *   delete:
    *     summary: Delete a service
    *     description: Deletes a service and its associated translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: serviceId
@@ -421,12 +457,14 @@ module.exports = (serviceCategoryService) => {
     try {
       const { serviceId } = req.params;
       logger.info(`Attempting to delete service: ${serviceId}`);
-      const result = await serviceCategoryService.deleteService(serviceId);
+      await serviceCategoryService.deleteService(serviceId);
       logger.info(`Service ${serviceId} deleted successfully in ${Date.now() - start}ms`);
       res.status(200).json({ message: `Service ${serviceId} deleted successfully` });
-    } catch (error)
-      {
-      logger.error(`Error deleting service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+    } catch (error) {
+      logger.error(`Error deleting service ${req.params.serviceId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       if (error.code === 404) {
         res.status(404).json({ message: error.message });
       } else {
@@ -437,11 +475,13 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /service-categories/init:
+   * /api/service-categories/init:
    *   post:
    *     summary: Initialize default categories
    *     description: Initializes the system with default categories and services
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       '200':
    *         description: Default categories initialized successfully
@@ -465,18 +505,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Default categories initialized successfully in ${Date.now() - start}ms`);
       res.json(result);
     } catch (error) {
-      logger.error(`Error initializing default categories: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error initializing default categories: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/{categoryId}/services:
+   * /api/service-categories/{categoryId}/services:
    *   post:
    *     summary: Create a new service for a category
    *     description: Creates a new service with translations under a specific category
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -513,18 +558,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service created successfully for category ${categoryId} in ${Date.now() - start}ms`);
       res.status(201).json(newService);
     } catch (error) {
-      logger.error(`Error creating service for category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error creating service for category ${req.params.categoryId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/{categoryId}:
+   * /api/service-categories/{categoryId}:
    *   put:
    *     summary: Update an existing category
    *     description: Updates a category's name and translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: categoryId
@@ -561,18 +611,23 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Category ${categoryId} updated successfully in ${Date.now() - start}ms`);
       res.status(200).json(result);
     } catch (error) {
-      logger.error(`Error updating category ${req.params.categoryId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error updating category ${req.params.categoryId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });
 
   /**
    * @swagger
-   * /service-categories/services/{serviceId}:
+   * /api/service-categories/services/{serviceId}:
    *   put:
    *     summary: Update an existing service
    *     description: Updates a service's name and its associated translations
    *     tags: [Service Categories]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: path
    *         name: serviceId
@@ -609,7 +664,10 @@ module.exports = (serviceCategoryService) => {
       logger.info(`Service ${serviceId} updated successfully in ${Date.now() - start}ms`);
       res.status(200).json(result);
     } catch (error) {
-      logger.error(`Error updating service ${req.params.serviceId}: ${error.message}`, { stack: error.stack, durationMs: Date.now() - start });
+      logger.error(`Error updating service ${req.params.serviceId}: ${error.message}`, {
+        stack: error.stack,
+        durationMs: Date.now() - start
+      });
       res.status(500).json({ message: error.message });
     }
   });

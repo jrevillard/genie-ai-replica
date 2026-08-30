@@ -1,7 +1,7 @@
-const crypto = require('crypto');
+const nodeCrypto = require('crypto');
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
 /**
@@ -22,9 +22,9 @@ function requireBroadcastAuth(req, res, next) {
     return res.status(503).json({ success: false, message: 'notification_broadcast_not_configured' });
   }
   const provided = req.get('x-notification-secret') || '';
-  const expectedDigest = crypto.createHash('sha256').update(expectedSecret).digest();
-  const providedDigest = crypto.createHash('sha256').update(provided).digest();
-  if (!crypto.timingSafeEqual(expectedDigest, providedDigest)) {
+  const expectedDigest = nodeCrypto.createHash('sha256').update(expectedSecret).digest();
+  const providedDigest = nodeCrypto.createHash('sha256').update(provided).digest();
+  if (!nodeCrypto.timingSafeEqual(expectedDigest, providedDigest)) {
     return res.status(401).json({ success: false, message: 'Invalid notification secret' });
   }
   req.notificationCaller = { kind: 'service', id: req.get('x-notification-source') || 'shared-secret' };
@@ -37,7 +37,7 @@ module.exports = (notificationService) => {
     throw new Error('notificationService is required');
   }
 
-  router.post('/register', authMiddleware.authenticate, async (req, res) => {
+  router.post('/register', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       const body = req.body || {};
       const authenticatedUserId = req.user?._key || req.user?.userId || req.user?.id;
@@ -55,7 +55,7 @@ module.exports = (notificationService) => {
     }
   });
 
-  router.post('/unregister', authMiddleware.authenticate, async (req, res) => {
+  router.post('/unregister', keycloakAuthMiddleware.authenticate, async (req, res) => {
     try {
       const body = req.body || {};
       const userId = req.user?._key || req.user?.userId || req.user?.id;

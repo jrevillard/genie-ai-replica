@@ -1,15 +1,17 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
-const { v4: uuidv4 } = require('uuid');
 const { logger, dbService } = require('../shared-lib');
 
 class SessionService {
   constructor() {
-    this.sessionExpirationTime = process.env.SESSION_EXPIRATION_TIME || 30 * 60 * 1000; // 30 minutes in milliseconds
+    this.sessionExpirationTime = parseInt(process.env.SESSION_EXPIRATION_TIME, 10) || 30 * 60 * 1000; // 30 minutes in milliseconds
     this.db = null;
     this.sessions = null;
     this.userSessions = null;
+    this.sessionQueries = null;
     this.initialized = false;
+    this._lastCleanupTime = 0;
+    this._cleanupIntervalMs = 5 * 60 * 1000; // Throttle: cleanup at most every 5 minutes
     logger.info('SessionService constructor called');
   }
 
@@ -20,8 +22,11 @@ class SessionService {
     }
     try {
       this.db = await dbService.getConnection('default');
+
       this.sessions = this.db.collection('sessions');
       this.userSessions = this.db.collection('userSessions');
+      this.sessionQueries = this.db.collection('sessionQueries');
+
       this.initialized = true;
       logger.info(`SessionService initialized successfully with expiration time: ${this.sessionExpirationTime}ms`);
     } catch (error) {
@@ -30,7 +35,7 @@ class SessionService {
     }
   }
 
-  async createSession(userId, deviceInfo = {}, ipAddress = '') {
+  async createSession(userId, userKey, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Creating session for user ${userId}`);
 
@@ -39,22 +44,22 @@ class SessionService {
         startTime: new Date().toISOString(),
         active: true
       };
-      
+
       logger.info(`Creating session document for user ${userId}`);
       const session = await this.sessions.save(basicSessionDoc);
       const sessionId = session._key;
       logger.info(`Session created with auto-generated key: ${sessionId}`);
-      
+
       const updateData = {};
-      
+
       if (deviceInfo && typeof deviceInfo === 'object' && Object.keys(deviceInfo).length > 0) {
         updateData.deviceInfo = deviceInfo;
       }
-      
+
       if (ipAddress && typeof ipAddress === 'string') {
         updateData.ipAddress = ipAddress;
       }
-      
+
       if (Object.keys(updateData).length > 0) {
         logger.info(`Updating session ${sessionId} with additional data: ${JSON.stringify(updateData)}`);
         await this.sessions.update(sessionId, updateData);
@@ -63,7 +68,7 @@ class SessionService {
       try {
         logger.info(`Creating edge between user ${userId} and session ${sessionId}`);
         await this.userSessions.save({
-          _from: `users/${userId}`,
+          _from: `users/${userKey}`,
           _to: `sessions/${sessionId}`,
           createdAt: new Date().toISOString()
         });
@@ -81,19 +86,32 @@ class SessionService {
     }
   }
 
-  async getActiveSession(userId) {
+  async getActiveSession(userId, { legacyKey = null } = {}) {
     try {
       logger.info(`Fetching active session for user ${userId}`);
 
-      const query = aql`
-        FOR session IN sessions
-          FILTER session.userId == ${userId}
-          FILTER session.active == true
-          FILTER session.endTime == null
-          SORT session.startTime DESC
-          LIMIT 1
-          RETURN session
-      `;
+      let query;
+      if (legacyKey) {
+        query = aql`
+          FOR session IN sessions
+            FILTER session.userId == ${userId} || session.userId == ${legacyKey}
+            FILTER session.active == true
+            FILTER session.endTime == null
+            SORT session.startTime DESC
+            LIMIT 1
+            RETURN session
+        `;
+      } else {
+        query = aql`
+          FOR session IN sessions
+            FILTER session.userId == ${userId}
+            FILTER session.active == true
+            FILTER session.endTime == null
+            SORT session.startTime DESC
+            LIMIT 1
+            RETURN session
+        `;
+      }
 
       const cursor = await this.db.query(query);
       const session = await cursor.next();
@@ -104,9 +122,10 @@ class SessionService {
       }
 
       const sessionStartTime = new Date(session.startTime).getTime();
+      const lastActive = session.lastActiveTime ? new Date(session.lastActiveTime).getTime() : sessionStartTime;
       const currentTime = new Date().getTime();
-      
-      if (currentTime - sessionStartTime > this.sessionExpirationTime) {
+
+      if (currentTime - lastActive > this.sessionExpirationTime) {
         logger.info(`Session ${session._key} for user ${userId} has expired`);
         await this.endSession(session._key);
         return null;
@@ -120,19 +139,28 @@ class SessionService {
     }
   }
 
-  async getOrCreateSession(userId, deviceInfo = {}, ipAddress = '') {
+  async getOrCreateSession(userId, userKey, deviceInfo = {}, ipAddress = '') {
     try {
       logger.info(`Getting or creating session for user ${userId}`);
 
-      const activeSession = await this.getActiveSession(userId);
-      
+      // Lazy cleanup: purge expired sessions on each access (throttled, no cron required)
+      const now = Date.now();
+      if (now - this._lastCleanupTime > this._cleanupIntervalMs) {
+        this._lastCleanupTime = now;
+        this.cleanupExpiredSessions().catch((err) => {
+          logger.warn(`Background session cleanup failed: ${err.message}`);
+        });
+      }
+
+      const activeSession = await this.getActiveSession(userId, { legacyKey: userKey });
+
       if (activeSession) {
         logger.info(`Returning existing active session: ${activeSession._key} for user ${userId}`);
         return activeSession;
       }
-      
+
       logger.info(`No active session found, creating new session for user ${userId}`);
-      const newSession = await this.createSession(userId, deviceInfo, ipAddress);
+      const newSession = await this.createSession(userId, userKey, deviceInfo, ipAddress);
       logger.info(`Session retrieved or created successfully: ${newSession._key} for user ${userId}`);
       return newSession;
     } catch (error) {
@@ -166,11 +194,7 @@ class SessionService {
 
       logger.info(`Update data: ${JSON.stringify(updateData)}`);
 
-      const updatedSession = await this.sessions.update(
-        sessionId,
-        updateData,
-        { returnNew: true }
-      );
+      const updatedSession = await this.sessions.update(sessionId, updateData, { returnNew: true });
 
       logger.info(`Session update result: ${JSON.stringify(updatedSession.new)}`);
 
@@ -215,13 +239,30 @@ class SessionService {
     }
   }
 
-  async getUserSessions(userId, activeOnly = false) {
+  async getUserSessions(userId, { legacyKey = null, activeOnly = false } = {}) {
     try {
       logger.info(`Fetching sessions for user ${userId}${activeOnly ? ' (active only)' : ''}`);
 
       let query;
-      
-      if (activeOnly) {
+
+      if (legacyKey) {
+        if (activeOnly) {
+          query = aql`
+            FOR session IN sessions
+              FILTER session.userId == ${userId} || session.userId == ${legacyKey}
+              FILTER session.active == true
+              SORT session.startTime DESC
+              RETURN session
+          `;
+        } else {
+          query = aql`
+            FOR session IN sessions
+              FILTER session.userId == ${userId} || session.userId == ${legacyKey}
+              SORT session.startTime DESC
+              RETURN session
+          `;
+        }
+      } else if (activeOnly) {
         query = aql`
           FOR session IN sessions
             FILTER session.userId == ${userId}
@@ -266,33 +307,67 @@ class SessionService {
       logger.info('Starting cleanup of expired sessions');
 
       const expirationTime = new Date(Date.now() - this.sessionExpirationTime).toISOString();
-      
+
       const query = aql`
         FOR session IN sessions
           FILTER session.active == true
           FILTER session.startTime < ${expirationTime}
           FILTER session.lastActiveTime == null OR session.lastActiveTime < ${expirationTime}
+          LIMIT 100
           RETURN session
       `;
-      
+
       const cursor = await this.db.query(query);
       const expiredSessions = await cursor.all();
-      
+
       let endedCount = 0;
+      let edgesRemoved = 0;
       for (const session of expiredSessions) {
+        // Remove orphaned edges before ending session
+        edgesRemoved += await this._removeSessionEdges(session._id);
         await this.endSession(session._key);
         endedCount++;
       }
-      
-      logger.info(`Expired sessions cleanup completed successfully: ${expiredSessions.length} found, ${endedCount} ended`);
+
+      logger.info(
+        `Expired sessions cleanup completed: ${expiredSessions.length} found, ${endedCount} ended, ${edgesRemoved} edges removed`
+      );
       return {
         expiredSessionsFound: expiredSessions.length,
-        sessionsEnded: endedCount
+        sessionsEnded: endedCount,
+        edgesRemoved
       };
     } catch (error) {
       logger.error(`Error cleaning up expired sessions: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  }
+
+  async _removeSessionEdges(sessionId) {
+    let removed = 0;
+    try {
+      const userSessionEdges = await this.db.query(aql`
+        FOR edge IN userSessions
+          FILTER edge._to == ${sessionId}
+          REMOVE edge IN userSessions
+          RETURN edge._id
+      `);
+      removed += (await userSessionEdges.all()).length;
+    } catch (error) {
+      logger.warn(`Failed to clean userSessions edges for ${sessionId}: ${error.message}`);
+    }
+    try {
+      const queryEdges = await this.db.query(aql`
+        FOR edge IN sessionQueries
+          FILTER edge._from == ${sessionId}
+          REMOVE edge IN sessionQueries
+          RETURN edge._id
+      `);
+      removed += (await queryEdges.all()).length;
+    } catch (error) {
+      logger.warn(`Failed to clean sessionQueries edges for ${sessionId}: ${error.message}`);
+    }
+    return removed;
   }
 
   async getSessionStats(startDate, endDate) {
@@ -346,7 +421,7 @@ class SessionService {
           sessionsByDevice
         }
       `;
-      
+
       const cursor = await this.db.query(query);
       const stats = await cursor.next();
       logger.info(`Session statistics retrieved successfully: ${JSON.stringify(stats)}`);

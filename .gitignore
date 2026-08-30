@@ -1,35 +1,133 @@
-node_modules/
+# playwright-cli working directory (test snapshots)
+.playwright-cli/
+.playwright/
+
+# Playwright test results
+test-results/
+
+# Environment files (secrets - never commit)
 .env
 .env.local
-.DS_Store
+.env.*.local
+
+# SSL certificates and keys (secrets - never commit)
+# The secrets/ directory contains actual certificates - keep structure but not files
+secrets/*.crt
+secrets/*.key
+secrets/*.pem
+api-gateway-solution/nginx/certs/
+
+# Auto-generated nginx config (rendered from template at container start)
+api-gateway-solution/nginx/conf/default.conf
+
+# Node modules
+node_modules/
+
+# Build outputs
+dist/
+
+# Git worktrees
+.worktrees/
+.claude/worktrees/
+build/
+
+# Logs
+logs/
 *.log
-logs
+*.log.txt
+*-log.txt
 *.log.gz
-secrets/
-components/secrets/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Centralized data directories (bind mounts)
+data/logs/
+data/database_backups/
+data/huggingface/
+
+# Database backups
+database_backups/
+
+# Kong config backups (runtime artifact)
+api-gateway-solution/new-config/kong_backups/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+.nyc_output
+.coverage
+
+# Test report artifacts (CI-generated)
+reports/
+**/reports/
+
+# Dependency directories
+jspm_packages/
+
+# Optional cache directories
+.npm
+.eslintcache
+.node_repl_history
+
+# Upload directories
+uploads/*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.env.swp
+
+# Temporary files
+*.tmp
+.tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Docker volumes data
+arango_data/
+
+# EasyOCR models (downloaded during Docker build)
+craft_mlt_*.zip
+english_g2.zip
+
+# Docker Compose local overrides (dev only)
+docker-compose.override.yml
+
+# Claude Code settings
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Roo local state
+.roo/
+
+# Stray SSL certificates (dev artifacts, never commit)
+*.pem
+*.crt
+!configs/**/*.crt
+!configs/**/*.pem
+
+# Python editable install artifacts
+genie-ai-overlay/*.egg-info/
+.tokensave/
+
+# Firebase / notification secrets
+.secrets/
 firebase-service-account.json
 *-firebase-adminsdk-*.json
-dist/
-build/
-english_g2.zip
-craft_mlt_25k.zip
-data/models--cross-encoder--ms-marco-MiniLM-L-6-v2/blobs/**
-data/models--BAAI--bge-base-en-v1.5/blobs/**
-data/models--*/*/blobs/**data/models--cross-encoder--ms-marco-MiniLM-L-6-v2/blobs/**
-data/models--BAAI--bge-base-en-v1.5/blobs/**
-data/models--*/blobs/**
 
-
-
-
-
-# Virtual environments and cache
-.venv/
-.venv/**
-**/__pycache__/
-*.pyc
-# Extra Python ignores
-.venv/**
-**/__pycache__/
-*.pyc
-google-cloud-sdk/
+# local dev symlink (Docker build creates its own copy)
+components/gov-chat-backend/shared-lib

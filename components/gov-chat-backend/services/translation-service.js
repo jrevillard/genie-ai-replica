@@ -1,10 +1,13 @@
 const { logger } = require('../shared-lib');
-const crypto = require('crypto'); // For generating cache key
-const Redis = require('ioredis');  // For Redis cache
+const nodeCrypto = require('crypto'); // For generating cache key
+const Redis = require('ioredis'); // For Redis cache
 
 // Import backend modules
 const CpuTranslateBackend = require('./translation/cpu-translate-backend');
 const GpuTranslateBackend = require('./translation/gpu-translate-backend');
+const { splitEdges } = require('./translation/text-edges');
+const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
+const { translationCacheKey } = require('./translation/translation-cache-key');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -13,7 +16,7 @@ const DEFAULT_BATCHES = 5;
 const intraOpNumThreads = parseInt(process.env.TRANSLATION_THREADS, 10) || DEFAULT_THREADS;
 const numParallelBatches = parseInt(process.env.TRANSLATION_BATCHES, 10) || DEFAULT_BATCHES;
 const cacheEnabled = process.env.TRANSLATION_CACHE === 'on';
-const translationBackend = process.env.TRANSLATION_BACKEND || 'cpu'; // Default to CPU for backward compatibility
+const translationBackend = process.env.TRANSLATION_BACKEND || 'auto'; // Default to auto (tries GPU, falls back to CPU)
 
 // --- Get Redis cache settings from env ---
 const redisHost = process.env.TRANSLATION_CACHE_HOST || 'localhost';
@@ -57,7 +60,7 @@ class TranslationService {
         },
         maxRetriesPerRequest: 3,
         // Prevent hanging if Redis is down on startup
-        enableOfflineQueue: false,
+        enableOfflineQueue: false
       });
 
       this.cacheClient.on('error', (err) => {
@@ -121,7 +124,6 @@ class TranslationService {
       }
 
       throw new Error(`Invalid TRANSLATION_BACKEND value: ${translationBackend}. Must be 'cpu', 'gpu', or 'auto'`);
-
     } catch (error) {
       logger.error(`[TRANSLATION-SERVICE] Backend selection failed: ${error.message}`);
       throw error;
@@ -164,7 +166,6 @@ class TranslationService {
 
       this.initialized = true;
       logger.info('[TRANSLATION-SERVICE] Initialized successfully. Backend is ready.');
-
     } catch (error) {
       logger.error(`[TRANSLATION-SERVICE] Initialization failed: ${error.message}`, { stack: error.stack });
       throw error;
@@ -204,7 +205,9 @@ class TranslationService {
       // Check for fallback language
       const fallbackLang = this.backend.getFallbackLanguage(targetLang);
       if (fallbackLang) {
-        logger.warn(`[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`);
+        logger.warn(
+          `[TRANSLATION-SERVICE] Target language ${targetLang} not directly supported, using fallback ${fallbackLang}`
+        );
         // Recursively call translate with fallback language
         return this.translate(texts, sourceLang, fallbackLang);
       }
@@ -218,24 +221,21 @@ class TranslationService {
       // Delegate to backend
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
       return translatedTexts;
-
     } catch (error) {
-      // If backend is GPU and in auto mode, try falling back to CPU
+      // If backend is GPU and in auto mode, try falling back to CPU for this request only
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
-        logger.warn(`[TRANSLATION-SERVICE] GPU backend failed, falling back to CPU: ${error.message}`);
+        logger.warn(`[TRANSLATION-SERVICE] GPU backend failed for this request, falling back to CPU: ${error.message}`);
         try {
-          this.backend = new CpuTranslateBackend();
-          await this.backend.init();
-          this.backendType = 'cpu';
+          const cpuBackend = new CpuTranslateBackend();
+          await cpuBackend.init();
           logger.info('[TRANSLATION-SERVICE] CPU backend initialized as fallback');
 
-          // Retry translation with CPU backend
-          const sourceCode = this.backend.getLanguageCode(sourceLang);
-          const targetCode = this.backend.getLanguageCode(targetLang);
-          return await this.backend.translate(texts, sourceCode, targetCode);
+          const sourceCode = cpuBackend.getLanguageCode(sourceLang);
+          const targetCode = cpuBackend.getLanguageCode(targetLang);
+          return await cpuBackend.translate(texts, sourceCode, targetCode);
         } catch (cpuError) {
           logger.error(`[TRANSLATION-SERVICE] CPU fallback also failed: ${cpuError.message}`);
-          throw new Error(`Translation failed on both GPU and CPU backends`);
+          throw new Error(`Translation failed on both GPU and CPU backends`, { cause: cpuError });
         }
       }
 
@@ -245,6 +245,73 @@ class TranslationService {
         targetLang: targetLang,
         backend: this.backendType
       });
+      throw error;
+    }
+  }
+
+  /**
+   * @method translateStream
+   * @description Stream-translate a single COMPLETE unit (sentence/paragraph) from
+   * sourceLang to targetLang, invoking onToken for each output delta. Used by the
+   * chat streaming handler to show the target language WHILE streaming (issue #829)
+   * instead of flipping at the end. The caller buffers source chunks into complete
+   * units first (see services/translation/stream-boundary.js) — the translator must
+   * receive a complete unit.
+   * @param {string} unit - A complete source-language unit to translate
+   * @param {string} sourceLang - Source language code (e.g. 'en')
+   * @param {string} targetLang - Target language code (e.g. 'es')
+   * @param {{source: string, target: string}[]} [context] - Prior units EN+target for consistency
+   * @param {(delta: string) => void} [onToken] - Streaming callback
+   * @returns {Promise<string>} Full translated unit
+   */
+  async translateStream(unit, sourceLang, targetLang, context, onToken) {
+    // Normalize to lowercase — the frontend may send uppercase locale codes
+    // (e.g. "ES") but the language maps use lowercase keys ("es").
+    sourceLang = (sourceLang || '').toLowerCase();
+    targetLang = (targetLang || '').toLowerCase();
+    if (!this.initialized || !this.backend) {
+      throw new Error('[TRANSLATION-SERVICE] Service is not ready.');
+    }
+    if (!unit || unit.trim() === '') return '';
+
+    const sourceLangCode = this.backend.getLanguageCode(sourceLang);
+    if (!sourceLangCode) throw new Error(`Unsupported source language: ${sourceLang}`);
+
+    if (!this.backend.isLanguageSupported(targetLang)) {
+      const fallbackLang = this.backend.getFallbackLanguage(targetLang);
+      if (fallbackLang) {
+        logger.warn(`[TRANSLATION-SERVICE] Stream target ${targetLang} not supported, using fallback ${fallbackLang}`);
+        return this.translateStream(unit, sourceLang, fallbackLang, context, onToken);
+      }
+      throw new Error(`Unsupported target language: ${targetLang}`);
+    }
+    const targetLangCode = this.backend.getLanguageCode(targetLang);
+
+    try {
+      if (typeof this.backend.translateStream === 'function') {
+        return await this.backend.translateStream(unit, sourceLangCode, targetLangCode, context, onToken);
+      }
+      // Backend has no streaming support (e.g. CPU) — translate the unit in one
+      // shot and emit it as a single delta so the caller keeps streaming.
+      const [translated] = await this.backend.translate([unit], sourceLangCode, targetLangCode);
+      if (translated && onToken) onToken(translated);
+      return translated || '';
+    } catch (error) {
+      // GPU failure in auto mode -> CPU fallback (non-streaming) for this unit.
+      if (this.backendType === 'gpu' && translationBackend === 'auto') {
+        logger.warn(`[TRANSLATION-SERVICE] GPU stream failed, CPU fallback (non-streaming): ${error.message}`);
+        try {
+          const cpuBackend = new CpuTranslateBackend();
+          await cpuBackend.init();
+          const sCode = cpuBackend.getLanguageCode(sourceLang);
+          const tCode = cpuBackend.getLanguageCode(targetLang);
+          const [translated] = await cpuBackend.translate([unit], sCode, tCode);
+          if (translated && onToken) onToken(translated);
+          return translated || '';
+        } catch (cpuError) {
+          throw new Error('Stream translation failed on both GPU and CPU', { cause: cpuError });
+        }
+      }
       throw error;
     }
   }
@@ -266,9 +333,11 @@ class TranslationService {
 
     // --- REDIS CACHE LOGIC (GET) ---
     // Generate a unique <name> by hashing the markdown content.
-    const docName = crypto.createHash('md5').update(markdownContent).digest('hex');
-    // Create the cache key in the format <prefix>:<name>:<locale>
-    const cacheKey = `translation:${docName}:${targetLang}`;
+    const docName = nodeCrypto.createHash('md5').update(markdownContent).digest('hex');
+    // Cache key includes the model id so switching the translation model
+    // invalidates the cache automatically (no stale translations on model change).
+    const modelId = this.backend && this.backend.getBackendInfo ? this.backend.getBackendInfo().model : undefined;
+    const cacheKey = translationCacheKey(docName, targetLang, modelId);
     // Key for in-flight tracking (combines doc hash and target language)
     const inFlightKey = `${docName}:${targetLang}`;
 
@@ -281,14 +350,16 @@ class TranslationService {
         }
         logger.info(`[TRANSLATION-CACHE] MISS: No cache in Redis for key ${cacheKey}. Translating...`);
       } catch (error) {
-         logger.warn(`[TRANSLATION-CACHE] Redis GET error. Translating anyway. ${error.message}`);
+        logger.warn(`[TRANSLATION-CACHE] Redis GET error. Translating anyway. ${error.message}`);
       }
     }
     // --- REDIS CACHE LOGIC (END) ---
 
     // --- IN-FLIGHT TRACKING: Check if translation is already in progress ---
     if (this.inFlightTranslations.has(inFlightKey)) {
-      logger.info(`[TRANSLATION-SERVICE] In-flight translation HIT for ${inFlightKey}. Waiting for existing promise...`);
+      logger.info(
+        `[TRANSLATION-SERVICE] In-flight translation HIT for ${inFlightKey}. Waiting for existing promise...`
+      );
       const existingPromise = this.inFlightTranslations.get(inFlightKey);
       return await existingPromise;
     }
@@ -307,13 +378,24 @@ class TranslationService {
         const tree = processor.parse(markdownContent);
         logger.debug('[TRANSLATION-SERVICE] Markdown parsed successfully');
 
+        // Normalize: ensure a space between inline strong/emphasis and an
+        // immediately following word (chatqna sometimes emits run-in
+        // "**Heading**Text"). Gated to word-spaced scripts — see
+        // markdown-normalize.js + text-edges.js.
+        normalizeInlineSpacing(tree);
+
         // Collect all text nodes
         const textNodes = [];
         this.visit(tree, 'text', (node) => {
           textNodes.push(node);
         });
 
-        const texts = textNodes.map(node => node.value);
+        // Split each text node into structural edges (lead/trail: whitespace +
+        // punctuation) and a word-bounded core. Translate ONLY the cores so the
+        // model never sees/drops edge chars like the ": " after **bold** — then
+        // re-apply the original edges verbatim. Keeps "Heading: text" intact.
+        const edges = textNodes.map((node) => splitEdges(node.value));
+        const texts = edges.map((e) => e.core);
         logger.info(`[TRANSLATION-SERVICE] Extracted ${texts.length} text nodes for translation`);
 
         if (texts.length === 0) {
@@ -326,7 +408,9 @@ class TranslationService {
         const batchSize = Math.ceil(texts.length / numBatches);
         const batches = [];
 
-        logger.info(`[TRANSLATION-SERVICE] Splitting ${texts.length} texts into ${numBatches} parallel batches of size ~${batchSize}`);
+        logger.info(
+          `[TRANSLATION-SERVICE] Splitting ${texts.length} texts into ${numBatches} parallel batches of size ~${batchSize}`
+        );
 
         for (let i = 0; i < texts.length; i += batchSize) {
           batches.push(texts.slice(i, i + batchSize));
@@ -346,26 +430,30 @@ class TranslationService {
         const translatedTexts = translatedBatches.flat();
 
         const duration = Date.now() - startTime;
-        logger.info(`[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`);
+        logger.info(
+          `[TRANSLATION-SERVICE] All ${batches.length} batches completed in ${duration}ms. Received ${translatedTexts.length} total translations.`
+        );
 
         // Sanity check
         if (translatedTexts.length !== textNodes.length) {
-          logger.error(`[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`);
+          logger.error(
+            `[TRANSLATION-SERVICE] Mismatch in text node count. Original: ${textNodes.length}, Translated: ${translatedTexts.length}. Aborting.`
+          );
           throw new Error('Translation failed due to text count mismatch.');
         }
 
-        // Replace original texts with translated ones
+        // Replace each node's core with its translation and re-apply the
+        // original structural edges (lead/trail) verbatim.
         logger.debug('[TRANSLATION-SERVICE] Replacing translated text in AST...');
         textNodes.forEach((node, index) => {
-          node.value = translatedTexts[index];
+          const e = edges[index];
+          node.value = e.lead + (translatedTexts[index] || '') + e.trail;
         });
         logger.debug('[TRANSLATION-SERVICE] Text replacement completed');
 
         // Stringify back to markdown
         logger.debug('[TRANSLATION-SERVICE] Converting AST back to markdown...');
-        const translatedMarkdown = this.unified()
-          .use(this.remarkStringify)
-          .stringify(tree);
+        const translatedMarkdown = this.unified().use(this.remarkStringify).stringify(tree);
         logger.debug('[TRANSLATION-SERVICE] Markdown stringification completed');
 
         logger.info('[TRANSLATION-SERVICE] Markdown translation completed successfully');
@@ -383,7 +471,6 @@ class TranslationService {
         // --- REDIS CACHE LOGIC (END) ---
 
         return translatedMarkdown;
-
       } catch (error) {
         // Log the error with full details
         logger.error(`[TRANSLATION-SERVICE] Translation failed: ${error.message}`, {
@@ -394,7 +481,6 @@ class TranslationService {
           duration: Date.now() - startTime
         });
         throw error; // Re-throw to reject the promise
-
       } finally {
         // --- IN-FLIGHT TRACKING: Clean up after completion/failure ---
         this.inFlightTranslations.delete(inFlightKey);
@@ -441,7 +527,7 @@ class TranslationService {
     if (!this.backend) {
       return {
         type: 'none',
-        initialized: false,
+        initialized: false
       };
     }
     return this.backend.getBackendInfo();

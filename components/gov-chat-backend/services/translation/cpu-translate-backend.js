@@ -24,6 +24,7 @@ class CpuTranslateBackend {
     this.messageQueue = new Map(); // For tracking in-flight translation requests
     this.messageId = 0;
     this.initialized = false;
+    this.workerError = null;
     this.languageMap = null;
     this.fallbackMap = null;
 
@@ -61,6 +62,9 @@ class CpuTranslateBackend {
       this.worker.on('error', (error) => {
         logger.error(`[CPU-BACKEND] Worker error: ${error.message}`);
         this.workerReady = false;
+        if (!this.workerError) {
+          this.workerError = error;
+        }
       });
 
       // Handle worker exit
@@ -77,7 +81,6 @@ class CpuTranslateBackend {
       // Send init message to worker to start model loading
       this.worker.postMessage({ type: 'init' });
       logger.info('[CPU-BACKEND] Sent init message to worker');
-
     } catch (error) {
       logger.error(`[CPU-BACKEND] Failed to spawn worker: ${error.message}`);
       throw error;
@@ -115,7 +118,25 @@ class CpuTranslateBackend {
           reject(new Error(error || 'Translation failed'));
         }
       } else {
-        logger.error(`[CPU-BACKEND] Received translation response for unknown or stale messageId: ${responseMessageId}. Queue has: ${Array.from(this.messageQueue.keys()).join(', ')}`);
+        logger.error(
+          `[CPU-BACKEND] Received translation response for unknown or stale messageId: ${responseMessageId}. Queue has: ${Array.from(this.messageQueue.keys()).join(', ')}`
+        );
+      }
+      return;
+    }
+
+    if (type === 'error') {
+      // The worker thread's uncaughtException/unhandledRejection handlers
+      // forward fatal worker errors here. Record the error so init() fails
+      // fast instead of polling until the init timeout, and reject any
+      // in-flight translations — the worker is in a broken state.
+      logger.error(`[CPU-BACKEND] Worker reported a fatal error: ${error}`);
+      this.workerError = new Error(error || 'Worker thread reported a fatal error');
+      this.workerReady = false;
+
+      for (const [pendingId, pending] of this.messageQueue) {
+        pending.reject(this.workerError);
+        this.messageQueue.delete(pendingId);
       }
       return;
     }
@@ -132,7 +153,7 @@ class CpuTranslateBackend {
       // Map model IDs to language map files
       const modelToMap = {
         'Xenova/nllb-200-distilled-600M': './language-maps/nllb-200-map.js',
-        'facebook/nllb-200-distilled-600M': './language-maps/nllb-200-map.js',
+        'facebook/nllb-200-distilled-600M': './language-maps/nllb-200-map.js'
       };
 
       const mapPath = modelToMap[modelId];
@@ -149,14 +170,14 @@ class CpuTranslateBackend {
       this.fallbackMap = this.languageMap.fallbackMap || {};
     } catch (error) {
       logger.error(`[CPU-BACKEND] Failed to load language map: ${error.message}`);
-      throw new Error(`Failed to load language map for model ${modelId}`);
+      throw new Error(`Failed to load language map for model ${modelId}`, { cause: error });
     }
   }
 
   /**
    * Initialize backend (initialize worker thread)
    */
-  async init() {
+  async init(timeout = 1200000) {
     if (this.initialized) {
       logger.debug('[CPU-BACKEND] Already initialized, skipping');
       return;
@@ -166,11 +187,14 @@ class CpuTranslateBackend {
       logger.info('[CPU-BACKEND] Starting initialization: Loading model in worker thread...');
 
       // Wait for worker to be ready (with timeout)
-      const timeout = 1200000; // 20 minutes timeout for model loading (can be slow on first run)
+      // timeout: default 20 minutes for model loading (can be slow on first run)
       const startTime = Date.now();
       let lastLogTime = startTime;
 
       while (!this.workerReady) {
+        if (this.workerError) {
+          throw this.workerError;
+        }
         if (Date.now() - startTime > timeout) {
           throw new Error('[CPU-BACKEND] Worker initialization timeout');
         }
@@ -182,12 +206,11 @@ class CpuTranslateBackend {
           lastLogTime = Date.now();
         }
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       this.initialized = true;
       logger.info('[CPU-BACKEND] Initialized successfully. Worker is ready.');
-
     } catch (error) {
       logger.error(`[CPU-BACKEND] Initialization failed: ${error.message}`, { stack: error.stack });
       throw error;
@@ -232,7 +255,7 @@ class CpuTranslateBackend {
    * @returns {boolean} True if supported
    */
   isLanguageSupported(isoCode) {
-    return this.languageMap && this.languageMap.languageMap.hasOwnProperty(isoCode);
+    return this.languageMap && Object.prototype.hasOwnProperty.call(this.languageMap.languageMap, isoCode);
   }
 
   /**
@@ -293,11 +316,8 @@ class CpuTranslateBackend {
         });
       });
 
-      // Clear timeout when promise resolves/rejects
-      translationPromise.finally(() => clearTimeout(timeout));
-
       // Wait for worker to complete translation (main thread is free!)
-      const translatedTexts = await translationPromise;
+      const translatedTexts = await translationPromise.finally(() => clearTimeout(timeout));
 
       const duration = Date.now() - startTime;
       logger.info(`[CPU-BACKEND] Translation completed in ${duration}ms`);
@@ -305,14 +325,13 @@ class CpuTranslateBackend {
       logger.debug(`[CPU-BACKEND] Extracted ${translatedTexts.length} translated texts`);
 
       return translatedTexts;
-
     } catch (error) {
       logger.error(`[CPU-BACKEND] Translation failed: ${error.message}`, {
         stack: error.stack,
         sourceCode: sourceCode,
         targetCode: targetCode
       });
-      throw new Error('[CPU-BACKEND] Failed to perform translation.');
+      throw new Error('[CPU-BACKEND] Failed to perform translation.', { cause: error });
     }
   }
 
@@ -330,24 +349,24 @@ class CpuTranslateBackend {
       batches: this.batches,
       initialized: this.initialized,
       workerReady: this.workerReady,
-      usingWorkerThreads: true,
+      usingWorkerThreads: true
     };
   }
 
   /**
    * Terminate worker thread (cleanup)
    */
-  async terminate() {
+  async terminate(forceTimeout = 5000) {
     if (this.worker) {
       logger.info('[CPU-BACKEND] Terminating worker thread...');
       this.worker.postMessage({ type: 'terminate' });
 
       // Wait for worker to exit gracefully
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         const timeout = setTimeout(() => {
-          this.worker.terminate();
+          if (this.worker) this.worker.terminate();
           resolve();
-        }, 5000);
+        }, forceTimeout);
 
         this.worker.once('exit', () => {
           clearTimeout(timeout);

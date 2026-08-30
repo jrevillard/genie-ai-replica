@@ -1,0 +1,14 @@
+---
+# Co-managed hosts (e.g. the GPU node, where deploy-gpu.yml owns Docker) set these
+# false so this role never mutates daemon.json or upgrades packages — both would
+# restart the Docker daemon and disrupt services another playbook manages.
+docker_manage_daemon_json: true   # gate the daemon.json write/clear tasks (notify Restart Docker)
+docker_upgrade_enabled: true      # gate the unhold / state:latest / hold upgrade block
+docker_userns_remap: false
+docker_version_pin: "5:28.5.*"
+docker_hold_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+  - docker-ce-rootless-extras

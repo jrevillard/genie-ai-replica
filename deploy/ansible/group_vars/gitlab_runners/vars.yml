@@ -1,0 +1,20 @@
+---
+# GENIE.AI - GitLab Runner configuration
+# Non-secret settings for the CI runner environment.
+
+# =============================================================================
+# DOCKER SECURITY
+# =============================================================================
+# userns-remap DISABLED: it was incompatible with every container-based buildkit
+# mode (docker-container driver needs privileged; rootless needs a nested userns).
+# The socket proxy still filters the Docker API, and the runner runs on a
+# dedicated VM, so isolation is maintained at those layers. See
+# docs/adr/0001-gitlab-registry-build-scan-pipeline.md for the full rationale.
+docker_userns_remap: false
+
+# =============================================================================
+# GITLAB RUNNER TUNING
+# =============================================================================
+# Override defaults from roles/gitlab_runner/defaults/main.yml if needed.
+# gitlab_runner_concurrent: 4   # max parallel jobs across all runners
+# gitlab_runner_limit: 4        # max jobs for this specific runner

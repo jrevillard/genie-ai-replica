@@ -1,0 +1,876 @@
+# =============================================================================
+# GENIE.AI - Environment Configuration Template
+# =============================================================================
+#
+# This file contains all configuration variables for GENIE.AI deployment.
+# Copy this file to .env and fill in the required values:
+#
+#   cp env .env
+#
+# IMPORTANT: .env is git-ignored and contains your actual secrets.
+# This file (env) is the committed template with empty/default values.
+#
+# Configuration Priority:
+#   1. Environment variables in .env (highest priority - overrides all)
+#   2. Volume-mounted files (for SSL certificates, prompts)
+#   3. Default values in code/docker-compose
+#   4. Default values in application code (lowest priority)
+#
+# Documentation: https://github.com/your-org/genie-ai/docs/deployment.md
+# =============================================================================
+
+# =============================================================================
+# SECTION 1: SECRETS (REQUIRED)
+# =============================================================================
+# Generate strong random values using:
+#   openssl rand -base64 32
+# or:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+#
+# These MUST be set in your .env for production deployment.
+
+# ArangoDB database name (default: genie-ai)
+# Uncomment and set for per-deployment database isolation (e.g. el-salvador)
+# ARANGO_DB=el-salvador
+
+# ArangoDB root password (vector + graph database)
+# Used by: backend, document-repository, dataprep, retriever
+ARANGO_PASSWORD=
+
+# Redis cache password (translation service caching)
+# Used by: redis-cache, translation service
+TRANSLATION_CACHE_PASSWORD=
+
+# ── Push notifications (FCM fan-out via BullMQ) ──────────────────────────────
+# REQUIRED for broadcasts: /api/notifications/broadcast fails closed (503)
+# when unset. Generate with: openssl rand -hex 32
+# Must match NOTIFICATION_BROADCAST_SECRET in warning_system_engine's env.
+NOTIFICATION_BROADCAST_SECRET=
+# Firebase Admin credentials: path to the service-account JSON as mounted
+# inside the backend container (see docker-compose backend volumes).
+GOOGLE_APPLICATION_CREDENTIALS=
+# real | mock — mock simulates FCM for load testing without quota
+FCM_TRANSPORT=real
+# Redis for the notification queues — falls back to TRANSLATION_CACHE_* when
+# unset; logical db 1 keeps BullMQ keys away from the translation cache.
+NOTIFICATION_REDIS_DB=1
+NOTIFICATION_SEND_CONCURRENCY=4
+NOTIFICATION_CHUNKS_PER_SEC=8
+NOTIFICATION_WORKER_ENABLED=true
+
+# PostgreSQL shared instance (API gateway + Keycloak)
+# The shared PostgreSQL (postgres service) uses a superuser + dedicated users:
+# - Superuser 'genieai' (POSTGRES_USER) with POSTGRES_PASSWORD — created by PostgreSQL init
+# - Dedicated user 'kong' with KONG_DB_PASSWORD — created by postgres-init
+# - Dedicated user 'keycloak' with KEYCLOAK_DB_PASSWORD — created by postgres-init (see Section 9)
+# Each service MUST have its own unique password.
+
+# PostgreSQL superuser username (created by PostgreSQL init on first start)
+# Default: genieai (set in docker-compose.yaml)
+# POSTGRES_USER=genieai
+
+# PostgreSQL superuser password
+# Used by: postgres (init), postgres-init (superuser auth)
+POSTGRES_PASSWORD=
+
+# Kong dedicated database user password (MUST differ from POSTGRES_PASSWORD)
+# Used by: postgres-init (creates 'kong' user), kong, kong-migrations
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KONG_DB_PASSWORD=
+
+# =============================================================================
+# SECTION 2: EMAIL CONFIGURATION (REQUIRED)
+# =============================================================================
+# SMTP server configuration for user verification emails, password reset,
+# and system notifications.
+#
+# Get SMTP credentials from your email provider:
+# - Gmail: Use App Password (https://support.google.com/accounts/answer/185833)
+# - SendGrid, AWS SES, Mailgun: Use provider's SMTP credentials
+#
+# Required for: User registration, email verification, password reset
+
+EMAIL_HOST=
+EMAIL_PORT=
+# EMAIL_SECURE=false
+EMAIL_USER=
+EMAIL_PASSWORD=
+EMAIL_FROM=
+# SMTP AUTH (auto-derived from EMAIL_USER — set to "false" to disable auth while keeping EMAIL_USER)
+# EMAIL_SMTP_AUTH=
+
+# =============================================================================
+# SECTION 3: EXTERNAL API KEYS
+# =============================================================================
+# Credentials for external services
+
+# Hugging Face Hub token (required for pulling AI models)
+# Get your token at: https://huggingface.co/settings/tokens
+# Used by: vLLM, TEI (embedding/reranking services)
+# Accept: "Read" permissions sufficient
+HUGGING_FACE_HUB_TOKEN=
+
+# Optional: vLLM API key if required by your vLLM deployment
+# VLLM_API_KEY=
+
+# =============================================================================
+# SECTION 3b: DEPLOYMENT OPTIONS
+# =============================================================================
+# Control whether OPEA/AI services are deployed (vllm, tei, embedding, reranker,
+# retriever, dataprep, chatqna, guardrail, translation).
+# DEPLOY_OPEA=1  -> OPEA services deployed (default, requires GPU)
+# DEPLOY_OPEA=0  -> OPEA services skipped (core services only, no GPU needed)
+#
+# DEPLOY_OPEA=1
+
+# =============================================================================
+# SECTION 4: AI/ML MODEL CONFIGURATION
+# =============================================================================
+# All models have sensible defaults in code/docker-compose.
+# Override here ONLY if you need different models for your deployment.
+#
+# Model Selection Guidelines:
+# - LLM: Larger models = better quality but slower/more GPU memory
+# - Translation: Smaller models sufficient for most use cases
+# - Embedding: Use multilingual models if you need non-English support
+# - Reranking: Improves retrieval quality, optional but recommended
+
+# Main LLM model for chat (OPEA ChatQnA service)
+# Default: meta-llama/Meta-Llama-3.1-8B-Instruct
+# Options: meta-llama/Llama-3.1-70B-Instruct (more accurate, slower)
+# VLLM_LLM_MODEL_ID=
+
+# Translation model (OPEA Translation service)
+# The model used for guardrails and translation (Service: vllm-translation-guardrail)
+#
+# --- HOW TO CHANGE THE TRANSLATION MODEL ---
+# The codebase auto-detects the model type and uses the correct prompt format:
+#   - google/translategemma-*       -> uses /v1/completions with manually applied chat template
+#   - google/gemma-3-*              -> uses generic plain-text prompt via /v1/chat/completions
+#   - Any other model               -> uses generic plain-text prompt via /v1/chat/completions
+# To switch, comment out the active line and uncomment the desired model below.
+#
+# Option 1: Generic LLM-based translation (current default, ~8GB VRAM)
+#VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
+# Option 2: Purpose-built translation model, 4b params (~8GB VRAM, supports low-resource languages incl. Sesotho)
+#VLLM_TRANSLATION_MODEL_ID=google/translategemma-4b-it
+# Option 3: Purpose-built translation model, 12b params (~26GB VRAM, better quality for low-resource languages)
+#             Requires gpu_memory_utilization >= 0.6 on 48GB GPU. See issue #581 for quality assessment.
+#VLLM_TRANSLATION_MODEL_ID=google/translategemma-12b-it
+#
+# Override docker-compose defaults for vllm-translation-guardrail (all have sensible defaults):
+# VLLM_TRANSLATION_SERVICE_PORT=9031
+# VLLM_TRANSLATION_GPU_UTILIZATION=0.35
+# VLLM_TRANSLATION_MAX_MODEL_LEN=8192
+# VLLM_TRANSLATION_DTYPE=auto
+
+# Embedding service API endpoint path
+# Default: /v1/embeddings (OpenAI-compatible, used by OPEA embedding microservice)
+# EMBEDDING_SERVER_ENDPOINT=
+
+# Embedding model for vector search
+# Default: BAAI/bge-base-en-v1.5
+# Options: BAAI/bge-large-en-v1.5 (better, slower), multilingual models
+# EMBEDDING_MODEL_ID=
+
+# Reranking model for search result refinement
+# Default: BAAI/bge-reranker-v2-m3
+# RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
+
+# ArangoDB graph traversal (used by retriever and chatqna)
+# ARANGO_GRAPH_NAME=GRAPH                  # ArangoDB graph name (was RETRIEVER_ARANGO_GRAPH_NAME in v1.3)
+# RETRIEVER_ARANGO_TRAVERSAL_ENABLED=false
+# RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH=2
+# RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED=3
+# RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD=0.5
+# RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES=1
+
+# Retriever tuning (used by retriever and chatqna)
+# RETRIEVER_ARANGO_K=4
+# RETRIEVER_ARANGO_FETCH_K=20
+# RETRIEVER_ARANGO_SCORE_THRESHOLD=0.1
+# RETRIEVER_ARANGO_DISTANCE_THRESHOLD=1
+# RETRIEVER_ARANGO_LAMBDA_MULT=0.5
+# RETRIEVER_ARANGO_SEARCH_START=chunk
+# RETRIEVER_ARANGO_SEARCH_MODE=vector
+# RETRIEVER_ARANGO_USE_APPROX_SEARCH=false
+# RETRIEVER_ARANGO_DISTANCE_STRATEGY=COSINE
+# RETRIEVER_ARANGO_NUM_CENTROIDS=1
+# RETRIEVER_ARANGO_FILTER_STRATEGY=OR
+# RETRIEVER_SUMMARIZER_ENABLED=false
+# RERANKING_THRESHOLD=0.75
+# RERANKING_STRATEGY=slice      # slice (default) | threshold | slice_threshold | knee_threshold | adaptive
+# RERANKER_TOP_N=3              # chunks kept for slice/slice_threshold strategies (default 3)
+# Adaptive utility-cost selection (only used when RERANKING_STRATEGY=adaptive):
+# NOVELTY_SIGMOID_A=20.0       # novelty->weight logistic steepness
+# NOVELTY_SIGMOID_B=0.25       # novelty->weight logistic midpoint
+# CONTEXT_DECAY_FACTOR=0.0025      # per-token context-window cost coefficient
+# MIN_VALUE_THRESHOLD=-1.0     # select a chunk only if marginal value > threshold
+
+# Dataprep LLM labeling tuning — labeling is the dominant ingestion cost (one
+# vLLM call per chunk). Defaults are safe; raise on a remote vLLM with spare
+# capacity to cut ingestion time. See genieai_dataprep_arangodb.py.
+#
+# REQUIREMENT: the labeling LLM (VLLM_LLM_MODEL_ID) MUST support OpenAI-compatible
+# `response_format={"type":"json_object"}` (vLLM guided JSON decoding). Dataprep
+# requests strict JSON object output per chunk; a model/vLLM without guided JSON
+# produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
+# lower label quality). Validated on ibm-granite/granite-4.1-8b.
+# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
+#                                     #   >1 batches chunks to cut network round-trips
+#                                     #   to a remote vLLM. Raise to 8 on capable models
+#                                     #   (e.g. granite-4.1-8b); batches fall back to
+#                                     #   per-chunk on parse failure, so output is correct.
+
+# Contextual Retrieval (Anthropic-style) — OPTIONAL, default OFF.
+# When enabled, the dataprep generates a short LLM document-context prefix per
+# chunk and prepends it before EMBEDDING and LABELING, so chunks carry the
+# document's subject (fixes label/embedding context loss — e.g. a generic
+# irrigation chunk in a cucumber guide becomes retrievable by "cucumber"). Adds
+# one vLLM call per chunk (concurrency-bounded) at ingest time. On any failure
+# (per-chunk or client-init) the chunk is stored raw — ingestion never blocks.
+# See site/content/en/docs/rag/data-labeling.md + _bmad-output spec-contextual-retrieval.md.
+# CONTEXTUAL_RETRIEVAL_ENABLED=true    # default true (on by default); set false to disable (no-op beyond skipping context gen)
+# DATAPREP_CONTEXTUAL_MODEL=           # model for context generation; empty = reuse
+#                                      #   VLLM_LLM_MODEL_ID. MUST support guided JSON
+#                                      #   (response_format=json_object) like granite-4.1-8b.
+# DATAPREP_CONTEXTUAL_DOC_BUDGET=100000 # max chars of doc text fed to the context LLM
+# DATAPREP_CONTEXTUAL_MAX_TOKENS=512   # max OUTPUT tokens for the context LLM (doc-level + per-chunk). Model writes ~196 tokens; 200 truncated the JSON under load. 512 = safe margin.
+#                                      #   (~1500 tokens); <=0 disables truncation.
+# CONTEXTUAL_STRATEGY=per_chunk         # per_chunk (default; one call/chunk, section-tailored context)
+#                                      #   every chunk — N× cheaper, still propagates the doc
+#                                      #   subject) | per_chunk (one call/chunk, section-tailored
+#                                      #   context — the Anthropic recipe).
+# CONTEXTUAL_LABEL_RAW=true            # decoupled mode (default): label the RAW chunk and use the
+#                                      #   context ONLY for the embedding — keeps label precision
+#                                      #   while propagating the subject via vectors).
+
+# Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — OPTIONAL, default OFF.
+# When enabled, the retriever runs a lexical (BM25) channel over <GRAPH>_SOURCE.text
+# alongside the dense vector search and fuses the two result sets with weighted
+# Reciprocal Rank Fusion. Recovers exact-match / rare-term / keyword-heavy queries
+# that dense embeddings rank poorly. Both channels read the same `text` field
+# (contextualized by Part A). Opt-in; OFF = true no-op (dense-only, byte-for-byte).
+# The BM25 ArangoSearch view is created idempotently + lazily per graph_name.
+# See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
+# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-in (default false; OFF = true no-op)
+# RETRIEVER_HYBRID_RRF_K=60                 # RRF ranking constant (literature standard)
+# RETRIEVER_HYBRID_BM25_CANDIDATES=50       # BM25 candidate fetch depth; fused then cut to top_k
+# RETRIEVER_HYBRID_DENSE_WEIGHT=1.0         # weight on the dense channel's rank contribution
+# RETRIEVER_HYBRID_LEXICAL_WEIGHT=1.0       # weight on the BM25 channel's rank contribution
+# RETRIEVER_HYBRID_BM25_ANALYZER=text_en    # ArangoSearch analyzer on the text field
+
+# Confidence scoring (chatqna) — rank-weighted aggregate of calibrated reranker
+# scores. The flat mean was count-dependent and tail-sensitive (a long tail of
+# low-scoring chunks kept by the adaptive strategy for novelty depressed it);
+# rank-weighting lets the most relevant document dominate. See site/content/en/docs/architecture/architecture.md §9.4.
+# CONFIDENCE_RANK_DECAY=0.5          # exponential weight decay per rank (rank 0 = best)
+# RERANKER_SCORE_CALIBRATION=none    # none | sigmoid — enable sigmoid ONLY if TEI
+#                                    #   returns raw logits (verify first: sigmoid on
+#                                    #   already-normalised scores compresses them and
+#                                    #   worsens the symptom). Default none is safe.
+# RERANKER_SCORE_TEMPERATURE=1.0     # temperature for sigmoid calibration
+# LLM_SELF_CONFIDENCE_ENABLED=0      # 0|1 — opt-in LLM self-grade: the model appends a
+#                                    #   [[CONF:<0-100>]] sentinel rating how well the
+#                                    #   retrieved documents support its answer; we strip
+#                                    #   it from the visible text and expose it as
+#                                    #   self_confidence alongside confidence_score.
+#                                    #   OFF by default — surface to users only after the
+#                                    #   eval harness confirms it is calibrated.
+
+# =============================================================================
+# SECTION 5: FRONTEND CONFIGURATION
+# =============================================================================
+# Override these for production deployment.
+# Defaults are set for local development (localhost).
+
+# Vue.js frontend API URL
+# Default: /api (relative, works with Kong/nginx reverse proxy)
+# Direct backend access: http://localhost:3000/api
+# Production: https://your-domain.com/api
+# VUE_APP_API_URL=
+
+# Proxy host for frontend (used for CSP configuration)
+# Default: localhost
+# Production: your-domain.com
+# Should match NGINX_PUBLIC_DOMAIN (section 7)
+# VUE_PROXY_HOST=
+
+# Content Security Policy connect sources (allowed WebSocket/API origins)
+# Used by: frontend (meta tag, build-time via Vue DefinePlugin)
+# Default: 'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090
+# Production: 'self' https://your-domain.com wss://your-domain.com
+# IMPORTANT: Also set CSP_CONNECT_SRC (section 6) to the same value.
+# They serve the same purpose but at different stages (build-time vs runtime).
+# VUE_APP_CSP_CONNECT_SRC=
+
+# Available UI locales for this deployment (comma-separated locale codes)
+# Restricts the language picker + vue-i18n loaded messages to the listed codes.
+# Default: unset (all locales under src/i18n/locales/ are active)
+# Example (El Salvador): en,es
+# Locale source files are never deleted — this only filters which are exposed.
+# VUE_APP_AVAILABLE_LOCALES=
+
+# =============================================================================
+# SECTION 6: BACKEND SERVICE CONFIGURATION
+# =============================================================================
+# Override for production deployment.
+
+# CORS allowed origins (which domains can access the API)
+# Used by: backend (response headers)
+# Default: http://localhost:3000,http://localhost:8090,http://127.0.0.1:8090,https://localhost,http://localhost
+# Production: https://your-domain.com,https://*.your-domain.com
+# CORS_ALLOWED_ORIGINS=
+
+# Content Security Policy for backend and nginx
+# Used by: backend (response headers), nginx (via CSP_CONNECT_SRC env var)
+# Note: nginx uses CSP_CONNECT_SRC (set in .env), not CORS_ALLOWED_ORIGINS.
+# Local development example: 'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090
+# NOTE: 'self' must include the single quotes (they are CSP directive syntax, not shell quoting)
+# Production: 'self' https://your-domain.com wss://your-domain.com
+# Runtime default (if unset): same as local development example above
+# IMPORTANT: Also set VUE_APP_CSP_CONNECT_SRC (section 5) to the same value.
+# They serve the same purpose but at different stages (build-time vs runtime).
+# CSP_CONNECT_SRC=
+
+# Log level for backend and document-repository services
+# Used by: backend (shared-lib/logger.js), document-repository (appConfig.js)
+# Values: error, warn, info, debug
+# Default: info
+# LOG_LEVEL=debug
+
+# Stream the target-language translation during chat streaming (issue #829) instead
+# of streaming English and flipping to the UI language at the end. 1 = stream-translate
+# complete sentence/paragraph units as they arrive; 0 (default) = current behavior.
+# STREAMING_TRANSLATION_ENABLED=0
+
+# Multi-turn vector-space blending (issue #833). Blends the query embedding
+# with the previous N turns' embedding (V = α·EQ + (1-α)·EH) at the retriever's
+# dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve
+# the prior turn's subject. Default OFF (no-op). Adds ONE embedding call per
+# multi-turn query. Query-time feature; unrelated to ingest-time
+# CONTEXTUAL_RETRIEVAL_ENABLED. Only the dense leg is blended; the BM25/hybrid
+# leg (RETRIEVER_HYBRID_RETRIEVAL_ENABLED) still uses the isolated query text.
+# MULTI_TURN_BLEND_ENABLED=false
+# MULTI_TURN_BLEND_ALPHA=0.7         # query weight α; 1.0 = query-only, 0.0 = history-only
+# MULTI_TURN_HISTORY_TURNS=1         # number of prior turns blended (1 = previous turn only)
+
+# Application session lifetime for automatic purging (MILLISECONDS, NOT seconds or minutes).
+# Controls how long an inactive analytics session is kept before automatic cleanup.
+# Used by: backend (session-service.js)
+# Default: 1800000 (30 minutes in milliseconds)
+# IMPORTANT: Value is in MILLISECONDS. Common values:
+#   15 minutes = 900000
+#   30 minutes = 1800000 (default)
+#   1 hour     = 3600000
+# Alignment with Keycloak: set this value to match or slightly exceed Keycloak's
+# SSO Session Max or Access Token Lifespan to ensure sessions are purged after
+# the user's authentication expires.
+# SESSION_EXPIRATION_TIME=
+
+# =============================================================================
+# SECTION 7: API GATEWAY CONFIGURATION
+# =============================================================================
+# Nginx reverse proxy configuration for cloud-native deployment.
+
+# NGINX public domain (used for HTTPS redirect, Host header, CORS origin)
+# Default: localhost
+# Production: your-domain.com
+# Used by: nginx (reverse proxy)
+# NGINX_PUBLIC_DOMAIN=
+
+# NGINX HTTP port (host port for HTTP redirect)
+# Default: 80
+# NGINX_HTTP_PORT=
+
+# NGINX HTTPS port (host port for HTTPS access)
+# Default: 443
+# NGINX_HTTPS_PORT=
+
+# Internal Docker service names (override ONLY if using custom service names)
+# NGINX_FRONTEND_HOST=frontend
+# NGINX_FRONTEND_PORT=8090
+# KONG_PROXY_HOST=kong
+
+# Kong proxy ports are NOT exposed to the host by default.
+# All external traffic routes through nginx (80/443).
+# To expose Kong directly for debugging, uncomment in docker-compose.yaml.
+
+# Kong trusted IPs for X-Forwarded-* header passthrough
+# Kong must trust nginx (on the Docker network) to pass through X-Forwarded-Proto,
+# X-Forwarded-Host, X-Forwarded-Port, and X-Forwarded-Prefix headers set by nginx.
+# Without this, Kong overwrites them with its own (http/port 8000).
+# Default: 172.16.0.0/12 (covers Docker bridge subnets 172.16–172.31)
+# Restrict to your Docker network subnet for production.
+# KONG_TRUSTED_IPS=
+
+# Let's Encrypt certificate management (optional)
+# Set CERTBOT_EMAIL to enable automatic SSL certificate provisioning via Let's Encrypt.
+# Activation requires: CERTBOT_EMAIL + deployment flag (--profile letsencrypt / CERTBOT_REPLICAS)
+# CERTBOT_EMAIL=your-email@example.com
+# CERTBOT_REPLICAS=0
+# CERTBOT_STAGING=false
+
+# Kong DNS stale TTL in seconds (default: 5)
+# Lower values reduce 502 errors after backend container recreate
+# Range: 1-3600. Set to 1 for immediate re-resolution (higher CPU).
+# Use "docker exec <kong-container> kong reload" for immediate DNS flush.
+# KONG_DNS_STALE_TTL=
+
+# =============================================================================
+# SECTION 8: LLM PROMPTS & FLAGS (OPTIONAL)
+# =============================================================================
+# Default prompts and flags are built into the Python code.
+# Override here ONLY for deployment-specific customization.
+#
+# **Prompts** (text instructions for AI):
+#   - CHATQNA_SYSTEM_PROMPT: Main system prompt for chat behavior
+#   - CHATQNA_ABSTENTION_INSTRUCTIONS: Instructions for when to refuse answering
+#   - LABEL_SELECTOR_SYSTEM_PROMPT: Prompt for automatic document labeling
+#
+# **Flags** (behavior toggles):
+#   - CHATQNA_ENFORCE_ABSTENTION: Whether to enforce abstention (default: true)
+#
+# To customize: Uncomment and set values below. To change built-in defaults,
+# edit the Python code in genie-ai-overlay/chatqna/ or genie-ai-overlay/dataprep/
+
+# CHATQNA_SYSTEM_PROMPT="You are a helpful assistant..."
+# CHATQNA_ABSTENTION_INSTRUCTIONS="If no information found in the context..."
+# CHATQNA_ENFORCE_ABSTENTION="false"
+# LABEL_SELECTOR_SYSTEM_PROMPT="Categorize this document..."
+# CONTEXTUAL_RETRIEVAL_PROMPT="..."    # per-chunk doc-context generation prompt
+#                                      #   (Contextual Retrieval; contains a
+#                                      #   {document_context} placeholder).
+
+# =============================================================================
+# SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)
+# =============================================================================
+# Keycloak is the identity provider for OIDC authentication.
+# All passwords below MUST be set in your .env before deployment.
+
+# Keycloak public URL (for backend OIDC discovery and token validation)
+# Used by: backend (keycloak-auth-service.js)
+# Must be the public URL via NGINX proxy so the issuer matches the JWT's iss claim.
+# In docker-compose, this is auto-derived from NGINX_PUBLIC_DOMAIN:
+#   KEYCLOAK_URL=https://<NGINX_PUBLIC_DOMAIN>/auth
+# Note: keycloak-config service uses its own internal KEYCLOAK_URL (http://keycloak:8080)
+# REQUIRED — app will not start without this value
+KEYCLOAK_URL=https://localhost/auth
+
+# Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
+#   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
+# This is set internally in docker-compose.yaml (keycloak-config service).
+# If you use a non-standard HTTPS port (e.g. 8443), set NGINX_HTTPS_PORT in .env — no other changes needed.
+
+# Keycloak realm name
+# REQUIRED — app will not start without this value
+KEYCLOAK_REALM=genie
+
+# OIDC client ID for the GENIE.AI application
+# REQUIRED — app will not start without this value
+KEYCLOAK_CLIENT_ID=genie-app
+
+# OIDC client secret (REQUIRED — generate a strong value)
+# Used by: backend (token validation), keycloak-config-cli (realm setup)
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_CLIENT_SECRET=
+
+# Additional Keycloak realms for backend token validation (JSON array of realm names)
+# Each additional realm must have a corresponding OIDC client configured in Keycloak admin console
+# with Authorization Code Flow + PKCE enabled and Valid Redirect URIs set to the frontend URL.
+# The frontend only authenticates against the primary realm (KEYCLOAK_REALM).
+# Users from additional realms authenticate via their own Keycloak login URL.
+# Example: KEYCLOAK_ADDITIONAL_REALMS=["partner-org","contractor"]
+# KEYCLOAK_ADDITIONAL_REALMS=
+
+# Keycloak master admin password (REQUIRED — set a strong value)
+# Used by: admin console access, keycloak-config-cli (master realm authentication)
+# WARNING: This is the master admin account password (NOT the GENIE realm admin)
+KEYCLOAK_ADMIN_PASSWORD=
+
+# GENIE realm admin username (default: genie-admin)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+# GENIE_ADMIN_USERNAME=genie-admin
+
+# GENIE realm admin password (REQUIRED — must satisfy KEYCLOAK_PASSWORD_POLICY)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+GENIE_ADMIN_PASSWORD=
+
+# GENIE realm admin email (REQUIRED — must be a valid email address)
+# Used by: keycloak-config-cli (creates admin user in GENIE realm)
+GENIE_ADMIN_EMAIL=
+
+# Keycloak PostgreSQL password (REQUIRED — must differ from POSTGRES_PASSWORD)
+# Used by: postgres-init (creates dedicated 'keycloak' DB user), keycloak service
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_DB_PASSWORD=
+
+# Keycloak database configuration
+# Uses the shared PostgreSQL instance with a dedicated 'keycloak' database and user
+# Used by: keycloak service
+# KC_DB=postgres
+
+# Keycloak PostgreSQL JDBC URL
+# Points to the shared PostgreSQL instance, 'keycloak' database
+# KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+
+# Keycloak PostgreSQL username (dedicated user, created by postgres-init)
+# KC_DB_USERNAME=keycloak
+
+# Valid redirect URIs for the OIDC client
+# Default: http://localhost:8090/* (frontend dev URL)
+# Production: https://your-domain.com/*
+# KEYCLOAK_VALID_REDIRECT_URIS=http://localhost:8090/*
+
+# Web origins for CORS
+# Default: http://localhost:8090 (frontend dev URL)
+# Production: https://your-domain.com
+# KEYCLOAK_WEB_ORIGINS=http://localhost:8090
+
+# TLS verification for Node.js services (backend, document-repository).
+# Affects all HTTPS connections: backend → NGINX OIDC/JWKS fetches,
+# backend → Keycloak token introspection, document-repository → NGINX.
+# Default: 1 (strict, production). Set to 0 for local dev with self-signed NGINX certs.
+# NODE_TLS_REJECT_UNAUTHORIZED=0
+
+# Keycloak proxy service account (REQUIRED — set a strong value)
+# Used by: backend (keycloak-admin-service.js) for Admin API proxy operations
+# The genie-proxy-client has restricted permissions: manage-users, view-users,
+# manage-roles, query-users ONLY. Cannot modify realm settings or client config.
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KEYCLOAK_PROXY_CLIENT_SECRET=
+
+# Dataprep service account client (client_credentials grant for service-to-service auth)
+# Used by: Dataprep → Document Repository and Backend API calls
+# Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+KC_DATAPREP_CLIENT_ID=dataprep-service-client
+KC_DATAPREP_CLIENT_SECRET=
+
+# Mobile OIDC client for institutional deployments (Flutter app)
+# Public client with PKCE — no client secret required (RFC 8252).
+# Change per deployment: each institution needs its own clientId and redirect scheme.
+# Used by: keycloak-config-cli (creates the mobile OIDC client in Keycloak at startup)
+# See: site/content/en/docs/deployment/mobile-deployment-guide.md (deployment onboarding guide)
+KC_MOBILE_CLIENT_ID=genie-mobile-<institution>
+
+# Mobile app custom URL scheme for OIDC callback redirect.
+# MUST match the following across all config layers (scheme coherence rule):
+#   1. redirectScheme in Dart flavor config (lib/config/flavors/*.dart)
+#   2. appAuthRedirectScheme in android/app/build.gradle manifestPlaceholders
+#   3. APP_AUTH_REDIRECT_SCHEME in iOS XCConfig (ios/Flutter/*.xcconfig)
+#   4. This variable in .env (used by keycloak-config-cli for Keycloak client redirectUris)
+# A mismatch causes silent OIDC callback failure — the browser redirects to the wrong
+# scheme and the app never receives the authorization code.
+KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
+
+# --- Realm properties (optional) ---
+# These control registration, email verification, password policy, and more.
+# Uncomment and override only if you need non-default behavior.
+
+# User self-registration (default: true)
+# Requires SMTP configuration for verification emails.
+# KEYCLOAK_REGISTRATION_ENABLED=true
+
+# Require email verification after registration (default: true)
+# Requires SMTP configuration for verification emails to work.
+# KEYCLOAK_VERIFY_EMAIL=true
+
+# Allow "Forgot Password" flow on Keycloak login page.
+# Requires SMTP configuration (EMAIL_HOST, EMAIL_PORT, etc.) for reset emails to work.
+# Set to "false" to hide the "Forgot Password" link on the Keycloak login page.
+# Default is "true" via docker-compose.yaml keycloak-config service fallback.
+# KEYCLOAK_RESET_PASSWORD=true
+
+# Allow login with email address (default: true)
+# KEYCLOAK_LOGIN_WITH_EMAIL=true
+
+# Allow multiple accounts with the same email (default: false)
+# KEYCLOAK_DUPLICATE_EMAILS=false
+
+# Brute force detection (lock account after failed attempts, default: true)
+# KEYCLOAK_BRUTE_FORCE=true
+
+# Password policy (Keycloak policy syntax)
+# Default (in docker-compose.yaml): length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+# To simplify: KEYCLOAK_PASSWORD_POLICY=length(8)
+# KEYCLOAK_PASSWORD_POLICY=length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+
+# Theme for login, account console, and email (default: genie — custom GENIE.AI theme)
+# KEYCLOAK_THEME=genie
+
+# Internationalization (default: true)
+# KEYCLOAK_I18N_ENABLED=true
+
+# Default locale for login pages (default: en)
+# KEYCLOAK_LOCALE=en
+
+# Supported locales for login/account pages — JSON array of locale codes.
+# Restricts the Keycloak language picker. Default (unset): the curated set
+# ["ar","de","en","es","fr","pt","ru","th","zh-Hans"].
+# Example (El Salvador): ["en","es"]
+# KEYCLOAK_SUPPORTED_LOCALES=
+
+# Access token lifespan in seconds (default: 300 = 5 minutes)
+# KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300
+
+# =============================================================================
+# SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
+# =============================================================================
+# External IdP credentials are configured in Keycloak, NOT in GENIE.AI's .env.
+# See site/content/en/docs/configuration/external-idp-integration-guide.md for step-by-step instructions.
+#
+# GENIE.AI's backend and frontend code does NOT need any external IdP configuration.
+# Keycloak handles the entire identity brokering flow and issues standard OIDC tokens
+# to GENIE.AI, regardless of which external IdP was used.
+#
+# If using keycloak-config-cli for automated IdP provisioning (optional), inject
+# secrets via environment variables on the keycloak-config service:
+#   KEYCLOAK_GOOGLE_CLIENT_ID=<google-oauth-client-id>
+#   KEYCLOAK_GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
+# These are NOT GENIE.AI variables — they are Keycloak configuration only.
+# Add them to docker-compose.yaml under keycloak-config environment section.
+
+# =============================================================================
+# SECTION 9C: SSE STREAMING (OPTIONAL)
+# =============================================================================
+# Defaults in code — uncomment to override.
+# OPEA_STREAMING=false
+# CHATQNA_STREAM_TIMEOUT=300000
+
+# =============================================================================
+# SECTION 10: GPU-SPECIFIC CONFIGURATION
+# =============================================================================
+# These variables override GPU memory utilization and model settings.
+# See env.t4 (NVIDIA T4 16GB) or env.rtx6000 (RTX 6000 ADA 24GB) for examples.
+#
+# Common GPU variables (see env.t4/env.rtx6000 for full list):
+# - VLLM_GPU_UTILIZATION: GPU memory fraction (0.1-1.0)
+# - VLLM_MAX_MODEL_LEN: Maximum context length (default: 65536 — granite-4.1-8b supports 128K; fits all RAG pipeline calls)
+# - VLLM_MAX_NUM_SEQS: Maximum concurrent sequences
+# - VLLM_DTYPE: Data type (half, float32, etc.)
+#
+# To use GPU-specific configuration:
+#   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+
+# =============================================================================
+# SECTION 11: PROXY CONFIGURATION (OPTIONAL)
+# =============================================================================
+# Uncomment ONLY if behind a corporate firewall that requires proxy.
+# Most deployments do NOT need these.
+
+# no_proxy=localhost,127.0.0.1
+# http_proxy=http://your-proxy:port
+# https_proxy=http://your-proxy:port
+
+# =============================================================================
+# SECTION 12: TELEMETRY & OBSERVABILITY (OPTIONAL)
+# =============================================================================
+# Uncomment to enable observability/tracing for debugging.
+
+# JAEGER_IP=127.0.0.1
+# OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=grpc://127.0.0.1:4317
+# TELEMETRY_ENDPOINT=http://127.0.0.1:4318/v1/traces
+
+# =============================================================================
+# SECTION 12C: OBSERVABILITY STACK (OPTIONAL)
+# =============================================================================
+# Deploy OTel Collector + VictoriaMetrics + VictoriaLogs + Grafana alongside the application.
+# All services use the fluentd logging driver to forward container logs to the
+# OTel Collector's fluent_forward receiver (port 24224, localhost only).
+# Docker dual logging (20.10+) keeps `docker logs` functional.
+# Enable via: docker compose --profile observability up -d
+#   or Swarm:  ENABLE_OBSERVABILITY=1 in .env (MUST be 0 or 1, not true/false)
+#   or Ansible: enable_observability: "1" in group_vars/all.yml
+#
+# Uncomment to override defaults (all have sensible defaults in docker-compose):
+# ENABLE_OBSERVABILITY=0
+# GRAFANA_ADMIN_USER=admin
+# GRAFANA_PORT=3002
+# VICTORIAMETRICS_RETENTION=30d
+# VICTORIALOGS_RETENTION=30d
+# VICTORIATRACES_RETENTION=30d
+# OTEL_TRACES_SAMPLER_RATE=100.0
+# KONG_TRACING_INSTRUMENTATIONS=request
+# KONG_TRACING_SAMPLING_RATE=1.0
+# OpenTelemetry OTLP endpoint — backend (Node.js) and OPEA services (Python) export traces here
+# Default in docker-compose: http://otel-collector:4318 — override only for external collectors
+# OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+
+# Grafana alerting contact points (optional — configure via Grafana UI for production)
+# Used by: grafana service (alerting notification channels)
+# GRAFANA_ALERT_WEBHOOK_URL=
+# GRAFANA_ALERT_EMAIL=
+
+# Grafana admin password (required secret, no default)
+# Used by: grafana service
+GRAFANA_ADMIN_PASSWORD=
+
+# Grafana OIDC client (required secret, no default)
+# Used by: keycloak-config service (creates grafana OIDC client), grafana service (OAuth)
+KC_GRAFANA_CLIENT_ID=grafana
+KC_GRAFANA_CLIENT_SECRET=
+
+# Grafana OAuth configuration (override defaults in docker-compose):
+# GF_AUTH_GENERIC_OAUTH_ENABLED=true
+# GF_AUTH_GENERIC_OAUTH_NAME=Keycloak
+# GF_AUTH_GENERIC_OAUTH_SCOPES=openid profile email
+
+# =============================================================================
+# SECTION 13: DOCKER SWARM MULTI-NODE (OPTIONAL)
+# =============================================================================
+# Override these variables when deploying with Docker Swarm (docker stack deploy).
+# Default values are for single-node Docker deployment (localhost).
+#
+# See site/content/en/docs/deployment/docker-swarm-setup.md for the full Swarm deployment guide.
+#
+# IMPORTANT: In Swarm, .env variables are resolved once at deploy time on the
+# manager node. Changing a variable requires redeploying the entire stack:
+#   docker stack deploy -c docker-compose.yaml genieai
+#
+# Variables that differ between Docker and Swarm:
+#
+# DATA_DIR=./data
+#   Base directory for all bind mounts (logs, backups, model cache).
+#   Subdirectories are auto-created by the deploy playbook:
+#     data/logs/kong, data/logs/backend, data/logs/doc-repo,
+#     data/database_backups, data/huggingface
+#   Docker: ./data (default, no override needed)
+#   Swarm:  override only if storing data on a different mount point
+#
+# Container images — GitLab Container Registry (CI-published, ansible deploys)
+GENIE_AI_REGISTRY=registry.opensource.unicc.org/un/itu/genie-ai
+GENIE_AI_GLOBAL_TAG=main
+# Per-service image refs (generated by ansible env.j2; listed here for local dev)
+GENIE_AI_KONG_CONFIG_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-kong-config
+GENIE_AI_KONG_CONFIG_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_NGINX_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-nginx
+GENIE_AI_NGINX_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_FRONTEND_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend
+GENIE_AI_FRONTEND_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_DB_MIGRATIONS_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-db-migrations
+GENIE_AI_DB_MIGRATIONS_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_BACKEND_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-backend
+GENIE_AI_BACKEND_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_DOCUMENT_REPOSITORY_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-document-repository
+GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_CHATQNA_SERVER_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-chatqna-server
+GENIE_AI_CHATQNA_SERVER_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_DATAPREP_ARANGO_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-dataprep-arango
+GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_RETRIEVER_ARANGO_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-retriever-arango
+GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_RERANKER_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-reranker
+GENIE_AI_RERANKER_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_EMBEDDING_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-embedding
+GENIE_AI_EMBEDDING_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_TEXTGEN_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-textgen
+GENIE_AI_TEXTGEN_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_POSTGRES_INIT_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-postgres-init
+GENIE_AI_POSTGRES_INIT_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_KEYCLOAK_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-keycloak
+GENIE_AI_KEYCLOAK_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_KEYCLOAK_CONFIG_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-keycloak-config
+GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_TEMPO_PROXY_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-tempo-proxy
+GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+#   Docker: N/A (images built locally for `docker compose up`, pulled from registry for Swarm)
+#   Swarm:  images pulled from GitLab Container Registry (per-service vars above)
+#
+# NGINX_PUBLIC_DOMAIN=<gateway-node-fqdn>
+#   Docker: localhost
+#   Swarm:  FQDN of the gateway node (gateway=true label, e.g., gateway.example.com)
+#
+# VUE_APP_API_URL=https://<gateway-node-fqdn>/api
+#   Docker: /api (relative, works with local proxy)
+#
+#   Swarm:  Full HTTPS URL pointing to the gateway node
+#
+# CSP_CONNECT_SRC='self' https://<gateway-node-fqdn> wss://<gateway-node-fqdn>
+#   Docker: 'self' http://localhost:3000 http://localhost:8090 ...
+#   Swarm:  'self' https://<gateway-node-fqdn> wss://<gateway-node-fqdn>
+#
+# CORS_ALLOWED_ORIGINS=https://<gateway-node-fqdn>
+#   Docker: http://localhost:3000,http://localhost:8090,...
+#   Swarm:  https://<gateway-node-fqdn>
+#
+# Variables that MUST be identical across all nodes:
+#   ARANGO_PASSWORD, TRANSLATION_CACHE_PASSWORD,
+#   POSTGRES_PASSWORD, KC_DATAPREP_CLIENT_SECRET
+#
+# Variables that MUST be identical (AI model IDs):
+#   EMBEDDING_MODEL_ID, RERANKER_MODEL_ID, VLLM_LLM_MODEL_ID
+#
+# GPU-specific overrides work the same as Docker:
+#   set -a && source .env && source env.t4 && set +a && docker stack deploy -c docker-compose.yaml genieai
+
+# =============================================================================
+# SECTION 14: REMOTE GPU NODE (OPTIONAL)
+# =============================================================================
+# When deploying a dedicated GPU node with the remote architecture (issue #758),
+# override the default local Docker DNS endpoints to point to the GPU node via HTTPS.
+# The GPU node runs nginx with TLS and API key authentication on port 443
+# with path-based routing: /llm/, /translation/, /embed/, /rerank/, /docling/.
+#
+# GPU_NODE_HOST=gpu.example.com
+#   DNS hostname or IP of the remote GPU node.
+#   All services below derive their URLs from this variable.
+#
+# GPU_MODEL_REPLICAS=0
+#   Set to 0 to skip GPU-heavy containers (vllm, tei, tei_reranker,
+#   vllm-translation-guardrail) on the app node when using a remote GPU node.
+#   Docker Compose: use --profile opea only (gpu-models profile is excluded).
+#   Docker Swarm: set in .env; defaults to DEPLOY_OPEA value when unset.
+#   Ansible: set automatically when gpu_node_host is configured.
+#
+# GPU_PUBLIC_DOMAIN=gpu.example.com
+#   Public domain for the GPU node (used by certbot for TLS certificates).
+#   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
+#
+# VLLM_ENDPOINT=https://${GPU_NODE_HOST}/llm
+# VLLM_TRANSLATION_ENDPOINT=https://${GPU_NODE_HOST}/translation
+# EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed
+# RERANKER_SERVICE_URL=https://${GPU_NODE_HOST}/rerank
+#
+# DOCLING_ENDPOINT=https://${GPU_NODE_HOST}/docling
+#   Remote docling-serve endpoint for document extraction.
+#   When set, dataprep sends documents to the remote GPU node for processing.
+#   When empty, dataprep uses the in-process docling converter (existing behavior).
+#
+# DOCLING_ENDPOINT_TIMEOUT=120
+#   HTTP timeout (seconds) for remote docling-serve calls. Default: 120.
+#
+# VLLM_API_KEY=<api-key-for-your-instance>
+#   API key for authenticating with the GPU node nginx proxy.
+#   Sent as standard Authorization: Bearer header by all clients:
+#   - OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI) use api_key param → Bearer natively.
+#   - OPEA TEI wrapper services (embedding, reranker) use huggingface_hub SDK →
+#     HF_TOKEN env var (automatically set from VLLM_API_KEY in docker-compose.yaml).
+#   - Custom HTTP clients (backend translation, dataprep docling) set Authorization header explicitly.
+#   One key per GENIE.AI instance, shared across all 5 GPU services.
+#   Contact the GPU node administrator to obtain your key.
+#
+# Self-signed TLS certificate:
+#   If the GPU node uses a self-signed certificate (private IP, no Let's Encrypt),
+#   Option A — Disable TLS verification (simpler, private network only):
+#     NODE_TLS_REJECT_UNAUTHORIZED=0
+#   Option B — Trust the certificate (recommended for production):
+#     Copy gpu-node.crt from the GPU node and set:
+#     NODE_EXTRA_CA_CERTS=/path/to/gpu-node.crt      (Node.js)
+#     REQUESTS_CA_BUNDLE=/path/to/gpu-node.crt         (Python)
+#
+# OPEA_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification in OPEA Python services
+#   (embedding, reranker, textgen, chatqna, retriever, dataprep). Required when
+#   the remote GPU node uses a self-signed certificate. Baked into Docker images
+#   via genie_ssl_patch.py — no volume mounts needed. Default: 0 (verify certs).
+#   When using Let's Encrypt or a recognized CA, leave at 0 (default).
+#
+# KEYCLOAK_SSL_SKIP_VERIFY=0
+#   Set to 1 to disable SSL certificate verification for dataprep's Keycloak
+#   service account token fetch (aiohttp connector in keycloak_service_account.py).
+#   Required when Keycloak is behind NGINX with a self-signed certificate.
+#   Independent of OPEA_SSL_SKIP_VERIFY. Default: 0 (verify certs).
+#   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
+#   for NGINX TLS verification instead.
+

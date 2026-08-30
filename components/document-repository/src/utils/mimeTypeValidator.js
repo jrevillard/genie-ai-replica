@@ -1,12 +1,28 @@
-// NOTE: this validation is not used anywhere at the moment
-// TODO: [NORMAL] validate file type and content in fileService.js by calling this function
-// - all functions here are not tested yet
-// - the code's file name should be changed to fileTypeValidator.js?? (not only validate mime type but also file content)
+// File type validation utilities
+// Used by validateFiles middleware in fileUpload.js to perform
+// extension checking and magic-byte validation on uploaded files
 
+console.log('VALIDATOR_FILE', __filename);
 const mime = require('mime-types');
-const { fromBuffer } = require('file-type');
 const config = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
+
+// file-type 17+ is pure ESM: CJS consumers load it via dynamic import. The
+// loader is injectable so unit tests can stub it without touching the Jest
+// module registry (dynamic imports are not interceptable in the CJS VM).
+// The registry lives on globalThis because Jest's resetModules() can produce
+// a second module instance whose closure would otherwise ignore the injection.
+const LOADER_KEY = '__GENIE_FILE_TYPE_LOADER__';
+const loadFileTypeModule = async () => {
+  if (globalThis[LOADER_KEY]) return globalThis[LOADER_KEY];
+  return import('file-type');
+};
+const setFileTypeLoader = (loader) => {
+  globalThis[LOADER_KEY] = loader;
+};
+const resetFileTypeLoader = () => {
+  delete globalThis[LOADER_KEY];
+};
 
 /**
  * Validate file type based on MIME type and extension
@@ -26,24 +42,26 @@ const validateFileType = async (file) => {
     }
     logger.debug(`File extension ${extension} is allowed.`);
 
-    // Check MIME type from multer
+    // Check MIME type from multer — but only reject if extension is also unrecognized
     logger.debug(`2. Validating MIME type from multer: ${file.mimetype}`);
     if (!config.upload.allowedMimeTypes.includes(file.mimetype)) {
-      logger.warn(`Validation failed for ${file.originalname}: MIME type ${file.mimetype} is not allowed.`);
-      return {
-        isValid: false,
-        error: `MIME type ${file.mimetype} is not allowed`
-      };
+      // Browser may misreport MIME type for valid extensions (e.g., .md as application/octet-stream)
+      // Skip to magic-byte validation instead of rejecting
+      logger.debug(`Multer MIME type ${file.mimetype} not in allowed list, will rely on magic-byte validation.`);
+    } else {
+      logger.debug(`Multer MIME type ${file.mimetype} is allowed.`);
     }
-    logger.debug(`Multer MIME type ${file.mimetype} is allowed.`);
 
     // Double-check MIME type by reading file buffer
     logger.debug('3. Validating MIME type from file buffer...');
-    const detectedType = await fromBuffer(file.buffer);
+    const { fileTypeFromBuffer } = await loadFileTypeModule();
+    const detectedType = await fileTypeFromBuffer(file.buffer);
     logger.debug(`Detected buffer MIME type: ${detectedType ? detectedType.mime : 'unknown'}`);
-    
+
     if (detectedType && !config.upload.allowedMimeTypes.includes(detectedType.mime)) {
-      logger.warn(`Validation failed for ${file.originalname}: Detected MIME type ${detectedType.mime} does not match allowed types.`);
+      logger.warn(
+        `Validation failed for ${file.originalname}: Detected MIME type ${detectedType.mime} does not match allowed types.`
+      );
       return {
         isValid: false,
         error: `Detected MIME type ${detectedType.mime} does not match allowed types`
@@ -95,7 +113,7 @@ const getFileCategory = (mimeType) => {
   else if (mimeType.includes('html')) category = 'html';
   else if (mimeType.includes('text')) category = 'text';
   else category = 'other';
-  
+
   logger.debug(`Returning category: ${category}`);
   return category;
 };
@@ -119,6 +137,8 @@ const isTextExtractable = (mimeType) => {
 };
 
 module.exports = {
+  setFileTypeLoader,
+  resetFileTypeLoader,
   validateFileType,
   getFileExtension,
   getMimeType,

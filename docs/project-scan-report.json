@@ -1,0 +1,82 @@
+{
+  "workflow_version": "bmad-document-project-v7",
+  "timestamps": {
+    "started": "2026-07-01T08:05:00Z",
+    "last_updated": "2026-07-01T11:24:08.505133+00:00",
+    "completed": "2026-07-01T11:24:08.505133+00:00"
+  },
+  "mode": "deep_dive",
+  "scan_level": "exhaustive",
+  "project_root": "/home/jerome/git_projects/ITU/genie-ai",
+  "project_knowledge": "docs",
+  "output_destination_override": "site/content/en/docs/ (public Docsy site) \u2014 per operator decision; deep-dive output curated directly into the public site rather than the internal docs/ KB",
+  "branch": "docs/rag-observability-sections",
+  "merge_request": "!219",
+  "current_step": "completed",
+  "completed_steps": [
+    {
+      "step": "audit",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "Full audit of all 42 existing public pages: detected 21 empty front-matter descriptions, 12 duplicate H1 titles, logging-architecture eval misplaced on public site, mobile-deployment-guide in wrong section, 3 repo-root orphans (install-guide 92K, gpu, a40), and persona gaps (KB management, operations runbook, decision-maker hub)."
+    },
+    {
+      "step": "deep_dive.rag",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "Exhaustive scan of genie-ai-overlay/{chatqna,retriever,reranker,dataprep}. Produced rag/ section (7 pages): pipeline, retrieval (hybrid vector+BM25+graph, RRF), reranking (strategies/calibration/confidence), generation (prompt/abstention/self-confidence/translation), data-labeling, contextual-retrieval, choosing-models."
+    },
+    {
+      "step": "deep_dive.observability",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "Scan of configs/otel, configs/grafana, backend tracing*.js, tracing.py. Produced observability/ section (5 pages): overview (Collector->Victoria trio->Grafana), tracing (traceparent, span taxonomy, PII filter, sampling), dashboards (9 pre-built), alerting, configuration."
+    },
+    {
+      "step": "gap.knowledge_base",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "New knowledge-base/ section (4 pages): ingestion, document-lifecycle, labelling-taxonomy, content-guidance. Fills the content/knowledge-manager persona gap."
+    },
+    {
+      "step": "gap.operations",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "New operations/ section (4 pages): backup-restore (arangodb dump.sh/restore.sh + kong restore, flags hardcoded-password gotcha), updates (re-ingestion rule), scaling, troubleshooting. Fills the day-2 operator gap."
+    },
+    {
+      "step": "restructure.project_overview",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "core/project-overview.md trimmed 917->125 lines: removed scan-dump kitchen-sink, kept orientation layer (capabilities, stack, layers, repo structure, design principles, where-to-go-next)."
+    },
+    {
+      "step": "restructure.relocations",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "logging-architecture eval -> internal docs/ (was a vendor evaluation of non-deployed candidates); mobile-deployment-guide -> mobile/; 3 root orphans -> deployment/ (install-guide, gpu, a40). All cross-references updated."
+    },
+    {
+      "step": "quality.baseline",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "Added user-oriented descriptions to 21 pages with empty front-matter; stripped 12 duplicate H1 titles. about.md expanded into a decision-maker hub (sovereignty/DPG/security/data-protection/persona map)."
+    },
+    {
+      "step": "accuracy.contextual_retrieval",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "Found docs contradicting code on contextual-retrieval defaults. Aligned all docs to code (source of truth): CONTEXTUAL_RETRIEVAL_ENABLED=true, CONTEXTUAL_STRATEGY=doc_level, CONTEXTUAL_LABEL_RAW=true. Fixed across env, CLAUDE.md, rag pages, architecture.md, install guide, dataprep README."
+    },
+    {
+      "step": "verify.build",
+      "status": "completed",
+      "timestamp": "2026-07-01T11:24:08.505133+00:00",
+      "summary": "hugo --gc --minify builds clean (0 errors). All 46 relref targets resolve. 11 sections, ~49 pages."
+    }
+  ],
+  "follow_ups": [
+    "Full CLAUDE.md<->code drift audit beyond contextual-retrieval (suspect: VLLM_MODEL_ID alias 'to be removed' exposed in install-guide).",
+    "Re-orient remaining dev-heavy pages (source-tree-analysis, UI inventories) for a broader audience."
+  ]
+}

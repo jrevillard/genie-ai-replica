@@ -1,0 +1,4 @@
+# .trivyignore — governed vulnerability exceptions for the scan:* gate.
+# Each line is a vulnerability ID (CVE-XXXX-XXXXX) to exclude from the gate.
+# See .gitlab/security-policies/policy.yml + GitLab Container Scanning.
+# Empty = no exceptions (all fixable HIGH/CRITICAL block the pipeline).

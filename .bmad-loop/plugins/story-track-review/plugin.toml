@@ -1,0 +1,29 @@
+# story-track-review plugin for bmad-loop.
+# Post-review: commit changes, push, wait CI, track issue.
+
+[plugin]
+name = "story-track-review"
+version = "1.0.0"
+api_version = 1
+description = "Post-review: commit review changes, push, wait CI, track issue."
+author = "bmad-issue-tracking"
+
+[workflows.story-track-review]
+stage = "post_review_result"
+role = "dev"
+prompt = "{scripts}/story-track-review-prompt.md"
+blocking = false
+
+[[settings]]
+key = "story_track_review_enabled"
+type = "bool"
+default = true
+label = "Enable story-track-review"
+help = "Run the post-review workflow: commit, push, wait CI, track issue."
+
+[[settings]]
+key = "story_track_review_blocking"
+type = "bool"
+default = false
+label = "Block on failure"
+help = "If true, defer the story when story-track-review fails."

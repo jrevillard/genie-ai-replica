@@ -1,0 +1,73 @@
+# GENIE.AI documentation site — Hugo + Docsy
+baseURL = "https://genie-ai-7e342b.opensource.unicc.org/"
+locale = "en-us"
+defaultContentLanguage = "en"
+defaultContentLanguageInSubdir = false
+title = "GENIE.AI"
+enableRobotsTXT = true
+enableGitInfo = true
+
+# Hugo Modules — Docsy theme (extended Hugo required for SCSS pipeline)
+[module]
+  hugoVersion = { extended = true, min = "0.146.0" }
+  [[module.imports]]
+    path = "github.com/google/docsy/theme"
+    disable = false
+
+# English (source of truth per project i18n policy). Add [languages.es] later.
+[languages.en]
+  label = "English"
+  title = "GENIE.AI"
+  weight = 1
+  contentDir = "content/en"
+
+[params]
+  copyright = "GENIE.AI — ITU"
+  description = "Sovereign, DPG-compliant generative AI / RAG framework for the public sector."
+  github_repo = "https://opensource.unicc.org/un/itu/genie-ai"
+  github_subdir = "site"
+  version = ""
+
+  # Docsy UI behavior
+  [params.ui]
+    navbar_logo = true
+    sidebar_menu_compact = true
+    sidebar_search_disable = false
+    feedback_disable = true
+    breadcrumb_disable = false
+    showLightDarkModeMenu = true
+
+  # Client-side search (no server needed)
+  [params.search]
+    offlineSearch = true
+
+# Top navbar menu
+[[menus.main]]
+  name = "Docs"
+  weight = 10
+  url = "/docs/"
+
+[[menus.main]]
+  name = "About"
+  weight = 20
+  url = "/about/"
+
+[[menus.main]]
+  name = "Repository"
+  weight = 30
+  url = "https://opensource.unicc.org/un/itu/genie-ai"
+
+# Chroma code-highlighting style (Task 5).
+# github-dark = a dark, high-contrast syntax theme; pairs with the fixed dark
+# code-block surface in _custom.scss and reads cleanly in both page modes.
+[markup.highlight]
+  style = "github-dark"
+  noClasses = false
+  lineNos = false
+  tabWidth = 2
+
+# Goldmark raw-HTML pass-through. Trusted-content docs site (no user-uploaded
+# markdown); required so the portal-landing card grid (_index.md) and other
+# inline Bootstrap markup survive the Markdown -> HTML render.
+[markup.goldmark.renderer]
+  unsafe = true

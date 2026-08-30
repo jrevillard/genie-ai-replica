@@ -1,8 +1,9 @@
 // src/routes/admin-routes.js
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth-middleware');
+const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const securityScanService = require('../services/security-scan-service');
+const queryService = require('../services/query-service');
 const { logger } = require('../shared-lib');
 
 /**
@@ -19,13 +20,15 @@ module.exports = (adminService, logsService) => {
     throw new Error('adminService is required with getSystemHealth');
   }
   logger.debug('[ADMIN-ROUTES] admin-routes initialized with adminService', {
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(adminService)).filter(m => m !== 'constructor')
+    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(adminService)).filter((m) => m !== 'constructor')
   });
 
   // Debug: Log securityScanService availability
   logger.debug('[ADMIN-ROUTES] Checking securityScanService:', {
     hasSecurityScanService: !!securityScanService,
-    methods: securityScanService ? Object.getOwnPropertyNames(Object.getPrototypeOf(securityScanService)).filter(m => m !== 'constructor') : 'undefined'
+    methods: securityScanService
+      ? Object.getOwnPropertyNames(Object.getPrototypeOf(securityScanService)).filter((m) => m !== 'constructor')
+      : 'undefined'
   });
 
   // Debug: Log request entry before middleware
@@ -38,17 +41,17 @@ module.exports = (adminService, logsService) => {
     next();
   });
 
-  router.use(authMiddleware.authenticate);
-  router.use(authMiddleware.isAdmin);
+  router.use(keycloakAuthMiddleware.authenticate);
+  router.use(keycloakAuthMiddleware.requireAdmin);
 
   /**
    * @swagger
-   * /admin/system-health:
+   * /api/admin/system-health:
    *   get:
    *     summary: Get system health metrics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: System health metrics retrieved successfully
@@ -61,7 +64,7 @@ module.exports = (adminService, logsService) => {
    */
   router.get('/system-health', async (req, res, next) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/system-health route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       const result = await adminService.getSystemHealth();
@@ -75,12 +78,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database/stats:
+   * /api/admin/database/stats:
    *   get:
    *     summary: Get database statistics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database statistics retrieved successfully
@@ -103,12 +106,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs:
+   * /api/admin/logs:
    *   get:
    *     summary: Get system logs
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: limit
@@ -148,12 +151,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/rollover:
+   * /api/admin/logs/rollover:
    *   post:
    *     summary: Trigger log rollover
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Logs rolled over successfully
@@ -176,12 +179,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/user-stats:
+   * /api/admin/user-stats:
    *   get:
    *     summary: Get user statistics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: User statistics retrieved successfully
@@ -205,12 +208,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/security-metrics:
+   * /api/admin/security-metrics:
    *   get:
    *     summary: Get security metrics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Security metrics retrieved successfully
@@ -221,7 +224,7 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/security-metrics', async (req, res, next) => {
+  router.get('/security-metrics', async (req, res) => {
     try {
       logger.info(`[ADMIN-ROUTES] Fetching security metrics for user: ${req.user?.email || 'unknown'}`);
       const lastScan = await securityScanService.getLastScanDetails();
@@ -229,7 +232,7 @@ module.exports = (adminService, logsService) => {
       const metrics = {
         failedLoginAttempts: lastScan.failedLoginDetails?.length || 0,
         suspiciousActivities: lastScan.suspiciousDetails?.length || 0,
-        lastSecurityScan: lastScan.scanTime || "Never",
+        lastSecurityScan: lastScan.scanTime || 'Never',
         vulnerabilities: lastScan.vulnerabilities || { critical: 0, medium: 0, low: 0 }
       };
 
@@ -246,12 +249,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/security-scan:
+   * /api/admin/security-scan:
    *   post:
    *     summary: Run security scan
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Security scan completed successfully
@@ -262,9 +265,9 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.post('/security-scan', async (req, res, next) => {
+  router.post('/security-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security-scan route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       logger.info(`[ADMIN-ROUTES] Initiating security scan by user: ${req.user?.email || 'unknown'}`);
@@ -274,18 +277,18 @@ module.exports = (adminService, logsService) => {
       logger.info(`[ADMIN-ROUTES] Security scan completed successfully by user: ${req.user?.email || 'unknown'}`);
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error running security scan: ${error.message}`, { stack: error.stack });
-      res.status(500).json({ success: false, message: 'Failed to run security scan', error: error.message });
+      res.status(500).json({ success: false, message: 'Failed to run security scan' });
     }
   });
 
   /**
    * @swagger
-   * /admin/security/last-scan:
+   * /api/admin/security/last-scan:
    *   get:
    *     summary: Retrieve the last security scan details
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Last security scan details retrieved successfully
@@ -296,9 +299,9 @@ module.exports = (adminService, logsService) => {
    *       500:
    *         description: Server error
    */
-  router.get('/security/last-scan', async (req, res, next) => {
+  router.get('/security/last-scan', async (req, res) => {
     logger.info('[ADMIN-ROUTES] Entering /admin/security/last-scan route', {
-      user: req.user ? req.user._key : 'unknown'
+      user: req.user?.iss_sub || 'unknown'
     });
     try {
       logger.info(`[ADMIN-ROUTES] Fetching last security scan details for user: ${req.user?.email || 'unknown'}`);
@@ -313,12 +316,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/diagnostics:
+   * /api/admin/diagnostics:
    *   post:
    *     summary: Run system diagnostics
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Diagnostics completed successfully
@@ -341,12 +344,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/summary:
+   * /api/admin/logs/summary:
    *   get:
    *     summary: Get logs summary by type and service
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: date
@@ -381,12 +384,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/search:
+   * /api/admin/logs/search:
    *   get:
    *     summary: Search logs with filtering
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: term
@@ -442,12 +445,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/logs/debug-yesterday:
+   * /api/admin/logs/debug-yesterday:
    *   get:
    *     summary: Debug logs for yesterday to diagnose issues
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Debug information retrieved successfully
@@ -470,40 +473,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database-operations/reindex:
-   *   post:
-   *     summary: Reindex database
-   *     tags: [Admin]
-   *     security:
-   *       - bearerAuth: []
-   *     responses:
-   *       200:
-   *         description: Database reindexed successfully
-   *       401:
-   *         description: Unauthorized - authentication required
-   *       403:
-   *         description: Forbidden - admin access required
-   *       500:
-   *         description: Server error
-   */
-  router.post('/database-operations/reindex', async (req, res, next) => {
-    try {
-      const result = await adminService.reindexDatabase();
-      res.json(result);
-    } catch (error) {
-      logger.error(`[ADMIN-ROUTES] Error reindexing database: ${error.message}`, { stack: error.stack });
-      next(error);
-    }
-  });
-
-  /**
-   * @swagger
-   * /admin/database-operations/backup:
+   * /api/admin/database-operations/backup:
    *   post:
    *     summary: Backup database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database backed up successfully
@@ -526,12 +501,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/database-operations/optimize:
+   * /api/admin/database-operations/optimize:
    *   post:
    *     summary: Optimize database
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
    *         description: Database optimized successfully
@@ -554,12 +529,12 @@ module.exports = (adminService, logsService) => {
 
   /**
    * @swagger
-   * /admin/users/search:
+   * /api/admin/users/search:
    *   get:
    *     summary: Search users with filtering
    *     tags: [Admin]
    *     security:
-   *       - bearerAuth: []
+   *       - KeycloakOAuth2: ['openid']
    *     parameters:
    *       - in: query
    *         name: term
@@ -600,6 +575,135 @@ module.exports = (adminService, logsService) => {
       res.json(result);
     } catch (error) {
       logger.error(`[ADMIN-ROUTES] Error searching users: ${error.message}`, { stack: error.stack });
+      next(error);
+    }
+  });
+
+  // ============================================================
+  // QUERY INSPECTOR ROUTES
+  // ============================================================
+
+  /**
+   * @swagger
+   * /admin/queries/inspect:
+   *   get:
+   *     summary: Get recent queries for admin inspection (Query Inspector)
+   *     tags: [Admin]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
+   *     parameters:
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *         description: Maximum number of queries to return (default 50)
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *         description: Offset for pagination
+   *       - in: query
+   *         name: userId
+   *         schema:
+   *           type: string
+   *         description: Filter by user ID
+   *       - in: query
+   *         name: searchText
+   *         schema:
+   *           type: string
+   *         description: Search in query text
+   *       - in: query
+   *         name: startDate
+   *         schema:
+   *           type: string
+   *         description: Filter from date (ISO string)
+   *       - in: query
+   *         name: endDate
+   *         schema:
+   *           type: string
+   *         description: Filter to date (ISO string)
+   *       - in: query
+   *         name: minConfidence
+   *         schema:
+   *           type: number
+   *         description: Minimum confidence score (0-1)
+   *       - in: query
+   *         name: maxConfidence
+   *         schema:
+   *           type: number
+   *         description: Maximum confidence score (0-1)
+   *     responses:
+   *       200:
+   *         description: Queries retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - admin access required
+   *       500:
+   *         description: Server error
+   */
+  router.get('/queries/inspect', async (req, res, next) => {
+    try {
+      const allowedParams = [
+        'limit',
+        'offset',
+        'userId',
+        'searchText',
+        'startDate',
+        'endDate',
+        'minConfidence',
+        'maxConfidence'
+      ];
+      const params = {};
+      for (const key of allowedParams) {
+        if (req.query[key] !== undefined) params[key] = req.query[key];
+      }
+      logger.info('[ADMIN-ROUTES] Query Inspector - fetching queries', { query: params });
+      const result = await queryService.getQueriesForInspector(params);
+      res.json(result);
+    } catch (error) {
+      logger.error(`[ADMIN-ROUTES] Error in Query Inspector: ${error.message}`, { stack: error.stack });
+      next(error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /admin/queries/inspect/{queryId}:
+   *   get:
+   *     summary: Get full query details for admin inspection
+   *     tags: [Admin]
+   *     security:
+   *       - KeycloakOAuth2: ['openid']
+   *     parameters:
+   *       - in: path
+   *         name: queryId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The query ID to inspect
+   *     responses:
+   *       200:
+   *         description: Query details retrieved successfully
+   *       401:
+   *         description: Unauthorized
+   *       403:
+   *         description: Forbidden - admin access required
+   *       404:
+   *         description: Query not found
+   *       500:
+   *         description: Server error
+   */
+  router.get('/queries/inspect/:queryId', async (req, res, next) => {
+    try {
+      logger.info('[ADMIN-ROUTES] Query Inspector - fetching query details', { queryId: req.params.queryId });
+      const result = await queryService.getQueryInspectorDetails(req.params.queryId);
+      res.json(result);
+    } catch (error) {
+      if (error.message === 'document not found' || (error.errorNum && error.errorNum === 1202)) {
+        return res.status(404).json({ success: false, message: 'Query not found' });
+      }
+      logger.error(`[ADMIN-ROUTES] Error in Query Inspector details: ${error.message}`, { stack: error.stack });
       next(error);
     }
   });

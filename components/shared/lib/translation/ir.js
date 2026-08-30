@@ -29,7 +29,6 @@
  * @typedef {ForStatement | FilterStatement | LetStatement | CollectStatement | SortStatement | LimitStatement | ReturnStatement | UpdateStatement | RemoveStatement | InsertStatement} Statement
  */
 
-
 // === Statement Nodes ===
 
 /**
@@ -135,7 +134,6 @@
  * @property {string} collectionName - The name of the collection.
  */
 
-
 // === Expression Nodes ===
 
 /**
@@ -202,7 +200,6 @@
  * @property {Expression} value - The property value expression.
  */
 
-
 // -----------------------------------------------------------------------------
 // 2. Verification Example
 // -----------------------------------------------------------------------------
@@ -219,86 +216,4 @@
 // LIMIT 10
 // RETURN { city: city, count: userCount }
 //
-const exampleIR = {
-  type: 'Query',
-  body: [
-    // FOR u IN users
-    {
-      type: 'ForStatement',
-      variableName: 'u',
-      collectionName: 'users'
-    },
-    // FILTER u.age > 30 AND u.status == "active"
-    {
-      type: 'FilterStatement',
-      condition: {
-        type: 'BinaryOperation',
-        operator: 'AND',
-        left: {
-          type: 'BinaryOperation',
-          operator: '>',
-          left: {
-            type: 'MemberExpression',
-            object: { type: 'Identifier', name: 'u' },
-            property: 'age'
-          },
-          right: { type: 'Literal', value: 30 }
-        },
-        right: {
-          type: 'BinaryOperation',
-          operator: '==',
-          left: {
-            type: 'MemberExpression',
-            object: { type: 'Identifier', name: 'u' },
-            property: 'status'
-          },
-          right: { type: 'Literal', value: 'active' }
-        }
-      }
-    },
-    // COLLECT city = u.city WITH COUNT INTO userCount
-    {
-      type: 'CollectStatement',
-      groupKeys: {
-        city: {
-          type: 'MemberExpression',
-          object: { type: 'Identifier', name: 'u' },
-          property: 'city'
-        }
-      },
-      aggregations: [
-        {
-          method: 'COUNT',
-          variableName: 'userCount'
-        }
-      ]
-    },
-    // SORT userCount DESC
-    {
-      type: 'SortStatement',
-      criteria: [
-        {
-          expression: { type: 'Identifier', name: 'userCount' },
-          direction: 'DESC'
-        }
-      ]
-    },
-    // LIMIT 10 (assuming offset 0 if not specified)
-    {
-      type: 'LimitStatement',
-      offset: 0,
-      count: 10
-    },
-    // RETURN { city: city, count: userCount }
-    {
-      type: 'ReturnStatement',
-      expression: {
-        type: 'ObjectExpression',
-        properties: [
-          { key: 'city', value: { type: 'Identifier', name: 'city' } },
-          { key: 'count', value: { type: 'Identifier', name: 'userCount' } }
-        ]
-      }
-    }
-  ]
-};
+// Example IR for documentation purposes

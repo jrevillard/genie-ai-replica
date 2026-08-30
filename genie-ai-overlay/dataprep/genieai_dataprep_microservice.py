@@ -192,6 +192,14 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             # Decode and temporarily save file
             file_bytes = base64.b64decode(payload.fileBase64)
             save_path = os.path.join(upload_folder, payload.fileName)
+            # OKF concept file names can carry folder structure (a zip import
+            # preserves the bundle's internal directories, e.g.
+            # "kenya-okf/concepts/ecitizen-digital-payments.md"). The save path
+            # must be guaranteed to exist — open() does NOT create intermediate
+            # directories and a missing one crashed the ingest with
+            # FileNotFoundError, leaving the concept stuck in the okf-server's
+            # 'parsed' queue forever (live-caught 2026-08-30).
+            os.makedirs(os.path.dirname(save_path) or upload_folder, exist_ok=True)
             with open(save_path, "wb") as f:
                 f.write(file_bytes)
             logger.info(f"[ ingest ] File saved to: {save_path}")

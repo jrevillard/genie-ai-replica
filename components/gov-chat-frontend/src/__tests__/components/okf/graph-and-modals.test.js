@@ -75,8 +75,12 @@ describe('OkfRepoGraphView', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // The REAL manifest shape: top-level links[] with from/to ids (the
+    // per-concept shape this test used to mock NEVER existed — production
+    // rendered zero edges because of it; live-caught 2026-08-30).
     mockGetManifest.mockResolvedValue({
-      concepts: [{ concept_id: 'wildlife', links: [{ to_concept_id: 'parks', label: 'see' }] }]
+      root_id: 'index',
+      links: [{ from_concept_id: 'wildlife', to_concept_id: 'parks', source: 'author' }]
     });
   });
 
@@ -96,6 +100,28 @@ describe('OkfRepoGraphView', () => {
     await wrapper.vm.$nextTick();
     await wrapper.findAll('.okf-gv__node')[1].trigger('click');
     expect(wrapper.emitted('select')).toEqual([['wildlife']]);
+  });
+
+  it('normalizes legacy concepts/ -prefixed link targets to node ids', async () => {
+    mockGetManifest.mockResolvedValue({
+      links: [
+        { from_concept_id: 'index', to_concept_id: 'concepts/wildlife', source: 'author' },
+        { from_concept_id: 'wildlife', to_concept_id: 'concepts/parks', source: 'author' }
+      ]
+    });
+    const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.edges).toHaveLength(2);
+  });
+
+  it('reloads links when the concept set changes (settle lands after mount)', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
+    await wrapper.vm.$nextTick();
+    const calls = mockGetManifest.mock.calls.length;
+    await wrapper.setProps({ concepts: [...CONCEPTS, { concept_id: 'new', title: 'New' }] });
+    await wrapper.vm.$nextTick();
+    expect(mockGetManifest.mock.calls.length).toBeGreaterThan(calls);
   });
 
   it('tolerates a not-yet-settled manifest (nodes, zero edges)', async () => {

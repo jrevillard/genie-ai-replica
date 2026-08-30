@@ -46,6 +46,11 @@ router.post('/:repo_id/lifecycle', requireRepoScope('repo_id', 'admin'), ctrl.tr
 // state). Read scope; the zip is built on the fly from the current concepts.
 router.get('/:repo_id/export', requireRepoScope('repo_id', 'read'), ctrl.exportRepoZip);
 
+// Story #978 — steward PII acknowledgement (David, 2026-08-30): waives the
+// PII 'hit' publish gate for REVIEWED public entities (audited; a scanner
+// 'error' still blocks). Admin scope on the repo.
+router.post('/:repo_id/pii-acknowledge', requireRepoScope('repo_id', 'admin'), ctrl.acknowledgePii);
+
 // Repository clone (Story 4.8 — D-V5): an ADMIN mutation on the SOURCE repo —
 // the clone reads the source wholesale (registry + meta), so the source's admin
 // scope gates it (mirrors ingest). getById pre-gate (404 foreign) in the controller.

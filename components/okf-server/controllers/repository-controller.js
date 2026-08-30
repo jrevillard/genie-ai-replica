@@ -11,7 +11,13 @@ const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
 const parserService = require('../services/parser-service');
 const { getMeter } = require('../shared-lib/metrics');
-const { createSchema, updateSchema, cloneSchema, lifecycleSchema } = require('../validators/repository-validator');
+const {
+  createSchema,
+  updateSchema,
+  cloneSchema,
+  lifecycleSchema,
+  piiAckSchema
+} = require('../validators/repository-validator');
 const lifecycleService = require('../services/lifecycle-service');
 const bundleExportService = require('../services/bundle-export-service');
 
@@ -610,6 +616,25 @@ async function exportRepoZip(req, res, next) {
   }
 }
 
+/**
+ * Story #978 (David, 2026-08-30) — steward PII acknowledgement. Body:
+ * { acknowledge: true|false }. Records the review on the registry (pii_ack)
+ * + audit; the publish mint then waives the PII 'hit' gate (errors still
+ * block). This is the sanctioned valve for PUBLIC entities — a government
+ * services directory is SUPPOSED to carry contact details.
+ */
+async function acknowledgePii(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const { acknowledge } = validate(piiAckSchema, req.body || {});
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const result = await piiService.acknowledgePii(repo_id, acknowledge !== false, actorFrom(req));
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRepo,
   cloneRepo,
@@ -632,5 +657,6 @@ module.exports = {
   autocorrectRepo,
   transitionLifecycle,
   exportRepoZip,
+  acknowledgePii,
   ValidationError
 };

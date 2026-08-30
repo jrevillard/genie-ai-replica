@@ -96,6 +96,19 @@
     >
       <p>{{ publishBodyText }}</p>
       <p v-if="publishError" class="okf-dashboard__dialog-error">{{ publishError }}</p>
+      <div v-if="piiBlocked">
+        <p class="okf-dashboard__pii-note">
+          {{
+            translate(
+              'okf.dashboard.pii.note',
+              'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+            )
+          }}
+        </p>
+        <DsButton variant="secondary" small :disabled="actionBusy" @click="onAcknowledgeAndPublish">
+          {{ translate('okf.dashboard.pii.ack', 'Acknowledge flagged entities & publish') }}
+        </DsButton>
+      </div>
     </DsDialog>
 
     <DsDialog
@@ -116,6 +129,46 @@
         <strong>{{ deleteAsk && (deleteAsk.name || deleteAsk.repo_id) }}</strong>
       </p>
       <p v-if="deleteError" class="okf-dashboard__dialog-error">{{ deleteError }}</p>
+    </DsDialog>
+
+    <DsDialog
+      :visible="bulkOpen"
+      :title="translate('okf.dashboard.bulk.title', 'Publish selected repositories')"
+      size="md"
+      :actions="[
+        { key: 'cancel', label: translate('common.cancel', 'Cancel'), variant: 'secondary' },
+        {
+          key: 'publish',
+          label: translate('okf.dashboard.bulk.publishConfirm', 'Publish {n}').replace(
+            '{n}',
+            String(selectedIds.length)
+          ),
+          variant: 'primary'
+        }
+      ]"
+      @close="bulkOpen = false"
+      @action="onBulkAction"
+    >
+      <p>
+        {{
+          translate(
+            'okf.dashboard.bulk.body',
+            'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:'
+          )
+        }}
+      </p>
+      <ul class="okf-dashboard__bulk-results">
+        <li
+          v-for="r in bulkResults"
+          :key="r.repo_id"
+          :class="r.ok ? 'okf-dashboard__bulk-ok' : 'okf-dashboard__bulk-fail'"
+        >
+          {{ r.name || r.repo_id }} — {{ r.ok ? '✓ published' : '✗ ' + (r.code || 'failed') }}
+        </li>
+      </ul>
+      <p v-if="bulkResults.length === 0" class="okf-dashboard__bulk-pending">
+        {{ translate('okf.dashboard.bulk.pending', 'Confirm to publish the selected repositories.') }}
+      </p>
     </DsDialog>
 
     <OkfVersionsDialog
@@ -183,6 +236,7 @@ export default {
       actionError: '',
       publishAsk: null,
       publishError: '',
+      piiBlocked: false,
       deleteAsk: null,
       deleteError: '',
       versionsRepo: null
@@ -212,6 +266,12 @@ export default {
         .map((id) => this.$store.getters['okf/repoById'](id))
         .filter(Boolean)
         .filter((r) => this.matchesFilters(r));
+    },
+    publishActions() {
+      return [
+        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
+        { key: 'confirm', label: this.translate('okf.dashboard.publish.confirm', 'Publish'), variant: 'primary' }
+      ];
     },
     deleteActions() {
       return [
@@ -303,6 +363,7 @@ export default {
       const action = this.contextualAction(r);
       if (action === 'publish') {
         this.publishError = '';
+        this.piiBlocked = false;
         this.publishAsk = r;
         return;
       }
@@ -310,7 +371,7 @@ export default {
       this.actionError = '';
       const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: r.repo_id, action });
       this.actionBusy = false;
-      if (!res.ok) this.actionError = res.message || 'Action failed';
+      if (!res.ok) this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
     },
     onVersions(r) {
       this.versionsRepo = r;
@@ -354,13 +415,32 @@ export default {
       if (key !== 'confirm' || !this.publishAsk) return;
       this.actionBusy = true;
       this.publishError = '';
+      this.piiBlocked = false;
       const res = await this.$store.dispatch('okf/lifecycleTransition', {
         repoId: this.publishAsk.repo_id,
         action: 'publish'
       });
       this.actionBusy = false;
+      if (!res.ok) {
+        this.publishError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+        if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
+        return; // keep the dialog open — the steward decides on the ack
+      }
       this.publishAsk = null;
-      if (!res.ok) this.actionError = res.message || 'Publish failed';
+      this.refreshAll();
+    },
+    async onAcknowledgeAndPublish() {
+      // The explicit, audited steward decision: reviewed flagged entities.
+      this.actionBusy = true;
+      try {
+        await okfRepoOps.acknowledgePii(this.publishAsk.repo_id, true);
+      } catch (err) {
+        this.actionBusy = false;
+        this.publishError = err.message || 'Acknowledgement failed';
+        return;
+      }
+      this.actionBusy = false;
+      await this.onPublishAction('confirm');
     },
     healthScore(r) {
       const m = r.metrics;
@@ -491,6 +571,26 @@ export default {
 }
 .okf-dashboard__card-delete {
   --ds-btn-ghost-color: var(--danger);
+}
+.okf-dashboard__bulk-results {
+  margin: var(--space-sm) 0 0;
+  padding-left: var(--space-md);
+  font-size: var(--text-sm);
+}
+.okf-dashboard__bulk-ok {
+  color: var(--success);
+}
+.okf-dashboard__bulk-fail {
+  color: var(--danger);
+}
+.okf-dashboard__bulk-pending {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.okf-dashboard__pii-note {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 .okf-dashboard__dialog-error {
   color: var(--danger);

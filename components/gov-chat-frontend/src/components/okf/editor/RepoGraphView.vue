@@ -125,6 +125,12 @@ export default {
       handler() {
         this.loadLinks();
       }
+    },
+    // Concepts settle asynchronously (the worker drains after mount) — the
+    // manifest's links land AFTER the first load. Reload when the set changes,
+    // or the graph renders nodes with NO edges (live-caught 2026-08-30).
+    'concepts.length'() {
+      this.loadLinks();
     }
   },
   methods: {
@@ -146,16 +152,26 @@ export default {
       this.links = {};
       if (!this.repoId) return;
       try {
-        // The settled bundle manifest carries each concept's links[] (the
-        // author-stated structural edges). Tolerates a not-yet-settled bundle.
+        // The settled bundle manifest carries the author-stated edges at the
+        // TOP level: links[] = [{ from_concept_id, to_concept_id, source }].
+        // (The previous code read concepts[].links — a shape the manifest
+        // never had — so NO edge ever rendered. Live-caught 2026-08-30 on the
+        // Kenya Government Services cross-linked bundle.) Targets from
+        // manifests written before the basename fix may carry a concepts/
+        // prefix — normalize like-for-like with node ids.
         const m = await repoOkfService.getManifest(this.repoId);
-        if (Array.isArray(m && m.concepts)) {
-          const map = {};
-          for (const c of m.concepts) {
-            if (c && c.concept_id && Array.isArray(c.links)) map[c.concept_id] = c.links;
+        const norm = (id) => String(id || '').replace(/^concepts\//, '');
+        const map = {};
+        if (Array.isArray(m && m.links)) {
+          for (const l of m.links) {
+            if (!l || !l.from_concept_id || !l.to_concept_id) continue;
+            const from = norm(l.from_concept_id);
+            const to = norm(l.to_concept_id);
+            if (!map[from]) map[from] = [];
+            map[from].push({ to_concept_id: to, label: l.label, source: l.source });
           }
-          this.links = map;
         }
+        this.links = map;
       } catch {
         this.links = {}; // manifest not settled — nodes still render, no edges
       }

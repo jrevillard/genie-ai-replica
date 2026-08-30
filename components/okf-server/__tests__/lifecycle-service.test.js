@@ -114,7 +114,7 @@ describe('publish — mint + bundle export + serving cleared', () => {
     mockDb.query.mockResolvedValueOnce({ all: async () => [7] }); // concept-count gate
     const res = await lifecycleService.transition(REPO, 'publish', { sub: 'steward-1' });
 
-    expect(mintVersion).toHaveBeenCalledWith(REPO, { trigger: 'publish' }, { sub: 'steward-1' });
+    expect(mintVersion).toHaveBeenCalledWith(REPO, { trigger: 'publish', acknowledgePii: false }, { sub: 'steward-1' });
     expect(exportBundle).toHaveBeenCalledTimes(1);
     expect(res).toMatchObject({ ok: true, action: 'publish', lifecycle_state: 'publish', bundle_version: 1 });
 
@@ -172,6 +172,16 @@ describe('publish — mint + bundle export + serving cleared', () => {
     );
     await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({ code: 'EXPORT_FAILED' });
     expect(mockDb._stores.okf_repositories[REPO].lifecycle_state).toBe('approve');
+  });
+
+  test('a recorded pii_ack waives the PII hit gate (acknowledgePii passthrough)', async () => {
+    seedRepo({
+      lifecycle_state: 'approve',
+      pii_ack: { by: 'steward-1', at: '2026-08-30T00:00:00Z', flagged_concepts: 5 }
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
+    await lifecycleService.transition(REPO, 'publish', { sub: 'steward-1' });
+    expect(mintVersion).toHaveBeenCalledWith(REPO, { trigger: 'publish', acknowledgePii: true }, { sub: 'steward-1' });
   });
 
   test('publish from review is REFUSED — approve first', async () => {

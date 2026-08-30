@@ -135,7 +135,9 @@ async function transition(repoId, action, actor) {
       // The mint is the REAL publish gate (PII-complete, all-indexed,
       // conformance-clean; 409 PUBLISH_GATE_BLOCKED / DRAIN_IN_PROGRESS pass
       // through untouched). It bumps repo.version to N.
-      await versionService.mintVersion(repoId, { trigger: 'publish' }, actor);
+      // A recorded steward acknowledgement (pii_ack) waives the PII 'hit'
+      // gate (reviewed public entities); a scanner 'error' still blocks.
+      await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
       // Re-read the registry post-mint (version/okf_tag bumped).
       const fresh = await loadRepo(db, repoId);
       // Export the bundle zip — THE repo+version artifact in the doc-repo.
@@ -155,7 +157,8 @@ async function transition(repoId, action, actor) {
       });
       await audit('repo.publish', repoId, actor, {
         bundle_version: bundle.bundle_version,
-        bundle_file_name: bundle.file_name
+        bundle_file_name: bundle.file_name,
+        pii_acknowledged: !!repo.pii_ack || undefined
       });
       logger.info('OKF repository published', {
         repo_id: repoId,

@@ -77,6 +77,13 @@ function conceptIdFromPath(p) {
     }
   }
   if (s.toLowerCase().endsWith('.md')) s = s.slice(0, -3);
+  // Concept ids are BASENAMES (zip intake strips folder prefixes — 2026-08-30):
+  // a link target like "concepts/service-directory.md" or "kenya-okf/index.md"
+  // must resolve to "service-directory" / "index", or the author link points
+  // at a concept id that does not exist (live-caught: the Kenya Government
+  // Services index's links carried a concepts/ prefix and its graph edges
+  // dead-ended). Folder structure in a link target is presentation.
+  s = s.split('/').pop() || s;
   return s || undefined;
 }
 

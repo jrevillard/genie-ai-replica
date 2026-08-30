@@ -271,6 +271,35 @@ export function createVersion(repoId, actor = {}) {
   return repoOkfService.mintVersion(repoId, { trigger: 'manual' }, actor);
 }
 
+/**
+ * Human-readable, ACTIONABLE text for lifecycle gate failures (David,
+ * 2026-08-30: "retry after the worker drains" is not a user-facing sentence).
+ * The raw server message stays available for the generic case.
+ */
+export function friendlyLifecycleError(code, message) {
+  if (code === 'DRAIN_IN_PROGRESS') {
+    return 'Some files are still being processed (indexed). Open this repository in the editor — the file list shows which ones, and ingestion retries automatically. Try publishing again once every file shows indexed.';
+  }
+  if (code === 'PUBLISH_GATE_BLOCKED') {
+    return (
+      message ||
+      'The repository is not ready to publish — all files must be indexed, conformance-clean and PII-scanned.'
+    );
+  }
+  if (code === 'PUBLISH_EMPTY') {
+    return 'This repository has no content yet — add concepts before publishing.';
+  }
+  if (code === 'INVALID_TRANSITION') {
+    return message || 'That action is not allowed from the current state.';
+  }
+  return message || 'Action failed';
+}
+
+/** Steward PII acknowledgement (audited server-side; waives the PII hit gate). */
+export function acknowledgePii(repoId, acknowledge = true, actor = {}) {
+  return repoOkfService.acknowledgePii(repoId, acknowledge, actor);
+}
+
 /** Generic lifecycle dispatcher — the single entry point for the store's
  * lifecycleTransition action (wizard + editor + dashboard all route here). */
 export function lifecycle(repoId, action, actor = {}) {
@@ -297,5 +326,7 @@ export default {
   createVersion,
   lifecycle,
   exportRepoZip,
-  importRepoZip
+  importRepoZip,
+  friendlyLifecycleError,
+  acknowledgePii
 };

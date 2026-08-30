@@ -64,6 +64,7 @@ import translateMixin from '../../../mixins/translateMixin';
 import DsDialog from '../../ds/Dialog.vue';
 import DsTable from '../../ds/Table.vue';
 import DsPill from '../../ds/Pill.vue';
+import okfRepoOps from '../../../services/okfRepoOps';
 
 export default {
   name: 'OkfVersionsDialog',
@@ -151,7 +152,7 @@ export default {
         });
         this.loading = false;
         if (!res.ok) {
-          this.error = res.message || this.translate('okf.versions.publishFailed', 'Publish failed');
+          this.error = okfRepoOps.friendlyLifecycleError(res.code, res.message);
           return;
         }
         this.lastResult = res.result;

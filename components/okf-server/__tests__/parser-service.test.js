@@ -21,7 +21,7 @@ describe('parser-service — parseConcept', () => {
     });
 
     test('concept_id derived from path (strips .md + leading /)', () => {
-      expect(result.concept_id).toBe('concepts/test');
+      expect(result.concept_id).toBe('test'); // basename (folder prefixes are presentation)
       expect(result.repo_id).toBe('repo-1');
       expect(result.bundle_version).toBe('1.0.0');
     });
@@ -49,9 +49,9 @@ describe('parser-service — parseConcept', () => {
 
     test('links extracted with anchor text as label; images excluded', () => {
       const targets = result.links.map((l) => l.to_concept_id);
-      expect(targets).toContain('concepts/related');
-      expect(targets).toContain('nested/deep');
-      const related = result.links.find((l) => l.to_concept_id === 'concepts/related');
+      expect(targets).toContain('related');
+      expect(targets).toContain('deep');
+      const related = result.links.find((l) => l.to_concept_id === 'related');
       expect(related.label).toBe('related concept');
       expect(targets).not.toContain('img/diagram');
     });
@@ -87,8 +87,8 @@ describe('parser-service — parseConcept', () => {
 
     test('broken links are emitted (tolerated, not fatal)', () => {
       expect(result.links).toHaveLength(2);
-      expect(result.links[0].to_concept_id).toBe('does/not/exist');
-      expect(result.links[1].to_concept_id).toBe('missing/target');
+      expect(result.links[0].to_concept_id).toBe('exist');
+      expect(result.links[1].to_concept_id).toBe('target');
     });
   });
 
@@ -145,16 +145,16 @@ describe('parser-service — deriveTrustTier', () => {
 
 describe('parser-service — conceptIdFromPath', () => {
   test('strips leading slash + .md', () => {
-    expect(conceptIdFromPath('/a/b/concept.md')).toBe('a/b/concept');
+    expect(conceptIdFromPath('/a/b/concept.md')).toBe('concept');
   });
   test('strips leading ./', () => {
-    expect(conceptIdFromPath('./nested/deep.md')).toBe('nested/deep');
+    expect(conceptIdFromPath('./nested/deep.md')).toBe('deep');
   });
   test('forces POSIX separators', () => {
-    expect(conceptIdFromPath('a\\b\\c.md')).toBe('a/b/c');
+    expect(conceptIdFromPath('a\\b\\c.md')).toBe('c');
   });
-  test('no .md suffix left as-is', () => {
-    expect(conceptIdFromPath('a/b')).toBe('a/b');
+  test('no .md suffix left as-is (basename)', () => {
+    expect(conceptIdFromPath('a/b')).toBe('b');
   });
   test('handles .// (leading slash after ./ strip)', () => {
     expect(conceptIdFromPath('.//foo.md')).toBe('foo');

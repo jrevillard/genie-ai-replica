@@ -67,4 +67,9 @@ const lifecycleSchema = Joi.object({
   action: Joi.string().valid('submit', 'approve', 'publish', 'ingest', 'retract').required()
 });
 
-module.exports = { createSchema, updateSchema, cloneSchema, aclSchema, sourceSchema, lifecycleSchema };
+// Steward PII acknowledgement (2026-08-30): { acknowledge: true|false }.
+const piiAckSchema = Joi.object({
+  acknowledge: Joi.boolean().required()
+});
+
+module.exports = { createSchema, updateSchema, cloneSchema, aclSchema, sourceSchema, lifecycleSchema, piiAckSchema };

@@ -199,7 +199,14 @@ function zipToRawInputs(zipBase64, maxConcepts) {
         400
       );
     }
-    const base = e.entryName.replace(/\.md$/, '');
+    // The concept id comes from the entry's BASENAME, never the zip's internal
+    // folder path: a bundle stored under `kenya-okf/concepts/…` used to mint
+    // ids WITH slashes, which crashed dataprep's file save (nested dirs) and
+    // poisoned chunk/graph keys. Folder structure is presentation, not
+    // identity — bare slugs match the editor-created convention.
+    // (Live-caught 2026-08-30: "Kenya Government Services" imported from a
+    // foldered zip drained 0/6 concepts and its publish was gate-blocked.)
+    const base = e.entryName.split('/').pop().replace(/\.md$/, '');
     inputs.push({ concept_id: null, path: `${uniquifySlug(base, text, seen)}.md`, frontmatter: {}, body: text });
   }
   return inputs;
@@ -451,6 +458,27 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       summary.bundle_stored = bundleFileName;
       summary.bundle_file_id = bres.data && bres.data.file_id;
       logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: summary.bundle_file_id });
+      // A bundle whose concepts were ALL dedup-skipped has nothing in flight —
+      // the zip must be born 'Ingested' (the state machine only advances on
+      // concept callbacks; zero enqueues means it would sit 'Pending' forever
+      // and the version mint's D1 gate would block publishing). Live-caught
+      // 2026-08-30: a no-op re-ingest of a fully-indexed repo re-stored the
+      // zip at Pending and bricked the publish.
+      if (summary.enqueued === 0 && bres.data && bres.data.file_id) {
+        try {
+          await authedAxios.patch(
+            `${config.documentRepository.url}/api/files/${encodeURIComponent(bres.data.file_id)}/status`,
+            { dataprep: { status: 'Ingested' } },
+            { timeout: 10000 }
+          );
+          logger.info('Bundle zip born Ingested (zero enqueues — nothing in flight)', {
+            repo_id,
+            bundle_file_id: summary.bundle_file_id
+          });
+        } catch (patchErr) {
+          logger.warn('Bundle born-Ingested patch failed (non-fatal)', { repo_id, error: patchErr.message });
+        }
+      }
     } catch (err) {
       summary.bundle_storage_error = err.message;
       logger.error('Ingest 4g bundle-zip store failed (isolated, non-fatal)', { repo_id, error: err.message });
@@ -508,6 +536,21 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       last_ingest_summary: lastIngestSummary,
       concept_count: countRows[0] || 0
     });
+    // Repo-level PII scan marker (David, 2026-08-30): the mint publish gate
+    // requires pii_scan_status === 'complete', but the marker was ONLY set by
+    // the file-discovery scan endpoint — a CONTENT-ONLY repository (editor or
+    // zip import; every concept scanned inline at 4d) could NEVER publish.
+    // When every concept row carries a pii_state, the scan IS complete.
+    const unscannedRows = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND (m.pii_state == null OR m.pii_state == "unknown") COLLECT WITH COUNT INTO c RETURN c',
+        { rid: repo_id }
+      )
+    ).all();
+    if ((countRows[0] || 0) > 0 && (unscannedRows[0] || 0) === 0) {
+      await db.collection('okf_repositories').update(repo_id, { pii_scan_status: 'complete' });
+      logger.info('Repo PII scan marked complete (all concepts scanned inline)', { repo_id });
+    }
   } catch (countErr) {
     logger.warn('Ingest summary surfacing failed (non-fatal)', { repo_id, error: countErr.message });
   }

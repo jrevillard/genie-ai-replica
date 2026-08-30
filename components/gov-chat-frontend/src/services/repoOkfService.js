@@ -171,6 +171,19 @@ const repoOkfService = {
   },
 
   /**
+   * Story #978 (David, 2026-08-30) — steward PII acknowledgement. Waives the
+   * PII 'hit' publish gate for REVIEWED public entities (audited server-side).
+   */
+  async acknowledgePii(repoId, acknowledge = true, actor = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-acknowledge`,
+      { acknowledge },
+      { headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {} }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
    * Story #978 — list the repo's version manifests (newest first). Shape:
    * { repo_id, versions: [{bundle_version, okf_tag, trigger, curator,
    * minted_at, concept_count}] }.

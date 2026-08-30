@@ -543,7 +543,9 @@ const actions = {
     } catch (err) {
       return {
         ok: false,
-        code: (err && err.code) || 'LIFECYCLE_FAILED',
+        // axios interceptor rejections carry the server error code in
+        // err.data.error (err.code is undefined for HTTP error responses).
+        code: (err && (err.code || (err.data && err.data.error))) || 'LIFECYCLE_FAILED',
         message: err.message || 'lifecycle transition failed'
       };
     }

@@ -20,7 +20,7 @@ jest.mock('../shared-lib/db-connection-service', () => {
 });
 jest.mock('../services/parser-service', () => ({
   parseConcept: jest.fn(async (markdown, ctx) => ({
-    concept_id: `concepts/${ctx.path.replace(/\.md$/, '')}`,
+    concept_id: ctx.path.replace(/.md$/, ''), // basename contract (2026-08-30)
     repo_id: ctx.repo_id,
     path: ctx.path,
     frontmatter: { title: 'T', type: 'service' },
@@ -190,7 +190,7 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
   test('dedup (4e): PRE-upsert doc with unchanged hash + index_status=indexed → enqueue SKIPPED (review fix)', async () => {
     // The stored (pre-upsert) doc: indexed with the hash the NEW body produces.
     conceptMeta.getConceptMeta.mockResolvedValueOnce({
-      concept_id: 'concepts/dup',
+      concept_id: 'dup',
       content_hash: 'MATCH',
       index_status: 'indexed'
     });
@@ -199,7 +199,7 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(summary.skipped_dedup).toBe(1);
     expect(summary.enqueued).toBe(0);
     expect(authedAxios.post).not.toHaveBeenCalled();
-    expect(conceptMeta.getConceptMeta).toHaveBeenCalledWith(REPO, 'concepts/dup');
+    expect(conceptMeta.getConceptMeta).toHaveBeenCalledWith(REPO, 'dup');
   });
 
   test('dedup (4e): CHANGED hash on an indexed concept → still enqueues (re-index needed)', async () => {
@@ -240,7 +240,7 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     );
     expect(summary.enqueued).toBe(1);
     expect(summary.enqueue_errors).toHaveLength(1);
-    expect(summary.enqueue_errors[0].concept_id).toBe('concepts/bad');
+    expect(summary.enqueue_errors[0].concept_id).toBe('bad');
     expect(summary.enqueue_errors[0].stage).toBe('meta_upsert');
   });
 
@@ -498,6 +498,30 @@ describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)
     for (const [name, content] of Object.entries(files)) zip.addFile(name, Buffer.from(content));
     return zip.toBuffer().toString('base64');
   };
+
+  test('FOLDERED zip intake: concept ids are basenames, never folder paths (2026-08-30)', async () => {
+    // A bundle stored under an internal folder (kenya-okf/concepts/*.md) used to
+    // mint ids WITH slashes — dataprep could not save them (nested dirs) and the
+    // concepts never drained, bricking publish. Folder structure is presentation.
+    const b64 = zipB64({
+      'kenya-okf/concepts/ecitizen-digital-payments.md': '# eCitizen\n\nbody',
+      'kenya-okf/index.md': '# Kenya\n\nindex'
+    });
+    const summary = await ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR);
+    expect(summary.parsed).toBe(2);
+    const ids = conceptMeta.upsertConceptMeta.mock.calls.map((c) => c[1].concept_id);
+    expect(ids).toContain('ecitizen-digital-payments');
+    expect(ids).toContain('index');
+    expect(ids.some((id) => String(id).includes('/'))).toBe(false);
+  });
+
+  test('COLLIDING basenames across folders: second gets a hash suffix (never silently merged)', async () => {
+    const b64 = zipB64({ 'v1/index.md': '# One', 'v2/index.md': '# Two' });
+    const summary = await ingestService.ingestRepoConcepts(REPO, { zip: b64 }, ACTOR);
+    expect(summary.parsed).toBe(2);
+    const ids = conceptMeta.upsertConceptMeta.mock.calls.map((c) => c[1].concept_id);
+    expect(ids.filter((id) => String(id).startsWith('index')).length).toBe(2);
+  });
 
   beforeEach(() => jest.clearAllMocks());
 

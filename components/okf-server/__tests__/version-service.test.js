@@ -187,18 +187,26 @@ describe('versionService.mintVersion (ADR-031: repo-level, monotonic, INSERT-onl
 });
 
 describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
-  test('D1: refuses mint while Pending OKF files exist (drain-in-flight) → 409 DRAIN_IN_PROGRESS', async () => {
+  test('D1 (re-scoped): refuses mint while the PARSED queue is in flight → 409 DRAIN_IN_PROGRESS', async () => {
     seedRepo({ version: 2 });
-    // The gate is the FIRST query — seed the pending row there (bypass the
-    // auto-prepended [] by mocking the raw sequence).
-    mockDb.query.mockResolvedValueOnce({
-      all: async () => [{ repo_id: REPO, file_id: 'f-pending', dataprep: { status: 'Pending' } }]
-    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // parsed rows exist
     await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
       code: 'DRAIN_IN_PROGRESS',
       status: 409
     });
     expect(mockDb._stores.okf_repositories[REPO].version).toBe(2); // no bump
+  });
+
+  test('D1 (re-scoped): a Pending zip with an EMPTY queue is stale — mint proceeds (reconcile is best-effort)', async () => {
+    seedRepo({ version: 2 });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // parsed queue empty
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    // The stale-zip reconcile runs outside the gate; its doc-repo PATCH is
+    // best-effort (no config in unit tests → caught + logged).
+    programQuery([]);
+    programQuery([]);
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
   });
 
   test('D1: mint proceeds when no Pending files exist', async () => {
@@ -210,8 +218,7 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
 
   test('D1 (WP-C): refuses mint while a meta row sits at index_status=parsed (the content-only queue) → 409', async () => {
     seedRepo({ version: 2 });
-    // Gate 1 (files) empty; gate 2 (parsed meta rows) non-empty.
-    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    // The parsed-queue gate is the FIRST query (re-scoped 2026-08-30).
     mockDb.query.mockResolvedValueOnce({
       all: async () => [{ repo_id: REPO, concept_id: 'stuck', index_status: 'parsed' }]
     });
@@ -280,6 +287,45 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     seedRepo({ version: 1, pii_scan_status: 'pending' });
     await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
       code: 'PUBLISH_GATE_BLOCKED',
+      status: 409
+    });
+  });
+
+  test('PII GATE (split, 2026-08-30): a pii_state hit refuses with PII_GATE_BLOCKED', async () => {
+    seedRepo({ version: 1 });
+    programQuery([
+      { concept_id: 'ok', title: 'Ok', content_hash: 'h', index_status: 'indexed', pii_state: 'clean' },
+      { concept_id: 'flagged', title: 'F', content_hash: 'h2', index_status: 'indexed', pii_state: 'hit' }
+    ]);
+    await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
+      code: 'PII_GATE_BLOCKED',
+      status: 409
+    });
+  });
+
+  test('PII GATE: acknowledgePii waives a reviewed hit and stamps the manifest', async () => {
+    seedRepo({ version: 1 });
+    programQuery([
+      { concept_id: 'ok', title: 'Ok', content_hash: 'h', index_status: 'indexed', pii_state: 'clean' },
+      { concept_id: 'flagged', title: 'F', content_hash: 'h2', index_status: 'indexed', pii_state: 'hit' }
+    ]);
+    programQuery([
+      { concept_id: 'ok', title: 'Ok', content_hash: 'h', index_status: 'indexed', pii_state: 'clean' },
+      { concept_id: 'flagged', title: 'F', content_hash: 'h2', index_status: 'indexed', pii_state: 'hit' }
+    ]);
+    const result = await versionService.mintVersion(REPO, { acknowledgePii: true });
+    expect(result.bundle_version).toBe(2);
+    const manifest = mockDb._stores.okf_versions[REPO + '_2'];
+    expect(manifest.pii_acknowledged).toBe(true);
+  });
+
+  test('PII GATE: a pii_state ERROR hard-blocks even with acknowledgePii (fail-closed)', async () => {
+    seedRepo({ version: 1 });
+    programQuery([
+      { concept_id: 'broken', title: 'B', content_hash: 'h', index_status: 'indexed', pii_state: 'error' }
+    ]);
+    await expect(versionService.mintVersion(REPO, { acknowledgePii: true })).rejects.toMatchObject({
+      code: 'PII_GATE_BLOCKED',
       status: 409
     });
   });

@@ -58,6 +58,31 @@
     />
 
     <DsDialog
+      :visible="publishOpen"
+      :title="translate('okf.shell.publish.title', 'Publish')"
+      size="sm"
+      :actions="publishActions"
+      @close="publishOpen = false"
+      @action="onPublishAction"
+    >
+      <p>{{ publishBodyText }}</p>
+      <p v-if="publishError" class="okf-shell__error">{{ publishError }}</p>
+      <div v-if="piiBlocked" class="okf-shell__pii">
+        <p class="okf-shell__pii-note">
+          {{
+            translate(
+              'okf.shell.pii.note',
+              'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+            )
+          }}
+        </p>
+        <DsButton variant="secondary" small :disabled="actionBusy" @click="onAcknowledgeAndPublish">
+          {{ translate('okf.shell.pii.ack', 'Acknowledge flagged entities & publish') }}
+        </DsButton>
+      </div>
+    </DsDialog>
+
+    <DsDialog
       :visible="deleteOpen"
       :title="translate('okf.shell.delete.title', 'Delete repository')"
       size="sm"
@@ -122,6 +147,9 @@ export default {
   data() {
     return {
       versionsOpen: false,
+      publishOpen: false,
+      publishError: '',
+      piiBlocked: false,
       deleteOpen: false,
       deleteError: '',
       actionBusy: false,
@@ -173,6 +201,22 @@ export default {
     bundleName() {
       return (this.repo.bundle && this.repo.bundle.file_name) || '';
     },
+    publishBodyText() {
+      const next = (this.repo.version || 0) + 1;
+      const file = (this.repo.name || this.repoId) + '-v' + next + '.zip';
+      return this.translate(
+        'okf.shell.publish.body',
+        'Publishing mints v{n} and stores bundle "{file}" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.'
+      )
+        .replace('{n}', String(next))
+        .replace('{file}', file);
+    },
+    publishActions() {
+      return [
+        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
+        { key: 'confirm', label: this.translate('okf.shell.publish.confirm', 'Publish'), variant: 'primary' }
+      ];
+    },
     subTabs() {
       return [
         { value: 'editor', label: this.translate('okf.shell.tab.editor', 'Editor') },
@@ -193,17 +237,49 @@ export default {
     async onLifecycle() {
       const action = this.lifecycleAction;
       if (action === 'publish') {
-        // Publish confirms through the Versions dialog ("Create new version")
-        // so the steward sees the mint + supersede consequence in context.
-        this.versionsOpen = true;
+        this.publishError = '';
+        this.piiBlocked = false;
+        this.publishOpen = true; // direct confirm — the Versions dialog is for the ledger
         return;
       }
       this.actionBusy = true;
       this.actionError = '';
       const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: this.repoId, action });
       this.actionBusy = false;
-      if (!res.ok) this.actionError = res.message || 'Action failed';
+      if (!res.ok) this.actionError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
       else this.$emit('refresh');
+    },
+    async onPublishAction(key) {
+      if (key === 'cancel') {
+        this.publishOpen = false;
+        return;
+      }
+      if (key !== 'confirm') return;
+      this.actionBusy = true;
+      this.publishError = '';
+      this.piiBlocked = false;
+      const res = await this.$store.dispatch('okf/lifecycleTransition', { repoId: this.repoId, action: 'publish' });
+      this.actionBusy = false;
+      if (!res.ok) {
+        this.publishError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+        if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
+        return; // keep the dialog open — the steward decides on the ack
+      }
+      this.publishOpen = false;
+      this.$emit('refresh');
+    },
+    async onAcknowledgeAndPublish() {
+      // The explicit, audited steward decision: reviewed flagged entities.
+      this.actionBusy = true;
+      try {
+        await okfRepoOps.acknowledgePii(this.repoId, true);
+      } catch (err) {
+        this.actionBusy = false;
+        this.publishError = err.message || 'Acknowledgement failed';
+        return;
+      }
+      this.actionBusy = false;
+      await this.onPublishAction('confirm');
     },
     async onExport() {
       this.exportBusy = true;
@@ -273,6 +349,14 @@ export default {
 }
 .okf-shell__delete {
   --ds-btn-ghost-color: var(--danger);
+}
+.okf-shell__pii {
+  margin-top: var(--space-sm);
+}
+.okf-shell__pii-note {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--muted);
 }
 .okf-shell__error {
   margin: var(--space-xs) 0 0;

@@ -15,6 +15,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const piiClient = require('./pii/pii-client');
+const auditService = require('./audit-service');
 
 const META = 'okf_concepts_meta';
 const REPOS = 'okf_repositories';
@@ -162,6 +163,55 @@ async function scanConcept(repo_id, concept_id, frontmatter = {}, body = '') {
     }
     span.setAttribute('okf.pii_state', result.pii_state);
     return result;
+  });
+}
+
+// ─── Steward PII acknowledgement (David, 2026-08-30) ────────────────────────
+// The publish PII gate needs a sanctioned release valve for PUBLIC entities
+// (government contact details are PII-shaped: phone numbers, emails, names).
+// The steward EXPLICITLY acknowledges the flagged entities; the decision is
+// stamped on the registry (pii_ack) and audited. A scanner 'error' still
+// hard-blocks — only reviewed 'hit's are waivable (version-service enforces).
+
+async function acknowledgePii(repo_id, acknowledge, actor) {
+  return withSpan('okf.pii.acknowledge', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const db = await getDb();
+    let repo = null;
+    try {
+      repo = await db.collection(REPOS).document(repo_id);
+    } catch (err) {
+      if (!isArangoNotFound(err)) throw err;
+    }
+    if (!repo || repo.deleted_at) {
+      throw Object.assign(new Error('Repository ' + repo_id + ' not found'), { code: 'REPO_NOT_FOUND', status: 404 });
+    }
+    // Count the currently-flagged concepts so the ack carries what was reviewed.
+    const flagged = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.pii_state == "hit" COLLECT WITH COUNT INTO c RETURN c',
+        { r: repo_id }
+      )
+    ).all();
+    const ts = new Date().toISOString();
+    const patch = acknowledge
+      ? { pii_ack: { by: (actor && actor.sub) || 'system', at: ts, flagged_concepts: flagged[0] || 0 } }
+      : { pii_ack: null };
+    await db.collection(REPOS).update(repo_id, patch);
+    await auditService
+      .writeAudit({
+        actor: (actor && actor.sub) || 'system',
+        action: acknowledge ? 'repo.pii_ack' : 'repo.pii_ack_revoke',
+        repo_id,
+        flagged_concepts: flagged[0] || 0
+      })
+      .catch(() => {});
+    logger.info('PII acknowledgement ' + (acknowledge ? 'recorded' : 'revoked'), {
+      repo_id,
+      flagged_concepts: flagged[0] || 0,
+      actor: (actor && actor.sub) || 'system'
+    });
+    return { ok: true, acknowledged: !!acknowledge, flagged_concepts: flagged[0] || 0 };
   });
 }
 
@@ -371,5 +421,6 @@ module.exports = {
   getRepoDocumentReferences,
   discoverRepoFiles,
   fetchFileBytes,
-  flattenFrontmatter
+  flattenFrontmatter,
+  acknowledgePii
 };

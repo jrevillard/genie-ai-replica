@@ -113,14 +113,17 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // moved the per-concept queue to META rows at index_status='parsed'; the
     // bundle-zip files doc (Pending → Ingested) remains the bundle-level signal,
     // so BOTH are checked.
+    // D1 (review 2026-08-17), re-scoped 2026-08-30: the REAL in-flight signal
+    // is the content-only queue (meta rows at 'parsed'). The bundle zip's
+    // 'Pending' status alone is NOT a drain — the state machine advances on
+    // concept callbacks, so a dedup-only ingest (zero enqueues) leaves the zip
+    // Pending forever and previously bricked the mint. A Pending zip with an
+    // EMPTY queue is a stale marker: reconcile it best-effort and proceed.
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (
-      (await drainInFlight(
-        `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`
-      )) ||
-      (await drainInFlight(
+      await drainInFlight(
         `FOR m IN ${META} FILTER m.repo_id == @repo_id AND m.index_status == 'parsed' LIMIT 1 RETURN 1`
-      ))
+      )
     ) {
       recordOp('mint', 'busy');
       throw new VersionError(
@@ -128,6 +131,31 @@ async function mintVersion(repo_id, opts = {}, actor) {
         `repository ${repo_id} has Pending ingests — retry after the worker drains`,
         409
       );
+    }
+    if (
+      await drainInFlight(
+        `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`
+      )
+    ) {
+      try {
+        const { authedAxios } = require('./service-token');
+        const config = require('../config');
+        const resp = await authedAxios.get(
+          `${config.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repo_id)}&is_bundle=true&limit=20`
+        );
+        const body = (resp && resp.data) || {};
+        const items = Array.isArray(body) ? body : body.data || body.items || [];
+        for (const f of items.filter((x) => x && x.file_id && x.dataprep && x.dataprep.status === 'Pending')) {
+          await authedAxios.patch(
+            `${config.documentRepository.url}/api/files/${encodeURIComponent(f.file_id)}/status`,
+            { dataprep: { status: 'Ingested' } },
+            { timeout: 10000 }
+          );
+        }
+        logger.info('Stale Pending bundle zip(s) reconciled to Ingested at mint', { repo_id, count: items.length });
+      } catch (err) {
+        logger.warn('Stale Pending bundle reconcile failed (non-fatal)', { repo_id, error: err.message });
+      }
     }
 
     // PUBLISH GATE — repo-level PII scan completeness (Story 4.8-amend, 2026-08-19).
@@ -172,12 +200,31 @@ async function mintVersion(repo_id, opts = {}, actor) {
           `${nonConformant.length} concept(s) with conformance issues: ${nonConformant.map((c) => c.concept_id).join(', ')}`
         );
       }
-      const piiFlagged = concepts.filter((c) => c.pii_state === 'hit' || c.pii_state === 'error');
-      if (piiFlagged.length > 0) {
-        gateReasons.push(
-          `${piiFlagged.length} concept(s) with PII hit/error: ${piiFlagged.map((c) => c.concept_id).join(', ')}`
+      // PII gate (split from the generic reasons — David, 2026-08-30): a
+      // scanner 'error' hard-blocks; a reviewed 'hit' can be waived by the
+      // steward's explicit acknowledgement (public-sector contact data is
+      // PII-SHAPED but publishable — the acknowledgement is audited and
+      // recorded on the manifest). The other gates (indexed, conformance)
+      // remain unconditional.
+      const piiErrors = concepts.filter((c) => c.pii_state === 'error');
+      if (piiErrors.length > 0) {
+        recordOp('mint', 'blocked');
+        throw new VersionError(
+          'PII_GATE_BLOCKED',
+          `${piiErrors.length} concept(s) with PII scan errors (fail-closed): ${piiErrors.map((c) => c.concept_id).join(', ')}`,
+          409
         );
       }
+      const piiHits = concepts.filter((c) => c.pii_state === 'hit');
+      if (piiHits.length > 0 && !opts.acknowledgePii) {
+        recordOp('mint', 'blocked');
+        throw new VersionError(
+          'PII_GATE_BLOCKED',
+          `${piiHits.length} concept(s) contain flagged entities (review required): ${piiHits.map((c) => c.concept_id).join(', ')}`,
+          409
+        );
+      }
+      const piiAcknowledged = piiHits.length > 0 && opts.acknowledgePii === true;
       if (gateReasons.length > 0) {
         recordOp('mint', 'blocked');
         throw new VersionError('PUBLISH_GATE_BLOCKED', gateReasons.join('; '), 409);
@@ -191,6 +238,7 @@ async function mintVersion(repo_id, opts = {}, actor) {
         trigger,
         source_ref: typeof opts.source_ref === 'string' ? opts.source_ref.slice(0, 500) : null,
         curator: opts.curator || (actor && actor.sub) || null,
+        pii_acknowledged: piiAcknowledged || undefined,
         minted_at: nowIso(),
         concept_count: concepts.length,
         concepts

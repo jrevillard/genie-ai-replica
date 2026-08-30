@@ -41,6 +41,23 @@ ARANGO_PASSWORD=
 # Used by: redis-cache, translation service
 TRANSLATION_CACHE_PASSWORD=
 
+# ── Push notifications (FCM fan-out via BullMQ) ──────────────────────────────
+# REQUIRED for broadcasts: /api/notifications/broadcast fails closed (503)
+# when unset. Generate with: openssl rand -hex 32
+# Must match NOTIFICATION_BROADCAST_SECRET in warning_system_engine's env.
+NOTIFICATION_BROADCAST_SECRET=
+# Firebase Admin credentials: path to the service-account JSON as mounted
+# inside the backend container (see docker-compose backend volumes).
+GOOGLE_APPLICATION_CREDENTIALS=
+# real | mock — mock simulates FCM for load testing without quota
+FCM_TRANSPORT=real
+# Redis for the notification queues — falls back to TRANSLATION_CACHE_* when
+# unset; logical db 1 keeps BullMQ keys away from the translation cache.
+NOTIFICATION_REDIS_DB=1
+NOTIFICATION_SEND_CONCURRENCY=4
+NOTIFICATION_CHUNKS_PER_SEC=8
+NOTIFICATION_WORKER_ENABLED=true
+
 # PostgreSQL shared instance (API gateway + Keycloak)
 # The shared PostgreSQL (postgres service) uses a superuser + dedicated users:
 # - Superuser 'genieai' (POSTGRES_USER) with POSTGRES_PASSWORD — created by PostgreSQL init

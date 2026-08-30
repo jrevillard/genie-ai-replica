@@ -500,7 +500,10 @@ const ROUTE_CONFIGS = [
     keycloakAuth: true
   },
   { file: 'weather-routes', paths: ['/api/weather'], serviceName: 'weatherService', keycloakAuth: true },
-  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true }
+  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true },
+  // Mixed auth handled inside the router (Keycloak for register/unregister,
+  // shared secret for broadcast/status/health) — so no mount-level keycloakAuth.
+  { file: 'notification-routes', paths: ['/api/notifications'], serviceName: 'notificationService' }
 ];
 
 /**
@@ -1036,7 +1039,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, logsService;
-  let databaseOperationsService, weatherService, securityScanService, translationService;
+  let databaseOperationsService, weatherService, securityScanService, translationService, notificationService;
 
   const importService = async (name, servicePath) => {
     logger.info(`Importing service: ${name}`);
@@ -1070,6 +1073,7 @@ async function initializeServices() {
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
+    notificationService = await importService('NotificationService', './services/notification-service');
 
     // Initialize user provisioning schema (indexes, legacy cleanup)
     const userProvisioningService = require('./services/user-provisioning-service');
@@ -1087,7 +1091,8 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
-      translationService: { instance: translationService, name: 'TranslationService' }
+      translationService: { instance: translationService, name: 'TranslationService' },
+      notificationService: { instance: notificationService, name: 'NotificationService' }
     };
 
     // Validate services
@@ -1134,7 +1139,9 @@ async function initializeServices() {
       { service: services.logsService, name: 'LogsService' },
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
-      { service: services.translationService, name: 'TranslationService' }
+      { service: services.translationService, name: 'TranslationService' },
+      // Marked optional: push notifications degrade gracefully without Redis/Firebase
+      { service: services.notificationService, name: 'NotificationService', optional: true }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {
@@ -1249,6 +1256,25 @@ async function startApp() {
   const app = createApp({ services });
   const PORT = process.env.PORT || 3000;
 
+  // Start BullMQ notification workers (in-process by default). Set
+  // NOTIFICATION_WORKER_ENABLED=false to run them in a separate container
+  // via `node workers/notification-worker.js` from the same image.
+  if (process.env.NOTIFICATION_WORKER_ENABLED !== 'false' && services.notificationService?.initialized) {
+    try {
+      const { startWorkers } = require('./workers/notification-worker');
+      await startWorkers({
+        tokenRepository: services.notificationService.tokenRepository,
+        broadcastRepository: services.notificationService.broadcastRepository,
+        fcmSender: services.notificationService.fcmSender,
+      });
+      logger.info('Notification workers started in-process');
+    } catch (workerError) {
+      logger.error('Failed to start notification workers — broadcasts will queue but not send', {
+        error: workerError.message,
+      });
+    }
+  }
+
   try {
     const server = app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
@@ -1259,6 +1285,31 @@ async function startApp() {
       server.setTimeout(3600000);
     }
     logger.info(`Server timeout set to 3600 seconds`);
+
+    // Graceful shutdown: drain BullMQ workers, then close the HTTP server.
+    let shuttingDown = false;
+    const gracefulShutdown = async (signal) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      logger.info(`Received ${signal} — shutting down gracefully`);
+      const forceExit = setTimeout(() => {
+        logger.error('Graceful shutdown timed out — forcing exit');
+        process.exit(1);
+      }, 25000);
+      forceExit.unref();
+      try {
+        const { stopWorkers } = require('./workers/notification-worker');
+        await stopWorkers();
+      } catch (error) {
+        logger.warn('Error stopping notification workers during shutdown', { error: error.message });
+      }
+      server.close(() => {
+        logger.info('HTTP server closed');
+        process.exit(0);
+      });
+    };
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   } catch (error) {
     logger.error('Failed to start server:', {
       error: error.message,

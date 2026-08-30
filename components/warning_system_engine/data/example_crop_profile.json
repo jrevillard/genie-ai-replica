@@ -1,0 +1,851 @@
+{
+  "potato_dhaka": {
+    "crop": "potato",
+    "region": "dhaka",
+    "crop_display_name": "Potato",
+    "season_span": {
+      "weeks": [
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        1,
+        2,
+        3,
+        4
+      ],
+      "months": [
+        "October",
+        "November",
+        "December",
+        "January"
+      ],
+      "duration_weeks": 15
+    },
+    "growth_stages": [
+      {
+        "stage": "Sprouting",
+        "weeks": [
+          42
+        ],
+        "months": [
+          "October"
+        ],
+        "week_count": 1,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 23.8,
+            "min": 23.8,
+            "max": 23.8,
+            "sum": 23.8
+          },
+          "temp_max_c": {
+            "mean": 32.0,
+            "min": 32.0,
+            "max": 32.0,
+            "sum": 32.0
+          },
+          "temp_mean_c": {
+            "mean": 27.9,
+            "min": 27.9,
+            "max": 27.9,
+            "sum": 27.9
+          },
+          "rainfall_mm": {
+            "mean": 40.5,
+            "min": 40.5,
+            "max": 40.5,
+            "sum": 40.5
+          },
+          "rh_max_pct": {
+            "mean": 95.0,
+            "min": 95.0,
+            "max": 95.0,
+            "sum": 95.0
+          },
+          "rh_min_pct": {
+            "mean": 60.2,
+            "min": 60.2,
+            "max": 60.2,
+            "sum": 60.2
+          }
+        }
+      },
+      {
+        "stage": "Seedling",
+        "weeks": [
+          43,
+          44
+        ],
+        "months": [
+          "October"
+        ],
+        "week_count": 2,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 21.9,
+            "min": 21.5,
+            "max": 22.3,
+            "sum": 43.8,
+            "stdev": 0.57
+          },
+          "temp_max_c": {
+            "mean": 31.2,
+            "min": 30.9,
+            "max": 31.5,
+            "sum": 62.4,
+            "stdev": 0.42
+          },
+          "temp_mean_c": {
+            "mean": 26.55,
+            "min": 26.2,
+            "max": 26.9,
+            "sum": 53.1,
+            "stdev": 0.49
+          },
+          "rainfall_mm": {
+            "mean": 19.25,
+            "min": 12.5,
+            "max": 26.0,
+            "sum": 38.5,
+            "stdev": 9.55
+          },
+          "rh_max_pct": {
+            "mean": 94.65,
+            "min": 94.5,
+            "max": 94.8,
+            "sum": 189.3,
+            "stdev": 0.21
+          },
+          "rh_min_pct": {
+            "mean": 55.05,
+            "min": 54.6,
+            "max": 55.5,
+            "sum": 110.1,
+            "stdev": 0.64
+          }
+        }
+      },
+      {
+        "stage": "Vegetative Growth",
+        "weeks": [
+          45,
+          46,
+          47
+        ],
+        "months": [
+          "November"
+        ],
+        "week_count": 3,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 18.97,
+            "min": 17.7,
+            "max": 20.5,
+            "sum": 56.9,
+            "stdev": 1.42
+          },
+          "temp_max_c": {
+            "mean": 29.8,
+            "min": 29.0,
+            "max": 30.6,
+            "sum": 89.4,
+            "stdev": 0.8
+          },
+          "temp_mean_c": {
+            "mean": 24.38,
+            "min": 23.35,
+            "max": 25.55,
+            "sum": 73.15,
+            "stdev": 1.11
+          },
+          "rainfall_mm": {
+            "mean": 5.83,
+            "min": 1.5,
+            "max": 10.0,
+            "sum": 17.5,
+            "stdev": 4.25
+          },
+          "rh_max_pct": {
+            "mean": 94.77,
+            "min": 94.6,
+            "max": 95.0,
+            "sum": 284.3,
+            "stdev": 0.21
+          },
+          "rh_min_pct": {
+            "mean": 49.43,
+            "min": 47.5,
+            "max": 51.5,
+            "sum": 148.3,
+            "stdev": 2.0
+          }
+        }
+      },
+      {
+        "stage": "Tuber Set / Initiation",
+        "weeks": [
+          48,
+          49,
+          50
+        ],
+        "months": [
+          "November",
+          "December"
+        ],
+        "week_count": 3,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 15.43,
+            "min": 14.7,
+            "max": 16.1,
+            "sum": 46.3,
+            "stdev": 0.7
+          },
+          "temp_max_c": {
+            "mean": 27.37,
+            "min": 26.2,
+            "max": 28.3,
+            "sum": 82.1,
+            "stdev": 1.07
+          },
+          "temp_mean_c": {
+            "mean": 21.4,
+            "min": 20.45,
+            "max": 22.2,
+            "sum": 64.2,
+            "stdev": 0.88
+          },
+          "rainfall_mm": {
+            "mean": 3.5,
+            "min": 1.5,
+            "max": 4.5,
+            "sum": 10.5,
+            "stdev": 1.73
+          },
+          "rh_max_pct": {
+            "mean": 94.8,
+            "min": 94.3,
+            "max": 95.3,
+            "sum": 284.4,
+            "stdev": 0.5
+          },
+          "rh_min_pct": {
+            "mean": 47.77,
+            "min": 46.3,
+            "max": 49.4,
+            "sum": 143.3,
+            "stdev": 1.56
+          }
+        }
+      },
+      {
+        "stage": "Tuberbulking/ Development",
+        "weeks": [
+          51,
+          52,
+          1
+        ],
+        "months": [
+          "December",
+          "January"
+        ],
+        "week_count": 3,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 12.93,
+            "min": 12.4,
+            "max": 13.5,
+            "sum": 38.8,
+            "stdev": 0.55
+          },
+          "temp_max_c": {
+            "mean": 24.77,
+            "min": 24.0,
+            "max": 25.5,
+            "sum": 74.3,
+            "stdev": 0.75
+          },
+          "temp_mean_c": {
+            "mean": 18.85,
+            "min": 18.2,
+            "max": 19.5,
+            "sum": 56.55,
+            "stdev": 0.65
+          },
+          "rainfall_mm": {
+            "mean": 1.83,
+            "min": 1.0,
+            "max": 3.5,
+            "sum": 5.5,
+            "stdev": 1.44
+          },
+          "rh_max_pct": {
+            "mean": 94.9,
+            "min": 94.6,
+            "max": 95.1,
+            "sum": 284.7,
+            "stdev": 0.26
+          },
+          "rh_min_pct": {
+            "mean": 49.73,
+            "min": 49.1,
+            "max": 50.3,
+            "sum": 149.2,
+            "stdev": 0.6
+          }
+        }
+      },
+      {
+        "stage": "Maturity",
+        "weeks": [
+          2,
+          3
+        ],
+        "months": [
+          "January"
+        ],
+        "week_count": 2,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 12.0,
+            "min": 12.0,
+            "max": 12.0,
+            "sum": 24.0,
+            "stdev": 0.0
+          },
+          "temp_max_c": {
+            "mean": 24.2,
+            "min": 23.9,
+            "max": 24.5,
+            "sum": 48.4,
+            "stdev": 0.42
+          },
+          "temp_mean_c": {
+            "mean": 18.1,
+            "min": 17.95,
+            "max": 18.25,
+            "sum": 36.2,
+            "stdev": 0.21
+          },
+          "rainfall_mm": {
+            "mean": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "sum": 0.0,
+            "stdev": 0.0
+          },
+          "rh_max_pct": {
+            "mean": 94.05,
+            "min": 93.8,
+            "max": 94.3,
+            "sum": 188.1,
+            "stdev": 0.35
+          },
+          "rh_min_pct": {
+            "mean": 47.5,
+            "min": 46.2,
+            "max": 48.8,
+            "sum": 95.0,
+            "stdev": 1.84
+          }
+        }
+      },
+      {
+        "stage": "Harvesting",
+        "weeks": [
+          4
+        ],
+        "months": [
+          "January"
+        ],
+        "week_count": 1,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 12.1,
+            "min": 12.1,
+            "max": 12.1,
+            "sum": 12.1
+          },
+          "temp_max_c": {
+            "mean": 25.0,
+            "min": 25.0,
+            "max": 25.0,
+            "sum": 25.0
+          },
+          "temp_mean_c": {
+            "mean": 18.55,
+            "min": 18.55,
+            "max": 18.55,
+            "sum": 18.55
+          },
+          "rainfall_mm": {
+            "mean": 0.5,
+            "min": 0.5,
+            "max": 0.5,
+            "sum": 0.5
+          },
+          "rh_max_pct": {
+            "mean": 93.4,
+            "min": 93.4,
+            "max": 93.4,
+            "sum": 93.4
+          },
+          "rh_min_pct": {
+            "mean": 43.3,
+            "min": 43.3,
+            "max": 43.3,
+            "sum": 43.3
+          }
+        }
+      }
+    ],
+    "weekly_calendar": [
+      {
+        "week": 42,
+        "month": "October",
+        "stage": "Sprouting",
+        "chunk_id": "climate_potato_dhaka_w42",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 42 (October) | Stage: Spouting. Climate: Rainfall 40.5mm, Temp 23.8-32.0°C, RH 60.2-95.0%.",
+        "temp_min_c": 23.8,
+        "temp_max_c": 32.0,
+        "rainfall_mm": 40.5,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 60.2,
+        "temp_mean_c": 27.9
+      },
+      {
+        "week": 43,
+        "month": "October",
+        "stage": "Seedling",
+        "chunk_id": "climate_potato_dhaka_w43",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 43 (October) | Stage: Seedling. Climate: Rainfall 26.0mm, Temp 22.3-31.5°C, RH 55.5-94.8%.",
+        "temp_min_c": 22.3,
+        "temp_max_c": 31.5,
+        "rainfall_mm": 26.0,
+        "rh_max_pct": 94.8,
+        "rh_min_pct": 55.5,
+        "temp_mean_c": 26.9
+      },
+      {
+        "week": 44,
+        "month": "October",
+        "stage": "Seedling",
+        "chunk_id": "climate_potato_dhaka_w44",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 44 (October) | Stage: Seedling. Climate: Rainfall 12.5mm, Temp 21.5-30.9°C, RH 54.6-94.5%.",
+        "temp_min_c": 21.5,
+        "temp_max_c": 30.9,
+        "rainfall_mm": 12.5,
+        "rh_max_pct": 94.5,
+        "rh_min_pct": 54.6,
+        "temp_mean_c": 26.2
+      },
+      {
+        "week": 45,
+        "month": "November",
+        "stage": "Vegetative Growth",
+        "chunk_id": "climate_potato_dhaka_w45",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 45 (November) | Stage: vegetative growth. Climate: Rainfall 10.0mm, Temp 20.5-30.6°C, RH 51.5-95.0%.",
+        "temp_min_c": 20.5,
+        "temp_max_c": 30.6,
+        "rainfall_mm": 10.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 51.5,
+        "temp_mean_c": 25.55
+      },
+      {
+        "week": 46,
+        "month": "November",
+        "stage": "Vegetative Growth",
+        "chunk_id": "climate_potato_dhaka_w46",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 46 (November) | Stage: vegetative growth. Climate: Rainfall 6.0mm, Temp 18.7-29.8°C, RH 49.3-94.7%.",
+        "temp_min_c": 18.7,
+        "temp_max_c": 29.8,
+        "rainfall_mm": 6.0,
+        "rh_max_pct": 94.7,
+        "rh_min_pct": 49.3,
+        "temp_mean_c": 24.25
+      },
+      {
+        "week": 47,
+        "month": "November",
+        "stage": "Vegetative Growth",
+        "chunk_id": "climate_potato_dhaka_w47",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 47 (November) | Stage: vegetative growth. Climate: Rainfall 1.5mm, Temp 17.7-29.0°C, RH 47.5-94.6%.",
+        "temp_min_c": 17.7,
+        "temp_max_c": 29.0,
+        "rainfall_mm": 1.5,
+        "rh_max_pct": 94.6,
+        "rh_min_pct": 47.5,
+        "temp_mean_c": 23.35
+      },
+      {
+        "week": 48,
+        "month": "November",
+        "stage": "Tuber Set / Initiation",
+        "chunk_id": "climate_potato_dhaka_w48",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 48 (November) | Stage: Tuber set/ initiation. Climate: Rainfall 4.5mm, Temp 16.1-28.3°C, RH 46.3-94.3%.",
+        "temp_min_c": 16.1,
+        "temp_max_c": 28.3,
+        "rainfall_mm": 4.5,
+        "rh_max_pct": 94.3,
+        "rh_min_pct": 46.3,
+        "temp_mean_c": 22.2
+      },
+      {
+        "week": 49,
+        "month": "December",
+        "stage": "Tuber Set / Initiation",
+        "chunk_id": "climate_potato_dhaka_w49",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 49 (December) | Stage: Tuber set/ initiation. Climate: Rainfall 1.5mm, Temp 15.5-27.6°C, RH 47.6-94.8%.",
+        "temp_min_c": 15.5,
+        "temp_max_c": 27.6,
+        "rainfall_mm": 1.5,
+        "rh_max_pct": 94.8,
+        "rh_min_pct": 47.6,
+        "temp_mean_c": 21.55
+      },
+      {
+        "week": 50,
+        "month": "December",
+        "stage": "Tuber Set / Initiation",
+        "chunk_id": "climate_potato_dhaka_w50",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 50 (December) | Stage: Tuber set/ initiation. Climate: Rainfall 4.5mm, Temp 14.7-26.2°C, RH 49.4-95.3%.",
+        "temp_min_c": 14.7,
+        "temp_max_c": 26.2,
+        "rainfall_mm": 4.5,
+        "rh_max_pct": 95.3,
+        "rh_min_pct": 49.4,
+        "temp_mean_c": 20.45
+      },
+      {
+        "week": 51,
+        "month": "December",
+        "stage": "Tuberbulking/ Development",
+        "chunk_id": "climate_potato_dhaka_w51",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 51 (December) | Stage: Tuber bulking/ development. Climate: Rainfall 1.0mm, Temp 13.5-25.5°C, RH 49.8-95.1%.",
+        "temp_min_c": 13.5,
+        "temp_max_c": 25.5,
+        "rainfall_mm": 1.0,
+        "rh_max_pct": 95.1,
+        "rh_min_pct": 49.8,
+        "temp_mean_c": 19.5
+      },
+      {
+        "week": 52,
+        "month": "December",
+        "stage": "Tuberbulking/ Development",
+        "chunk_id": "climate_potato_dhaka_w52",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 52 (December) | Stage: Tuber bulking/ development. Climate: Rainfall 3.5mm, Temp 12.9-24.8°C, RH 49.1-95.0%.",
+        "temp_min_c": 12.9,
+        "temp_max_c": 24.8,
+        "rainfall_mm": 3.5,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 49.1,
+        "temp_mean_c": 18.85
+      },
+      {
+        "week": 1,
+        "month": "January",
+        "stage": "Tuberbulking/ Development",
+        "chunk_id": "climate_potato_dhaka_w1",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 1 (January) | Stage: Tuber bulking/ development. Climate: Rainfall 1.0mm, Temp 12.4-24.0°C, RH 50.3-94.6%.",
+        "temp_min_c": 12.4,
+        "temp_max_c": 24.0,
+        "rainfall_mm": 1.0,
+        "rh_max_pct": 94.6,
+        "rh_min_pct": 50.3,
+        "temp_mean_c": 18.2
+      },
+      {
+        "week": 2,
+        "month": "January",
+        "stage": "Maturity",
+        "chunk_id": "climate_potato_dhaka_w2",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 2 (January) | Stage: Maturity. Climate: Rainfall N/Amm, Temp 12.0-23.9°C, RH 48.8-94.3%.",
+        "temp_min_c": 12.0,
+        "temp_max_c": 23.9,
+        "rainfall_mm": 0.0,
+        "rh_max_pct": 94.3,
+        "rh_min_pct": 48.8,
+        "temp_mean_c": 17.95
+      },
+      {
+        "week": 3,
+        "month": "January",
+        "stage": "Maturity",
+        "chunk_id": "climate_potato_dhaka_w3",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 3 (January) | Stage: Maturity. Climate: Rainfall N/Amm, Temp 12.0-24.5°C, RH 46.2-93.8%.",
+        "temp_min_c": 12.0,
+        "temp_max_c": 24.5,
+        "rainfall_mm": 0.0,
+        "rh_max_pct": 93.8,
+        "rh_min_pct": 46.2,
+        "temp_mean_c": 18.25
+      },
+      {
+        "week": 4,
+        "month": "January",
+        "stage": "Harvesting",
+        "chunk_id": "climate_potato_dhaka_w4",
+        "chunk_text": "Crop: potato | Region: dhaka | Week 4 (January) | Stage: Harve sting. Climate: Rainfall 0.5mm, Temp 12.1-25.0°C, RH 43.3-93.4%.",
+        "temp_min_c": 12.1,
+        "temp_max_c": 25.0,
+        "rainfall_mm": 0.5,
+        "rh_max_pct": 93.4,
+        "rh_min_pct": 43.3,
+        "temp_mean_c": 18.55
+      }
+    ],
+    "derived_thresholds": {
+      "temp_min_observed_c": {
+        "absolute_min": 12.0,
+        "absolute_max": 23.8,
+        "mean": 16.38
+      },
+      "temp_max_observed_c": {
+        "absolute_min": 23.9,
+        "absolute_max": 32.0,
+        "mean": 27.57
+      },
+      "rainfall_mm": {
+        "weekly_mean": 7.53,
+        "weekly_max": 40.5,
+        "weekly_min": 0.0,
+        "season_total": 113.0
+      },
+      "relative_humidity_pct": {
+        "rh_max_mean": 94.61,
+        "rh_min_mean": 49.96,
+        "rh_max_peak": 95.3,
+        "rh_min_trough": 43.3
+      }
+    },
+    "risk_by_stage": [
+      {
+        "stage": "Sprouting",
+        "has_manual_rules": true,
+        "risk_weeks": [
+          {
+            "week": 42,
+            "month": "October",
+            "alerts": [
+              {
+                "type": "high_temperature",
+                "threshold": 30,
+                "observed": 32.0,
+                "severity": "warning"
+              }
+            ]
+          }
+        ],
+        "risk_week_count": 1
+      },
+      {
+        "stage": "Seedling",
+        "has_manual_rules": true,
+        "risk_weeks": [
+          {
+            "week": 43,
+            "month": "October",
+            "alerts": [
+              {
+                "type": "high_temperature",
+                "threshold": 30,
+                "observed": 31.5,
+                "severity": "warning"
+              }
+            ]
+          },
+          {
+            "week": 44,
+            "month": "October",
+            "alerts": [
+              {
+                "type": "high_temperature",
+                "threshold": 30,
+                "observed": 30.9,
+                "severity": "warning"
+              }
+            ]
+          }
+        ],
+        "risk_week_count": 2
+      },
+      {
+        "stage": "Vegetative Growth",
+        "has_manual_rules": true,
+        "risk_weeks": [
+          {
+            "week": 45,
+            "month": "November",
+            "alerts": [
+              {
+                "type": "high_temperature",
+                "threshold": 30,
+                "observed": 30.6,
+                "severity": "warning"
+              }
+            ]
+          }
+        ],
+        "risk_week_count": 1
+      }
+    ],
+    "weather_warnings": [],
+    "pest_disease_advisories": [],
+    "source_chunks": {
+      "climate_count": 15,
+      "advisory_count": 0,
+      "climate_chunk_ids": [
+        "climate_potato_dhaka_w42",
+        "climate_potato_dhaka_w43",
+        "climate_potato_dhaka_w44",
+        "climate_potato_dhaka_w45",
+        "climate_potato_dhaka_w46",
+        "climate_potato_dhaka_w47",
+        "climate_potato_dhaka_w48",
+        "climate_potato_dhaka_w49",
+        "climate_potato_dhaka_w50",
+        "climate_potato_dhaka_w51",
+        "climate_potato_dhaka_w52",
+        "climate_potato_dhaka_w1",
+        "climate_potato_dhaka_w2",
+        "climate_potato_dhaka_w3",
+        "climate_potato_dhaka_w4"
+      ],
+      "advisory_chunk_ids": []
+    },
+    "crop_rules": {
+      "temperature_min": {
+        "min": 10,
+        "source_section": "Weather Warning"
+      },
+      "temperature_max": {
+        "max": 30,
+        "source_section": "Weather Warning"
+      },
+      "humidity": {
+        "min": 65,
+        "max": 80,
+        "source_section": "Favorable Weather Conditions"
+      },
+      "rainfall_daily": [
+        {
+          "severity": "medium",
+          "min": 25,
+          "source_section": "Weather Warning"
+        },
+        {
+          "severity": "critical",
+          "min": 100,
+          "source_section": "Weather Warning"
+        }
+      ],
+      "wind_speed_kmh": {
+        "max": 30,
+        "source_section": "Weather Warning"
+      }
+    },
+    "disease_risks": [
+      {
+        "name": "late_blight",
+        "when": {
+          "temperature_mean": {
+            "min": 16,
+            "max": 20
+          },
+          "humidity": {
+            "min": 90
+          },
+          "precipitation": {
+            "min": 1
+          }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "El clima frío y húmedo favorece el tizón tardío."
+      },
+      {
+        "name": "bacterial_wilt",
+        "when": {
+          "temperature_min": {
+            "min": 28,
+            "max": 30
+          },
+          "humidity": {
+            "min": 80,
+            "max": 90
+          }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "Alta temperatura nocturna y alta humedad favorecen la marchitez bacteriana."
+      },
+      {
+        "name": "fusarium_wilt",
+        "when": {
+          "temperature_min": {
+            "min": 28,
+            "max": 30
+          },
+          "humidity": {
+            "min": 80,
+            "max": 90
+          }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "Alta temperatura nocturna y alta humedad favorecen la marchitez por fusarium."
+      },
+      {
+        "name": "potato_leaf_roll_virus_vector",
+        "when": {
+          "temperature_mean": {
+            "min": 18,
+            "max": 20
+          },
+          "humidity": {
+            "min": 70
+          }
+        },
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "Estas condiciones favorecen el vector del virus del enrollamiento de la hoja de la papa."
+      },
+      {
+        "name": "termite",
+        "when": {
+          "temperature_max": {
+            "min": 30
+          }
+        },
+        "requires_additional_variables": [
+          "fog",
+          "cloud_cover"
+        ],
+        "evaluable_with_current_feeds": false,
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "La niebla, nubosidad y temperatura anormalmente alta favorecen el riesgo de termitas."
+      },
+      {
+        "name": "potato_wire_worm",
+        "when": {
+          "soil_temperature": {
+            "min": 10,
+            "max": 27
+          }
+        },
+        "requires_additional_variables": [
+          "soil_temperature"
+        ],
+        "evaluable_with_current_feeds": false,
+        "source_section": "Favorable Weather Condition for Pests & Diseases",
+        "message": "La temperatura del suelo en este rango favorece el riesgo de gusano de alambre."
+      }
+    ]
+  }
+}

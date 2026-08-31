@@ -109,7 +109,10 @@ function buildMetaDoc(repo_id, parsed, opts = {}) {
     repo_id,
     concept_id: p.concept_id,
     path,
-    graph_name: `OKF_${repo_id}`,
+    // Born-right (David, 2026-08-31): the enqueueing ingest passes the repo's
+    // CURRENT versioned graph name so the worker drains into the SAME graph
+    // dataprep writes. The OKF_{repo_id} default is the legacy anchor only.
+    graph_name: opts.graph_name || `OKF_${repo_id}`,
     bundle_version: p.bundle_version != null ? p.bundle_version : (opts.bundle_version ?? null),
     title,
     type: fm.type || '',

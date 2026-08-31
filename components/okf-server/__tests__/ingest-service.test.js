@@ -540,7 +540,9 @@ describe('ingestService bundle-zip intake (Story 2.9.5 contract, pulled forward)
     const bundleCall = postCalls[0];
     expect(bundleCall[1]).toMatchObject({
       is_bundle: true,
-      graph_name: `OKF_${REPO}`,
+      // Born-right naming: the default mock repo (no name → slug 'repo',
+      // version 3, register) builds content for v4.
+      graph_name: 'OKF_repo_v4',
       bundle: b64,
       originalFileName: 'repo-bundle.zip'
     });

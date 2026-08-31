@@ -26,6 +26,7 @@ const {
   promoteGraph,
   demoteGraph,
   versionedGraphName,
+  workingGraphName,
   GraphLifecycleError
 } = require('../services/graph-lifecycle-service');
 
@@ -60,55 +61,109 @@ describe('graph-lifecycle-service (versioned serving graph)', () => {
     expect(versionedGraphName(repoDoc())).toBe('OKF_kenya-government-services_v2');
   });
 
-  test('promoteGraph renames the 4 collections + creates the versioned graph definition', async () => {
-    seedGraph(WORKING);
-    const out = await promoteGraph(repoDoc());
+  test('workingGraphName: the graph is BORN named for the version being built', () => {
+    // Fresh repo (never minted): the first concept ingest creates v1 — never
+    // OKF_{repo_id} (David, 2026-08-31: created with the correct convention).
+    expect(workingGraphName({ name: 'Kenya Government Services', version: 0 })).toBe(
+      'OKF_kenya-government-services_v1'
+    );
+    // Editing states build the NEXT version (the one the next publish mints).
+    for (const state of ['draft', 'register', 'review', 'approve', 'retracted']) {
+      expect(workingGraphName({ name: 'Kenya Gov', version: 2, lifecycle_state: state })).toBe('OKF_kenya-gov_v3');
+    }
+    // Published (pending ingest) and serving content IS the current version.
+    expect(workingGraphName({ name: 'Kenya Gov', version: 2, lifecycle_state: 'publish' })).toBe('OKF_kenya-gov_v2');
+    expect(workingGraphName({ name: 'Kenya Gov', version: 2, lifecycle_state: 'publish', ingested_at: 'x' })).toBe(
+      'OKF_kenya-gov_v2'
+    );
+  });
+
+  test('promoteGraph renames the open DRAFT graph (v{n+1}) to the serving name (v{n})', async () => {
+    // Retracted repo re-ingesting without edits: content is v2, the draft
+    // graph was renamed to v3 when the retract opened it.
+    const DRAFT = 'OKF_kenya-government-services_v3';
+    seedGraph(DRAFT);
+    const out = await promoteGraph(repoDoc({ lifecycle_state: 'retracted' }));
     expect(out).toBe('OKF_kenya-government-services_v2');
     for (const s of SUFFIXES) {
       expect(mockDb._stores['OKF_kenya-government-services_v2' + s]).toBeDefined();
-      expect(mockDb._stores[WORKING + s]).toBeUndefined();
+      expect(mockDb._stores[DRAFT + s]).toBeUndefined();
     }
+  });
+
+  test('promoteGraph NO-OPs when the working graph is already the serving name (born right)', async () => {
+    const SERVING = 'OKF_kenya-government-services_v2';
+    seedGraph(SERVING); // the published/ingest-pending graph, born right
+    const doc = repoDoc({ lifecycle_state: 'publish' });
+    const out = await promoteGraph(doc);
+    expect(out).toBe(SERVING);
+    expect(mockDb._stores[SERVING + '_SOURCE'].x1).toBeDefined(); // untouched
   });
 
   test('promoteGraph skips absent sources but still creates the versioned definition', async () => {
     // No seeding: sources never materialized with data — the mock treats
     // empty/absent as not-exists. Rename is skipped, definition still created.
-    const out = await promoteGraph(repoDoc());
+    const out = await promoteGraph(repoDoc({ lifecycle_state: 'retracted' }));
     expect(out).toBe('OKF_kenya-government-services_v2');
     expect(mockDb.createGraph).toHaveBeenCalled();
   });
 
   test('GRAPH_NAME_CONFLICT: a foreign graph owns the target name → 409, stores untouched', async () => {
-    seedGraph(WORKING);
+    const DRAFT = 'OKF_kenya-government-services_v3';
+    seedGraph(DRAFT);
     // A DIFFERENT repo that happens to carry the same name+version → same
     // serving name — the collision the guard exists for.
     seedGraph('OKF_kenya-government-services_v2');
-    const doc = repoDoc({ ingested_graph_name: null });
+    const doc = repoDoc({ lifecycle_state: 'retracted', ingested_graph_name: null });
     const err = await promoteGraph(doc).catch((e) => e);
     expect(err).toBeInstanceOf(GraphLifecycleError);
     expect(err.code).toBe('GRAPH_NAME_CONFLICT');
     expect(mockDb._stores['OKF_kenya-government-services_v2_SOURCE'].x1).toBeDefined(); // foreign data untouched
+    expect(mockDb._stores[DRAFT + '_SOURCE']).toBeDefined(); // own data unmoved
   });
 
-  test('own leftover target is drop-safe (crashed prior promote heals on retry)', async () => {
-    const TARGET = 'OKF_kenya-government-services_v2';
-    seedGraph(WORKING);
-    seedGraph(TARGET);
-    const out = await promoteGraph(repoDoc({ ingested_graph_name: TARGET }));
-    expect(out).toBe(TARGET);
-    // The leftover was cleared and the working data moved in.
-    expect(mockDb._stores[TARGET + '_SOURCE'] && mockDb._stores[TARGET + '_SOURCE'].x1).toBeDefined();
-    expect(mockDb._stores[WORKING + '_SOURCE']).toBeUndefined();
+  test('promoteGraph issues the canonical endpoint rewrite for both edge collections', async () => {
+    const DRAFT = 'OKF_kenya-government-services_v3';
+    seedGraph(DRAFT);
+    await promoteGraph(repoDoc({ lifecycle_state: 'retracted' }));
+    const rewrites = mockDb.query.mock.calls.filter((c) => String(c[0]).includes('PARSE_IDENTIFIER'));
+    expect(rewrites.length).toBe(2); // _HAS_SOURCE + _LINKS_TO
+    expect(rewrites[0][0]).toContain('CONCAT(@toFrom');
+    // The endpoints are written canonically from the fixed edge shapes —
+    // HAS_SOURCE: ENTITY->SOURCE, LINKS_TO: ENTITY->ENTITY.
+    expect(rewrites[0][1]).toMatchObject({
+      from: DRAFT,
+      legacy: WORKING,
+      toFrom: 'OKF_kenya-government-services_v2_ENTITY',
+      toTo: 'OKF_kenya-government-services_v2_SOURCE'
+    });
+    expect(rewrites[1][1]).toMatchObject({
+      toFrom: 'OKF_kenya-government-services_v2_ENTITY',
+      toTo: 'OKF_kenya-government-services_v2_ENTITY'
+    });
   });
 
-  test('demoteGraph renames the versioned graph back to the working name', async () => {
+  test('demoteGraph renames the serving graph to the OPEN DRAFT (v{n+1})', async () => {
     const TARGET = 'OKF_kenya-government-services_v2';
+    const DRAFT = 'OKF_kenya-government-services_v3';
     seedGraph(TARGET);
     const out = await demoteGraph(repoDoc({ ingested_graph_name: TARGET }));
-    expect(out).toBe(WORKING);
+    expect(out).toBe(DRAFT);
     for (const s of SUFFIXES) {
-      expect(mockDb._stores[WORKING + s]).toBeDefined();
+      expect(mockDb._stores[DRAFT + s]).toBeDefined();
       expect(mockDb._stores[TARGET + s]).toBeUndefined();
     }
+  });
+
+  test('demoteGraph heals a partial prior demote (leftover draft targets are drop-safe)', async () => {
+    const TARGET = 'OKF_kenya-government-services_v2';
+    const DRAFT = 'OKF_kenya-government-services_v3';
+    seedGraph(TARGET);
+    seedGraph(DRAFT); // leftover from a crashed demote — the draft name is repo-private
+    const out = await demoteGraph(repoDoc({ ingested_graph_name: TARGET }));
+    expect(out).toBe(DRAFT);
+    // The leftover draft collection was replaced by the serving data.
+    expect(mockDb._stores[DRAFT + '_SOURCE'].x1).toBeDefined();
+    expect(mockDb._stores[TARGET + '_SOURCE']).toBeUndefined();
   });
 });

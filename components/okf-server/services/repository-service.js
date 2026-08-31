@@ -22,6 +22,7 @@ const auditService = require('./audit-service');
 const conformanceService = require('./conformance-service');
 const piiService = require('./pii-service');
 const { retractRepoGraph } = require('./graph-retract-service');
+const { workingGraphName } = require('./graph-lifecycle-service');
 
 const COLLECTION = 'okf_repositories';
 
@@ -314,7 +315,9 @@ async function cloneRepository(source_id, input, actor) {
         delete copy._id;
         delete copy._rev;
         copy.repo_id = clone.repo_id;
-        copy.graph_name = `OKF_${clone.repo_id}`;
+        // Born-right: the clone's rows drain into the clone's OWN versioned
+        // draft graph (its first publish mints version+1 — the same name).
+        copy.graph_name = workingGraphName(clone);
         copy.updated_at = ts; // created_at preserved (the content's origin lineage)
         await metaCol.save(copy);
         copied += 1;

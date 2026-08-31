@@ -21,6 +21,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const auditService = require('./audit-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
+const { workingGraphName } = require('./graph-lifecycle-service');
 
 const GRAPH_SUFFIXES = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'];
 const NOT_FOUND = (err) =>
@@ -44,15 +45,34 @@ async function retractRepoGraph(repo_id, actor) {
     span.setAttribute('okf.operation', 'graph_retract');
     const db = await dbService.getConnection('default');
 
-    // Resolve the graph name from the registry — the ONLY trusted source.
+    // Resolve the graph names from the registry — the ONLY trusted source. A
+    // repo's content may span several graph names across its history: the
+    // immutable legacy anchor (OKF_{repo_id}), the born-right working/serving
+    // names, and the recorded ingested_graph_name. All are dropped; the
+    // footgun guard still excludes anything that is not an OKF_ per-repo
+    // graph (the default free-form GRAPH can never be dropped here).
     let repo = null;
     try {
       repo = await db.collection('okf_repositories').document(repo_id);
     } catch (err) {
       if (!NOT_FOUND(err)) throw err;
     }
-    const graph = repo && repo.graph_name;
-    if (!graph || !String(graph).startsWith('OKF_')) {
+    const candidates = new Set();
+    if (repo && repo.graph_name && String(repo.graph_name).startsWith('OKF_')) {
+      candidates.add(repo.graph_name);
+    }
+    if (repo && repo.ingested_graph_name && String(repo.ingested_graph_name).startsWith('OKF_')) {
+      candidates.add(repo.ingested_graph_name);
+    }
+    if (repo) {
+      try {
+        const computed = workingGraphName(repo);
+        if (String(computed).startsWith('OKF_')) candidates.add(computed);
+      } catch {
+        /* best-effort — the anchor + ingested names above still apply */
+      }
+    }
+    if (candidates.size === 0) {
       // No repo, no graph, or not an OKF per-repo graph (footgun guard: the
       // default free-form GRAPH must never be droppable through this path).
       logger.info('Graph retract skipped (no OKF per-repo graph)', { repo_id });
@@ -61,29 +81,31 @@ async function retractRepoGraph(repo_id, actor) {
     }
 
     const dropped = [];
-    // 1. CASCADE DROP: deleting the graph with dropCollections=true removes the
-    //    definition AND all its member tables in one server-side call. (Why the
-    //    definition must go first either way — ArangoDB hard rule, live-verified
-    //    errorNum 1942: "must not drop collection while part of graph"; member
-    //    tables cannot be dropped while a definition references them.)
-    try {
-      await db.route(`_api/gharial/${encodeURIComponent(graph)}?dropCollections=true`).delete();
-      dropped.push(`${graph} (graph definition + member collections, cascade)`);
-    } catch (err) {
-      if (!NOT_FOUND(err)) {
-        logger.warn('Graph retract: graph cascade drop failed', { repo_id, graph, error: err.message });
-      }
-    }
-    // 2. Sweep ORPHANED tables (no definition — e.g. a prior partial retract):
-    //    droppable now that nothing references them. No-op after a clean cascade.
-    for (const suffix of GRAPH_SUFFIXES) {
-      const name = `${graph}${suffix}`;
+    for (const graph of candidates) {
+      // 1. CASCADE DROP: deleting the graph with dropCollections=true removes the
+      //    definition AND all its member tables in one server-side call. (Why the
+      //    definition must go first either way — ArangoDB hard rule, live-verified
+      //    errorNum 1942: "must not drop collection while part of graph"; member
+      //    tables cannot be dropped while a definition references them.)
       try {
-        await db.collection(name).drop();
-        dropped.push(name);
+        await db.route(`_api/gharial/${encodeURIComponent(graph)}?dropCollections=true`).delete();
+        dropped.push(`${graph} (graph definition + member collections, cascade)`);
       } catch (err) {
         if (!NOT_FOUND(err)) {
-          logger.warn('Graph retract: collection drop failed', { repo_id, name, error: err.message });
+          logger.warn('Graph retract: graph cascade drop failed', { repo_id, graph, error: err.message });
+        }
+      }
+      // 2. Sweep ORPHANED tables (no definition — e.g. a prior partial retract):
+      //    droppable now that nothing references them. No-op after a clean cascade.
+      for (const suffix of GRAPH_SUFFIXES) {
+        const name = `${graph}${suffix}`;
+        try {
+          await db.collection(name).drop();
+          dropped.push(name);
+        } catch (err) {
+          if (!NOT_FOUND(err)) {
+            logger.warn('Graph retract: collection drop failed', { repo_id, name, error: err.message });
+          }
         }
       }
     }
@@ -150,7 +172,7 @@ async function retractRepoGraph(repo_id, actor) {
     span.setAttribute('okf.graph.dropped', dropped.length);
     logger.info('OKF repo graph retracted (dropped)', {
       repo_id,
-      graph,
+      graphs: Array.from(candidates),
       dropped: dropped.length,
       metaRemoved,
       filesRemoved
@@ -167,7 +189,7 @@ async function retractRepoGraph(repo_id, actor) {
       });
     return {
       repo_id,
-      graph_name: graph,
+      graph_name: Array.from(candidates),
       retracted: true,
       dropped,
       meta_removed: metaRemoved,

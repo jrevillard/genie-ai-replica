@@ -47,7 +47,8 @@ describe('graph-retract-service.retractRepoGraph (bundle-level drop)', () => {
     seedGraphCollections();
     const result = await retractRepoGraph(REPO);
     expect(result.retracted).toBe(true);
-    expect(result.graph_name).toBe(GRAPH);
+    // Born-right: candidates include the legacy anchor AND the computed name.
+    expect(result.graph_name).toEqual(expect.arrayContaining([GRAPH]));
     expect(result.dropped).toEqual(expect.arrayContaining(SUFFIXES.map((s) => GRAPH + s)));
     expect(result.dropped).toContain(`${GRAPH} (graph definition + member collections, cascade)`);
     for (const s of SUFFIXES) {
@@ -55,22 +56,43 @@ describe('graph-retract-service.retractRepoGraph (bundle-level drop)', () => {
     }
   });
 
-  test('FOOTGUN GUARD: a non-OKF graph_name (the default GRAPH) is NEVER dropped', async () => {
+  test('drops a born-right ingested graph too (ingested_graph_name candidate)', async () => {
+    seedRepo(GRAPH);
+    seedGraphCollections();
+    const SERVING = 'OKF_demo-repo_v2';
+    await mockDb.collection('okf_repositories').update(REPO, { ingested_graph_name: SERVING });
+    for (const s of SUFFIXES) mockDb.collection(SERVING + s).save({ _key: 'x' });
+    const result = await retractRepoGraph(REPO);
+    expect(result.retracted).toBe(true);
+    expect(result.graph_name).toEqual(expect.arrayContaining([GRAPH, SERVING]));
+    for (const s of SUFFIXES) {
+      expect(mockDb._stores[SERVING + s]).toBeUndefined();
+      expect(mockDb._stores[GRAPH + s]).toBeUndefined();
+    }
+  });
+
+  test('FOOTGUN GUARD: the free-form default GRAPH is NEVER dropped', async () => {
     seedRepo('GRAPH'); // a malformed registry entry naming the free-form graph
     seedGraphCollections();
     mockDb.collection('GRAPH_SOURCE').save({ _key: 'chunk' });
     const result = await retractRepoGraph(REPO);
-    expect(result).toMatchObject({ retracted: false, reason: 'no-okf-graph' });
+    // 'GRAPH' is not OKF_-prefixed → never a candidate; the computed born-right
+    // name is (nothing seeded → no-op drops). The default graph survives.
+    expect(result.retracted).toBe(true);
+    expect(result.dropped).not.toContain('GRAPH (graph definition + member collections, cascade)');
     expect(mockDb._stores.GRAPH_SOURCE).toBeDefined(); // untouched
-    expect(mockDb._stores[GRAPH + '_SOURCE']).toBeDefined(); // nothing dropped at all
   });
 
-  test('no repo / no graph_name → clean no-op, never throws', async () => {
+  test('no repo → clean no-op, never throws', async () => {
     const missing = await retractRepoGraph('00000000-0000-4000-8000-000000000000');
     expect(missing).toMatchObject({ retracted: false, reason: 'no-okf-graph' });
+  });
+
+  test('a live repo with no stored graph_name still drops its computed born-right name', async () => {
     await seedRepo(null);
-    const noGraph = await retractRepoGraph(REPO);
-    expect(noGraph).toMatchObject({ retracted: false, reason: 'no-okf-graph' });
+    seedGraphCollections();
+    const result = await retractRepoGraph(REPO);
+    expect(result.retracted).toBe(true); // computed OKF_<slug>_v<N> is a valid candidate
   });
 
   test('never-created collections are tolerated (idempotent re-retract)', async () => {

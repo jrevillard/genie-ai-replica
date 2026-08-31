@@ -26,6 +26,23 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
 const auditService = require('./audit-service');
+const { workingGraphName } = require('./graph-lifecycle-service');
+
+/**
+ * The repo's CURRENT graph name (born-right `OKF_<slug>_v<N>`). Edges land in
+ * the same graph dataprep drains into — derived from the registry, never
+ * invented from repo_id. A missing repo doc falls back to the legacy anchor
+ * (pre-convention repos whose graph predates the versioned naming).
+ */
+async function graphNameForRepo(db, repo_id) {
+  let repo = null;
+  try {
+    repo = await db.collection('okf_repositories').document(repo_id);
+  } catch (err) {
+    if (!(err && (err.code === 404 || err.errorNum === 1204 || err.statusCode === 404))) throw err;
+  }
+  return repo ? workingGraphName(repo) : `OKF_${repo_id}`;
+}
 
 const meter = getMeter();
 const edgesCounter = meter.createCounter('okf_edges_written_total', {
@@ -73,7 +90,7 @@ async function writeRepoAuthorLinks(repo_id) {
   return withSpan('okf.edges.authorLinks', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     const db = await getDb();
-    const graph = `OKF_${repo_id}`;
+    const graph = await graphNameForRepo(db, repo_id);
     const edgeCol = db.collection(`${graph}_LINKS_TO`);
     const entityCol = db.collection(`${graph}_ENTITY`);
     const rows = await (
@@ -172,7 +189,7 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     span.setAttribute('okf.repo_id', repo_id);
     span.setAttribute('okf.concept_id', concept_id);
     const db = await getDb();
-    const graph = `OKF_${repo_id}`;
+    const graph = await graphNameForRepo(db, repo_id);
     const entityCol = db.collection(`${graph}_ENTITY`);
     const edgeCol = db.collection(`${graph}_LINKS_TO`);
     const dropped = [];

@@ -27,6 +27,7 @@ const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { authedAxios } = require('./service-token');
 const config = require('../config');
+const { versionedGraphName } = require('./graph-lifecycle-service');
 
 const META = 'okf_concepts_meta';
 
@@ -135,7 +136,9 @@ async function exportBundle(repo, actor) {
 
     const { buffer, concept_count } = await buildBundleZip(repoId);
     const fileName = bundleFileName(repo, bundleVersion);
-    const graphName = repo.graph_name || `OKF_${repoId}`;
+    // The bundle represents version N — its graph_name metadata records the
+    // SERVING graph the bundle's content becomes at ingest (born-right vN).
+    const graphName = versionedGraphName(repo) || `OKF_${repoId}`;
 
     // Supersede FIRST (the ingest worker's bundle cache must not point at a
     // deleted doc), then store the new zip.

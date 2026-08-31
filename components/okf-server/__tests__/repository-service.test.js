@@ -447,7 +447,7 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
     expect(minted.cloned_from).toEqual({ repo_id: src.repo_id, version: 2 });
   });
 
-  test('copies meta VERBATIM: concept_id (incl. concepts/ prefix), title, bundle_version, content_hash, index_status — graph rewritten to OKF_{clone}', async () => {
+  test('copies meta VERBATIM: concept_id (incl. concepts/ prefix), title, bundle_version, content_hash, index_status — graph rewritten to the clone born-right draft name', async () => {
     const { src, rows } = await seedSource();
     const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
     const copied = Object.values(db._stores.okf_concepts_meta).filter((m) => m.repo_id === clone.repo_id);
@@ -461,7 +461,9 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
       expect(c.bundle_version).toBe(r.bundle_version);
       expect(c.content_hash).toBe(r.content_hash);
       expect(c.index_status).toBe(r.index_status);
-      expect(c.graph_name).toBe(`OKF_${clone.repo_id}`);
+      // Born-right: the clone's rows drain into its OWN versioned draft graph
+      // ('Source KB (clone)', never-minted → the next publish mints v1).
+      expect(c.graph_name).toBe('OKF_source-kb-clone_v1');
       expect(c.pii_state).toBe('clean');
     }
     // created_at preserved; updated_at stamped to the clone time.

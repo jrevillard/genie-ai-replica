@@ -26,6 +26,7 @@ const conformanceService = require('./conformance-service');
 const conceptMetaService = require('./concept-meta-service');
 const piiService = require('./pii-service');
 const repositoryService = require('./repository-service');
+const { workingGraphName } = require('./graph-lifecycle-service');
 const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
 const dbService = require('../shared-lib/db-connection-service');
@@ -233,7 +234,9 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   // [2] Resolve repo — authz/existence handled by the controller's getById
   // pre-gate; this fetch carries the derivation fields (domain/graph/version).
   const repo = await repositoryService.getById(repo_id);
-  const graphName = repo.graph_name || `OKF_${repo_id}`;
+  // BORN-RIGHT naming (David, 2026-08-31): dataprep CREATES the repo's graph
+  // under the versioned draft name on this very write — never OKF_{repo_id}.
+  const graphName = workingGraphName(repo);
   const aclLabels = deriveAclLabels(repo);
   const bundleVersion = repo.version != null ? repo.version : null;
   // Story 2.9.7 (D-V1): the minted version tag rides the labels so it is
@@ -347,7 +350,8 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     try {
       const r = await conceptMetaService.upsertConceptMeta(repo_id, parsed, {
         bundle_version: bundleVersion,
-        ingest_labels: labels
+        ingest_labels: labels,
+        graph_name: graphName // born-right: the row drains into the SAME graph dataprep writes
       });
       summary[r.action === 'created' ? 'created' : 'updated'] += 1;
     } catch (err) {
@@ -657,24 +661,44 @@ async function resplitRepo(repo_id, mode, opts = {}) {
   return { ...summary, mode, file_id: fileId };
 }
 
-/** Delete all concepts for a repo + drop the 4 per-repo graph collections.
- * Idempotent — safe to call when the repo has no concepts yet. */
+/** Delete all concepts for a repo + truncate the per-repo graph collections.
+ * Idempotent — safe to call when the repo has no concepts yet. The content may
+ * live under MORE than one graph name across a repo's history (born-right
+ * draft name, a pre-convention legacy OKF_{repo_id} graph, a retracted
+ * serving name) — the meta rows' graph_name values are the source of truth
+ * and are collected BEFORE the rows are removed. */
 async function clearRepoConceptsAndGraph(repo_id) {
   const db = await dbService.getConnection('default');
   const meta = db.collection('okf_concepts_meta');
+  const rowGraphs = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.graph_name != null COLLECT g = m.graph_name RETURN g',
+      { rid: repo_id }
+    )
+  ).all();
   await db.query(aql`FOR m IN ${meta} FILTER m.repo_id == ${repo_id} REMOVE m IN ${meta}`);
 
   const repo = await repositoryService.getById(repo_id).catch(() => null);
-  const graphName = (repo && repo.graph_name) || `OKF_${repo_id}`;
-  const collections = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'].map((s) => `${graphName}${s}`);
-  for (const collName of collections) {
+  const candidates = new Set(rowGraphs);
+  if (repo) {
     try {
-      const c = db.collection(collName);
-      // Truncate (faster than REMOVE each row; both are fine since the
-      // collection will be re-populated by the worker).
-      await c.truncate();
+      candidates.add(workingGraphName(repo));
     } catch {
-      /* collection may not exist yet on a fresh repo — that's fine */
+      /* name derivation is best-effort here */
+    }
+  }
+  candidates.add(`OKF_${repo_id}`); // the legacy pre-convention anchor
+  for (const graphName of candidates) {
+    const collections = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'].map((s) => `${graphName}${s}`);
+    for (const collName of collections) {
+      try {
+        const c = db.collection(collName);
+        // Truncate (faster than REMOVE each row; both are fine since the
+        // collection will be re-populated by the worker).
+        await c.truncate();
+      } catch {
+        /* collection may not exist yet on a fresh repo — that's fine */
+      }
     }
   }
 }
@@ -777,7 +801,10 @@ async function deleteConcept(repo_id, concept_id, opts = {}) {
   try {
     const db = await dbService.getConnection('default');
     const repo = await repositoryService.getById(repo_id).catch(() => null);
-    const graphName = (repo && repo.graph_name) || `OKF_${repo_id}`;
+    // The meta row's graph_name is where THIS concept's content actually lives
+    // (born-right draft name; a legacy row may still carry OKF_{repo_id}) —
+    // fall back to the computed working name for a row that predates the field.
+    const graphName = (removed.meta && removed.meta.graph_name) || (repo ? workingGraphName(repo) : `OKF_${repo_id}`);
 
     // SOURCE chunks for this concept + the HAS_SOURCE edges touching them,
     // in one pass each (bounded by the concept's own chunk count).

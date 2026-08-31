@@ -23,7 +23,9 @@ Last updated: 2026-08-31
 
 **Standing decisions (already made, don't re-ask):** D1 ✅ done · D2 HOLD MR until BMAD stories done, then merge-commit · D3 defer triggers · D5 defer Flutter · D6 = proper BMAD (story files per story).
 
-**First command in a fresh session:** `/bmad-create-story 4-1` (verify requireRole enforcement — top of Remaining work, nothing blocks it).
+**⚠️ BMAD automation override (this initiative only):** the `_bmad` workflow automation (`complete.yaml` — story branches, PRD-branch MRs, issue creation) assumes the `feat/{prd_key}/prd` worktree convention, which SST deliberately does not use. **A `complete.yaml` halt is expected and correct** — do not "fix" it by creating PRD branches. Instead: write the story file, commit it together with tracker updates **directly on `feat/sst`**, push. GitLab issue creation stays deferred until the #696–#725 re-baseline (see sprint-status TRACKING NOTE).
+
+**Next up:** `/bmad-dev-story 4-1-two-keycloak-roles-and-require-role` (story file ready; top of Remaining work).
 
 ---
 
@@ -178,5 +180,6 @@ files (work went epics → code directly). That's exactly why the tracker drifte
 
 | Date | What happened |
 |------|---------------|
+| 2026-08-31 (4) | Story 4-1 file created (create-story session): verified `requireRole` doesn't exist, `tools-routes.js:19` blankets requireAdmin → both epic ACs fail today; story ready-for-dev. Its complete.yaml halt declared **correct by design** (override documented above). Correction: commit 0b9b64531 contained ONLY the tools/ deletion — the Dockerfile image-wiring fix was never in it (silent git add failure). Actually landed now as a verified follow-up commit. |
 | 2026-08-31 (2) | Decisions recorded: D1 executed (chatqna image wiring fixed — COPY workflows/ + explicit requests/httpx; orphaned tools/ deleted; 48 tests green), D2 hold MR until BMAD stories done then merge-commit, D3 defer remaining triggers, D5 defer Flutter, D6 proper BMAD. D4 explained (AGPL) — awaiting sign-off owner. Real MR size corrected: 50 files +6,844/−96 (earlier 167-file figure was measured against a stale local main). |
 | 2026-08-31 | Audited feat/sst vs tracker; re-baselined sprint-status.yaml (17 review / 5 in-progress / 12 backlog); found orphaned `tools/` dupe (D1); created this plan; MR !279 pipeline confirmed green. |

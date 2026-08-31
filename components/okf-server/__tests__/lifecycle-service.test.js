@@ -298,6 +298,33 @@ describe('ingest / retract — the serving flag', () => {
       status: 409
     });
   });
+
+  test('EVERY transition writes an audit row with user, timestamp and description (David, 2026-08-31)', async () => {
+    const actor = { sub: 'steward-9', name: 'Steward Nine' };
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      name: 'Demo Repo',
+      bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 }
+    });
+    await lifecycleService.transition(REPO, 'ingest', actor);
+    await lifecycleService.transition(REPO, 'retract', actor);
+    // audit-service is a jest mock in this file — assert the PAYLOADS it received.
+    const { writeAudit } = require('../services/audit-service');
+    const calls = writeAudit.mock.calls.map((c) => c[0]);
+    const ingestRow = calls.find((r) => r.action === 'repo.ingest');
+    const retractRow = calls.find((r) => r.action === 'repo.retract');
+    for (const row of [ingestRow, retractRow]) {
+      expect(row).toBeTruthy();
+      expect(row.actor).toBe('steward-9');
+      expect(row.actor_name).toBe('Steward Nine');
+      expect(typeof row.description).toBe('string');
+      expect(row.description.length).toBeGreaterThan(5);
+    }
+    expect(ingestRow.description).toContain('version 1');
+    expect(ingestRow.description).toContain('OKF_demo-repo_v1');
+    expect(retractRow.description).toContain('Retracted version 1');
+  });
 });
 
 describe('delete guard — an ingested repository cannot be deleted', () => {

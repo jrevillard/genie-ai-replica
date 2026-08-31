@@ -94,7 +94,13 @@ async function loadRepo(db, repoId) {
 
 function audit(action, repoId, actor, extra = {}) {
   return auditService
-    .writeAudit({ actor: (actor && actor.sub) || 'system', action, repo_id: repoId, ...extra })
+    .writeAudit({
+      actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
+      action,
+      repo_id: repoId,
+      ...extra
+    })
     .catch(() => {
       /* best-effort */
     });
@@ -128,7 +134,11 @@ async function transition(repoId, action, actor) {
 
     if (action === 'submit' || action === 'approve') {
       await db.collection(REPOS).update(repoId, { lifecycle_state: spec.to, updated_at: nowIso() });
-      await audit(`repo.${action}`, repoId, actor, { from: repo.lifecycle_state, to: spec.to });
+      await audit(`repo.${action}`, repoId, actor, {
+        from: repo.lifecycle_state,
+        to: spec.to,
+        description: action === 'submit' ? 'Submitted for review' : 'Approved (review sign-off)'
+      });
       logger.info('OKF lifecycle transition', { repo_id: repoId, action, to: spec.to });
       return { ok: true, action, lifecycle_state: spec.to };
     }
@@ -182,7 +192,13 @@ async function transition(repoId, action, actor) {
       await audit('repo.publish', repoId, actor, {
         bundle_version: bundle.bundle_version,
         bundle_file_name: bundle.file_name,
-        pii_acknowledged: !!repo.pii_ack || undefined
+        pii_acknowledged: !!repo.pii_ack || undefined,
+        description:
+          'Published version ' +
+          bundle.bundle_version +
+          ' — bundle "' +
+          bundle.file_name +
+          '" stored in the document repository'
       });
       logger.info('OKF repository published', {
         repo_id: repoId,
@@ -219,7 +235,8 @@ async function transition(repoId, action, actor) {
       });
       await audit('repo.ingest', repoId, actor, {
         ingested_version: repo.version || null,
-        graph_name: graphName
+        graph_name: graphName,
+        description: 'Ingested version ' + (repo.version || '?') + ' — graph "' + graphName + '" is now serving'
       });
       logger.info('OKF repository ingested (version serving)', {
         repo_id: repoId,
@@ -252,7 +269,11 @@ async function transition(repoId, action, actor) {
     });
     await audit('repo.retract', repoId, actor, {
       retracted_version: repo.ingested_version || null,
-      graph_name: repo.ingested_graph_name || null
+      graph_name: repo.ingested_graph_name || null,
+      description:
+        'Retracted version ' +
+        (repo.ingested_version || '?') +
+        ' — taken out of service; the repository is editable again'
     });
     logger.info('OKF repository retracted (version out of service)', {
       repo_id: repoId,

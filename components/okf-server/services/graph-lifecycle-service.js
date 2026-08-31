@@ -126,7 +126,13 @@ async function getDb() {
 
 async function audit(action, repoId, actor, extra = {}) {
   return auditService
-    .writeAudit({ actor: (actor && actor.sub) || 'system', action, repo_id: repoId, ...extra })
+    .writeAudit({
+      actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
+      action,
+      repo_id: repoId,
+      ...extra
+    })
     .catch(() => {
       /* best-effort */
     });
@@ -330,7 +336,11 @@ async function promoteGraph(repo, actor) {
       renamed: result.renamed.length,
       skipped: result.skipped.length
     });
-    await audit('repo.graph_promote', repo.repo_id, actor, { from: fromGraph, to: toGraph });
+    await audit('repo.graph_promote', repo.repo_id, actor, {
+      from: fromGraph,
+      to: toGraph,
+      description: 'Serving graph name promoted: ' + fromGraph + ' -> ' + toGraph
+    });
     return toGraph;
   });
 }
@@ -367,7 +377,11 @@ async function demoteGraph(repo, actor) {
       renamed: result.renamed.length,
       skipped: result.skipped.length
     });
-    await audit('repo.graph_demote', repo.repo_id, actor, { from: fromGraph, to: toGraph });
+    await audit('repo.graph_demote', repo.repo_id, actor, {
+      from: fromGraph,
+      to: toGraph,
+      description: 'Graph demoted to the open draft: ' + fromGraph + ' -> ' + toGraph
+    });
     return toGraph;
   });
 }

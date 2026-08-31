@@ -180,9 +180,11 @@ async function retractRepoGraph(repo_id, actor) {
     auditService
       .writeAudit({
         actor: (actor && actor.sub) || 'system',
+        actor_name: (actor && actor.name) || null,
         action: 'repo.graph_retract',
         repo_id,
-        source_ip: (actor && actor.source_ip) || null
+        source_ip: (actor && actor.source_ip) || null,
+        description: 'Repository deleted — per-repo graph collections and definition dropped (repo teardown)'
       })
       .catch(() => {
         /* best-effort */

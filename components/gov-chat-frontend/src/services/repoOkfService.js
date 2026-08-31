@@ -191,6 +191,16 @@ const repoOkfService = {
   async listVersions(repoId) {
     const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/versions`);
     return res && res.data && Array.isArray(res.data.versions) ? res.data.versions : [];
+  },
+
+  /**
+   * Story #978 (David, 2026-08-31) — the repository's action/audit log
+   * (okf_audit_logs, newest first). Shape: { repo_id, logs: [{ts, actor,
+   * actor_name, action, description, details, concept_id?}] }.
+   */
+  async getRepoLogs(repoId) {
+    const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/logs`);
+    return res && res.data && Array.isArray(res.data.logs) ? res.data.logs : [];
   }
 };
 

@@ -223,9 +223,14 @@ async function create(input, actor, opts = {}) {
 
     await auditService.writeAudit({
       actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
       action: opts.audit_action || 'repo.create', // Story 4.8: the clone audits 'repo.clone' (additive)
       repo_id,
-      source_ip: (actor && actor.source_ip) || null
+      source_ip: (actor && actor.source_ip) || null,
+      description:
+        opts.audit_action === 'repo.clone'
+          ? 'Cloned repository as "' + input.name + '" (domain ' + input.domain + ')'
+          : 'Created repository "' + input.name + '" in domain "' + input.domain + '"'
     });
     recordOp('create', 'success');
     logger.info('OKF repository created', { repo_id, graph_name, domain: input.domain });
@@ -546,9 +551,16 @@ async function update(repo_id, patch, actor) {
 
     await auditService.writeAudit({
       actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
       action: 'repo.update',
       repo_id,
-      source_ip: (actor && actor.source_ip) || null
+      source_ip: (actor && actor.source_ip) || null,
+      description:
+        'Updated repository fields: ' +
+        Object.keys(setFields)
+          .filter((f) => f !== 'updated_at')
+          .join(', '),
+      details: { fields: Object.keys(setFields).filter((f) => f !== 'updated_at') }
     });
     recordOp('update', 'success');
     logger.info('OKF repository updated', { repo_id, fields: Object.keys(setFields) });
@@ -617,9 +629,11 @@ async function remove(repo_id, actor) {
 
     await auditService.writeAudit({
       actor: (actor && actor.sub) || 'system',
+      actor_name: (actor && actor.name) || null,
       action: 'repo.delete',
       repo_id,
-      source_ip: (actor && actor.source_ip) || null
+      source_ip: (actor && actor.source_ip) || null,
+      description: 'Deleted the repository with its concepts, graph, bundle artifacts and manifests'
     });
     recordOp('delete', 'success');
     logger.info('OKF repository deleted (fully cleaned)', { repo_id });

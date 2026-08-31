@@ -294,11 +294,20 @@ async function mintVersion(repo_id, opts = {}, actor) {
       auditService
         .writeAudit({
           actor: (actor && actor.sub) || 'system',
+          actor_name: (actor && actor.name) || null,
           action: 'repo.version_mint',
           repo_id,
           version: nextVersion, // review fix P7: attribute the exact manifest
           okf_tag: okfTag,
-          source_ip: (actor && actor.source_ip) || null
+          source_ip: (actor && actor.source_ip) || null,
+          description:
+            'Minted version ' +
+            nextVersion +
+            ' (okf:v' +
+            nextVersion +
+            ') — immutable manifest snapshot of ' +
+            concepts.length +
+            ' concept(s)'
         })
         .catch(() => {
           /* best-effort */

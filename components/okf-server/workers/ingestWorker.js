@@ -346,7 +346,12 @@ async function _processOneJob() {
         actor: 'okf-worker',
         action: `ingest.${outcome}`,
         repo_id: job.repo_id,
-        source_ip: null
+        source_ip: null,
+        concept_id: conceptId,
+        description:
+          outcome === 'indexed'
+            ? 'Concept "' + conceptId + '" indexed into the repository graph'
+            : 'Concept "' + conceptId + '" ingest ' + outcome
       })
       .catch(() => {
         /* best-effort */

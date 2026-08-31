@@ -17,6 +17,7 @@ jest.mock('@/services/repoOkfService', () => ({
     lifecycle: jest.fn().mockResolvedValue({ ok: true }),
     deleteRepo: jest.fn().mockResolvedValue({ status: 'deleted' }),
     listVersions: jest.fn(),
+    getRepoLogs: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     ingest: jest.fn(),
     mintVersion: jest.fn()
@@ -72,6 +73,7 @@ const OkfStudioDashboard = require('@/components/okf/StudioDashboard.vue').defau
 const OkfRepoEditorShell = require('@/components/okf/editor/RepoEditorShell.vue').default;
 const OkfVersionsDialog = require('@/components/okf/editor/VersionsDialog.vue').default;
 const OkfRepoEditor = require('@/components/okf/editor/RepoEditor.vue').default;
+const OkfLogsDialog = require('@/components/okf/editor/LogsDialog.vue').default;
 
 const STUBS = { teleport: true };
 
@@ -253,6 +255,54 @@ describe('OkfRepoEditorShell — lifecycle strip', () => {
     });
     expect(wrapper.text()).not.toContain('READ ONLY');
     expect(wrapper.findComponent(OkfRepoEditor).props('readOnly')).toBe(false);
+  });
+
+  it('Logs opens the activity-log dialog between Versions and Export (David, 2026-08-31)', async () => {
+    const repoOkfService = require('@/services/repoOkfService').default;
+    repoOkfService.getRepoLogs.mockResolvedValue([
+      {
+        ts: '2026-08-31T10:00:00Z',
+        actor: 'steward-1',
+        actor_name: 'Steward One',
+        action: 'repo.publish',
+        description: 'Published version 1 — bundle "demo-v1.zip" stored in the document repository'
+      },
+      {
+        ts: '2026-08-31T11:00:00Z',
+        actor: 'steward-1',
+        actor_name: 'Steward One',
+        action: 'repo.ingest',
+        description: 'Ingested version 1 — graph "OKF_demo_v1" is now serving'
+      }
+    ]);
+    const store = buildStore();
+    await seedRepos(store, [{ repo_id: 'r-5', name: 'Logged', lifecycle_state: 'approve', version: 1 }]);
+    await flush();
+    const wrapper = mount(OkfRepoEditorShell, {
+      global: { mocks: { $store: store }, stubs: STUBS },
+      props: { repoId: 'r-5' }
+    });
+    const btns = wrapper.findAll('button').map((b) => b.text());
+    const versionsIdx = btns.indexOf('Versions');
+    const logsIdx = btns.indexOf('Logs');
+    const exportIdx = btns.findIndex((t) => t.includes('Export'));
+    expect(logsIdx).toBeGreaterThan(-1);
+    expect(logsIdx).toBeGreaterThan(versionsIdx);
+    expect(logsIdx).toBeLessThan(exportIdx);
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Logs')
+      .trigger('click');
+    await flush();
+    const dialog = wrapper.findComponent(OkfLogsDialog);
+    expect(dialog.props('visible')).toBe(true);
+    expect(repoOkfService.getRepoLogs).toHaveBeenCalledWith('r-5');
+    // The rendered rows: user, timestamp, action and the human description.
+    const text = wrapper.text();
+    expect(text).toContain('Steward One');
+    expect(text).toContain('repo.publish');
+    expect(text).toContain('Published version 1 — bundle "demo-v1.zip" stored in the document repository');
+    expect(text).toContain('Ingested version 1 — graph "OKF_demo_v1" is now serving');
   });
 });
 

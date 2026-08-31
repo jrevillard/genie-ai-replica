@@ -565,13 +565,28 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     .writeAudit({
       action: 'repo.ingest',
       actor: (actor && actor.sub) || null,
+      actor_name: (actor && actor.name) || null,
       repo_id,
       source_ip: (actor && actor.source_ip) || null,
-      total: summary.total,
-      enqueued: summary.enqueued,
-      skipped_dedup: summary.skipped_dedup,
-      rejected: summary.rejected,
-      error_count: summary.enqueue_errors.length
+      description:
+        'Ingested ' +
+        summary.total +
+        ' concept(s): ' +
+        summary.enqueued +
+        ' enqueued for indexing, ' +
+        summary.skipped_dedup +
+        ' deduplicated, ' +
+        summary.rejected +
+        ' rejected, ' +
+        summary.enqueue_errors.length +
+        ' error(s)',
+      details: {
+        total: summary.total,
+        enqueued: summary.enqueued,
+        skipped_dedup: summary.skipped_dedup,
+        rejected: summary.rejected,
+        error_count: summary.enqueue_errors.length
+      }
     })
     .catch(() => {
       /* best-effort */
@@ -859,10 +874,12 @@ async function deleteConcept(repo_id, concept_id, opts = {}) {
     await auditService.writeAudit({
       action: 'concept.delete',
       actor: (opts.actor && opts.actor.sub) || null,
+      actor_name: (opts.actor && opts.actor.name) || null,
       repo_id,
       concept_id,
       source_ip: (opts.actor && opts.actor.source_ip) || null,
-      removed
+      description: 'Deleted concept "' + concept_id + '" with its meta row, indexed chunks and graph edges',
+      details: removed
     });
   } catch {
     /* audit is best-effort */

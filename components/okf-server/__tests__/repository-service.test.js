@@ -42,7 +42,7 @@ describe('repository-service', () => {
 
     test('writes an audit row on create', async () => {
       const repo = await repoService.create(validCreateInput(), ACTOR);
-      const audit = Object.values(db._stores.okf_audit || {});
+      const audit = Object.values(db._stores.okf_audit_logs || {});
       expect(audit).toHaveLength(1);
       expect(audit[0]).toMatchObject({ action: 'repo.create', repo_id: repo.repo_id, actor: 'steward-1' });
     });
@@ -129,7 +129,7 @@ describe('repository-service', () => {
     test('writes an audit row on update', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       await repoService.update(created.repo_id, { name: 'Renamed' }, ACTOR);
-      const updates = Object.values(db._stores.okf_audit || {}).filter((a) => a.action === 'repo.update');
+      const updates = Object.values(db._stores.okf_audit_logs || {}).filter((a) => a.action === 'repo.update');
       expect(updates).toHaveLength(1);
     });
   });
@@ -167,7 +167,7 @@ describe('repository-service', () => {
     test('writes an audit row on delete', async () => {
       const created = await repoService.create(validCreateInput(), ACTOR);
       await repoService.remove(created.repo_id, ACTOR);
-      const deletes = Object.values(db._stores.okf_audit || {}).filter((a) => a.action === 'repo.delete');
+      const deletes = Object.values(db._stores.okf_audit_logs || {}).filter((a) => a.action === 'repo.delete');
       expect(deletes).toHaveLength(1);
     });
   });
@@ -327,7 +327,7 @@ describe('create additive opts (Story 4.8 — R5 default pinned)', () => {
     expect(repo.cloned_from).toBeUndefined();
     const stored = db._stores.okf_repositories[repo.repo_id];
     expect(stored.cloned_from).toBeUndefined();
-    const audits = Object.values(db._stores.okf_audit || {});
+    const audits = Object.values(db._stores.okf_audit_logs || {});
     expect(audits[0].action).toBe('repo.create');
   });
 
@@ -341,7 +341,7 @@ describe('create additive opts (Story 4.8 — R5 default pinned)', () => {
     expect(repo.lifecycle_state).toBe('draft');
     expect(repo.cloned_from).toEqual({ repo_id: 'src', version: 2 });
     expect(repo.okf_version).toBe('0.3');
-    const audits = Object.values(db._stores.okf_audit || {});
+    const audits = Object.values(db._stores.okf_audit_logs || {});
     expect(audits[0].action).toBe('repo.clone');
   });
 
@@ -509,7 +509,7 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
   test('writes a repo.clone audit row + does NOT mutate the source meta', async () => {
     const { src, rows } = await seedSource();
     const clone = await repoService.cloneRepository(src.repo_id, {}, ACTOR);
-    const audits = Object.values(db._stores.okf_audit || {}).filter((a) => a.action === 'repo.clone');
+    const audits = Object.values(db._stores.okf_audit_logs || {}).filter((a) => a.action === 'repo.clone');
     expect(audits).toHaveLength(1);
     expect(audits[0]).toMatchObject({ actor: 'steward-1', repo_id: clone.repo_id });
     // Source meta untouched.

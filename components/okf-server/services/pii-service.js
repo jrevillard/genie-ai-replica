@@ -201,9 +201,15 @@ async function acknowledgePii(repo_id, acknowledge, actor) {
     await auditService
       .writeAudit({
         actor: (actor && actor.sub) || 'system',
+        actor_name: (actor && actor.name) || null,
         action: acknowledge ? 'repo.pii_ack' : 'repo.pii_ack_revoke',
         repo_id,
-        flagged_concepts: flagged[0] || 0
+        flagged_concepts: flagged[0] || 0,
+        description: acknowledge
+          ? 'Steward acknowledged ' +
+            (flagged[0] || 0) +
+            ' PII-flagged concept(s) — the publish gate is waived for reviewed public entities'
+          : 'Steward revoked the PII acknowledgement — flagged concepts block publishing again'
       })
       .catch(() => {});
     logger.info('PII acknowledgement ' + (acknowledge ? 'recorded' : 'revoked'), {

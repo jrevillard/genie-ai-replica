@@ -17,7 +17,7 @@ const { withSpan } = require('../shared-lib/tracing');
 const COLLECTIONS = [
   'okf_repositories',
   'okf_concepts_meta',
-  'okf_audit',
+  'okf_audit_logs',
   'okf_sources',
   'okf_versions',
   'okf_bundle_manifest'
@@ -43,9 +43,9 @@ const INDEXES = {
     { type: 'persistent', fields: ['repo_id'] },
     { type: 'persistent', fields: ['repo_id', 'bundle_version'], unique: true }
   ],
-  okf_audit: [
+  okf_audit_logs: [
     { type: 'persistent', fields: ['ts'] },
-    { type: 'persistent', fields: ['repo_id'] }
+    { type: 'persistent', fields: ['repo_id', 'ts'] }
   ],
   okf_sources: [{ type: 'persistent', fields: ['repo_id'], unique: true }],
   // Story B+C: discovery scans every manifest — index the domain for the

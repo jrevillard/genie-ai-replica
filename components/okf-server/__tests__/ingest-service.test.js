@@ -283,13 +283,17 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
       expect.objectContaining({
         action: 'repo.ingest',
         actor: 'steward-1',
+        actor_name: ACTOR.name,
         repo_id: REPO,
         source_ip: '127.0.0.1',
-        total: 1,
-        enqueued: 1,
-        skipped_dedup: 0,
-        rejected: 0,
-        error_count: 0
+        description: expect.stringContaining('Ingested 1 concept(s)'),
+        details: expect.objectContaining({
+          total: 1,
+          enqueued: 1,
+          skipped_dedup: 0,
+          rejected: 0,
+          error_count: 0
+        })
       })
     );
   });

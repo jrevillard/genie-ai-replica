@@ -31,6 +31,9 @@
         <DsButton variant="secondary" small :disabled="actionBusy" @click="versionsOpen = true">
           {{ translate('okf.shell.versions', 'Versions') }}
         </DsButton>
+        <DsButton variant="secondary" small :disabled="logsBusy" @click="logsOpen = true">
+          {{ translate('okf.shell.logs', 'Logs') }}
+        </DsButton>
         <DsButton variant="ghost" small :disabled="exportBusy" @click="onExport">
           {{ translate('okf.shell.export', 'Export .zip') }}
         </DsButton>
@@ -66,6 +69,8 @@
       @close="versionsOpen = false"
       @changed="onChanged"
     />
+
+    <OkfLogsDialog :visible="logsOpen" :repo="repo && repo.repo_id ? repo : null" @close="logsOpen = false" />
 
     <DsDialog
       :visible="publishOpen"
@@ -125,6 +130,7 @@ import DsTabs from '../../ds/Tabs.vue';
 import OkfStudioWizard from '../StudioWizard.vue';
 import OkfRepoEditor from './RepoEditor.vue';
 import OkfVersionsDialog from './VersionsDialog.vue';
+import OkfLogsDialog from './LogsDialog.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
 
 const STATE_LABELS = {
@@ -146,7 +152,17 @@ const LIFECYCLE_LABELS = {
 
 export default {
   name: 'OkfRepoEditorShell',
-  components: { DsButton, DsDialog, DsPill, DsStatusTag, DsTabs, OkfStudioWizard, OkfRepoEditor, OkfVersionsDialog },
+  components: {
+    DsButton,
+    DsDialog,
+    DsPill,
+    DsStatusTag,
+    DsTabs,
+    OkfStudioWizard,
+    OkfRepoEditor,
+    OkfVersionsDialog,
+    OkfLogsDialog
+  },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true },
@@ -157,6 +173,8 @@ export default {
   data() {
     return {
       versionsOpen: false,
+      logsOpen: false,
+      logsBusy: false,
       publishOpen: false,
       publishError: '',
       piiBlocked: false,

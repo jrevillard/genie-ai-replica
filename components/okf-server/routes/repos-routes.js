@@ -46,6 +46,11 @@ router.post('/:repo_id/lifecycle', requireRepoScope('repo_id', 'admin'), ctrl.tr
 // state). Read scope; the zip is built on the fly from the current concepts.
 router.get('/:repo_id/export', requireRepoScope('repo_id', 'read'), ctrl.exportRepoZip);
 
+// Story #978 (David, 2026-08-31) — the repository's action/audit log
+// (okf_audit_logs, linked by repo_id): every state transition and every
+// modification, newest first. Read scope (same as the manifest/export).
+router.get('/:repo_id/logs', requireRepoScope('repo_id', 'read'), ctrl.getRepoLogs);
+
 // Story #978 — steward PII acknowledgement (David, 2026-08-30): waives the
 // PII 'hit' publish gate for REVIEWED public entities (audited; a scanner
 // 'error' still blocks). Admin scope on the repo.

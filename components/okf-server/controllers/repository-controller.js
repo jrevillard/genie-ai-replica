@@ -335,6 +335,24 @@ async function piiScan(req, res, next) {
     await piiService.markRepoPiiScanned(repo_id);
 
     const gate = await piiService.assertPiiClean(repo_id);
+    // AUDIT: a PII scan is a compliance action over the full content set.
+    auditService
+      .writeAudit({
+        action: 'repo.pii_scan',
+        actor: (req.actor && req.actor.sub) || null,
+        actor_name: (req.actor && req.actor.name) || null,
+        repo_id,
+        source_ip: req.ip,
+        description:
+          'PII scan completed — ' +
+          results.length +
+          ' concept(s) scanned; gate ' +
+          (gate.blocked ? 'BLOCKED (' + gate.reasons.join('; ') + ')' : 'clean'),
+        details: { scanned: results.length, gate }
+      })
+      .catch(() => {
+        /* best-effort */
+      });
     res.status(200).json({
       repo_id,
       scanned: results.length,
@@ -481,11 +499,17 @@ async function patchConcept(req, res, next) {
       await auditService.writeAudit({
         action: 'concept.patch',
         actor: (req.actor && req.actor.sub) || null,
+        actor_name: (req.actor && req.actor.name) || null,
         repo_id,
         source_ip: req.ip,
         concept_id,
         content_hash: updated.content_hash,
-        index_status: updated.index_status
+        index_status: updated.index_status,
+        description:
+          'Edited concept "' +
+          concept_id +
+          '" (frontmatter + body) — re-index ' +
+          (updated.index_status === 'parsed' ? 'queued (content changed)' : 'not needed (content unchanged)')
       });
     } catch {
       /* ignore — audit is best-effort */
@@ -558,6 +582,26 @@ async function resplitRepo(req, res, next) {
     assertWritable(repoDoc);
     const opts = { ...actorFrom(req), file_id };
     const summary = await ingestService.resplitRepo(repo_id, mode, opts);
+    // AUDIT: a re-split DELETES every concept and rebuilds from the source —
+    // one of the most destructive repository actions; it must be in the log.
+    auditService
+      .writeAudit({
+        action: 'repo.resplit',
+        actor: (req.actor && req.actor.sub) || null,
+        actor_name: (req.actor && req.actor.name) || null,
+        repo_id,
+        source_ip: req.ip,
+        description:
+          'Re-split the repository from its source file (mode ' +
+          mode +
+          ') — ' +
+          summary.total +
+          ' concept(s) re-ingested',
+        details: { mode, ...summary }
+      })
+      .catch(() => {
+        /* best-effort */
+      });
     res.status(200).json({ ok: true, mode, ...summary });
   } catch (err) {
     next(err);
@@ -581,12 +625,50 @@ async function autocorrectRepo(req, res, next) {
     // repos cannot be autocorrected.
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     assertWritable(repoDoc);
+    const applied = !(dry_run === true);
     const result = await conceptMetaService.autocorrectRepo(
       repo_id,
       typeof dry_run === 'boolean' ? dry_run : true,
       actorFrom(req)
     );
+    // AUDIT: only an APPLYING run modifies concepts; a dry run is a read.
+    if (applied) {
+      auditService
+        .writeAudit({
+          action: 'repo.autocorrect',
+          actor: (req.actor && req.actor.sub) || null,
+          actor_name: (req.actor && req.actor.name) || null,
+          repo_id,
+          source_ip: req.ip,
+          description:
+            'Applied frontmatter autocorrect — ' +
+            ((result.changes && result.changes.length) || 0) +
+            ' change(s) across the repository',
+          details: { changes: result.changes, warnings: result.warnings }
+        })
+        .catch(() => {
+          /* best-effort */
+        });
+    }
     res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story #978 (David, 2026-08-31) — GET /api/okf/repos/:repo_id/logs.
+ * The repository's action/audit log (okf_audit_logs, linked by repo_id):
+ * every state transition and every modification with the user, date/time,
+ * action and a human-readable description. Read scope; newest first.
+ */
+async function getRepoLogs(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
+    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const logs = await auditService.listRepoLogs(repo_id, { limit: req.query.limit });
+    res.status(200).json({ repo_id, logs });
   } catch (err) {
     next(err);
   }
@@ -621,6 +703,20 @@ async function exportRepoZip(req, res, next) {
     const repo = await repoService.getById(req.params.repo_id, { authz: authzForService(req) });
     const { buffer } = await bundleExportService.buildBundleZip(repo.repo_id);
     const fileName = bundleExportService.bundleFileName(repo, repo.version || 0);
+    // AUDIT (David, 2026-08-31: every repository action is traceable) — an
+    // export hands the full content to the caller; it belongs in the log.
+    auditService
+      .writeAudit({
+        action: 'repo.export',
+        actor: (req.actor && req.actor.sub) || null,
+        actor_name: (req.actor && req.actor.name) || null,
+        repo_id: repo.repo_id,
+        source_ip: req.ip,
+        description: 'Exported the repository as bundle "' + fileName + '"'
+      })
+      .catch(() => {
+        /* best-effort */
+      });
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.status(200).send(buffer);
@@ -670,6 +766,7 @@ module.exports = {
   autocorrectRepo,
   transitionLifecycle,
   exportRepoZip,
+  getRepoLogs,
   acknowledgePii,
   ValidationError
 };

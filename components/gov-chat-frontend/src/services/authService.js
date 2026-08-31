@@ -70,17 +70,49 @@ class AuthService {
    */
   async login(loginName, password) {
     try {
-      const encPassword = this.hashPassword(password);
-      const response = await this.retryRequest(() =>
-        httpService.post(`${this.authEndpoint}/login`, {
-          loginName,
-          encPassword
-        })
+      // Keycloak OIDC Direct Access Grant (ROPC). Only the auth transport
+      // changed — storage shape and return shape match the legacy flow.
+      const kcUrl = process.env.VUE_APP_KEYCLOAK_URL || 'http://localhost:8081';
+      const kcRealm = process.env.VUE_APP_KEYCLOAK_REALM || 'genie';
+      const kcClient = process.env.VUE_APP_KEYCLOAK_CLIENT_ID || 'genie-app';
+      const tokenResp = await fetch(
+        `${kcUrl}/realms/${kcRealm}/protocol/openid-connect/token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'password',
+            client_id: kcClient,
+            username: loginName,
+            password: password,
+            scope: 'openid profile email'
+          })
+        }
       );
-      if (response.data && response.data.accessToken) {
-        this.setUserData(response.data);
+      const tokenData = await tokenResp.json();
+      if (!tokenResp.ok) {
+        throw new Error(tokenData.error_description || tokenData.error || 'Login failed');
       }
-      return response.data;
+      const accessToken = tokenData.access_token;
+      localStorage.setItem('auth_token', accessToken); // api.js interceptor
+
+      // Fetch (and auto-provision on first login) the backend user profile.
+      let user = { loginName };
+      try {
+        const profResp = await fetch(`${httpService.baseUrl}/users`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (profResp.ok) {
+          const prof = await profResp.json();
+          user = prof.user && typeof prof.user === 'object' ? prof.user : prof;
+        }
+      } catch (profileError) {
+        console.warn('Profile fetch after login failed:', profileError);
+      }
+
+      const data = { ...user, accessToken, refreshToken: tokenData.refresh_token };
+      this.setUserData(data);
+      return data;
     } catch (error) {
       console.error('Login error:', error);
       throw error;

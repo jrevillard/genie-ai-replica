@@ -55,6 +55,20 @@ class NotificationService {
     );
     await _localNotifications.initialize(settings: initSettings);
 
+    // Create the weather_alerts channel explicitly. The backend sends
+    // channelId: 'weather_alerts'; without this, Android routes background
+    // pushes to a default-importance fallback channel with no heads-up banner.
+    const AndroidNotificationChannel weatherChannel = AndroidNotificationChannel(
+      'weather_alerts',
+      'Weather Alerts',
+      description: 'Severe weather and climate early warnings',
+      importance: Importance.max,
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(weatherChannel);
+
     // 3. Handle Foreground Messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint(
@@ -86,8 +100,8 @@ class NotificationService {
   static Future<void> _showLocalNotification(RemoteMessage message) async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'high_importance_channel',
-          'High Importance Notifications',
+          'weather_alerts',
+          'Weather Alerts',
           importance: Importance.max,
           priority: Priority.high,
         );

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/services/api_service.dart';
 
 class UserService {
@@ -16,26 +17,76 @@ class UserService {
     return sha256.convert(bytes).toString();
   }
 
-  Future<Map<String, dynamic>> login(String loginName, String password) async {
-    final response = await _api.post('$authEndpoint/login', {
-      'loginName': loginName,
-      'encPassword': hashPassword(password),
-    });
+  // Keycloak OIDC endpoints (Direct Access Grant / ROPC). Only auth transport
+  // changed — the login form, and everything after login, stay as they were.
+  static const String _keycloakUrl = String.fromEnvironment(
+    'KEYCLOAK_URL',
+    defaultValue: 'http://localhost:8081',
+  );
+  static const String _keycloakRealm = String.fromEnvironment(
+    'KEYCLOAK_REALM',
+    defaultValue: 'genie',
+  );
+  static const String _keycloakClientId = String.fromEnvironment(
+    'KEYCLOAK_CLIENT_ID',
+    defaultValue: 'genie-app',
+  );
 
-    final data = _decodeJsonObject(response.body);
-    if (response.statusCode != 200) {
+  Future<Map<String, dynamic>> login(String loginName, String password) async {
+    // 1. Authenticate against Keycloak (password grant). Note: Keycloak keeps
+    //    its own password hashes, so the raw password is sent (over TLS in
+    //    production) — the legacy client-side sha256 no longer applies here.
+    final tokenUri = Uri.parse(
+      '$_keycloakUrl/realms/$_keycloakRealm/protocol/openid-connect/token',
+    );
+    final kcResponse = await http.post(
+      tokenUri,
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: {
+        'grant_type': 'password',
+        'client_id': _keycloakClientId,
+        'username': loginName,
+        'password': password,
+        'scope': 'openid profile email',
+      },
+    );
+
+    final tokenData = _decodeJsonObject(kcResponse.body);
+    if (kcResponse.statusCode != 200) {
       throw Exception(
-        'Login Error: ${data['message'] ?? data['error'] ?? response.body}',
+        'Login Error: ${tokenData['error_description'] ?? tokenData['error'] ?? kcResponse.body}',
       );
     }
 
-    final accessToken = data['accessToken'] ?? data['token'];
+    final accessToken = tokenData['access_token'];
     if (accessToken is String && accessToken.isNotEmpty) {
       _api.setToken(accessToken);
     }
 
-    final userData = data['user'];
-    _currentUser = userData is Map<String, dynamic> ? userData : data;
+    // 2. Fetch (and auto-provision, on first login) our backend user profile
+    //    so downstream code keeps receiving the ArangoDB user document.
+    Map<String, dynamic> userData = {'loginName': loginName};
+    try {
+      final meResponse = await _api.get(userEndpoint);
+      if (meResponse.statusCode == 200) {
+        final me = _decodeJsonObject(meResponse.body);
+        userData = me['user'] is Map<String, dynamic>
+            ? me['user'] as Map<String, dynamic>
+            : me;
+      }
+    } catch (_) {
+      // Profile fetch failing shouldn't block login; token is already set.
+    }
+
+    // Flat legacy shape: old backend returned the user document's fields at the
+    // top level plus tokens — downstream widgets index those keys directly.
+    final data = <String, dynamic>{
+      ...userData,
+      'user': userData,
+      'accessToken': accessToken,
+      'refreshToken': tokenData['refresh_token'] ?? '',
+    };
+    _currentUser = data;
     return data;
   }
 

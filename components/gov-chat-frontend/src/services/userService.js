@@ -1,5 +1,6 @@
 // src/services/userService.js
 import httpService from './httpService';
+import authService from './authService';
 import crypto from 'crypto';
 
 /**
@@ -25,6 +26,11 @@ class UserService {
    * @returns {Promise} Promise with user data or error
    */
   async login(loginName, password) {
+    // Delegates to authService (Keycloak Direct Access Grant) — single auth path.
+    return authService.login(loginName, password);
+  }
+
+  async _legacyLogin(loginName, password) {
     try {
       // Hash the password client-side before sending
       const encPassword = this.hashPassword(password);

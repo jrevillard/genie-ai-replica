@@ -241,20 +241,9 @@ export default {
       rememberMe: false,
       isLoading: false,
       error: '',
-      savedAccounts: [
-        {
-          id: 1,
-          name: 'John Doe',
-          provider: 'Google',
-          email: 'john.doe@gmail.com'
-        },
-        {
-          id: 2,
-          name: 'Jane Smith',
-          provider: 'Facebook',
-          email: 'jane.smith@facebook.com'
-        }
-      ]
+      // Saved accounts are hidden: the section only renders when this list is
+      // non-empty, and no real persisted-account source exists yet.
+      savedAccounts: []
     }
   },
   created() {

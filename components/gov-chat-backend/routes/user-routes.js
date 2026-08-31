@@ -70,7 +70,9 @@ module.exports = (userService) => {
       const userKey = req.user._key;
       logger.info(`Getting profile for authenticated user ${userId}`);
       const user = await userService.getUserProfile(userKey);
-      res.json(user);
+      // Never expose credential material to clients
+      const { encPassword, ...safeUser } = user || {};
+      res.json(safeUser);
     } catch (error) {
       logger.error(`Error getting user profile: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });

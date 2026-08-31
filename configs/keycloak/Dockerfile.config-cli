@@ -1,5 +1,15 @@
 FROM adorsys/keycloak-config-cli:6.5.0-26
 
+# The upstream image runs as uid 65534 and ships without a security-upgrade
+# layer, so its Ubuntu 24.04 base packages only move when the upstream image
+# is rebuilt. Pull published security fixes at build time instead — the
+# monthly rebuild then picks them up automatically (perl, p11-kit, libc6...).
+USER root
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
+USER 65534
+
 COPY genie-realm.yaml /config/genie-realm.yaml
 COPY --chmod=755 config-and-sleep.sh /usr/local/bin/config-and-sleep.sh
 

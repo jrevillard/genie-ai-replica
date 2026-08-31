@@ -2,7 +2,8 @@
 
 This directory contains configuration and scripts for managing an ArangoDB instance using Docker. ArangoDB is a multi-model database that supports document, graph, and key-value data models. In this setup, it is configured with experimental vector index support enabled, which is useful for vector search applications (e.g., in AI or similarity-based queries).
 
-The setup uses Docker Compose to run ArangoDB in a container named `arango-vector-db`. The database files are persisted in the host directory `/root/arango_data`.
+The setup uses Docker Compose to run ArangoDB in a container named `arango-vector-db`. The database files are persisted in the `arango_data` Docker volume (bind a
+host directory via `ARANGO_DATA_DIR=/path` to override).
 
 **Prerequisites:**
 - Docker and Docker Compose must be installed on your system.
@@ -20,7 +21,7 @@ docker compose up -d
 This command uses the `compose.yaml` file (which is a Docker Compose configuration file) to launch the service. The container will run ArangoDB version 3.12.4 with the following key configurations:
 - Exposed on port `8529` (mapped to the host's port `8529`).
 - Root password set via the `ARANGO_PASSWORD` environment variable.
-- Persistent volume mounted at `/root/arango_data` on the host to `/var/lib/arangodb3` in the container.
+- Persistent storage in the `arango_data` Docker volume, mounted at `/var/lib/arangodb3` in the container (`ARANGO_DATA_DIR=/path` binds a host directory instead).
 - Experimental vector index feature enabled via the command flag `--experimental-vector-index=true`.
 - Connected to a custom bridge network named `chatqna_default` (external network, assuming it's created elsewhere in your setup).
 - Restart policy set to `unless-stopped` for automatic recovery.
@@ -41,7 +42,7 @@ docker logs arango-vector-db
 
 ## Database Files
 
-The database files are stored in `/root/arango_data` on the host machine. This directory is mounted as a volume to the container, ensuring data persistence even if the container is stopped or removed.
+The database files live in the `arango_data` Docker volume, ensuring data persistence even if the container is stopped or removed. Installs that predate the named volume and still hold data in `/root/arango_data` can restore it with `ARANGO_DATA_DIR=/root/arango_data docker compose up -d` (or copy the files into the volume).
 
 ## Backup and Restore
 
@@ -112,7 +113,7 @@ Use `docker-compose up -d` to start the ArangoDB server.
 
 If it's already running, verify with `docker ps` and `docker logs arango-vector-db`.
 
-See the `/root/arango_data` directory for the database files (attached to the container).
+Inspect the database files with `docker volume inspect arango_data` (attached to the container).
 
 Use `sh dump.sh` to dump the database to `/root/arango_backups/`
 

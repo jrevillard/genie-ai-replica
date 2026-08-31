@@ -115,7 +115,7 @@ This service runs the ArangoDB database.
 
 * **Image**: arangodb/arangodb:3.12.4
 * **Ports**: Exposes the ArangoDB interface on the host at port **8529**.
-* **Volumes**: Persists database data to /root/arango_data on the host machine.
+* **Volumes**: Persists database data in the `arango_data` Docker volume.
 * **Environment**:
   * ARANGO_ROOT_PASSWORD: **(Secret)** Set via the ARANGO_PASSWORD variable in `.env`.
 * **Command**: Starts ArangoDB with the --experimental-vector-index=true flag to enable vector search capabilities.

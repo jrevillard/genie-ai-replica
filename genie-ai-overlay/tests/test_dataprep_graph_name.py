@@ -269,18 +269,14 @@ class TestEnsureGraphCollections:
         kwargs = db.create_graph.call_args.kwargs
         assert name == "OKF_repo1"
         edge_defs = kwargs["edge_definitions"]
-        has_source = next(
-            d for d in edge_defs if d["edge_collection"] == "OKF_repo1_HAS_SOURCE"
-        )
-        assert (
-            has_source["from_vertex_collections"] == ["OKF_repo1_ENTITY"]
-            and has_source["to_vertex_collections"] == ["OKF_repo1_SOURCE"]
-        )
+        has_source = next(d for d in edge_defs if d["edge_collection"] == "OKF_repo1_HAS_SOURCE")
+        assert has_source["from_vertex_collections"] == ["OKF_repo1_ENTITY"] and has_source[
+            "to_vertex_collections"
+        ] == ["OKF_repo1_SOURCE"]
         links = next(d for d in edge_defs if d["edge_collection"] == "OKF_repo1_LINKS_TO")
-        assert (
-            links["from_vertex_collections"] == ["OKF_repo1_ENTITY"]
-            and links["to_vertex_collections"] == ["OKF_repo1_ENTITY"]
-        )
+        assert links["from_vertex_collections"] == ["OKF_repo1_ENTITY"] and links["to_vertex_collections"] == [
+            "OKF_repo1_ENTITY"
+        ]
 
     def test_skips_graph_registration_when_graph_exists(self):
         instance, db = self._bare_loader(

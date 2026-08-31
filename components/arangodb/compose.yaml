@@ -6,6 +6,17 @@
 services:
 
   arango-vector-db:
+    # least-privilege hardening: same capabilities as the main-stack arango service
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     image: arangodb/arangodb:3.12.4
     container_name: arango-vector-db
     ports:

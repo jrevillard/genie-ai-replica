@@ -88,5 +88,4 @@ See [`verification.md` §Final success signal](verification.md#final-success-sig
 
 ## Open Questions
 
-- **Q-1** Add `@opentelemetry/sdk-logs` deps to `components/shared/lib/package.json` (shared) or only to `components/gov-chat-backend/package.json` + `document-repository`'s own? Component-boundary rule from project-context.md prefers deps live with consumer. Confirm before P1a MR.
 - **Q-2** Confirm `VL_FAIL_OPEN` rate-limit cadence — 1 per minute as drafted, or lower (e.g., 1 per 5 minutes) to avoid log flood during extended outages?

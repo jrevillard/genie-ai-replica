@@ -88,4 +88,4 @@ See [`verification.md` §Final success signal](verification.md#final-success-sig
 
 ## Open Questions
 
-- **Q-2** Confirm `VL_FAIL_OPEN` rate-limit cadence — 1 per minute as drafted, or lower (e.g., 1 per 5 minutes) to avoid log flood during extended outages?
+*All open questions resolved. Q-1 → option C; Q-2 → 1/min; Q-3 → out-of-scope (single-tenant, env kept as port seam per AD-15). See memlog entries 34–35 for traceability.*

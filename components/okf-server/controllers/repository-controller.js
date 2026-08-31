@@ -339,8 +339,8 @@ async function piiScan(req, res, next) {
     auditService
       .writeAudit({
         action: 'repo.pii_scan',
-        actor: (req.actor && req.actor.sub) || null,
-        actor_name: (req.actor && req.actor.name) || null,
+        actor: actorFrom(req).sub,
+        actor_name: actorFrom(req).name,
         repo_id,
         source_ip: req.ip,
         description:
@@ -498,8 +498,8 @@ async function patchConcept(req, res, next) {
     try {
       await auditService.writeAudit({
         action: 'concept.patch',
-        actor: (req.actor && req.actor.sub) || null,
-        actor_name: (req.actor && req.actor.name) || null,
+        actor: actorFrom(req).sub,
+        actor_name: actorFrom(req).name,
         repo_id,
         source_ip: req.ip,
         concept_id,
@@ -587,8 +587,8 @@ async function resplitRepo(req, res, next) {
     auditService
       .writeAudit({
         action: 'repo.resplit',
-        actor: (req.actor && req.actor.sub) || null,
-        actor_name: (req.actor && req.actor.name) || null,
+        actor: actorFrom(req).sub,
+        actor_name: actorFrom(req).name,
         repo_id,
         source_ip: req.ip,
         description:
@@ -636,8 +636,8 @@ async function autocorrectRepo(req, res, next) {
       auditService
         .writeAudit({
           action: 'repo.autocorrect',
-          actor: (req.actor && req.actor.sub) || null,
-          actor_name: (req.actor && req.actor.name) || null,
+          actor: actorFrom(req).sub,
+          actor_name: actorFrom(req).name,
           repo_id,
           source_ip: req.ip,
           description:
@@ -708,8 +708,8 @@ async function exportRepoZip(req, res, next) {
     auditService
       .writeAudit({
         action: 'repo.export',
-        actor: (req.actor && req.actor.sub) || null,
-        actor_name: (req.actor && req.actor.name) || null,
+        actor: actorFrom(req).sub,
+        actor_name: actorFrom(req).name,
         repo_id: repo.repo_id,
         source_ip: req.ip,
         description: 'Exported the repository as bundle "' + fileName + '"'

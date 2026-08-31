@@ -315,6 +315,7 @@
       failed_when: false
 
     - name: Generate self-signed SSL certificate
+      become: true
       ansible.builtin.command: >
         openssl req -x509 -nodes -days 365 -newkey rsa:2048
         -keyout {{ deploy_dir }}/secrets/ssl/server.key
@@ -325,6 +326,20 @@
         - self_signed_certs | default(false) | bool
         - not ssl_files.results[0].stat.exists or not ssl_files.results[1].stat.exists
       changed_when: true
+
+    - name: Normalize SSL certificate ownership for the cap-dropped nginx container
+      become: true
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}/secrets/ssl/{{ item.name }}"
+        state: file
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - { name: server.crt, mode: '0644' }
+        - { name: server.key, mode: '0600' }
+      when:
+        - ssl_files.results[0].stat.exists or ssl_files.results[1].stat.exists
 
     - name: Assert SSL certificates exist (self-signed disabled)
       ansible.builtin.assert:
@@ -374,7 +389,8 @@
         src: "{{ playbook_dir }}/files/certificates/{{ group_names[0] }}/{{ item.item }}"
         dest: "{{ deploy_dir }}/secrets/ssl/{{ item.item }}"
         mode: '0600'
-        owner: "{{ ansible_user }}"
+        owner: root
+        group: root
       loop: "{{ local_certs.results }}"
       when: item.stat.exists
       loop_control:

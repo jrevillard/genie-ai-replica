@@ -233,3 +233,161 @@ class TestAlignOutputsDegradationWiring:
         # And the extractor recovers it from a schedule-shaped result dict
         result_dict = {"retriever_node": result, "llm": {"text": "answer"}}
         assert self.svc._extract_degradation(result_dict) == deg
+
+
+# ---------------------------------------------------------------------------
+# Story 2-8 — source_type on citations (declared contract, Decision 10)
+# ---------------------------------------------------------------------------
+class TestSourceTypeOnCitations:
+    def setup_method(self):
+        self.svc = create_chatqna_service()
+
+    def _run_assemble(self, result_dict):
+        import asyncio
+
+        return asyncio.run(self.svc._assemble_source_documents(result_dict))
+
+    def test_tool_result_citation_carries_web_search_source_type(self):
+        result_dict = {
+            "retriever_node": {"retrieved_docs": [], "file_id_pairs": {}},
+            "rerank_node": {
+                "retrieved_docs": [
+                    {
+                        "id": "tool_web_search_0",
+                        "text": "Title: T\nURL: http://x.test\nContent: c",
+                        "score": 0.85,
+                        "is_tool_result": True,
+                        "tool_url": "http://x.test",
+                        "tool_title": "T",
+                    }
+                ]
+            },
+        }
+        docs, _conf, grounded = self._run_assemble(result_dict)
+        assert grounded is True
+        assert len(docs) == 1
+        assert docs[0]["source_type"] == "web_search"
+        assert docs[0]["url"] == "http://x.test"
+
+    def test_kb_document_citation_carries_document_source_type(self):
+        result_dict = {
+            "retriever_node": {
+                "retrieved_docs": [{"id": "d1", "text": "t", "metadata": {"score": 0.9}}],
+                "file_id_pairs": {"d1": "file-1"},
+            }
+        }
+
+        # _assemble_source_documents fetches file metadata per file_id — stub it
+        async def _fake_fetch(file_id):
+            return {"labels": ["L"], "file_name": "doc.pdf"}
+
+        self.svc.fetch_file_metadata = _fake_fetch
+        docs, _conf, grounded = self._run_assemble(result_dict)
+        assert grounded is True
+        assert len(docs) == 1
+        assert docs[0]["source_type"] == "document"
+        assert docs[0]["document_id"] == "file-1"
+
+
+# ---------------------------------------------------------------------------
+# Story 2-8 review patches — rerank marker rescue, cross-seam memo, confidence
+# ---------------------------------------------------------------------------
+class TestReviewPatchesSeam:
+    def setup_method(self):
+        self.svc = create_chatqna_service()
+
+    def _align_rerank(self, self_mock, data, inputs):
+        from chatqna.genieai_chatqna import align_outputs
+        from tests.test_chatqna import FakeServiceType, create_mock_runtime_graph, create_mock_service_node
+
+        self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+        graph = create_mock_runtime_graph(downstream_nodes=["llm_node"])
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            return align_outputs(self_mock, data, "rerank_node", inputs, graph, {})
+
+    def test_rerank_reconstruction_preserves_tool_fields(self):
+        """H2: web docs fused at the retriever seam arrive here as INPUT docs
+        carrying is_tool_result; the reranker echoes {text, score}. The
+        reconstruction must merge the marker fields back or the citation
+        dies at the file_id_pairs gate."""
+        from tests.test_chatqna import stub_web_search_fallback
+
+        tool_doc = {
+            "id": "tool_web_search_0",
+            "text": "Title: T\nURL: http://x.test\nContent: c",
+            "score": 0.85,
+            "is_tool_result": True,
+            "tool_id": "web_search",
+            "tool_url": "http://x.test",
+            "tool_title": "T",
+        }
+        self_mock = MagicMock()
+        stub_web_search_fallback(self_mock)
+        result = self._align_rerank(
+            self_mock,
+            data={"reranked_docs": [{"text": tool_doc["text"], "score": 0.4}]},
+            inputs={"initial_query": "q", "retrieved_docs": [tool_doc]},
+        )
+        out = result["retrieved_docs"][0]
+        assert out["is_tool_result"] is True
+        assert out["tool_url"] == "http://x.test"
+        assert out["tool_title"] == "T"
+
+    def test_cross_seam_memo_prevents_second_search(self):
+        """M1: when the retriever seam already attempted web search, the rerank
+        seam must not call the helper again (no second SearXNG call)."""
+        from tests.test_chatqna import stub_web_search_fallback
+
+        self_mock = MagicMock()
+        stub_web_search_fallback(self_mock)
+        self._align_rerank(
+            self_mock,
+            data={"reranked_docs": [{"text": "t", "score": 0.1}]},
+            inputs={"initial_query": "q", "retrieved_docs": [], "web_search_attempted": True},
+        )
+        self_mock._apply_web_search_fallback.assert_not_called()
+
+    def test_cross_seam_memo_set_when_retriever_seam_fires(self):
+        from chatqna.genieai_chatqna import align_outputs
+        from tests.test_chatqna import (
+            FakeServiceType,
+            create_mock_runtime_graph,
+            create_mock_service_node,
+            stub_web_search_fallback,
+        )
+
+        self_mock = MagicMock()
+        self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+        stub_web_search_fallback(self_mock)
+        graph = create_mock_runtime_graph(downstream_nodes=["llm_node"])
+        data = {"initial_query": "q", "retrieved_docs": [], "metadata": []}
+        with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
+            result = align_outputs(self_mock, data, "retriever_node", {"text": "q"}, graph, {})
+        assert result.get("web_search_attempted") is True
+
+    def test_tool_scores_excluded_from_retrieval_confidence(self):
+        """M4: retrieval_confidence_score stays a KB-retrieval measure; the
+        fusion engine's synthetic 0.85 must not blend into it. Web-only answer:
+        grounded (has retrieved backing) but retrieval confidence 0.0."""
+        result_dict = {
+            "retriever_node": {"retrieved_docs": [], "file_id_pairs": {}},
+            "rerank_node": {
+                "retrieved_docs": [
+                    {
+                        "id": "tool_web_search_0",
+                        "text": "Title: T\nURL: http://x.test\nContent: c",
+                        "score": 0.85,
+                        "is_tool_result": True,
+                        "tool_url": "http://x.test",
+                        "tool_title": "T",
+                    }
+                ]
+            },
+        }
+        import asyncio
+
+        docs, conf, grounded = asyncio.run(self.svc._assemble_source_documents(result_dict))
+        assert grounded is True
+        assert len(docs) == 1
+        assert docs[0]["source_type"] == "web_search"
+        assert conf == 0.0

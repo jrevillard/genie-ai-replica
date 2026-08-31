@@ -1556,6 +1556,95 @@ describe('ChatBotComponent', () => {
       expect(vm.relatedDocuments[0].type).toBe('PDF');
     });
 
+    it('maps source_type and stores degradation from the declared metadata contract (2-8)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Contract test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      const lastMessageIndex = vm.chatMessages.length - 1;
+      const degradation = { tool_id: 'web_search', reason: 'LOW_QUALITY', fallback_applied: 'none', message: 'm' };
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          {
+            document_id: 'w1',
+            document_name: 'Web Result',
+            url: 'http://example.com/page',
+            score: 0.85,
+            source_type: 'web_search'
+          },
+          { document_id: 'doc-1', document_name: 'KB Doc', url: '', score: 0.9, source_type: 'document' }
+        ],
+        degradation
+      });
+
+      expect(vm.relatedDocuments.length).toBe(2);
+      expect(vm.relatedDocuments.find((d) => d.id === 'w1').sourceType).toBe('web_search');
+      expect(vm.relatedDocuments.find((d) => d.id === 'w1').type).toBe('LINK');
+      expect(vm.relatedDocuments.find((d) => d.id === 'doc-1').sourceType).toBe('document');
+      // Degradation retained on the stored message for rendering (story 2-9)
+      expect(vm.chatMessages[lastMessageIndex].metadata.degradation).toEqual(degradation);
+    });
+
+    it('maps categoryLabel from the plural categoryLabels the backend sends (2-8 review)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Labels test';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          { document_id: 'doc-l', document_name: 'Labeled', url: '', score: 0.9, categoryLabels: ['Agriculture'] }
+        ]
+      });
+
+      expect(vm.relatedDocuments[0].categoryLabel).toEqual(['Agriculture']);
+    });
+
+    it('shows each answer web results despite colliding tool pseudo-ids (2-8 review)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Q1';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          {
+            document_id: 'tool_web_search_0',
+            document_name: 'First',
+            url: 'http://a.test/1',
+            score: 0.85,
+            source_type: 'web_search'
+          }
+        ]
+      });
+
+      vm.newMessage = 'Q2';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+      capturedCallbacks.onMetadata({
+        source_documents: [
+          {
+            document_id: 'tool_web_search_0',
+            document_name: 'Second',
+            url: 'http://b.test/2',
+            score: 0.85,
+            source_type: 'web_search'
+          }
+        ]
+      });
+
+      // Both web results shown — pseudo-id collision must not dedupe them away
+      const urls = vm.relatedDocuments.map((d) => d.url);
+      expect(urls).toContain('http://a.test/1');
+      expect(urls).toContain('http://b.test/2');
+    });
+
     it('filters duplicate source documents', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;

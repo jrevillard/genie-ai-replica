@@ -1031,3 +1031,111 @@ describe('POST /:queryId/link/:messageId', () => {
     expect(response.status).toBe(500);
   });
 });
+
+// ============================================================
+// Story 2-8 — declared SSE metadata contract (D20)
+// ============================================================
+describe('POST /stream metadata contract (story 2-8)', () => {
+  it('forwards the declared field set and logs dropped fields', async () => {
+    queryService.initStreamQuery.mockResolvedValue({
+      queryId: 'q1',
+      opeaUrl: 'http://chatqna:8888/v1/chatqna',
+      opeaPayload: { messages: [] }
+    });
+    // Parser-faithful mock (review patch: a bare JSON.parse mock masked the
+    // real parser stripping `degradation`). Mirrors the REAL parser's spread +
+    // normalize — keep in sync with services/query-service.js; its own unit
+    // test pins the shape including pass-through of unknown keys.
+    queryService.parseChatQnASSELine.mockImplementation((data) => {
+      const trimmed = data.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const obj = JSON.parse(trimmed);
+          if (obj && obj.type === 'metadata') {
+            return {
+              ...obj,
+              type: 'metadata',
+              source_documents: obj.source_documents ?? [],
+              confidence_score: obj.confidence_score ?? 0,
+              retrieval_confidence_score: obj.retrieval_confidence_score ?? null,
+              self_confidence: Object.prototype.hasOwnProperty.call(obj, 'self_confidence')
+                ? obj.self_confidence
+                : null,
+              is_grounded: obj.is_grounded ?? false
+            };
+          }
+        } catch {
+          /* fall through */
+        }
+      }
+      return JSON.parse(data);
+    });
+    queryService.finalizeStreamQuery.mockResolvedValue(undefined);
+
+    const mockStream = new Readable({ read() {} });
+    axios.post.mockResolvedValue({ data: mockStream });
+
+    const { logger } = require('../../shared-lib');
+    logger.info.mockClear();
+
+    const responsePromise = authPost('/api/queries/stream', {
+      sessionId: 's1',
+      messages: [{ role: 'user', content: 'hello' }],
+      context: { language: 'EN' }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const degradation = { tool_id: 'web_search', reason: 'LOW_QUALITY', fallback_applied: 'none', message: 'm' };
+    mockStream.push('data: {"type":"chunk","content":"Answer"}\n\n');
+    mockStream.push(
+      'data: ' +
+        JSON.stringify({
+          type: 'metadata',
+          source_documents: [{ document_id: 'f1', document_name: 'Doc', source_type: 'document', score: 0.9 }],
+          retrieval_confidence_score: 0.87,
+          confidence_score: 0.87,
+          is_grounded: true,
+          degradation,
+          self_confidence: 0.8,
+          future_unknown_field: 'x'
+        }) +
+        '\n\n'
+    );
+    mockStream.push('data: {"type":"done","queryId":"q1"}\n\n');
+    mockStream.push(null);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    const body = response.text || '';
+
+    // Declared fields survive to the client's metadata event
+    const metaEvent = body
+      .split('\n')
+      .filter((l) => l.startsWith('data: ') && l.includes('"metadata"'))
+      .map((l) => JSON.parse(l.slice(6)))
+      .find((e) => e.type === 'metadata');
+    expect(metaEvent).toBeDefined();
+    expect(metaEvent.retrieval_confidence_score).toBe(0.87);
+    expect(metaEvent.degradation).toEqual(degradation);
+    expect(metaEvent.source_documents[0].source_type).toBe('document');
+    expect(metaEvent.responseTime).toBeDefined();
+
+    // Non-declared fields are dropped AND logged, never silently
+    expect(metaEvent.self_confidence).toBeUndefined();
+    expect(metaEvent.future_unknown_field).toBeUndefined();
+    // Drop log fires exactly once, naming only genuine extras (self_confidence
+    // is parser-injected and excluded from the scan)
+    const dropCalls = logger.info.mock.calls.filter((c) => c[0] === 'QueryService.sse_metadata_fields_dropped');
+    expect(dropCalls.length).toBe(1);
+    expect(dropCalls[0][1].dropped).toEqual(['future_unknown_field']);
+
+    // Full declared set asserted (confidence_score included — review patch)
+    expect(metaEvent.confidence_score).toBe(0.87);
+    expect(metaEvent.is_grounded).toBe(true);
+
+    // The persisted metadata carries the declared set too
+    const finalizeCall = queryService.finalizeStreamQuery.mock.calls[0];
+    expect(finalizeCall[3].retrieval_confidence_score).toBe(0.87);
+    expect(finalizeCall[3].degradation).toEqual(degradation);
+  });
+});

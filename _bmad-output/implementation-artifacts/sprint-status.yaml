@@ -118,7 +118,7 @@ development_status:
   2-5-fusion-budget-quality-threshold: review # workflows/tools/fusion.py FusionBudget (60/40 ratio, remainder rollover); scoring/dedupe simplified vs spec
   2-6-chatqna-integration-at-both-seams: review # genieai_chatqna.py imports at L1195 + L1325 (both seams)
   2-7-degradation-and-transparent-insufficiency: review # code-review PASSED 2026-08-31: 6 patches applied (never-kill-chat broad guard, null-safe gate+scores, KB-aware wording, script-aware threshold, wiring test); 722 tests green; 2-8 must settle tool_id spelling + reason enum
-  2-8-sse-metadata-contract-extension: in-progress # _stream_with_metadata exists in chatqna but predates/overlaps SST — verify contract covers citations
+  2-8-sse-metadata-contract-extension: review # code-review PASSED 2026-08-31: 7 patches — parser spreads producer keys (degradation was stripped BELOW the whitelist), rerank reconstruction rescues tool fields, cross-seam memo, conf-scale separation, Vue dedupe/labels; 728/1673/1249 green
   2-9-vue-citation-and-degradation-rendering: review # ChatBotComponent.vue has citation/web_search rendering
   2-10-flutter-citation-and-degradation-parity: backlog # no mobile/ changes in MR !279
   epic-2-retrospective: optional

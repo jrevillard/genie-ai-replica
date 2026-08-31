@@ -8,6 +8,18 @@ const { logger } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 
+// Declared SSE metadata contract (story 2-8, architecture D20 / OQ-SST-7):
+// the fields the BFF forwards from chatqna's in-stream metadata event to the
+// client. Extend deliberately per FR — anything chatqna sends outside this set
+// is logged as dropped rather than silently vanishing.
+const SSE_METADATA_FIELDS = [
+  'source_documents', // citations incl. source_type ("document" | "web_search")
+  'retrieval_confidence_score', // raw rank-weighted confidence (admin/eval)
+  'confidence_score', // display confidence
+  'is_grounded',
+  'degradation' // story 2-7 notice object (tool_id/reason/fallback_applied/message)
+];
+
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes
   router.use(keycloakAuthMiddleware.authenticate);
@@ -320,11 +332,22 @@ module.exports = (queryService) => {
           } else if (parsed.type === 'metadata') {
             // chatqna already computed reranker-grounded source docs + is_grounded; capture
             // them instead of re-running retrieval on the backend.
-            capturedMetadata = {
-              source_documents: parsed.source_documents,
-              confidence_score: parsed.confidence_score,
-              is_grounded: parsed.is_grounded
-            };
+            capturedMetadata = {};
+            for (const field of SSE_METADATA_FIELDS) {
+              if (parsed[field] !== undefined) {
+                capturedMetadata[field] = parsed[field];
+              }
+            }
+            // Declared contract (D20): any TOP-LEVEL producer field we do not
+            // forward is logged, never silently dropped. self_confidence is
+            // excluded — the BFF parser always injects it (null when chatqna
+            // didn't send it), so it is not a producer field attribution.
+            const dropped = Object.keys(parsed).filter(
+              (key) => key !== 'type' && key !== 'self_confidence' && !SSE_METADATA_FIELDS.includes(key)
+            );
+            if (dropped.length > 0) {
+              logger.info('QueryService.sse_metadata_fields_dropped', { queryId, dropped });
+            }
           } else if (parsed.type === 'done') {
             doHandleStreamDone();
           } else if (parsed.type === 'error') {
@@ -360,8 +383,11 @@ module.exports = (queryService) => {
           if (fullResponseText) {
             queryService
               .finalizeStreamQuery(queryId, fullResponseText, Date.now() - startTime, {
+                // Same declared-contract shape as the finalized save (minus degradation)
                 source_documents: [],
-                confidence_score: 0
+                confidence_score: 0,
+                retrieval_confidence_score: 0,
+                is_grounded: false
               })
               .catch((err) => logger.error('QueryService.partial_save_failed', { queryId, error: err.message }));
           }

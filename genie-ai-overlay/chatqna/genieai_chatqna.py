@@ -266,6 +266,11 @@ def _blend_embeddings(query_emb, history_emb, alpha):
 _CONV_MSG_SEPARATOR = "|<-MSG->|"
 # Separator with surrounding whitespace collapsed to a single newline.
 _CONV_SEP_RE = re.compile(r"\s*\|<-MSG->\|\s*")
+
+# Fields that mark a fused tool result (web search) and must survive every
+# reconstruction between the fusion seams and _assemble_source_documents
+# (epic 2-6 hazard E6). Losing them silently drops web citations.
+_TOOL_RESULT_FIELDS = ("is_tool_result", "tool_id", "tool_url", "tool_title")
 # Role marker at line start, tolerating leading whitespace so a marker split
 # from its preceding separator across chunks (separator -> "\n" in one chunk,
 # " USER:" arriving in the next) is still stripped.
@@ -1184,12 +1189,19 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             received_prompt = data.get("initial_query", inputs.get("text", ""))
 
             # FR17, FR19: Web search trigger & fusion (story 2-7: governed by
-            # _apply_web_search_fallback — degradation truth table lives there)
-            _scores = [(d.get("metadata") or {}).get("score") for d in retrieved_docs]
-            max_score = max((s for s in _scores if isinstance(s, (int, float))), default=0.0)
-            retrieved_docs, _degradation = self._apply_web_search_fallback(retrieved_docs, received_prompt, max_score)
-            if _degradation:
-                next_data["degradation"] = _degradation
+            # _apply_web_search_fallback — degradation truth table lives there).
+            # Cross-seam memo: fire at most once per request — the rerank seam
+            # checks this flag so a low reranker verdict cannot re-trigger a
+            # second SearXNG call with the query's web content already fused.
+            if not inputs.get("web_search_attempted"):
+                _scores = [(d.get("metadata") or {}).get("score") for d in retrieved_docs]
+                max_score = max((s for s in _scores if isinstance(s, (int, float))), default=0.0)
+                retrieved_docs, _degradation = self._apply_web_search_fallback(
+                    retrieved_docs, received_prompt, max_score
+                )
+                next_data["web_search_attempted"] = True
+                if _degradation:
+                    next_data["degradation"] = _degradation
 
             if not retrieved_docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
                 abstention_instructions = (
@@ -1252,21 +1264,31 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
 
         # 1. Handle output from custom Genie Python Wrapper
         if isinstance(data, dict):
+            # Tool-result marker rescue (epic 2-6 hazard E6): web docs fused at
+            # the retriever seam carry is_tool_result/tool_url/tool_title on the
+            # INPUT docs, but the reranker service echoes back only {text, score}
+            # — reconstructing {id, text, score} alone would strip the markers
+            # and drop every web citation at the file_id_pairs gate downstream.
+            text_to_tool_fields = {
+                d.get("text", ""): {k: d[k] for k in _TOOL_RESULT_FIELDS if k in d}
+                for d in original_retrieved_docs
+                if d.get("is_tool_result")
+            }
             if "reranked_docs" in data:
                 for doc in data["reranked_docs"]:
                     doc_text = doc.get("text", "")
                     docs.append(doc_text)
 
                     # Reconstruct the rich document object for the frontend
-                    reranked_docs_with_scores.append(
-                        {"id": text_to_id.get(doc_text, "N/A"), "text": doc_text, "score": doc.get("score", 0.0)}
-                    )
+                    entry = {"id": text_to_id.get(doc_text, "N/A"), "text": doc_text, "score": doc.get("score", 0.0)}
+                    entry.update(text_to_tool_fields.get(doc_text, {}))
+                    reranked_docs_with_scores.append(entry)
             elif "documents" in data:
                 for doc_text in data["documents"]:
                     docs.append(doc_text)
-                    reranked_docs_with_scores.append(
-                        {"id": text_to_id.get(doc_text, "N/A"), "text": doc_text, "score": 0.0}
-                    )
+                    entry = {"id": text_to_id.get(doc_text, "N/A"), "text": doc_text, "score": 0.0}
+                    entry.update(text_to_tool_fields.get(doc_text, {}))
+                    reranked_docs_with_scores.append(entry)
 
         # 2. Fallback for raw TEI output
         elif isinstance(data, list):
@@ -1304,14 +1326,19 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
 
         # FR17, FR19: Web search trigger & fusion (story 2-7: governed by
-        # _apply_web_search_fallback — degradation truth table lives there)
-        _scores = [d.get("score") for d in reranked_docs_with_scores]
-        max_score = max((s for s in _scores if isinstance(s, (int, float))), default=0.0)
-        reranked_docs_with_scores, _degradation = self._apply_web_search_fallback(
-            reranked_docs_with_scores, initial_query, max_score
-        )
-        if _degradation:
-            next_data["degradation"] = _degradation
+        # _apply_web_search_fallback — degradation truth table lives there).
+        # Cross-seam memo: the retriever seam may already have fused web results
+        # (they arrive here stripped of markers and scored low by the reranker);
+        # do not search again.
+        if not inputs.get("web_search_attempted"):
+            _scores = [d.get("score") for d in reranked_docs_with_scores]
+            max_score = max((s for s in _scores if isinstance(s, (int, float))), default=0.0)
+            reranked_docs_with_scores, _degradation = self._apply_web_search_fallback(
+                reranked_docs_with_scores, initial_query, max_score
+            )
+            next_data["web_search_attempted"] = True
+            if _degradation:
+                next_data["degradation"] = _degradation
         # Update docs list for prompt
         docs = [doc.get("text", "") for doc in reranked_docs_with_scores]
 
@@ -1568,14 +1595,20 @@ class ChatQnAService:
         rerank_verdict = reranker_node_output.get("retrieved_docs", []) if rerank_key else []
 
         # Normalize the documents to display into (id, score) tuples.
+        # Tool results (web search) pass through WHOLE — their citation fields
+        # (is_tool_result, tool_url, tool_title) live on the doc and must reach
+        # the tool branch below; stripping them here silently dropped every web
+        # result from citations at the file_id_pairs gate (epic 2-6 hazard E6).
+        def _display_entry(doc: dict, score: float) -> dict:
+            if doc.get("is_tool_result"):
+                return doc
+            return {"id": doc.get("id", "N/A"), "score": score}
+
         if rerank_key:
-            display_docs = [{"id": doc.get("id", "N/A"), "score": doc.get("score", 0.0)} for doc in rerank_verdict]
+            display_docs = [_display_entry(doc, doc.get("score", 0.0)) for doc in rerank_verdict]
         else:
             display_docs = [
-                {
-                    "id": doc.get("id", "N/A"),
-                    "score": (doc.get("metadata") or {}).get("score", doc.get("score", 0.0)),
-                }
+                _display_entry(doc, (doc.get("metadata") or {}).get("score", doc.get("score", 0.0)))
                 for doc in retrieved_docs
             ]
         is_grounded = bool(display_docs)
@@ -1594,18 +1627,25 @@ class ChatQnAService:
 
         for item in display_docs:
             if item.get("is_tool_result"):
+                # Tool scores do NOT enter `scores`: retrieval_confidence_score
+                # is a KB-retrieval measure on the calibrated reranker scale,
+                # and the fusion engine's synthetic 0.85 is a different scale —
+                # blending them reported inflated confidences. Web presence is
+                # shown via citations + degradation instead.
                 score = _calibrate_reranker_score(item.get("score", 0.0))
                 source_documents_formatted.append(
                     {
                         "document_id": item.get("id"),
                         "document_name": item.get("tool_title", "Tool Result"),
                         "url": item.get("tool_url", ""),
+                        # Declared citation contract (story 2-8 / Decision 10):
+                        # "web_search" now; "feed" reserved for Epic 3
+                        "source_type": "web_search",
                         "categoryLabels": [],
                         "serviceLabels": [],
                         "score": score,
                     }
                 )
-                scores.append(score)
                 continue
 
             doc_id_by_orchestrator = item.get("id", "N/A")
@@ -1668,6 +1708,8 @@ class ChatQnAService:
                     "document_id": file_id,
                     "document_name": file_name,
                     "url": file_read_url,
+                    # Declared citation contract (story 2-8 / Decision 10)
+                    "source_type": "document",
                     "categoryLabels": labels if isinstance(labels, list) else [labels] if labels else [],
                     "serviceLabels": [],
                     "score": score,

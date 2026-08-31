@@ -938,15 +938,19 @@ export default {
                 title: doc.document_name || doc.file_name || `Source ${(doc.document_id || '').slice(0, 4)}`,
                 documentName: doc.document_name,
                 fileName: doc.file_name,
-                type: doc.url?.split('.').pop().toUpperCase() || 'LINK',
+                type: doc.source_type === 'web_search' ? 'LINK' : doc.url?.split('.').pop().toUpperCase() || 'LINK',
                 size: 0,
                 url: doc.url,
                 score: doc.score,
-                categoryLabel: doc.categoryLabel,
+                sourceType: doc.source_type,
+                categoryLabel: doc.categoryLabels,
                 serviceLabels: doc.serviceLabels
               }));
               const existingIds = new Set(this.relatedDocuments.map((d) => d.id));
-              const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
+              // Web-search citations use per-request pseudo-ids (tool_web_search_0)
+              // that collide across messages — dedupe only KB documents by id so
+              // each answer's web results are shown.
+              const uniqueNewDocs = newDocs.filter((d) => d.sourceType === 'web_search' || !existingIds.has(d.id));
               this.relatedDocuments.unshift(...uniqueNewDocs);
             }
           },

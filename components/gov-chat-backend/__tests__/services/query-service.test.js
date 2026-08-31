@@ -403,6 +403,42 @@ describe('QueryService', () => {
       expect(result.self_confidence).toBeNull();
     });
 
+    it('should pass through degradation only when chatqna sent it (story 2-8 contract)', () => {
+      const withDegradation = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        retrieval_confidence_score: 0.5,
+        is_grounded: true,
+        degradation: { tool_id: 'web_search', reason: 'LOW_QUALITY', fallback_applied: 'none', message: 'm' }
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(withDegradation));
+      expect(result.degradation).toEqual(withDegradation.degradation);
+
+      const withoutDegradation = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        retrieval_confidence_score: 0.5,
+        is_grounded: false
+      };
+      const result2 = queryService.parseChatQnASSELine(JSON.stringify(withoutDegradation));
+      expect(result2).not.toHaveProperty('degradation');
+    });
+
+    it('should pass through unknown top-level producer keys (D20 single filtering point)', () => {
+      const meta = {
+        type: 'metadata',
+        source_documents: [],
+        confidence_score: 0.5,
+        retrieval_confidence_score: 0.5,
+        is_grounded: true,
+        some_future_field: 'x'
+      };
+      const result = queryService.parseChatQnASSELine(JSON.stringify(meta));
+      expect(result.some_future_field).toBe('x');
+    });
+
     it('should pass through retrieval_confidence_score and self_confidence', () => {
       const meta = {
         type: 'metadata',

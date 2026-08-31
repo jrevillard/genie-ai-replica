@@ -227,7 +227,13 @@ class QueryService {
       try {
         const obj = JSON.parse(trimmed);
         if (obj && obj.type === 'metadata') {
+          // Declared contract (D20): pass ALL top-level producer keys through
+          // (spread) and normalize the known ones. The BFF route's whitelist +
+          // drop-log is the single filtering point — rebuilding a fixed key set
+          // here silently discarded unknown producer fields one layer below
+          // the contract (the exact failure mode D20 exists to prevent).
           return {
+            ...obj,
             type: 'metadata',
             source_documents: obj.source_documents ?? [],
             confidence_score: obj.confidence_score ?? 0,

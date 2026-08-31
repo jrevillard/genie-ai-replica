@@ -52,8 +52,6 @@ services:
       --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - VLLM_ATTENTION_BACKEND=TORCH_SDPA
-      - VLLM_USE_FLASHINFER_SAMPLER=0
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
       - hf_cache:/root/.cache/huggingface

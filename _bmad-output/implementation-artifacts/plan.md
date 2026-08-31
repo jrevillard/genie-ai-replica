@@ -57,11 +57,23 @@ Last updated: 2026-08-31
 
 ---
 
-### D2 — Merge strategy for MR !279 ✅ RESOLVED
+### D2 — Merge strategy ✅ RESOLVED, then AMENDED (same day)
 
-- [x] **Chosen: HOLD the MR** until we're back on track with the BMAD method (remaining
-  stories done properly per D6), then merge as a **merge commit** (team convention,
-  commits preserved).
+- [x] **Original:** HOLD the MR until BMAD catch-up done, then merge-commit.
+- [x] **Amendment (later on 2026-08-31): MERGE-ANYTIME policy.** The MR may be merged
+  whenever we choose — no need to wait for remaining stories — using the staging
+  mechanism below. Reason: merging to `main` never touches `feat/sst`, so it cannot
+  interrupt an active story session.
+
+**How to merge anytime (operating procedure):**
+- **Whole current state:** approve + merge MR !279 as a merge commit —
+  **⚠️ UNCHECK "Delete source branch"**. Branch lives on; next batch = new MR
+  `feat/sst → main` (auto-shows only the delta).
+- **Partial (clean cut mid-branch):** `git branch sst-stage-N <green-sha> && git push
+  origin sst-stage-N` → MR `sst-stage-N → main`. Stage branches are ancestors of the
+  tip → no conflicts, no rebase, remainder MRs show only what's new.
+- **Never while a session works on the branch:** rebase/force-push/reset `feat/sst`,
+  or delete it. Everything else is invisible to the working session.
 
 ---
 
@@ -181,6 +193,7 @@ files (work went epics → code directly). That's exactly why the tracker drifte
 
 | Date | What happened |
 |------|---------------|
+| 2026-08-31 (8) | **D2 amended: merge-anytime policy.** MR !279 may merge whenever we choose (merge commit, never delete source branch); partial merges via ancestor stage branches (`sst-stage-N` at green commits). Hard rule while sessions run: never rewrite feat/sst history. Rationale: merging to main is invisible to the active story session. |
 | 2026-08-31 (7) | Story 4-1 committed + pushed to feat/sst (independently re-verified: 1670/1670 backend tests, eslint + prettier clean). Exact tracker recount: **21 review · 5 in-progress · 11 backlog · 1 blocked of 38** (earlier "17 review" lines undercounted — 21 is grep-verified). Next: 2-7 + 2-8. |
 | 2026-08-31 (6) | **Story 4-1 code review passed (3 adversarial layers) + 4 patches applied.** Review caught a real production bug my dev session missed: admin-routes (`/api/admin`, blanket `requireAdmin`) mounted before tools-routes in ROUTE_CONFIGS → the new RBAC was inert in the composed app (route tests had mounted the router standalone). Fixed: mount order swapped, trailing default-deny added to tools router, composed-app integration test w/ real middleware added (5 tests), route-test harness hardened. Backend 65 suites / 1670 tests green, lint + format clean. 2 pre-existing findings deferred to deferred-work.md (double-authenticate; admin-routes token logging). Status stays `review` → `done` when MR !279 merges. Next queued: **2-7 + 2-8**. |
 | 2026-08-31 (5) | **Story 4-1 implemented (dev-story session)**: `requireRole(...)` added to keycloak-auth-middleware (fail-closed, claims-based, `requireAdmin` byte-identical); tools-routes split read guard (`tools-admin`/`tools-reader`/`admin`) + write guard (`tools-admin`/`admin`); 16 new tests (middleware unit + route RBAC incl. tools-reader 403 on writes, NFR8 read path); backend 64 suites / 1662 tests green, lint + Prettier clean. Status → **review**, changes uncommitted in working tree (user commits). Next queued: **2-7 + 2-8**, then `/bmad-code-review 4-1`. |

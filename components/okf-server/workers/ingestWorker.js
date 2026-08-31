@@ -239,7 +239,11 @@ async function _processOneJob() {
           fileLabels: Array.isArray(job.ingest_labels) ? job.ingest_labels : [],
           graphName: job.graph_name || `OKF_${job.repo_id}`,
           bundleVersion: job.bundle_version != null ? job.bundle_version : null,
-          conceptId
+          conceptId,
+          // EXPLICIT callback identity (David, 2026-08-31): born-right graph
+          // names carry repo name+version — dataprep must never parse the
+          // repo_id out of a name.
+          repoId: job.repo_id
         },
         { timeout: 30000 }
       );

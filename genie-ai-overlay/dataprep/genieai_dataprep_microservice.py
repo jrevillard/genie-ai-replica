@@ -126,6 +126,11 @@ class DocRepoIngestPayload(BaseModel):
     # callback routes to the OKF Server (no doc-repo files doc exists for a
     # concept). Absent/None → legacy single-file behavior (doc-repo callback).
     conceptId: str | None = None
+    # OKF repo id (David, 2026-08-31): the EXPLICIT completion-callback
+    # identity. Born-right graph names carry repo NAME+VERSION — a graph name
+    # is not an identity field, so it must never be parsed for one. Absent →
+    # legacy graph-name-parse fallback.
+    repoId: str | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
@@ -219,6 +224,10 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 # Story 4.8-amend: the OKF concept id rides through to chunk docs
                 # (citation provenance) + routes the completion callback.
                 concept_id=payload.conceptId,
+                # David (2026-08-31): the EXPLICIT repo id for the completion
+                # callback — born-right graph names carry name+version, so
+                # identity must not be parsed out of them.
+                repo_id=getattr(payload, "repoId", None),
                 # Story 4.8-amend follow-up: concept's source filename mirrors
                 # into the bundle zip's ingestion log so the bundle's UI
                 # Ingestion Log tab can trace each entry to its concept file.

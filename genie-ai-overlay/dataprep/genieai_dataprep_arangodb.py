@@ -1480,20 +1480,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # OKF per-repo graph is un-queryable at runtime. Edge directions match the
         # retriever's traversal: ENTITY -(_HAS_SOURCE)-> SOURCE(chunk) and
         # ENTITY -(_LINKS_TO)-> ENTITY. Idempotent (a re-registration is a no-op).
+        # NOTE (live-caught 2026-08-31): python-arango's edge-definition entries
+        # use "edge_collection"/"from_vertex_collections"/"to_vertex_collections"
+        # — the arangojs-style "collection"/"from"/"to" keys raised KeyError
+        # 'edge_collection' here and the named graph was NEVER registered (the
+        # retriever's has_graph guard then treated every OKF graph as absent).
         try:
             if not self.db.has_graph(graph_name):
                 self.db.create_graph(
                     graph_name,
                     edge_definitions=[
                         {
-                            "collection": f"{graph_name}_HAS_SOURCE",
-                            "from": [f"{graph_name}_ENTITY"],
-                            "to": [f"{graph_name}_SOURCE"],
+                            "edge_collection": f"{graph_name}_HAS_SOURCE",
+                            "from_vertex_collections": [f"{graph_name}_ENTITY"],
+                            "to_vertex_collections": [f"{graph_name}_SOURCE"],
                         },
                         {
-                            "collection": f"{graph_name}_LINKS_TO",
-                            "from": [f"{graph_name}_ENTITY"],
-                            "to": [f"{graph_name}_ENTITY"],
+                            "edge_collection": f"{graph_name}_LINKS_TO",
+                            "from_vertex_collections": [f"{graph_name}_ENTITY"],
+                            "to_vertex_collections": [f"{graph_name}_ENTITY"],
                         },
                     ],
                 )
@@ -1512,15 +1517,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # the input + repo_id on the instance so the per-stage log POST
         # helper can mirror into the bundle zip's ingestion_log (file-centric UI).
         self._current_input = input
-        # The graph name encodes the repo_id (`OKF_<repo_id>`); pull it back out.
-        try:
-            graph_name = input.graph_name or ""
-        except AttributeError:
-            graph_name = ""
-        if graph_name.startswith("OKF_") and len(graph_name) > 4:
-            self._current_repo_id = graph_name[4:]
-        else:
-            self._current_repo_id = None
+        # The caller's EXPLICIT repo_id is the identity channel (David,
+        # 2026-08-31): born-right graph names encode repo NAME+VERSION, not the
+        # repo_id — a graph name is a name, not an identity field. The old
+        # graph-name parse survives ONLY as the fallback for legacy in-flight
+        # jobs sent before the explicit field existed.
+        self._current_repo_id = getattr(input, "repo_id", None)
+        if not self._current_repo_id:
+            try:
+                graph_name = input.graph_name or ""
+            except AttributeError:
+                graph_name = ""
+            if graph_name.startswith("OKF_") and len(graph_name) > 4:
+                self._current_repo_id = graph_name[4:]
         # The bundle-id cache is keyed by concept_id, but concept ids RECUR
         # across runs/repos ('index', 'service_directory', ...). A cache hit
         # from a previous ingest would mirror this run's logs into the

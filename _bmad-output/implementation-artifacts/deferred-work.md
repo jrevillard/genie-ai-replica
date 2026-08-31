@@ -1972,3 +1972,12 @@ location: _bmad-output/implementation-artifacts/spec-3-4-confirm-the-targeted-up
 severity: low
 reason: All verification commands specify only "expected" success outcomes. No failure handling documented.
 status: open
+
+### DW-325: tests/melt-correlation/ full implementation (OTel chaos + correlation suite) deferred from admin logs → VL migration.
+origin: spec-deferred admin-logs-victorialogs-migration 2026-08-31
+source_spec: `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` (CAP-8 / NG-4)
+location: tests/melt-correlation/ (directory absent; CI stub added in P0 MR)
+severity: medium
+reason: P0 MR ships an `exit-0` stub at `tests/melt-correlation/run-melt-test.sh` + README to unblock `.gitlab-ci.yml:2942-2984`. Full chaos/correlation suite (OTel trace↔log↔metric correlation, controlled chaos: VL kill/restart, fluentd pause/resume, otel-collector restart) belongs to a separate epic. Triggers for revisit: any MR touching VL/OTel collector deployment, observability reliability question, or Grafana dashboard rework.
+status: open
+resolution: stub only; no further work in admin-logs-victorialogs-migration scope.

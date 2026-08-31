@@ -25,7 +25,7 @@ Last updated: 2026-08-31
 
 **⚠️ BMAD automation override (this initiative only):** the `_bmad` workflow automation (`complete.yaml` — story branches, PRD-branch MRs, issue creation) assumes the `feat/{prd_key}/prd` worktree convention, which SST deliberately does not use. **A `complete.yaml` halt is expected and correct** — do not "fix" it by creating PRD branches. Instead: write the story file, commit it together with tracker updates **directly on `feat/sst`**, push. GitLab issue creation stays deferred until the #696–#725 re-baseline (see sprint-status TRACKING NOTE).
 
-**Next up:** `/bmad-dev-story 4-1-two-keycloak-roles-and-require-role` (story file ready; top of Remaining work).
+**Next up:** story **2-7 + 2-8** (degradation notice + SSE citation contract) — `/bmad-create-story 2-7` to start. Story 4-1 is fully done through the loop (dev → review → patches → committed).
 
 ---
 
@@ -33,10 +33,11 @@ Last updated: 2026-08-31
 
 - **Branch `feat/sst` → MR !279** (open, target `main`, pipeline green, **awaiting approvals**)
 - SST = **Server-Side Tools**: web search (SearXNG) + stream ingestor (RSS) + governance wrapper + admin UI
-- **50 files, +6,844/−96, 11 commits.** Core of all 4 epics implemented; tracker synced (`sprint-status.yaml`)
+- **MR !279: ~47 files, 17 commits** (count grows as stories land). Tracker synced (`sprint-status.yaml`)
 - **Fixed 2026-08-31:** web search was silently dead in the deployed image (chatqna Dockerfile never copied `workflows/`; the `try/except` swallowed the `ModuleNotFoundError`). Now wired: `COPY genie-ai-overlay/workflows/ /app/workflows/` + explicit `requests httpx` deps. Orphaned `tools/` dupe (1,875 lines) deleted.
-- **Nothing is merged yet.** Implemented stories sit at `review` status.
-- Score: **17 review · 6 in-progress · 11 backlog · 1 blocked · 1 deferred**
+- **Story 4-1 complete through the full BMAD loop** (dev → 3-layer review → 4 patches → 1670 tests green → committed). Review caught the RBAC being inert behind admin-routes' mount order — fixed with an integration test pinning it.
+- **Nothing is merged yet** (D2: hold until stories done, then merge-commit).
+- Score (exact recount 2026-08-31): **21 review · 5 in-progress · 11 backlog · 1 blocked** — of 38 stories across 4 epics (+1 deferred)
 
 ---
 
@@ -121,8 +122,8 @@ Ordered by: blocks merge → blocks production → everything else.
 | # | Story | Why this order |
 |---|-------|----------------|
 | ~~1~~ | ~~D1 cleanup~~ | ✅ DONE 2026-08-31 (dupe deleted + image wiring fixed) |
-| 2 | 4-1 finish: verify `requireRole` enforcement on `/api/admin/tools/*` | Security gap if missing — **START HERE** |
-| 3 | 2-7 + 2-8 finish: degradation notice + SSE citation contract (OQ-SST-7) | User-facing correctness |
+| ~~2~~ | ~~4-1 requireRole RBAC~~ | ✅ DONE through full BMAD loop 2026-08-31 (in MR !279; → `done` on merge) |
+| 3 | 2-7 + 2-8 finish: degradation notice + SSE citation contract (OQ-SST-7) | User-facing correctness — **START HERE** |
 | 4 | 4-9 finish: real i18n keys for AdminToolsView (14 locales, CI gate) | CI gate exists for this |
 | 5 | 4-8 finish: verify role-grant half works | Admin can maybe only view |
 | 6 | 2-4 finish: time-sensitive + LLM-fallback triggers (per D3) | Feature completeness |
@@ -180,6 +181,9 @@ files (work went epics → code directly). That's exactly why the tracker drifte
 
 | Date | What happened |
 |------|---------------|
+| 2026-08-31 (7) | Story 4-1 committed + pushed to feat/sst (independently re-verified: 1670/1670 backend tests, eslint + prettier clean). Exact tracker recount: **21 review · 5 in-progress · 11 backlog · 1 blocked of 38** (earlier "17 review" lines undercounted — 21 is grep-verified). Next: 2-7 + 2-8. |
+| 2026-08-31 (6) | **Story 4-1 code review passed (3 adversarial layers) + 4 patches applied.** Review caught a real production bug my dev session missed: admin-routes (`/api/admin`, blanket `requireAdmin`) mounted before tools-routes in ROUTE_CONFIGS → the new RBAC was inert in the composed app (route tests had mounted the router standalone). Fixed: mount order swapped, trailing default-deny added to tools router, composed-app integration test w/ real middleware added (5 tests), route-test harness hardened. Backend 65 suites / 1670 tests green, lint + format clean. 2 pre-existing findings deferred to deferred-work.md (double-authenticate; admin-routes token logging). Status stays `review` → `done` when MR !279 merges. Next queued: **2-7 + 2-8**. |
+| 2026-08-31 (5) | **Story 4-1 implemented (dev-story session)**: `requireRole(...)` added to keycloak-auth-middleware (fail-closed, claims-based, `requireAdmin` byte-identical); tools-routes split read guard (`tools-admin`/`tools-reader`/`admin`) + write guard (`tools-admin`/`admin`); 16 new tests (middleware unit + route RBAC incl. tools-reader 403 on writes, NFR8 read path); backend 64 suites / 1662 tests green, lint + Prettier clean. Status → **review**, changes uncommitted in working tree (user commits). Next queued: **2-7 + 2-8**, then `/bmad-code-review 4-1`. |
 | 2026-08-31 (4) | Story 4-1 file created (create-story session): verified `requireRole` doesn't exist, `tools-routes.js:19` blankets requireAdmin → both epic ACs fail today; story ready-for-dev. Its complete.yaml halt declared **correct by design** (override documented above). Correction: commit 0b9b64531 contained ONLY the tools/ deletion — the Dockerfile image-wiring fix was never in it (silent git add failure). Actually landed now as a verified follow-up commit. |
 | 2026-08-31 (2) | Decisions recorded: D1 executed (chatqna image wiring fixed — COPY workflows/ + explicit requests/httpx; orphaned tools/ deleted; 48 tests green), D2 hold MR until BMAD stories done then merge-commit, D3 defer remaining triggers, D5 defer Flutter, D6 proper BMAD. D4 explained (AGPL) — awaiting sign-off owner. Real MR size corrected: 50 files +6,844/−96 (earlier 167-file figure was measured against a stale local main). |
 | 2026-08-31 | Audited feat/sst vs tracker; re-baselined sprint-status.yaml (17 review / 5 in-progress / 12 backlog); found orphaned `tools/` dupe (D1); created this plan; MR !279 pipeline confirmed green. |

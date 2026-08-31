@@ -191,6 +191,30 @@ const keycloakAuthMiddleware = {
       });
     }
     next();
+  },
+
+  /**
+   * Require at least one of the given realm roles — must be used after authenticate
+   * Reads fresh JWT claims (req.claims.realm_access.roles) like requireAdmin;
+   * fails closed when claims are missing (no bypass by skipping authenticate).
+   * @param {...string} allowedRoles - Realm roles that grant access (e.g. 'tools-admin', 'admin')
+   * @returns {Function} Express middleware
+   */
+  requireRole(...allowedRoles) {
+    return (req, res, next) => {
+      const roles = req.claims && req.claims.realm_access && req.claims.realm_access.roles;
+      if (!roles || !Array.isArray(roles) || !allowedRoles.some((role) => roles.includes(role))) {
+        logger.warn(
+          `[requireRole] Access denied for ${req.user?.iss_sub || 'unknown'} — required: ${allowedRoles.join('|')}, roles: ${JSON.stringify(roles)}`
+        );
+        return res.status(403).json({
+          error: 'FORBIDDEN',
+          message: `${allowedRoles.join(' or ')} access required`,
+          details: {}
+        });
+      }
+      next();
+    };
   }
 };
 

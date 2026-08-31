@@ -1,6 +1,10 @@
+---
+baseline_commit: af37c47988ffd60c53d1de4b62cccb65b7098fa2
+---
+
 # Story 4.1: Two Keycloak roles + `requireRole()`
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -28,17 +32,28 @@ so that tool/feed configuration is mutable only by authorized admins while FOI a
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Add `requireRole(...allowedRoles)` to `keycloakAuthMiddleware` (AC: 1, 4)
-  - [ ] Place it next to `requireAdmin` in the same object literal; module.exports unchanged shape (still `{ keycloakAuthMiddleware, PUBLIC_PATHS, isPublicRoute }`)
-  - [ ] Variadic factory returning `(req, res, next) =>`; 403 body `{ error: 'FORBIDDEN', message: '<roles> access required', details: {} }`; `logger.warn` denied attempts (mirror requireAdmin's log line)
-- [ ] Task 2 — Split guards in `routes/tools-routes.js` (AC: 2)
-  - [ ] Keep `router.use(keycloakAuthMiddleware.authenticate)` (line 18) — requireRole depends on `req.claims`
-  - [ ] Replace line 19 blanket `requireAdmin` with per-route guards: reads → `requireRole('tools-admin', 'tools-reader', 'admin')`; writes → `requireRole('tools-admin', 'admin')`
-- [ ] Task 3 — Tests (AC: 1, 2, 4)
-  - [ ] Extend `__tests__/keycloak-auth-middleware.test.js` — new `describe('requireRole')` block beside the existing `requireAdmin` one (line 585): allows each listed role; rejects unlisted role with 403; fail-closed when `req.claims` undefined; multiple allowed roles work
-  - [ ] New `__tests__/routes/tools-routes.test.js` — follow the established mock pattern (`jest.mock` the middleware module with `authenticate`/`requireAdmin`/`requireRole` as `jest.fn()` pass-throughs, e.g. `__tests__/routes/weather-routes.test.js:77`): GET /feeds reachable by tools-reader; POST /feeds 403 for tools-reader mock (assert requireRole invoked with write roles); all routes behind authenticate
-  - [ ] Run backend suite + repo lint/format checks
-- [ ] Task 4 — Update trackers: `sprint-status.yaml` (4-1 → review), plan.md session log
+- [x] Task 1 — Add `requireRole(...allowedRoles)` to `keycloakAuthMiddleware` (AC: 1, 4)
+  - [x] Place it next to `requireAdmin` in the same object literal; module.exports unchanged shape (still `{ keycloakAuthMiddleware, PUBLIC_PATHS, isPublicRoute }`)
+  - [x] Variadic factory returning `(req, res, next) =>`; 403 body `{ error: 'FORBIDDEN', message: '<roles> access required', details: {} }`; `logger.warn` denied attempts (mirror requireAdmin's log line)
+- [x] Task 2 — Split guards in `routes/tools-routes.js` (AC: 2)
+  - [x] Keep `router.use(keycloakAuthMiddleware.authenticate)` (line 18) — requireRole depends on `req.claims`
+  - [x] Replace line 19 blanket `requireAdmin` with per-route guards: reads → `requireRole('tools-admin', 'tools-reader', 'admin')`; writes → `requireRole('tools-admin', 'admin')`
+- [x] Task 3 — Tests (AC: 1, 2, 4)
+  - [x] Extend `__tests__/keycloak-auth-middleware.test.js` — new `describe('requireRole')` block beside the existing `requireAdmin` one (line 585): allows each listed role; rejects unlisted role with 403; fail-closed when `req.claims` undefined; multiple allowed roles work
+  - [x] New `__tests__/routes/tools-routes.test.js` — follow the established mock pattern (`jest.mock` the middleware module with `authenticate`/`requireAdmin`/`requireRole` as `jest.fn()` pass-throughs, e.g. `__tests__/routes/weather-routes.test.js:77`): GET /feeds reachable by tools-reader; POST /feeds 403 for tools-reader mock (assert requireRole invoked with write roles); all routes behind authenticate
+  - [x] Run backend suite + repo lint/format checks
+- [x] Task 4 — Update trackers: `sprint-status.yaml` (4-1 → review), plan.md session log
+
+### Review Findings
+
+_Code review 2026-08-31 — 3 adversarial layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor)._
+
+- [x] [Review][Patch] **admin-routes intercepts `/api/admin/tools/*` before tools-routes mounts → new RBAC inert in production** [index.js:481-498 + admin-routes.js:45] — `admin-routes` is mounted at `/api/admin` BEFORE `tools-routes` at `/api/admin/tools` in `ROUTE_CONFIGS`; admin-router's pathless `router.use(requireAdmin)` runs first on every tools request, so `tools-reader` AND `tools-admin` holders get 403 `Admin access required` and the new guards are dead code in the composed app. Verified by composing the real routers in index.js order. Route tests passed only because they mount the tools router standalone. Fix: move the `tools-routes` entry above `admin-routes` in `ROUTE_CONFIGS`; add a composed-app test (createApp, REAL middleware, token mocked at `keycloakAuthService.verifyToken`) proving tools-reader reads and tools-admin writes work end-to-end. **FIXED 2026-08-31: tools-routes moved above admin-routes (with explanatory comment); `tools-routes.integration.test.js` added — 5 composed-app tests green.**
+- [x] [Review][Patch] **No default-deny on the tools router — a future unguarded route is authenticated-only** [tools-routes.js:19-24] — removing the blanket `requireAdmin` switched the router from secure-by-default to enumerate-or-fail-open. Fix: trailing catch-all deny (`router.use` after all routes → 403) so unmatched/unguarded paths fail closed. **FIXED 2026-08-31: trailing default-deny added; integration test asserts unmatched path → 403.**
+- [x] [Review][Patch] **Tests never exercise the real authenticate→requireRole claims seam; mock defaults to the most privileged role** [tools-routes.test.js:13,200] — both new test files mock or hand-set `req.claims`; nothing pins real `authenticate` output shape to what `requireRole` reads, and the route-test helper's `|| 'admin'` default silently tests the most privileged path when a header is forgotten. Fix: composed-app integration test from the mount-order patch covers the seam; change helper default to `''` (no roles → loud 403). **FIXED 2026-08-31: integration test exercises real authenticate→requireRole→router chain; helper defaults to `''` + trim.**
+- [x] [Review][Patch] **Route-test coverage and isolation gaps** [tools-routes.test.js] — PUT/DELETE happy paths untested (a swapped-guard typo would pass); no route-level denial test for a plain `user` on GET; `clearMocks` not configured (jest default false) so `not.toHaveBeenCalled()` assertions are order-dependent; `x-test-roles` parsing doesn't trim (`'a, b'` → `' b'`). Fix: two happy-path tests, one denial test, `beforeEach(jest.clearAllMocks)`, `.map(s => s.trim())`. **FIXED 2026-08-31: all four applied; wiring test re-instantiates the router (clearAllMocks wipes module-load calls).**
+- [x] [Review][Defer] Double authenticate per tools request (pre-existing) [tools-routes.js:19 + index.js:930] — deferred, pre-existing; recorded in deferred-work.md
+- [x] [Review][Defer] admin-routes logs full headers incl. bearer token at info level (pre-existing) [admin-routes.js:34-40] — deferred, pre-existing; recorded in deferred-work.md
 
 ## Dev Notes
 
@@ -75,8 +90,36 @@ so that tool/feed configuration is mutable only by authorized admins while FOI a
 
 ### Agent Model Used
 
+GLM-5.2 (Claude Code harness)
+
 ### Debug Log References
+
+- RED phase: 10 tests failed exactly as expected (5× `requireRole is not a function` in middleware tests, 5× wrong-status in route tests) before implementation
+- GREEN phase: 56/56 pass across the two touched suites; full backend regression 64 suites / 1662 tests pass
+- ESLint clean on all four touched files; Prettier auto-formatted the new route test once, then clean
+- Known env gap (not this story): root `npm run lint` aborts at `components/document-repository` — its `node_modules` is not installed locally. Frontend + backend lint green; CI installs deps per component. Story touched neither component.
 
 ### Completion Notes List
 
+- `requireRole(...allowedRoles)` added as a sibling of `requireAdmin` — purely additive diff, `requireAdmin` byte-identical (its 6 message-assertion tests untouched and green)
+- Guards split in `tools-routes.js`: `readGuard = requireRole('tools-admin', 'tools-reader', 'admin')` on GET /feeds; `writeGuard = requireRole('tools-admin', 'admin')` on POST/PUT/DELETE /feeds* and POST /test-search; `authenticate` still runs router-wide first
+- Fail-closed verified: missing `req.claims` → 403 (no bypass by mounting requireRole without authenticate)
+- No realm-yaml change needed — `tools-admin`/`tools-reader` already exist (`genie-realm.yaml:46-48`)
+- Route tests assert guard wiring directly (`requireRole` called with exact role sets, `requireAdmin` never called)
+
 ### File List
+
+- components/gov-chat-backend/middleware/keycloak-auth-middleware.js (modified — added requireRole)
+- components/gov-chat-backend/routes/tools-routes.js (modified — per-route guards + trailing default-deny)
+- components/gov-chat-backend/index.js (modified — tools-routes mounted before admin-routes)
+- components/gov-chat-backend/__tests__/keycloak-auth-middleware.test.js (modified — requireRole describe block)
+- components/gov-chat-backend/__tests__/routes/tools-routes.test.js (new)
+- components/gov-chat-backend/__tests__/routes/tools-routes.integration.test.js (new — composed-app RBAC, real middleware)
+- _bmad-output/implementation-artifacts/sprint-status.yaml (status updates)
+- _bmad-output/implementation-artifacts/deferred-work.md (2 deferred review findings)
+- _bmad-output/implementation-artifacts/4-1-two-keycloak-roles-and-require-role.md (this record)
+
+### Change Log
+
+- 2026-08-31: Implemented requireRole + per-route RBAC on /api/admin/tools/*, tests added, all suites green → status review
+- 2026-08-31: Code review (3 adversarial layers) — 4 patches applied: ROUTE_CONFIGS mount order (tools before admin — RBAC was inert in composed app), trailing default-deny on tools router, real-seam integration test + mock-default hardening, test isolation/coverage fixes. Backend 65 suites / 1670 tests green, lint + format clean. Stays at `review` per D2 (moves to `done` when MR !279 merges).

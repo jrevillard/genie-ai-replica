@@ -485,6 +485,15 @@ const ROUTE_CONFIGS = [
     keycloakAuth: true
   },
   {
+    // MUST mount before admin-routes: admin-routes sits on the '/api/admin'
+    // prefix with a router-level requireAdmin, which would otherwise intercept
+    // every '/api/admin/tools/*' request and 403 tools-admin/tools-reader.
+    file: 'tools-routes',
+    paths: ['/api/admin/tools'],
+    serviceName: 'toolsService',
+    keycloakAuth: true
+  },
+  {
     file: 'admin-routes',
     paths: ['/api/admin'],
     serviceName: 'adminDashboardService',
@@ -492,13 +501,7 @@ const ROUTE_CONFIGS = [
     keycloakAuth: true
   },
   { file: 'weather-routes', paths: ['/api/weather'], serviceName: 'weatherService', keycloakAuth: true },
-  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true },
-  {
-    file: 'tools-routes',
-    paths: ['/api/admin/tools'],
-    serviceName: 'toolsService',
-    keycloakAuth: true
-  }
+  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true }
 ];
 
 /**

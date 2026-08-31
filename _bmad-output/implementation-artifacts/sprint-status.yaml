@@ -142,7 +142,7 @@ development_status:
 
   # ─────────────── Epic 4 — Admin surface ───────────────
   epic-4: in-progress
-  4-1-two-keycloak-roles-and-require-role: ready-for-dev # realm roles exist in genie-realm.yaml; verified gap: tools-routes.js:19 blanket requireAdmin (no requireRole) — story file 2026-08-31
+  4-1-two-keycloak-roles-and-require-role: review # code-review PASSED 2026-08-31: 4 patches applied (mount order fixed — RBAC was inert behind admin-routes; default-deny; integration test; test hardening); 1670 tests green; → done when MR !279 merges
   4-2-api-tools-bff-proxy: review # tools-routes.js mounted in index.js L497 (/feeds CRUD, /test-search); Kong + env.j2 sync unverified
   4-3-admin-tools-tab: review # AdminToolsView.vue (488 lines) + store/modules/tools.js
   4-4-tool-management-and-domain-whitelist-editor: backlog # no whitelist editor in AdminToolsView

@@ -756,6 +756,81 @@ describe('requireAdmin', () => {
   });
 });
 
+describe('requireRole', () => {
+  let req, res, next;
+
+  beforeEach(() => {
+    req = {
+      user: {
+        _key: 'users/123',
+        iss_sub: 'http://localhost:8080/realms/genie#12345678',
+        email: 'user@example.com',
+        name: 'Test User'
+      },
+      path: '/api/admin/tools/feeds',
+      originalUrl: '/api/admin/tools/feeds'
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis()
+    };
+    next = jest.fn();
+  });
+
+  it('should allow access when user has an allowed role', () => {
+    req.claims = { realm_access: { roles: ['user', 'tools-admin'] } };
+
+    keycloakAuthMiddleware.requireRole('tools-admin', 'admin')(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('should allow access when user has any one of the allowed roles', () => {
+    req.claims = { realm_access: { roles: ['user', 'admin'] } };
+
+    keycloakAuthMiddleware.requireRole('tools-admin', 'admin')(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('should return 403 when user only has a non-allowed role', () => {
+    req.claims = { realm_access: { roles: ['user', 'tools-reader'] } };
+
+    keycloakAuthMiddleware.requireRole('tools-admin', 'admin')(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'tools-admin or admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when claims is undefined (fail-closed)', () => {
+    keycloakAuthMiddleware.requireRole('tools-admin')(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'FORBIDDEN',
+      message: 'tools-admin access required',
+      details: {}
+    });
+  });
+
+  it('should return 403 when realm_access.roles is missing or not an array', () => {
+    req.claims = {};
+
+    keycloakAuthMiddleware.requireRole('tools-admin')(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+});
+
 describe('PUBLIC_PATHS', () => {
   it('should contain required public paths', () => {
     expect(PUBLIC_PATHS).toContain('/health');

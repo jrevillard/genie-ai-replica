@@ -1183,25 +1183,13 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             # handle template
             received_prompt = data.get("initial_query", inputs.get("text", ""))
 
-            # FR17, FR19: Web search trigger & fusion
-            try:
-                max_score = (
-                    max([(d.get("metadata") or {}).get("score", 0.0) for d in retrieved_docs])
-                    if retrieved_docs
-                    else 0.0
-                )
-                if max_score < 0.70:
-                    logger.info("Triggering web search fallback due to low RAG confidence (%.2f < 0.70)", max_score)
-                    from workflows.tools.fusion import ResultFusionEngine
-                    from workflows.tools.web_search import SearxngBackend
-
-                    backend = SearxngBackend()
-                    web_results = backend.search_sync(received_prompt, num_results=3)
-
-                    fusion = ResultFusionEngine()
-                    retrieved_docs = fusion.fuse(retrieved_docs, web_results, tool_id="web_search")
-            except Exception as e:
-                logger.error("Web search integration failed: %s", e)
+            # FR17, FR19: Web search trigger & fusion (story 2-7: governed by
+            # _apply_web_search_fallback — degradation truth table lives there)
+            _scores = [(d.get("metadata") or {}).get("score") for d in retrieved_docs]
+            max_score = max((s for s in _scores if isinstance(s, (int, float))), default=0.0)
+            retrieved_docs, _degradation = self._apply_web_search_fallback(retrieved_docs, received_prompt, max_score)
+            if _degradation:
+                next_data["degradation"] = _degradation
 
             if not retrieved_docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
                 abstention_instructions = (
@@ -1315,25 +1303,17 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         # else:
         #     prompt = ChatTemplate.generate_rag_prompt(initial_query, docs)
 
-        # FR17, FR19: Web search trigger & fusion
-        try:
-            max_score = (
-                max([d.get("score", 0.0) for d in reranked_docs_with_scores]) if reranked_docs_with_scores else 0.0
-            )
-            if max_score < 0.70:
-                logger.info("Triggering web search fallback due to low RAG confidence (%.2f < 0.70)", max_score)
-                from workflows.tools.fusion import ResultFusionEngine
-                from workflows.tools.web_search import SearxngBackend
-
-                backend = SearxngBackend()
-                web_results = backend.search_sync(initial_query, num_results=3)
-
-                fusion = ResultFusionEngine()
-                reranked_docs_with_scores = fusion.fuse(reranked_docs_with_scores, web_results, tool_id="web_search")
-                # Update docs list for prompt
-                docs = [doc.get("text", "") for doc in reranked_docs_with_scores]
-        except Exception as e:
-            logger.error("Web search integration failed: %s", e)
+        # FR17, FR19: Web search trigger & fusion (story 2-7: governed by
+        # _apply_web_search_fallback — degradation truth table lives there)
+        _scores = [d.get("score") for d in reranked_docs_with_scores]
+        max_score = max((s for s in _scores if isinstance(s, (int, float))), default=0.0)
+        reranked_docs_with_scores, _degradation = self._apply_web_search_fallback(
+            reranked_docs_with_scores, initial_query, max_score
+        )
+        if _degradation:
+            next_data["degradation"] = _degradation
+        # Update docs list for prompt
+        docs = [doc.get("text", "") for doc in reranked_docs_with_scores]
 
         if not docs and str(CHATQNA_ENFORCE_ABSTENTION).lower() == "true":
             abstention_instructions = (
@@ -1716,6 +1696,96 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
+    def _apply_web_search_fallback(self, docs, query, max_score):
+        """Story 2-7: low-confidence web-search fallback with degradation truth table.
+
+        Called at both fusion seams (retriever and rerank nodes). Returns
+        ``(docs, degradation_or_None)``:
+
+        - max_score >= threshold: trigger not fired, docs unchanged, no degradation.
+        - Backend failure (WebSearchError) with KB docs: RAG-only, deliberately
+          NO degradation object (epic 2.7: silent when the KB still answers).
+        - Backend failure without KB docs: SEARCH_UNAVAILABLE degradation so the
+          UI can render a notice; docs stay empty -> abstention fires downstream.
+        - Results below the FR24 quality gate: LOW_QUALITY degradation with
+          alternative-source guidance (worded for whether KB docs exist);
+          junk is never fused.
+        - Usable results: fused as before (existing behavior, regression-guarded).
+
+        Never raises: an unexpected failure (missing module in a built image,
+        backend bug) degrades to RAG-only instead of failing the chat request —
+        the optional web-search enhancement must not take the answer down.
+        """
+        threshold = 0.70
+        if max_score >= threshold:
+            return docs, None
+
+        logger.info("Triggering web search fallback due to low RAG confidence (%.2f < %.2f)", max_score, threshold)
+        try:
+            from workflows.tools.fusion import ResultFusionEngine, filter_usable_results
+            from workflows.tools.web_search import SearxngBackend, WebSearchError
+
+            try:
+                web_results = SearxngBackend().search_sync(query, num_results=3)
+            except WebSearchError as exc:
+                logger.warning("Web search unavailable: %s", exc)
+                if not docs:
+                    return docs, {
+                        "tool_id": "web_search",
+                        "reason": "SEARCH_UNAVAILABLE",
+                        "fallback_applied": "none",
+                        "message": "Web search is temporarily unavailable and the knowledge base "
+                        "has no information on this topic. Try rephrasing your question or "
+                        "contact the relevant office directly for up-to-date information.",
+                    }
+                return docs, None
+
+            usable = filter_usable_results(web_results)
+            if not usable:
+                if docs:
+                    message = (
+                        "Web results were found but did not meet quality standards, so they were "
+                        "not used. The answer is based on available knowledge base documents only; "
+                        "for the latest information please consult the official source directly."
+                    )
+                else:
+                    message = (
+                        "Web results were found but did not meet quality standards, and the "
+                        "knowledge base has no information on this topic. Please try rephrasing "
+                        "your question or consult the relevant official source directly."
+                    )
+                return docs, {
+                    "tool_id": "web_search",
+                    "reason": "LOW_QUALITY",
+                    "fallback_applied": "none",
+                    "message": message,
+                }
+
+            fused = ResultFusionEngine().fuse(docs, usable, tool_id="web_search")
+            return fused, None
+        except Exception as exc:  # never kill the chat request — degrade to RAG-only
+            logger.error("Web search fallback failed unexpectedly: %s", exc, exc_info=True)
+            if not docs:
+                return docs, {
+                    "tool_id": "web_search",
+                    "reason": "SEARCH_UNAVAILABLE",
+                    "fallback_applied": "none",
+                    "message": "Web search is temporarily unavailable and the knowledge base "
+                    "has no information on this topic. Try rephrasing your question or "
+                    "contact the relevant office directly for up-to-date information.",
+                }
+            return docs, None
+
+    def _extract_degradation(self, result_dict):
+        """Recover the degradation dict set by a fusion seam from the
+        node-keyed megaservice result dict (state keys persist downstream)."""
+        if not isinstance(result_dict, dict):
+            return None
+        for value in result_dict.values():
+            if isinstance(value, dict) and value.get("degradation"):
+                return value["degradation"]
+        return None
+
     async def _stream_with_metadata(self, body_iterator, result_dict):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
@@ -1826,6 +1896,10 @@ class ChatQnAService:
             # Raw LLM self-assessed groundedness; None when the sentinel was
             # omitted/malformed. Never hard-fails the chat.
             metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
+        # Story 2-7: degradation notice (web search unavailable / below quality)
+        _degradation = self._extract_degradation(result_dict)
+        if _degradation:
+            metadata["degradation"] = _degradation
         yield "data: " + json.dumps(metadata) + "\n\n"
         yield "data: [DONE]\n\n"
 
@@ -2729,6 +2803,10 @@ class ChatQnAService:
             # Raw LLM self-assessed groundedness; None when the sentinel was omitted
             # or malformed.
             metadata["self_confidence"] = round(self_confidence, 2) if self_confidence is not None else None
+        # Story 2-7: degradation notice (web search unavailable / below quality)
+        _degradation = self._extract_degradation(result_dict)
+        if _degradation:
+            metadata["degradation"] = _degradation
 
         final_response_payload = {
             "response": final_text_response,

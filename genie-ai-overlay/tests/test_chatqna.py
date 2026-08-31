@@ -57,6 +57,14 @@ def create_mock_request(data=None, headers=None):
     return req
 
 
+def stub_web_search_fallback(self_mock):
+    """align_outputs tests exercise mock selves; make the story-2-7 helper a
+    passthrough (real behavior has a dedicated suite in
+    tests/test_chatqna_degradation.py)."""
+    self_mock._apply_web_search_fallback.side_effect = lambda docs, query, max_score: (docs, None)
+    return self_mock
+
+
 def create_mock_chat_request_data(**overrides):
     """Return a dict matching ChatCompletionRequest schema."""
     defaults = {
@@ -685,6 +693,7 @@ class TestAlignOutputs:
         def test_without_rerank_no_docs_adds_abstention(self):
             self_mock = MagicMock()
             self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+            stub_web_search_fallback(self_mock)
             # downstream returns a node NOT starting with "rerank" → with_rerank=False
             graph = create_mock_runtime_graph(downstream_nodes=["llm_node"])
             data = {"initial_query": "test", "retrieved_docs": [], "metadata": []}
@@ -789,6 +798,7 @@ class TestAlignOutputs:
         def test_empty_docs_with_rerank_deletes_rerank_node(self):
             self_mock = MagicMock()
             self_mock.services = {"retriever_node": create_mock_service_node(FakeServiceType.RETRIEVER)}
+            stub_web_search_fallback(self_mock)
             graph = create_mock_runtime_graph(downstream_nodes=["rerank_node"])
             graph.downstream.side_effect = lambda node: {
                 "retriever_node": ["rerank_node"],
@@ -821,6 +831,7 @@ class TestAlignOutputs:
         def test_builds_reranked_docs_with_scores(self):
             self_mock = MagicMock()
             self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+            stub_web_search_fallback(self_mock)
             data = {"reranked_docs": [{"text": "doc1", "score": 0.95}, {"text": "doc2", "score": 0.80}]}
             inputs = {
                 "initial_query": "test",
@@ -836,6 +847,7 @@ class TestAlignOutputs:
         def test_empty_docs_enforces_abstention(self):
             self_mock = MagicMock()
             self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+            stub_web_search_fallback(self_mock)
             data = {"reranked_docs": []}
             inputs = {"initial_query": "test", "retrieved_docs": []}
             llm_params = {}
@@ -850,6 +862,7 @@ class TestAlignOutputs:
         def test_documents_format_rerank_output(self):
             self_mock = MagicMock()
             self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+            stub_web_search_fallback(self_mock)
             # Format 2: data["documents"] is a list of plain-text strings
             data = {"documents": ["doc from reranker service"]}
             inputs = {
@@ -866,6 +879,7 @@ class TestAlignOutputs:
         def test_list_format_tei_rerank_output(self):
             self_mock = MagicMock()
             self_mock.services = {"rerank_node": create_mock_service_node(FakeServiceType.RERANK)}
+            stub_web_search_fallback(self_mock)
             # Format 3: raw TEI list output with index referencing input documents
             data = [{"index": 0, "score": 0.92}]
             inputs = {

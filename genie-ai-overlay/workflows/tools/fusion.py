@@ -10,10 +10,69 @@ Enforces context-window budgets and normalizes citation formats.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+#: Default minimum characters of content for a web result to be usable (FR24).
+#: Env-overridable via WEB_SEARCH_MIN_CONTENT_CHARS; <= 0 disables the gate.
+DEFAULT_MIN_CONTENT_CHARS = 80
+
+
+def filter_usable_results(
+    tool_results: list[dict[str, Any]],
+    min_content_chars: int | None = None,
+) -> list[dict[str, Any]]:
+    """FR24 quality gate: drop tool results below the minimum quality bar.
+
+    A web result is usable when it has a non-empty title AND url AND at least
+    ``min_content_chars`` characters of non-whitespace content. Applied before
+    fusion so unusable results never enter the LLM context. Null field values
+    (SearXNG passes JSON ``null`` through verbatim) count as empty.
+    """
+    if not tool_results:
+        return []
+    if min_content_chars is None:
+        try:
+            min_content_chars = int(os.getenv("WEB_SEARCH_MIN_CONTENT_CHARS", DEFAULT_MIN_CONTENT_CHARS))
+        except (TypeError, ValueError):
+            min_content_chars = DEFAULT_MIN_CONTENT_CHARS
+    if min_content_chars <= 0:
+        return list(tool_results)
+
+    usable = []
+    for res in tool_results:
+        title = _stripped(res, "title")
+        url = _stripped(res, "url")
+        content = _stripped(res, "content")
+        if title and url and len(content) >= _effective_min_chars(content, min_content_chars):
+            usable.append(res)
+
+    dropped = len(tool_results) - len(usable)
+    if dropped:
+        logger.info("FR24 quality gate dropped %d of %d web result(s)", dropped, len(tool_results))
+    return usable
+
+
+def _stripped(res: dict[str, Any], key: str) -> str:
+    """Field access that treats explicit JSON nulls (and non-strings) as empty."""
+    value = res.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _effective_min_chars(content: str, min_chars: int) -> int:
+    """Halve the threshold for non-Latin scripts.
+
+    CJK/Arabic/Cyrillic text carries roughly twice the information per code
+    point that Latin text does; a fixed character bar calibrated on Latin
+    snippets would drop usable results as LOW_QUALITY for those scripts.
+    """
+    letters = [c for c in content if c.isalpha()]
+    if letters and sum(1 for c in letters if ord(c) > 0x24F) > len(letters) // 2:
+        return max(1, min_chars // 2)
+    return min_chars
 
 
 @dataclass

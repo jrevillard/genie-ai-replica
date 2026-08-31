@@ -21,7 +21,7 @@ Last updated: 2026-08-31
    - Update `sprint-status.yaml` status + append to Session Log below. **Never skip this step — a stale tracker is how we got lost.**
 5. Anything ambiguous → ask in chat, record the answer here as a numbered decision.
 
-**Standing decisions (already made, don't re-ask):** D1 ✅ done · D2 HOLD MR until BMAD stories done, then merge-commit · D3 defer triggers · D5 defer Flutter · D6 = proper BMAD (story files per story).
+**Standing decisions (already made, don't re-ask):** D1 ✅ done · D2 merge-ANYTIME (amended — see D2 below) · D3 defer triggers · D5 defer Flutter · D6 = proper BMAD (story files per story).
 
 **⚠️ BMAD automation override (this initiative only):** the `_bmad` workflow automation (`complete.yaml` — story branches, PRD-branch MRs, issue creation) assumes the `feat/{prd_key}/prd` worktree convention, which SST deliberately does not use. **A `complete.yaml` halt is expected and correct** — do not "fix" it by creating PRD branches. Instead: write the story file, commit it together with tracker updates **directly on `feat/sst`**, push. GitLab issue creation stays deferred until the #696–#725 re-baseline (see sprint-status TRACKING NOTE).
 
@@ -36,7 +36,7 @@ Last updated: 2026-08-31
 - **MR !279: ~47 files, 17 commits** (count grows as stories land). Tracker synced (`sprint-status.yaml`)
 - **Fixed 2026-08-31:** web search was silently dead in the deployed image (chatqna Dockerfile never copied `workflows/`; the `try/except` swallowed the `ModuleNotFoundError`). Now wired: `COPY genie-ai-overlay/workflows/ /app/workflows/` + explicit `requests httpx` deps. Orphaned `tools/` dupe (1,875 lines) deleted.
 - **Story 4-1 complete through the full BMAD loop** (dev → 3-layer review → 4 patches → 1670 tests green → committed). Review caught the RBAC being inert behind admin-routes' mount order — fixed with an integration test pinning it.
-- **Nothing is merged yet** (D2: hold until stories done, then merge-commit).
+- **Nothing is merged yet** — but per the amended D2, the MR may be merged anytime (see operating procedure under D2).
 - Score (exact recount 2026-08-31): **21 review · 5 in-progress · 11 backlog · 1 blocked** — of 38 stories across 4 epics (+1 deferred)
 
 ---
@@ -127,27 +127,43 @@ Vue renders citations; mobile does not. No `mobile/` changes exist in the MR.
  
 ---
 
-## Remaining work (backlog + in-progress, priority order)
+## Remaining work — progress + ETA (updated 2026-08-31)
 
-Ordered by: blocks merge → blocks production → everything else.
+**ETA unit = one BMAD-loop session** (create-story → dev-story → code-review → commit; measured from story 4-1 ≈ 1 session/story). Calibrated on actuals, not hope.
 
-| # | Story | Why this order |
-|---|-------|----------------|
-| ~~1~~ | ~~D1 cleanup~~ | ✅ DONE 2026-08-31 (dupe deleted + image wiring fixed) |
-| ~~2~~ | ~~4-1 requireRole RBAC~~ | ✅ DONE through full BMAD loop 2026-08-31 (in MR !279; → `done` on merge) |
-| 3 | 2-7 + 2-8 finish: degradation notice + SSE citation contract (OQ-SST-7) | User-facing correctness — **START HERE** |
-| 4 | 4-9 finish: real i18n keys for AdminToolsView (14 locales, CI gate) | CI gate exists for this |
-| 5 | 4-8 finish: verify role-grant half works | Admin can maybe only view |
-| 6 | 2-4 finish: time-sensitive + LLM-fallback triggers (per D3) | Feature completeness |
-| 7 | 1-5 OTel spans on governance phases | Observability requirement |
-| 8 | 1-6 Presidio container + plumbing | PII hard-guarantee (regex today) |
-| 9 | 1-1 schemas package (into live `workflows/tools/`) | Contract for 2-8/2-10 |
-| 10 | 4-4, 4-6, 4-7 admin UI: whitelist editor, audit viewer, health overview | Depends on 1-3 backend (done) |
-| 11 | 3-4, 3-5, 3-9, 3-11 ingestor: JSON-API polling, webhooks, DLQ, regression guard | 3-11 is the production gate (needs OQ-SST-4) |
-| 12 | 2-10 Flutter parity (per D5) | Last |
+### ✅ Done (22 of 38)
+| What | Status |
+|---|---|
+| 21 stories in review (all four epic cores + 4-1 RBAC through full loop) | in MR !279, merge-anytime per D2 |
 
-Blocked elsewhere: **1-7** (needs OPEA 1.5 bump task A1 — not ours).
-Deferred: 5-1 analytics dashboard.
+### 🔨 Milestone A — "merge-clean" (finish the half-done stories) → **~3–4 sessions**
+| # | Story | ETA | Why |
+|---|---|---|---|
+| 3 | 2-7 + 2-8 finish: degradation notice + SSE citation contract (OQ-SST-7) | 1–2 sess | User-facing correctness — **START HERE** |
+| 4 | 4-9 finish: real i18n keys, 14 locales + CI gate | 1 sess | Mechanical, CI-enforced |
+| 5 | 4-8 finish: verify role-grant half | 0.5 sess | Verify + small fix |
+
+*After A: merge a fully-coherent SST (every story either done or cleanly backlog).*
+
+### 🏭 Milestone B — "production-grade" → **+4–6 sessions (cumulative ~8)** 
+| # | Story | ETA | Why |
+|---|---|---|---|
+| 6 | 2-4 finish: time-sensitive + LLM-fallback triggers | 1 sess | Feature completeness |
+| 7 | 1-5 OTel spans on governance phases | 1 sess | Observability (pattern exists) |
+| 8 | 1-6 Presidio container + plumbing | 1–2 sess | PII hard-guarantee |
+| 9 | 1-1 schemas package (port from git history) | 0.5–1 sess | Contract for citations |
+| — | 3-11 regression guard (needs OQ-SST-4 answer) | 1 sess | THE production gate |
+
+### 🧰 Milestone C — "full initiative" → **+5–7 sessions (cumulative ~14–17)**
+| # | Story | ETA | Why |
+|---|---|---|---|
+| 10 | 4-4, 4-6, 4-7 admin UI: whitelist editor, audit viewer, health overview | 2–3 sess | Backend (1-3) already done |
+| 11 | 3-4, 3-5, 3-9 ingestor: JSON-API polling, webhooks, DLQ | 3 sess | Resilience depth |
+
+Blocked elsewhere: **1-7** (needs OPEA 1.5 bump task A1 — not ours, no ETA).
+Deferred: **2-10** Flutter (D5), **5-1** analytics.
+
+**Wall-clock at various paces:** 1 session/day → A in 3–4 days, full in ~3 weeks · 3 sessions/week → full in ~5–6 weeks · weekend batching (3–4 sess/weekend) → full in ~4–5 weekends.
 
 ---
 

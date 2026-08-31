@@ -255,7 +255,12 @@ class TestEnsureGraphCollections:
 
     def test_registers_the_named_graph_for_a_new_repo(self):
         """Story 4.8-amend: the retriever's `has_graph` guard requires a named
-        graph; register ENTITY -(_HAS_SOURCE)-> SOURCE + ENTITY -(_LINKS_TO)-> ENTITY."""
+        graph; register ENTITY -(_HAS_SOURCE)-> SOURCE + ENTITY -(_LINKS_TO)-> ENTITY.
+        NOTE (live-caught 2026-08-31): python-arango's create_graph entries use
+        "edge_collection"/"from_vertex_collections"/"to_vertex_collections" —
+        the arangojs-style "collection"/"from"/"to" keys raised KeyError
+        'edge_collection' inside python-arango and the graph was NEVER
+        registered. The contract below pins the python-arango shape."""
         instance, db = self._bare_loader(["GRAPH_SOURCE", "_graphs"])
         db.has_graph.return_value = False
         instance._ensure_graph_collections("OKF_repo1")
@@ -264,10 +269,18 @@ class TestEnsureGraphCollections:
         kwargs = db.create_graph.call_args.kwargs
         assert name == "OKF_repo1"
         edge_defs = kwargs["edge_definitions"]
-        has_source = next(d for d in edge_defs if d["collection"] == "OKF_repo1_HAS_SOURCE")
-        assert has_source["from"] == ["OKF_repo1_ENTITY"] and has_source["to"] == ["OKF_repo1_SOURCE"]
-        links = next(d for d in edge_defs if d["collection"] == "OKF_repo1_LINKS_TO")
-        assert links["from"] == ["OKF_repo1_ENTITY"] and links["to"] == ["OKF_repo1_ENTITY"]
+        has_source = next(
+            d for d in edge_defs if d["edge_collection"] == "OKF_repo1_HAS_SOURCE"
+        )
+        assert (
+            has_source["from_vertex_collections"] == ["OKF_repo1_ENTITY"]
+            and has_source["to_vertex_collections"] == ["OKF_repo1_SOURCE"]
+        )
+        links = next(d for d in edge_defs if d["edge_collection"] == "OKF_repo1_LINKS_TO")
+        assert (
+            links["from_vertex_collections"] == ["OKF_repo1_ENTITY"]
+            and links["to_vertex_collections"] == ["OKF_repo1_ENTITY"]
+        )
 
     def test_skips_graph_registration_when_graph_exists(self):
         instance, db = self._bare_loader(

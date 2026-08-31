@@ -192,8 +192,8 @@
         src: templates/api_keys.map.j2
         dest: "{{ gpu_deploy_dir }}/{{ gpu_generated_dir }}/api_keys.map"
         mode: '0600'
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
+        owner: root
+        group: root
       notify: Reload nginx-gpu
       no_log: true
 
@@ -239,6 +239,38 @@
         chdir: "{{ gpu_deploy_dir }}"
       register: compose_deploy
       changed_when: "'Started' in compose_deploy.stdout or 'Created' in compose_deploy.stdout"
+
+
+    - name: Stat GPU node SSL and api_keys files before normalization
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      register: gpu_node_files_pre
+      loop:
+        - { path: "{{ gpu_deploy_dir }}/ssl/server.crt" }
+        - { path: "{{ gpu_deploy_dir }}/ssl/server.key" }
+        - { path: "{{ gpu_deploy_dir }}/{{ gpu_generated_dir }}/api_keys.map" }
+      failed_when: false
+
+    # The cap-dropped nginx-gpu container (root with no DAC_OVERRIDE) can
+    # only read files it owns. Re-owning here keeps the fix idempotent
+    # and self-healing across re-runs.
+    - name: Normalize GPU node file ownership for the cap-dropped nginx-gpu container
+      become: true
+      become_user: root
+      become_method: sudo
+      ansible.builtin.file:
+        path: "{{ item.stat.path }}"
+        state: file
+        owner: root
+        group: root
+        mode: >-
+          {{ '0644' if (item.item.path.endswith('server.crt') or item.item.path.endswith('api_keys.map')) else '0600' }}
+      loop: "{{ gpu_node_files_pre.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+      when:
+        - item.stat.exists
+        - (item.stat.pw_name != 'root')
 
     - name: Deploy output
       ansible.builtin.debug:

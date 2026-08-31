@@ -65,6 +65,7 @@ COPY --chmod=0755 genie-ai-overlay/chatqna/entrypoint.sh /app/ChatQnA/entrypoint
 # Step C: Install dependencies
 # Install extra dependencies from our original Dockerfile_genieai
 RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography]" \
+    requests httpx \
     "opentelemetry-api>=1.22" "opentelemetry-sdk>=1.22" \
     "opentelemetry-instrumentation-fastapi>=0.43b0" \
     "opentelemetry-instrumentation-httpx>=0.43b0" \
@@ -75,6 +76,11 @@ RUN pip install --no-cache-dir langdetect transformers "python-jose[cryptography
 # Step D: "Overlay" our custom GENIE-AI "glue" files
 # Copy the shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
+
+# Copy the SST workflows tools package (web search + fusion + governance,
+# importable as workflows.tools from PYTHONPATH=/app) — used by the
+# web-search fallback in genieai_chatqna.py
+COPY genie-ai-overlay/workflows/ /app/workflows/
 
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py

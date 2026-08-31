@@ -6,39 +6,6 @@ change requires manual action from deployers.
 
 ---
 
-## v2.0.1 → v2.1.0
-
-### Breaking Changes
-
-#### OPEA v1.3 → v1.5
-
-All four OPEA overlay images (chatqna, dataprep, retriever, reranker) now build from OPEA v1.5. The upgrade absorbs 7.5 months of upstream bug fixes and dependency CVEs while preserving GENIE's RAG behavior (retrieval, reranking, labeling, contextual retrieval).
-
-**Compatibility**: ArangoDB vector store format unchanged. Existing embeddings and graph data are compatible. No data migration required.
-
-**Rollback**: Redeploy the previous v1.3-based image tags. The v1.3 images remain in the registry.
-
-**What changed**:
-- All OPEA services now use Python 3.11 (was 3.10)
-- Dataprep image base aligned to OPEA v1.5 upstream (`python:3.11-slim`, GPU support maintained via pip-installed CUDA libraries)
-- Retriever graph name default unified to `ARANGO_GRAPH_NAME` (was `RETRIEVER_ARANGO_GRAPH_NAME`)
-
-**Migration**: No manual migration required. Pull new images and redeploy.
-
-#### Python 3.10 → 3.11
-
-All OPEA overlay images now use Python 3.11 (matching OPEA v1.5's base). Custom Python code in the overlay (if any) should be tested against Python 3.11.
-
-**Compatibility**: Python 3.11 is backward-compatible with 3.10 for standard library and most third-party packages. No code changes expected.
-
-#### Dataprep Image Base Change
-
-The dataprep image base changed from `nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04` to `python:3.11-slim` to align with OPEA v1.5 upstream. **GPU support is maintained** — CUDA libraries are now installed via pip (`cuda-toolkit`, `nvidia-cuda-runtime`) rather than baked into the base image.
-
-**Compatibility**: No functional change. Docling continues to use GPU for document parsing when `DOCLING_DEVICE=cuda` (default). The dataprep service still runs on GPU nodes (`node.labels.gpu == true`).
-
----
-
 ## v2.0.0 → v2.0.1
 
 ### Breaking Changes

@@ -112,3 +112,15 @@ curl -X POST $API/api/notifications/broadcast \
 
 Firebase service-account JSON lives outside git (`.secrets/`, gitignored) and
 must be readable by the container's `node` user.
+
+## 6. release/2.0 merge (Aug 31)
+
+Merged `origin/release/2.0` (21 stabilization commits): backend CVE bumps
+(multer 2.x, nodemailer 9.x, uuid 11, protobufjs override) combined with our
+bullmq/firebase-admin, document-repository CVE bumps + crawler fix, overlay
+embedding/textgen image bumps, postgres Dockerfile, docs/changelog. Kept ours:
+frozen frontend (release's frontend CVE bumps deliberately skipped —
+jspdf 4 / @lucide/vue rename pending the unfreeze), gateway, root compose,
+main-lineage CI/Dockerfile. The chatqna max_tokens/pydantic fix was not
+needed: this branch's chatqna already defaults max_tokens to 1024 and never
+passes None. Verified: jest 64/64 with the bumped dependencies.

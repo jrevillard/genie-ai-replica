@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-31
+
 ### Changed
 
 - **OPEA upgrade from v1.3 to v1.5:** All four OPEA overlay images (chatqna, dataprep, retriever, reranker) now build from OPEA v1.5. The upgrade absorbs 7.5 months of upstream bug fixes and dependency CVEs while preserving GENIE's RAG behavior (retrieval, reranking, labeling, contextual retrieval). Rollback: redeploy the previous v1.3-based image tags.
@@ -20,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Analytics filters error handling:** The `filters` query parameter on the analytics endpoint now returns a proper 400 error with `INVALID_FILTERS_JSON` code when malformed JSON is provided, instead of crashing with an unhandled exception.
 - **Reranker index bounds:** Reranker now handles out-of-range TEI indices defensively — a buggy TEI response that returns fewer scores than documents no longer crashes with `IndexError`; the affected entry is skipped and the partial result is preserved.
 - **Docling device auto-detection:** When `DOCLING_DEVICE=cuda` is requested but no GPU is available (CPU-only deployment), the dataprep service now falls back to CPU with a visible warning instead of crashing at docling initialization.
+- **Backend CPU translation fallback crash:** When the GPU translation endpoint was unreachable, the CPU fallback crashed the backend at startup (EACCES on the transformers.js model cache and log directories owned by root while the image runs as uid 1000). Image directories are now pre-created writable, and fatal translation-worker errors fail fast with a clear message instead of hanging for the 20-minute init timeout. (#325)
 
 ### Security
 
@@ -27,6 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependency CVE remediation (GitLab Ultimate pipeline 6345, 2026-08-22):** Resolved 21 high-severity runtime CVEs across all JS components by bumping affected transitive and direct dependencies. Highlights: `protobufjs` 7.5.5 → 7.5.6 (5 CVEs including RCE via prototype pollution CVE-2026-44291, code injection CVE-2026-44293, DoS recursion CVE-2026-44289); `sharp` 0.32.6 → 0.35.0 (inherited libvips CVEs); `ip-address` 5.9.4 → 10.3.1 (SSRF via Address4 octal/decimal confusion CVE-2026-69192) via `geoip-lite` 1.4.10 → 2.0.3; `@opentelemetry/propagator-jaeger` 2.7.1 → 2.9.0 (DoS via malformed Jaeger header CVE-2026-59892); `js-yaml` → 4.3.1 across all manifests (quadratic CPU `!!omap` GHSA-5p4m-2wfm-xmqj); `dompurify` 3.2.6 → 3.4.14 (IN_PLACE hook XSS); `uuid`, `postcss`, `serialize-javascript`, `fast-uri` overrides; `@opentelemetry/core` 2.7.1 → 2.8.0 (unbounded memory W3C Baggage CVE-2026-54285).
 - **Mobile AppAuth MITM vulnerability fixed:** The vendored `flutter_appauth` Android plugin previously wired an `InsecureConnectionBuilder` (which disables TLS certificate validation via a trust-everything `X509TrustManager`) into the `AuthorizationService` unconditionally at engine attach. Production now never instantiates an insecure service: `createAuthorizationServices()` lazy-instantiates the insecure service only when `allowInsecureConnections=true`, which only the dev and E2E configs set. Production flavors (`flavors/itu.dart`, `flavors/template.dart`) inherit `false` from `KeycloakConfig` and reach the secure path. An attacker on a hostile network (Wi-Fi, ISP proxy) can no longer MITM the Keycloak login flow on Android production builds.
 - **SAST scan surface restricted:** `.gitlab-ci.yml` adds `SAST_EXCLUDED_PATHS` covering only dev/test-only paths (Windows desktop CMake runner, real-comps contract tests, jest test dirs, dev migration scripts, synthetic-data generators, coverage reports). The production Docker entrypoint `document-repository/scripts/clamav-node.sh` remains scanned. The previously advertised `SEARCH_IGNORED` variable was removed — it is not honored by any official GitLab SAST template.
+
+- **Container least-privilege hardening:** All 37 compose services now run with `cap_drop: [ALL]`, `no-new-privileges`, and only the capabilities their entrypoints require. The GPU-node (`docker-compose.gpu.yaml`) and standalone-Arango compose files are hardened identically. **Breaking** for custom deployments with modified entrypoints: add the required `cap_add` to your overrides (#320, #324, #329)
+- **Slimmed runtime images:** Backend, doc-repo, dataprep, retriever and reranker runtime stages moved to Debian slim bases with `apt-get upgrade` security-update layers at build time, removing the kernel-headers CVE surface; entrypoint/healthcheck tool inventory audited per image (#315)
+- **keycloak-config image security updates:** The `adorsys/keycloak-config-cli` base (Ubuntu 24.04) now receives `apt-get upgrade` at build time, pulling published perl/p11-kit fixes on every rebuild (#328)
+- **Crawler SSRF hardening:** Literal-IP validation (encoded-IPv4 normalization), DNS resolution checked against private ranges, and manual per-hop redirect revalidation (#318)
+- **Dynamic `RegExp` hardening:** All interpolated `RegExp` construction sites escape their inputs or were refactored to plain string operations; the DNS safety layer gained dedicated tests (#319, #321)
+- **Conversation key generation:** Backend uses `crypto.randomInt` instead of `Math.random` for conversation key suffixes (#318)
+- **Frontend dev-server path containment:** The `gov-chat-frontend` static server restricts served paths to the project root (#323)
+- **OPEA base images security patch:** `apt-get upgrade` layer added to the embedding/textgen wrappers, fixing openssl CVE-2026-31789 (#314)
+- **Brace-expansion DoS overrides:** `brace-expansion` pinned above the affected versions across all four package locks (#323, #330)
+- **file-type nested copy eliminated:** The transitive `file-type@16.5.4` under `mime-kind` (CVE-2026-31808, ASF parser infinite loop) is removed via a self-referencing override resolving to the direct 21.3.4 (#330)
 
 ## [2.0.1] - 2026-08-03
 
@@ -138,4 +152,5 @@ Initial release for El Salvador agricultural AI assistant deployment.
 [R_1_0_0]: https://opensource.unicc.org/un/itu/genie-ai/-/tags/R_1_0_0
 [2.0.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/R_1_0_0...v2.0.0
 [2.0.1]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.0...v2.0.1
-[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.1...main
+[Unreleased]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.1.0...main
+[2.1.0]: https://opensource.unicc.org/un/itu/genie-ai/-/compare/v2.0.1...v2.1.0

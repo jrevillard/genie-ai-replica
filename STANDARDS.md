@@ -550,7 +550,7 @@ These standards apply to all JavaScript code, both frontend (Vue) and backend (N
 
       - **Secrets**: Use environment variables (`${ARANGO_PASSWORD}`) for secrets like passwords.
       - **Environment Files**: Use `.env` files for environment-specific configuration
-      - **Data Persistence**: Use Docker volumes to persist database data. Map volumes to clear, absolute paths on the host (e.g., `/root/arango_data`).
+      - **Data Persistence**: Use named Docker volumes to persist database data (e.g., `arango_data:`); bind-mounting host directories such as `/root/...` into containers is disallowed. Host paths only via an explicit env override when migrating legacy data.
       - **Networking**: Use explicitly named bridge networks for inter-service communication.
       - **Health Checks**: Define health checks for all critical services
       - **Resource Limits**: Set appropriate resource limits for containers

@@ -17,6 +17,19 @@ Catalog of every env var introduced or touched by the migration. Add to `tests/c
 | `VL_FAIL_OPEN` | `false` | P2 | When `true`, VL 5xx / ECONNREFUSED / ENOTFOUND / timeout returns `{logs:[], degraded:true}` instead of surfacing 500 to admin. **Pre-P2 deploys: no-op + warn log (rolled back via revert MR; no consumers yet).** |
 | `SECURITY_SCAN_BACKEND` | `victorialogs` | P3 | Falls back to `worker_threads` file scan if set to `file`. Permanent escape hatch. |
 
+## npm dependency split (Q-1 resolved)
+
+Per AD-18 + the component-boundary rule from `project-context.md`, OTel deps are split:
+
+| Package | `components/shared/lib/package.json` | `components/gov-chat-backend/package.json` | `components/document-repository/package.json` |
+|---|---|---|---|
+| `@opentelemetry/api` | peer-dep (already) | `0.221.0` | `0.221.0` |
+| `@opentelemetry/api-logs` | `0.221.0` (peer optional) | `0.221.0` | `0.221.0` |
+| `@opentelemetry/sdk-logs` | — | `0.221.0` | `0.221.0` |
+| `@opentelemetry/exporter-logs-otlp-http` | — | `0.221.0` | `0.221.0` |
+
+`victorialogs-transport.js` (in shared/lib) requires only `@opentelemetry/api-logs` (the thin wrapper). Heavy SDK + exporter live per-component for local init control (resource attributes, processor chain, batch config per AD-18).
+
 ## Pre-existing vars (touched but semantics changed)
 
 | Variable | Default | Phase | Purpose / change |

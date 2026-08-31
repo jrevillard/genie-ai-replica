@@ -66,6 +66,10 @@ check_existing_certs() {
 # Copy obtained/renewed certs from Let's Encrypt to secrets dir
 copy_certs() {
     if [ -f "${CERT_DIR}/fullchain.pem" ] && [ -f "${CERT_DIR}/privkey.pem" ]; then
+        # Remove-then-copy: a plain cp over an existing file writes into its
+        # inode and inherits the previous (possibly non-root) ownership, which
+        # the cap-dropped nginx container cannot read.
+        rm -f "${SECRETS_DIR}/server.crt" "${SECRETS_DIR}/server.key"
         cp "${CERT_DIR}/fullchain.pem" "${SECRETS_DIR}/server.crt"
         cp "${CERT_DIR}/privkey.pem" "${SECRETS_DIR}/server.key"
         chmod 644 "${SECRETS_DIR}/server.crt"

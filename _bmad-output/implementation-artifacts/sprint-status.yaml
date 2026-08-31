@@ -1,4 +1,5 @@
 # generated: 2026-08-17
+# re-baselined: 2026-08-31 — statuses synced to implemented reality on feat/sst (MR !279)
 # project: genie-ai
 # project_key: server-side-tools
 # tracking_system: gitlab-issues (fallback: file-system)
@@ -7,7 +8,7 @@
 # epics: _bmad-output/planning-artifacts/epics.md
 # architecture: _bmad-output/planning-artifacts/architecture.md
 # branch: feat/sst
-
+#
 # STATUS DEFINITIONS:
 # ==================
 # Epic Status:
@@ -23,14 +24,16 @@
 #   - backlog: Story only exists in epic file
 #   - ready-for-dev: Story file created in stories folder
 #   - in-progress: Developer actively working on implementation
-#   - review: Ready for code review (via Dev's code-review workflow)
-#   - done: Story completed
+#   - review: Implemented, awaiting code review / merge (MR !279 open)
+#   - done: Story completed AND merged to main
 #   - blocked: Cannot start — see the inline reason
 #   - deferred: Deliberately out of this initiative's scope
 #
-# Retrospective Status:
-#   - optional: Can be completed but not required
-#   - done: Retrospective has been completed
+# RE-BASELINE NOTE (2026-08-31):
+#   The 2026-08-17 snapshot predated the implementation sprint and said "backlog"
+#   everywhere. Statuses below are evidence-based from the feat/sst tree:
+#   "review" = implemented on the branch, inside open MR !279 (pipeline green).
+#   They move to "done" when MR !279 merges. Evidence notes name the anchor file.
 
 generated: 2026-08-17
 project: genie-ai
@@ -41,8 +44,9 @@ story_location: _bmad-output/implementation-artifacts
 # TRACKING NOTE
 # =============
 # GitLab Issues are the primary source of truth when reachable (project-context.md).
-# `glab` is NOT installed on the current machine, so this file is the working source
-# of truth until the CLI is installed or the re-baselining is done in the GitLab UI.
+# glab IS installed and working (2026-08-31) — `GITLAB_HOST=opensource.unicc.org glab api`
+# works; use `projects/:id/...` form. Issues #696–#725 still need the re-baselining
+# described in epics.md (close subsumed Epic 1 items, re-point the rest at these stories).
 #
 # Re-baselining #696–#725 (epics.md, final section):
 #   - original Epic 1 issues (registry / executor / mcpo / D14 / D15 / D17)
@@ -89,59 +93,65 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   # ─────────────── Epic 1 — Governance & tool host ───────────────
   # Hard gate for #603. Stories 1-1..1-6 need no running service and no bump.
-  epic-1: backlog
-  1-1-declared-schemas-package: backlog # worktree: sst-governance
-  1-2-pii-redactor-abc-and-implementations: backlog # worktree: sst-governance — NFR6 gating suite
-  1-3-redis-primitives-rate-limiter-circuit-breaker-audit-stream: backlog # worktree: sst-governance — all greenfield (E5)
-  1-4-governance-pipeline: backlog # worktree: sst-governance — depends 1-2, 1-3
-  1-5-otel-spans-on-governance-phases: backlog # worktree: sst-governance — depends 1-4
-  1-6-presidio-deployment-and-config-plumbing: backlog # worktree: sst-tools-infra
+  # LIVE CODE lives in genie-ai-overlay/workflows/tools/ (chatqna imports it;
+  # copied into the chatqna image since 2026-08-31 — Dockerfile COPY /app/workflows/).
+  # RESOLVED 2026-08-31: the orphaned genie-ai-overlay/tools/ duplicate was deleted
+  # (see git history if salvage needed — e.g. its 331-line fusion.py had richer
+  # scoring/dedupe and the schemas module story 1-1 wants).
+  epic-1: in-progress
+  1-1-declared-schemas-package: backlog # schemas module existed only in the deleted tools/ dupe (git history) — recreate in workflows/tools/ if needed
+  1-2-pii-redactor-abc-and-implementations: review # workflows/tools/pii_redactor.py: ABC + Regex + Presidio impls; tests in tests/test_governance.py
+  1-3-redis-primitives-rate-limiter-circuit-breaker-audit-stream: review # workflows/tools/redis_primitives.py: SlidingWindowRateLimiter + CircuitBreaker + AuditStream
+  1-4-governance-pipeline: review # workflows/tools/governance.py (370 lines, 3-phase pipeline incl. whitelist + degradation)
+  1-5-otel-spans-on-governance-phases: backlog # no tracing import in governance.py — not instrumented
+  1-6-presidio-deployment-and-config-plumbing: backlog # no presidio service in docker-compose.yaml (regex redactor is the live impl)
   1-7-minimum-tool-host-shell: blocked # BUMP-GATED: needs ServiceType.WORKFLOW=101 (bump task A1)
   epic-1-retrospective: optional
 
   # ─────────────── Epic 2 — Web search (SearXNG) ───────────────
   # Second hard gate for #603. Depends on Epic 1 stories 1-1..1-4.
-  epic-2: backlog
-  2-1-searxng-deployment: backlog # worktree: sst-websearch-py — AGPL sign-off gates production (OQ-SST-5)
-  2-2-pluggable-search-backend-and-searxng-client: backlog # worktree: sst-websearch-py
-  2-3-domain-whitelist-enforced-at-executor: backlog # worktree: sst-websearch-py — NFR11, not bypassable
-  2-4-triggers-low-confidence-time-sensitive-llm-fallback: backlog # worktree: sst-websearch-py
-  2-5-fusion-budget-quality-threshold: backlog # worktree: sst-websearch-py
-  2-6-chatqna-integration-at-both-seams: backlog # worktree: sst-websearch-py — BOTH seams (E6); coordinate with jrevillard
-  2-7-degradation-and-transparent-insufficiency: backlog # worktree: sst-websearch-py — NFR12 zero fabrication
-  2-8-sse-metadata-contract-extension: backlog # worktree: sst-websearch-ui — BLOCKS 2-9 + 2-10 (E3); start early
-  2-9-vue-citation-and-degradation-rendering: backlog # worktree: sst-websearch-ui — depends 2-8
-  2-10-flutter-citation-and-degradation-parity: backlog # worktree: sst-websearch-ui — depends 2-8
+  epic-2: in-progress
+  2-1-searxng-deployment: review # compose service searxng + configs/searxng/settings.yml; AGPL sign-off (OQ-SST-5) still gates production
+  2-2-pluggable-search-backend-and-searxng-client: review # workflows/tools/web_search.py SearxngBackend; SearchBackend ABC exists only in orphaned tools/ dupe
+  2-3-domain-whitelist-enforced-at-executor: review # whitelist enforced in governance.py (executor level)
+  2-4-triggers-low-confidence-time-sensitive-llm-fallback: in-progress # low-confidence trigger (<0.70) implemented inline in genieai_chatqna.py web-search fallback; time-sensitive + LLM-fallback triggers still missing
+  2-5-fusion-budget-quality-threshold: review # workflows/tools/fusion.py FusionBudget (60/40 ratio, remainder rollover); scoring/dedupe simplified vs spec
+  2-6-chatqna-integration-at-both-seams: review # genieai_chatqna.py imports at L1195 + L1325 (both seams)
+  2-7-degradation-and-transparent-insufficiency: in-progress # degradation handled in governance.py; chatqna/user-facing insufficiency path unverified
+  2-8-sse-metadata-contract-extension: in-progress # _stream_with_metadata exists in chatqna but predates/overlaps SST — verify contract covers citations
+  2-9-vue-citation-and-degradation-rendering: review # ChatBotComponent.vue has citation/web_search rendering
+  2-10-flutter-citation-and-degradation-parity: backlog # no mobile/ changes in MR !279
   epic-2-retrospective: optional
 
   # ─────────────── Epic 3 — Stream ingestor ───────────────
   # No #603 dependency. May run parallel to Epic 4.
-  epic-3: backlog
-  3-1-chunk-source-type-and-additive-chunk-metadata: backlog # worktree: sst-ingestor-dataprep — needs OQ-SST-6 (OKF enum)
-  3-2-retract-expired-feed-chunks: backlog # worktree: sst-ingestor-dataprep — new method, not new class
-  3-3-rss-atom-polling: backlog # worktree: sst-ingestor-svc
-  3-4-json-api-polling-with-field-mapping: backlog # worktree: sst-ingestor-svc
-  3-5-webhook-push-ingestion: backlog # worktree: sst-ingestor-svc — 401 unauth, 429 + Retry-After
-  3-6-route-through-existing-tei-and-shared-arangodb: backlog # worktree: sst-ingestor-svc — waits on 3-1
-  3-7-per-feed-lifecycle-retention-ttl-update-vs-append: backlog # worktree: sst-ingestor-svc
-  3-8-feed-definition-persistence: backlog # worktree: sst-ingestor-svc — needs OQ-SST-1
-  3-9-per-feed-resilience-breaker-dlq-backoff: backlog # worktree: sst-ingestor-svc
-  3-10-health-endpoints-and-per-feed-health: backlog # worktree: sst-ingestor-svc
-  3-11-regression-guard: backlog # worktree: sst-ingestor-svc — PRODUCTION GATE; needs OQ-SST-4
+  # genie-ai-overlay/stream_ingestor/genieai_stream_ingestor.py (246 lines) + BFF /feeds CRUD.
+  epic-3: in-progress
+  3-1-chunk-source-type-and-additive-chunk-metadata: review # genie-ai-overlay/core/source_type.py exists (also resolves OQ-SST-6)
+  3-2-retract-expired-feed-chunks: review # retract_expired_chunks + retract_loop, calls dataprep retract_file
+  3-3-rss-atom-polling: review # feedparser + poll_feeds/process_feed
+  3-4-json-api-polling-with-field-mapping: backlog # not in stream_ingestor
+  3-5-webhook-push-ingestion: backlog # aiohttp web server only serves /health + /ready
+  3-6-route-through-existing-tei-and-shared-arangodb: review # feeds route to existing dataprep pipeline (verify ingest path e2e)
+  3-7-per-feed-lifecycle-retention-ttl-update-vs-append: review # per-feed expiry + retraction loop (update-vs-append semantics unverified)
+  3-8-feed-definition-persistence: review # ArangoDB feeds collection (migration 005) + BFF CRUD — resolves OQ-SST-1 as "ingestor config"
+  3-9-per-feed-resilience-breaker-dlq-backoff: backlog # no breaker/DLQ/backoff in stream_ingestor
+  3-10-health-endpoints-and-per-feed-health: review # /health + /ready endpoints (per-feed health granularity unverified)
+  3-11-regression-guard: backlog # PRODUCTION GATE; needs OQ-SST-4
   epic-3-retrospective: optional
 
   # ─────────────── Epic 4 — Admin surface ───────────────
-  epic-4: backlog
-  4-1-two-keycloak-roles-and-require-role: backlog # worktree: sst-admin-api — requireAdmin is single-role today
-  4-2-api-tools-bff-proxy: backlog # worktree: sst-admin-api — THREE registries (E7): ROUTE_CONFIGS, Kong, env.j2
-  4-3-admin-tools-tab: backlog # worktree: sst-admin-ui — QueryInspector pattern, NOT the 4446-line monolith (E1)
-  4-4-tool-management-and-domain-whitelist-editor: backlog # worktree: sst-admin-ui
-  4-5-feed-management-form: backlog # worktree: sst-admin-ui — waits on 3-8
-  4-6-audit-log-viewer: backlog # worktree: sst-admin-ui — FOI access path (NFR8)
-  4-7-health-overview: backlog # worktree: sst-admin-ui
-  4-8-list-and-grant-user-capabilities: backlog # worktree: sst-admin-ui — reuse searchUsers; grant half is net-new (E2)
-  4-9-i18n-across-all-14-locales: backlog # worktree: sst-admin-ui — CI GATE: localeConsistency.test.js
-  4-10-ansible-tags-tools-and-profile-tools: backlog # worktree: sst-admin-api — no `tools` tag exists today
+  epic-4: in-progress
+  4-1-two-keycloak-roles-and-require-role: in-progress # realm roles tools-admin + tools-reader in genie-realm.yaml; route-level requireRole enforcement unverified
+  4-2-api-tools-bff-proxy: review # tools-routes.js mounted in index.js L497 (/feeds CRUD, /test-search); Kong + env.j2 sync unverified
+  4-3-admin-tools-tab: review # AdminToolsView.vue (488 lines) + store/modules/tools.js
+  4-4-tool-management-and-domain-whitelist-editor: backlog # no whitelist editor in AdminToolsView
+  4-5-feed-management-form: review # feeds CRUD wired end-to-end (store → BFF → ArangoDB)
+  4-6-audit-log-viewer: backlog # no audit viewer in AdminToolsView (AuditStream backend exists from 1-3)
+  4-7-health-overview: backlog # no health overview in AdminToolsView
+  4-8-list-and-grant-user-capabilities: in-progress # role modal exists per commit 9435c0ef9; grant half unverified
+  4-9-i18n-across-all-14-locales: in-progress # all 14 locale files touched but ~1 key each; CI gate localeConsistency.test.js unverified
+  4-10-ansible-tags-tools-and-profile-tools: review # deploy.yml + group_vars updated
   epic-4-retrospective: optional
 
   # ─────────────── Post-MVP (non-blocking) ───────────────
@@ -149,11 +159,13 @@ development_status:
 
 # OPEN DECISIONS (block the stories noted above)
 # ==============================================
-#   OQ-SST-1  feed-config persistence: registry (dropped) or ingestor config (keep)?  → 3-8
-#   OQ-SST-2  original 17-ADR spec: leave on feat/server-side-tools/prd or port?      → re-baselining
-#   OQ-SST-3  confirm governance + web search are hard blockers for #603              → epic sequencing
-#   OQ-SST-4  which curated-only baseline validates feed-chunk relevance?             → 3-11
-#   OQ-SST-5  SearXNG AGPL sign-off recorded?                                         → 2-1 to production
-#   OQ-SST-6  ChunkSourceType enum ownership with OKF                                 → 3-1
-#   OQ-SST-7  SSE metadata: ad-hoc fields or declared contract?                       → 2-8
-#   OQ-SST-8  tool-host boundary: shell only vs. more                                 → 1-7
+#   OQ-SST-1  feed-config persistence        → RESOLVED (2026-08-31): ingestor config / ArangoDB feeds collection (3-8 shipped this way)
+#   OQ-SST-2  original 17-ADR spec: leave on feat/server-side-tools/prd or port?      → re-baselining  (OPEN)
+#   OQ-SST-3  confirm governance + web search are hard blockers for #603              → epic sequencing (OPEN)
+#   OQ-SST-4  which curated-only baseline validates feed-chunk relevance?             → 3-11          (OPEN)
+#   OQ-SST-5  SearXNG AGPL sign-off recorded?                                         → 2-1 production (OPEN)
+#   OQ-SST-6  ChunkSourceType enum ownership with OKF                                 → RESOLVED (2026-08-31): lives in genie-ai-overlay/core/source_type.py
+#   OQ-SST-7  SSE metadata: ad-hoc fields or declared contract?                       → 2-8           (OPEN)
+#   OQ-SST-8  tool-host boundary: shell only vs. more                                 → 1-7           (OPEN)
+#
+# Coordination doc for the remaining decisions: _bmad-output/implementation-artifacts/plan.md

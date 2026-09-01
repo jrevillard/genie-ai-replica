@@ -150,7 +150,7 @@ development_status:
   4-6-audit-log-viewer: backlog # no audit viewer in AdminToolsView (AuditStream backend exists from 1-3)
   4-7-health-overview: backlog # no health overview in AdminToolsView
   4-8-list-and-grant-user-capabilities: in-progress # role modal exists per commit 9435c0ef9; grant half unverified
-  4-9-i18n-across-all-14-locales: in-progress # all 14 locale files touched but ~1 key each; CI gate localeConsistency.test.js unverified
+  4-9-i18n-across-all-14-locales: review # code-review PASSED 2026-08-31: 37 keys × 14 locales (real translations), per-component translate(), removeFeed confirm wired, phantom urlPlaceholder key dropped, 4 locale word fixes; gate + 1249 tests green. GAP: QueryInspector keys fallback-only (follow-up)
   4-10-ansible-tags-tools-and-profile-tools: review # deploy.yml + group_vars updated
   epic-4-retrospective: optional
 

@@ -5,7 +5,7 @@
         <!-- Sidebar Navigation -->
         <div class="sidebar">
           <div class="nav-section">
-            <div class="nav-header">TOOLS & INTEGRATIONS</div>
+            <div class="nav-header">{{ translate('admin.tools.toolsIntegrations', 'TOOLS & INTEGRATIONS') }}</div>
             <ul class="nav-items">
               <li class="nav-item">
                 <a
@@ -14,7 +14,7 @@
                   @click.prevent="activeTab = 'feeds'"
                 >
                   <i>📡</i>
-                  <span>RSS Feeds</span>
+                  <span>{{ translate('admin.tools.navFeeds', 'RSS Feeds') }}</span>
                 </a>
               </li>
               <li class="nav-item">
@@ -24,18 +24,18 @@
                   @click.prevent="activeTab = 'searxng'"
                 >
                   <i>🔍</i>
-                  <span>Web Search (SearXNG)</span>
+                  <span>{{ translate('admin.tools.navWebSearch', 'Web Search (SearXNG)') }}</span>
                 </a>
               </li>
             </ul>
           </div>
           <div class="nav-section">
-            <div class="nav-header">NAVIGATION</div>
+            <div class="nav-header">{{ translate('admin.tools.navigation', 'NAVIGATION') }}</div>
             <ul class="nav-items">
               <li class="nav-item">
                 <router-link to="/admin" class="nav-link">
                   <i>⬅️</i>
-                  <span>Back to Admin</span>
+                  <span>{{ translate('admin.tools.backToAdmin', 'Back to Admin') }}</span>
                 </router-link>
               </li>
             </ul>
@@ -45,19 +45,23 @@
         <!-- Main Content Area -->
         <div class="main">
           <div class="header">
-            <h1 class="page-title">Tools Management</h1>
+            <h1 class="page-title">{{ translate('admin.tools.pageTitle', 'Tools Management') }}</h1>
           </div>
 
           <!-- Feeds Tab -->
           <div v-if="activeTab === 'feeds'" class="dashboard-card">
             <div class="card-header">
-              <div class="card-title">RSS Stream Ingestor Feeds</div>
+              <div class="card-title">{{ translate('admin.tools.feedsCardTitle', 'RSS Stream Ingestor Feeds') }}</div>
               <div class="card-actions">
-                <DsButton variant="primary" @click="showAddFeedModal = true"> + Add Feed </DsButton>
+                <DsButton variant="primary" @click="showAddFeedModal = true">
+                  {{ translate('admin.tools.addFeed', '+ Add Feed') }}
+                </DsButton>
               </div>
             </div>
 
-            <DsStateDisplay v-if="isLoadingFeeds" type="loading"> Loading feeds... </DsStateDisplay>
+            <DsStateDisplay v-if="isLoadingFeeds" type="loading">
+              {{ translate('admin.tools.loadingFeeds', 'Loading feeds...') }}
+            </DsStateDisplay>
             <DsStateDisplay v-else-if="error" type="error">
               {{ error }}
             </DsStateDisplay>
@@ -66,17 +70,19 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Feed Title</th>
-                    <th>URL</th>
-                    <th>Interval (s)</th>
-                    <th>Status</th>
-                    <th>Failures</th>
-                    <th>Actions</th>
+                    <th>{{ translate('admin.tools.tableFeedTitle', 'Feed Title') }}</th>
+                    <th>{{ translate('admin.tools.tableUrl', 'URL') }}</th>
+                    <th>{{ translate('admin.tools.tableInterval', 'Interval (s)') }}</th>
+                    <th>{{ translate('admin.tools.tableStatus', 'Status') }}</th>
+                    <th>{{ translate('admin.tools.tableFailures', 'Failures') }}</th>
+                    <th>{{ translate('admin.tools.tableActions', 'Actions') }}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-if="feeds.length === 0">
-                    <td colspan="6" class="table-message">No feeds configured.</td>
+                    <td colspan="6" class="table-message">
+                      {{ translate('admin.tools.noFeeds', 'No feeds configured.') }}
+                    </td>
                   </tr>
                   <tr v-for="feed in feeds" :key="feed._key">
                     <td>{{ feed.title }}</td>
@@ -84,13 +90,17 @@
                     <td>{{ feed.polling_interval }}</td>
                     <td>
                       <DsStatusTag :variant="feed.enabled ? 'success' : 'danger'">
-                        {{ feed.enabled ? 'Active' : 'Disabled' }}
+                        {{
+                          feed.enabled
+                            ? translate('admin.tools.statusActive', 'Active')
+                            : translate('admin.tools.statusDisabled', 'Disabled')
+                        }}
                       </DsStatusTag>
                     </td>
                     <td>{{ feed.failures || 0 }}</td>
                     <td>
                       <DsButton variant="ghost" @click="editFeed(feed)">✏️</DsButton>
-                      <DsButton variant="ghost" @click="deleteFeed(feed._key)">🗑️</DsButton>
+                      <DsButton variant="ghost" @click="removeFeed(feed._key)">🗑️</DsButton>
                     </td>
                   </tr>
                 </tbody>
@@ -101,33 +111,47 @@
           <!-- SearXNG Tab -->
           <div v-if="activeTab === 'searxng'" class="dashboard-card">
             <div class="card-header">
-              <div class="card-title">SearXNG Web Search Integration</div>
+              <div class="card-title">
+                {{ translate('admin.tools.searxngCardTitle', 'SearXNG Web Search Integration') }}
+              </div>
             </div>
             <div class="p-4">
               <p class="mb-4">
-                SearXNG is integrated natively via the backend search service. Configure search parameters to test
-                connectivity.
+                {{
+                  translate(
+                    'admin.tools.searxngDescription',
+                    'SearXNG is integrated natively via the backend search service. Configure search parameters to test connectivity.'
+                  )
+                }}
               </p>
 
               <div class="form-group mb-4">
-                <label>Test Search Query</label>
+                <label>{{ translate('admin.tools.testSearchQuery', 'Test Search Query') }}</label>
                 <div style="display: flex; gap: 8px">
-                  <DsInput v-model="searchQuery" placeholder="Enter query..." style="flex: 1" />
+                  <DsInput
+                    v-model="searchQuery"
+                    :placeholder="translate('admin.tools.searchPlaceholder', 'Enter query...')"
+                    style="flex: 1"
+                  />
                   <DsButton variant="primary" :disabled="!searchQuery || isSearching" @click="runTestSearch">
-                    {{ isSearching ? 'Searching...' : 'Test Search' }}
+                    {{
+                      isSearching
+                        ? translate('admin.tools.searching', 'Searching...')
+                        : translate('admin.tools.testSearch', 'Test Search')
+                    }}
                   </DsButton>
                 </div>
               </div>
 
               <div v-if="searchResults" class="search-results mt-4">
-                <h4>Results ({{ searchResults.results?.length || 0 }})</h4>
+                <h4>{{ translate('admin.tools.results', 'Results') }} ({{ searchResults.results?.length || 0 }})</h4>
                 <div class="table-container">
                   <table class="data-table">
                     <thead>
                       <tr>
-                        <th>Title</th>
-                        <th>URL</th>
-                        <th>Engine</th>
+                        <th>{{ translate('admin.tools.tableTitle', 'Title') }}</th>
+                        <th>{{ translate('admin.tools.tableUrl', 'URL') }}</th>
+                        <th>{{ translate('admin.tools.tableEngine', 'Engine') }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -151,33 +175,41 @@
     <!-- Add/Edit Feed Modal -->
     <div v-if="showAddFeedModal" class="modal-overlay">
       <div class="modal-content" style="max-width: 500px">
-        <h3 class="modal-title">{{ editingFeed ? 'Edit Feed' : 'Add New Feed' }}</h3>
+        <h3 class="modal-title">
+          {{
+            editingFeed
+              ? translate('admin.tools.editFeedTitle', 'Edit Feed')
+              : translate('admin.tools.addFeedTitle', 'Add New Feed')
+          }}
+        </h3>
 
         <div class="form-group">
-          <label>Title</label>
-          <DsInput v-model="feedForm.title" placeholder="e.g. UN News" />
+          <label>{{ translate('admin.tools.formTitle', 'Title') }}</label>
+          <DsInput v-model="feedForm.title" :placeholder="translate('admin.tools.titlePlaceholder', 'e.g. UN News')" />
         </div>
 
         <div class="form-group mt-3">
-          <label>RSS URL</label>
+          <label>{{ translate('admin.tools.formRssUrl', 'RSS URL') }}</label>
           <DsInput v-model="feedForm.url" placeholder="https://..." />
         </div>
 
         <div class="form-group mt-3">
-          <label>Polling Interval (seconds)</label>
+          <label>{{ translate('admin.tools.formInterval', 'Polling Interval (seconds)') }}</label>
           <DsInput v-model.number="feedForm.polling_interval" type="number" />
         </div>
 
         <div class="form-group mt-3" style="display: flex; align-items: center; gap: 8px">
           <input id="feed-enabled" v-model="feedForm.enabled" type="checkbox" />
-          <label for="feed-enabled" style="margin: 0">Enabled</label>
+          <label for="feed-enabled" style="margin: 0">{{ translate('admin.tools.formEnabled', 'Enabled') }}</label>
         </div>
 
         <div class="modal-actions mt-4" style="display: flex; justify-content: flex-end; gap: 8px">
-          <DsButton variant="secondary" @click="closeFeedModal">Cancel</DsButton>
-          <DsButton variant="primary" :disabled="!feedForm.title || !feedForm.url" @click="saveFeed"
-            >Save Feed</DsButton
-          >
+          <DsButton variant="secondary" @click="closeFeedModal">{{
+            translate('admin.tools.cancel', 'Cancel')
+          }}</DsButton>
+          <DsButton variant="primary" :disabled="!feedForm.title || !feedForm.url" @click="saveFeed">
+            {{ translate('admin.tools.saveFeed', 'Save Feed') }}
+          </DsButton>
         </div>
       </div>
     </div>
@@ -224,6 +256,24 @@ export default {
   methods: {
     ...mapActions('tools', ['fetchFeeds', 'addFeed', 'updateFeed', 'deleteFeed', 'testSearch']),
 
+    // Per-component helper (epic 4.9 convention) — this view is router-mounted,
+    // so there is no AdminDashboard parent to delegate to (unlike QueryInspector).
+    translate(key, fallback = '') {
+      if (!this.$i18n) {
+        return fallback;
+      }
+      try {
+        const translation = this.$i18n.t(key);
+        if (translation === key) {
+          return fallback || key;
+        }
+        return translation;
+      } catch (e) {
+        console.error(`[AdminToolsView] Translation error for key ${key}:`, e);
+        return fallback || key;
+      }
+    },
+
     closeFeedModal() {
       this.showAddFeedModal = false;
       this.editingFeed = null;
@@ -251,7 +301,7 @@ export default {
     },
 
     async removeFeed(id) {
-      if (confirm('Are you sure you want to delete this feed?')) {
+      if (confirm(this.translate('admin.tools.deleteConfirm', 'Are you sure you want to delete this feed?'))) {
         await this.deleteFeed(id);
       }
     },

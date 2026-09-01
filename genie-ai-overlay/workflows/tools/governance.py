@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from tracing import with_span
 from workflows.tools.pii_redactor import PIIRedactionError, PIIRedactor, RedactionResult, create_pii_redactor
 from workflows.tools.redis_primitives import (
     AuditEntry,
@@ -355,16 +356,48 @@ class GovernancePipeline:
             GovernanceResult with decision, execution result, and audit trail.
         """
         # Phase 1: PRE-EXECUTION
-        result = await self._pre_execution(tool_config, user_id, user_roles, parameters)
+        # Spans (NFR31): one per phase, non-PII attributes only — never the
+        # redacted params/result (tracing.with_span does not sanitize for us).
+        with with_span(
+            "sst.governance.pre",
+            attributes={"governance.tool_id": tool_config.tool_id},
+        ) as span:
+            result = await self._pre_execution(tool_config, user_id, user_roles, parameters)
+            span.set_attribute("governance.decision", result.decision)
+            span.set_attribute("governance.allowed", result.allowed)
+            span.set_attribute("governance.pii_entities_found", result.pii_entities_found)
+
         if not result.allowed:
             # Still audit blocked invocations
-            await self._post_execution(tool_config, result)
+            with with_span("sst.governance.post", attributes={"governance.tool_id": tool_config.tool_id}) as span:
+                result = await self._post_execution(tool_config, result)
+                span.set_attribute("governance.decision", result.decision)
+                span.set_attribute("governance.audit_written", result.audit_entry_id is not None)
             return result
 
         # Phase 2: RUNTIME
-        result = await self._runtime(tool_config, user_id, result, tool_fn)
+        with with_span(
+            "sst.governance.runtime",
+            attributes={"governance.tool_id": tool_config.tool_id},
+        ) as span:
+            result = await self._runtime(tool_config, user_id, result, tool_fn)
+            span.set_attribute("governance.decision", result.decision)
+            span.set_attribute("governance.allowed", result.allowed)
+            span.set_attribute("governance.circuit_state", result.circuit_state or "")
+            if result.duration_ms is not None:
+                # Absent when rate-limited / circuit-open (no tool ran) — a
+                # fabricated 0.0 would skew latency percentiles
+                span.set_attribute("governance.duration_ms", result.duration_ms)
+            span.set_attribute("governance.rate_limit_remaining", result.rate_limit_remaining or 0)
 
         # Phase 3: POST-EXECUTION (runs regardless of tool success/failure)
-        result = await self._post_execution(tool_config, result)
+        with with_span("sst.governance.post", attributes={"governance.tool_id": tool_config.tool_id}) as span:
+            result = await self._post_execution(tool_config, result)
+            span.set_attribute("governance.decision", result.decision)
+            if result.duration_ms is not None:
+                span.set_attribute("governance.duration_ms", result.duration_ms)
+            span.set_attribute("governance.audit_written", result.audit_entry_id is not None)
+            if result.audit_entry_id is not None:
+                span.set_attribute("governance.audit_entry_id", result.audit_entry_id)
 
         return result

@@ -535,10 +535,157 @@ class TestGovernancePipeline:
         # Audit stream should have been called
         redis.xadd.assert_called_once()
 
+    # ===========================================================================
+    # Source Type Tests
+    # ===========================================================================
 
-# ===========================================================================
-# Source Type Tests
-# ===========================================================================
+    # ------------------------------------------------------------------
+    # Story 1-5 — OTel spans on the governance phases (NFR31)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _span_mocks(tracer, count):
+        """Distinct span mocks per start_span call (side_effect), returned in
+        call order — attributes are attributable to a specific span."""
+        spans = [MagicMock() for _ in range(count)]
+        tracer.start_span.side_effect = spans
+        return spans
+
+    @staticmethod
+    def _attrs_of(spans, tracer, idx):
+        """Start attributes (from the start_span call kwargs) + in-span sets,
+        for the idx-th span."""
+        call = tracer.start_span.call_args_list[idx]
+        attrs = dict(call.kwargs.get("attributes") or {})
+        attrs.update({c.args[0]: c.args[1] for c in spans[idx].set_attribute.call_args_list})
+        return attrs
+
+    @pytest.mark.asyncio
+    async def test_spans_happy_path_three_phases_per_span_attributes(self, pipeline, redis, tool_config, mock_tool_fn):
+        """Happy path: exactly pre/runtime/post in order; each phase's attributes
+        land on ITS span (pre: pii count; runtime: circuit + rate limit; post:
+        audit id)."""
+        from unittest.mock import patch as _patch
+
+        self._setup_redis_for_allow(redis)
+        tracer = MagicMock()
+        spans = self._span_mocks(tracer, 3)
+        with _patch("tracing.get_tracer", return_value=tracer):
+            result = await pipeline.execute(
+                tool_config=tool_config,
+                user_id="user-1",
+                user_roles=["tools-admin"],
+                parameters={"query": "government services"},
+                tool_fn=mock_tool_fn,
+            )
+
+        assert result.allowed is True
+        names = [c.args[0] for c in tracer.start_span.call_args_list]
+        assert names == ["sst.governance.pre", "sst.governance.runtime", "sst.governance.post"]
+
+        pre_attrs = self._attrs_of(spans, tracer, 0)
+        runtime_attrs = self._attrs_of(spans, tracer, 1)
+        post_attrs = self._attrs_of(spans, tracer, 2)
+
+        assert pre_attrs["governance.tool_id"] == "web-search"
+        assert pre_attrs["governance.decision"] == "allow"
+        assert pre_attrs["governance.pii_entities_found"] == 0
+        assert runtime_attrs["governance.circuit_state"] == "closed"
+        assert "governance.rate_limit_remaining" in runtime_attrs
+        assert post_attrs["governance.audit_written"] is True
+        assert post_attrs.get("governance.audit_entry_id")  # opaque id present
+
+        # Per-span attribution: pre-only and runtime-only keys must not leak
+        assert "governance.circuit_state" not in pre_attrs
+        assert "governance.pii_entities_found" not in runtime_attrs
+
+    @pytest.mark.asyncio
+    async def test_spans_blocked_path_pre_and_post_only(self, pipeline, redis, tool_config, mock_tool_fn):
+        from unittest.mock import patch as _patch
+
+        tool_config.enabled = False
+        tracer = MagicMock()
+        spans = self._span_mocks(tracer, 2)
+        with _patch("tracing.get_tracer", return_value=tracer):
+            result = await pipeline.execute(
+                tool_config=tool_config,
+                user_id="user-1",
+                user_roles=["tools-admin"],
+                parameters={"query": "x"},
+                tool_fn=mock_tool_fn,
+            )
+
+        assert result.allowed is False
+        mock_tool_fn.assert_not_called()
+        names = [c.args[0] for c in tracer.start_span.call_args_list]
+        assert names == ["sst.governance.pre", "sst.governance.post"]
+
+        pre_attrs = self._attrs_of(spans, tracer, 0)
+        post_attrs = self._attrs_of(spans, tracer, 1)
+        assert pre_attrs["governance.decision"] == "block_auth"
+        assert pre_attrs["governance.allowed"] is False
+        # No fabricated duration on the blocked path (no tool ran)
+        assert "governance.duration_ms" not in post_attrs
+
+    @pytest.mark.asyncio
+    async def test_spans_no_pii_in_any_attribute_or_event(self, pipeline, redis, tool_config, mock_tool_fn):
+        from unittest.mock import patch as _patch
+
+        self._setup_redis_for_allow(redis)
+        tracer = MagicMock()
+        self._span_mocks(tracer, 3)
+        pii_query = "contact john.doe@example.com about services"
+        with _patch("tracing.get_tracer", return_value=tracer):
+            await pipeline.execute(
+                tool_config=tool_config,
+                user_id="user-1",
+                user_roles=["tools-admin"],
+                parameters={"query": pii_query},
+                tool_fn=mock_tool_fn,
+            )
+
+        # Anchor: spans WERE emitted (a vacuous pass with zero spans is not a pass)
+        assert len(tracer.start_span.call_args_list) == 3
+        for call, span in zip(tracer.start_span.call_args_list, tracer.start_span.side_effect, strict=False):
+            values = list((call.kwargs.get("attributes") or {}).values()) + [
+                c.args[1] for c in span.set_attribute.call_args_list
+            ]
+            for event in span.add_event.call_args_list:
+                values.extend(str(v) for v in event.kwargs.get("attributes", {}).values())
+            for exc in span.record_exception.call_args_list:
+                values.extend(str(a) for a in exc.args)
+            for value in values:
+                assert "john.doe@example.com" not in str(value)
+                assert pii_query not in str(value)
+
+    @pytest.mark.asyncio
+    async def test_spans_exception_path_marks_error_and_ends(self, pipeline, redis, tool_config, mock_tool_fn):
+        """with_span must record the exception + set ERROR + end the span when a
+        phase raises through it (lifecycle contract)."""
+        from unittest.mock import patch as _patch
+
+        tracer = MagicMock()
+        spans = self._span_mocks(tracer, 1)
+        with (
+            _patch("tracing.get_tracer", return_value=tracer),
+            _patch.object(
+                pipeline,
+                "_pre_execution",
+                side_effect=RuntimeError("phase exploded"),
+            ),
+            pytest.raises(RuntimeError, match="phase exploded"),
+        ):
+            await pipeline.execute(
+                tool_config=tool_config,
+                user_id="user-1",
+                user_roles=["tools-admin"],
+                parameters={"query": "x"},
+                tool_fn=mock_tool_fn,
+            )
+
+        spans[0].record_exception.assert_called_once()
+        spans[0].end.assert_called_once()
+
+
 class TestSourceType:
     """Tests for the shared SourceType enum."""
 

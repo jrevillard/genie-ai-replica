@@ -103,7 +103,7 @@ development_status:
   1-2-pii-redactor-abc-and-implementations: review # workflows/tools/pii_redactor.py: ABC + Regex + Presidio impls; tests in tests/test_governance.py
   1-3-redis-primitives-rate-limiter-circuit-breaker-audit-stream: review # workflows/tools/redis_primitives.py: SlidingWindowRateLimiter + CircuitBreaker + AuditStream
   1-4-governance-pipeline: review # workflows/tools/governance.py (370 lines, 3-phase pipeline incl. whitelist + degradation)
-  1-5-otel-spans-on-governance-phases: backlog # no tracing import in governance.py — not instrumented
+  1-5-otel-spans-on-governance-phases: review # code-review PASSED 2026-09-01: 3 spans (pre/runtime/post) + no-PII allowlist; review patches (per-span test attribution, truthful optional attrs, exception-lifecycle pin); 759 green; with_span-context fix deferred
   1-6-presidio-deployment-and-config-plumbing: backlog # no presidio service in docker-compose.yaml (regex redactor is the live impl)
   1-7-minimum-tool-host-shell: blocked # BUMP-GATED: needs ServiceType.WORKFLOW=101 (bump task A1)
   epic-1-retrospective: optional

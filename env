@@ -857,3 +857,9 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
 #   for NGINX TLS verification instead.
 
+# SECTION 15: WEB SEARCH / SERVER-SIDE TOOLS (OPTIONAL)
+# Runtime controls for the chatqna web-search fallback. Defaults live in code;
+# set these only to override.
+# WEB_SEARCH_ENABLED=true            # kill-switch: only 1/true/yes (or unset) enable; anything else disables
+# WEB_SEARCH_CONFIDENCE_THRESHOLD=0.70  # FR8 low-confidence trigger threshold
+# WEB_SEARCH_TIME_PATTERNS=latest,today # FR9 patterns: 'a,b' replaces defaults; '+a,b' appends

@@ -1738,13 +1738,18 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    def _apply_web_search_fallback(self, docs, query, max_score):
-        """Story 2-7: low-confidence web-search fallback with degradation truth table.
+    def _apply_web_search_fallback(self, docs, query, max_score, llm_requested=False):
+        """Story 2-4/2-7: trigger-driven web-search fallback with degradation truth table.
 
         Called at both fusion seams (retriever and rerank nodes). Returns
-        ``(docs, degradation_or_None)``:
+        ``(docs, degradation_or_None)``. The search decision is delegated to
+        ``workflows.tools.fusion.should_search``, which checks in precedence
+        order: FR9 time-sensitive (regardless of confidence) > FR10
+        llm_requested > FR8 low-confidence. ``llm_requested`` has no live
+        caller yet; it is the FR10 contract for the LLM-intent path that
+        arrives with the LangGraph work.
 
-        - max_score >= threshold: trigger not fired, docs unchanged, no degradation.
+        - Trigger not fired: docs unchanged, no degradation.
         - Backend failure (WebSearchError) with KB docs: RAG-only, deliberately
           NO degradation object (epic 2.7: silent when the KB still answers).
         - Backend failure without KB docs: SEARCH_UNAVAILABLE degradation so the
@@ -1754,15 +1759,35 @@ class ChatQnAService:
           junk is never fused.
         - Usable results: fused as before (existing behavior, regression-guarded).
 
+        ``WEB_SEARCH_ENABLED`` is the operator kill-switch: only ``1``/``true``/
+        ``yes`` (or unset) keep search enabled — any other value (``0``,
+        ``false``, ``off``, blank, typo) blocks every trigger path (the
+        deployable FR11 equivalent while the governance pipeline is not wired
+        into chatqna — see plan.md NFR11 gap).
+
         Never raises: an unexpected failure (missing module in a built image,
         backend bug) degrades to RAG-only instead of failing the chat request —
         the optional web-search enhancement must not take the answer down.
         """
-        threshold = 0.70
-        if max_score >= threshold:
+        # Fail-closed allow-list: only explicit '1'/'true'/'yes' (or unset) keep
+        # search enabled — a blank/typo/'off' value disables it. An emergency
+        # kill-switch that fails open on bad config is the unsafe direction.
+        if str(os.getenv("WEB_SEARCH_ENABLED", "true")).strip().lower() not in ("1", "true", "yes"):
             return docs, None
 
-        logger.info("Triggering web search fallback due to low RAG confidence (%.2f < %.2f)", max_score, threshold)
+        try:
+            from workflows.tools.fusion import should_search
+
+            decision = should_search(max_score, query, llm_requested=llm_requested)
+        except Exception as exc:
+            # Trigger engine unavailable (e.g. workflows/ missing from a built
+            # image) — never-kill-chat: behave as not triggered.
+            logger.error("Web search trigger engine unavailable: %s", exc)
+            return docs, None
+        if not decision:
+            return docs, None
+
+        logger.info("Triggering web search fallback (reason=%s, max_score=%s)", decision.reason, max_score)
         try:
             from workflows.tools.fusion import ResultFusionEngine, filter_usable_results
             from workflows.tools.web_search import SearxngBackend, WebSearchError

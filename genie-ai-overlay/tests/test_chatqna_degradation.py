@@ -391,3 +391,101 @@ class TestReviewPatchesSeam:
         assert len(docs) == 1
         assert docs[0]["source_type"] == "web_search"
         assert conf == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Story 2-4 — trigger-driven helper integration
+# ---------------------------------------------------------------------------
+class TestTriggerIntegration:
+    def setup_method(self):
+        self.svc = create_chatqna_service()
+
+    def test_time_sensitive_query_searches_at_high_confidence(self):
+        """FR9: a confidently-retrieved but stale doc must not block the search."""
+        docs = [_kb_doc(score=0.95)]
+        with patch(
+            "workflows.tools.web_search.SearxngBackend.search_sync", return_value=[_web_result()]
+        ) as mock_search:
+            out_docs, degradation = self.svc._apply_web_search_fallback(docs, "latest deadlines", 0.95)
+        mock_search.assert_called_once()
+        assert len(out_docs) == 2  # KB + fused web result
+        assert degradation is None
+
+    def test_kill_switch_blocks_every_trigger_path(self):
+        for query, max_score, llm in [("latest deadlines", 0.95, False), ("plain", 0.1, False), ("plain", 0.95, True)]:
+            with (
+                patch("workflows.tools.web_search.SearxngBackend.search_sync") as mock_search,
+                patch.dict("os.environ", {"WEB_SEARCH_ENABLED": "0"}),
+            ):
+                out_docs, degradation = self.svc._apply_web_search_fallback(
+                    [_kb_doc()], query, max_score, llm_requested=llm
+                )
+            mock_search.assert_not_called()
+            assert degradation is None
+
+    def test_llm_requested_fires_at_high_confidence(self):
+        with patch(
+            "workflows.tools.web_search.SearxngBackend.search_sync", return_value=[_web_result()]
+        ) as mock_search:
+            out_docs, _ = self.svc._apply_web_search_fallback([], "query", 0.9, llm_requested=True)
+        mock_search.assert_called_once()
+        assert len(out_docs) == 1
+
+    def test_plain_high_confidence_still_does_not_search(self):
+        with patch("workflows.tools.web_search.SearxngBackend.search_sync") as mock_search:
+            out_docs, degradation = self.svc._apply_web_search_fallback([_kb_doc(0.9)], "birth certificate", 0.9)
+        mock_search.assert_not_called()
+        assert degradation is None
+
+
+# ---------------------------------------------------------------------------
+# Story 2-4 review patches — kill-switch hardening + engine-unavailable guard
+# ---------------------------------------------------------------------------
+class TestKillSwitchHardening:
+    def setup_method(self):
+        self.svc = create_chatqna_service()
+
+    def test_kill_switch_fails_closed_on_unrecognized_values(self):
+        """Blank / 'off' / typo values must DISABLE (an emergency-off switch
+        that fails open on bad config is the unsafe direction)."""
+        for bad in ("", "off", "disabled", "flase"):
+            with (
+                patch("workflows.tools.web_search.SearxngBackend.search_sync") as mock_search,
+                patch.dict("os.environ", {"WEB_SEARCH_ENABLED": bad}),
+            ):
+                out_docs, degradation = self.svc._apply_web_search_fallback([], "latest deadlines", 0.1)
+            mock_search.assert_not_called()
+            assert degradation is None, bad
+            assert out_docs == [], bad
+
+    def test_kill_switch_empty_docs_no_degradation(self):
+        with patch.dict("os.environ", {"WEB_SEARCH_ENABLED": "false"}):
+            out_docs, degradation = self.svc._apply_web_search_fallback([], "latest", 0.1)
+        assert out_docs == []
+        assert degradation is None
+
+    def test_kill_switch_allows_explicit_true_values(self):
+        with (
+            patch("workflows.tools.web_search.SearxngBackend.search_sync", return_value=[_web_result()]) as mock_search,
+            patch.dict("os.environ", {"WEB_SEARCH_ENABLED": "yes"}),
+        ):
+            out_docs, _ = self.svc._apply_web_search_fallback([], "latest deadlines", 0.95)
+        mock_search.assert_called_once()
+        assert len(out_docs) == 1
+
+    def test_trigger_engine_unavailable_degrades_to_not_triggered(self):
+        """The inner engine-import guard: never-kill-chat even when the decision
+        itself cannot run (stripped image)."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def _boom(name, *args, **kwargs):
+            if name.startswith("workflows.tools"):
+                raise ModuleNotFoundError(f"No module named '{name}'")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=_boom):
+            out_docs, degradation = self.svc._apply_web_search_fallback([_kb_doc()], "latest", 0.1)
+        assert degradation is None
+        assert out_docs is not None

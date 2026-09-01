@@ -114,7 +114,7 @@ development_status:
   2-1-searxng-deployment: review # compose service searxng + configs/searxng/settings.yml; AGPL sign-off (OQ-SST-5) still gates production
   2-2-pluggable-search-backend-and-searxng-client: review # workflows/tools/web_search.py SearxngBackend; SearchBackend ABC exists only in orphaned tools/ dupe
   2-3-domain-whitelist-enforced-at-executor: review # whitelist enforced in governance.py (executor level)
-  2-4-triggers-low-confidence-time-sensitive-llm-fallback: in-progress # low-confidence trigger (<0.70) implemented inline in genieai_chatqna.py web-search fallback; time-sensitive + LLM-fallback triggers still missing
+  2-4-triggers-low-confidence-time-sensitive-llm-fallback: review # code-review PASSED 2026-09-01: FR9 time-sensitive + FR10 llm_requested triggers ported from c0008225f, FR8 delegated to engine; fail-closed kill-switch, env hardening; 755 tests green
   2-5-fusion-budget-quality-threshold: review # workflows/tools/fusion.py FusionBudget (60/40 ratio, remainder rollover); scoring/dedupe simplified vs spec
   2-6-chatqna-integration-at-both-seams: review # genieai_chatqna.py imports at L1195 + L1325 (both seams)
   2-7-degradation-and-transparent-insufficiency: review # code-review PASSED 2026-08-31: 6 patches applied (never-kill-chat broad guard, null-safe gate+scores, KB-aware wording, script-aware threshold, wiring test); 722 tests green; 2-8 must settle tool_id spelling + reason enum

@@ -136,3 +136,119 @@ def test_filter_usable_results_latin_not_halved():
     # Accented Latin (é, ü) must not trigger the non-Latin halving
     latin_ext = _res(content="çéàüöß" * 10)  # 60 chars, Latin Extended
     assert filter_usable_results([latin_ext], min_content_chars=80) == []
+
+
+# ---------------------------------------------------------------------------
+# Story 2-4 — trigger engine (FR8/FR9/FR10), ported from c0008225f
+# ---------------------------------------------------------------------------
+from workflows.tools.fusion import (
+    TriggerReason,
+    is_time_sensitive,
+    should_search,
+)
+
+
+class TestIsTimeSensitive:
+    def test_default_patterns_fire(self):
+        assert is_time_sensitive("what is the latest deadline?") is True
+        assert is_time_sensitive("Is this regulation still valid") is True
+        assert is_time_sensitive("current interest rates") is True
+
+    def test_word_boundaries_prevent_substring_fires(self):
+        assert is_time_sensitive("contract renewal process") is False  # "new" in "renewal"
+        assert is_time_sensitive("as often as needed") is False  # "as of" in "as often"
+
+    def test_plain_query_does_not_fire(self):
+        assert is_time_sensitive("how do I register a birth certificate") is False
+        assert is_time_sensitive("") is False
+
+
+class TestShouldSearch:
+    def test_none_confidence_fires_low_confidence(self):
+        d = should_search(None, "birth certificate")
+        assert d.should_search and d.reason == TriggerReason.LOW_CONFIDENCE
+
+    def test_below_threshold_fires(self):
+        d = should_search(0.3, "query")
+        assert d.should_search and d.reason == TriggerReason.LOW_CONFIDENCE
+
+    def test_time_sensitive_fires_regardless_of_confidence(self):
+        d = should_search(0.95, "latest deadlines")
+        assert d.should_search and d.reason == TriggerReason.TIME_SENSITIVE
+
+    def test_llm_requested_fires_at_high_confidence(self):
+        d = should_search(0.95, "query", llm_requested=True)
+        assert d.should_search and d.reason == TriggerReason.LLM_REQUESTED
+
+    def test_time_sensitive_outranks_llm_requested(self):
+        d = should_search(0.95, "latest deadlines", llm_requested=True)
+        assert d.reason == TriggerReason.TIME_SENSITIVE
+
+    def test_high_confidence_plain_query_not_triggered(self):
+        d = should_search(0.9, "birth certificate process")
+        assert not d.should_search and d.reason == TriggerReason.NOT_TRIGGERED
+
+    def test_confidence_threshold_env_override(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_CONFIDENCE_THRESHOLD", "0.95")
+        d = should_search(0.9, "query")
+        assert d.should_search and d.reason == TriggerReason.LOW_CONFIDENCE
+
+    def test_time_patterns_env_override(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_TIME_PATTERNS", "plazo actual, vigente")
+        assert is_time_sensitive("cual es el plazo actual") is True
+        assert is_time_sensitive("latest deadlines") is False  # defaults replaced
+
+
+# ---------------------------------------------------------------------------
+# Story 2-4 review patches — fail-safe env handling, containment, NaN
+# ---------------------------------------------------------------------------
+import math
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _clean_web_search_env(monkeypatch):
+    """Ambient CI env must not flip default-relying trigger tests."""
+    for var in ("WEB_SEARCH_TIME_PATTERNS", "WEB_SEARCH_CONFIDENCE_THRESHOLD", "WEB_SEARCH_ENABLED"):
+        monkeypatch.delenv(var, raising=False)
+
+
+class TestTriggerEnvHardening:
+    def test_bad_threshold_falls_back_to_default(self, monkeypatch):
+        for bad in ("0,70", "", "abc"):
+            monkeypatch.setenv("WEB_SEARCH_CONFIDENCE_THRESHOLD", bad)
+            d = should_search(0.5, "plain query")
+            assert d.should_search and d.reason == TriggerReason.LOW_CONFIDENCE, bad
+            d2 = should_search(0.9, "plain query")
+            assert not d2.should_search, bad
+
+    def test_patterns_replace_mode_drops_defaults(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_TIME_PATTERNS", "plazo actual")
+        assert is_time_sensitive("cual es el plazo actual") is True
+        assert is_time_sensitive("latest deadlines") is False
+
+    def test_patterns_append_mode_keeps_defaults(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_TIME_PATTERNS", "+plazo actual")
+        assert is_time_sensitive("cual es el plazo actual") is True
+        assert is_time_sensitive("latest deadlines") is True
+
+    def test_comma_only_override_falls_back_to_defaults(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_TIME_PATTERNS", ",,,")
+        assert is_time_sensitive("latest deadlines") is True
+
+    def test_non_ascii_pattern_matches_by_containment(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_TIME_PATTERNS", "最新")
+        assert is_time_sensitive("政府最新公告") is True
+
+    def test_punctuation_edged_custom_pattern_matches(self, monkeypatch):
+        monkeypatch.setenv("WEB_SEARCH_TIME_PATTERNS", "#now")
+        assert is_time_sensitive("#now what") is True
+
+    def test_nan_confidence_fires_low_confidence(self):
+        d = should_search(math.nan, "plain query")
+        assert d.should_search and d.reason == TriggerReason.LOW_CONFIDENCE
+
+    def test_llm_requested_outranks_low_confidence(self):
+        d = should_search(0.3, "plain query", llm_requested=True)
+        assert d.reason == TriggerReason.LLM_REQUESTED

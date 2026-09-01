@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,6 +74,172 @@ def _effective_min_chars(content: str, min_chars: int) -> int:
     if letters and sum(1 for c in letters if ord(c) > 0x24F) > len(letters) // 2:
         return max(1, min_chars // 2)
     return min_chars
+
+
+# FR8 — default low-confidence threshold. Below this, retrieval is treated as
+# too weak to answer alone and web search is triggered.
+DEFAULT_CONFIDENCE_THRESHOLD = 0.70
+
+# FR24 — results scoring below this are discarded before entering the LLM context.
+DEFAULT_QUALITY_THRESHOLD = 0.30
+
+# FR20 — share of the context window reserved for tool results (the rest is RAG).
+DEFAULT_TOOL_CONTEXT_RATIO = 0.40
+
+# FR9 — time-sensitive query patterns.
+#
+# ponytail: English-only. GENIE serves 14 locales, so a Spanish query asking for the
+# *plazo actual* will not fire this trigger and will fall back to the confidence
+# trigger alone. Overridable via WEB_SEARCH_TIME_PATTERNS (comma-separated) so a
+# deployment can add its locales without a code change. Proper fix is to run the
+# trigger after the existing translation step, or to let the LLM-driven path (FR10)
+# carry non-English detection — both are larger changes than this trigger warrants.
+_DEFAULT_TIME_PATTERNS = (
+    "current",
+    "latest",
+    "today",
+    "tomorrow",
+    "yesterday",
+    "this week",
+    "this month",
+    "this year",
+    "right now",
+    "recent",
+    "recently",
+    "deadline",
+    "up to date",
+    "as of",
+    "new",
+    "update",
+    "updated",
+    "still valid",
+)
+
+
+class TriggerReason(str):
+    """Why web search fired — carried into span attributes and the audit record."""
+
+    LOW_CONFIDENCE = "low_confidence"
+    TIME_SENSITIVE = "time_sensitive"
+    LLM_REQUESTED = "llm_requested"
+    NOT_TRIGGERED = "not_triggered"
+
+
+@dataclass(frozen=True)
+class TriggerDecision:
+    """The outcome of the should-we-search question."""
+
+    should_search: bool
+    reason: str
+
+    def __bool__(self) -> bool:
+        return self.should_search
+
+
+def _isnan(value) -> bool:
+    """NaN scores carry no information — treat like None (fire, the unsafe-direction default)."""
+    try:
+        return value != value  # NaN is the only value != itself; no math import needed
+    except Exception:
+        return False
+
+
+def _time_patterns() -> tuple[str, ...]:
+    """Time-sensitive patterns, with the env override applied.
+
+    ``WEB_SEARCH_TIME_PATTERNS=a,b,c`` REPLACES the defaults (the removal lever
+    for deployments that find a pattern too noisy). Prefixing with ``+``
+    (``+a,b,c``) APPENDS to the defaults — the add-my-locales case. A value that
+    parses to no patterns at all (e.g. comma-only) falls back to the defaults
+    rather than silently disarming the trigger.
+    """
+    override = os.getenv("WEB_SEARCH_TIME_PATTERNS", "").strip()
+    if override:
+        append = override.startswith("+")
+        custom = tuple(p.strip().lower() for p in override.lstrip("+").split(",") if p.strip())
+        if not custom:
+            logger.warning("WEB_SEARCH_TIME_PATTERNS=%r parsed to no patterns; using defaults", override)
+            return _DEFAULT_TIME_PATTERNS
+        if append:
+            return _DEFAULT_TIME_PATTERNS + custom
+        return custom
+    return _DEFAULT_TIME_PATTERNS
+
+
+def _matches_pattern(query: str, pattern: str) -> bool:
+    """Word-boundary match for plain word patterns; containment otherwise.
+
+    ``\b`` boundaries need word/non-word transitions, which do not exist inside
+    CJK/Thai contiguous scripts or around punctuation-edged custom patterns
+    ("#now") — those use plain containment instead.
+    """
+    if pattern.isascii() and re.match(r"^\w", pattern) and re.search(r"\w$", pattern):
+        return re.search(rf"\b{re.escape(pattern)}\b", query) is not None
+    return pattern in query
+
+
+def is_time_sensitive(query: str) -> bool:
+    """True when *query* contains a time-sensitive pattern (FR9).
+
+    Matched on word boundaries so "new" does not fire on "renewal" and "as of" does
+    not fire inside "as often". Multi-word patterns are matched as phrases.
+    """
+    if not query:
+        return False
+    lowered = query.lower()
+    return any(_matches_pattern(lowered, pattern) for pattern in _time_patterns())
+
+
+def should_search(
+    retrieval_confidence: float | None,
+    query: str,
+    *,
+    confidence_threshold: float | None = None,
+    llm_requested: bool = False,
+) -> TriggerDecision:
+    """Decide whether to invoke web search (FR8, FR9, FR10).
+
+    Precedence, highest first:
+
+    1. **Time-sensitive** (FR9) — fires *regardless of retrieval confidence*, because a
+       confidently-retrieved but stale document is exactly the failure mode this trigger
+       exists to catch. Checked first for that reason.
+    2. **LLM-requested** (FR10) — the model judged the knowledge base insufficient.
+    3. **Low confidence** (FR8) — retrieval scored below the threshold.
+
+    A missing ``retrieval_confidence`` (``None``) is treated as low confidence: if the
+    pipeline could not score its own retrieval, assuming it was good is the unsafe
+    direction.
+
+    This function deliberately does **not** consult the tool's enabled/authorized state.
+    FR11 requires that a disabled tool cannot fire from either the rule-based or the
+    LLM-driven path, and that guarantee is enforced structurally in
+    ``governance.GovernancePipeline.guard`` — the single place every call must traverse.
+    Duplicating the check here would create a second place for the two to drift apart.
+    """
+    if is_time_sensitive(query):
+        return TriggerDecision(True, TriggerReason.TIME_SENSITIVE)
+    if llm_requested:
+        return TriggerDecision(True, TriggerReason.LLM_REQUESTED)
+
+    threshold = confidence_threshold
+    if threshold is None:
+        raw = os.getenv("WEB_SEARCH_CONFIDENCE_THRESHOLD", DEFAULT_CONFIDENCE_THRESHOLD)
+        try:
+            threshold = float(raw)
+        except (TypeError, ValueError):
+            # Bad config (typo, locale comma "0,70", empty) must not kill the
+            # trigger or masquerade as an engine outage — fall back to default.
+            logger.warning(
+                "WEB_SEARCH_CONFIDENCE_THRESHOLD=%r is not a float; using default %s",
+                raw,
+                DEFAULT_CONFIDENCE_THRESHOLD,
+            )
+            threshold = DEFAULT_CONFIDENCE_THRESHOLD
+    if retrieval_confidence is None or _isnan(retrieval_confidence) or retrieval_confidence < threshold:
+        return TriggerDecision(True, TriggerReason.LOW_CONFIDENCE)
+
+    return TriggerDecision(False, TriggerReason.NOT_TRIGGERED)
 
 
 @dataclass

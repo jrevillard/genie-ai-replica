@@ -1081,8 +1081,12 @@ class FileController {
       // Joi validation
       const schema = Joi.object({
         bundle: Joi.string().base64().required(),
+        // Story #978 born-right graph naming (David, 2026-08-31): okf-server
+        // derives the graph name from the repo NAME + version —
+        // `OKF_<name-slug>_v<N>` — so the legacy uuid-only shape
+        // (`OKF_<repo_id>`) is no longer the only legal form.
         graph_name: Joi.string()
-          .pattern(/^OKF_[a-f0-9-]+$/)
+          .pattern(/^OKF_[a-z0-9-]+(_v[0-9]+)?$/)
           .required(),
         repo_id: Joi.string().uuid().required(),
         originalFileName: Joi.string().allow('').optional(),
@@ -1117,11 +1121,17 @@ class FileController {
         return res.status(400).json({ error: 'VALIDATION_ERROR', message: error.details[0].message });
       }
 
-      // Ownership assertion: graph_name must match OKF_{repo_id}
-      if (graph_name !== `OKF_${repo_id}`) {
+      // Ownership assertion: the LEGACY uuid-named graph must match
+      // OKF_{repo_id}. Born-right names (`OKF_<slug>_v<N>`) derive from the
+      // repo NAME + version — doc-repo cannot recompute them, so they pass on
+      // format alone (okf-server derives them from the registry server-side;
+      // this route is internal, service-token-gated).
+      const isBornRightName = /^OKF_[a-z0-9-]+_v[0-9]+$/.test(graph_name);
+      const isLegacyOwned = graph_name === `OKF_${repo_id}`;
+      if (!isBornRightName && !isLegacyOwned) {
         return res.status(400).json({
           error: 'OWNERSHIP_MISMATCH',
-          message: `graph_name must equal OKF_${repo_id}`
+          message: `graph_name must be the born-right OKF_<slug>_v<N> form or equal OKF_${repo_id}`
         });
       }
 

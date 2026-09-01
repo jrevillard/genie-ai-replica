@@ -78,11 +78,13 @@ function safeKey(prefix, value) {
 }
 
 /**
- * Persist a bundle's AUTHOR-STATED links (from each concept's frontmatter
- * `links: [...]` array) as additional _LINKS_TO edges with source='author'.
- * Idempotent: same _key, fresh payload (overwrite). Runs at bundle-settle
- * alongside writeManifest — the manifest links and the graph edges carry the
- * same author-stated structure; tier-3 graph-walk reads them transparently.
+ * Persist a bundle's AUTHOR-STATED links (the parser's structural links —
+ * markdown-body hyperlinks targeting `*.md`, FR-7 — persisted per concept on
+ * the meta doc's `links` array) as additional _LINKS_TO edges with
+ * source='author'. Idempotent: same _key, fresh payload (overwrite). Runs at
+ * bundle-settle alongside writeManifest — the manifest links and the graph
+ * edges carry the same author-stated structure; tier-3 graph-walk reads them
+ * transparently.
  * @param {string} repo_id
  * @returns {Promise<{repo_id, written: number, skipped: number}>}
  */

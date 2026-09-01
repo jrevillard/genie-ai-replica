@@ -196,6 +196,36 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
     expect(res.body.error).toBe('VALIDATION_ERROR');
   });
 
+  it('should ACCEPT a born-right versioned graph name (Story #978, 2026-09-01)', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'born-right-file-id',
+      file_name: 'concept.md',
+      storage_path: '/uploads/born-right-file-id.md'
+    });
+
+    const res = await request(app).post('/api/files/ingest-bundle').send({
+      ...validBody,
+      // okf-server derives the graph from the repo NAME + version — the uuid
+      // shape no longer covers it (live-caught: publish 502 EXPORT_FAILED).
+      graph_name: 'OKF_drain-probe_v1'
+    });
+
+    expect(res.status).toBe(202);
+    expect(res.body.graph_name).toBe('OKF_drain-probe_v1');
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
+  });
+
+  it('should still reject a legacy-format graph_name that does not own repo_id', async () => {
+    const res = await request(app).post('/api/files/ingest-bundle').send({
+      ...validBody,
+      graph_name: 'OKF_99999999-9999-4999-8999-999999999999' // legacy shape, WRONG repo
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('OWNERSHIP_MISMATCH');
+    expect(fileService.uploadBundle).not.toHaveBeenCalled();
+  });
+
   it('should return 403 for a non-Admin caller', async () => {
     mockDenyAuth = true;
     try {

@@ -100,6 +100,27 @@ describe('graph-lifecycle-service (versioned serving graph)', () => {
     expect(mockDb._stores[SERVING + '_SOURCE'].x1).toBeDefined(); // untouched
   });
 
+  test('promoteGraph follows the DRAIN authority after a version skew (live-caught 2026-09-01)', async () => {
+    // A failed publish consumed version 1 (the mint persisted before the
+    // bundle export failed) — the retry minted v2, so the serving target is
+    // v2 while the concepts DRAINED into v1. The registry cannot derive v1;
+    // the meta rows name it. Promote must move THAT graph.
+    const DRAINED = 'OKF_drain-probe_v1';
+    seedGraph(DRAINED);
+    // The first db.query in promoteGraph is the drain-authority read.
+    mockDb.query.mockResolvedValueOnce({ all: async () => [DRAINED] });
+    const doc = repoDoc({
+      name: 'Drain Probe',
+      version: 2,
+      lifecycle_state: 'publish',
+      ingested_graph_name: null
+    });
+    const out = await promoteGraph(doc);
+    expect(out).toBe('OKF_drain-probe_v2');
+    expect(mockDb._stores['OKF_drain-probe_v2_SOURCE'].x1).toBeDefined(); // the DATA moved
+    expect(mockDb._stores[DRAINED + '_SOURCE']).toBeUndefined();
+  });
+
   test('promoteGraph skips absent sources but still creates the versioned definition', async () => {
     // No seeding: sources never materialized with data — the mock treats
     // empty/absent as not-exists. Rename is skipped, definition still created.

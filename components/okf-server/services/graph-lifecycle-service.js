@@ -300,10 +300,35 @@ async function refreshMetaGraphNames(repoId, graphName) {
 }
 
 /**
+ * The graphs the repo's concepts ACTUALLY drained into — DISTINCT
+ * okf_concepts_meta.graph_name. The meta rows are the DRAIN AUTHORITY: the
+ * worker drains rows stamped with graph_name, so after a version skew (a
+ * failed publish consumed a version number — live-caught 2026-09-01) the
+ * drained graph (`v1`) is NOT derivable from the registry (`v2`), while the
+ * meta rows still name it. Best-effort: a read failure degrades to the
+ * registry-derived candidates.
+ */
+async function drainedGraphNames(db, repoId) {
+  try {
+    return await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.repo_id == @rid AND m.graph_name != null ' +
+          'COLLECT g = m.graph_name RETURN g',
+        { rid: repoId }
+      )
+    ).all();
+  } catch (err) {
+    logger.warn('Graph lifecycle: meta graph-name read failed (continuing)', { repo_id: repoId, error: err.message });
+    return [];
+  }
+}
+
+/**
  * INGEST side: the content becomes version N — the serving graph MUST be
  * `OKF_<slug>_v<N>`. With born-right naming the working graph is usually
  * ALREADY `v<N>` (renameGraph no-ops); only a draft opened at retract
- * (`v<N+1>`) or a legacy pre-convention graph needs the transition rename.
+ * (`v<N+1>`), a version-skewed drain, or a legacy pre-convention graph needs
+ * the transition rename.
  * Called by lifecycle-service BEFORE the serving flags flip — a failed
  * rename leaves the repo un-serving and retryable.
  * @param {object} repo the registry doc (name, version, repo_id, ingested_graph_name?)
@@ -315,9 +340,11 @@ async function promoteGraph(repo, actor) {
     span.setAttribute('okf.repo_id', repo.repo_id);
     span.setAttribute('okf.graph.to', toGraph);
     // Resolve where the data ACTUALLY lives (a mid-rename crash leaves the
-    // collections at the target while the registry still names the source).
+    // collections at the target while the registry still names the source;
+    // the meta rows name whatever the drains actually wrote).
     const db = await getDb();
     const fromGraph = await resolveGraphName(db, [
+      ...(await drainedGraphNames(db, repo.repo_id)),
       repo.ingested_graph_name,
       workingGraphName(repo),
       versionedGraphName(repo),
@@ -359,9 +386,11 @@ async function demoteGraph(repo, actor) {
     span.setAttribute('okf.graph.to', toGraph);
     // Resolve where the data ACTUALLY lives — a crashed prior demote leaves
     // the collections at this very draft name while the registry still names
-    // the served version; the retry must no-op the rename, not fail.
+    // the served version; the retry must no-op the rename, not fail. The meta
+    // rows name whatever the drains actually wrote (drain authority).
     const db = await getDb();
     const fromGraph = await resolveGraphName(db, [
+      ...(await drainedGraphNames(db, repo.repo_id)),
       repo.ingested_graph_name,
       versionedGraphName(repo),
       toGraph,

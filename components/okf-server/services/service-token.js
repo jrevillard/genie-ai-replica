@@ -7,7 +7,13 @@
 // proven dataprep pattern (genie-ai-overlay/dataprep/keycloak_service_account.py):
 // cached with expiry + 30s buffer, single-flight refresh, clear errors.
 // Token endpoint base precedence: KEYCLOAK_INTERNAL_URL (split-URL/local —
-// container-reachable) → KEYCLOAK_PUBLIC_URL → KEYCLOAK_URL (cloud default).
+// container-reachable) → KEYCLOAK_URL → KEYCLOAK_PUBLIC_URL (browser-facing
+// alias — LAST, never first: a service-account mint is server-to-server and
+// the public alias is routinely unreachable from inside the container).
+// MINTING FAILOVERS across every candidate (live-caught 2026-09-01: with only
+// the public https://localhost/auth reachable-from-a-browser, the mint died
+// with "socket disconnected before secure TLS" and the ingest worker could
+// not drain at all — the winner is cached so refreshes skip dead endpoints).
 
 const axios = require('axios');
 const { logger } = require('../shared-lib/logger');
@@ -23,14 +29,22 @@ let _cachedToken = null;
 let _tokenExpiry = 0;
 let _mintPromise = null;
 let _warnedUnconfigured = false;
+let _tokenEndpoint = null; // the endpoint that last minted successfully (failover memory)
+
+function tokenEndpointCandidates() {
+  const bases = [
+    process.env.KEYCLOAK_INTERNAL_URL,
+    process.env.KEYCLOAK_URL,
+    process.env.KEYCLOAK_PUBLIC_URL,
+    'http://keycloak:8080'
+  ];
+  const unique = [...new Set(bases.filter(Boolean).map((b) => b.replace(/\/$/, '')))];
+  return unique.map((base) => `${base}/realms/${KC_REALM()}/protocol/openid-connect/token`);
+}
 
 function tokenEndpoint() {
-  const base =
-    process.env.KEYCLOAK_INTERNAL_URL ||
-    process.env.KEYCLOAK_PUBLIC_URL ||
-    process.env.KEYCLOAK_URL ||
-    'http://keycloak:8080';
-  return `${base.replace(/\/$/, '')}/realms/${KC_REALM()}/protocol/openid-connect/token`;
+  // Documented precedence (first candidate); mintToken failovers across all.
+  return tokenEndpointCandidates()[0];
 }
 
 /** True when the client credentials env is absent — calls proceed WITHOUT a
@@ -54,26 +68,40 @@ async function mintToken() {
     client_id: CLIENT_ID(),
     client_secret: CLIENT_SECRET()
   });
-  const https = tokenEndpoint().startsWith('https');
-  let resp;
-  try {
-    resp = await axios.post(tokenEndpoint(), body, {
-      timeout: 10000,
-      ...(https && (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' || process.env.KEYCLOAK_SSL_SKIP_VERIFY === '1')
-        ? { httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }) }
-        : {})
-    });
-  } catch (err) {
-    throw new Error(`Service-account token request failed: ${err.message}`, { cause: err });
+  // Try the last-known-good endpoint FIRST (if any), then the candidates in
+  // precedence order. Every failure is COLLECTED into the thrown message —
+  // the Winston console formatter strips metadata fields, so the diagnosis
+  // must be self-describing (live-caught: a bare "token request failed" hid
+  // WHICH endpoint was unreachable for a day).
+  const candidates = [...new Set([_tokenEndpoint, ...tokenEndpointCandidates()].filter(Boolean))];
+  const failures = [];
+  for (const endpoint of candidates) {
+    const https = endpoint.startsWith('https');
+    try {
+      const resp = await axios.post(endpoint, body, {
+        timeout: 5000,
+        ...(https && (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' || process.env.KEYCLOAK_SSL_SKIP_VERIFY === '1')
+          ? { httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }) }
+          : {})
+      });
+      const data = resp.data || {};
+      if (!data.access_token) {
+        throw new Error('response missing access_token');
+      }
+      _cachedToken = data.access_token;
+      _tokenExpiry = Date.now() + (data.expires_in || 300) * 1000;
+      _tokenEndpoint = endpoint;
+      logger.info('okf-server service-account token minted', {
+        client_id: CLIENT_ID(),
+        expires_in: data.expires_in,
+        endpoint
+      });
+      return _cachedToken;
+    } catch (err) {
+      failures.push(`${endpoint} (${err.message})`);
+    }
   }
-  const data = resp.data || {};
-  if (!data.access_token) {
-    throw new Error('Service-account token response missing access_token');
-  }
-  _cachedToken = data.access_token;
-  _tokenExpiry = Date.now() + (data.expires_in || 300) * 1000;
-  logger.info('okf-server service-account token minted', { client_id: CLIENT_ID(), expires_in: data.expires_in });
-  return _cachedToken;
+  throw new Error(`Service-account token request failed for ${failures.length} endpoint(s): ${failures.join('; ')}`);
 }
 
 /**
@@ -161,6 +189,7 @@ function _resetForTesting() {
   _clearTokenCache();
   _mintPromise = null;
   _warnedUnconfigured = false;
+  _tokenEndpoint = null;
 }
 
 module.exports = { getServiceToken, authedAxios, tokenEndpoint, _resetForTesting };

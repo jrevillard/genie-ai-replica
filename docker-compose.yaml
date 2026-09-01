@@ -544,6 +544,10 @@ services:
       # Split-URL OIDC: KEYCLOAK_PUBLIC_URL aliases the browser-facing issuer to the same JWKS.
       # No-op in cloud (equals KEYCLOAK_URL); active where internal/public issuers differ (local build).
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}
+      # Service-account mints (okf-server → doc-repo/dataprep) are server-to-server:
+      # prefer the container-reachable INTERNAL Keycloak; the browser-facing public
+      # alias stays only a late fallback. Mirrors the dataprep block.
+      - KEYCLOAK_INTERNAL_URL=${KEYCLOAK_INTERNAL_URL:-}
       # TLS verification for okf-server → NGINX OIDC discovery/JWKS fetches.
       # Default 1 (strict, production); set 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}

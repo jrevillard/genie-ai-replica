@@ -23,12 +23,14 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     process.env.KC_OKF_SERVER_CLIENT_SECRET = 'test-secret';
     delete process.env.KEYCLOAK_INTERNAL_URL;
     delete process.env.KEYCLOAK_PUBLIC_URL;
+    delete process.env.KEYCLOAK_URL;
   });
   afterEach(() => {
     delete process.env.KC_OKF_SERVER_CLIENT_ID;
     delete process.env.KC_OKF_SERVER_CLIENT_SECRET;
     delete process.env.KEYCLOAK_INTERNAL_URL;
     delete process.env.KEYCLOAK_PUBLIC_URL;
+    delete process.env.KEYCLOAK_URL;
   });
 
   test('mints via client_credentials against the realm token endpoint', async () => {
@@ -62,9 +64,39 @@ describe('service-token (client_credentials, cached, single-flight)', () => {
     expect(axios.post.mock.calls[0][0]).toContain('http://keycloak:8080/realms/genie/protocol/openid-connect/token');
   });
 
+  test('FAILOVER: an unreachable first endpoint falls through to the next (live-caught 2026-09-01)', async () => {
+    process.env.KEYCLOAK_URL = 'https://localhost/auth'; // browser-facing alias — dead from inside a container
+    // expires_in: 1 (< the 30s refresh buffer) so the SECOND getServiceToken
+    // call re-mints — proving the WINNER endpoint is remembered (no dead-end retry).
+    axios.post.mockImplementation((url) =>
+      url.startsWith('https://localhost/auth')
+        ? Promise.reject(new Error('Client network socket disconnected before secure TLS connection was established'))
+        : Promise.resolve({ data: { access_token: 'tok-via-fallback', expires_in: 1 } })
+    );
+    const t = await getServiceToken();
+    expect(t).toBe('tok-via-fallback');
+    // first mint tried the dead public alias, then the next candidate
+    expect(axios.post.mock.calls[0][0]).toContain('https://localhost/auth/realms/genie');
+    expect(axios.post.mock.calls[1][0]).not.toContain('localhost');
+    // the WINNER is cached: re-mint goes straight to the working endpoint
+    axios.post.mockClear();
+    await getServiceToken();
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post.mock.calls[0][0]).not.toContain('localhost');
+  });
+
   test('token failure surfaces a clear error (no silent null)', async () => {
     axios.post.mockRejectedValue(new Error('401 invalid_client'));
     await expect(getServiceToken()).rejects.toThrow(/token/i);
+  });
+
+  test('all-endpoints-down error NAMES every endpoint tried (Winston strips metadata)', async () => {
+    process.env.KEYCLOAK_URL = 'http://kong:8000/auth';
+    process.env.KEYCLOAK_PUBLIC_URL = 'https://localhost/auth';
+    axios.post.mockRejectedValue(new Error('socket disconnected'));
+    await expect(getServiceToken()).rejects.toThrow(
+      /failed for \d+ endpoint\(s\): .*kong:8000.*localhost\/auth/s
+    );
   });
 
   test('authedAxios injects the Bearer header on requests', async () => {

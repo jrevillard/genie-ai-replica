@@ -67,6 +67,9 @@
             <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onVersions(r)">
               {{ translate('okf.dashboard.card.versions', 'Versions') }}
             </DsButton>
+            <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onLogs(r)">
+              {{ translate('okf.dashboard.card.logs', 'Logs') }}
+            </DsButton>
             <DsButton variant="ghost" small :disabled="exportBusy" @click.stop="onExport(r)">
               {{ translate('okf.dashboard.card.export', 'Export') }}
             </DsButton>
@@ -177,6 +180,8 @@
       @close="versionsRepo = null"
       @changed="onVersionsChanged"
     />
+
+    <OkfLogsDialog :visible="logsOpen" :repo="logsRepo" @close="logsOpen = false" />
   </div>
 </template>
 
@@ -189,6 +194,7 @@ import DsInput from '../ds/Input.vue';
 import DsSelect from '../ds/Select.vue';
 import DsHealthRing from '../ds/HealthRing.vue';
 import OkfVersionsDialog from './editor/VersionsDialog.vue';
+import OkfLogsDialog from './editor/LogsDialog.vue';
 import okfRepoOps from '../../services/okfRepoOps';
 
 const LANES = [
@@ -220,7 +226,7 @@ const CONTEXTUAL_LABELS = {
 
 export default {
   name: 'OkfStudioDashboard',
-  components: { DsButton, DsDialog, DsInput, DsSelect, DsHealthRing, OkfVersionsDialog },
+  components: { DsButton, DsDialog, DsInput, DsSelect, DsHealthRing, OkfVersionsDialog, OkfLogsDialog },
   mixins: [translateMixin],
   emits: ['new', 'resume'],
   data() {
@@ -239,7 +245,9 @@ export default {
       piiBlocked: false,
       deleteAsk: null,
       deleteError: '',
-      versionsRepo: null
+      versionsRepo: null,
+      logsOpen: false,
+      logsRepo: null
     };
   },
   computed: {
@@ -375,6 +383,10 @@ export default {
     },
     onVersions(r) {
       this.versionsRepo = r;
+    },
+    onLogs(r) {
+      this.logsRepo = r;
+      this.logsOpen = true;
     },
     onVersionsChanged() {
       this.refreshAll();

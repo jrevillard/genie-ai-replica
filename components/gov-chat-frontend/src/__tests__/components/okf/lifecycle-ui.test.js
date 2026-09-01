@@ -177,6 +177,32 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
       .trigger('click');
     expect(wrapper.findComponent(OkfVersionsDialog).props('visible')).toBe(true);
   });
+
+  it('offers Logs between Versions and Export on EVERY card and opens the dialog for that repo (David, 2026-08-31)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, {
+      global: { mocks: { $store: store }, stubs: STUBS }
+    });
+    await seedRepos(store, REPOS);
+    await flush();
+    const cards = wrapper.findAll('.okf-dashboard__card-wrap');
+    expect(cards.length).toBe(REPOS.length);
+    for (const card of cards) {
+      const buttons = card.findAll('button').map((b) => b.text());
+      expect(buttons).toContain('Logs');
+      // BETWEEN Versions and Export (the audit-log directive order)
+      expect(buttons.indexOf('Logs')).toBeGreaterThan(buttons.indexOf('Versions'));
+      expect(buttons.indexOf('Logs')).toBeLessThan(buttons.indexOf('Export'));
+    }
+    const drafty = cards.find((c) => c.text().includes('Drafty'));
+    await drafty
+      .findAll('button')
+      .find((b) => b.text() === 'Logs')
+      .trigger('click');
+    const dialog = wrapper.findComponent(OkfLogsDialog);
+    expect(dialog.props('visible')).toBe(true);
+    expect(dialog.props('repo')).toMatchObject({ repo_id: 'd1' });
+  });
 });
 
 describe('OkfRepoEditorShell — lifecycle strip', () => {

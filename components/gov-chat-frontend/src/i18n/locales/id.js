@@ -199,6 +199,12 @@ export default {
     ZW: 'Zimbabwe'
   },
   admin: {
+    roleDialog: {
+      title: 'Kelola peran',
+      loading: 'Memuat peran...',
+      assign: 'Tetapkan',
+      remove: 'Hapus'
+    },
     tools: {
       toolsIntegrations: 'ALAT & INTEGRASI',
       navigation: 'NAVIGASI',

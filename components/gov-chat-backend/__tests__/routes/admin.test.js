@@ -37,7 +37,10 @@ jest.mock('../../services/admin-dashboard-service', () => ({
   backupDatabase: jest.fn(),
   optimizeDatabase: jest.fn(),
   searchUsers: jest.fn(),
-  runDiagnostics: jest.fn()
+  runDiagnostics: jest.fn(),
+  getUserRoles: jest.fn(),
+  assignUserRole: jest.fn(),
+  removeUserRole: jest.fn()
 }));
 
 // Mock logsService
@@ -652,5 +655,68 @@ describe('AC7: Error handling patterns', () => {
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ error: 'Failed to fetch last scan details', message: 'Details error' });
     });
+  });
+});
+
+// ============================================================
+// Story 4-8 — list-and-grant role routes
+// ============================================================
+describe('Role management routes (story 4-8)', () => {
+  const { NotFoundError } = require('../../middleware/errors');
+
+  it('GET /users/:userKey/roles returns live roles from the service', async () => {
+    adminService.getUserRoles.mockResolvedValue({
+      success: true,
+      userKey: 'u1',
+      roles: [{ id: 'r1', name: 'tools-admin' }]
+    });
+
+    const response = await authGet('/api/admin/users/u1/roles');
+    expect(response.status).toBe(200);
+    expect(response.body.roles).toEqual([{ id: 'r1', name: 'tools-admin' }]);
+  });
+
+  it('GET /users/:userKey/roles maps NotFoundError to 404 (no Keycloak sub)', async () => {
+    adminService.getUserRoles.mockRejectedValue(new NotFoundError('User u2 has no Keycloak UUID (sub field)'));
+
+    const response = await authGet('/api/admin/users/u2/roles');
+    expect(response.status).toBe(404);
+  });
+
+  it('POST /users/:userKey/roles passes through to the service', async () => {
+    adminService.assignUserRole.mockResolvedValue({ success: true, userKey: 'u1', roleName: 'tools-admin' });
+
+    const response = await authPost('/api/admin/users/u1/roles', { roleName: 'tools-admin' });
+    expect(response.status).toBe(200);
+    expect(adminService.assignUserRole).toHaveBeenCalledWith('u1', 'tools-admin');
+  });
+
+  it('POST /users/:userKey/roles rejects a missing roleName with 400', async () => {
+    const response = await authPost('/api/admin/users/u1/roles', {});
+    expect(response.status).toBe(400);
+    expect(adminService.assignUserRole).not.toHaveBeenCalled();
+  });
+
+  it('POST /users/:userKey/roles propagates service errors (Keycloak down)', async () => {
+    adminService.assignUserRole.mockRejectedValue(new Error('Keycloak API error: 503'));
+
+    const response = await authPost('/api/admin/users/u1/roles', { roleName: 'tools-admin' });
+    expect(response.status).toBe(500);
+  });
+
+  it('POST /users/:userKey/roles rejects non-string roleName at the trust boundary', async () => {
+    const response = await authPost('/api/admin/users/u1/roles', { roleName: 42 });
+    expect(response.status).toBe(400);
+    expect(adminService.assignUserRole).not.toHaveBeenCalled();
+  });
+
+  it('DELETE /users/:userKey/roles/:roleName passes through to the service', async () => {
+    adminService.removeUserRole.mockResolvedValue({ success: true, userKey: 'u1', roleName: 'tools-reader' });
+
+    const response = await request(app)
+      .delete('/api/admin/users/u1/roles/tools-reader')
+      .set('Authorization', `Bearer ${validToken}`);
+    expect(response.status).toBe(200);
+    expect(adminService.removeUserRole).toHaveBeenCalledWith('u1', 'tools-reader');
   });
 });

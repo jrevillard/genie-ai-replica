@@ -62,6 +62,10 @@ const mockRunDiagnostics = jest.fn().mockResolvedValue({});
 const mockRunSecurityScan = jest.fn().mockResolvedValue({});
 const mockRolloverLogs = jest.fn().mockResolvedValue({});
 
+const mockGetUserRoles = jest.fn();
+const mockAssignUserRole = jest.fn();
+const mockRemoveUserRole = jest.fn();
+
 jest.mock('../../services/adminDashboardService', () => ({
   getSystemHealth: mockGetSystemHealth,
   getUserStats: mockGetUserStats,
@@ -73,7 +77,10 @@ jest.mock('../../services/adminDashboardService', () => ({
   getSecurityDetails: mockGetSecurityDetails,
   runDiagnostics: mockRunDiagnostics,
   runSecurityScan: mockRunSecurityScan,
-  rolloverLogs: mockRolloverLogs
+  rolloverLogs: mockRolloverLogs,
+  getUserRoles: mockGetUserRoles,
+  assignUserRole: mockAssignUserRole,
+  removeUserRole: mockRemoveUserRole
 }));
 
 jest.mock('../../services/serviceTreeService', () => ({
@@ -1340,6 +1347,95 @@ describe('AdminDashboard', () => {
       wrapper.vm.cancelHierarchyForm();
 
       expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Story 4-8 — role dialog: live roles from Keycloak (JIT rule means the
+  // search payload cannot be trusted for current assignment state)
+  // ---------------------------------------------------------------------
+  describe('role dialog (story 4-8)', () => {
+    it('fetches live roles when opened and prefers them in hasRole', async () => {
+      mockGetUserRoles.mockResolvedValue({
+        success: true,
+        userKey: 'u1',
+        roles: [{ id: 'r1', name: 'tools-admin' }]
+      });
+      const wrapper = createAdminDashboardWrapper();
+      const vm = wrapper.vm;
+      // Stale search payload: no roles — must NOT be trusted
+      const user = { _key: 'u1', email: 'a@b.c', roles: [] };
+
+      await vm.openAssignRoleDialog(user);
+      await vm.$nextTick();
+
+      expect(mockGetUserRoles).toHaveBeenCalledWith('u1');
+      expect(vm.roleDialog.liveRoles).toEqual([{ id: 'r1', name: 'tools-admin' }]);
+      expect(vm.hasRole(user, 'tools-admin')).toBe(true);
+      expect(vm.hasRole(user, 'tools-reader')).toBe(false);
+    });
+
+    it('renders both role rows; unknown state (fetch failed) disables the buttons', async () => {
+      mockGetUserRoles.mockRejectedValue(new Error('Keycloak down'));
+      // Earlier dialog tests leave their teleported modals on body (test-utils
+      // does not clean Teleport targets) — strip them before asserting counts
+      document.body.innerHTML = '';
+      const wrapper = createAdminDashboardWrapper();
+      const vm = wrapper.vm;
+
+      await vm.openAssignRoleDialog({ _key: 'u1', email: 'a@b.c', roles: [] });
+      await vm.$nextTick();
+      await vm.$nextTick();
+
+      // DsModal teleports to body — query the document, not the wrapper
+      const rows = document.querySelectorAll('.role-dialog-row');
+      expect(rows.length).toBe(2);
+      const buttons = document.querySelectorAll('.role-dialog-row button');
+      expect(buttons.length).toBe(2);
+      // Fetch failed -> liveRoles is null (unknown) -> buttons disabled, so the
+      // dialog never renders a misleading "Assign" for a role the user may hold
+      expect(buttons[0].hasAttribute('disabled')).toBe(true);
+
+      vm.closeRoleDialog();
+      await vm.$nextTick();
+    });
+
+    it('toggle assign calls the service then re-syncs from Keycloak', async () => {
+      mockGetUserRoles
+        .mockResolvedValueOnce({ success: true, userKey: 'u1', roles: [] }) // on open
+        .mockResolvedValueOnce({ success: true, userKey: 'u1', roles: [{ id: 'r1', name: 'tools-admin' }] }); // after assign
+      mockAssignUserRole.mockResolvedValue({ success: true });
+      const wrapper = createAdminDashboardWrapper();
+      const vm = wrapper.vm;
+      const user = { _key: 'u1', email: 'a@b.c', roles: [] };
+
+      await vm.openAssignRoleDialog(user);
+      await vm.toggleUserRole('tools-admin');
+
+      expect(mockAssignUserRole).toHaveBeenCalledWith('u1', 'tools-admin');
+      expect(mockGetUserRoles).toHaveBeenCalledTimes(2);
+      expect(vm.roleDialog.liveRoles).toEqual([{ id: 'r1', name: 'tools-admin' }]);
+    });
+
+    it('toggle remove uses the live set, not the stale payload', async () => {
+      mockGetUserRoles
+        .mockResolvedValueOnce({
+          success: true,
+          userKey: 'u1',
+          roles: [{ id: 'r1', name: 'tools-reader' }]
+        })
+        .mockResolvedValueOnce({ success: true, userKey: 'u1', roles: [] });
+      mockRemoveUserRole.mockResolvedValue({ success: true });
+      const wrapper = createAdminDashboardWrapper();
+      const vm = wrapper.vm;
+      // Stale payload claims no roles; live set says tools-reader is held
+      const user = { _key: 'u1', email: 'a@b.c', roles: [] };
+
+      await vm.openAssignRoleDialog(user);
+      await vm.toggleUserRole('tools-reader');
+
+      expect(mockRemoveUserRole).toHaveBeenCalledWith('u1', 'tools-reader');
+      expect(vm.roleDialog.liveRoles).toEqual([]);
     });
   });
 });

@@ -199,6 +199,12 @@ export default {
     ZW: 'زيمبابوي'
   },
   admin: {
+    roleDialog: {
+      title: 'إدارة الأدوار',
+      loading: 'جارٍ تحميل الأدوار...',
+      assign: 'تعيين',
+      remove: 'إزالة'
+    },
     tools: {
       toolsIntegrations: 'الأدوات والتكاملات',
       navigation: 'التنقل',

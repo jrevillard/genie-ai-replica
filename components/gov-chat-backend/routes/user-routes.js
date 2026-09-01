@@ -192,7 +192,9 @@ module.exports = (userService) => {
       logger.info(`[DELETE] Account deleted successfully for user ${userId}`);
       res.json({ success: true, message: 'Account deleted' });
     } catch (error) {
-      const status = error.status === 404 ? 404 : 500;
+      // NotFoundError carries statusCode (the proxy's no-sub path); older
+      // callers may set status — honor both so a missing user is a 404, not 500
+      const status = error.status === 404 || error.statusCode === 404 ? 404 : 500;
       logger.error(`[DELETE] Error deleting account: ${error.message}`, { stack: error.stack });
       res.status(status).json({ success: false, message: error.message || 'Failed to delete account' });
     }

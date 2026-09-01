@@ -2,6 +2,7 @@
 
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { NotFoundError } = require('../middleware/errors');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
@@ -29,7 +30,7 @@ const keycloakProxyService = {
    * Resolve a Keycloak UUID from an ArangoDB user record
    * @param {string} userKey - ArangoDB _key
    * @returns {Promise<string>} Keycloak UUID (sub field)
-   * @throws {Error} If user not found or sub field missing
+   * @throws {NotFoundError} If user not found or sub field missing (404, not 500)
    */
   async _resolveKeycloakUserId(userKey) {
     const db = await dbService.getConnection('default');
@@ -43,7 +44,9 @@ const keycloakProxyService = {
     const sub = await cursor.next();
 
     if (!sub) {
-      throw new Error(`User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`);
+      throw new NotFoundError(
+        `User ${userKey} has no Keycloak UUID (sub field) — user may not have logged in via Keycloak`
+      );
     }
 
     return sub;
@@ -291,6 +294,29 @@ const keycloakProxyService = {
         name: role.name
       }
     ]);
+  },
+
+  /**
+   * List a user's DIRECTLY ASSIGNED realm roles from Keycloak (live,
+   * authoritative — roles are JIT-protected and never persisted to ArangoDB).
+   * Not composite/group-derived ("effective") mappings. Implicit/technical
+   * roles are filtered to match the admin search display.
+   * @param {string} userKey - ArangoDB _key
+   * @returns {Promise<Array<{id: string, name: string}>>}
+   */
+  async getUserRealmRoles(userKey) {
+    const uuid = await this._resolveKeycloakUserId(userKey);
+    const roles = await this._adminApiCall('GET', `/users/${uuid}/role-mappings/realm`);
+    return (Array.isArray(roles) ? roles : [])
+      .filter(
+        (role) =>
+          role &&
+          role.name &&
+          role.name !== 'offline_access' &&
+          role.name !== 'uma_authorization' &&
+          !role.name.startsWith('default-roles-')
+      )
+      .map(({ id, name }) => ({ id, name }));
   },
 
   // ---------------------------------------------------------------------------

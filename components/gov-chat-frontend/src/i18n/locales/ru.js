@@ -199,6 +199,12 @@ export default {
     ZW: 'Зимбабве'
   },
   admin: {
+    roleDialog: {
+      title: 'Управление ролями',
+      loading: 'Загрузка ролей...',
+      assign: 'Назначить',
+      remove: 'Отозвать'
+    },
     tools: {
       toolsIntegrations: 'ИНСТРУМЕНТЫ И ИНТЕГРАЦИИ',
       navigation: 'НАВИГАЦИЯ',

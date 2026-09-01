@@ -199,6 +199,12 @@ export default {
     ZW: '津巴布韦'
   },
   admin: {
+    roleDialog: {
+      title: '管理角色',
+      loading: '正在加载角色...',
+      assign: '分配',
+      remove: '移除'
+    },
     tools: {
       toolsIntegrations: '工具与集成',
       navigation: '导航',

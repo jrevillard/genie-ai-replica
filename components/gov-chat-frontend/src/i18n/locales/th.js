@@ -199,6 +199,12 @@ export default {
     ZW: 'ซิมบับเว'
   },
   admin: {
+    roleDialog: {
+      title: 'จัดการบทบาท',
+      loading: 'กำลังโหลดบทบาท...',
+      assign: 'กำหนด',
+      remove: 'ลบออก'
+    },
     tools: {
       toolsIntegrations: 'เครื่องมือและการเชื่อมต่อ',
       navigation: 'การนำทาง',

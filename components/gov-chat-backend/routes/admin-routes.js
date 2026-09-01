@@ -5,6 +5,7 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const securityScanService = require('../services/security-scan-service');
 const queryService = require('../services/query-service');
 const { logger } = require('../shared-lib');
+const { ValidationError } = require('../middleware/errors');
 
 /**
  * @swagger
@@ -610,10 +611,10 @@ module.exports = (adminService, logsService) => {
     try {
       const { userKey } = req.params;
       const { roleName } = req.body;
-      if (!roleName) {
-        const err = new Error('roleName is required');
-        err.status = 400;
-        throw err;
+      if (typeof roleName !== 'string' || !roleName.trim()) {
+        // ValidationError carries statusCode — the global error middleware only
+        // honors statusCode (a plain err.status here surfaced as a 500)
+        throw new ValidationError('roleName is required');
       }
       const result = await adminService.assignUserRole(userKey, roleName);
       res.json(result);
@@ -649,6 +650,59 @@ module.exports = (adminService, logsService) => {
     try {
       const { userKey, roleName } = req.params;
       const result = await adminService.removeUserRole(userKey, roleName);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/users/{userKey}/roles:
+   *   get:
+   *     summary: List a user's current realm roles (live from Keycloak)
+   *     description: >-
+   *       Roles are JIT-protected and never persisted to ArangoDB — Keycloak is
+   *       the only source of current assignment state. Implicit/technical roles
+   *       (offline_access, uma_authorization, default-roles-*) are filtered out.
+   *       Grants take effect on the granted user's next login (fresh token).
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: userKey
+   *         schema:
+   *           type: string
+   *         required: true
+   *     responses:
+   *       200:
+   *         description: User's realm roles
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 userKey:
+   *                   type: string
+   *                 roles:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                       name:
+   *                         type: string
+   *       404:
+   *         description: User not found or has no Keycloak UUID (never logged in)
+   */
+  router.get('/users/:userKey/roles', async (req, res, next) => {
+    try {
+      const { userKey } = req.params;
+      const result = await adminService.getUserRoles(userKey);
       res.json(result);
     } catch (error) {
       next(error);

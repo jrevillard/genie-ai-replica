@@ -1550,6 +1550,37 @@
         @confirm="confirmDialogState.onConfirm"
         @cancel="confirmDialogState.onCancel"
       />
+
+      <!-- Story 4-8: role assignment dialog (live roles from Keycloak —
+           roles are JIT-protected in ArangoDB, so the search payload is stale) -->
+      <DsModal
+        :visible="roleDialog.visible"
+        :title="translate('admin.roleDialog.title', 'Manage Roles')"
+        size="sm"
+        @close="closeRoleDialog"
+      >
+        <div v-if="roleDialog.isLoadingRoles" class="role-dialog-loading">
+          <DsSpinner size="sm" />
+          <span>{{ translate('admin.roleDialog.loading', 'Loading roles...') }}</span>
+        </div>
+        <div v-else class="role-dialog-list">
+          <div v-for="role in ['tools-admin', 'tools-reader']" :key="role" class="role-dialog-row">
+            <span class="role-dialog-name">{{ role }}</span>
+            <DsButton
+              :variant="hasRole(roleDialog.user, role) ? 'danger' : 'primary'"
+              small
+              :disabled="isManagingRole !== null || roleDialog.liveRoles === null"
+              @click="toggleUserRole(role)"
+            >
+              {{
+                hasRole(roleDialog.user, role)
+                  ? translate('admin.roleDialog.remove', 'Remove')
+                  : translate('admin.roleDialog.assign', 'Assign')
+              }}
+            </DsButton>
+          </div>
+        </div>
+      </DsModal>
     </div>
   </div>
 </template>
@@ -1569,6 +1600,7 @@ import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
 import DsStatusTag from './ds/StatusTag.vue';
 import DsSpinner from './ds/Spinner.vue';
+import DsModal from './ds/Modal.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
@@ -1594,6 +1626,7 @@ export default {
     DsInput,
     DsStatusTag,
     DsSpinner,
+    DsModal,
     DsStateDisplay,
     DsTabs,
     DsSelect,
@@ -1718,7 +1751,11 @@ export default {
       userSearchResults: null,
       roleDialog: {
         visible: false,
-        user: null
+        user: null,
+        // Live roles from Keycloak (roles are JIT-protected in ArangoDB —
+        // the search payload cannot be trusted for current assignment state)
+        liveRoles: null,
+        isLoadingRoles: false
       },
       isManagingRole: null,
       userSearchTotal: 0,
@@ -2521,18 +2558,40 @@ export default {
       }
     },
 
-    openAssignRoleDialog(user) {
+    async openAssignRoleDialog(user) {
       this.roleDialog.user = user;
       this.roleDialog.visible = true;
+      this.roleDialog.liveRoles = null;
+      this.roleDialog.isLoadingRoles = true;
+      try {
+        const result = await adminDashboardService.getUserRoles(user._key);
+        // Race guard: a quick close/reopen for another user must not let this
+        // response overwrite the newer dialog state. Compare by _key — the
+        // state-stored user is a reactive Proxy, so reference equality fails.
+        if (this.roleDialog.user?._key !== user._key) return;
+        this.roleDialog.liveRoles = (result && result.roles) || [];
+      } catch (e) {
+        console.error(e);
+        this.showNotification(`Failed to load current roles: ${e.message}`, 'error');
+        // null (not []) — "unknown" must not render as "no roles held"
+        if (this.roleDialog.user?._key === user._key) this.roleDialog.liveRoles = null;
+      } finally {
+        if (this.roleDialog.user?._key === user._key) this.roleDialog.isLoadingRoles = false;
+      }
     },
 
     closeRoleDialog() {
       this.roleDialog.visible = false;
       this.roleDialog.user = null;
+      this.roleDialog.liveRoles = null;
     },
 
     hasRole(user, role) {
       if (!user) return false;
+      // Prefer the live Keycloak set; fall back to the (stale) search payload
+      if (Array.isArray(this.roleDialog.liveRoles)) {
+        return this.roleDialog.liveRoles.some((r) => r && r.name === role);
+      }
       const roles = user.roles || (user.role ? [user.role] : []);
       return roles.includes(role);
     },
@@ -2542,17 +2601,17 @@ export default {
       if (!user) return;
       this.isManagingRole = role;
 
+      const applyIfCurrent = (roles) => {
+        if (this.roleDialog.user?._key !== user._key) return;
+        this.roleDialog.liveRoles = roles;
+      };
+
       try {
         const isAdding = !this.hasRole(user, role);
         if (isAdding) {
           await adminDashboardService.assignUserRole(user._key, role);
-          if (!user.roles) user.roles = [];
-          user.roles.push(role);
         } else {
           await adminDashboardService.removeUserRole(user._key, role);
-          if (user.roles) {
-            user.roles = user.roles.filter((r) => r !== role);
-          }
         }
         this.showNotification(`Role ${role} ${isAdding ? 'assigned' : 'removed'}`, 'success');
       } catch (e) {
@@ -2560,6 +2619,14 @@ export default {
         this.showNotification(`Failed to modify role: ${e.message}`, 'error');
       } finally {
         this.isManagingRole = null;
+      }
+      // Re-sync from the authoritative source (also on failure) instead of
+      // mutating local state — guarded against a close/reopen race.
+      try {
+        const result = await adminDashboardService.getUserRoles(user._key);
+        applyIfCurrent((result && result.roles) || []);
+      } catch (retryErr) {
+        console.error(retryErr);
       }
     },
 
@@ -3722,6 +3789,34 @@ input:checked + .slider:before {
 }
 
 /* Modal */
+.role-dialog-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--muted);
+  padding: var(--space-md) 0;
+}
+
+.role-dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.role-dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.role-dialog-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
 .modal {
   position: fixed;
   top: 0;

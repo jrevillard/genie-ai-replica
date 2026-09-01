@@ -199,6 +199,12 @@ export default {
     ZW: 'Jimbabuwe'
   },
   admin: {
+    roleDialog: {
+      title: 'Jumaa mara',
+      loading: 'Mara lu ka looti...',
+      assign: 'A fara',
+      remove: 'A bula'
+    },
     tools: {
       toolsIntegrations: 'TOOLU NI JUNIYEE',
       navigation: 'NAVIGESOO',

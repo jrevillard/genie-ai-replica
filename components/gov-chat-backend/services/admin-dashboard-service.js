@@ -1058,6 +1058,15 @@ class AdminDashboardService {
     return { success: true, userKey, roleName };
   }
 
+  /**
+   * Live realm roles from Keycloak (roles are JIT-protected in ArangoDB —
+   * the proxy is the only source of current assignment state).
+   */
+  async getUserRoles(userKey) {
+    const roles = await keycloakProxyService.getUserRealmRoles(userKey);
+    return { success: true, userKey, roles };
+  }
+
   async searchUsers(options = {}) {
     if (!this.db) {
       throw new Error('Database not initialized. Call init() first.');

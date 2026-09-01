@@ -199,6 +199,12 @@ export default {
     ZW: 'জিম্বাবুয়ে'
   },
   admin: {
+    roleDialog: {
+      title: 'ভূমিকা ব্যবস্থাপনা',
+      loading: 'ভূমিকা লোড হচ্ছে...',
+      assign: 'নির্ধারণ করুন',
+      remove: 'সরান'
+    },
     tools: {
       toolsIntegrations: 'টুলস ও ইন্টিগ্রেশন',
       navigation: 'নেভিগেশন',

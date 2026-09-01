@@ -295,6 +295,20 @@ const adminDashboardService = {
     }
   },
 
+  /**
+   * Live realm roles from Keycloak — roles are JIT-protected in ArangoDB,
+   * so the search payload's roles field is stale/empty for JIT-era users.
+   */
+  async getUserRoles(userKey) {
+    try {
+      const response = await httpService.get(`admin/users/${userKey}/roles`);
+      return response.data;
+    } catch (error) {
+      console.error('[AdminDashboardService] Error fetching user roles:', error.message);
+      throw error;
+    }
+  },
+
   async removeUserRole(userKey, roleName) {
     try {
       const response = await httpService.delete(`admin/users/${userKey}/roles/${roleName}`);

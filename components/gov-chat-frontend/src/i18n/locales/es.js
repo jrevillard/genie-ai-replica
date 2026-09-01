@@ -199,6 +199,12 @@ export default {
     ZW: 'Zimbabue'
   },
   admin: {
+    roleDialog: {
+      title: 'Gestionar roles',
+      loading: 'Cargando roles...',
+      assign: 'Asignar',
+      remove: 'Quitar'
+    },
     tools: {
       toolsIntegrations: 'HERRAMIENTAS E INTEGRACIONES',
       navigation: 'NAVEGACIÓN',

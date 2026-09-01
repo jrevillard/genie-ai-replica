@@ -199,6 +199,12 @@ export default {
     ZW: 'Simbabwe'
   },
   admin: {
+    roleDialog: {
+      title: 'Rollen verwalten',
+      loading: 'Rollen werden geladen...',
+      assign: 'Zuweisen',
+      remove: 'Entfernen'
+    },
     tools: {
       toolsIntegrations: 'TOOLS & INTEGRATIONEN',
       navigation: 'NAVIGATION',

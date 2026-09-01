@@ -199,6 +199,12 @@ export default {
     ZW: 'Zimbabwe'
   },
   admin: {
+    roleDialog: {
+      title: 'Gérer les rôles',
+      loading: 'Chargement des rôles...',
+      assign: 'Attribuer',
+      remove: 'Retirer'
+    },
     tools: {
       toolsIntegrations: 'OUTILS ET INTÉGRATIONS',
       navigation: 'NAVIGATION',

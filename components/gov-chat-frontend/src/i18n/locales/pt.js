@@ -199,6 +199,12 @@ export default {
     ZW: 'Zimbábue'
   },
   admin: {
+    roleDialog: {
+      title: 'Gerir funções',
+      loading: 'A carregar funções...',
+      assign: 'Atribuir',
+      remove: 'Remover'
+    },
     tools: {
       toolsIntegrations: 'FERRAMENTAS E INTEGRAÇÕES',
       navigation: 'NAVEGAÇÃO',

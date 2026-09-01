@@ -199,6 +199,12 @@ export default {
     ZW: 'Zimbabwe'
   },
   admin: {
+    roleDialog: {
+      title: 'Taolo maemo',
+      loading: 'E kenya maemo...',
+      assign: 'Abetela',
+      remove: 'Tlosa'
+    },
     tools: {
       toolsIntegrations: 'DITSEBETSO LE MEKGOA',
       navigation: 'TSAMAELO',

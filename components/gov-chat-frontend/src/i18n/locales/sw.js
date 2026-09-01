@@ -199,6 +199,12 @@ export default {
     ZW: 'Zimbabwe'
   },
   admin: {
+    roleDialog: {
+      title: 'Simamisha majukumu',
+      loading: 'Inapakia majukumu...',
+      assign: 'Pewa',
+      remove: 'Ondoa'
+    },
     tools: {
       toolsIntegrations: 'ZANA NA UNGANISHO',
       navigation: 'NAVIGESHENI',

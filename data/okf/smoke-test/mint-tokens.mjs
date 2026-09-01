@@ -40,17 +40,28 @@ const H = { Authorization: `Bearer ${master.access_token}`, 'Content-Type': 'app
 
 async function ensureUser(username, attrs) {
   const found = await j(`${AUTH}/admin/realms/genie/users?username=${username}`, { headers: H });
-  if (found.length) return found[0];
-  const body = {
-    username, email: `${username}@smoke.local`, emailVerified: true, enabled: true,
-    firstName: 'Smoke', lastName: 'Test',
-    credentials: [{ type: 'password', value: SCOPE_PASSWORD, temporary: false }],
-    ...(attrs ? { attributes: attrs } : {})
-  };
-  const r = await fetch(`${AUTH}/admin/realms/genie/users`, { method: 'POST', headers: H, body: JSON.stringify(body) });
-  if (!r.ok && r.status !== 409) throw new Error(`user create ${r.status} ${await r.text()}`);
-  const again = await j(`${AUTH}/admin/realms/genie/users?username=${username}`, { headers: H });
-  return again[0];
+  let user;
+  if (found.length) {
+    user = found[0];
+  } else {
+    const body = {
+      username, email: `${username}@smoke.local`, emailVerified: true, enabled: true,
+      firstName: 'Smoke', lastName: 'Test',
+      credentials: [{ type: 'password', value: SCOPE_PASSWORD, temporary: false }],
+      ...(attrs ? { attributes: attrs } : {})
+    };
+    const r = await fetch(`${AUTH}/admin/realms/genie/users`, { method: 'POST', headers: H, body: JSON.stringify(body) });
+    if (!r.ok && r.status !== 409) throw new Error(`user create ${r.status} ${await r.text()}`);
+    user = (await j(`${AUTH}/admin/realms/genie/users?username=${username}`, { headers: H }))[0];
+  }
+  // Re-align credentials on EVERY run (live-caught 2026-09-01: an existing
+  // smoke user with a drifted password 400s "Invalid user credentials" and
+  // the mint can never self-heal). .env stays the single source of truth.
+  await fetch(`${AUTH}/admin/realms/genie/users/${user.id}/reset-password`, {
+    method: 'PUT', headers: H,
+    body: JSON.stringify({ type: 'password', value: SCOPE_PASSWORD, temporary: false })
+  });
+  return user;
 }
 const scoped = await ensureUser('smoke-scoped', { okf_scopes: [`okf:smoke:${REPO}:read`] });
 await ensureUser('smoke-scopeless', null);
@@ -64,6 +75,12 @@ const adminUser = (await j(`${AUTH}/admin/realms/genie/users?username=${encodeUR
 await fetch(`${AUTH}/admin/realms/genie/users/${adminUser.id}`, {
   method: 'PUT', headers: H,
   body: JSON.stringify({ ...adminUser, attributes: { ...(adminUser.attributes || {}), okf_scopes: ['okf:*:*:admin'] } })
+});
+// Re-align genie-admin's password to .env (the ROPC mint below uses it; drift
+// here is the same self-heal gap as the smoke users).
+await fetch(`${AUTH}/admin/realms/genie/users/${adminUser.id}/reset-password`, {
+  method: 'PUT', headers: H,
+  body: JSON.stringify({ type: 'password', value: ENV.GENIE_ADMIN_PASSWORD, temporary: false })
 });
 
 // ROPC window → mint → revert (asserted)

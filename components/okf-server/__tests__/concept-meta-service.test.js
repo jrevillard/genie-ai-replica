@@ -300,6 +300,21 @@ describe('concept-meta-service — 2.9.1 review findings (2026-08-16 code review
     expect(doc.index_status).toBe('rejected'); // the hard-error rejection survives re-ingest until fixed
   });
 
+  it('a FRONTMATTER conformance fix re-enters validation even when the body is unchanged (live-caught 2026-09-01)', async () => {
+    // The rejection was `type` missing; the fix adds type: service — the BODY
+    // is byte-identical, so the body-hash escape alone left the concept at
+    // 'rejected' forever. Conformance-relevant frontmatter counts as content.
+    const rejected = await conceptMeta.upsertConceptMeta('r1', parsedInput(), {
+      patch: { index_status: 'rejected', conformance_issues: [{ code: 'MISSING_TYPE' }] }
+    });
+    expect(rejected.doc.index_status).toBe('rejected');
+    const fixed = await conceptMeta.upsertConceptMeta(
+      'r1',
+      parsedInput({ frontmatter: { title: 'Health Policy', type: 'service' } })
+    );
+    expect(fixed.doc.index_status).toBe('parsed'); // re-validates (re-drains)
+  });
+
   it('getConceptMeta returns the stored doc / null when absent (the 4e PRE-upsert read)', async () => {
     expect(await conceptMeta.getConceptMeta('r1', 'concepts/health-policy')).toBeNull();
     await conceptMeta.upsertConceptMeta('r1', parsedInput());

@@ -168,8 +168,18 @@ async function applyUpdate(col, existing, repo_id, conceptId, parsed, opts, mini
     // concepts at 'indexed' with stale chunks (the worker never re-claimed
     // them; version threading died silently). The protection now keeps the
     // terminal state only when the content is UNCHANGED (the dedup case).
+    // AMENDED (2026-09-01, live-caught in the lifecycle E2E): the conformance
+    // gate reads FRONTMATTER (title/type), so a rejection fix is often
+    // frontmatter-only — while content_hash covers the BODY only. Keying the
+    // escape purely on the body hash left rejected concepts at 'rejected'
+    // forever (the steward fixed `type:`, nothing else could un-reject it).
+    // A conformance-relevant frontmatter change (title/type) therefore counts
+    // as a content change too (it also feeds the embedding context, so
+    // re-indexing is correct, not wasteful).
+    const conformanceFm = (fm) => JSON.stringify(fm ? { title: fm.title, type: fm.type } : null);
     const contentChanged =
-      patch.content_hash != null && existing.content_hash != null && patch.content_hash !== existing.content_hash;
+      (patch.content_hash != null && existing.content_hash != null && patch.content_hash !== existing.content_hash) ||
+      conformanceFm(existing.frontmatter) !== conformanceFm(parsed.frontmatter);
     if (existing.pii_state && existing.pii_state !== 'unknown' && patch.pii_state === 'unknown') {
       delete patch.pii_state;
     }

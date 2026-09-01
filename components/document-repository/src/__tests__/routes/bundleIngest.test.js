@@ -203,12 +203,14 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
       storage_path: '/uploads/born-right-file-id.md'
     });
 
-    const res = await request(app).post('/api/files/ingest-bundle').send({
-      ...validBody,
-      // okf-server derives the graph from the repo NAME + version — the uuid
-      // shape no longer covers it (live-caught: publish 502 EXPORT_FAILED).
-      graph_name: 'OKF_drain-probe_v1'
-    });
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({
+        ...validBody,
+        // okf-server derives the graph from the repo NAME + version — the uuid
+        // shape no longer covers it (live-caught: publish 502 EXPORT_FAILED).
+        graph_name: 'OKF_drain-probe_v1'
+      });
 
     expect(res.status).toBe(202);
     expect(res.body.graph_name).toBe('OKF_drain-probe_v1');
@@ -216,10 +218,12 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
   });
 
   it('should still reject a legacy-format graph_name that does not own repo_id', async () => {
-    const res = await request(app).post('/api/files/ingest-bundle').send({
-      ...validBody,
-      graph_name: 'OKF_99999999-9999-4999-8999-999999999999' // legacy shape, WRONG repo
-    });
+    const res = await request(app)
+      .post('/api/files/ingest-bundle')
+      .send({
+        ...validBody,
+        graph_name: 'OKF_99999999-9999-4999-8999-999999999999' // legacy shape, WRONG repo
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('OWNERSHIP_MISMATCH');

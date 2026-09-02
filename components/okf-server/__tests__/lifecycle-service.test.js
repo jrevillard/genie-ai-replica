@@ -22,6 +22,9 @@ jest.mock('../shared-lib/db-connection-service', () => {
 jest.mock('../services/audit-service', () => ({
   writeAudit: jest.fn().mockResolvedValue(null)
 }));
+jest.mock('../services/concept-meta-service', () => ({
+  countByIndexStatus: jest.fn().mockResolvedValue(0)
+}));
 jest.mock('../services/version-service', () => ({
   mintVersion: jest.fn().mockResolvedValue({ bundle_version: 1, okf_tag: 'okf:v1' })
 }));
@@ -105,6 +108,49 @@ describe('lifecycle transitions — the machine, exhaustively', () => {
       code: 'VALIDATION_ERROR',
       status: 400
     });
+  });
+
+  test('BUILDING GATE: an active conversion blocks submit with BUILD_IN_PROGRESS (David, 2026-09-02)', async () => {
+    seedRepo({
+      lifecycle_state: 'draft',
+      conversion: { status: 'splitting', stage: 'splitting', pages_done: 12, batches_done: 2 }
+    });
+    await expect(lifecycleService.transition(REPO, 'submit', {})).rejects.toMatchObject({
+      code: 'BUILD_IN_PROGRESS',
+      status: 409
+    });
+    const { countByIndexStatus } = require('../services/concept-meta-service');
+    expect(countByIndexStatus).not.toHaveBeenCalled(); // conversion check short-circuits
+  });
+
+  test('BUILDING GATE: a terminal conversion (done) does NOT block (the peer-contract bug)', async () => {
+    seedRepo({ lifecycle_state: 'draft', conversion: { status: 'done', pages_done: 340, batches_done: 9 } });
+    await expect(lifecycleService.transition(REPO, 'submit', {})).resolves.toMatchObject({
+      ok: true,
+      lifecycle_state: 'review'
+    });
+  });
+
+  test('BUILDING GATE: concepts still indexing block with INDEXING_IN_PROGRESS', async () => {
+    seedRepo({ lifecycle_state: 'draft' });
+    const { countByIndexStatus } = require('../services/concept-meta-service');
+    countByIndexStatus.mockResolvedValueOnce(41); // Once — auto-expires, never leaks into later tests
+    await expect(lifecycleService.transition(REPO, 'submit', {})).rejects.toThrow(
+      /41 concept\(s\) are still indexing/
+    );
+  });
+
+  test('BUILDING GATE: retract is exempt (a serving repo can never be building)', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      ingested_at: 'x',
+      ingested_version: 1,
+      ingested_graph_name: 'OKF_demo-repo_v1',
+      name: 'Demo Repo'
+    });
+    const res = await lifecycleService.transition(REPO, 'retract', {});
+    expect(res).toMatchObject({ ok: true, lifecycle_state: 'retracted' });
   });
 
   test('missing repo → 404 REPO_NOT_FOUND', async () => {

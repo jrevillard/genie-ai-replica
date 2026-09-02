@@ -412,6 +412,7 @@ async function list({ domain, authz, cursor, limit } = {}) {
     const result = await db.query(query);
     const docs = await result.all();
     const items = docs.map(toResponse);
+    await attachIndexingPending(items);
     const next_cursor =
       items.length === safeLimit && items.length > 0
         ? encodeCursor(items[items.length - 1].created_at, items[items.length - 1].repo_id)
@@ -421,6 +422,32 @@ async function list({ domain, authz, cursor, limit } = {}) {
     logger.info('OKF repositories listed', { count: items.length, domain: domain || 'all' });
     return { items, next_cursor };
   });
+}
+
+/**
+ * BUILDING UI SIGNAL (David, 2026-09-02): attach `indexing_pending` (the
+ * repo's parsed-row count) to repo rows so the dashboard can pin building
+ * repos to "In progress" and show an animated builder. One grouped query for
+ * the whole page — never per-repo. Fail-soft: a count failure leaves the
+ * field undefined (the UI treats it as 0).
+ * @param {object[]} rows repo response rows (mutated in place)
+ */
+async function attachIndexingPending(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+  try {
+    const db = await getDb();
+    const counts = await (
+      await db.query(
+        'FOR m IN okf_concepts_meta FILTER m.index_status == @st AND m.repo_id IN @ids ' +
+          'COLLECT repo_id = m.repo_id WITH COUNT INTO n RETURN { repo_id, n }',
+        { st: 'parsed', ids: rows.map((r) => r.repo_id) }
+      )
+    ).all();
+    const byRepo = new Map(counts.map((c) => [c.repo_id, c.n]));
+    for (const r of rows) r.indexing_pending = byRepo.get(r.repo_id) || 0;
+  } catch (err) {
+    logger.warn('indexing_pending attach failed (non-fatal)', { error: err.message });
+  }
 }
 
 /**
@@ -461,6 +488,7 @@ async function getById(repo_id, { domain, authz } = {}) {
     }
     recordOp('get', 'success');
     const repo = toResponse(doc);
+    await attachIndexingPending([repo]);
     try {
       repo.metrics = await conformanceService.getRepoMetrics(repo_id);
     } catch (err) {

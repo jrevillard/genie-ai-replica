@@ -49,6 +49,7 @@ const auditService = require('./audit-service');
 const versionService = require('./version-service');
 const bundleExportService = require('./bundle-export-service');
 const graphLifecycle = require('./graph-lifecycle-service');
+const conceptMetaService = require('./concept-meta-service');
 
 const REPOS = 'okf_repositories';
 const META = 'okf_concepts_meta';
@@ -68,6 +69,57 @@ const TRANSITIONS = {
   ingest: { from: ['publish', 'retracted'], to: 'publish' },
   retract: { from: ['publish'], to: 'retracted' }
 };
+
+// Terminal conversion statuses — SINGLE-SOURCED from the owner service
+// (contract agreed with the crawl-conversion session 2026-09-02: terminal is
+// 'done' | 'failed'; 'completed'/'interrupted' never occur — a hard-coded
+// list here drifted and would have permanently locked successful crawl
+// repos). Lazy require: keeps this module load-order independent of the
+// conversion service.
+function conversionTerminal(conv) {
+  return require('./crawl-conversion-service').isTerminal(conv);
+}
+
+/**
+ * BUILDING GATE (David, 2026-09-02): a repo whose source file is still being
+ * converted, or whose concepts are still indexing, is NOT reviewable content
+ * yet — the human workflow pins it to "In progress" and refuses every
+ * transition until the build completes. Server-authoritative; the dashboard
+ * mirrors it (building lane pinning + spinner). Returns the blocking error or
+ * null when the repo may transition.
+ *   - BUILD_IN_PROGRESS: conversion record present and not terminal
+ *     ('done'|'failed' — via isTerminal; missing conversion = not building).
+ *   - INDEXING_IN_PROGRESS: parsed (queued/in-flight) concept rows > 0 —
+ *     reuses conceptMetaService.countByIndexStatus; 'rejected'/'failed' rows
+ *     are terminal states that block at the mint's own gates instead.
+ */
+async function buildingBlocker(repo) {
+  const conv = repo.conversion;
+  if (conv && !conversionTerminal(conv)) {
+    const stage = conv.stage || conv.status || 'processing';
+    return new LifecycleError(
+      'BUILD_IN_PROGRESS',
+      'The source file is still being processed (stage: ' +
+        stage +
+        ', ' +
+        (conv.pages_done || 0) +
+        ' pages, ' +
+        (conv.batches_done || 0) +
+        ' batches done). The repository stays In progress until the full file is processed.',
+      409
+    );
+  }
+  const pending = await conceptMetaService.countByIndexStatus(repo.repo_id, 'parsed');
+  if (pending > 0) {
+    return new LifecycleError(
+      'INDEXING_IN_PROGRESS',
+      pending +
+        ' concept(s) are still indexing. The repository stays In progress until every concept shows Indexed.',
+      409
+    );
+  }
+  return null;
+}
 
 const ACTIONS = Object.keys(TRANSITIONS);
 
@@ -123,6 +175,17 @@ async function transition(repoId, action, actor) {
     span.setAttribute('okf.lifecycle.action', action);
     const db = await getDb();
     const repo = await loadRepo(db, repoId);
+
+    // BUILDING GATE — before the transition table so a building repo hears
+    // "still building", never "invalid transition". Retract is exempt (a
+    // serving repo can never be building: publish already required all-indexed).
+    if (action !== 'retract') {
+      const blocker = await buildingBlocker(repo);
+      if (blocker) {
+        span.setAttribute('okf.lifecycle.blocked', blocker.code);
+        throw blocker;
+      }
+    }
 
     if (!spec.from.includes(repo.lifecycle_state)) {
       throw new LifecycleError(

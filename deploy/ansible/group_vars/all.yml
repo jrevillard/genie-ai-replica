@@ -154,3 +154,12 @@ reranker_model_id: BAAI/bge-reranker-v2-m3
 # --- Reranker strategy defaults ---
 #   reranking_strategy: slice           # slice (default; top-N by TEI score) | threshold | adaptive | knee_threshold | slice_threshold
 #   reranker_top_n: 3                   # chunks kept for slice/slice_threshold strategies
+
+# Server-Side Tools (SST) — optional; unset renders nothing in env.j2 (code defaults apply)
+# searxng_url: "http://searxng:8080"
+# web_search_enabled: "true"
+# web_search_confidence_threshold: "0.70"
+# pii_redactor_impl: "regex"
+# presidio_analyzer_url: "http://presidio-analyzer:3000"
+# presidio_anonymizer_url: "http://presidio-anonymizer:3000"
+# web_search_time_patterns: ""

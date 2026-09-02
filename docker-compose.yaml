@@ -616,6 +616,58 @@ services:
         delay: 5s
         max_attempts: 10
 
+  presidio-analyzer:
+    logging: *fluent-logging
+    restart: unless-stopped
+    # Epic 1-6: --profile tools gates these in compose up (Swarm deploys
+    # regardless of profiles — placement constraint does the gating there)
+    profiles: [tools]
+    image: mcr.microsoft.com/presidio-analyzer:2.2.362
+    # Internal only (port 3000; language comes per-request in the JSON body)
+    networks:
+      - genieai_network
+    healthcheck:
+      # /health is the route both presidio apps serve (verified upstream);
+      # long start_period covers the spaCy model download on first boot
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  presidio-anonymizer:
+    logging: *fluent-logging
+    restart: unless-stopped
+    profiles: [tools]
+    image: mcr.microsoft.com/presidio-anonymizer:2.2.362
+    # Internal only (port 3001)
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
   stream-ingestor:
     logging: *fluent-logging
     restart: unless-stopped
@@ -1214,6 +1266,11 @@ services:
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       MEGA_SERVICE_HOST_IP: chatqna-xeon-backend-server
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # SST PII redaction (story 1-6): regex default; http:// selects the
+      # presidio-analyzer/anonymizer services (PII_REDACTOR_IMPL=http://...)
+      PII_REDACTOR_IMPL: ${PII_REDACTOR_IMPL:-regex}
+      PRESIDIO_ANALYZER_URL: ${PRESIDIO_ANALYZER_URL:-http://presidio-analyzer:3000}
+      PRESIDIO_ANONYMIZER_URL: ${PRESIDIO_ANONYMIZER_URL:-http://presidio-anonymizer:3000}
       EMBEDDING_SERVER_HOST_IP: embedding
       EMBEDDING_SERVER_PORT: 6000
       EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}

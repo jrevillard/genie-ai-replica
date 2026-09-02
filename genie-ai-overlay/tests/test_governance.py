@@ -150,9 +150,12 @@ class TestPIIRedactorFactory:
         with pytest.raises(PIIRedactionError, match="Unknown PII_REDACTOR_IMPL"):
             create_pii_redactor("unknown")
 
-    def test_create_http_raises_not_implemented(self):
-        with pytest.raises(PIIRedactionError, match="not yet implemented"):
-            create_pii_redactor("http://pii-service:8080")
+    def test_create_http_returns_service_delegating_impl(self):
+        # Story 1-6: the HTTP selector returns HttpPIIRedactor (Presidio-as-a-
+        # service) — the old "not yet implemented" stub is gone
+        from workflows.tools.pii_redactor import HttpPIIRedactor
+
+        assert isinstance(create_pii_redactor("http://pii-service:8080"), HttpPIIRedactor)
 
     @patch.dict("os.environ", {"PII_REDACTOR_IMPL": "regex"})
     def test_create_from_env(self):
@@ -712,3 +715,159 @@ class TestSourceType:
 
         values = [m.value for m in SourceType]
         assert len(values) == len(set(values))
+
+
+# ===========================================================================
+# Story 1-6 — HttpPIIRedactor (Presidio-as-a-service)
+# ===========================================================================
+class TestHttpPIIRedactor:
+    """Failure = BLOCK: every failure mode must raise PIIRedactionError — the
+    governance pipeline refuses to forward unredacted text."""
+
+    @pytest.fixture
+    def redactor(self, monkeypatch):
+        monkeypatch.setenv("PRESIDIO_ANALYZER_URL", "http://analyzer:3000")
+        monkeypatch.setenv("PRESIDIO_ANONYMIZER_URL", "http://anonymizer:3000")
+        from workflows.tools.pii_redactor import HttpPIIRedactor
+
+        return HttpPIIRedactor()
+
+    @pytest.mark.asyncio
+    async def test_redact_happy_path(self, redactor):
+        # Upstream-verified contract (microsoft/presidio app.py): analyzer
+        # returns start/end; anonymizer takes analyzer_results; both listen on 3000
+        analyzer_response = [{"entity_type": "EMAIL", "start": 6, "end": 18, "score": 0.9}]
+        anonymizer_response = {"text": "email <EMAIL> here", "items": []}
+        with patch.object(
+            redactor, "_post", new=AsyncMock(side_effect=[analyzer_response, anonymizer_response])
+        ) as mock_post:
+            result = await redactor.redact("email john@doe.com here")
+
+        assert result.redacted_text == "email <EMAIL> here"
+        assert result.entity_count == 1
+        assert result.entities_found[0].entity_type == "EMAIL"
+        assert result.entities_found[0].start == 6
+        assert result.entities_found[0].end == 18
+        assert mock_post.call_args_list[0].args == (
+            "http://analyzer:3000/analyze",
+            {"text": "email john@doe.com here", "language": "en"},
+        )
+        anonymize_args = mock_post.call_args_list[1].args
+        assert anonymize_args[0] == "http://anonymizer:3000/anonymize"
+        assert anonymize_args[1]["analyzer_results"] == [{"entity_type": "EMAIL", "start": 6, "end": 18, "score": 0.9}]
+
+    @pytest.mark.asyncio
+    async def test_non_list_200_body_raises_not_passthrough(self, redactor):
+        """A wrong-shape 200 body (proxy envelope, future API change) must
+        BLOCK — treating it as zero entities would forward raw PII text."""
+        from workflows.tools.pii_redactor import PIIRedactionError
+
+        with patch.object(redactor, "_post", new=AsyncMock(return_value={"results": []})):
+            with pytest.raises(PIIRedactionError, match="unexpected body shape"):
+                await redactor.redact("call john@doe.com")
+
+    @pytest.mark.asyncio
+    async def test_malformed_entity_fields_raise_redaction_error(self, redactor):
+        from workflows.tools.pii_redactor import PIIRedactionError
+
+        with (
+            patch.object(redactor, "_post", new=AsyncMock(return_value=[{"entity_type": "EMAIL", "score": "abc"}])),
+            pytest.raises(PIIRedactionError, match="malformed entity"),
+        ):
+            await redactor.redact("text")
+
+    @pytest.mark.asyncio
+    async def test_empty_text_short_circuits_without_http(self, redactor):
+        with patch.object(redactor, "_post", new=AsyncMock()) as mock_post:
+            result = await redactor.redact("")
+        assert result.redacted_text == ""
+        assert result.entity_count == 0
+        mock_post.assert_not_called()  # upstream /analyze 500s on empty text
+
+    @pytest.mark.asyncio
+    async def test_no_entities_fast_path_returns_original(self, redactor):
+        with patch.object(redactor, "_post", new=AsyncMock(return_value=[])) as mock_post:
+            result = await redactor.redact("no pii here")
+        assert result.redacted_text == "no pii here"
+        assert result.entity_count == 0
+        # Only the analyzer was called — no anonymize round-trip for clean text
+        assert mock_post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_analyzer_unreachable_raises_redaction_error(self, redactor):
+        import httpx
+
+        from workflows.tools.pii_redactor import PIIRedactionError
+
+        # Real failure mode at the transport, not a stubbed error class
+        with (
+            patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("refused")),
+            pytest.raises(PIIRedactionError, match="service call failed"),
+        ):
+            await redactor.redact("text with john@doe.com")
+
+    @pytest.mark.asyncio
+    async def test_anonymizer_returns_no_text_raises(self, redactor):
+        from workflows.tools.pii_redactor import PIIRedactionError
+
+        with (
+            patch.object(
+                redactor,
+                "_post",
+                new=AsyncMock(
+                    side_effect=[
+                        [{"entity_type": "EMAIL", "start": 0, "end": 3, "score": 0.9}],
+                        {"items": []},
+                    ]
+                ),
+            ),
+            pytest.raises(PIIRedactionError, match="no text"),
+        ):
+            await redactor.redact("abc")
+
+    @pytest.mark.asyncio
+    async def test_post_wraps_http_errors(self, redactor):
+        import httpx
+
+        from workflows.tools.pii_redactor import PIIRedactionError
+
+        with (
+            patch("httpx.AsyncClient.post", side_effect=httpx.ConnectError("down")),
+            pytest.raises(PIIRedactionError, match="service call failed"),
+        ):
+            await redactor._post("http://analyzer:3000/analyze", {})
+
+    @pytest.mark.asyncio
+    async def test_post_wraps_timeout(self, redactor):
+        import httpx
+
+        from workflows.tools.pii_redactor import PIIRedactionError
+
+        with (
+            patch("httpx.AsyncClient.post", side_effect=httpx.ReadTimeout("slow")),
+            pytest.raises(PIIRedactionError, match="service call failed"),
+        ):
+            await redactor._post("http://analyzer:3000/analyze", {})
+
+
+class TestCreateRedactorHttpSelection:
+    def test_http_url_selects_http_impl(self, monkeypatch):
+        monkeypatch.setenv("PRESIDIO_ANALYZER_URL", "http://a:3000")
+        monkeypatch.setenv("PRESIDIO_ANONYMIZER_URL", "http://b:3001")
+        from workflows.tools.pii_redactor import HttpPIIRedactor, create_pii_redactor
+
+        assert isinstance(create_pii_redactor("http://presidio-analyzer:3000"), HttpPIIRedactor)
+
+    def test_default_remains_regex(self, monkeypatch):
+        monkeypatch.delenv("PII_REDACTOR_IMPL", raising=False)
+        from workflows.tools.pii_redactor import RegexPIIRedactor, create_pii_redactor
+
+        assert isinstance(create_pii_redactor(), RegexPIIRedactor)
+
+
+class TestHttpRedactorTimeoutConfig:
+    def test_timeout_env_tunable(self, monkeypatch):
+        monkeypatch.setenv("PRESIDIO_TIMEOUT_SECONDS", "9")
+        from workflows.tools.pii_redactor import HttpPIIRedactor
+
+        assert HttpPIIRedactor()._timeout == 9.0

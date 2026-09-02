@@ -23,6 +23,8 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+import httpx
+
 
 # ---------------------------------------------------------------------------
 # PII entity model
@@ -277,6 +279,94 @@ class PresidioPIIRedactor(PIIRedactor):
             raise PIIRedactionError(f"Presidio redaction failed: {exc}") from exc
 
 
+class HttpPIIRedactor(PIIRedactor):
+    """Presidio-as-a-service redactor — the epic-pinned production shape (story 1-6).
+
+    Delegates to the presidio-analyzer and presidio-anonymizer containers (both
+    listen on container port 3000). Selected by ``PII_REDACTOR_IMPL=http://...``;
+    the service URLs come from ``PRESIDIO_ANALYZER_URL`` / ``PRESIDIO_ANONYMIZER_URL``.
+
+    API contract (verified against microsoft/presidio app.py, review 2026-09-01):
+      - POST ``{analyzer}/analyze`` ``{"text", "language"}`` -> list of
+        ``{"entity_type", "start", "end", "score"}`` (RecognizerResult.to_dict)
+      - POST ``{anonymizer}/anonymize`` ``{"text", "analyzer_results": [...]}``
+        -> ``{"text": "<redacted>", "items": [...]}`` (EngineResult)
+
+    Failure = BLOCK: any HTTP/parse/shape failure raises ``PIIRedactionError``
+    so the governance pipeline blocks the tool call rather than forwarding
+    unredacted content (Decision 5, NFR6). A 200 body of unexpected shape
+    raises too — it must NEVER be read as "no PII found".
+    """
+
+    def __init__(self) -> None:
+        self._analyzer_url = os.getenv("PRESIDIO_ANALYZER_URL", "http://presidio-analyzer:3000")
+        self._anonymizer_url = os.getenv("PRESIDIO_ANONYMIZER_URL", "http://presidio-anonymizer:3000")
+        # Story said 2s; upstream analyzer cold-start (spaCy load) and long tool
+        # results exceed it — a guaranteed first-call BLOCK. 5s default,
+        # env-tunable (deviation recorded in the story file).
+        self._timeout = float(os.getenv("PRESIDIO_TIMEOUT_SECONDS", "5"))
+
+    async def _post(self, url: str, payload: dict):
+        """POST JSON and return the parsed body; any failure is a redaction error."""
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as exc:
+            raise PIIRedactionError(f"Presidio service call failed ({url}): {exc}") from exc
+        except ValueError as exc:  # non-JSON body
+            raise PIIRedactionError(f"Presidio service returned unparseable body ({url})") from exc
+
+    @staticmethod
+    def _to_entities(analyzer_results) -> list[PIIEntity]:
+        """Map the analyzer response; a wrong-shape 200 body is a hard error
+        (fail-closed), never a silent zero-entity passthrough of raw text."""
+        if not isinstance(analyzer_results, list):
+            raise PIIRedactionError(
+                f"Presidio analyzer returned an unexpected body shape: {type(analyzer_results).__name__}"
+            )
+        entities = []
+        try:
+            for item in analyzer_results:
+                if not isinstance(item, dict):
+                    continue
+                entities.append(
+                    PIIEntity(
+                        entity_type=str(item.get("entity_type", "UNKNOWN")),
+                        start=int(item.get("start", 0)),
+                        end=int(item.get("end", 0)),
+                        score=float(item.get("score", 1.0)),
+                    )
+                )
+        except (TypeError, ValueError) as exc:
+            raise PIIRedactionError(f"Presidio analyzer returned malformed entity fields: {exc}") from exc
+        return entities
+
+    async def detect(self, text: str) -> list[PIIEntity]:
+        if not text:  # upstream /analyze raises 500 on empty text
+            return []
+        result = await self._post(f"{self._analyzer_url}/analyze", {"text": text, "language": "en"})
+        return self._to_entities(result)
+
+    async def redact(self, text: str) -> RedactionResult:
+        entities = await self.detect(text)
+        if not entities:
+            return RedactionResult(redacted_text=text, entities_found=[], entity_count=0)
+
+        payload = {
+            "text": text,
+            "analyzer_results": [
+                {"entity_type": e.entity_type, "start": e.start, "end": e.end, "score": e.score} for e in entities
+            ],
+        }
+        result = await self._post(f"{self._anonymizer_url}/anonymize", payload)
+        redacted = result.get("text") if isinstance(result, dict) else None
+        if not isinstance(redacted, str):
+            raise PIIRedactionError("Presidio anonymizer returned no text")
+        return RedactionResult(redacted_text=redacted, entities_found=entities, entity_count=len(entities))
+
+
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
@@ -300,9 +390,8 @@ def create_pii_redactor(impl: str | None = None) -> PIIRedactor:
     elif impl == "presidio":
         return PresidioPIIRedactor()
     elif impl.startswith("http://") or impl.startswith("https://"):
-        # HTTP-delegating implementation (future — stub for now)
-        raise PIIRedactionError(
-            f"HTTP PII redactor not yet implemented. Configure PII_REDACTOR_IMPL=regex or presidio. Got: {impl}"
-        )
+        # Presidio-as-a-service (story 1-6). The URL itself selects the shape;
+        # the service endpoints come from PRESIDIO_*_URL.
+        return HttpPIIRedactor()
     else:
         raise PIIRedactionError(f"Unknown PII_REDACTOR_IMPL: {impl}. Use 'regex', 'presidio', or an HTTP URL.")

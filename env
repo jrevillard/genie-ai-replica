@@ -863,3 +863,10 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # WEB_SEARCH_ENABLED=true            # kill-switch: only 1/true/yes (or unset) enable; anything else disables
 # WEB_SEARCH_CONFIDENCE_THRESHOLD=0.70  # FR8 low-confidence trigger threshold
 # WEB_SEARCH_TIME_PATTERNS=latest,today # FR9 patterns: 'a,b' replaces defaults; '+a,b' appends
+#
+# PII redaction (story 1-6). 'regex' (default) needs no services; set the impl
+# to the analyzer URL shape to use the presidio-analyzer/anonymizer services.
+# PII_REDACTOR_IMPL=regex
+# PRESIDIO_ANALYZER_URL=http://presidio-analyzer:3000
+# PRESIDIO_ANONYMIZER_URL=http://presidio-anonymizer:3000  # both presidio images listen on 3000
+# PRESIDIO_TIMEOUT_SECONDS=5

@@ -41,7 +41,12 @@ jest.mock('@/services/okfRepoOps', () => {
     retract: jest.fn(),
     lifecycle: mockOpsLifecycle,
     deleteRepo: mockOpsDelete,
-    listVersions: mockOpsVersions
+    listVersions: mockOpsVersions,
+    // The real predicate (same logic as okfRepoOps.isBuilding) — the building
+    // UI must react to REAL shapes, not a jest.fn().
+    isBuilding: (repo) =>
+      !!repo &&
+      ((repo.conversion && !['done', 'failed'].includes(repo.conversion.status)) || (repo.indexing_pending || 0) > 0)
   };
   return { __esModule: true, default: impl, ...impl };
 });
@@ -240,13 +245,100 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     expect(dialog.props('visible')).toBe(true);
     expect(dialog.props('repo')).toMatchObject({ repo_id: 'd1', name: 'Drafty' });
     await dialog.setData({ name: 'Drafty Renamed' });
-    await (dialog.find('button').exists()
-      ? dialog.findAll('button').find((b) => b.text() === 'Rename')
-      : { trigger: () => {} }
+    await (
+      dialog.find('button').exists()
+        ? dialog.findAll('button').find((b) => b.text() === 'Rename')
+        : { trigger: () => {} }
     ).trigger('click');
     await flush();
     expect(repoOkfService.update).toHaveBeenCalledWith('d1', { name: 'Drafty Renamed' });
     expect(dialog.props('visible')).toBe(false);
+  });
+});
+
+describe('BUILDING GATE (David, 2026-09-02) — building repos stay In progress', () => {
+  // lifecycle_state says 'review'/'approve' — the BUILDING state must override
+  // the lane, the action button AND the card's health ring.
+  const BUILDING = {
+    repo_id: 'b1',
+    name: 'Builder',
+    lifecycle_state: 'review',
+    concept_count: 3,
+    conversion: { status: 'splitting', stage: 'splitting', pages_done: 12, batches_done: 2 }
+  };
+  const INDEXING = {
+    repo_id: 'b2',
+    name: 'Indexer',
+    lifecycle_state: 'approve',
+    concept_count: 41,
+    indexing_pending: 41
+  };
+  const DONE = {
+    repo_id: 'ok1',
+    name: 'DoneRepo',
+    lifecycle_state: 'review',
+    conversion: { status: 'done' },
+    concept_count: 5
+  };
+
+  it('a building repo lands in the In progress lane (laneFor pinning)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, [BUILDING, INDEXING, DONE]);
+    await flush();
+    const lanes = wrapper.findAll('.okf-dashboard__lane');
+    const inProgress = lanes[0].text();
+    expect(inProgress).toContain('Builder'); // conversion active → pinned to In progress
+    expect(inProgress).toContain('Indexer'); // indexing_pending>0 → pinned too
+    const inReview = lanes[1].text();
+    expect(inReview).toContain('DoneRepo');
+    expect(inProgress).not.toContain('In review');
+  });
+
+  it('building cards show the spinner + disabled Building… chip, no lifecycle action', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, [BUILDING]);
+    await flush();
+    const card = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Builder'));
+    expect(card.findComponent({ name: 'DsSpinner' }).exists()).toBe(true);
+    const chip = card.findAll('button').find((b) => b.text() === 'Building…');
+    expect(chip).toBeTruthy();
+    expect(chip.attributes('disabled')).toBeDefined();
+    expect(card.findAll('button').some((b) => b.text() === 'Approve')).toBe(false);
+  });
+
+  it('a done conversion + zero indexing_pending does NOT build-block (the contextual action returns)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, [DONE]);
+    await flush();
+    const card = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('DoneRepo'));
+    expect(card.findAll('button').some((b) => b.text() === 'Approve')).toBe(true);
+    expect(card.findAll('button').some((b) => b.text() === 'Building…')).toBe(false);
+  });
+
+  it('editor shell: lifecycle button shows Building…, disabled, click is a no-op', async () => {
+    const store = buildStore();
+    await seedRepos(store, [
+      {
+        repo_id: 'sh1',
+        name: 'ShellBuild',
+        lifecycle_state: 'review',
+        conversion: { status: 'downloading' }
+      }
+    ]);
+    await flush();
+    const wrapper = mount(OkfRepoEditorShell, {
+      global: { mocks: { $store: store }, stubs: STUBS },
+      props: { repoId: 'sh1' }
+    });
+    const btn = wrapper.findAll('button').find((b) => b.text() === 'Building…');
+    expect(btn).toBeTruthy();
+    expect(btn.attributes('disabled')).toBeDefined();
+    await btn.trigger('click');
+    await flush();
+    expect(mockOpsLifecycle).not.toHaveBeenCalledWith('sh1', 'approve', {});
   });
 });
 

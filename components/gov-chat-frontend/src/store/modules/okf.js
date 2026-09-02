@@ -26,6 +26,11 @@ const initialState = () => ({
   // two; 'retracted' is its own visible state, never folded into Published.
   reposByStage: { draft: [], in_review: [], published: [], ingested: [], retracted: [] },
   selection: { documents: [], crawlSeeds: [], clonedFrom: null },
+  // Server-side crawl→OKF conversions (David, 2026-09-02): repo_id →
+  // {repo_id, name, conversion, file_id}. Live progress for the Dashboard
+  // status bars; survives dialog close (store-scoped, poller-driven).
+  crawlConversions: {},
+  conversionPollTimer: null,
   gates: {
     okfRepoButton: { visible: false, reasonKey: null, reasonParams: {} }
   },
@@ -53,16 +58,29 @@ const initialState = () => ({
  * is its own lane. The old mapping compared against 'published' — a value the
  * server NEVER sets (the state is 'publish') — so published repos landed in
  * the wrong lane.
+ *
+ * BUILDING GATE (David, 2026-09-02): a repo whose source file is still
+ * converting or whose concepts are still indexing stays pinned to the
+ * "In progress" lane regardless of its lifecycle_state — the UI mirror of
+ * the server's buildingBlocker (it refuses every transition while building).
  */
 function laneFor(repos) {
+  let isBuilding = () => false;
+  try {
+    isBuilding = require('@/services/okfRepoOps').isBuilding; // lazy — module-load order
+  } catch {
+    /* tests without services — fall back to plain lifecycle mapping */
+  }
   const byStage = { draft: [], in_review: [], published: [], ingested: [], retracted: [] };
   (repos || []).forEach((r) => {
     let key = 'draft';
-    if (r.lifecycle_state === 'review' || r.lifecycle_state === 'approve') key = 'in_review';
-    else if (r.lifecycle_state === 'publish' && r.ingested_at) key = 'ingested';
-    else if (r.lifecycle_state === 'publish') key = 'published';
-    else if (r.lifecycle_state === 'retracted') key = 'retracted';
-    else if (['version', 'deprecate', 'retire'].includes(r.lifecycle_state)) key = 'published'; // reserved → Published
+    if (!isBuilding(r)) {
+      if (r.lifecycle_state === 'review' || r.lifecycle_state === 'approve') key = 'in_review';
+      else if (r.lifecycle_state === 'publish' && r.ingested_at) key = 'ingested';
+      else if (r.lifecycle_state === 'publish') key = 'published';
+      else if (r.lifecycle_state === 'retracted') key = 'retracted';
+      else if (['version', 'deprecate', 'retire'].includes(r.lifecycle_state)) key = 'published'; // reserved → Published
+    }
     if (byStage[key]) byStage[key].push(r.repo_id);
   });
   return byStage;
@@ -117,6 +135,22 @@ const mutations = {
   upsertRepo(state, repo) {
     if (!repo || !repo.repo_id) return;
     state.reposById = { ...state.reposById, [repo.repo_id]: repo };
+  },
+  setCrawlConversion(state, { repo_id, name, conversion, file_id }) {
+    if (!repo_id) return;
+    const prev = state.crawlConversions[repo_id];
+    state.crawlConversions = {
+      ...state.crawlConversions,
+      [repo_id]: {
+        repo_id,
+        name: name || (prev && prev.name) || repo_id,
+        conversion: conversion || (prev && prev.conversion) || { status: 'queued' },
+        file_id: file_id || (prev && prev.file_id) || null
+      }
+    };
+  },
+  setConversionPollTimer(state, timer) {
+    state.conversionPollTimer = timer;
   },
   removeRepo(state, repoId) {
     const next = { ...state.reposById };
@@ -334,7 +368,7 @@ const actions = {
    * @param {string} [payload.domain]     subject area (defaults to 'general')
    * @returns {Promise<Object>} { ok, repo?, code?, message? }
    */
-  async createFromCrawl({ commit }, payload = {}) {
+  async createFromCrawl({ commit, dispatch }, payload = {}) {
     commit('setError', null);
     try {
       const repo = await crawlerToOkfService.convertCrawlToOkf(payload);
@@ -344,6 +378,16 @@ const actions = {
         const draftLane = Array.isArray(byStage.draft) ? byStage.draft.slice() : [];
         if (!draftLane.includes(repo.repo_id)) draftLane.push(repo.repo_id);
         commit('setReposByStage', { ...byStage, draft: draftLane });
+        // Register for live progress tracking (the conversion is a
+        // SERVER-SIDE job now — the repo doc's `conversion` field is the
+        // source of truth; the poller keeps it fresh until terminal).
+        commit('setCrawlConversion', {
+          repo_id: repo.repo_id,
+          name: repo.name,
+          conversion: repo.conversion || { status: 'queued', stage: 'queued' },
+          file_id: payload.fileId || null
+        });
+        dispatch('pollCrawlConversions');
         if (typeof window !== 'undefined') {
           window.dispatchEvent(
             new CustomEvent('okf:okf-repo-created', {
@@ -355,14 +399,52 @@ const actions = {
       return { ok: true, repo };
     } catch (err) {
       const code = err && err.code ? err.code : 'CRAWL_TO_OKF_FAILED';
-      if (err && err.repo && err.repo.repo_id) {
-        commit('upsertRepo', err.repo);
-        commit('setError', err.message);
-        return { ok: false, partial: true, repo: err.repo, code, message: err.message };
-      }
       commit('setError', err.message || 'createFromCrawl failed');
       return { ok: false, code, message: err.message };
     }
+  },
+
+  /**
+   * Poll GET /okf/repos/:id for every NON-TERMINAL crawl conversion and
+   * merge the repo doc's `conversion` progress into the registry. One
+   * lightweight interval serves all in-flight conversions; it stops itself
+   * when none are active. Non-blocking by design — the UI never waits on it.
+   */
+  pollCrawlConversions({ commit }) {
+    const state = this.state?.okf;
+    if (!state || !state.crawlConversions) return;
+    const active = Object.values(state.crawlConversions).filter(
+      (c) => c.conversion && !['done', 'failed'].includes(c.conversion.status)
+    );
+    if (active.length === 0) return;
+    if (state.conversionPollTimer) return; // already running
+    const timer = setInterval(async () => {
+      const s = this.state?.okf;
+      const ids = Object.values(s.crawlConversions || {})
+        .filter((c) => c.conversion && !['done', 'failed'].includes(c.conversion.status))
+        .map((c) => c.repo_id);
+      if (ids.length === 0) {
+        clearInterval(s.conversionPollTimer);
+        commit('setConversionPollTimer', null);
+        return;
+      }
+      for (const repoId of ids) {
+        try {
+          const repo = await repoOkfService.get(repoId);
+          if (repo && repo.conversion) {
+            commit('setCrawlConversion', {
+              repo_id: repoId,
+              name: repo.name,
+              conversion: repo.conversion,
+              file_id: null
+            });
+          }
+        } catch {
+          // transient — the next tick retries; never block the UI
+        }
+      }
+    }, 3000);
+    commit('setConversionPollTimer', timer);
   },
 
   // ─── Story #978 — Studio Editor (Wizard | Editor sub-tabs) ───────────────

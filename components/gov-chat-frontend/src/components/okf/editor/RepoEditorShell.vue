@@ -45,7 +45,13 @@
         </div>
       </div>
       <div class="okf-shell__actions">
-        <DsButton variant="primary" small :disabled="actionBusy" @click="onLifecycle">
+        <DsButton
+          variant="primary"
+          small
+          :disabled="actionBusy || building"
+          :title="building ? translate('okf.shell.buildingHint', 'The source file is still being processed') : null"
+          @click="onLifecycle"
+        >
           {{ lifecycleLabel }}
         </DsButton>
         <DsButton variant="secondary" small :disabled="actionBusy" @click="versionsOpen = true">
@@ -222,6 +228,11 @@ export default {
     readOnly() {
       return this.serving;
     },
+    building() {
+      // BUILDING GATE (David, 2026-09-02): mirror of the server's
+      // buildingBlocker — conversion active or concepts indexing.
+      return okfRepoOps.isBuilding(this.repo);
+    },
     graphName() {
       return this.repo.ingested_graph_name || '';
     },
@@ -249,6 +260,7 @@ export default {
       return 'submit';
     },
     lifecycleLabel() {
+      if (this.building) return this.translate('okf.shell.building', 'Building…');
       const a = this.lifecycleAction;
       return this.translate('okf.lifecycle.' + a, LIFECYCLE_LABELS[a]);
     },
@@ -312,6 +324,7 @@ export default {
       this.$store.dispatch('okf/setEditorSubTab', v);
     },
     async onLifecycle() {
+      if (this.building) return; // the server refuses it anyway — never even try
       const action = this.lifecycleAction;
       if (action === 'publish') {
         this.publishError = '';

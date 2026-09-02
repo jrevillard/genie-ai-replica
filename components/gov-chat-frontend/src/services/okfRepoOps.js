@@ -158,6 +158,22 @@ export async function deleteConcept(repoId, conceptId) {
   return repoOkfService.deleteConcept(repoId, conceptId);
 }
 
+// ─── BUILDING GATE (David, 2026-09-02) ───────────────────────────────────────
+// A repo whose source file is still converting, or whose concepts are still
+// indexing, is NOT reviewable content yet: the human workflow pins it to
+// "In progress" and refuses every lifecycle move. This mirrors the server's
+// authoritative buildingBlocker (lifecycle-service.js) for the UI. Terminal
+// vocabulary is single-sourced with the crawl-conversion contract:
+// terminal = 'done' | 'failed' ONLY (missing conversion = not building).
+
+/** True while the repo is being built (conversion active OR concepts indexing). */
+export function isBuilding(repo) {
+  if (!repo) return false;
+  const conv = repo.conversion;
+  if (conv && !['done', 'failed'].includes(conv.status)) return true;
+  return (repo.indexing_pending || 0) > 0;
+}
+
 // ─── Lifecycle (David, 2026-08-28) ───────────────────────────────────────────
 // The full publish lifecycle is shared by BOTH UI approaches (wizard Step 9
 // and the editor shell / dashboard cards) via these thin wrappers — one
@@ -316,6 +332,7 @@ export function lifecycle(repoId, action, actor = {}) {
  * imports the default binding; tests import named members). */
 export default {
   slugifyConcept,
+  isBuilding,
   buildConceptPayload,
   addConcept,
   appendToIndexToc,

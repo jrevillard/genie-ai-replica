@@ -53,7 +53,11 @@
               <span v-if="r.version" class="okf-dashboard__card-version">v{{ r.version }}</span>
             </span>
             <span class="okf-dashboard__card-row">
-              <DsHealthRing :score="healthScore(r)" :size="'sm'" :aria-label="healthAria(r)" />
+              <!-- BUILDING GATE (David, 2026-09-02): an animated build state —
+                the file is processed in the background and the card stays in
+                this lane until every concept shows Indexed. -->
+              <DsSpinner v-if="isBuilding(r)" size="sm" :aria-label="buildingAria(r)" />
+              <DsHealthRing v-else :score="healthScore(r)" :size="'sm'" :aria-label="healthAria(r)" />
               <span class="okf-dashboard__card-count">
                 {{ r.concept_count || 0 }} {{ translate('okf.dashboard.topics', 'topics') }}
               </span>
@@ -61,7 +65,13 @@
             </span>
           </button>
           <div class="okf-dashboard__card-actions" role="group" :aria-label="actionsAria(r)">
-            <DsButton variant="secondary" small :disabled="actionBusy" @click.stop="onLifecycle(r)">
+            <!-- Building: NO lifecycle action is offered (the server refuses
+              every transition with 409 BUILD/INDEXING_IN_PROGRESS anyway) —
+              a disabled Building… chip tells the steward to wait. -->
+            <DsButton v-if="isBuilding(r)" variant="secondary" small disabled>
+              {{ translate('okf.dashboard.card.building', 'Building…') }}
+            </DsButton>
+            <DsButton v-else variant="secondary" small :disabled="actionBusy" @click.stop="onLifecycle(r)">
               {{ contextualLabel(r) }}
             </DsButton>
             <DsButton variant="ghost" small :disabled="actionBusy" @click.stop="onVersions(r)">
@@ -203,6 +213,7 @@ import DsDialog from '../ds/Dialog.vue';
 import DsInput from '../ds/Input.vue';
 import DsSelect from '../ds/Select.vue';
 import DsHealthRing from '../ds/HealthRing.vue';
+import DsSpinner from '../ds/Spinner.vue';
 import OkfVersionsDialog from './editor/VersionsDialog.vue';
 import OkfLogsDialog from './editor/LogsDialog.vue';
 import OkfRenameRepoDialog from './editor/RenameRepoDialog.vue';
@@ -243,6 +254,7 @@ export default {
     DsInput,
     DsSelect,
     DsHealthRing,
+    DsSpinner,
     OkfVersionsDialog,
     OkfLogsDialog,
     OkfRenameRepoDialog
@@ -330,6 +342,9 @@ export default {
       return (r.name || '').toLowerCase().includes(s) || (r.domain || '').toLowerCase().includes(s);
     },
     stageLabel(r) {
+      if (this.isBuilding(r)) {
+        return this.translate('okf.dashboard.stage.building', 'Building…');
+      }
       const s = r.lifecycle_state;
       if (s === 'publish' && r.ingested_at) {
         return this.translate('okf.dashboard.stage.ingested', 'Ingested v{n}').replace('{n}', String(r.version || ''));
@@ -363,7 +378,14 @@ export default {
     isServing(r) {
       return !!(r.lifecycle_state === 'publish' && r.ingested_at);
     },
+    isBuilding(r) {
+      return okfRepoOps.isBuilding(r);
+    },
+    buildingAria() {
+      return this.translate('okf.dashboard.card.buildingAria', 'Building — the source file is still being processed');
+    },
     canBulk(r) {
+      if (this.isBuilding(r)) return false; // building repos never bulk-publish
       return ['approve', 'publish', 'retracted'].includes(r.lifecycle_state);
     },
     selectAria(r) {

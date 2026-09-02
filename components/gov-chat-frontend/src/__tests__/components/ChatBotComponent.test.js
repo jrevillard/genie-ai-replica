@@ -1630,7 +1630,9 @@ describe('ChatBotComponent', () => {
     it('returns formatted time for valid timestamp', () => {
       const wrapper = createChatBotWrapper();
       const result = wrapper.vm.formatMessageTime('2024-01-15T14:30:00Z');
-      expect(result).toMatch(/\d{2}:\d{2}/);
+      // The separator is LOCALE-dependent (e.g. "14:30" en-US, "14.30" some
+      // Windows locales) — accept any non-digit separator between HH and MM.
+      expect(result).toMatch(/\d{2}\D\d{2}/);
     });
 
     it('returns empty string for null timestamp', () => {

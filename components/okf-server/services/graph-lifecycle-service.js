@@ -148,12 +148,19 @@ async function audit(action, repoId, actor, extra = {}) {
 async function resolveGraphName(db, candidates) {
   for (const name of candidates) {
     if (!name) continue;
-    const col = db.collection(`${name}_SOURCE`);
+    const col = db.collection(`${name}_SOURCE`); // eslint-disable-line no-await-in-loop
     if (await col.exists()) return name;
-    const ent = db.collection(`${name}_ENTITY`);
+    const ent = db.collection(`${name}_ENTITY`); // eslint-disable-line no-await-in-loop
     if (await ent.exists()) return name;
   }
   return candidates.find(Boolean); // nothing exists — use the primary candidate
+}
+
+/** True when the graph's member collections exist (same test as resolveGraphName). */
+async function graphExists(db, name) {
+  if (!name) return false;
+  if (await db.collection(`${name}_SOURCE`).exists()) return true;
+  return db.collection(`${name}_ENTITY`).exists();
 }
 
 /**
@@ -415,9 +422,66 @@ async function demoteGraph(repo, actor) {
   });
 }
 
+/**
+ * REPO RENAME (David, 2026-09-02): the repo's human NAME changed — and the
+ * born-right graph name DERIVES from it (`OKF_<slug>_v{N}`). The graph must
+ * MOVE with the name (same version numbers, new slug), or the next drain
+ * would create a differently-named graph and orphan everything drained so
+ * far. Called by repository-service.update AFTER the registry write; resolves
+ * the source from the OLD-name candidates + the meta rows (drain authority),
+ * so a crashed rename heals on any later rename/retry.
+ * @param {object} repo the UPDATED registry doc (new name already written)
+ * @param {string} oldName the name the repo had before the update
+ * @returns {Promise<string>} the (possibly unchanged) graph name
+ */
+async function renameForRepoNameChange(repo, oldName, actor) {
+  return withSpan('okf.graph.repoRename', async (span) => {
+    const toGraph = workingGraphName(repo); // derived from the NEW name
+    span.setAttribute('okf.repo_id', repo.repo_id);
+    span.setAttribute('okf.graph.to', toGraph);
+    const db = await getDb();
+    const fromGraph = await resolveGraphName(db, [
+      workingGraphName({ ...repo, name: oldName }),
+      versionedGraphName({ ...repo, name: oldName }),
+      ...(await drainedGraphNames(db, repo.repo_id)),
+      `OKF_${repo.repo_id}` // the legacy pre-convention anchor
+    ]);
+    if (fromGraph === toGraph) return toGraph; // slug unchanged — nothing to move
+    // NO SOURCE GRAPH (pure metadata rename): the target slug must still be
+    // FREE — a foreign graph at the new slug would swallow this repo's future
+    // drains into the wrong workspace (fail closed, live-caught in tests).
+    if (!(await graphExists(db, fromGraph)) && (await graphExists(db, toGraph))) {
+      throw new GraphLifecycleError(
+        'GRAPH_NAME_CONFLICT',
+        `graph '${toGraph}' already belongs to another repository — pick a name whose workspace is free`,
+        409
+      );
+    }
+    // A colliding target with BOTH graphs present is refused inside
+    // renameGraph (GRAPH_NAME_CONFLICT); our own leftover is impossible for a
+    // repo-rename target (a fresh slug).
+    const result = await renameGraph(repo, fromGraph, toGraph, { allowDropTarget: false });
+    await refreshMetaGraphNames(repo.repo_id, toGraph);
+    span.setAttribute('okf.graph.renamed', result.renamed.length);
+    logger.info('OKF graph renamed with its repository', {
+      repo_id: repo.repo_id,
+      from: fromGraph,
+      to: toGraph,
+      renamed: result.renamed.length
+    });
+    await audit('repo.graph_rename', repo.repo_id, actor, {
+      from: fromGraph,
+      to: toGraph,
+      description: 'Repository renamed — graph "' + fromGraph + '" -> "' + toGraph + '"'
+    });
+    return toGraph;
+  });
+}
+
 module.exports = {
   promoteGraph,
   demoteGraph,
+  renameForRepoNameChange,
   versionedGraphName,
   workingGraphName,
   GraphLifecycleError

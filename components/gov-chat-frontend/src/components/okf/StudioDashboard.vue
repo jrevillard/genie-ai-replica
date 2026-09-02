@@ -73,6 +73,9 @@
             <DsButton variant="ghost" small :disabled="exportBusy" @click.stop="onExport(r)">
               {{ translate('okf.dashboard.card.export', 'Export') }}
             </DsButton>
+            <DsButton v-if="!isServing(r)" variant="ghost" small :disabled="actionBusy" @click.stop="onRenameAsk(r)">
+              {{ translate('okf.dashboard.card.rename', 'Rename') }}
+            </DsButton>
             <DsButton
               v-if="!isServing(r)"
               variant="ghost"
@@ -182,6 +185,13 @@
     />
 
     <OkfLogsDialog :visible="logsOpen" :repo="logsRepo" @close="logsOpen = false" />
+
+    <OkfRenameRepoDialog
+      :visible="renameRepo !== null"
+      :repo="renameRepo"
+      @close="renameRepo = null"
+      @renamed="onRenamed"
+    />
   </div>
 </template>
 
@@ -195,6 +205,7 @@ import DsSelect from '../ds/Select.vue';
 import DsHealthRing from '../ds/HealthRing.vue';
 import OkfVersionsDialog from './editor/VersionsDialog.vue';
 import OkfLogsDialog from './editor/LogsDialog.vue';
+import OkfRenameRepoDialog from './editor/RenameRepoDialog.vue';
 import okfRepoOps from '../../services/okfRepoOps';
 
 const LANES = [
@@ -226,7 +237,16 @@ const CONTEXTUAL_LABELS = {
 
 export default {
   name: 'OkfStudioDashboard',
-  components: { DsButton, DsDialog, DsInput, DsSelect, DsHealthRing, OkfVersionsDialog, OkfLogsDialog },
+  components: {
+    DsButton,
+    DsDialog,
+    DsInput,
+    DsSelect,
+    DsHealthRing,
+    OkfVersionsDialog,
+    OkfLogsDialog,
+    OkfRenameRepoDialog
+  },
   mixins: [translateMixin],
   emits: ['new', 'resume'],
   data() {
@@ -247,7 +267,8 @@ export default {
       deleteError: '',
       versionsRepo: null,
       logsOpen: false,
-      logsRepo: null
+      logsRepo: null,
+      renameRepo: null
     };
   },
   computed: {
@@ -387,6 +408,12 @@ export default {
     onLogs(r) {
       this.logsRepo = r;
       this.logsOpen = true;
+    },
+    onRenameAsk(r) {
+      this.renameRepo = r;
+    },
+    onRenamed() {
+      this.refreshAll();
     },
     onVersionsChanged() {
       this.refreshAll();

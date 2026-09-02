@@ -537,6 +537,8 @@ async function update(repo_id, patch, actor) {
     for (const f of UPDATABLE_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(patch, f)) setFields[f] = patch[f];
     }
+    const nameChanged = Object.prototype.hasOwnProperty.call(setFields, 'name') && setFields.name !== existing.name;
+    const oldName = existing.name;
     setFields.updated_at = nowIso();
     try {
       await db.collection(COLLECTION).update(repo_id, setFields);
@@ -547,6 +549,36 @@ async function update(repo_id, patch, actor) {
         throw new RepoError('DUPLICATE_REPO', `Repository name already exists in this domain`, 409);
       }
       throw err;
+    }
+
+    // BORN-RIGHT RENAME (David, 2026-09-02): the graph name derives from the
+    // repo NAME — a rename must move the graph (same versions, new slug), or
+    // the next drain would create a differently-named graph and orphan the
+    // drained content. Runs AFTER the registry write; a failure throws (no
+    // silent split — the audit trail shows the rename attempt and a follow-up
+    // update heals via the drained-graph authority).
+    if (nameChanged) {
+      try {
+        const refreshedForGraph = await db.collection(COLLECTION).document(repo_id);
+        await require('./graph-lifecycle-service').renameForRepoNameChange(refreshedForGraph, oldName, actor);
+      } catch (err) {
+        recordOp('update', 'graph_rename_failed');
+        logger.error('OKF repo rename: graph move failed', {
+          repo_id,
+          from: oldName,
+          to: setFields.name,
+          error: err.message
+        });
+        throw err;
+      }
+      await auditService.writeAudit({
+        actor: (actor && actor.sub) || 'system',
+        actor_name: (actor && actor.name) || null,
+        action: 'repo.rename',
+        repo_id,
+        source_ip: (actor && actor.source_ip) || null,
+        description: 'Renamed repository "' + oldName + '" to "' + setFields.name + '"'
+      });
     }
 
     await auditService.writeAudit({

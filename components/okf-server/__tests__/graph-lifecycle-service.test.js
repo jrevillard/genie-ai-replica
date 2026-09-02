@@ -25,6 +25,7 @@ const mockDb = require('../shared-lib/db-connection-service').__mockDb;
 const {
   promoteGraph,
   demoteGraph,
+  renameForRepoNameChange,
   versionedGraphName,
   workingGraphName,
   GraphLifecycleError
@@ -186,5 +187,42 @@ describe('graph-lifecycle-service (versioned serving graph)', () => {
     // The leftover draft collection was replaced by the serving data.
     expect(mockDb._stores[DRAFT + '_SOURCE'].x1).toBeDefined();
     expect(mockDb._stores[TARGET + '_SOURCE']).toBeUndefined();
+  });
+
+  test('renameForRepoNameChange moves the graph to the NEW slug (David, 2026-09-02)', async () => {
+    const OLD = 'OKF_kenya-government-services_v3';
+    const NEW = 'OKF_ke-services_v3';
+    seedGraph(OLD);
+    // The first db.query in the rename is the drain-authority read — the meta
+    // rows still name the OLD slug (the registry is already updated).
+    mockDb.query.mockResolvedValueOnce({ all: async () => [OLD] });
+    const repo = repoDoc({ name: 'KE Services', version: 2, lifecycle_state: 'approve' });
+    const out = await renameForRepoNameChange(repo, 'Kenya Government Services');
+    expect(out).toBe(NEW);
+    for (const s of SUFFIXES) {
+      expect(mockDb._stores[NEW + s]).toBeDefined(); // the DATA moved
+      expect(mockDb._stores[OLD + s]).toBeUndefined();
+    }
+  });
+
+  test('renameForRepoNameChange NO-OPs when the slug is unchanged (case-only edit)', async () => {
+    const G = 'OKF_kenya-government-services_v3';
+    seedGraph(G);
+    const repo = repoDoc({ name: 'Kenya Government SERVICES', version: 2, lifecycle_state: 'approve' });
+    const out = await renameForRepoNameChange(repo, 'Kenya Government Services');
+    expect(out).toBe(G);
+    expect(mockDb._stores[G + '_SOURCE'].x1).toBeDefined(); // untouched
+  });
+
+  test('renameForRepoNameChange refuses a target slug owned by another repo (fail closed)', async () => {
+    const OLD = 'OKF_kenya-government-services_v3';
+    // "KE-Services" normalizes to the same slug as "KE Services" — a distinct
+    // repo already lives at that graph name.
+    seedGraph('OKF_ke-services_v3');
+    const repo = repoDoc({ name: 'KE Services', version: 2, lifecycle_state: 'approve' });
+    const err = await renameForRepoNameChange(repo, 'Kenya Government Services').catch((e) => e);
+    expect(err).toBeInstanceOf(GraphLifecycleError);
+    expect(err.code).toBe('GRAPH_NAME_CONFLICT');
+    expect(mockDb._stores[OLD + '_SOURCE']).toBeUndefined; // own data unmoved
   });
 });

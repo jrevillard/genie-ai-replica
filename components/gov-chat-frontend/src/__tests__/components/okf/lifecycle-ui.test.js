@@ -20,7 +20,8 @@ jest.mock('@/services/repoOkfService', () => ({
     getRepoLogs: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     ingest: jest.fn(),
-    mintVersion: jest.fn()
+    mintVersion: jest.fn(),
+    update: jest.fn().mockResolvedValue({ ok: true })
   }
 }));
 
@@ -74,6 +75,7 @@ const OkfRepoEditorShell = require('@/components/okf/editor/RepoEditorShell.vue'
 const OkfVersionsDialog = require('@/components/okf/editor/VersionsDialog.vue').default;
 const OkfRepoEditor = require('@/components/okf/editor/RepoEditor.vue').default;
 const OkfLogsDialog = require('@/components/okf/editor/LogsDialog.vue').default;
+const OkfRenameRepoDialog = require('@/components/okf/editor/RenameRepoDialog.vue').default;
 
 const STUBS = { teleport: true };
 
@@ -202,6 +204,49 @@ describe('OkfStudioDashboard — five lifecycle lanes', () => {
     const dialog = wrapper.findComponent(OkfLogsDialog);
     expect(dialog.props('visible')).toBe(true);
     expect(dialog.props('repo')).toMatchObject({ repo_id: 'd1' });
+  });
+
+  it('offers Rename between Export and Delete on NON-serving cards only (hidden while serving)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, {
+      global: { mocks: { $store: store }, stubs: STUBS }
+    });
+    await seedRepos(store, REPOS);
+    await flush();
+    const cards = wrapper.findAll('.okf-dashboard__card-wrap');
+    const serving = cards.find((c) => c.text().includes('Ingesty'));
+    const draft = cards.find((c) => c.text().includes('Drafty'));
+    expect(serving.findAll('button').some((b) => b.text() === 'Rename')).toBe(false);
+    expect(draft.findAll('button').some((b) => b.text() === 'Rename')).toBe(true);
+    // order: ... Export · Rename · Delete
+    const buttons = draft.findAll('button').map((b) => b.text());
+    expect(buttons.indexOf('Rename')).toBeGreaterThan(buttons.indexOf('Export'));
+    expect(buttons.indexOf('Rename')).toBeLessThan(buttons.indexOf('Delete'));
+  });
+
+  it('Rename opens the dialog prefilled; saving calls update and refreshes', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, {
+      global: { mocks: { $store: store }, stubs: STUBS }
+    });
+    await seedRepos(store, REPOS);
+    await flush();
+    const draft = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Drafty'));
+    await draft
+      .findAll('button')
+      .find((b) => b.text() === 'Rename')
+      .trigger('click');
+    const dialog = wrapper.findComponent(OkfRenameRepoDialog);
+    expect(dialog.props('visible')).toBe(true);
+    expect(dialog.props('repo')).toMatchObject({ repo_id: 'd1', name: 'Drafty' });
+    await dialog.setData({ name: 'Drafty Renamed' });
+    await (dialog.find('button').exists()
+      ? dialog.findAll('button').find((b) => b.text() === 'Rename')
+      : { trigger: () => {} }
+    ).trigger('click');
+    await flush();
+    expect(repoOkfService.update).toHaveBeenCalledWith('d1', { name: 'Drafty Renamed' });
+    expect(dialog.props('visible')).toBe(false);
   });
 });
 

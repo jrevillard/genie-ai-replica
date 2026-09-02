@@ -24,6 +24,26 @@
       <span v-if="bundleName" class="okf-shell__bundle" :title="bundleName">
         <code>{{ bundleName }}</code>
       </span>
+      <span v-if="sourceDoc && sourceDoc.file_name" class="okf-shell__source" :title="sourceTooltip">
+        <DsPill variant="info">Source document</DsPill>
+        <code>{{ sourceDoc.file_name }}</code>
+      </span>
+      <div v-if="sourceDoc && sourceDoc.file_name" class="expanded-source">
+        <div v-if="sourceDoc.size_bytes" class="expanded-source__row">
+          <span class="expanded-source__label">Size</span>
+          <span>{{ fmtBytes(sourceDoc.size_bytes) }}</span>
+        </div>
+        <div v-if="sourceDoc.file_type" class="expanded-source__row">
+          <span class="expanded-source__label">Type</span>
+          <span>{{ sourceDoc.file_type }}</span>
+        </div>
+        <div v-if="sourceDoc.url" class="expanded-source__row">
+          <span class="expanded-source__label">Crawl seed</span>
+          <span>
+            <a :href="sourceDoc.url" target="_blank" rel="noopener">{{ sourceDoc.url }}</a>
+          </span>
+        </div>
+      </div>
       <div class="okf-shell__actions">
         <DsButton variant="primary" small :disabled="actionBusy" @click="onLifecycle">
           {{ lifecycleLabel }}
@@ -235,6 +255,18 @@ export default {
     bundleName() {
       return (this.repo.bundle && this.repo.bundle.file_name) || '';
     },
+    sourceDoc() {
+      return this.repo.source_document || null;
+    },
+    sourceTooltip() {
+      const d = this.sourceDoc || {};
+      const parts = [];
+      if (d.size_bytes) parts.push(this.fmtBytes(d.size_bytes));
+      if (d.file_type) parts.push(d.file_type);
+      if (d.uploaded_date) parts.push('uploaded ' + String(d.uploaded_date).slice(0, 10));
+      if (d.crawl_job_id) parts.push('crawl job ' + d.crawl_job_id);
+      return parts.join(' · ');
+    },
     publishBodyText() {
       const next = (this.repo.version || 0) + 1;
       const file = (this.repo.name || this.repoId) + '-v' + next + '.zip';
@@ -265,6 +297,17 @@ export default {
     }
   },
   methods: {
+    fmtBytes(n) {
+      if (!Number.isFinite(n) || n <= 0) return '';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0;
+      let v = n;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i += 1;
+      }
+      return v.toFixed(v >= 10 || i === 0 ? 0 : 1) + ' ' + units[i];
+    },
     onSubTab(v) {
       this.$store.dispatch('okf/setEditorSubTab', v);
     },
@@ -374,6 +417,42 @@ export default {
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
+}
+.okf-shell__source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.okf-shell__source code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+.expanded-source {
+  display: flex;
+  gap: var(--space-md);
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.expanded-source__row {
+  display: inline-flex;
+  gap: var(--space-xs);
+}
+.expanded-source__label {
+  color: var(--muted-soft, var(--muted));
+}
+.expanded-source__row a {
+  color: var(--accent);
+  text-decoration: none;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: bottom;
 }
 .okf-shell__actions {
   display: flex;

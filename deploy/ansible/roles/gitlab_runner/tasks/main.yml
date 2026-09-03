@@ -17,10 +17,14 @@
       - gitlab_runner_tokens is defined
       - gitlab_runner_tokens[inventory_hostname] is defined
       - gitlab_runner_tokens[inventory_hostname] | length > 0
+      - gitlab_runner_version is defined and gitlab_runner_version | length > 0
     fail_msg: >-
       Missing required variables: gitlab_url or gitlab_runner_tokens[inventory_hostname].
       Set gitlab_url in group_vars/all.yml; set each host's glrt- token in the
       gitlab_runner_tokens dict in group_vars/gitlab_runners/vault.yml.
+      gitlab_runner_version must be "*" (latest from repo), an exact package
+      version (e.g. "19.0.0"), or a glob pattern (e.g. "19.*"). Pinned versions
+      are recommended for production.
     quiet: true
 
 # === Install gitlab-runner binary ===
@@ -44,11 +48,53 @@
     dest: /etc/apt/sources.list.d/gitlab-runner.sources
     mode: "0644"
 
+- name: Refresh apt cache (needed for both resolution and install)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+# === Resolve gitlab-runner version when pinned/globbed ===
+
+# Convert the glob pattern to a regex inside the shell — escaping '.' and '*'
+# through Jinja/YAML layers produces double-backslashes that defeat grep. The
+# sed pipeline below is the single source of truth for glob → regex conversion.
+# Debian package versions carry a trailing revision suffix ("-1"); we make it
+# optional in the regex so a user-specified "19.0.0" matches the actual package
+# version "19.0.0-1".
+
+- name: Find latest gitlab-runner version matching the pattern
+  ansible.builtin.shell:
+    # Use bash explicitly — Ubuntu's /bin/sh is dash, which lacks -o pipefail.
+    executable: /bin/bash
+    cmd: |
+      set -euo pipefail
+      PATTERN='{{ gitlab_runner_version }}'
+      # Glob → regex: escape literal dots, convert '*' to '.*', allow the
+      # trailing Debian revision (-N) optionally.
+      REGEX=$(printf '%s' "$PATTERN" | sed 's/\./\\./g; s/\*/\.\*/g; s/$/(-[0-9]+)?/')
+      apt-cache madison gitlab-runner \
+        | awk -F'|' '{gsub(/^ +| +$/, "", $2); print $2}' \
+        | grep -E "^${REGEX}$" \
+        | sort -V \
+        | tail -n 1
+  register: _gr_resolved_version
+  changed_when: false
+  when: gitlab_runner_version != '*'
+
+- name: Fail if no gitlab-runner version matches the pattern
+  ansible.builtin.fail:
+    msg: >-
+      No gitlab-runner package version matches '{{ gitlab_runner_version }}'.
+      Check the apt repository or adjust gitlab_runner_version.
+  when:
+    - gitlab_runner_version != '*'
+    - _gr_resolved_version.stdout | default('') | length == 0
+
 - name: Install gitlab-runner
   ansible.builtin.apt:
-    name: gitlab-runner
-    update_cache: true
-    state: present
+    name: "{% if gitlab_runner_version == '*' %}gitlab-runner{% else %}gitlab-runner={{ _gr_resolved_version.stdout }}{% endif %}"
+    state: "{{ 'latest' if gitlab_runner_version == '*' else 'present' }}"
+    # cache already refreshed above
 
 - name: Add gitlab-runner user to docker group
   ansible.builtin.user:

@@ -7,6 +7,18 @@
 # Runner authentication token (glrt-xxx) must be set in vault before running.
 # Create the runner in GitLab UI: Settings > CI/CD > Runners > New project runner
 #
+# The gitlab_runner_version variable (default: "*") controls the runner
+# package version. Accepted values:
+#   "*"          install/upgrade to whatever the apt repo ships (re-runs WILL
+#                upgrade — re-runs track upstream).
+#   "19.0.0"     pin to an exact version (re-runs are idempotent until the
+#                variable is bumped — recommended for production).
+#   "19.*"       resolve to the highest available 19.x.y at playbook time,
+#                then pin (re-runs are idempotent within the same glob; a
+#                newer 19.x.y release triggers a single upgrade next run).
+# Override via host_vars/<host>.yml, group_vars, or
+# --extra-vars "gitlab_runner_version=19.*".
+#
 # Usage:
 #   ansible-playbook -i inventory/gitlab-runner.ini gitlab-runner.yml --vault-id gitlab@prompt
 #

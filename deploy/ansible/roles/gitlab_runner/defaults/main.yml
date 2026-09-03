@@ -2,6 +2,23 @@
 gitlab_runner_description: "genie-ai-runner"
 gitlab_runner_executor: docker
 gitlab_runner_docker_image: "docker:28"
+
+# gitlab-runner package version.
+# - "*" (default): install/upgrade to whatever the apt repo ships. Matches
+#   the previous behavior, but re-runs WILL upgrade the runner.
+# - exact version (e.g. "19.0.0"): pin the runner exactly. Re-runs are
+#   idempotent until the variable is bumped manually.
+# - glob pattern (e.g. "19.*", "19.0.*"): resolve to the highest available
+#   version in the apt repo that matches the glob, then pin. Idempotent
+#   between upgrades of that glob (the resolved version is recorded as a
+#   set_fact each run, so a newer 19.x.y triggers a single upgrade next
+#   time the playbook is run).
+#
+# Production deploys should pin a version that matches the deployed GitLab
+# server major (server N / runner N is the supported sweet spot). The glob
+# form is useful after a GitLab platform upgrade: bump from "18.*" to
+# "19.*" and the runner will track the new major automatically.
+gitlab_runner_version: "*"
 gitlab_runner_concurrent: 2
 gitlab_runner_limit: 2
 # security_opt applied to job containers. Required for BuildKit rootless

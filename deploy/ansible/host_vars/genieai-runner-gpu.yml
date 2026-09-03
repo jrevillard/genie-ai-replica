@@ -11,6 +11,9 @@
 
 gitlab_runner_description: "genie-ai-runner-gpu"
 
+# gitlab_runner_version lives in group_vars/gitlab_runners/vars.yml — shared
+# across all runners in the gitlab_runners group.
+
 # Docker role safety flags — see roles/docker/defaults/main.yml. These are the
 # ONLY two mutation points that restart the daemon; disabling them leaves the
 # GPU host's Docker (and its 7 inference containers) untouched.

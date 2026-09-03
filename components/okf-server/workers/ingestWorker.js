@@ -47,9 +47,8 @@ function recordJob(outcome) {
   }
 }
 
-let _drainTimer = null;
+let _drainTimers = []; // one timer per drain lane (PARALLEL — see start())
 let _sweepTimer = null;
-let _draining = false;
 let _sweeping = false;
 
 const enabled = () => (process.env.OKF_INGEST_WORKER_ENABLED || 'true').toLowerCase() !== 'false';
@@ -95,6 +94,10 @@ async function claimNextJob(db) {
     await db.query(aql`
     FOR m IN okf_concepts_meta
       FILTER m.index_status == 'parsed' AND m.repo_id != null
+      // Lanes claim in parallel: a row claimed within the last JOB_TIMEOUT is
+      // in-flight on another lane — never double-claim it. A STALE claim
+      // (past the drain window) belongs to a dead lane and is reclaimable.
+      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${JOB_TIMEOUT_MS()}
       SORT m.updated_at ASC
       LIMIT 1
       RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry'])
@@ -214,7 +217,7 @@ async function writeBundleIngestionLog(repoId, conceptId, level, stage, message)
  */
 async function _processOneJob() {
   const db = await getDb();
-  const job = await claimNextJob(db);
+  const job = await claimNextSerialized(db);
   if (!job) return { outcome: 'idle' };
 
   return withSpan('okf.ingest.worker.job', async (span) => {
@@ -534,17 +537,40 @@ async function _reapStuckParsed() {
   return { reaped: victims.length, victims };
 }
 
-/** One drain cycle (guarded against overlap — the timer never stacks). */
+/** One drain cycle for ONE lane — each lane self-serializes (its poll awaits
+ * the cycle before re-arming), so lanes never overlap themselves; separate
+ * lanes run concurrently by design. */
 async function _drainCycle() {
-  if (_draining) return;
-  _draining = true;
   try {
     await _processOneJob();
   } catch (err) {
     logger.error('Ingest worker cycle error', { error: err.message });
-  } finally {
-    _draining = false;
   }
+}
+
+/** Drain lanes (PARALLEL, David 2026-09-03: "repositories are independent
+ * units of work and MUST run in parallel and utilize the machine resources
+ * as much as possible", capped by configuration). Each lane loops
+ * claim → dataprep → wait-terminal independently; a lane blocked on a slow
+ * drain no longer starves the others. Requires the dataprep side to accept
+ * concurrent ingests (DATAPREP_INGEST_CONCURRENCY) — otherwise the extra
+ * lanes just cycle through 429 backoffs. */
+function laneCount() {
+  return Math.max(1, safeInt('OKF_INGEST_CONCURRENCY', 1));
+}
+
+/** In-process claim mutex (Node is single-threaded): the claim READ + STAMP
+ * must complete for one lane before the next lane claims, or two lanes could
+ * pick the same row. One okf-server container is assumed (multi-process
+ * deployments would need a DB-side atomic claim). */
+let _claimChain = Promise.resolve();
+function claimNextSerialized(db) {
+  const run = _claimChain.then(() => claimNextJob(db));
+  _claimChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 function start() {
@@ -552,24 +578,26 @@ function start() {
     logger.info('Ingest worker DISABLED (OKF_INGEST_WORKER_ENABLED=false)');
     return;
   }
-  const concurrency = safeInt('OKF_INGEST_CONCURRENCY', 1);
-  if (concurrency > 1) {
-    logger.warn(
-      'OKF_INGEST_CONCURRENCY>1 requested — v1 runs SEQUENTIAL by design (dataprep single-flight); the value is accepted but not honored'
-    );
-  }
+  const lanes = laneCount();
   logger.info('Ingest worker starting', {
     interval_ms: intervalMs(),
-    sweep_interval_ms: sweepIntervalMs()
+    sweep_interval_ms: sweepIntervalMs(),
+    lanes
   });
-  const poll = async () => {
-    try {
-      await _drainCycle();
-    } finally {
-      _drainTimer = setTimeout(poll, intervalMs());
-    }
-  };
-  poll();
+  // One self-scheduling loop per lane; a lane busy draining simply misses
+  // ticks (its timer fires only after its cycle settles).
+  _drainTimers = [];
+  for (let lane = 0; lane < lanes; lane++) {
+    const poll = async () => {
+      try {
+        await _drainCycle();
+      } finally {
+        const i = _drainTimers.indexOf(poll);
+        _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());
+      }
+    };
+    poll();
+  }
   const sweep = async () => {
     if (_sweeping) return;
     _sweeping = true;
@@ -587,9 +615,9 @@ function start() {
 }
 
 function stop() {
-  if (_drainTimer) clearTimeout(_drainTimer);
+  for (const t of _drainTimers || []) clearTimeout(t);
+  _drainTimers = [];
   if (_sweepTimer) clearTimeout(_sweepTimer);
-  _drainTimer = null;
   _sweepTimer = null;
 }
 

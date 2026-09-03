@@ -63,6 +63,27 @@ setup_trace_logging("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# PARALLEL INGEST (David, 2026-09-03): number of concurrently accepted ingest
+# requests. Each slot is its own flock file; a request takes any FREE slot and
+# 429s only when ALL are busy. Default 1 = the historical single-flight
+# (one lock file, same 429 behavior).
+DATAPREP_INGEST_CONCURRENCY = max(1, int(os.getenv("DATAPREP_INGEST_CONCURRENCY", "1")))
+
+
+def acquire_ingest_slot():
+    """Try to claim one of the N ingest slots (non-blocking). Returns the
+    open lock file (held by the caller until the ingest's finally-block
+    releases it) or None when every slot is busy."""
+    for i in range(DATAPREP_INGEST_CONCURRENCY):
+        path = f"/tmp/genie_dataprep_{i}.lock"
+        lock_file = open(path, "w")  # noqa: SIM115 — held across the request task
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_file
+        except OSError:
+            lock_file.close()
+    return None
+
 
 dataprep_component_name = "GENIE_DATAPREP_ARANGODB"
 # Initialize OpeaComponentLoader
@@ -163,19 +184,23 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         span.set_attribute("dataprep.file_size_bytes", len(payload.fileBase64))
         span.set_attribute("dataprep.file_id", payload.fileId)
 
-        # --- SYNCHRONOUS LOCK CHECK ---
-        # We acquire the lock HERE to ensure we can return 429 immediately if busy.
-        lock_file = open(LOCK_FILE_PATH, "w")  # noqa: SIM115
-        try:
-            # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            lock_file.close()
-            logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
+        # --- SYNCHRONOUS SLOT CHECK ---
+        # We acquire an ingest slot HERE to return 429 immediately when all
+        # slots are busy (PARALLEL INGEST: DATAPREP_INGEST_CONCURRENCY slots,
+        # default 1 = the historical single-flight).
+        lock_file = acquire_ingest_slot()
+        if lock_file is None:
+            logger.warning(
+                f"[ ingest ] Rejected file_id {payload.fileId}: System busy "
+                f"({DATAPREP_INGEST_CONCURRENCY} slot(s) all in use)."
+            )
             raise HTTPException(
                 status_code=429,
-                detail="System is currently processing another document. Only one ingestion can run at a time.",
-            ) from None
+                detail=(
+                    "System is currently processing other documents. "
+                    f"All {DATAPREP_INGEST_CONCURRENCY} ingestion slot(s) are in use."
+                ),
+            )
 
         # --- Environment-specific Arango config ---
         ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")

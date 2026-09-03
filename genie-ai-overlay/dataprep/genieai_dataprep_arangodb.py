@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import contextvars
 import fcntl  # Added for file locking
 import json
 import os
@@ -74,6 +75,25 @@ EMBEDDING_LABEL_THRESHOLD = float(os.getenv("EMBEDDING_LABEL_THRESHOLD", "0.75")
 BM25_LABEL_THRESHOLD = float(os.getenv("BM25_LABEL_THRESHOLD", "2.00"))
 CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea")
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# PARALLEL INGEST (David, 2026-09-03: "repositories are independent units of
+# work ... MUST run in parallel and utilize the machine resources"). Number of
+# concurrently accepted ingest requests per dataprep container. Each slot is
+# one flock file (the microservice 429s only when ALL slots are busy); the
+# default 1 reproduces the historical single-flight exactly. The heavy stages
+# are HTTP waits (vLLM labeling / TEI embedding — both natively concurrent),
+# so in-process slots scale near-linearly until CPU-bound chunking dominates;
+# scale further with container replicas on many-core nodes.
+DATAPREP_INGEST_CONCURRENCY = max(1, int(os.getenv("DATAPREP_INGEST_CONCURRENCY", "1")))
+
+# Request-local ingest context (parallel-ingest companion): each
+# ingest_file_with_guardrail task binds its own {input, repo_id, caches} so
+# concurrent requests no longer share the per-run state that used to live on
+# `self` (under >1 slot, two ingests would clobber each other's bundle-log
+# mirror and callback repo_id). ContextVars are asyncio-task-local: every
+# request runs in its own task, so isolation is automatic. Helpers read the
+# context first and FALL BACK to the legacy self attributes so the pytest
+# fixtures (which set self._current_* directly) stay green.
+_INGEST_CTX: contextvars.ContextVar = contextvars.ContextVar("ingest_ctx", default=None)
 # Concurrency control for LLM labeling. Default raised 5 → 20 so vLLM's
 # continuous batching is utilized — LLM labeling was the #1 ingestion
 # bottleneck (~70% of wall time; see perf analysis on release/el-salvador).
@@ -278,6 +298,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """Return the concept's original filename for use as a log prefix so
         the bundle's UI Ingestion Log tab is traceable. Pulled from the
         ``input.file_name`` (Story 4.8-amend follow-up) on first use; cached."""
+        # Parallel-ingest: the request-local context is authoritative when the
+        # task bound one; the legacy self-cache stays as the fallback.
+        ctx = _INGEST_CTX.get()
+        if ctx is not None:
+            cache = ctx["name_cache"]
+            if file_id in cache:
+                return cache[file_id] or None
+            file_name = getattr(ctx["input"], "file_name", None)
+            cache[file_id] = file_name or ""
+            return file_name or None
         cached = self._concept_file_name_cache.get(file_id)
         if cached is not None:
             return cached or None
@@ -309,11 +339,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         cached = self._bundle_file_id_cache.get(file_id)
         if cached:
             return f"{DOCUMENT_REPOSITORY_URL}/api/files/{cached}/ingestion-log"
-        # Single-file (non-concept_id-keyed) requests: the file_id IS the
-        # bundle — no mirror needed. (Deterministic, safe to cache.)
-        if not (file_id and self._is_concept_id(file_id)):
-            return None
-        repo_id = getattr(self, "_current_repo_id", None)
+        # Parallel-ingest: request-local cache/repo when the task bound a
+        # context (falls through to the legacy self-state otherwise).
+        ctx = _INGEST_CTX.get()
+        if ctx is not None:
+            if file_id in ctx["bundle_cache"]:
+                return f"{DOCUMENT_REPOSITORY_URL}/api/files/{ctx['bundle_cache'][file_id]}/ingestion-log"
+            if not (file_id and self._is_concept_id(file_id)):
+                return None
+            repo_id = ctx["repo_id"]
+        else:
+            if not (file_id and self._is_concept_id(file_id)):
+                return None
+            repo_id = getattr(self, "_current_repo_id", None)
         if not repo_id:
             return None
         # Look up the bundle zip via doc-repo's getFiles (Story 4.8-amend +
@@ -334,7 +372,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 bundle_file_id = items[0].get("file_id")
                 if not bundle_file_id:
                     return None
-                self._bundle_file_id_cache[file_id] = bundle_file_id
+                if ctx is not None:
+                    ctx["bundle_cache"][file_id] = bundle_file_id
+                else:
+                    self._bundle_file_id_cache[file_id] = bundle_file_id
                 return f"{DOCUMENT_REPOSITORY_URL}/api/files/{bundle_file_id}/ingestion-log"
         except Exception as e:
             if logflag:
@@ -422,7 +463,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # Exact-lookup key: the same concept_id can exist in multiple repos
             # (clones, smoke scratch repos); the okf-server resolves repo from
             # this when present instead of an ambiguous repo-wide search.
-            current_repo = getattr(self, "_current_repo_id", None)
+            ctx = _INGEST_CTX.get()
+            current_repo = (ctx or {}).get("repo_id") or getattr(self, "_current_repo_id", None)
             if current_repo:
                 payload["repo_id"] = current_repo
             # Internal cross-service auth: the shared secret (fail-closed — an
@@ -1544,6 +1586,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             file_name = getattr(input, "file_name", None)
             if file_name:
                 self._concept_file_name_cache[concept_id] = file_name
+        # PARALLEL-INGEST: bind the request-local context (task-scoped) so
+        # concurrent ingests never share bundle-log caches or callback
+        # repo_id. The self-stash above remains for legacy readers.
+        _INGEST_CTX.set(
+            {
+                "input": input,
+                "repo_id": self._current_repo_id,
+                "bundle_cache": {},
+                "name_cache": {},
+            }
+        )
 
         try:
             # --- START PROTECTED EXECUTION (Spec 5.1) ---

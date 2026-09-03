@@ -200,6 +200,12 @@ HUGGING_FACE_HUB_TOKEN=
 # produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
 # lower label quality). Validated on ibm-granite/granite-4.1-8b.
 # DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_INGEST_CONCURRENCY=1       # parallel ingest slots per dataprep container
+#                                     #   (David, 2026-09-03). Each slot is a flock file;
+#                                     #   429 only when ALL are busy. 1 = historical
+#                                     #   single-flight. Pair with okf-server's
+#                                     #   OKF_INGEST_CONCURRENCY drain lanes to use the
+#                                     #   machine's cores (vLLM/TEI batch natively).
 # DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
 #                                     #   >1 batches chunks to cut network round-trips
 #                                     #   to a remote vLLM. Raise to 8 on capable models
@@ -555,12 +561,24 @@ KC_DATAPREP_CLIENT_ID=dataprep-service-client
 KC_OKF_SERVER_CLIENT_SECRET=
 
 # --- OKF ingestion worker (Story 2.9.4; crawlWorker pattern) ---
-# Drains the orchestrator's per-concept Pending files docs (sequential — dataprep
-# is single-flight). OKF_INGEST_WORKER_ENABLED=false disables the worker entirely.
+# Drains parsed concepts to dataprep. OKF_INGEST_WORKER_ENABLED=false disables
+# the worker entirely.
 # OKF_INGEST_WORKER_ENABLED=true
 # OKF_INGEST_WORKER_INTERVAL_MS=15000
 # OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
+# PARALLEL DRAIN (David, 2026-09-03): number of independent worker lanes. Each
+# lane claims a different parsed concept and drains it concurrently (requires
+# dataprep to accept parallel ingests — set DATAPREP_INGEST_CONCURRENCY to
+# match). 1 = the historical sequential behavior. Repos are independent units
+# of work: raise both values to scale with machine capacity (e.g. 6 on a
+# 24-vCPU workstation; watch dataprep/vLLM headroom).
 # OKF_INGEST_CONCURRENCY=1
+# Stuck-drain reaper: a concept claimed but not terminal after this many ms is
+# dead-lettered (dead lane / lost callback), and a concept claimed more than
+# OKF_INGEST_WORKER_MAX_CLAIMS times is treated as poison. WAITING concepts
+# are never reaped, whatever the queue depth.
+# OKF_INGEST_WORKER_REAP_GRACE_MS=3600000
+# OKF_INGEST_WORKER_MAX_CLAIMS=8
 
 # --- OKF content-only chunking (Story 4.8-amend) ---
 # Concepts never become doc-repo files docs — the worker POSTs the concept's

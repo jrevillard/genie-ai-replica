@@ -263,6 +263,8 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `NGINX_PUBLIC_DOMAIN` - Public domain for Nginx
 - `VUE_APP_API_URL` - Frontend API URL
 - `VUE_APP_AVAILABLE_LOCALES` - Whitelist of active UI locales (comma-separated codes, e.g. `en,es`; unset = all locales)
+- `OKF_MAX_CRAWL_SOURCE_MB` - Max crawled-source file size (MB) okf-server converts into an OKF repository (authoritative pre-flight of the server-side streaming conversion job). Default 10240 (10 GB); mode B batches to the cap, mode A limited to ~45 MB (one request body)
+- `OKF_CONVERSION_DEBUG` - `1` = fine-grained per-page/per-batch logging in the crawl→OKF conversion job
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
 - `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
 

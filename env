@@ -572,6 +572,17 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # OKF_INTERNAL_SECRET=<set this — same value on okf-server + dataprep-arango-service>
 # DATAPREP_URL=http://dataprep-arango-service:5000
 
+# Maximum size (MB) of a crawled source file okf-server will convert into an
+# OKF repository (server-side streaming conversion job — authoritative check
+# against the doc-repo Content-Length before any processing). Default:
+# 10240 (10 GB). Mode B (per-page) scales to the cap via batched in-process
+# ingests; mode A (single mega-concept) is additionally limited to ~45 MB
+# (one request body).
+# OKF_MAX_CRAWL_SOURCE_MB=10240
+# Debug logging for the crawl→OKF conversion job (1 = per-page/per-batch logs
+# from okf-server). Leave empty to disable.
+# OKF_CONVERSION_DEBUG=
+
 # Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 

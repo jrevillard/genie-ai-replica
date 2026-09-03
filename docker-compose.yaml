@@ -573,12 +573,23 @@ services:
       - OKF_INGEST_WORKER_INTERVAL_MS=${OKF_INGEST_WORKER_INTERVAL_MS:-15000}
       - OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=${OKF_INGEST_WORKER_SWEEP_INTERVAL_MS:-3600000}
       - OKF_INGEST_CONCURRENCY=${OKF_INGEST_CONCURRENCY:-1}
+      # Stuck-parsed reaper signals (claim-stamp semantics): a claimed row with
+      # no terminal callback after REAP_GRACE_MS, or one claimed too many
+      # times, is dead-lettered. WAITING rows are never reaped.
+      - OKF_INGEST_WORKER_REAP_GRACE_MS=${OKF_INGEST_WORKER_REAP_GRACE_MS:-3600000}
+      - OKF_INGEST_WORKER_MAX_CLAIMS=${OKF_INGEST_WORKER_MAX_CLAIMS:-8}
       # Story 4.8-amend: content-only chunking — the worker POSTs the concept's
       # markdown DIRECTLY to dataprep (no doc-repo files doc). Empty default =
       # fail-closed; the controller refuses every callback without a secret
       # configured, so the .env / deployment MUST set both ends to the same value.
       - DATAPREP_URL=${DATAPREP_URL:-http://dataprep-arango-service:5000}
       - OKF_INTERNAL_SECRET=${OKF_INTERNAL_SECRET:-}
+      # Server-side crawl→OKF conversion: max crawled-source file size (MB).
+      # Authoritative pre-flight against doc-repo Content-Length. Default
+      # 10240 (10 GB) in the service when unset.
+      - OKF_MAX_CRAWL_SOURCE_MB=${OKF_MAX_CRAWL_SOURCE_MB:-}
+      # Fine-grained per-page/per-flush conversion logging when =1.
+      - OKF_CONVERSION_DEBUG=${OKF_CONVERSION_DEBUG:-}
     networks:
       - genieai_network
     deploy:
@@ -594,6 +605,10 @@ services:
   pii-service:
     logging: *fluent-logging
     restart: unless-stopped
+    environment:
+      # uvicorn worker processes (GIL-bound NER needs processes, not threads;
+      # raise on many-core deployments)
+      - PII_WEB_CONCURRENCY=${PII_WEB_CONCURRENCY:-2}
     build:
       context: components/pii-service/
       dockerfile: Dockerfile

@@ -16,5 +16,14 @@ docker_userns_remap: false
 # GITLAB RUNNER TUNING
 # =============================================================================
 # Override defaults from roles/gitlab_runner/defaults/main.yml if needed.
+
+# Pin to the latest 19.x release — matches the upgraded GitLab 19 platform.
+# Resolved each run via `apt-cache madison`, then pinned for idempotency.
+# Override per-host in host_vars/<host>.yml if a single runner needs to lag
+# or lead (e.g. GPU runner pinned to a known-good version while CPU rolls
+# forward). Accepted values: "*", an exact version (e.g. "19.0.0"), or a
+# glob (e.g. "19.*").
+gitlab_runner_version: "19.*"
+
 # gitlab_runner_concurrent: 4   # max parallel jobs across all runners
 # gitlab_runner_limit: 4        # max jobs for this specific runner

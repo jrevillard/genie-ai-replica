@@ -3,3 +3,5 @@
 # Full docker role + socket proxy + runner. No overrides needed beyond the
 # display name (defaults come from roles/*/defaults/main.yml).
 gitlab_runner_description: "genie-ai-runner-cpu"
+# gitlab_runner_version lives in group_vars/gitlab_runners/vars.yml — shared
+# across all runners in the gitlab_runners group.

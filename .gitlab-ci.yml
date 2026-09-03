@@ -2556,6 +2556,11 @@ verify:dataprep-lock:
 config:validate:
   extends: .node_base
   stage: config
+  # Self-contained env-coverage checks (npm test on the checkout) — no
+  # upstream artifacts needed. Same rationale as verify:dataprep-lock:
+  # the default artifact coupling made this job 403-flake with the
+  # 2026-09-02/03 instance artifact-download problem.
+  dependencies: []
   before_script:
     - cd tests/config-validator && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci

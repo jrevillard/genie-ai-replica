@@ -14,7 +14,7 @@
 
 **Stories:**
 
-### Story 1.1: docker-compose: VL + Collector → profiles:[core]
+### Story 1.1: docker-compose: VL + Collector → always-on (no profile)
 
 | Field | Value |
 | --- | --- |

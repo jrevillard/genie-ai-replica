@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
-const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages } = require('../validators/parse-compose');
+const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts } = require('../validators/parse-compose');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
@@ -330,6 +330,52 @@ describe('Configuration Validation Suite', () => {
 
       const violations = images.filter((img) => img.image.endsWith(':latest'));
       expect(violations.map((v) => `${v.job || 'global'}: ${v.image}`)).toEqual([]);
+    });
+  });
+
+  // --- D1: admin-logs substrate always-on contract (CAP-7) ---
+  describe('admin-logs always-on substrate (CAP-7 / D1)', () => {
+    let contracts;
+
+    beforeAll(() => {
+      contracts = parseComposeServiceContracts(COMPOSE_FILE);
+    });
+
+    const findService = (name) => contracts.find((c) => c.service === name);
+
+    test('victorialogs has no observability profile (always-on)', () => {
+      const svc = findService('victorialogs');
+      expect(svc).toBeDefined();
+      expect(svc.profiles).not.toContain('observability');
+    });
+
+    test('otel-collector has no observability profile (always-on)', () => {
+      const svc = findService('otel-collector');
+      expect(svc).toBeDefined();
+      expect(svc.profiles).not.toContain('observability');
+    });
+
+    test('otel-collector-init has no observability profile (always-on)', () => {
+      const svc = findService('otel-collector-init');
+      expect(svc).toBeDefined();
+      expect(svc.profiles).not.toContain('observability');
+    });
+
+    test('victorialogs deploy.replicas is pinned to literal 1 (not env-gated)', () => {
+      const svc = findService('victorialogs');
+      expect(svc).toBeDefined();
+      expect(svc.replicas).toBe('1');
+    });
+
+    test('opt-in services still gated behind [observability] profile', () => {
+      for (const name of ['victoriametrics', 'victoriatraces', 'grafana', 'tempo-proxy']) {
+        const svc = findService(name);
+        expect({ svc: name, found: !!svc, profiles: svc ? svc.profiles : null }).toEqual({
+          svc: name,
+          found: true,
+          profiles: expect.arrayContaining(['observability'])
+        });
+      }
     });
   });
 

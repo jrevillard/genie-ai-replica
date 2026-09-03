@@ -35,7 +35,7 @@ async function scan(texts, opts = {}) {
   };
   for (let attempt = 1; attempt <= config.piiService.retries + 1; attempt++) {
     try {
-      const res = await client.post(config.piiService.scanPath, body);
+      const res = await client.post(config.piiService.scanPath, body, { timeout: scanTimeoutMs(texts) });
       // FAIL-CLOSED on payloads too (code-review fix): a 200 with a malformed/
       // empty body must NOT be treated as 'no hits'. Validate the shape.
       const results = res.data && res.data.results;
@@ -61,6 +61,18 @@ async function scan(texts, opts = {}) {
   }
   /* istanbul ignore next — unreachable (loop returns) */
   return { state: 'error', error: 'EXHAUSTED' };
+}
+
+/** Size-scaled per-call timeout (live-fix 2026-09-03): the 10 s default is
+ * tuned for small concepts; presidio NER on a 90 KB crawl page legitimately
+ * runs tens of seconds, and a client timeout ALWAYS beats a working sidecar
+ * (3 attempts x fail-closed = pii_state=error on healthy content). Budget
+ * ~2 s per KB of scanned text with the configured default as the floor and
+ * a hard 10-min cap. */
+function scanTimeoutMs(texts) {
+  const totalChars = texts.reduce((n, t) => n + (t && typeof t.text === 'string' ? t.text.length : 0), 0);
+  const scaled = Math.ceil(totalChars / 1024) * 2000;
+  return Math.min(Math.max(scaled, config.piiService.timeoutMs), 600000);
 }
 
 /** Convenience: scan one text → ok|hit|error + hits/redacted_text. */

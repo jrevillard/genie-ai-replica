@@ -25,4 +25,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=8)"
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# PII_WEB_CONCURRENCY: uvicorn WORKER PROCESSES (live-fixed 2026-09-03). The
+# scan endpoint is sync + presidio/spaCy NER is GIL-bound, so a single worker
+# serializes EVERY scan — one 90 KB crawl page saturates the process (client
+# 10 s timeouts, even /ready starves → docker marks the service unhealthy).
+# Processes parallelize where threads cannot; each loads its own model copy.
+# Size for the node: 2 = default sane floor; raise on many-core deployments.
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 8000 --workers ${PII_WEB_CONCURRENCY:-2}"]

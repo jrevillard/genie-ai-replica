@@ -81,6 +81,7 @@ const OkfVersionsDialog = require('@/components/okf/editor/VersionsDialog.vue').
 const OkfRepoEditor = require('@/components/okf/editor/RepoEditor.vue').default;
 const OkfLogsDialog = require('@/components/okf/editor/LogsDialog.vue').default;
 const OkfRenameRepoDialog = require('@/components/okf/editor/RenameRepoDialog.vue').default;
+const OkfBuildProgressCard = require('@/components/okf/editor/BuildProgressCard.vue').default;
 
 const STUBS = { teleport: true };
 
@@ -339,6 +340,58 @@ describe('BUILDING GATE (David, 2026-09-02) — building repos stay In progress'
     await btn.trigger('click');
     await flush();
     expect(mockOpsLifecycle).not.toHaveBeenCalledWith('sh1', 'approve', {});
+  });
+
+  it('hovering a building card opens the live progress metrics card (David, 2026-09-03)', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, [BUILDING]);
+    await flush();
+    repoOkfService.get.mockResolvedValueOnce({
+      repo_id: 'b1',
+      name: 'Builder',
+      concept_count: 40,
+      indexing_pending: 10,
+      conversion: { status: 'adding', stage: 'adding', pages_done: 12, batches_done: 3, bytes_total: 2048 }
+    });
+    const card = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Builder'));
+    await card.find('.okf-dashboard__card').trigger('mouseenter');
+    await flush();
+    const pop = wrapper.findComponent(OkfBuildProgressCard);
+    expect(pop.exists()).toBe(true);
+    await flush(); // the component's own fetch resolves into `fresh`
+    const text = wrapper.text();
+    expect(text).toContain('30 / 40'); // indexed / total
+    expect(text).toContain('75%');
+    expect(text).toContain('Adding');
+    expect(text).toContain('12'); // pages processed
+    expect(text).toContain('3'); // batches stored
+    expect(text).toContain('2.0 KB'); // fmtBytes(bytes_total)
+  });
+
+  it('a NON-building card never sprouts the progress popup', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, [DONE]);
+    await flush();
+    const card = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('DoneRepo'));
+    await card.find('.okf-dashboard__card').trigger('mouseenter');
+    await flush();
+    expect(wrapper.findComponent(OkfBuildProgressCard).exists()).toBe(false);
+  });
+
+  it('leaving the card closes the popup after the grace period', async () => {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
+    await seedRepos(store, [BUILDING]);
+    await flush();
+    const card = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('Builder'));
+    await card.find('.okf-dashboard__card').trigger('mouseenter');
+    await flush();
+    expect(wrapper.findComponent(OkfBuildProgressCard).exists()).toBe(true);
+    await card.find('.okf-dashboard__card').trigger('mouseleave');
+    await new Promise((r) => setTimeout(r, 350)); // > the 250 ms grace
+    expect(wrapper.findComponent(OkfBuildProgressCard).exists()).toBe(false);
   });
 });
 

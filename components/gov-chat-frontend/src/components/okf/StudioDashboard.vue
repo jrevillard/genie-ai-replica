@@ -39,7 +39,14 @@
         </header>
         <p v-if="reposInLane(lane.key).length === 0" class="okf-dashboard__empty">{{ lane.emptyText }}</p>
         <div v-for="r in reposInLane(lane.key)" :key="r.repo_id" class="okf-dashboard__card-wrap">
-          <button type="button" class="okf-dashboard__card" :class="cardClasses(r)" @click="onCardClick(r)">
+          <button
+            type="button"
+            class="okf-dashboard__card"
+            :class="cardClasses(r)"
+            @click="onCardClick(r)"
+            @mouseenter="onCardEnter(r, $event)"
+            @mouseleave="onCardLeave"
+          >
             <span class="okf-dashboard__card-row">
               <input
                 v-if="canBulk(r)"
@@ -202,6 +209,21 @@
       @close="renameRepo = null"
       @renamed="onRenamed"
     />
+
+    <!-- BUILDING GATE hover popup (David, 2026-09-03): a live progress
+      metrics card for building repos. Teleported to <body> so the lanes'
+      overflow never clips it; fixed-positioned under the hovered card. -->
+    <Teleport to="body">
+      <div
+        v-if="buildHover"
+        class="okf-build-pop"
+        :style="buildPopStyle"
+        @mouseenter="onPopEnter"
+        @mouseleave="onCardLeave"
+      >
+        <OkfBuildProgressCard :repo="buildHover" />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -217,6 +239,7 @@ import DsSpinner from '../ds/Spinner.vue';
 import OkfVersionsDialog from './editor/VersionsDialog.vue';
 import OkfLogsDialog from './editor/LogsDialog.vue';
 import OkfRenameRepoDialog from './editor/RenameRepoDialog.vue';
+import OkfBuildProgressCard from './editor/BuildProgressCard.vue';
 import okfRepoOps from '../../services/okfRepoOps';
 
 const LANES = [
@@ -257,7 +280,8 @@ export default {
     DsSpinner,
     OkfVersionsDialog,
     OkfLogsDialog,
-    OkfRenameRepoDialog
+    OkfRenameRepoDialog,
+    OkfBuildProgressCard
   },
   mixins: [translateMixin],
   emits: ['new', 'resume'],
@@ -280,7 +304,10 @@ export default {
       versionsRepo: null,
       logsOpen: false,
       logsRepo: null,
-      renameRepo: null
+      renameRepo: null,
+      buildHover: null,
+      buildPopStyle: {},
+      buildHoverTimer: null
     };
   },
   computed: {
@@ -409,6 +436,33 @@ export default {
     },
     onCardClick(r) {
       this.$emit('resume', r.repo_id);
+    },
+    // BUILDING GATE hover popup: only building cards sprout the progress
+    // metrics card; it follows below the card and survives moving the
+    // pointer onto the popup itself (250 ms grace on leave).
+    onCardEnter(r, evt) {
+      if (!this.isBuilding(r)) return;
+      if (this.buildHoverTimer) {
+        clearTimeout(this.buildHoverTimer);
+        this.buildHoverTimer = null;
+      }
+      const rect = evt.currentTarget.getBoundingClientRect();
+      const width = 300;
+      const left = Math.min(rect.left, window.innerWidth - width - 12);
+      this.buildHover = r;
+      this.buildPopStyle = { top: rect.bottom + 6 + 'px', left: Math.max(8, left) + 'px', width: width + 'px' };
+    },
+    onCardLeave() {
+      if (this.buildHoverTimer) clearTimeout(this.buildHoverTimer);
+      this.buildHoverTimer = setTimeout(() => {
+        this.buildHover = null;
+      }, 250);
+    },
+    onPopEnter() {
+      if (this.buildHoverTimer) {
+        clearTimeout(this.buildHoverTimer);
+        this.buildHoverTimer = null;
+      }
     },
     async onLifecycle(r) {
       const action = this.contextualAction(r);
@@ -657,5 +711,15 @@ export default {
   color: var(--danger);
   font-size: var(--text-sm);
   margin: var(--space-sm) 0 0;
+}
+.okf-build-pop {
+  position: fixed;
+  z-index: 1000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-md);
+  pointer-events: auto;
 }
 </style>

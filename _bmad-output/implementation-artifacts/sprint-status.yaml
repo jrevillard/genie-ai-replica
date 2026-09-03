@@ -66,74 +66,102 @@ epics:
 development_status:
   # === Epic 1 ===
   epic-1: backlog
-  1-1-docker-compose-vl-collector-profiles-core: backlog
-  1-2-otel-collector-config-add-otlp-to-logs-receivers: backlog
-  1-3-env-j2-render-3-new-vars-unconditionally: backlog
-  1-4-env-root-commented-templates-for-new-vars: backlog
-  1-5-tests-melt-correlation-ci-stub-exit-0-readme: backlog
-  1-6-docs-security-cve-triage-2026q3-md-update-optional: backlog
+  1-1-docker-compose-vl-collector-profiles-core: ready-for-dev
+  1-2-otel-collector-config-add-otlp-to-logs-receivers: ready-for-dev
+  1-3-env-j2-render-3-new-vars-unconditionally: ready-for-dev
+  1-4-env-root-commented-templates-for-new-vars: ready-for-dev
+  1-5-tests-melt-correlation-ci-stub-exit-0-readme: ready-for-dev
+  1-6-docs-security-cve-triage-2026q3-md-update-optional: ready-for-dev
   epic-1-retrospective: optional
 
   epic-2: backlog
-  2-1-shared-lib-add-opentelemetry-api-logs-peer-dep: backlog
-  2-2-shared-lib-add-boolean-env-helper-boolean-env-js: backlog
-  2-3-shared-lib-add-shared-otel-batch-config-js: backlog
-  2-4-shared-lib-add-victorialogs-transport-js-winston-transportst: backlog
-  2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra: backlog
-  2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr: backlog
-  2-7-gov-chat-backend-package-json-add-sdk-logs-exporter-logs-otl: backlog
-  2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass: backlog
-  2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: backlog
-  2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: backlog
-  2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: backlog
-  2-12-prometheus-log_record_dropped_total-reason-counter: backlog
+  2-1-shared-lib-add-opentelemetry-api-logs-peer-dep: ready-for-dev
+  2-2-shared-lib-add-boolean-env-helper-boolean-env-js: ready-for-dev
+  2-3-shared-lib-add-shared-otel-batch-config-js: ready-for-dev
+  2-4-shared-lib-add-victorialogs-transport-js-winston-transportst: 
+    ready-for-dev
+  2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra: 
+    ready-for-dev
+  2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr: 
+    ready-for-dev
+  2-7-gov-chat-backend-package-json-add-sdk-logs-exporter-logs-otl: 
+    ready-for-dev
+  2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass: 
+    ready-for-dev
+  2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: ready-for-dev
+  2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: 
+    ready-for-dev
+  2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: ready-for-dev
+  2-12-prometheus-log_record_dropped_total-reason-counter: ready-for-dev
   epic-2-retrospective: optional
 
   epic-3: backlog
-  3-1-document-repository-package-json-add-otel-deps-winston-forma: backlog
-  3-2-document-repository-tracing-js-logs-only-path: backlog
-  3-3-document-repository-require-tracing-at-app-js-1: backlog
-  3-4-document-repository-clamav-observability-events-clamav-scan: backlog
+  3-1-document-repository-package-json-add-otel-deps-winston-forma: 
+    ready-for-dev
+  3-2-document-repository-tracing-js-logs-only-path: ready-for-dev
+  3-3-document-repository-require-tracing-at-app-js-1: ready-for-dev
+  3-4-document-repository-clamav-observability-events-clamav-scan: ready-for-dev
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: backlog
-  4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict: backlog
-  4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize: backlog
-  4-4-shared-lib-index-js-re-export-melt: backlog
-  4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize: backlog
-  4-6-tests-config-validator-whitelist-melt_provider-victorialogs: backlog
-  4-7-tests-empty-melt_provider-whitelist-verification-on-boot: backlog
+  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: 
+    ready-for-dev
+  4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict: 
+    ready-for-dev
+  4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize: 
+    ready-for-dev
+  4-4-shared-lib-index-js-re-export-melt: ready-for-dev
+  4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize: ready-for-dev
+  4-6-tests-config-validator-whitelist-melt_provider-victorialogs: ready-for-dev
+  4-7-tests-empty-melt_provider-whitelist-verification-on-boot: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog
-  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: backlog
-  5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co: backlog
-  5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog: backlog
-  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: backlog
-  5-5-admin_logs_source-file-log_to_file-1-503-with-recovery-hint: backlog
-  5-6-enoent-tolerance-o_excl-concurrent-writer-lock-for-file-fall: backlog
-  5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d: backlog
-  5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: backlog
-  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: backlog
-  5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: backlog
-  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: backlog
-  5-12-grep-fix-other-printf-regex-assertions-in-test-suite: backlog
+  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: 
+    ready-for-dev
+  5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co: 
+    ready-for-dev
+  5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog: 
+    ready-for-dev
+  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: ready-for-dev
+  5-5-admin_logs_source-file-log_to_file-1-503-with-recovery-hint: ready-for-dev
+  5-6-enoent-tolerance-o_excl-concurrent-writer-lock-for-file-fall: 
+    ready-for-dev
+  5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d: 
+    ready-for-dev
+  5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: 
+    ready-for-dev
+  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: 
+    ready-for-dev
+  5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: 
+    ready-for-dev
+  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: 
+    ready-for-dev
+  5-12-grep-fix-other-printf-regex-assertions-in-test-suite: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: backlog
-  6-1-security-scan-service-drop-worker_threads-import-processfile: backlog
-  6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: backlog
-  6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs: backlog
-  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: backlog
+  6-1-security-scan-service-drop-worker_threads-import-processfile: 
+    ready-for-dev
+  6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: 
+    ready-for-dev
+  6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs: 
+    ready-for-dev
+  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: 
+    ready-for-dev
   epic-6-retrospective: optional
 
   epic-7: backlog
-  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf: backlog
-  7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur: backlog
-  7-3-shared-lib-index-js-stop-re-exporting-reconfigurelogger-trig: backlog
-  7-4-tests-linter-shared-lib-re-exports-test-js-assert-logger-rou: backlog
-  7-5-verify-ci-allow_failure-true-on-scheduled-melt-correlation-g: backlog
+  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf: 
+    ready-for-dev
+  7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur: 
+    ready-for-dev
+  7-3-shared-lib-index-js-stop-re-exporting-reconfigurelogger-trig: 
+    ready-for-dev
+  7-4-tests-linter-shared-lib-re-exports-test-js-assert-logger-rou: 
+    ready-for-dev
+  7-5-verify-ci-allow_failure-true-on-scheduled-melt-correlation-g: 
+    ready-for-dev
   epic-7-retrospective: optional
 rollback_switches:
   ADMIN_LOGS_SOURCE: "victorialogs | file (permanent, default flips to victorialogs

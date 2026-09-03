@@ -182,6 +182,7 @@ service:
         - otlp_http/victoriatraces
     logs:
       receivers:
+        - otlp
         - fluent_forward
       processors:
         - batch

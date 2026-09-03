@@ -296,7 +296,19 @@ async function _processOneJob() {
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
-          { patch: { last_worker_error: `dataprep POST failed: ${err.message}`.slice(0, 500) } }
+          {
+            patch: {
+              last_worker_error: `dataprep POST failed: ${err.message}`.slice(0, 500),
+              // CLEAR the claim (live-fixed 2026-09-03): the touch above moves
+              // the row to the FIFO BACK, so its legitimate retry is the whole
+              // queue away — but the reaper measures claim age. A stale claim
+              // on an errored row is NOT a lost drain; returning it to the
+              // unclaimed pool lets a lane re-claim it long before the grace
+              // window. (Live: 10 healthy rows dead-lettered after dataprep
+              // was briefly not-ready at worker start.)
+              worker_claimed_at: null
+            }
+          }
         );
       } catch {
         /* best-effort — the error log below still records it */
@@ -310,7 +322,12 @@ async function _processOneJob() {
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
-          { patch: { last_worker_error: `dataprep status ${kick.status}`.slice(0, 500) } }
+          {
+            patch: {
+              last_worker_error: `dataprep status ${kick.status}`.slice(0, 500),
+              worker_claimed_at: null // claim cleared — see the POST-failed path
+            }
+          }
         );
       } catch {
         /* best-effort */
@@ -342,7 +359,7 @@ async function _processOneJob() {
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
-          { patch: { index_status: 'parsed', reindex_retry: true } }
+          { patch: { index_status: 'parsed', reindex_retry: true, worker_claimed_at: null } }
         );
         logger.warn('Ingest worker: re-index failed after retract — reset to parsed for ONE retry', {
           concept_id: conceptId,

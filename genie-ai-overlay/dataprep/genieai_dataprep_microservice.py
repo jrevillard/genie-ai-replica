@@ -73,9 +73,14 @@ DATAPREP_INGEST_CONCURRENCY = max(1, int(os.getenv("DATAPREP_INGEST_CONCURRENCY"
 def acquire_ingest_slot():
     """Try to claim one of the N ingest slots (non-blocking). Returns the
     open lock file (held by the caller until the ingest's finally-block
-    releases it) or None when every slot is busy."""
+    releases it) or None when every slot is busy.
+
+    All slot files derive from LOCK_FILE_PATH (slot 0 keeps the legacy name;
+    slot i lives at `LOCK_FILE_PATH.i`) — tests redirect that single base to a
+    per-test tmp dir, so slot files inherit the isolation instead of leaking
+    across tests/workers through a hardcoded global path."""
     for i in range(DATAPREP_INGEST_CONCURRENCY):
-        path = f"/tmp/genie_dataprep_{i}.lock"
+        path = LOCK_FILE_PATH if i == 0 else f"{LOCK_FILE_PATH}.{i}"
         lock_file = open(path, "w")  # noqa: SIM115 — held across the request task
         try:
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)

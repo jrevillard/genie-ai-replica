@@ -176,10 +176,29 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
       REPO,
       { concept_id: 'a', repo_id: REPO },
-      { patch: { last_worker_error: 'dataprep POST failed: dataprep down' } }
+      {
+        patch: {
+          last_worker_error: 'dataprep POST failed: dataprep down',
+          worker_claimed_at: null // claim cleared — the retry must not wait behind the reaper
+        }
+      }
     );
     const patches = conceptMeta.upsertConceptMeta.mock.calls.map((c) => c[2] && c[2].patch).filter(Boolean);
     expect(patches.every((p) => p.index_status === undefined)).toBe(true);
+  });
+
+  test('claim-stale reaper vs errored row: the claim CLEAR (not the age) lets it retry (live regression 2026-09-03)', async () => {
+    // Live failure: dataprep briefly not-ready at worker start → POST error →
+    // the row kept its claim stamp but moved to the FIFO back; the reaper's
+    // 1h claim-grace killed it before any lane could legitimately retry.
+    // The error path must CLEAR worker_claimed_at so the row is re-claimable.
+    programQueries([{ repo_id: REPO, concept_id: 'err-row', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# e' }]);
+    authedAxios.post.mockRejectedValue(new Error('ECONNREFUSED'));
+    await worker._processOneJob();
+    const patch = conceptMeta.upsertConceptMeta.mock.calls
+      .map((c) => c[2] && c[2].patch)
+      .find((p) => p && p.last_worker_error);
+    expect(patch.worker_claimed_at).toBeNull();
   });
 
   test('non-200 dataprep kick → outcome error with status', async () => {

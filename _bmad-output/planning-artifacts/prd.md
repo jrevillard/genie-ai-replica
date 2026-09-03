@@ -4,7 +4,7 @@ created: 2026-08-31
 updated: 2026-09-03
 status: active
 initiative: admin-logs + security-scan migration to VictoriaLogs
-umbrella_branch: feat/admin-logs-victorialogs
+umbrella_branch: feat/admin-logs-victorialogs/prd
 umbrella_mr: "!335"
 owner: jrevillard (ITU)
 sources_of_truth:
@@ -19,7 +19,7 @@ sources_of_truth:
 
 > **Routing artifact only.** Source-of-truth for capability contract is the spec kernel (`_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`) and the architecture spine (`ARCHITECTURE-SPINE.md`). This PRD exists so the BMad activation scripts (`find-prd`, `bmad-sprint-planning`, `bmad-correct-course`, `bmad-retrospective`, etc.) can resolve `prd_key` and dispatch to the right artifacts.
 >
-> The umbrella branch (`feat/admin-logs-victorialogs`) is intentionally NOT named `feat/admin-logs-victorialogs/prd` because Git refuses nested branches when a parent of the same name exists. The pattern `feat/{prd_key}/prd` from `issue-tracking.yaml:branch_patterns.prd` is incompatible with our existing umbrella MR !335. We accept the activation-script friction; manual skills (reading the frontmatter below) work.
+> The umbrella branch is now `feat/admin-logs-victorialogs/prd` (renamed 2026-09-03 from `feat/admin-logs-victorialogs` to match the BMad `feat/{prd_key}/prd` branch pattern from `issue-tracking.yaml`). MR !335 continues to track the same SHA on the renamed branch.
 
 ## Why
 

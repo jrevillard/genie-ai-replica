@@ -2,7 +2,7 @@
 key: 1-2-otel-collector-config-add-otlp-to-logs-receivers
 title: otel-collector-config: add `otlp` to logs receivers
 epic: epic-1
-status: review
+status: done
 effort: 0.25
 depends_on: []
 files: configs/otel/otel-collector-config.yaml:183-189
@@ -41,4 +41,4 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 
 ### Change Log
 
-- 2026-09-03 — feat(otel-collector): add `otlp` receiver to logs pipeline (commit `013af06e9`)
+- 2026-09-03 — feat(otel-collector): add `otlp` receiver to logs pipeline (commit `402b774ab`, rebased; merged via MR !341 → PRD `51156328b`)

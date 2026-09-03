@@ -1,0 +1,24 @@
+---
+key: 7-5-verify-ci-allow_failure-true-on-scheduled-melt-correlation-g
+title: verify CI `allow_failure: true` on `scheduled:melt-correlation` (`.gitlab-ci.yml:2942-2984`); document volume backup/cleanup (DW-65) if VL prod
+epic: epic-7
+status: backlog
+effort: 0.1
+depends_on: []
+files: docs only
+---
+
+# Story 7.5 — verify CI `allow_failure: true` on `scheduled:melt-correlation` (`.gitlab-ci.yml:2942-2984`); document volume backup/cleanup (DW-65) if VL prod
+
+**Epic**: epic-7 (0.1 SP)
+**Files**: `docs only`
+
+## Acceptance
+
+See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bmad-output/planning-artifacts/epics.md#7` for the epic-level acceptance criteria; this story is one contributing step.
+
+## References
+
+- `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`
+- `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md`
+- `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`

@@ -1,0 +1,24 @@
+---
+key: 2-12-prometheus-log_record_dropped_total-reason-counter
+title: Prometheus: `log_record_dropped_total{reason=...}` counter
+epic: epic-2
+status: backlog
+effort: 0.25
+depends_on: [2.6]
+files: components/gov-chat-backend/metrics.js
+---
+
+# Story 2.12 — Prometheus: `log_record_dropped_total{reason=...}` counter
+
+**Epic**: epic-2 (0.25 SP)
+**Files**: `components/gov-chat-backend/metrics.js`
+
+## Acceptance
+
+See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bmad-output/planning-artifacts/epics.md#2` for the epic-level acceptance criteria; this story is one contributing step.
+
+## References
+
+- `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`
+- `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md`
+- `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`

@@ -1,0 +1,24 @@
+---
+key: 1-3-env-j2-render-3-new-vars-unconditionally
+title: env.j2: render 3 new vars unconditionally
+epic: epic-1
+status: backlog
+effort: 0.25
+depends_on: []
+files: deploy/ansible/templates/env.j2` (after `:239`)
+---
+
+# Story 1.3 — env.j2: render 3 new vars unconditionally
+
+**Epic**: epic-1 (0.25 SP)
+**Files**: `deploy/ansible/templates/env.j2` (after `:239`)`
+
+## Acceptance
+
+See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bmad-output/planning-artifacts/epics.md#1` for the epic-level acceptance criteria; this story is one contributing step.
+
+## References
+
+- `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`
+- `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md`
+- `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`

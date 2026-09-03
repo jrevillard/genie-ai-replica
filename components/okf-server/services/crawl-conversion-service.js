@@ -222,11 +222,16 @@ function releaseSlot() {
 function sanitizeCrawlBody(body) {
   if (!body) return body;
   let out = String(body);
-  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, alt, url) => {
-    const text = (alt || '').trim() || 'image';
+  // Alt text may contain ESCAPED brackets (wiki: "Naturalis \[2013\]") — a
+  // plain [^\]]* class stops at the escaped bracket and silently leaves the
+  // image as raw markdown (live: 7 pages in an 840-page crawl). Escaped
+  // pairs are consumed atomically; emitted link text is unescaped.
+  out = out.replace(/!\[((?:[^\\\]]|\\.)*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, alt, url) => {
+    const text = (alt || '').replace(/\\(.)/g, '$1').trim() || 'image';
     return `[${text}](${url})`;
   });
-  out = out.replace(/\[\s*\n+([^\]]*?)\s*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, inner, url) => {
+  out = out.replace(/\[\s*\n+((?:[^\\\]]|\\.)*)\s*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, innerRaw, url) => {
+    const inner = innerRaw.replace(/\\(.)/g, '$1');
     const lines = inner
       .split('\n')
       .map((l) => l.trim())

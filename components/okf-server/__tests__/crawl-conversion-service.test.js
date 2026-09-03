@@ -147,6 +147,13 @@ describe('sanitizeCrawlBody', () => {
     expect(conv.sanitizeCrawlBody('![img](/self.png)')).toBe('[img](/self.png)');
   });
 
+  test('escaped brackets in alt text no longer leak raw images (live crawl 2026-09-03)', () => {
+    expect(
+      conv.sanitizeCrawlBody('[![Naturalis \\[2013\\]](https://up.example/n.jpg)](https://x.example/p)')
+    ).toContain('[Naturalis [2013]](https://up.example/n.jpg)');
+    expect(conv.sanitizeCrawlBody('![\\[icon\\]](https://up.example/i.png)')).toBe('[[icon]](https://up.example/i.png)');
+  });
+
   test('passthrough for falsy input', () => {
     expect(conv.sanitizeCrawlBody('')).toBe('');
     expect(conv.sanitizeCrawlBody(null)).toBeNull();

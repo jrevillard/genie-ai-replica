@@ -9,3 +9,4 @@ section: "configuration"
 
 1. [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/)
 2. [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/)
+3. [OKF Configuration Variables](/docs/configuration/okf-variables/)

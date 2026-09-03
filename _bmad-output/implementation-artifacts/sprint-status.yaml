@@ -2,8 +2,9 @@
 # Source spec:  _bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
 # Source spine: _bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
 # Source plan:  _bmad-output/planning-artifacts/epics.md
-# Branch:      feat/admin-logs-victorialogs
+# Branch:      feat/admin-logs-victorialogs/1-1-docker-compose-vl-collector-profiles-core
 # MR:          !335 (planning, draft)
+# Updated:     2026-09-03 (story 1-1 → review)
 # Convention per project memory (project_bmad-loop-sprint-status-layout):
 #   - flat per-story entries
 #   - status transitions only forward
@@ -66,7 +67,7 @@ epics:
 development_status:
   # === Epic 1 ===
   epic-1: backlog
-  1-1-docker-compose-vl-collector-profiles-core: ready-for-dev
+  1-1-docker-compose-vl-collector-profiles-core: review
   1-2-otel-collector-config-add-otlp-to-logs-receivers: ready-for-dev
   1-3-env-j2-render-3-new-vars-unconditionally: ready-for-dev
   1-4-env-root-commented-templates-for-new-vars: ready-for-dev

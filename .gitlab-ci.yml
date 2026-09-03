@@ -609,6 +609,12 @@ kics-iac-sast:
   image: docker:28
   tags: [docker]
   interruptible: true
+  # Builds consume only the checkout (docker buildx) — no upstream artifacts.
+  # Without this, GitLab's default makes every build job download ALL
+  # test-stage artifacts (scan reports, JUnit XML) — pure waste, and the
+  # 2026-09-02/03 instance flake (intermittent 403 on artifact downloads,
+  # uploads fine) killed builds before their script ran.
+  dependencies: []
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi

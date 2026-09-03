@@ -4,7 +4,7 @@ Per-phase rollback triggers, actions, and time-to-rollback. `ADMIN_LOGS_SOURCE=f
 
 | Phase | Trigger | Action | Time | Notes |
 |---|---|---|---|---|
-| **P0** | VL healthcheck fails on stack start | Revert `profiles: [core]` → `profiles: [observability]` on `docker-compose.yaml:1650,1671,1749`. Re-run `docker compose --profile observability up -d`. | < 2 min | No data migration; pure compose flip. |
+| **P0** | VL healthcheck fails on stack start | Re-add `profiles: [observability]` to `docker-compose.yaml:1650,1671,1749` and revert `victorialogs.deploy.replicas` to `${ENABLE_OBSERVABILITY:-0}`. Re-run `docker compose --profile observability up -d`. | < 2 min | No data migration; pure compose flip. |
 | **P1a** | OTel logs exporter errors flood backend logs | `LOG_TO_VICTORIALOGS=0` env. Restart backend. New transport short-circuits. File logging remains. | < 5 min | Logs still flow via Console + DailyRotateFile; admin endpoints keep file path (until P2). |
 | **P1c** | Backend logs disappear after driver switch | Revert YAML anchor `x-local-logging` at `docker-compose.yaml:75` AND the per-service overrides at `:484, :596` (anchor + both refs are required). Restart backend. | < 3 min | Fluentd pipeline preserved; OTel exporter still writes to VL in parallel. |
 | **P2** | Admin endpoints return empty/wrong shape | `ADMIN_LOGS_SOURCE=file` env. Old `LogsService` path activates on next request — no restart (per-call env read in P2). | < 1 min | D2 master switch. Permanent. |
@@ -39,7 +39,7 @@ docker service update genieai_gov-chat-backend
 docker service update genieai_document-repository
 
 # 3. Optionally revert docker-compose.yaml profiles
-# (P0 only; revert :1650,1671,1749 to profiles:[observability])
+# (P0 only; re-add profiles:[observability] on :1650,1671,1749 and revert VL replicas to ${ENABLE_OBSERVABILITY:-0})
 ```
 
 System returns to pre-migration behaviour; P0's CI stub stays in place; subsequent MRs can resume from P0 forward.

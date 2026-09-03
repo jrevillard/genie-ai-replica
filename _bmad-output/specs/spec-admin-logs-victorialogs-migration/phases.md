@@ -7,13 +7,13 @@ One MR per phase. Branch `feat/admin-logs-victorialogs`; never commit to `main`.
 **Goal:** `victorialogs` + `otel-collector` always run with the stack; no consumer behaviour change yet.
 
 **Files:**
-- `docker-compose.yaml` — `:1650` (otel-collector-init), `:1671` (otel-collector), `:1749` (victorialogs): `profiles: [observability]` → `profiles: [core]`. Leave `victoriametrics :1716`, `victoriatraces :1818`, `grafana :1854` under `[observability]`.
+- `docker-compose.yaml` — `:1650` (otel-collector-init), `:1671` (otel-collector), `:1749` (victorialogs): remove `profiles: [observability]` so the three services start unconditionally; pin `victorialogs.deploy.replicas: 1` (was `${ENABLE_OBSERVABILITY:-0}`). Leave `victoriametrics :1716`, `victoriatraces :1818`, `grafana :1854` under `[observability]`.
 - `configs/otel/otel-collector-config.yaml` — `:183-189` logs pipeline receivers: add `- otlp` so apps can POST to `:4318/v1/logs`. Final: `receivers: [fluent_forward, otlp]`.
 - `deploy/ansible/templates/env.j2` — after `:239` (unconditional): `VICTORIALOGS_URL`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, `LOG_TO_VICTORIALOGS`.
 - `env` (root) — add commented templates for the new vars under the observability section.
 - `tests/melt-correlation/{run-melt-test.sh,README.md}` (new stub) — `exit 0` + log line. Unblocks `.gitlab-ci.yml:2942-2984`.
 
-**Acceptance:** `docker compose --profile core up -d` brings up VL + Collector; `curl http://victorialogs:9428/health` returns `{"status":"ok"}`; `curl -X POST http://otel-collector:4318/v1/logs` returns 200.
+**Acceptance:** `docker compose up -d` (no profile flag) brings up VL + Collector; `curl http://victorialogs:9428/health` returns `{"status":"ok"}`; `curl -X POST http://otel-collector:4318/v1/logs` returns 200.
 
 **Effort:** 1 SP. **Rollback:** revert the 3 compose profile lines.
 

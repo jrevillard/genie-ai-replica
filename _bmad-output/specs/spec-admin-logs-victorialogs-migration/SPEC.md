@@ -44,8 +44,8 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
   - **intent:** Each phase ships with a tested env switch that re-enables the previous behaviour: `LOG_TO_VICTORIALOGS=0` (P1a), `ADMIN_LOGS_SOURCE=file` (P2), `VL_FAIL_OPEN=true` (P3), `LOG_TO_FILE=1` (P4).
   - **success:** Each switch tested with smoke on the deployed release branch before merge to `main`; `ADMIN_LOGS_SOURCE=file` is permanent and never removed.
 - **CAP-7 VictoriaLogs + OTel Collector always-on core stack (D1)**
-  - **intent:** Split `victorialogs`, `otel-collector`, `otel-collector-init` out of `profiles: [observability]` into `profiles: [core]` in `docker-compose.yaml`; non-Node services (Python OPEA, Kong, nginx, postgres) keep `fluentd → collector → VL`.
-  - **success:** `docker compose --profile core up -d` brings VL + Collector without `--profile observability`; `curl http://victorialogs:9428/health` returns `{"status":"ok"}`; `ENABLE_OBSERVABILITY=0` deployments keep the admin endpoints functional.
+  - **intent:** Remove `profiles: [observability]` from `victorialogs`, `otel-collector`, and `otel-collector-init` in `docker-compose.yaml` so they start by default in `docker compose up`; pin `victorialogs.deploy.replicas: 1` so Swarm always runs one replica regardless of `ENABLE_OBSERVABILITY`. Non-Node services (Python OPEA, Kong, nginx, postgres) keep `fluentd → collector → VL`.
+  - **success:** `docker compose config --services` lists VL + Collector + init alongside the always-on core services; `curl http://victorialogs:9428/health` returns `{"status":"ok"}`; `ENABLE_OBSERVABILITY=0` deployments keep the admin endpoints functional.
 
 ## Constraints
 
@@ -67,7 +67,7 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
 
 ## Decisions
 
-- **D1 (a)** Split VL + OTel Collector out of `profiles: [observability]` into `profiles: [core]`. VL always-on; admin endpoints always functional regardless of `ENABLE_OBSERVABILITY`. Captured as constraint C-7 in production deploys.
+- **D1 (a)** Remove `profiles: [observability]` from VL + OTel Collector + otel-collector-init; pin `victorialogs.deploy.replicas: 1`. VL always-on; admin endpoints always functional regardless of `ENABLE_OBSERVABILITY`. Captured as constraint C-7 in production deploys.
 - **D2** `ADMIN_LOGS_SOURCE=file|victorialogs` is a **permanent** escape hatch, never removed. Default is `victorialogs` after first release.
 - **D3** VL service filter scope = all services (`service:*`). Admin UI default filter = "All". Full-stack view.
 - **D4** Producer-first sequencing. Winston emits to VL before any consumer rewires land.

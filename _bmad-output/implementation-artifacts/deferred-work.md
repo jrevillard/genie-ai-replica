@@ -1981,3 +1981,9 @@ severity: medium
 reason: P0 MR ships an `exit-0` stub at `tests/melt-correlation/run-melt-test.sh` + README to unblock `.gitlab-ci.yml:2942-2984`. Full chaos/correlation suite (OTel trace↔log↔metric correlation, controlled chaos: VL kill/restart, fluentd pause/resume, otel-collector restart) belongs to a separate epic. Triggers for revisit: any MR touching VL/OTel collector deployment, observability reliability question, or Grafana dashboard rework.
 status: open
 resolution: stub only; no further work in admin-logs-victorialogs-migration scope.
+
+## Deferred from: code review of 1-1-docker-compose-vl-collector-profiles-core.md (2026-09-03)
+
+- **DW-X1: Resource-cost impact of always-on VL + OTel Collector** — quantify baseline memory/CPU + `vlogs-data` persistent volume impact via Ansible runbook validation. Pre-existing — outside story scope.
+- **DW-X2: `site/content/en/docs/observability/` docstring alignment** — if it still says VL is opt-in, align in a dedicated docs MR.
+- **DW-X3: CI `config:validate` job under `ENABLE_OBSERVABILITY=0`** — confirm collector-config-file deployment + new structural tests pass when CI runs without the observability profile.

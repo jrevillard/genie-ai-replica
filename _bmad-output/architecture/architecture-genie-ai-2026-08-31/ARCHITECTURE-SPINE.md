@@ -90,7 +90,7 @@ The other direction (application `MELT_PROVIDER` env):
 
 - **Binds:** CAP-7
 - **Prevents:** cloud deployments with `ENABLE_OBSERVABILITY=0` returning empty admin logs by policy
-- **Rule:** VL + OTel Collector move to `profiles: [core]` (always-on in `docker-compose.yaml:1650, :1671, :1749`). Observability profile keeps `victoriametrics`, `victoriatraces`, `grafana` only. `LOG_TO_VICTORIALOGS=1` is still AND-gated with `ENABLE_OBSERVABILITY=1` so disabled observability does not emit into absent collector; a Prometheus counter `log_record_dropped_total{reason="observability_disabled"}` exposes the policy state.
+- **Rule:** VL + OTel Collector run unconditionally — `profiles: [observability]` removed from `docker-compose.yaml:1650, :1671, :1749`, `victorialogs.deploy.replicas` pinned to `1`. Observability profile keeps `victoriametrics`, `victoriatraces`, `grafana` only. `LOG_TO_VICTORIALOGS=1` is still AND-gated with `ENABLE_OBSERVABILITY=1` so disabled observability does not emit into absent collector; a Prometheus counter `log_record_dropped_total{reason="observability_disabled"}` exposes the policy state.
 
 ### AD-8 — OTel global setter pattern
 

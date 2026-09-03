@@ -1,12 +1,11 @@
 ---
 key: 1-1-docker-compose-vl-collector-profiles-core
-title: docker-compose: VL + Collector → profiles:[core]
+title: docker-compose: VL + Collector → always-on (no profile)
 epic: epic-1
-status: review
+status: done
 effort: 0.5
 depends_on: []
-files: docker-compose.yaml:1650,1671,1749
-baseline_commit: ffdab9c938345584405dcb95bf3e77494c5549db
+files: docker-compose.yaml:1650,1671,1749  # line numbers pre-edit; see `git diff feat/admin-logs-victorialogs/prd..HEAD -- docker-compose.yaml` for current
 ---
 
 # Story 1.1 — docker-compose: VL + Collector → profiles:[core]
@@ -51,16 +50,35 @@ in compose and `ENABLE_OBSERVABILITY=1` in Swarm.
   so admin endpoints stay functional with `ENABLE_OBSERVABILITY=0`.
 - Header doc comment + observability-section banner updated to document the
   always-on vs opt-in split.
-- `docker compose config -q` exits 0; default `docker compose config --services`
-  returns VL + Collector + init alongside the 15 default services;
-  `--profile observability` adds vm + vtraces + tempo-proxy + grafana.
-- `tests/config-validator`: 28/28 tests pass — no env-var coverage regressions.
-- Diff: `docker-compose.yaml` only — 21 insertions, 11 deletions.
-- **Follow-up:** `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`,
-  `phases.md`, `rollback-matrix.md`, `epics.md` and `ARCHITECTURE-SPINE.md`
-  still describe the change as `profiles: [observability]` → `profiles: [core]`.
-  Recommend a `bmad-correct-course` pass to align wording with the chosen
-  implementation (no-profile approach) before MR review.
+- `docker compose config -q` exits 0.
+- Default `docker compose config --services` (18 services) includes
+  `otel-collector-init`, `otel-collector`, `victorialogs` alongside the
+  15 core services:
+
+  ```
+  arango-vector-db  frontend           postgres-init
+  backend           keycloak           redis-cache
+  clamav            keycloak-config    victorialogs
+  db-migrations     kong               otel-collector
+  document-repository kong-config      otel-collector-init
+                    kong-migrations    nginx
+  ```
+
+- `--profile observability` adds 4 opt-in services:
+  `victoriametrics`, `victoriatraces`, `grafana`, `tempo-proxy`.
+- `tests/config-validator` — env-var coverage: 28/28 pass, no regressions.
+- `tests/config-validator` — new `describe('admin-logs always-on substrate')`
+  suite added per code-review D3 finding (5 tests pinning the contract via
+  `parseComposeServiceContracts`).
+- Diff (`feat/admin-logs-victorialogs/prd..HEAD`): `docker-compose.yaml` 29
+  insertions / 12 deletions; story file +49/-1; sprint-status +5/-4.
+- Doc alignment pass (D1): SPEC.md CAP-7/D1(a), phases.md P0,
+  rollback-matrix.md P0, epics.md Story 1.1 title, ARCHITECTURE-SPINE.md AD-7
+  all updated to describe the no-profile approach.
+- Deploy alignment (D2): `deploy/ansible/deploy.yml:_deploy_files_obs` now
+  copies `configs/otel/otel-collector-config.yaml` unconditionally so the
+  always-on otel-collector bind-mount source is present regardless of
+  `enable_observability`.
 
 ### File List
 
@@ -69,3 +87,7 @@ in compose and `ENABLE_OBSERVABILITY=1` in Swarm.
 ### Change Log
 
 - 2026-09-03: implemented D1 always-on substrate (no-profile approach per design discussion); status → review
+- 2026-09-03: code review pass — D1 (5 docs aligned), D2 (deploy.yml unconditional config copy), D3 (config-validator structural test added); story title updated to match implementation. See PR description for review output.
+
+<!-- Change Log convention: `_bmad-output/implementation-artifacts/workflow.md`
+     (bmad-loop project memory `project_bmad-loop-sprint-status-layout`). -->

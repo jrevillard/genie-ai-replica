@@ -2497,6 +2497,13 @@ verify:dataprep-lock:
   stage: config
   image: python:3.10-slim
   interruptible: true
+  # The lock check is self-contained (uv sync --dry-run + grep against the
+  # checked-out files) — it must not pull upstream artifacts. Without this,
+  # GitLab's default makes the job download EVERY test-stage artifact (scan
+  # reports, JUnit XML), so an unrelated artifact-download failure kills the
+  # lock check before its script even runs (2026-09-02: instance artifact
+  # downloads 403'd pipeline-wide while uploads succeeded).
+  dependencies: []
   variables:
     UV_VERSION: "0.10.6"
   before_script:

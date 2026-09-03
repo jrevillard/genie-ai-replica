@@ -47,10 +47,16 @@ const edgeService = require('../services/edge-service');
 const REPO = '99999999-9999-4999-8999-999999999999';
 
 /** Program the mock db.query sequence (the worker queries by position:
- * 1st = claim, then terminal polls; sweep = orphan query + per-orphan removes). */
+ * 1st = claim read, then terminal polls; sweep = orphan query + per-orphan removes).
+ * The CLAIM STAMP query is detected by shape (UPDATE + worker_claimed_at) and
+ * skipped positionally — it consumes no programmed result. */
 function programQueries(...results) {
   let i = 0;
-  mockDb.query.mockImplementation(async () => {
+  mockDb.query.mockImplementation(async (q) => {
+    const text = q && q.query ? String(q.query) : '';
+    if (text.includes('UPDATE m WITH') && text.includes('worker_claimed_at')) {
+      return { all: async () => [] }; // claim stamp — unpositioned side-write
+    }
     const r = results[Math.min(i, results.length - 1)];
     i += 1;
     return { all: async () => (Array.isArray(r) ? r : [r]) };
@@ -79,6 +85,27 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'idle' });
     expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
+  test('claim stamps worker_claimed_at + ingest_attempts on the claimed row', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'stamp-me', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# s' }],
+      [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done, no timeout wait
+    );
+    await worker._processOneJob();
+    // The stamp query is the UPDATE + worker_claimed_at shape.
+    const stampCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const t = String((q && q.query) || '');
+        return t.includes('UPDATE m WITH') && t.includes('worker_claimed_at');
+      });
+    expect(stampCall).toBeDefined();
+    // aql binds are positional (value0, value1, ...) — assert on the values.
+    const binds = Object.values(stampCall.bindVars || {});
+    expect(binds).toContain(REPO);
+    expect(binds).toContain('stamp-me');
+    expect(stampCall.query).toContain('ingest_attempts');
   });
 
   test('parsed concept → POSTs its markdown DIRECTLY to dataprep, waits for indexed', async () => {
@@ -200,9 +227,9 @@ describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
   });
 });
 
-describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — dead-letter rows past the grace window)', () => {
-  test('dead-letters a stuck parsed row to failed with last_error', async () => {
-    programQueries([{ repo_id: REPO, concept_id: 'stuck' }], []);
+describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping, 2026-09-03)', () => {
+  test('dead-letters a CLAIM-STALE parsed row (died mid-drain)', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'stuck', worker_claimed_at: '2026-09-01T00:00:00.000Z' }], []);
     const res = await worker._reapStuckParsed();
     expect(res).toEqual({ reaped: 1, victims: [`${REPO}/stuck`] });
     expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
@@ -211,7 +238,8 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — dead-letter rows pa
       {
         patch: {
           index_status: 'failed',
-          last_error: 'stuck in parsed queue past the grace window (reaper dead-letter)'
+          last_error:
+            'ingest drain stuck — no terminal callback within the grace window (reaper dead-letter; recovery = re-ingest)'
         }
       }
     );
@@ -238,6 +266,21 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — dead-letter rows pa
     const res = await worker._reapStuckParsed();
     expect(res.reaped).toBe(1); // 'b' dead-lettered; 'a' failed isolation-logged
     expect(res.victims).toEqual([`${REPO}/b`]);
+  });
+
+  test('reaps by CLAIM STATE, never by row age (2026-09-02/03 regression guard)', async () => {
+    // Two false-positive rules already shipped from this file (age-only, then
+    // head-by-age): both mass-killed healthy crawl backlogs. The query must
+    // signal ONLY on claim state — worker_claimed_at staleness or claim count
+    // — and must NOT filter on updated_at age.
+    programQueries([], []);
+    await worker._reapStuckParsed();
+    // The aql tag produces {query, bindVars} — inspect the template text.
+    const aqlText = String(mockDb.query.mock.calls[0][0].query);
+    expect(aqlText).toContain("FILTER m.index_status == 'parsed'");
+    expect(aqlText).toContain('worker_claimed_at');
+    expect(aqlText).toContain('ingest_attempts');
+    expect(aqlText).not.toContain('DATE_TIMESTAMP(m.updated_at)');
   });
 });
 

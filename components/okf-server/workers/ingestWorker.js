@@ -82,7 +82,14 @@ function markdownFor(input) {
  * index_status='parsed' (the orchestrator left it parsed; 'rejected' concepts
  * are excluded by construction — the ingest hard-gate never enqueues them).
  * Story 4.8-amend: content-only chunking — no doc-repo files doc exists for a
- * concept; the concept's own meta row is the queue. */
+ * concept; the concept's own meta row is the queue.
+ *
+ * CLAIM STAMP (live-fixed 2026-09-03): the claim also stamps
+ * worker_claimed_at + ingest_attempts on the row. These are the reaper's ONLY
+ * signals — a WAITING row is never reaped no matter how deep the backlog gets
+ * (the age-based rule mass-killed crawl backlogs: ~20 drains/hour vs a
+ * 1550-row queue means every head row is >1h old for days). updated_at is
+ * deliberately NOT touched here: it is the FIFO order key. */
 async function claimNextJob(db) {
   const rows = await (
     await db.query(aql`
@@ -93,7 +100,29 @@ async function claimNextJob(db) {
       RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry'])
   `)
   ).all();
-  return rows[0] || null;
+  if (!rows[0]) return null;
+  await _stampClaim(db, rows[0].repo_id, rows[0].concept_id);
+  return rows[0];
+}
+
+/** Stamp the claim on a claimed row (best-effort — a failed stamp must not
+ * block the drain; the row simply keeps its previous claim state). */
+async function _stampClaim(db, repoId, conceptId) {
+  try {
+    await db.query(
+      aql`
+      FOR m IN okf_concepts_meta
+        FILTER m.repo_id == ${repoId} AND m.concept_id == ${conceptId}
+        UPDATE m WITH {
+          worker_claimed_at: DATE_ISO8601(DATE_NOW()),
+          ingest_attempts: (m.ingest_attempts == null ? 0 : m.ingest_attempts) + 1
+        } IN okf_concepts_meta
+    `,
+      {}
+    );
+  } catch (err) {
+    logger.warn('Ingest worker: claim stamp failed (non-fatal)', { concept_id: conceptId, error: err.message });
+  }
 }
 
 /** Terminal-state poll of ONE concept — the okf-server concept-status callback
@@ -433,23 +462,44 @@ async function _sweepOnce() {
  * dataprep crash, repeated POST errors with the row touched out of the queue
  * head) would block BOTH forever, with no retry deadline and no visibility.
  *
- * Semantics: a parsed row older than the grace window (default 1h — well
- * above the 10-min JOB_TIMEOUT, so an in-flight drain is never reaped) is
- * dead-lettered to index_status='failed' with last_error set. Recovery for a
- * reaped concept is a re-ingest (the standard failed-path contract).
+ * Semantics history: the ORIGINAL rule (any parsed row older than grace)
+ * mass-killed healthy crawl backlogs — the worker is SEQUENTIAL (1 concept
+ * per interval + drain time), so a 340-concept crawl waits hours in the
+ * queue and its untouched tail sailed past the 1h window — 145 red 'failed'
+ * dots across the usa-gov/wikipedia crawl repos, all "reaper dead-letter",
+ * zero actual content failures. The 2026-09-02 HEAD-STAGNATION rule (only
+ * the FIFO head may reap, by age) ALSO false-positived.
+ *
+ * CLAIM-STAMP SEMANTICS (second fix, 2026-09-03 — the head-window rule ALSO
+ * false-positived: at ~20 drains/hour vs a 1500-row crawl backlog the queue
+ * HEAD stays >1h old for DAYS, so even head-only reaping killed 3 rows per
+ * hourly sweep, live-verified 05:26→08:33). Age of the ROW is meaningless;
+ * the only true "stuck" signals are claim state:
+ *   1. DIED MID-DRAIN — the row was claimed (worker_claimed_at set) and is
+ *      still 'parsed' past the grace window: the process died between kick
+ *      and callback (restart/crash), or the callback is lost forever.
+ *   2. POISON LOOP — the row has been claimed too many times
+ *      (ingest_attempts >= OKF_INGEST_WORKER_MAX_CLAIMS, default 8): every
+ *      attempt ends in timeout/error and re-claim. Dead-letter unblocks the
+ *      mint D1 gate with a visible last_error (recovery = re-ingest).
+ * WAITING rows (never claimed, or claimed recently) are immune regardless of
+ * backlog depth — updated_at (the FIFO key) is never consulted.
  *
  * @returns {Promise<{reaped: number, victims: string[]}>}
  */
 async function _reapStuckParsed() {
   const db = await getDb();
   const graceMs = safeIntOrZero('OKF_INGEST_WORKER_REAP_GRACE_MS', 3600000);
+  const maxClaims = Math.max(1, safeIntOrZero('OKF_INGEST_WORKER_MAX_CLAIMS', 8));
   const stuck = await (
     await db.query(aql`
     FOR m IN okf_concepts_meta
       FILTER m.index_status == 'parsed'
-      FILTER m.updated_at != null AND m.updated_at != '' AND DATE_TIMESTAMP(m.updated_at) < DATE_NOW() - ${graceMs}
+      FILTER
+        (m.worker_claimed_at != null AND m.worker_claimed_at != '' AND DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${graceMs})
+        OR (m.ingest_attempts != null AND m.ingest_attempts >= ${maxClaims})
       LIMIT 10
-      RETURN KEEP(m, ['repo_id', 'concept_id'])
+      RETURN KEEP(m, ['repo_id', 'concept_id', 'worker_claimed_at', 'ingest_attempts'])
   `)
   ).all();
   const victims = [];
@@ -461,7 +511,8 @@ async function _reapStuckParsed() {
         {
           patch: {
             index_status: 'failed',
-            last_error: 'stuck in parsed queue past the grace window (reaper dead-letter)'
+            last_error:
+              'ingest drain stuck — no terminal callback within the grace window (reaper dead-letter; recovery = re-ingest)'
           }
         }
       );
@@ -471,7 +522,7 @@ async function _reapStuckParsed() {
         m.concept_id,
         'ERROR',
         'System',
-        'Concept dead-lettered by the stuck-parsed reaper (no terminal callback within the grace window)'
+        'Concept dead-lettered by the stuck-parsed reaper (claim-stale past grace, or too many claims)'
       );
     } catch (err) {
       logger.warn(`Ingest worker reaper: failed to dead-letter ${m.repo_id}/${m.concept_id} (${err.message})`);

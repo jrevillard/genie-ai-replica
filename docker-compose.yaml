@@ -25,8 +25,14 @@
 #   - Local GPU: --profile opea --profile gpu-models; Remote GPU: --profile opea only
 #   - GPU_MODEL_REPLICAS: set to 0 to skip GPU-heavy containers in Swarm (remote GPU node)
 #   - Orchestrator endpoints use ${VAR:-default} pattern; override from .env for remote GPU
-#   - profiles: [observability] controls Observability stack in compose up; Swarm ignores
-#     them and uses ENABLE_OBSERVABILITY env var instead (default: 0 = disabled)
+#   - profiles: [observability] controls the optional Observability stack
+#     (VictoriaMetrics, VictoriaTraces, tempo-proxy, Grafana) in compose up;
+#     Swarm ignores profiles and uses ENABLE_OBSERVABILITY env var instead
+#     (default: 0 = disabled)
+#   - the admin-logs substrate (VictoriaLogs + OTel Collector + otel-collector-init)
+#     is always-on — no profile label, starts by default in compose up and runs
+#     unconditionally in Swarm so admin endpoints stay functional regardless of
+#     ENABLE_OBSERVABILITY (D1 — admin-logs VictoriaLogs migration)
 #   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
 #   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
 #
@@ -1630,9 +1636,15 @@ services:
   # ===========================================================================
   # Observability Stack (node.labels.genieai == true)
   # ===========================================================================
-  # Disabled by default. Enable via:
-  #   docker compose: --profile observability flag
-  #   Docker Swarm:   ENABLE_OBSERVABILITY=1 in .env
+  # Split into an always-on substrate and an opt-in bucket (D1 — admin-logs
+  # VictoriaLogs migration):
+  #   no profile       otel-collector-init + otel-collector + victorialogs
+  #                    → always-on, admin endpoints stay functional regardless
+  #                      of ENABLE_OBSERVABILITY (compose up brings them by
+  #                      default; Swarm runs them via deploy.replicas / mode)
+  #   [observability]  victoriametrics + victoriatraces + tempo-proxy + grafana
+  #                    → optional, gated by ENABLE_OBSERVABILITY in Swarm;
+  #                      require --profile observability in compose
   # ===========================================================================
 
   # One-shot init container: sets otel-queue volume ownership for the nonroot
@@ -1645,7 +1657,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    profiles: [observability]
     image: busybox:1.38.0
     command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
     volumes:
@@ -1666,7 +1677,6 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    profiles: [observability]
     restart: unless-stopped
     image: otel/opentelemetry-collector-contrib:0.152.0
     # Expose fluentforward receiver on localhost so the Docker daemon can
@@ -1745,7 +1755,6 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
-    profiles: [observability]
     restart: unless-stopped
     image: victoriametrics/victoria-logs:v1.50.0
     command:
@@ -1763,7 +1772,9 @@ services:
     networks:
       - genieai_network
     deploy:
-      replicas: ${ENABLE_OBSERVABILITY:-0}
+      # D1: pinned to 1 — VictoriaLogs is always-on (no profile label) so the
+      # admin Logs facility stays functional regardless of ENABLE_OBSERVABILITY.
+      replicas: 1
       placement:
         constraints:
           - node.labels.genieai == true

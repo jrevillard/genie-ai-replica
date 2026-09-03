@@ -20,6 +20,10 @@ router.get('/:repo_id', ctrl.getRepo);
 
 // Mutations.
 router.post('/', requireRole('tools-admin'), ctrl.createRepo);
+// Server-side crawl→OKF conversion (David, 2026-09-02): 202 + background
+// streaming job — NO long-running request through Kong. Registered BEFORE
+// the :repo_id routes so 'convert-from-crawl' is never parsed as an id.
+router.post('/convert-from-crawl', requireRole('tools-admin'), ctrl.convertFromCrawl);
 router.patch('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.updateRepo);
 router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo);
 

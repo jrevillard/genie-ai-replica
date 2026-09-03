@@ -31,7 +31,10 @@ function createApp() {
         .filter(Boolean)
     : true;
   app.use(cors({ origin: corsAllowlist }));
-  app.use(express.json({ limit: '10mb' }));
+  // 50mb — whole-crawl mega-concepts (split mode A) and 200-concept ingest
+  // batches legitimately carry tens of MB; the outer nginx already allows
+  // client_max_body_size 50m. (10mb 413'd a 200-concept batch — 2026-09-01.)
+  app.use(express.json({ limit: '50mb' }));
   app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 }));
   app.use(metricsMiddleware()); // OTel HTTP metrics → OTLP → VictoriaMetrics (MELT)
   app.use((req, res, next) => {

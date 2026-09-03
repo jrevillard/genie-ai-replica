@@ -11,6 +11,9 @@ jest.mock('../shared-lib/logger', () => ({
   logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
 }));
 jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn() }));
+// Crawl→OKF conversion job is mocked wholesale (the 202 trigger is the
+// HTTP-layer concern; the job itself is unit-tested in crawl-conversion-service.test.js).
+jest.mock('../services/crawl-conversion-service');
 // Auto-mock (no factory) so all exports become jest.fn() and tests can stub.
 jest.mock('../services/concept-meta-service');
 jest.mock('../services/parser-service');
@@ -315,6 +318,7 @@ jest.mock('../services/version-service', () => ({
 }));
 const ingestService = require('../services/ingest-service');
 const versionService = require('../services/version-service');
+const crawlConversionService = require('../services/crawl-conversion-service');
 
 describe('POST /api/okf/repos/:repo_id/ingest (Story 2.9.1)', () => {
   beforeEach(() => {
@@ -1037,5 +1041,130 @@ describe('DELETE /api/okf/repos/:repo_id/concepts/:concept_id (Story #978)', () 
     const res = await request(createApp()).delete('/api/okf/repos/repoA/concepts/conceptA').set('Authorization', TOKEN);
     expect(res.status).toBe(403);
     expect(ingestService.deleteConcept).not.toHaveBeenCalled();
+  });
+});
+
+// ─── POST /api/okf/repos/convert-from-crawl (server-side crawl conversion) ────
+
+describe('POST /api/okf/repos/convert-from-crawl', () => {
+  const body = {
+    file_id: 'f-1',
+    url: 'https://x.example/crawl',
+    crawl_job_id: 'cj-1',
+    split_mode: 'B',
+    name: 'my-crawl',
+    domain: 'general'
+  };
+
+  function dup() {
+    return Object.assign(new Error('dup'), { code: 'DUPLICATE_REPO', status: 409 });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authUser(['tools-admin']);
+    repoService.create.mockResolvedValue({ repo_id: 'r1', name: 'my-crawl', domain: 'general', graph_name: 'OKF_r1' });
+  });
+
+  test('202 → repo created + conversion job registered', async () => {
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send(body);
+    expect(res.status).toBe(202);
+    expect(res.body.repo_id).toBe('r1');
+    expect(res.body.name_adjusted).toBe(false);
+    expect(crawlConversionService.startConversion).toHaveBeenCalledTimes(1);
+    expect(crawlConversionService.startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ repo_id: 'r1', file_id: 'f-1', split_mode: 'B', requested_name: 'my-crawl' })
+    );
+  });
+
+  test('unique-name retry: suffixes -2..-10 on DUPLICATE_REPO', async () => {
+    repoService.create
+      .mockRejectedValueOnce(dup())
+      .mockRejectedValueOnce(dup())
+      .mockResolvedValueOnce({ repo_id: 'r3', name: 'my-crawl-3', domain: 'general', graph_name: 'OKF_r3' });
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send(body);
+    expect(res.status).toBe(202);
+    expect(res.body.repo_id).toBe('r3');
+    expect(res.body.name_adjusted).toBe(true);
+    expect(repoService.create).toHaveBeenCalledTimes(3);
+    const names = repoService.create.mock.calls.map((c) => c[0].name);
+    expect(names).toEqual(['my-crawl', 'my-crawl-2', 'my-crawl-3']);
+    expect(crawlConversionService.startConversion).toHaveBeenCalledWith(expect.objectContaining({ repo_id: 'r3' }));
+  });
+
+  test('409 DUPLICATE_REPO when all 10 candidates collide', async () => {
+    repoService.create.mockRejectedValue(dup());
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send(body);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('DUPLICATE_REPO');
+    expect(repoService.create).toHaveBeenCalledTimes(10);
+    expect(crawlConversionService.startConversion).not.toHaveBeenCalled();
+  });
+
+  test('400 when file_id missing', async () => {
+    const rest = { ...body };
+    delete rest.file_id;
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send(rest);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  test('400 when split_mode is not A or B', async () => {
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send({ ...body, split_mode: 'Z' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(repoService.create).not.toHaveBeenCalled();
+  });
+
+  test('403 FORBIDDEN_ROLE when not tools-admin', async () => {
+    authScoped(['okf:t1:r1:read']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send(body);
+    expect(res.status).toBe(403);
+    expect(repoService.create).not.toHaveBeenCalled();
+    expect(crawlConversionService.startConversion).not.toHaveBeenCalled();
+  });
+
+  test('domain defaults to general and url/crawl_job_id pass through as null', async () => {
+    const noDomain = { ...body };
+    delete noDomain.domain;
+    delete noDomain.url;
+    delete noDomain.crawl_job_id;
+    repoService.create.mockResolvedValueOnce({
+      repo_id: 'r9',
+      name: 'my-crawl',
+      domain: 'general',
+      graph_name: 'OKF_r9'
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/convert-from-crawl')
+      .set('Authorization', TOKEN)
+      .send(noDomain);
+    expect(res.status).toBe(202);
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ domain: 'general' }),
+      expect.anything(),
+      {}
+    );
+    expect(crawlConversionService.startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ url: null, crawl_job_id: null })
+    );
   });
 });

@@ -31,22 +31,6 @@
 
       <div class="dialog-body">
         <div class="form-group">
-          <label>{{ translate('okf.crawl.targetLabel', 'Where should this go?') }}</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input v-model="okfTarget" type="radio" value="freeform" />
-              {{ translate('okf.crawl.target.freeform', 'Crawl to free-form corpus') }}
-            </label>
-            <label class="radio-label">
-              <input v-model="okfTarget" type="radio" value="okf_repo" />
-              {{ translate('okf.crawl.target.okfRepo', 'OKF repository') }}
-            </label>
-          </div>
-          <p v-if="okfTarget === 'okf_repo'" class="form-hint">
-            {{ translate('okf.crawl.targetHint', "We'll show you the topics we found before we save anything.") }}
-          </p>
-        </div>
-        <div class="form-group">
           <label for="url-input">{{ translate('link.label', 'Website URL') }}</label>
           <DsInput
             id="url-input"
@@ -67,6 +51,14 @@
               )
             }}
           </p>
+          <p class="form-hint">
+            {{
+              translate(
+                'okf.crawl.postCrawlHint',
+                "After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab."
+              )
+            }}
+          </p>
         </div>
 
         <div class="form-group">
@@ -79,28 +71,6 @@
             <label class="radio-label">
               <input v-model="crawlMode" type="radio" value="full_site" />
               {{ translate('link.mode.fullSite', 'Full Site (Async)') }}
-            </label>
-          </div>
-        </div>
-
-        <div v-if="okfTarget === 'okf_repo'" class="form-group">
-          <label>{{ translate('okf.crawl.splitLabel', 'Concept split') }}</label>
-          <div class="split-group">
-            <label class="radio-label">
-              <input v-model="splitMode" type="radio" value="B" />
-              {{ translate('okf.crawl.splitB', 'One concept per page (recommended)') }}
-            </label>
-            <label class="radio-label">
-              <input v-model="splitMode" type="radio" value="A" />
-              {{ translate('okf.crawl.splitA', 'One concept for the whole crawl') }}
-            </label>
-            <label
-              class="radio-label radio-label--disabled"
-              :title="translate('okf.crawl.splitCHint', 'Story 10.6 — coming soon')"
-            >
-              <input v-model="splitMode" type="radio" value="C" disabled />
-              {{ translate('okf.crawl.splitC', 'Use LLM topic extraction') }}
-              <span class="radio-hint">{{ translate('okf.crawl.splitCHint', 'Story 10.6 — coming soon') }}</span>
             </label>
           </div>
         </div>
@@ -357,11 +327,6 @@ export default {
       url: '',
       crawlMode: 'single_page',
       crawlDepth: 5,
-      // Story 3-7: which target should the crawl feed?
-      okfTarget: 'freeform',
-      // Story #978: how to split the crawled markdown into OKF concepts —
-      // 'B' per-page (default) | 'A' mega-concept | 'C' LLM (deferred, 10.6).
-      splitMode: 'B',
       isLoading: false,
       errorMessage: '',
       // Advanced Config State
@@ -500,56 +465,14 @@ export default {
               ).replace('{fileName}', fileName);
 
         this.showNotification(successMsg, 'success');
-        // Story 3-7 (fixed in #977): when target is OKF repository, create a
-        // draft OKF repo from the crawled .md and ingest it as a concept. The
-        // freeform (Document) path is untouched — the file is still saved as
-        // today and the parent AdminDashboard handles the link-submitted
-        // emission as before.
-        //
-        // Single-page crawl returns the file synchronously (response.data.file
-        // contains file_name + file_id); full-site crawl is async (file_id +
-        // crawl_job_id) — for the async path we only persist the seed and
-        // dispatch the seed event so the user lands in Studio and the actual
-        // repo creation happens when the crawl finishes (the FileDetailsDialog
-        // has its own 'Create OKF repository from this crawl' button that
-        // invokes createFromCrawl when the crawl_job.status === 'Succeeded').
-        if (this.okfTarget === 'okf_repo' && this.crawlMode === 'single_page') {
-          const fileId = response.data?.file?._key || response.data?.file_id || response.data?.data?._key || null;
-          const filename =
-            response.data?.file?.file_name || response.data?.file_name || response.data?.data?.file_name || null;
-          if (fileId) {
-            const result = await this.$store.dispatch('okf/createFromCrawl', {
-              fileId,
-              url: this.url.trim(),
-              crawlMode: this.crawlMode,
-              crawlDepth: this.crawlDepth,
-              filename,
-              splitMode: this.splitMode,
-              actor: { sub: 'crawler-to-okf' }
-            });
-            if (!result || !result.ok) {
-              // Partial success (repo created but ingest failed) is still
-              // surfaced — the user gets a clear message and the dashboard
-              // shows the empty repo so they can retry ingest from the wizard.
-              this.errorMessage = this.translate(
-                'okf.crawl.partialSuccess',
-                'Crawl saved as an OKF repository, but the concept ingestion failed. Open it from the Studio to retry.'
-              );
-            }
-          } else {
-            this.errorMessage = this.translate(
-              'okf.crawl.missingFile',
-              'Crawl finished but no file_id was returned. The Studio will not be opened.'
-            );
-          }
-          // Always close the dialog on the OKF path (success + partial).
-          this.$emit('link-submitted', response.data);
-          this.$emit('close');
-          return;
-        }
-        if (this.okfTarget === 'okf_repo') {
-          // Async full-site crawl: seed the wizard with the URL, let the
-          // FileDetailsDialog drive createFromCrawl when the crawl finishes.
+        // UX simplification (David, 2026-09-01): the crawl dialog no longer
+        // offers an OKF target or split mode — EVERY crawl is saved as the
+        // same combined markdown, and the conversion happens on the file's
+        // Dashboard tab ("Create OKF repository from this crawl"), where all
+        // split options live in one place, after the file exists. The legacy
+        // seed event is kept only for the async path so an already-open
+        // Studio wizard can pre-fill the URL (harmless no-op otherwise).
+        if (this.crawlMode !== 'single_page') {
           await this.$store.dispatch('okf/setSelection', { crawlSeeds: [this.url.trim()] });
           window.dispatchEvent(
             new CustomEvent('okf:create-from-crawl', {
@@ -671,25 +594,6 @@ export default {
   cursor: pointer;
   width: 1.1rem;
   height: 1.1rem;
-}
-
-/* Story #978 — concept split radios (visible when target = OKF repository). */
-.split-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  margin-top: var(--space-xs);
-}
-.radio-label--disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.radio-label--disabled input[type='radio'] {
-  cursor: not-allowed;
-}
-.radio-hint {
-  font-size: var(--text-xs);
-  color: var(--muted-soft);
 }
 
 /* Advanced Toggle */

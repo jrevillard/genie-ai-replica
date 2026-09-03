@@ -21,6 +21,7 @@ const {
 const lifecycleService = require('../services/lifecycle-service');
 const { assertWritable } = lifecycleService;
 const bundleExportService = require('../services/bundle-export-service');
+const crawlConversionService = require('../services/crawl-conversion-service');
 
 // Story #978 — metrics helpers (fail-soft if OTel collector is unavailable).
 // Lazy + try/catch because getMeter() may throw at module-load when the SDK
@@ -100,6 +101,63 @@ async function createRepo(req, res, next) {
     }
     const repo = await repoService.create(input, actorFrom(req), opts);
     res.status(201).json(repo);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /okf/repos/convert-from-crawl — trigger a SERVER-SIDE crawl→OKF
+ * conversion (David, 2026-09-02: "a long running service through Kong will
+ * not cut it" + "must support files up to 10GB").
+ *
+ * Creates the repo with a UNIQUE name (retry loop over DUPLICATE_REPO —
+ * the same crawl file can become multiple repos, each traceable), then
+ * starts the streaming conversion job in okf-server and returns 202
+ * immediately with the repo (its `conversion` field carries live progress:
+ * status/stage/bytes/pages/batches — the UI polls GET /okf/repos/:id).
+ */
+async function convertFromCrawl(req, res, next) {
+  try {
+    const body = req.body || {};
+    if (!body.file_id) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'file_id is required' });
+    }
+    if (!['A', 'B'].includes(body.split_mode)) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: `split_mode must be 'A' or 'B' (got ${JSON.stringify(body.split_mode || null)})`
+      });
+    }
+    const actor = actorFrom(req);
+    const repoDomain = body.domain || 'general';
+    const acl = { required_scopes: [`okf:t:${repoDomain}:admin`] };
+    const baseName = typeof body.name === 'string' && body.name ? body.name : 'crawled-repository';
+    let repo = null;
+    for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
+      const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
+      try {
+        repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
+      } catch (err) {
+        if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
+      }
+    }
+    if (!repo) {
+      return res.status(409).json({
+        error: 'DUPLICATE_REPO',
+        message: `Repository name "${baseName}" (and suffixed variants) already exists in domain "${repoDomain}"`
+      });
+    }
+    await crawlConversionService.startConversion({
+      repo_id: repo.repo_id,
+      file_id: body.file_id,
+      url: body.url || null,
+      crawl_job_id: body.crawl_job_id || null,
+      split_mode: body.split_mode,
+      requested_name: body.name || null,
+      actor
+    });
+    res.status(202).json({ ...repo, name_adjusted: repo.name !== baseName });
   } catch (err) {
     next(err);
   }
@@ -746,6 +804,7 @@ async function acknowledgePii(req, res, next) {
 
 module.exports = {
   createRepo,
+  convertFromCrawl,
   cloneRepo,
   listRepos,
   getRepo,

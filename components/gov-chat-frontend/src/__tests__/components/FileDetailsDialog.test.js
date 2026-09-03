@@ -74,6 +74,13 @@ jest.mock('../../eventBus', () => ({
   }
 }));
 
+// Vuex dispatch for the OKF crawl→repo action (FileDetailsDialog
+// onCreateOkfFromCrawl → store 'okf/createFromCrawl'). Default: success.
+const mockStoreDispatch = jest.fn().mockResolvedValue({
+  ok: true,
+  repo: { repo_id: 'r-new', name: 'new-repo', concept_count: 1 }
+});
+
 jest.mock('../../config/oidcConfig', () => ({
   __esModule: true,
   default: {
@@ -146,7 +153,8 @@ function createFileDetailsDialogWrapper(overrides = {}) {
         $store: {
           getters: {
             accessToken: 'mock-token-123'
-          }
+          },
+          dispatch: mockStoreDispatch
         },
         $router: { push: jest.fn() }
       },
@@ -294,6 +302,134 @@ describe('FileDetailsDialog', () => {
 
       const tabs = wrapper.vm.visibleTabs;
       expect(tabs.some((t) => t.value === 'ingestionLog')).toBe(false);
+    });
+
+    it('places Dashboard FIRST when crawlJob exists (crawl-created file)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Pending' } }));
+      mockGetCrawlJob.mockResolvedValue({ status: 'Crawling' });
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+      wrapper.vm.crawlJob = { status: 'Crawling' };
+      await wrapper.vm.$nextTick();
+
+      const tabs = wrapper.vm.visibleTabs;
+      expect(tabs[0].value).toBe('dashboard');
+      expect(tabs[1].value).toBe('details');
+      expect(tabs[2].value).toBe('crawlLog');
+    });
+
+    it('keeps Details first when there is no crawl job (regular upload)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Pending' } }));
+      mockGetCrawlJob.mockResolvedValue(null);
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({ dataprep: { status: 'Pending' } });
+      await wrapper.vm.$nextTick();
+
+      const tabs = wrapper.vm.visibleTabs;
+      expect(tabs[0].value).toBe('details');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 2026-09-01 — OKF crawl split footer + Dashboard-first tab after a crawl
+  // -------------------------------------------------------------------------
+  describe('OKF crawl split footer + Dashboard-first tab', () => {
+    async function mountCrawlFile({ crawlStatus = 'Succeeded' } = {}) {
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({ source_url: 'https://example.com/x', dataprep: { status: 'Pending' } })
+      );
+      mockGetCrawlJob.mockResolvedValue({ data: { status: crawlStatus, config: { url: 'https://example.com/x' } } });
+      const wrapper = createFileDetailsDialogWrapper();
+      // fetchData resolves across a few ticks (metadata → crawl-job lookup)
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      return wrapper;
+    }
+
+    it('auto-selects the Dashboard tab once when the file came from a crawl', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.crawlJob).toBeTruthy();
+      expect(wrapper.vm.activeTab).toBe('dashboard');
+    });
+
+    it('keeps Details selected for regular uploads (no crawl job)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({ dataprep: { status: 'Pending' } }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.crawlJob).toBeNull();
+      expect(wrapper.vm.activeTab).toBe('details');
+    });
+
+    it('does not re-apply the Dashboard tab on a later refetch (locale change)', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.activeTab).toBe('dashboard');
+      // User switches to Details, then the locale watcher refetches
+      wrapper.vm.activeTab = 'details';
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.fetchData('test-file-123');
+      await wrapper.vm.$nextTick();
+      expect(wrapper.vm.activeTab).toBe('details');
+    });
+
+    it('renders the concept-split radios on the Dashboard tab after a succeeded crawl', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.activeTab).toBe('dashboard');
+
+      const footer = wrapper.find('.okf-split-footer');
+      expect(footer.exists()).toBe(true);
+
+      const options = wrapper.findAll('.okf-split-option');
+      expect(options).toHaveLength(3);
+
+      const radios = options.map((o) => o.find('input[type="radio"]'));
+      expect(radios[0].attributes('value')).toBe('B'); // per-page (recommended)
+      expect(radios[0].element.disabled).toBe(false);
+      expect(radios[1].attributes('value')).toBe('A'); // whole-crawl mega
+      expect(radios[1].element.disabled).toBe(false);
+      expect(radios[2].attributes('value')).toBe('C'); // LLM — deferred
+      expect(radios[2].element.disabled).toBe(true);
+    });
+
+    it('hides the split footer once the file is linked to an OKF repo', async () => {
+      const wrapper = await mountCrawlFile();
+      wrapper.vm.file = { ...wrapper.vm.file, okf_repo_id: 'r-existing' };
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.okf-split-footer').exists()).toBe(false);
+    });
+
+    it('splits mode B per page and mode A as one concept (okfSplitMode default B)', async () => {
+      const wrapper = await mountCrawlFile();
+      expect(wrapper.vm.okfSplitMode).toBe('B');
+      const checked = wrapper.findAll('.okf-split-option input[type="radio"]').find((r) => r.element.checked);
+      expect(checked.attributes('value')).toBe('B');
+    });
+
+    it('success notice names the repo when the slug collided (name_adjusted)', async () => {
+      const wrapper = await mountCrawlFile();
+      mockStoreDispatch.mockResolvedValueOnce({ ok: true, repo: { repo_id: 'r1', name: 'x-2', name_adjusted: true } });
+      await wrapper.vm.onCreateOkfFromCrawl();
+      expect(mockStoreDispatch).toHaveBeenCalledWith(
+        'okf/createFromCrawl',
+        expect.objectContaining({ splitMode: 'B' })
+      );
+      const notice = mockEventBusEmit.mock.calls.map((c) => c[1]).find((p) => p && p.type === 'success');
+      expect(notice.message).toContain('x-2');
+    });
+
+    it('error notice when the store action reports failure', async () => {
+      const wrapper = await mountCrawlFile();
+      mockStoreDispatch.mockResolvedValueOnce({ ok: false, code: 'CREATE_FAILED' });
+      await wrapper.vm.onCreateOkfFromCrawl();
+      const notice = mockEventBusEmit.mock.calls.map((c) => c[1]).find((p) => p && p.type === 'error');
+      expect(notice).toBeTruthy();
     });
   });
 

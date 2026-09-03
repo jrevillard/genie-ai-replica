@@ -1436,7 +1436,15 @@ export default {
     hash: 'SHA256 Has',
     tabs: {
       details: 'Kibaroo',
-      ingestionLog: 'Dung Log'
+      ingestionLog: 'Dung Log',
+      detailsHint:
+        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+      dashboardHint:
+        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+      crawlLogHint:
+        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+      ingestionLogHint:
+        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
     },
     log: {
       killActions: 'Faha Kewol (Kill Actions):',
@@ -1730,6 +1738,32 @@ export default {
       },
       targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
       createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
+      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
+      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
+      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
+      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
+      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
+      splitBHint:
+        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
+      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
+      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
+      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
+      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
+      postCrawlHint:
+        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
+      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
+      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+      conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
+      convQueued: '__TODO_TRANSLATE__ (en: Queued...)',
+      convDownloading: '__TODO_TRANSLATE__ (en: Downloading crawl...)',
+      convSplitting: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
+      convAdding: '__TODO_TRANSLATE__ (en: Adding concepts ([p] pages so far)...)',
+      convDone: '__TODO_TRANSLATE__ (en: Created ([p] pages))',
+      convFailed: '__TODO_TRANSLATE__ (en: Failed)',
+      createStarted: '__TODO_TRANSLATE__ (en: Creating "[name]" — track progress below.)',
+
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {

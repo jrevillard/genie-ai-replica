@@ -1477,7 +1477,15 @@ export default {
     hash: 'SHA256 Hash',
     tabs: {
       details: 'Details',
-      ingestionLog: 'Ingestion Log'
+      ingestionLog: 'Ingestion Log',
+      detailsHint:
+        'Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.',
+      dashboardHint:
+        "Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.",
+      crawlLogHint:
+        'Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.',
+      ingestionLogHint:
+        'Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.'
     },
     log: {
       killActions: 'Kill Actions:',
@@ -1771,6 +1779,29 @@ export default {
       },
       targetHint: 'We will show you the topics we found before we save anything.',
       createOkfFromCrawl: 'Create OKF repository from this crawl',
+      splitLabel: 'Concept split',
+      splitA: 'One concept for the whole crawl',
+      splitB: 'One concept per page (recommended)',
+      splitC: 'Use LLM topic extraction',
+      splitCHint: 'Story 10.6 — coming soon',
+      splitBHint: 'Each crawled page becomes its own concept — the AI can cite individual pages.',
+      splitAHint: 'The entire crawl becomes one large concept — best for small sites.',
+      progressDownload: 'Downloading crawled content...',
+      progressSplit: 'Splitting into concepts...',
+      progressIngest: 'Adding concepts (batch [i] of [n])...',
+      postCrawlHint: "After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.",
+      creating: 'Creating OKF repository...',
+      createOk: 'OKF repository created. Opening the Studio to curate.',
+      createOkRenamed: 'OKF repository created as "[name]". Opening the Studio to curate.',
+      createFailed: 'Could not create the OKF repository from this crawl.',
+      conversionsTitle: 'Repositories created from this crawl',
+      convQueued: 'Queued...',
+      convDownloading: 'Downloading crawl...',
+      convSplitting: 'Splitting into concepts...',
+      convAdding: 'Adding concepts ([p] pages so far)...',
+      convDone: 'Created ([p] pages)',
+      convFailed: 'Failed',
+      createStarted: 'Creating "[name]" — track progress below.',
       modelTier: {
         label: 'Model',
         options: {

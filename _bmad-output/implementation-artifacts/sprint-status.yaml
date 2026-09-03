@@ -12,7 +12,8 @@
 project_key: admin-logs-victorialogs
 branch: feat/admin-logs-victorialogs
 spec: _bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
-spine: _bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
+spine: 
+  _bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
 tracking_started: 2026-08-31
 tracking_format_version: 1
 
@@ -64,74 +65,79 @@ epics:
 # Per AD-13 merge-order gate: MR-N+1 blocked until MR-N green.
 development_status:
   # === Epic 1 ===
-  "1.1": { status: backlog, title: "docker-compose: VL + Collector → profiles:[core]", effort: 0.5, owner: null }
-  "1.2": { status: backlog, title: "otel-collector-config: add otlp to logs receivers", effort: 0.25, owner: null }
-  "1.3": { status: backlog, title: "env.j2: render 3 new vars unconditionally", effort: 0.25, owner: null }
-  "1.4": { status: backlog, title: "env (root): commented templates for new vars", effort: 0.1, owner: null }
-  "1.5": { status: backlog, title: "tests/melt-correlation/: CI stub (exit 0) + README", effort: 0.1, owner: null }
-  "1.6": { status: backlog, title: "verify scheduled:melt-correlation allow_failure: true", effort: 0.1, owner: null }
+  epic-1: backlog
+  1-1-docker-compose-vl-collector-profiles-core: backlog
+  1-2-otel-collector-config-add-otlp-to-logs-receivers: backlog
+  1-3-env-j2-render-3-new-vars-unconditionally: backlog
+  1-4-env-root-commented-templates-for-new-vars: backlog
+  1-5-tests-melt-correlation-ci-stub-exit-0-readme: backlog
+  1-6-docs-security-cve-triage-2026q3-md-update-optional: backlog
+  epic-1-retrospective: optional
 
-  # === Epic 2 ===
-  "2.1": { status: backlog, title: "shared/lib: add @opentelemetry/api-logs peer-dep", effort: 0.1, owner: null, depends_on: [epic-1] }
-  "2.2": { status: backlog, title: "shared/lib: boolean-env.js helper", effort: 0.1, owner: null, depends_on: [epic-1] }
-  "2.3": { status: backlog, title: "shared/lib: otel-batch-config.js shared tuning", effort: 0.1, owner: null, depends_on: [epic-1] }
-  "2.4": { status: backlog, title: "victorialogs-transport.js (Winston TransportStream)", effort: 0.5, owner: null, depends_on: [2.1] }
-  "2.5": { status: backlog, title: "logger.js: format=json, drop traceFormat, add VL transport", effort: 0.5, owner: null, depends_on: [2.2, 2.3, 2.4] }
-  "2.6": { status: backlog, title: "gov-chat-backend/tracing.js: LoggerProvider + PII processor", effort: 0.5, owner: null, depends_on: [2.3] }
-  "2.7": { status: backlog, title: "gov-chat-backend/package.json: add sdk-logs + exporter-logs-otlp-http", effort: 0.1, owner: null, depends_on: [2.6] }
-  "2.8": { status: backlog, title: "logger-functions + logger-otel-trace: JSON-key assertions", effort: 0.25, owner: null, depends_on: [2.5] }
-  "2.9": { status: backlog, title: "PII scrubbing covers body field", effort: 0.25, owner: null, depends_on: [2.6] }
-  "2.10": { status: backlog, title: "victorialogs-transport.test.js", effort: 0.25, owner: null, depends_on: [2.4] }
-  "2.11": { status: backlog, title: "logger-vl-integration.test.js (fake OTLPLogExporter)", effort: 0.25, owner: null, depends_on: [2.6, 2.7] }
-  "2.12": { status: backlog, title: "log_record_dropped_total{reason=...} Prometheus counter", effort: 0.25, owner: null, depends_on: [2.5] }
+  epic-2: backlog
+  2-1-shared-lib-add-opentelemetry-api-logs-peer-dep: backlog
+  2-2-shared-lib-add-boolean-env-helper-boolean-env-js: backlog
+  2-3-shared-lib-add-shared-otel-batch-config-js: backlog
+  2-4-shared-lib-add-victorialogs-transport-js-winston-transportst: backlog
+  2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra: backlog
+  2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr: backlog
+  2-7-gov-chat-backend-package-json-add-sdk-logs-exporter-logs-otl: backlog
+  2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass: backlog
+  2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: backlog
+  2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: backlog
+  2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: backlog
+  2-12-prometheus-log_record_dropped_total-reason-counter: backlog
+  epic-2-retrospective: optional
 
-  # === Epic 3 ===
-  "3.1": { status: backlog, title: "document-repository/package.json: OTel deps + winston-format-json", effort: 0.1, owner: null, depends_on: [epic-2] }
-  "3.2": { status: backlog, title: "document-repository/src/tracing.js (logs-only path)", effort: 0.5, owner: null, depends_on: [3.1] }
-  "3.3": { status: backlog, title: "document-repository/src/app.js: require('./tracing') at :1", effort: 0.05, owner: null, depends_on: [3.2] }
-  "3.4": { status: backlog, title: "ClamAV observability events (clamav.scan.*) per AD-20", effort: 0.5, owner: null, depends_on: [3.3] }
+  epic-3: backlog
+  3-1-document-repository-package-json-add-otel-deps-winston-forma: backlog
+  3-2-document-repository-tracing-js-logs-only-path: backlog
+  3-3-document-repository-require-tracing-at-app-js-1: backlog
+  3-4-document-repository-clamav-observability-events-clamav-scan: backlog
+  epic-3-retrospective: optional
 
-  # === Epic 4 ===
-  "4.1": { status: backlog, title: "shared/lib/melt/types.js (zero-dep domain)", effort: 0.1, owner: null }
-  "4.2": { status: backlog, title: "shared/lib/melt/index.js: port + adapter + application exports", effort: 0.25, owner: null, depends_on: [4.1] }
-  "4.3": { status: backlog, title: "victorialogs-client.js: axios + normalize + AcctID/ProjID headers + lazy health probe + VL_QUERY_TIMEOUT_MS", effort: 0.5, owner: null, depends_on: [4.1] }
-  "4.4": { status: backlog, title: "shared/lib/index.js: re-export melt/", effort: 0.05, owner: null, depends_on: [4.2] }
-  "4.5": { status: backlog, title: "melt/victorialogs-client.test.js (normalize + headers + retry + escape)", effort: 0.25, owner: null, depends_on: [4.3] }
-  "4.6": { status: backlog, title: "config-validator: whitelist MELT_PROVIDER", effort: 0.1, owner: null }
-  "4.7": { status: backlog, title: "config-validator: MELT_PROVIDER boot verification", effort: 0.1, owner: null, depends_on: [4.6] }
+  epic-4: backlog
+  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: backlog
+  4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict: backlog
+  4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize: backlog
+  4-4-shared-lib-index-js-re-export-melt: backlog
+  4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize: backlog
+  4-6-tests-config-validator-whitelist-melt_provider-victorialogs: backlog
+  4-7-tests-empty-melt_provider-whitelist-verification-on-boot: backlog
+  epic-4-retrospective: optional
 
-  # === Epic 5 ===
-  "5.1": { status: backlog, title: "tests/test-fixtures/logs/combined-2026-08-15.log (NDJSON fixture)", effort: 0.1, owner: null }
-  "5.2": { status: backlog, title: "ingestion script: POST fixture to /v1/logs (OTLP) before contract test", effort: 0.1, owner: null, depends_on: [5.1] }
-  "5.3": { status: backlog, title: "logs-service.js: rewrite public methods via VictoriaLogsClient; per-call ADMIN_LOGS_SOURCE env read", effort: 1.0, owner: null, depends_on: [epic-4, 5.1, 5.2] }
-  "5.4": { status: backlog, title: "admin-dashboard-service: drop fs.readFile, F4 deleted, JSON.parse fallback", effort: 0.5, owner: null, depends_on: [5.3] }
-  "5.5": { status: backlog, title: "ADMIN_LOGS_SOURCE=file + LOG_TO_FILE!='1' → 503 with hint", effort: 0.1, owner: null, depends_on: [5.3] }
-  "5.6": { status: backlog, title: "ENOENT tolerance + O_EXCL concurrent-writer lock", effort: 0.1, owner: null, depends_on: [5.4] }
-  "5.7": { status: backlog, title: "LogSearchDialog.vue computed.banner from response.degraded", effort: 0.25, owner: null, depends_on: [5.3] }
-  "5.8": { status: backlog, title: "logs-vl-contract.test.js (deep-equal on same fixture)", effort: 0.25, owner: null, depends_on: [5.3] }
-  "5.9": { status: backlog, title: "logs-vl-degradation.test.js (5xx/ECONNREFUSED/ENOTFOUND + rate-limit)", effort: 0.25, owner: null, depends_on: [5.3] }
-  "5.10": { status: backlog, title: "logs-service-admin-source.test.js (env toggle, no restart)", effort: 0.1, owner: null, depends_on: [5.3] }
-  "5.11": { status: backlog, title: "LogSearchDialog.test.js Story 7.6 rewrite (JSON, no regex)", effort: 0.1, owner: null, depends_on: [5.7] }
-  "5.12": { status: backlog, title: "grep + fix other printf regex assertions", effort: 0.1, owner: null, depends_on: [5.11] }
+  epic-5: backlog
+  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: backlog
+  5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co: backlog
+  5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog: backlog
+  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: backlog
+  5-5-admin_logs_source-file-log_to_file-1-503-with-recovery-hint: backlog
+  5-6-enoent-tolerance-o_excl-concurrent-writer-lock-for-file-fall: backlog
+  5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d: backlog
+  5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: backlog
+  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: backlog
+  5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: backlog
+  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: backlog
+  5-12-grep-fix-other-printf-regex-assertions-in-test-suite: backlog
+  epic-5-retrospective: optional
 
-  # === Epic 6 ===
-  "6.1": { status: backlog, title: "security-scan-service: drop worker_threads import + processFile + worker block", effort: 0.25, owner: null, depends_on: [epic-4] }
-  "6.2": { status: backlog, title: "processLogsInParallel rewrite (sha1 bucket + truncation + retention + AJV cache)", effort: 1.0, owner: null, depends_on: [6.1] }
-  "6.3": { status: backlog, title: "security-scan-service tests: replace Worker mock; delete gzip cases; new bulk + degradation tests", effort: 0.5, owner: null, depends_on: [6.2] }
-  "6.4": { status: backlog, title: "verify SECURITY_SCAN_BACKEND=file fallback works", effort: 0.1, owner: null, depends_on: [6.2] }
+  epic-6: backlog
+  6-1-security-scan-service-drop-worker_threads-import-processfile: backlog
+  6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: backlog
+  6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs: backlog
+  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: backlog
+  epic-6-retrospective: optional
 
-  # === Epic 7 ===
-  "7.1": { status: backlog, title: "logger.js: wrap file transports in LOG_TO_FILE guard", effort: 0.25, owner: null, depends_on: [epic-2] }
-  "7.2": { status: backlog, title: "routes: rollover/configure → {deprecated:true}; rolloverLogs → 410 Gone for cron callers", effort: 0.25, owner: null, depends_on: [epic-5, epic-6] }
-  "7.3": { status: backlog, title: "shared/lib/index.js: drop re-exports; logger-routes.js imports internal ./logger", effort: 0.25, owner: null, depends_on: [7.2] }
-  "7.4": { status: backlog, title: "linter-shared-lib-re-exports.test.js + routes/logger-routes.test.js deprecated", effort: 0.25, owner: null, depends_on: [7.3] }
-  "7.5": { status: backlog, title: "verify CI allow_failure + document volume backup/cleanup (DW-65)", effort: 0.1, owner: null }
-
-# Rollback switches — kept visible for MR-time verification
-# Per AD-6 + AD-14 + AD-15
-# Each switch is per-call, no-restart (see logs-service.js / security-scan-service.js per epic 5/6 impl).
+  epic-7: backlog
+  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf: backlog
+  7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur: backlog
+  7-3-shared-lib-index-js-stop-re-exporting-reconfigurelogger-trig: backlog
+  7-4-tests-linter-shared-lib-re-exports-test-js-assert-logger-rou: backlog
+  7-5-verify-ci-allow_failure-true-on-scheduled-melt-correlation-g: backlog
+  epic-7-retrospective: optional
 rollback_switches:
-  ADMIN_LOGS_SOURCE: "victorialogs | file (permanent, default flips to victorialogs after first release)"
+  ADMIN_LOGS_SOURCE: "victorialogs | file (permanent, default flips to victorialogs
+    after first release)"
   LOG_TO_VICTORIALOGS: "1 | 0 (P1a, restart)"
   VL_FAIL_OPEN: "false | true (P2, no restart)"
   LOG_TO_FILE: "0 | 1 (P4, restart)"
@@ -141,11 +147,19 @@ rollback_switches:
 audit:
   planning_mr: "!335 (draft flag not set via CLI; toggle in GitLab UI)"
   resolved_questions:
-    Q-1: OTel deps split per option C (shared/lib/api-logs only; SDK per-component)
+    Q-1: OTel deps split per option C (shared/lib/api-logs only; SDK 
+      per-component)
     Q-2: VL_FAIL_OPEN rate-limit = 1/min
-    Q-3: multi-tenant out-of-scope; VICTORIALOGS_TENANT_ID kept as port seam (default 0:0)
+    Q-3: multi-tenant out-of-scope; VICTORIALOGS_TENANT_ID kept as port seam 
+      (default 0:0)
     Q-4: log_record_dropped_total carries 3 reason labels (no per-service)
   deferred:
     DW-325: "tests/melt-correlation/ full suite — separate epic"
-  closures:
-    "Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure note appended to archived file"
+  closures: "Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure
+    note appended to archived file"
+generated: '2026-09-03'
+last_updated: '2026-09-03'
+project: admin-logs-victorialogs
+tracking_system: file-system
+story_location: 
+  /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/admin-logs-vl/_bmad-output/implementation-artifacts/stories

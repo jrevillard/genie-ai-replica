@@ -3,7 +3,7 @@ name: review-web-reality-check
 type: review
 reviewer: web-reality-check
 review_date: 2026-08-31
-target: /home/jerome/git_projects/ITU/genie-ai/_bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
+target: /home/jerome/git_projects/ITU/genie-ai/_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md
 companion: /home/jerome/git_projects/ITU/genie-ai/_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
 verdict: pass-with-fixes
 ---
@@ -161,7 +161,7 @@ the spine is ready for P0 MR.
 
 ## Cross-reference: where each claim lives
 
-- Spine AD-1 — `/home/jerome/git_projects/ITU/genie-ai/_bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md:35-39`
+- Spine AD-1 — `/home/jerome/git_projects/ITU/genie-ai/_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md:35-39`
 - Spine AD-2 — same file, lines 41-45
 - Spine AD-9 — same file, lines 84-87
 - Spine AD-10 — same file, lines 89-93

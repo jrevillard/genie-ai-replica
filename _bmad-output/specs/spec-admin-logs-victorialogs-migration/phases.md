@@ -9,9 +9,8 @@ One MR per phase. Branch `feat/admin-logs-victorialogs`; never commit to `main`.
 **Files:**
 - `docker-compose.yaml` — `:1650` (otel-collector-init), `:1671` (otel-collector), `:1749` (victorialogs): remove `profiles: [observability]` so the three services start unconditionally; pin `victorialogs.deploy.replicas: 1` (was `${ENABLE_OBSERVABILITY:-0}`). Leave `victoriametrics :1716`, `victoriatraces :1818`, `grafana :1854` under `[observability]`.
 - `configs/otel/otel-collector-config.yaml` — `:183-189` logs pipeline receivers: add `- otlp` so apps can POST to `:4318/v1/logs`. Final: `receivers: [fluent_forward, otlp]`.
-- `deploy/ansible/templates/env.j2` — after `:239` (unconditional): `VICTORIALOGS_URL`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, `LOG_TO_VICTORIALOGS`.
-- `env` (root) — add commented templates for the new vars under the observability section.
-- `tests/melt-correlation/{run-melt-test.sh,README.md}` (new stub) — `exit 0` + log line. Unblocks `.gitlab-ci.yml:2942-2984`.
+- `deploy/ansible/templates/env.j2` — after `:239` (unconditional): `VICTORIALOGS_URL`, `VICTORIALOGS_TENANT_ID`, `VL_QUERY_TIMEOUT_MS`, `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, `LOG_TO_VICTORIALOGS`. New SECTION 12D after 12C: `MELT_PROVIDER`, `VL_FAIL_OPEN`, `ADMIN_LOGS_SOURCE`, `SECURITY_SCAN_BACKEND`, `LOG_TO_FILE`.
+- `env` (root) — add commented templates for the new vars under SECTION 12D.
 
 **Acceptance:** `docker compose up -d` (no profile flag) brings up VL + Collector; `curl http://victorialogs:9428/health` returns `{"status":"ok"}`; `curl -X POST http://otel-collector:4318/v1/logs` returns 200.
 

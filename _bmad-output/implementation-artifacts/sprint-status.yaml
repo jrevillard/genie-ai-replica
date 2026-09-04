@@ -1,6 +1,6 @@
 # Sprint status — admin-logs-victorialogs-migration
 # Source spec:  _bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
-# Source spine: _bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
+# Source spine: _bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md
 # Source plan:  _bmad-output/planning-artifacts/epics.md
 # Branch:      feat/admin-logs-victorialogs/1-1-docker-compose-vl-collector-profiles-core
 # MR:          !335 (planning, draft)
@@ -13,7 +13,7 @@ project_key: admin-logs-victorialogs
 branch: feat/admin-logs-victorialogs
 spec: _bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
 spine: 
-  _bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
+  _bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md
 tracking_started: 2026-08-31
 tracking_format_version: 1
 
@@ -70,7 +70,6 @@ development_status:
   1-2-otel-collector-config-add-otlp-to-logs-receivers: done
   1-3-env-j2-render-3-new-vars-unconditionally: done
   1-4-env-root-commented-templates-for-new-vars: done
-  1-5-tests-melt-correlation-ci-stub-exit-0-readme: done
   1-6-docs-security-cve-triage-2026q3-md-update-optional: done
   epic-1-retrospective: optional
 
@@ -158,9 +157,7 @@ development_status:
     ready-for-dev
   7-3-shared-lib-index-js-stop-re-exporting-reconfigurelogger-trig: 
     ready-for-dev
-  7-4-tests-linter-shared-lib-re-exports-test-js-assert-logger-rou: 
-    ready-for-dev
-  7-5-verify-ci-allow_failure-true-on-scheduled-melt-correlation-g: 
+  7-4-tests-linter-shared-lib-re-exports-test-js-assert-logger-rou:
     ready-for-dev
   epic-7-retrospective: optional
 rollback_switches:
@@ -181,12 +178,11 @@ audit:
     Q-3: multi-tenant out-of-scope; VICTORIALOGS_TENANT_ID kept as port seam 
       (default 0:0)
     Q-4: log_record_dropped_total carries 3 reason labels (no per-service)
-  deferred:
-    DW-325: "tests/melt-correlation/ full suite — separate epic"
+  deferred: {}
   closures: "Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure
     note appended to archived file"
 generated: '2026-09-03'
-last_updated: '2026-09-03 (story 1-1 → done)'
+last_updated: '2026-09-04 (Epic 1 review findings applied)'
 project: admin-logs-victorialogs
 tracking_system: file-system
 story_location: 

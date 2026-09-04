@@ -32,7 +32,7 @@
 #   - the admin-logs substrate (VictoriaLogs + OTel Collector + otel-collector-init)
 #     is always-on — no profile label, starts by default in compose up and runs
 #     unconditionally in Swarm so admin endpoints stay functional regardless of
-#     ENABLE_OBSERVABILITY (D1 — admin-logs VictoriaLogs migration)
+#     ENABLE_OBSERVABILITY
 #   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
 #   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
 #
@@ -1636,8 +1636,7 @@ services:
   # ===========================================================================
   # Observability Stack (node.labels.genieai == true)
   # ===========================================================================
-  # Split into an always-on substrate and an opt-in bucket (D1 — admin-logs
-  # VictoriaLogs migration):
+  # Split into an always-on substrate and an opt-in bucket:
   #   no profile       otel-collector-init + otel-collector + victorialogs
   #                    → always-on, admin endpoints stay functional regardless
   #                      of ENABLE_OBSERVABILITY (compose up brings them by
@@ -1772,8 +1771,7 @@ services:
     networks:
       - genieai_network
     deploy:
-      # D1: pinned to 1 — VictoriaLogs is always-on (no profile label) so the
-      # admin Logs facility stays functional regardless of ENABLE_OBSERVABILITY.
+      # Always-on core: pinned to 1 replica so admin endpoints stay functional regardless of ENABLE_OBSERVABILITY.
       replicas: 1
       placement:
         constraints:

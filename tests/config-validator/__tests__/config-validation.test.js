@@ -333,8 +333,8 @@ describe('Configuration Validation Suite', () => {
     });
   });
 
-  // --- D1: admin-logs substrate always-on contract (CAP-7) ---
-  describe('admin-logs always-on substrate (CAP-7 / D1)', () => {
+  // --- Admin-logs substrate always-on contract: VL + OTel Collector + otel-collector-init must start by default; VL pinned to 1 replica. ---
+  describe('admin-logs always-on substrate', () => {
     let contracts;
 
     beforeAll(() => {

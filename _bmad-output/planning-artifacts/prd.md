@@ -1,18 +1,17 @@
 ---
 prd_key: admin-logs-victorialogs
 created: 2026-08-31
-updated: 2026-09-03
+updated: 2026-09-04
 status: active
 initiative: admin-logs + security-scan migration to VictoriaLogs
 umbrella_branch: feat/admin-logs-victorialogs/prd
-umbrella_mr: "!335"
+umbrella_mr: "!343"
 owner: jrevillard (ITU)
 sources_of_truth:
   spec: _bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
-  architecture: _bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md
+  architecture: _bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md
   epics: _bmad-output/planning-artifacts/epics.md
   sprint_status: _bmad-output/implementation-artifacts/sprint-status.yaml
-  workflow: _bmad-output/implementation-artifacts/workflow.md
 ---
 
 # PRD — Admin Logs + Security-Scan → VictoriaLogs
@@ -38,7 +37,7 @@ D. Forden (2026-08-15) mandated the Winston logger write directly to VictoriaLog
 - okf-server migration (service doesn't exist in repo)
 - Frontend AdminDashboard.vue / LogSearchDialog.vue contract changes
 - Grafana service-logs dashboard rewrites
-- Full `tests/melt-correlation/` implementation (stub-only this rollout, DW-325)
+- Chaos/correlation test suite (out of project scope — no replacement planned)
 - Document-repository admin endpoints (none exist)
 
 ## Decisions resolved
@@ -51,7 +50,7 @@ D. Forden (2026-08-15) mandated the Winston logger write directly to VictoriaLog
 
 ## Open questions
 
-All resolved (Q-1..Q-4 closed; see spec `.memlog.md` entries 34–36 + workflow.md "Resolved decisions").
+All resolved (Q-1..Q-4 closed; see spec `.memlog.md` entries 34–36 + sprint-status.yaml `development_status`).
 
 ## Success criteria (full AC in spec)
 
@@ -73,7 +72,7 @@ All resolved (Q-1..Q-4 closed; see spec `.memlog.md` entries 34–36 + workflow.
 
 7 sub-branches × 7 sub-MRs targeting umbrella branch (`feat/admin-logs-victorialogs`). Final umbrella MR merges to main after all 7 verified + smoke-tested on release stack.
 
-Procedure: `_bmad-output/implementation-artifacts/workflow.md` (stacked MRs, merge-order gate per AD-13, branch lifecycle).
+Procedure: see `_bmad-output/implementation-artifacts/sprint-status.yaml` + `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md` (AD-13 merge-order gate, branch lifecycle).
 
 ## Epics (high-level)
 
@@ -95,6 +94,5 @@ Full story breakdown: `_bmad-output/planning-artifacts/epics.md`
 
 ## Deferred (sibling items)
 
-- `DW-325`: `tests/melt-correlation/` full suite — separate epic. Stub exits 0 in P0.
 - Story 7-6 closure note (2026-05-29 AC3 "preserve printf format" overridden by P1a JSON switch) appended to archived story file.
 - Volume backup/cleanup strategy for VictoriaLogs (DW-65) — operational concern, separate epic.

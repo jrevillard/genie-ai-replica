@@ -67,6 +67,9 @@ coverage/
 reports/
 **/reports/
 
+# bmad-loop story-track control-plane (per-machine state)
+ci-status.json
+
 # Dependency directories
 jspm_packages/
 

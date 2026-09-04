@@ -89,5 +89,5 @@ in compose and `ENABLE_OBSERVABILITY=1` in Swarm.
 - 2026-09-03: implemented D1 always-on substrate (no-profile approach per design discussion); status → review
 - 2026-09-03: code review pass — D1 (5 docs aligned), D2 (deploy.yml unconditional config copy), D3 (config-validator structural test added); story title updated to match implementation. See PR description for review output.
 
-<!-- Change Log convention: `_bmad-output/implementation-artifacts/workflow.md`
-     (bmad-loop project memory `project_bmad-loop-sprint-status-layout`). -->
+<!-- Change Log convention: see `_bmad-output/implementation-artifacts/sprint-status.yaml` §branch-top
+     and `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md` §CAP-1..CAP-8. -->

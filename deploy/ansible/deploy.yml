@@ -218,9 +218,7 @@
         _deploy_files_default:
           - src: "{{ compose_file }}"
             dest: "{{ deploy_dir }}/{{ compose_file }}"
-        # otel-collector is always-on (D1) — its config bind-mount must be on
-        # disk in every deploy, regardless of enable_observability. The grafana
-        # dashboards below stay gated on enable_observability.
+        # otel-collector is always-on — config bind-mount ships in every deploy; grafana dashboards stay gated.
         _deploy_files_obs: [{'src': 'configs/otel/otel-collector-config.yaml', 'dest': deploy_dir + '/configs/otel/otel-collector-config.yaml'}]
         _deploy_files_certbot: "{{ [{'src': 'api-gateway-solution/certbot/entrypoint.sh', 'dest': deploy_dir + '/api-gateway-solution/certbot/entrypoint.sh', 'mode': '0755'}] if certbot_replicas | default('0') != '0' else [] }}"
 

@@ -62,7 +62,6 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
 - **NG-1 okf-server migration** — does not exist in the repo (the 2026-08-15 study is wrong on this third Node service). Only `gov-chat-backend` + `document-repository` are Node services.
 - **NG-2 Frontend contract changes** — `AdminDashboard.vue` / `LogSearchDialog.vue` shapes preserved by contract tests; Vue 3 Options API stays. UI gains a `degraded: true` banner via the existing mechanism.
 - **NG-3 Grafana dashboard rewrites** — derived fields `TraceID` / `SpanID` at `configs/grafana/provisioning/datasources/vm-datasource.yml:13-21` already work with OTel logs; new structured `level` / `service.name` extract natively.
-- **NG-4 Full `tests/melt-correlation/` implementation + CI stub** — P0 MR ships an `exit-0` stub at `tests/melt-correlation/{run-melt-test.sh,README.md}` to unblock `.gitlab-ci.yml:2942-2984`. The `scheduled:melt-correlation` job is `allow_failure: true` (verified before merge). The chaos/correlation suite itself is a separate epic.
 - **NG-5 document-repository admin endpoints** — none exist; only the producer path lands on document-repository.
 
 ## Decisions

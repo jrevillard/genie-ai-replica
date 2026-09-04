@@ -1973,49 +1973,8 @@ severity: low
 reason: All verification commands specify only "expected" success outcomes. No failure handling documented.
 status: open
 
-### DW-325: tests/melt-correlation/ full implementation (OTel chaos + correlation suite) deferred from admin logs → VL migration.
-origin: spec-deferred admin-logs-victorialogs-migration 2026-08-31
-source_spec: `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` (CAP-8 / NG-4)
-location: tests/melt-correlation/ (directory absent; CI stub added in P0 MR)
-severity: medium
-reason: P0 MR ships an `exit-0` stub at `tests/melt-correlation/run-melt-test.sh` + README to unblock `.gitlab-ci.yml:2942-2984`. Full chaos/correlation suite (OTel trace↔log↔metric correlation, controlled chaos: VL kill/restart, fluentd pause/resume, otel-collector restart) belongs to a separate epic. Triggers for revisit: any MR touching VL/OTel collector deployment, observability reliability question, or Grafana dashboard rework.
-status: open
-resolution: stub only; no further work in admin-logs-victorialogs-migration scope.
-
 ## Deferred from: code review of 1-1-docker-compose-vl-collector-profiles-core.md (2026-09-03)
 
 - **DW-X1: Resource-cost impact of always-on VL + OTel Collector** — quantify baseline memory/CPU + `vlogs-data` persistent volume impact via Ansible runbook validation. Pre-existing — outside story scope.
 - **DW-X2: `site/content/en/docs/observability/` docstring alignment** — if it still says VL is opt-in, align in a dedicated docs MR.
 - **DW-X3: CI `config:validate` job under `ENABLE_OBSERVABILITY=0`** — confirm collector-config-file deployment + new structural tests pass when CI runs without the observability profile.
-
-### DW-326: No MR-pipeline automated test covers the melt-correlation stub contract (exit 0, two valid JUnit XML files, unknown-flag tolerance).
-origin: spec-deferred 4402ccdb83e0
-location: tests/melt-correlation/run-melt-test.sh
-source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
-severity: low
-reason: The only in-repo invokers are the `scheduled:melt-correlation` and `scheduled:melt-chaos` jobs, gated on `$CI_PIPELINE_SOURCE == "schedule" && $ENABLE_OBSERVABILITY == "1"`, so a regression in the stub is invisible on MR pipelines until a scheduled run weeks later. A real test belongs with the DW-325 suite that replaces the stub.
-status: open
-
-### DW-327: `.gitlab-ci.yml` comments attribute the melt jobs to a non-existent "Story 7-10".
-origin: spec-deferred b1fd8655b376
-location: .gitlab-ci.yml:2942
-source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
-severity: low
-reason: `.gitlab-ci.yml:2942` and `:2970` reference "Story 7-10"; no such story exists in this initiative. Pre-existing comment drift, not caused by this change.
-status: open
-
-### DW-328: `scheduled:melt-chaos` cannot pass even with the stub: it runs `npm ci` in a directory with no package.json and then `node chaos-resilience.test.js`, which does not exist.
-origin: spec-deferred 8304a8e9593e
-location: .gitlab-ci.yml:2981
-source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
-severity: medium
-reason: `.gitlab-ci.yml:2981-2986`. Only the `run-melt-test.sh` line carries `|| true`. Both the missing chaos driver and its `reports/melt-chaos-report.xml` artifact belong to DW-325.
-status: open
-
-### DW-329: The Story 1.6 row in `epics.md` carries a `Files` cell copied from Story 7.5 (`verify allow_failure: true on scheduled:melt-correlation`), and the 1.3/1.4/1.5 rows carry stray trailing backticks.
-origin: spec-deferred 020e855723e5
-location: _bmad-output/planning-artifacts/epics.md:57
-source_spec: `1-6-docs-security-cve-triage-2026q3-md-update-optional.md`
-severity: low
-reason: `_bmad-output/planning-artifacts/epics.md:57-63` — the Story 1.6 Files cell names `.gitlab-ci.yml:2942-2984`, which is Story 7.5's subject, not this story's (`docs/security/cve-triage-2026q3.md`, per the row's own title). The generated story spec inherited the wrong value. Pre-existing planning-artifact drift, not caused by this change; corrected locally in this story's frontmatter and Spec Change Log, but the source table still misleads anyone reading `epics.md` directly.
-status: open

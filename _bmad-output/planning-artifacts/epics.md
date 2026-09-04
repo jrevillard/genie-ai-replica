@@ -2,7 +2,7 @@
 
 **Initiative key:** `admin-logs-victorialogs`
 **Source spec:** `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`
-**Architecture spine:** `_bmad-output/architecture/architecture-genie-ai-2026-08-31/ARCHITECTURE-SPINE.md` (20 ADs, hexa/onion MELT layout)
+**Architecture spine:** `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md` (20 ADs, hexa/onion MELT layout)
 **Branch:** `feat/admin-logs-victorialogs`
 **First MR:** !335 (planning, opened)
 
@@ -46,20 +46,12 @@
 | Files | `env` (Section 12C)` |
 | Depends on | [] |
 
-### Story 1.5: tests/melt-correlation/: CI stub (exit 0) + README
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `tests/melt-correlation/{run-melt-test.sh,README.md}` (new)` |
-| Depends on | [] |
-
 ### Story 1.6: docs/security/cve-triage-2026q3.md update (optional)
 
 | Field | Value |
 | --- | --- |
 | Effort | 0.1 SP |
-| Files | `verify `allow_failure: true` on `scheduled:melt-correlation` (`.gitlab-ci.yml:2942-2984`)` |
+| Files | `docs/security/cve-triage-2026q3.md` |
 | Depends on | [] |
 
 ---
@@ -442,12 +434,6 @@
 | Files | `components/gov-chat-backend/__tests__/` (new)` |
 | Depends on | [7.3] |
 
-### Story 7.5: verify CI `allow_failure: true` on `scheduled:melt-correlation` (`.gitlab-ci.yml:2942-2984`); document volume backup/cleanup (DW-65) if VL prod
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `docs only` |
-| Depends on | [] |
+### Story 7.5: ~~DELETED~~ — previously verify CI `allow_failure: true` on `scheduled:melt-correlation`. Cancelled 2026-09-04 (Epic 1 review): the scheduled CI jobs + stub are deleted; chaos/correlation testing is out of project scope. DW-325..DW-329 resolved by deletion.
 
 ---

@@ -2,7 +2,7 @@
 key: 3-3-document-repository-require-tracing-at-app-js-1
 title: document-repository: require('./tracing') at app.js:1
 epic: epic-3
-status: backlog
+status: ready-for-dev
 effort: 0.05
 depends_on: [3.2]
 files: components/document-repository/src/app.js

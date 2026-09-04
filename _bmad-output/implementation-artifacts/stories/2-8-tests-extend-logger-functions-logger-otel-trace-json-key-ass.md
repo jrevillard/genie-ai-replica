@@ -2,7 +2,7 @@
 key: 2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass
 title: tests: extend logger-functions, logger-otel-trace (JSON-key assertions)
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [2.5]
 files: components/gov-chat-backend/__tests__/{logger-functions,logger-otel-trace}.test.js

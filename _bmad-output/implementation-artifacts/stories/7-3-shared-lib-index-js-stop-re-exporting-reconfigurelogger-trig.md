@@ -2,7 +2,7 @@
 key: 7-3-shared-lib-index-js-stop-re-exporting-reconfigurelogger-trig
 title: shared/lib/index.js: stop re-exporting `reconfigureLogger`, `triggerLogRollover`, `cleanupCombinedLog`; logger-routes.js imports internal `./logger` not via shared/lib
 epic: epic-7
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [7.2]
 files: components/shared/lib/index.js` + `components/gov-chat-backend/routes/logger-routes.js:4

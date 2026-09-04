@@ -2,7 +2,7 @@
 key: 7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur
 title: routes: `POST /api/admin/logs/rollover` + `POST /api/logger/{configure,rollover}` return `{ deprecated: true, ... }`; `rolloverLogs` → 410 Gone for cron callers
 epic: epic-7
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [Epic 5]
 files: components/gov-chat-backend/routes/{admin,logger}-routes.js:170, 97, 198

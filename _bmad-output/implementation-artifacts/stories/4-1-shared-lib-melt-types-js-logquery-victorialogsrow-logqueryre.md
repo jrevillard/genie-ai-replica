@@ -2,7 +2,7 @@
 key: 4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre
 title: shared/lib/melt/types.js: `LogQuery`, `VictoriaLogsRow`, `LogQueryResult` (zero-dep)
 epic: epic-4
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: []
 files: components/shared/lib/melt/types.js` (new)

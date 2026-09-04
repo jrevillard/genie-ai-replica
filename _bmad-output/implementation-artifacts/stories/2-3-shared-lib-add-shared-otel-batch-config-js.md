@@ -2,7 +2,7 @@
 key: 2-3-shared-lib-add-shared-otel-batch-config-js
 title: shared/lib: add shared `otel-batch-config.js`
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: []
 files: components/shared/lib/otel-batch-config.js` (new)

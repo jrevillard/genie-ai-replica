@@ -2,7 +2,7 @@
 key: 5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co
 title: ingestion script: POST same fixture to `/v1/logs` (OTLP) before contract test
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: [5.1]
 files: new shell script

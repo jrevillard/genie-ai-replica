@@ -2,7 +2,7 @@
 key: 2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow
 title: tests: `victorialogs-transport.test.js` (severity + trace_id flow)
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [2.4]
 files: components/shared/lib/__tests__/victorialogs-transport.test.js` (new)

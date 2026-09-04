@@ -2,7 +2,7 @@
 key: 3-4-document-repository-clamav-observability-events-clamav-scan
 title: document-repository: ClamAV observability events (`clamav.scan.*`) per AD-20
 epic: epic-3
-status: backlog
+status: ready-for-dev
 effort: 0.5
 depends_on: [3.3]
 files: ClamAV scan call site + structured Winston events

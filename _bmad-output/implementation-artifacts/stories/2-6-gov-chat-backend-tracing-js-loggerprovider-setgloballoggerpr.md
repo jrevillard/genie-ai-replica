@@ -1,11 +1,11 @@
 ---
 key: 2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr
-title: gov-chat-backend: tracing.js → LoggerProvider + setGlobalLoggerProvider + PII processor
+title: "gov-chat-backend: tracing.js → LoggerProvider + setGlobalLoggerProvider + PII processor"
 epic: epic-2
 status: ready-for-dev
 effort: 0.5
 depends_on: [2.3]
-files: components/gov-chat-backend/tracing.js` (after `:117`)
+files: "components/gov-chat-backend/tracing.js` (after `:117`)"
 ---
 
 # Story 2.6 — gov-chat-backend: tracing.js → LoggerProvider + setGlobalLoggerProvider + PII processor

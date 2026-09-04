@@ -1,6 +1,6 @@
 ---
 key: 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li
-title: degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit persistence
+title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit persistence"
 epic: epic-5
 status: ready-for-dev
 effort: 0.25

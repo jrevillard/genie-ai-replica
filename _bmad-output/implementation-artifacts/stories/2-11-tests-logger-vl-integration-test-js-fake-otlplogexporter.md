@@ -1,6 +1,6 @@
 ---
 key: 2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter
-title: tests: `logger-vl-integration.test.js` (fake OTLPLogExporter)
+title: "tests: `logger-vl-integration.test.js` (fake OTLPLogExporter)"
 epic: epic-2
 status: ready-for-dev
 effort: 0.25

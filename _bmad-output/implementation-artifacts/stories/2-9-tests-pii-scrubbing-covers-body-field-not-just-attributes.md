@@ -1,6 +1,6 @@
 ---
 key: 2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes
-title: tests: PII scrubbing covers body field (not just attributes)
+title: "tests: PII scrubbing covers body field (not just attributes)"
 epic: epic-2
 status: ready-for-dev
 effort: 0.25

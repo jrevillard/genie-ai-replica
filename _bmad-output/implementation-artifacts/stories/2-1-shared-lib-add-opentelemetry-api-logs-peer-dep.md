@@ -1,6 +1,6 @@
 ---
 key: 2-1-shared-lib-add-opentelemetry-api-logs-peer-dep
-title: shared/lib: add `@opentelemetry/api-logs` peer-dep
+title: "shared/lib: add `@opentelemetry/api-logs` peer-dep"
 epic: epic-2
 status: ready-for-dev
 effort: 0.1

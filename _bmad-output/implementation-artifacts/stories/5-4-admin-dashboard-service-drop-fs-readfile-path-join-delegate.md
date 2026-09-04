@@ -1,11 +1,11 @@
 ---
 key: 5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate
-title: admin-dashboard-service: drop fs.readFile path.join; delegate to logsService.getLogsInRange; F4 regex deleted; JSON.parse for file fallback (try/catch + N=4096 re-parse window + error.stack newline guard)
+title: "admin-dashboard-service: drop fs.readFile path.join; delegate to logsService.getLogsInRange; F4 regex deleted; JSON.parse for file fallback (try/catch + N=4096 re-parse window + error.stack newline guard)"
 epic: epic-5
 status: ready-for-dev
 effort: 0.5
 depends_on: [5.3]
-files: components/gov-chat-backend/services/admin-dashboard-service.js:466-585, 525, 591
+files: "components/gov-chat-backend/services/admin-dashboard-service.js:466-585, 525, 591"
 ---
 
 # Story 5.4 — admin-dashboard-service: drop fs.readFile path.join; delegate to logsService.getLogsInRange; F4 regex deleted; JSON.parse for file fallback (try/catch + N=4096 re-parse window + error.stack newline guard)

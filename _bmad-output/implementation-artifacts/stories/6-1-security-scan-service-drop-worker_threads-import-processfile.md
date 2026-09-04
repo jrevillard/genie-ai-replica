@@ -1,11 +1,11 @@
 ---
 key: 6-1-security-scan-service-drop-worker_threads-import-processfile
-title: security-scan-service: drop `worker_threads` import + `processFile` + worker block
+title: "security-scan-service: drop `worker_threads` import + `processFile` + worker block"
 epic: epic-6
 status: ready-for-dev
 effort: 0.25
 depends_on: [Epic 4]
-files: components/gov-chat-backend/services/security-scan-service.js:9, 418, 1015-1125
+files: "components/gov-chat-backend/services/security-scan-service.js:9, 418, 1015-1125"
 ---
 
 # Story 6.1 — security-scan-service: drop `worker_threads` import + `processFile` + worker block

@@ -1,6 +1,6 @@
 ---
 key: 7-4-tests-linter-shared-lib-re-exports-test-js-assert-logger-rou
-title: tests: `linter-shared-lib-re-exports.test.js` (assert logger-routes.js imports from `./logger`); `routes/logger-routes.test.js` deprecated endpoints
+title: "tests: `linter-shared-lib-re-exports.test.js` (assert logger-routes.js imports from `./logger`); `routes/logger-routes.test.js` deprecated endpoints"
 epic: epic-7
 status: ready-for-dev
 effort: 0.25

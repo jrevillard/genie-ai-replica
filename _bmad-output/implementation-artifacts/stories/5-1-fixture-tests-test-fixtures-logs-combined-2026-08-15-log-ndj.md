@@ -1,6 +1,6 @@
 ---
 key: 5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj
-title: fixture: `tests/test-fixtures/logs/combined-2026-08-15.log` (NDJSON, ~500 records, schema {timestamp, level, message, service, trace_id, span_id})
+title: "fixture: `tests/test-fixtures/logs/combined-2026-08-15.log` (NDJSON, ~500 records, schema {timestamp, level, message, service, trace_id, span_id})"
 epic: epic-5
 status: ready-for-dev
 effort: 0.1

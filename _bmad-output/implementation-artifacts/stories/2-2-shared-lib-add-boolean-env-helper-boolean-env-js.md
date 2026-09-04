@@ -1,6 +1,6 @@
 ---
 key: 2-2-shared-lib-add-boolean-env-helper-boolean-env-js
-title: shared/lib: add boolean-env helper (`boolean-env.js`)
+title: "shared/lib: add boolean-env helper (`boolean-env.js`)"
 epic: epic-2
 status: ready-for-dev
 effort: 0.1

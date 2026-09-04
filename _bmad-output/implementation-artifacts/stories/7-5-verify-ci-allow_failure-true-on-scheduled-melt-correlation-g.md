@@ -1,6 +1,6 @@
 ---
 key: 7-5-verify-ci-allow_failure-true-on-scheduled-melt-correlation-g
-title: verify CI `allow_failure: true` on `scheduled:melt-correlation` (`.gitlab-ci.yml:2942-2984`); document volume backup/cleanup (DW-65) if VL prod
+title: "verify CI `allow_failure: true` on `scheduled:melt-correlation` (`.gitlab-ci.yml:2942-2984`); document volume backup/cleanup (DW-65) if VL prod"
 epic: epic-7
 status: ready-for-dev
 effort: 0.1

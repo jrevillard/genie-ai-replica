@@ -1,6 +1,6 @@
 ---
 key: 5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat
-title: admin-source test: toggle env mid-suite assert no-restart path switch
+title: "admin-source test: toggle env mid-suite assert no-restart path switch"
 epic: epic-5
 status: ready-for-dev
 effort: 0.1

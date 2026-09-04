@@ -5,7 +5,7 @@ epic: epic-5
 status: ready-for-dev
 effort: 0.1
 depends_on: [5.7]
-files: components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js:885-948
+files: "components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js:885-948"
 ---
 
 # Story 5.11 — LogSearchDialog.test.js Story 7.6 rewrite (JSON parsing, no regex)

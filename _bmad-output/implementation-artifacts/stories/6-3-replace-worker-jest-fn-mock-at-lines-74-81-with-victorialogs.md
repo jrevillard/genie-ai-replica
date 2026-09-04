@@ -1,6 +1,6 @@
 ---
 key: 6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs
-title: replace `Worker: jest.fn()` mock at lines 74-81 with `VictoriaLogsClient` mock; delete dead gzip/Worker test cases (683-740); new `security-scan-vl-bulk.test.js` + `security-scan-vl-degradation.test.js`
+title: "replace `Worker: jest.fn()` mock at lines 74-81 with `VictoriaLogsClient` mock; delete dead gzip/Worker test cases (683-740); new `security-scan-vl-bulk.test.js` + `security-scan-vl-degradation.test.js`"
 epic: epic-6
 status: ready-for-dev
 effort: 0.5

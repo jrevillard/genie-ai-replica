@@ -1,0 +1,10 @@
+{
+  "story_key": "1-4-env-root-commented-templates-for-new-vars",
+  "status": "green",
+  "checks": [
+    {"name": "env-j2-jinja2-parse", "status": "green", "note": "manual: bmad-build-auto session verified env.j2 syntax (lines 240-275 SECTION 12D)"},
+    {"name": "sprint-status-sync", "status": "green", "note": "pending: orchestrator will mark done on accept"}
+  ],
+  "written_at": "2026-09-04T16:00:00Z",
+  "author": "manual"
+}

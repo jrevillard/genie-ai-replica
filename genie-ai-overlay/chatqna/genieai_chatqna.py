@@ -1738,6 +1738,68 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
+    def _fetch_tools_config(self):
+        """Story 4-4: runtime-editable tools config from the ArangoDB
+        ``tools_config/config`` singleton (the BFF admin UI writes it).
+
+        Returns a dict ``{"whitelist": [...], "web_search_enabled": bool}``,
+        or ``None`` on ANY failure — a config-fetch failure degrades to the
+        env/code behavior (never-kill-chat), it is not a degradation event.
+        Fetched per search invocation: the AC is "next query takes effect".
+        """
+        try:
+            import httpx
+
+            base = os.getenv("ARANGO_URL", "http://arango-vector-db:8529").rstrip("/")
+            db_name = os.getenv("ARANGO_DB", "genie-ai")
+            user = os.getenv("ARANGO_USER", "root")
+            password = os.getenv("ARANGO_PASSWORD", "")
+            url = f"{base}/_db/{db_name}/_api/document/tools_config/config"
+            response = httpx.get(
+                url,
+                auth=(user, password),
+                timeout=1.0,
+            )
+            if response.status_code != 200:
+                return None
+            doc = response.json()
+            raw_whitelist = doc.get("whitelist")
+            return {
+                "whitelist": (
+                    [d for d in raw_whitelist if isinstance(d, str)] if isinstance(raw_whitelist, list) else []
+                ),
+                "web_search_enabled": doc.get("web_search_enabled") is not False,
+            }
+        except Exception as exc:
+            # Fail-open BY DESIGN for this optional layer (the env breaker and
+            # the SearXNG quality gate still apply) — but loudly: a persistent
+            # fetch failure means the admin whitelist/toggle is not being enforced
+            logger.warning("Tools config fetch unavailable (whitelist/toggle NOT enforced): %s", exc)
+            return None
+
+    @staticmethod
+    def _host_matches_whitelist(url, whitelist):
+        """Registrable-domain suffix match: whitelisting who.int covers
+        www.who.int (FR17). Empty whitelist = no filtering."""
+        if not whitelist:
+            return True
+        try:
+            from urllib.parse import urlparse
+
+            host = (urlparse(url).hostname or "").lower().rstrip(".")
+        except Exception:
+            return False
+        if not host:
+            # Scheme-less URLs (SearXNG passes them verbatim) — urlparse needs
+            # a scheme to expose a hostname
+            candidate = url.lower().split("/")[0].split("?")[0].rstrip(".")
+            host = candidate if "." in candidate else ""
+            if not host:
+                return False
+        # Entries normalized at read time (direct-DB writes bypass the BFF's
+        # lowercase-on-write)
+        return any(host == d.lower() or host.endswith("." + d.lower()) for d in whitelist)
+
     def _apply_web_search_fallback(self, docs, query, max_score, llm_requested=False):
         """Story 2-4/2-7: trigger-driven web-search fallback with degradation truth table.
 
@@ -1772,7 +1834,12 @@ class ChatQnAService:
         # Fail-closed allow-list: only explicit '1'/'true'/'yes' (or unset) keep
         # search enabled — a blank/typo/'off' value disables it. An emergency
         # kill-switch that fails open on bad config is the unsafe direction.
-        if str(os.getenv("WEB_SEARCH_ENABLED", "true")).strip().lower() not in ("1", "true", "yes"):
+        # The env var is the OPERATOR breaker; the ArangoDB tools_config doc
+        # (story 4-4) is the ADMIN lever — env-off wins over doc-on.
+        # env breaker first — when the operator has killed search there is no
+        # point paying the config-fetch round trip
+        env_off = str(os.getenv("WEB_SEARCH_ENABLED", "true")).strip().lower() not in ("1", "true", "yes")
+        if env_off:
             return docs, None
 
         try:
@@ -1785,6 +1852,14 @@ class ChatQnAService:
             logger.error("Web search trigger engine unavailable: %s", exc)
             return docs, None
         if not decision:
+            return docs, None
+
+        # Config fetched ONLY once a trigger fired — non-triggered queries pay
+        # nothing (review: the fetch used to precede the trigger decision)
+        config = self._fetch_tools_config()
+        # Strict boolean: only an explicit False in the doc disables
+        doc_off = config is not None and config["web_search_enabled"] is False
+        if doc_off:
             return docs, None
 
         logger.info("Triggering web search fallback (reason=%s, max_score=%s)", decision.reason, max_score)
@@ -1808,8 +1883,29 @@ class ChatQnAService:
                 return docs, None
 
             usable = filter_usable_results(web_results)
+            whitelist_dropped_all = False
+            if config and config["whitelist"]:
+                before = len(usable)
+                usable = [r for r in usable if self._host_matches_whitelist(r.get("url", ""), config["whitelist"])]
+                dropped = before - len(usable)
+                if dropped:
+                    logger.info("FR17 whitelist dropped %d of %d web result(s)", dropped, before)
+                whitelist_dropped_all = before > 0 and not usable
+            else:
+                whitelist_dropped_all = False
             if not usable:
-                if docs:
+                if whitelist_dropped_all:
+                    # Policy block, not quality — the wording must not blame
+                    # "quality standards" for an allowlist decision
+                    message = (
+                        "Web results were found but none came from allowed domains, so they "
+                        "were not used. The answer is based on available knowledge base "
+                        "documents only."
+                        if docs
+                        else "Web results were found but none came from allowed domains, "
+                        "and the knowledge base has no information on this topic."
+                    )
+                elif docs:
                     message = (
                         "Web results were found but did not meet quality standards, so they were "
                         "not used. The answer is based on available knowledge base documents only; "

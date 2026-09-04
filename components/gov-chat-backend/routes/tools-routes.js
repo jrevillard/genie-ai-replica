@@ -68,6 +68,90 @@ module.exports = (toolsService) => {
     }
   });
 
+  // --- Configuration (story 4-4: domain whitelist + tool toggles) ---
+
+  const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+  /**
+   * @swagger
+   * /api/admin/tools/config:
+   *   get:
+   *     summary: Get the tools configuration (domain whitelist + tool toggles)
+   *     tags: [Tools]
+   *     responses:
+   *       200:
+   *         description: Tools configuration
+   */
+  router.get('/config', readGuard, async (req, res, _next) => {
+    try {
+      const config = await toolsService.getConfig();
+      res.json({ success: true, data: config });
+    } catch (error) {
+      logger.error(`[TOOLS-ROUTES] Error getting config: ${error.message}`);
+      res.status(500).json({ success: false, message: 'Failed to retrieve configuration' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/tools/config:
+   *   put:
+   *     summary: Update the tools configuration (tools-admin only)
+   *     tags: [Tools]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               whitelist:
+   *                 type: array
+   *                 items: { type: string }
+   *               web_search_enabled:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Configuration updated
+   *       400:
+   *         description: Invalid whitelist entry
+   */
+  router.put('/config', writeGuard, async (req, res, _next) => {
+    try {
+      const { whitelist, web_search_enabled } = req.body;
+      // Whole-doc replace: both fields REQUIRED — a partial payload must not
+      // silently wipe the whitelist or coerce the toggle
+      if (!Array.isArray(whitelist)) {
+        return res.status(400).json({ success: false, message: 'whitelist (array) is required' });
+      }
+      if (typeof web_search_enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'web_search_enabled (boolean) is required' });
+      }
+      const invalid = whitelist.find((d) => typeof d !== 'string' || !HOSTNAME_RE.test(d.trim().toLowerCase()));
+      if (invalid !== undefined) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid whitelist entry: ${JSON.stringify(invalid)}`
+        });
+      }
+      const normalized = [...new Set(whitelist.map((d) => d.trim().toLowerCase()).filter(Boolean))];
+      if (normalized.length > 1000) {
+        return res.status(400).json({
+          success: false,
+          message: `Whitelist exceeds 1000 entries (${normalized.length})`
+        });
+      }
+      const config = await toolsService.updateConfig({
+        whitelist: normalized,
+        web_search_enabled
+      });
+      res.json({ success: true, data: config });
+    } catch (error) {
+      logger.error(`[TOOLS-ROUTES] Error updating config: ${error.message}`);
+      res.status(500).json({ success: false, message: 'Failed to update configuration' });
+    }
+  });
+
   // --- SearXNG ---
 
   // Basic testing proxy to SearXNG

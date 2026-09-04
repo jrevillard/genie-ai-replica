@@ -23,6 +23,12 @@ class ToolsService {
           name: 'idx_feeds_url'
         });
       }
+      // Story 4-4: singleton tools config (domain whitelist + tool toggles) —
+      // the runtime-editable store; env stays the operator breaker
+      const configExists = await this.db.collection('tools_config').exists();
+      if (!configExists) {
+        await this.db.createCollection('tools_config');
+      }
       this.initialized = true;
       logger.info('ToolsService initialized');
     } catch (error) {
@@ -40,6 +46,43 @@ class ToolsService {
       return await cursor.all();
     } catch (error) {
       logger.error(`Error getting feeds: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async getConfig() {
+    try {
+      const doc = await this.db
+        .collection('tools_config')
+        .document('config')
+        .catch((err) => {
+          if (err.errorNum === 1202 || err.code === 404) return null;
+          throw err;
+        });
+      if (!doc) {
+        return { whitelist: [], web_search_enabled: true };
+      }
+      return {
+        whitelist: Array.isArray(doc.whitelist) ? doc.whitelist : [],
+        web_search_enabled: doc.web_search_enabled !== false
+      };
+    } catch (error) {
+      logger.error(`Error getting tools config: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async updateConfig({ whitelist, web_search_enabled }) {
+    try {
+      const config = {
+        whitelist: Array.isArray(whitelist) ? whitelist : [],
+        web_search_enabled: web_search_enabled !== false,
+        updatedAt: Date.now()
+      };
+      await this.db.collection('tools_config').save({ _key: 'config', ...config }, { overwriteMode: 'replace' });
+      return config;
+    } catch (error) {
+      logger.error(`Error updating tools config: ${error.message}`);
       throw error;
     }
   }

@@ -27,6 +27,16 @@
                   <span>{{ translate('admin.tools.navWebSearch', 'Web Search (SearXNG)') }}</span>
                 </a>
               </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'config' }]"
+                  @click.prevent="activeTab = 'config'"
+                >
+                  <i>⚙️</i>
+                  <span>{{ translate('admin.tools.navConfig', 'Configuration') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
           <div class="nav-section">
@@ -169,6 +179,63 @@
             </div>
           </div>
         </div>
+
+        <!-- Configuration Tab (story 4-4) -->
+        <div v-if="activeTab === 'config'" class="dashboard-card">
+          <div class="card-header">
+            <div class="card-title">{{ translate('admin.tools.configTitle', 'Tools Configuration') }}</div>
+            <div class="card-actions">
+              <DsButton
+                variant="primary"
+                :disabled="!isConfigLoaded || isSavingConfig || !canEditConfig || !!whitelistValidationError"
+                @click="saveConfig"
+              >
+                {{
+                  isSavingConfig ? translate('admin.tools.saving', 'Saving...') : translate('admin.tools.save', 'Save')
+                }}
+              </DsButton>
+            </div>
+          </div>
+
+          <DsStateDisplay v-if="isLoadingConfig" type="loading">
+            {{ translate('admin.tools.loadingConfig', 'Loading configuration...') }}
+          </DsStateDisplay>
+          <DsStateDisplay v-else-if="configError" type="error">
+            {{ configError }}
+          </DsStateDisplay>
+
+          <div v-else class="p-4">
+            <div class="form-group mb-4">
+              <label class="config-label">
+                <input v-model="configForm.web_search_enabled" type="checkbox" :disabled="!canEditConfig" />
+                {{ translate('admin.tools.webSearchEnabled', 'Web search enabled') }}
+              </label>
+              <p class="config-hint">
+                {{ translate('admin.tools.webSearchHint', 'Takes effect on the next query — no redeployment needed.') }}
+              </p>
+            </div>
+
+            <div class="form-group mb-4">
+              <label>{{ translate('admin.tools.whitelistTitle', 'Domain whitelist (one per line)') }}</label>
+              <textarea
+                v-model="whitelistText"
+                class="whitelist-editor"
+                rows="8"
+                :readonly="!canEditConfig"
+                :placeholder="translate('admin.tools.whitelistPlaceholder', 'who.int\nun.org')"
+              ></textarea>
+              <p class="config-hint">
+                {{
+                  translate(
+                    'admin.tools.whitelistHint',
+                    'A whitelisted domain covers all its subdomains. Empty = no filtering.'
+                  )
+                }}
+              </p>
+              <p v-if="whitelistValidationError" class="config-error">{{ whitelistValidationError }}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -244,17 +311,52 @@ export default {
       },
       searchQuery: '',
       isSearching: false,
-      searchResults: null
+      searchResults: null,
+      configForm: { whitelist: [], web_search_enabled: true },
+      whitelistText: '',
+      isSavingConfig: false
     };
   },
   computed: {
-    ...mapState('tools', ['feeds', 'isLoadingFeeds', 'error'])
+    ...mapState('tools', ['feeds', 'isLoadingFeeds', 'error', 'toolsConfig', 'isLoadingConfig']),
+    configError() {
+      // Dedicated: a FEED load error must not blank the Configuration tab
+      return this.$store.state.tools.configError || null;
+    },
+    isConfigLoaded() {
+      return this.toolsConfig !== null;
+    },
+    canEditConfig() {
+      // Default-DENY: only tools-admin (or legacy admin) edit; the backend
+      // writeGuard is authoritative regardless
+      const roles = this.$store.state.auth?.user?.roles || [];
+      return roles.includes('tools-admin') || roles.includes('admin');
+    },
+    whitelistValidationError() {
+      const invalid = this.whitelistText
+        .split('\n')
+        .map((l) => l.trim().toLowerCase())
+        .filter(Boolean)
+        .find((d) => !/^(?=.{1,253}$)[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d));
+      return invalid
+        ? this.translate('admin.tools.whitelistInvalid', 'Invalid domain: {d}').replace('{d}', invalid)
+        : '';
+    }
   },
   mounted() {
     this.fetchFeeds();
+    this.loadConfig();
   },
   methods: {
-    ...mapActions('tools', ['fetchFeeds', 'addFeed', 'updateFeed', 'deleteFeed', 'testSearch']),
+    ...mapActions('tools', [
+      'fetchFeeds',
+      'addFeed',
+      'updateFeed',
+      'deleteFeed',
+      'testSearch',
+      'fetchToolsConfig',
+      'saveToolsConfig'
+    ]),
 
     // Per-component helper (epic 4.9 convention) — this view is router-mounted,
     // so there is no AdminDashboard parent to delegate to (unlike QueryInspector).
@@ -303,6 +405,31 @@ export default {
     async removeFeed(id) {
       if (confirm(this.translate('admin.tools.deleteConfirm', 'Are you sure you want to delete this feed?'))) {
         await this.deleteFeed(id);
+      }
+    },
+
+    async loadConfig() {
+      await this.fetchToolsConfig();
+      if (this.toolsConfig) {
+        this.configForm = { ...this.toolsConfig };
+        this.whitelistText = (this.toolsConfig.whitelist || []).join('\n');
+      }
+    },
+
+    async saveConfig() {
+      if (this.whitelistValidationError) return;
+      this.isSavingConfig = true;
+      const ok = await this.saveToolsConfig({
+        whitelist: this.whitelistText
+          .split('\n')
+          .map((l) => l.trim().toLowerCase())
+          .filter(Boolean),
+        web_search_enabled: this.configForm.web_search_enabled
+      });
+      this.isSavingConfig = false;
+      if (ok && this.toolsConfig) {
+        this.configForm = { ...this.toolsConfig };
+        this.whitelistText = (this.toolsConfig.whitelist || []).join('\n');
       }
     },
 
@@ -534,5 +661,36 @@ export default {
 }
 .p-4 {
   padding: 1.5rem;
+}
+
+.config-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--fg);
+}
+
+.config-hint {
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.config-error {
+  margin-top: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+.whitelist-editor {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
 }
 </style>

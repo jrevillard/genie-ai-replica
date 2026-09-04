@@ -3,15 +3,52 @@ import httpService from '@/services/httpService';
 const state = {
   feeds: [],
   isLoadingFeeds: false,
-  error: null
+  error: null,
+  config: null,
+  isLoadingConfig: false,
+  configError: null
 };
 
 const getters = {
   feeds: (state) => state.feeds,
-  isLoadingFeeds: (state) => state.isLoadingFeeds
+  isLoadingFeeds: (state) => state.isLoadingFeeds,
+  toolsConfig: (state) => state.config,
+  isLoadingConfig: (state) => state.isLoadingConfig
 };
 
 const actions = {
+  async fetchToolsConfig({ commit }) {
+    commit('SET_CONFIG_LOADING', true);
+    commit('SET_CONFIG_ERROR', null);
+    try {
+      const response = await httpService.get('admin/tools/config');
+      if (response.data && response.data.success) {
+        commit('SET_TOOLS_CONFIG', response.data.data);
+      }
+    } catch (error) {
+      commit('SET_CONFIG_ERROR', error.response?.data?.message || 'Failed to fetch tools configuration');
+      console.error('Error fetching tools config:', error);
+    } finally {
+      commit('SET_CONFIG_LOADING', false);
+    }
+  },
+
+  async saveToolsConfig({ commit }, configData) {
+    commit('SET_CONFIG_ERROR', null);
+    try {
+      const response = await httpService.put('admin/tools/config', configData);
+      if (response.data && response.data.success) {
+        commit('SET_TOOLS_CONFIG', response.data.data);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      commit('SET_CONFIG_ERROR', error.response?.data?.message || 'Failed to save tools configuration');
+      console.error('Error saving tools config:', error);
+      return false;
+    }
+  },
+
   async fetchFeeds({ commit }) {
     commit('SET_LOADING', true);
     commit('CLEAR_ERROR');
@@ -91,6 +128,18 @@ const actions = {
 };
 
 const mutations = {
+  SET_TOOLS_CONFIG(state, config) {
+    state.config = config;
+  },
+
+  SET_CONFIG_LOADING(state, value) {
+    state.isLoadingConfig = value;
+  },
+
+  SET_CONFIG_ERROR(state, value) {
+    state.configError = value;
+  },
+
   SET_FEEDS(state, feeds) {
     state.feeds = feeds;
   },

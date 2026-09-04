@@ -1277,6 +1277,12 @@ services:
       PII_REDACTOR_IMPL: ${PII_REDACTOR_IMPL:-regex}
       PRESIDIO_ANALYZER_URL: ${PRESIDIO_ANALYZER_URL:-http://presidio-analyzer:3000}
       PRESIDIO_ANONYMIZER_URL: ${PRESIDIO_ANONYMIZER_URL:-http://presidio-anonymizer:3000}
+      # Story 4-4: read-only access to the tools_config doc (runtime whitelist
+      # + tool toggles written by the admin UI via the BFF)
+      ARANGO_URL: ${ARANGO_URL:-http://arango-vector-db:8529}
+      ARANGO_DB: ${ARANGO_DB:-genie-ai}
+      ARANGO_USER: ${ARANGO_USER:-root}
+      ARANGO_PASSWORD: ${ARANGO_PASSWORD}
       EMBEDDING_SERVER_HOST_IP: embedding
       EMBEDDING_SERVER_PORT: 6000
       EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}

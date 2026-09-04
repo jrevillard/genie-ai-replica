@@ -44,7 +44,9 @@ const toolsService = {
   getFeeds: jest.fn().mockResolvedValue([{ id: 'feed-1', name: 'News' }]),
   createFeed: jest.fn().mockResolvedValue({ id: 'feed-2', name: 'New feed' }),
   updateFeed: jest.fn().mockResolvedValue({ id: 'feed-1', name: 'Updated' }),
-  deleteFeed: jest.fn().mockResolvedValue({ success: true })
+  deleteFeed: jest.fn().mockResolvedValue({ success: true }),
+  getConfig: jest.fn().mockResolvedValue({ whitelist: [], web_search_enabled: true }),
+  updateConfig: jest.fn().mockResolvedValue({ whitelist: [], web_search_enabled: true })
 };
 
 const app = express();
@@ -165,5 +167,67 @@ describe('write access', () => {
   it('legacy admin role retains write access', async () => {
     const response = await post('/api/admin/tools/feeds', 'admin', { name: 'x' });
     expect(response.status).toBe(201);
+  });
+});
+
+// ============================================================
+// Story 4-4 — tools config (domain whitelist + tool toggles)
+// ============================================================
+describe('tools config routes (story 4-4)', () => {
+  it('GET /config returns the service config', async () => {
+    toolsService.getConfig = jest.fn().mockResolvedValue({ whitelist: ['who.int'], web_search_enabled: true });
+    const response = await request(app).get('/api/admin/tools/config').set('x-test-roles', 'tools-reader');
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ whitelist: ['who.int'], web_search_enabled: true });
+  });
+
+  it('PUT /config rejects an invalid whitelist entry with 400', async () => {
+    const response = await request(app)
+      .put('/api/admin/tools/config')
+      .set('x-test-roles', 'tools-admin')
+      .send({ whitelist: ['not a domain!'], web_search_enabled: true });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('not a domain!');
+    expect(toolsService.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it('PUT /config rejects a partial payload (missing whitelist) with 400', async () => {
+    const response = await request(app)
+      .put('/api/admin/tools/config')
+      .set('x-test-roles', 'tools-admin')
+      .send({ web_search_enabled: false });
+    expect(response.status).toBe(400);
+    expect(toolsService.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it('PUT /config rejects a non-boolean toggle with 400', async () => {
+    const response = await request(app)
+      .put('/api/admin/tools/config')
+      .set('x-test-roles', 'tools-admin')
+      .send({ whitelist: [], web_search_enabled: 'false' });
+    expect(response.status).toBe(400);
+    expect(toolsService.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it('PUT /config returns 403 for tools-reader (negative authz)', async () => {
+    const response = await request(app)
+      .put('/api/admin/tools/config')
+      .set('x-test-roles', 'tools-reader')
+      .send({ whitelist: [], web_search_enabled: true });
+    expect(response.status).toBe(403);
+    expect(toolsService.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it('PUT /config normalizes and saves valid domains', async () => {
+    toolsService.updateConfig = jest.fn().mockResolvedValue({ whitelist: ['who.int'], web_search_enabled: true });
+    const response = await request(app)
+      .put('/api/admin/tools/config')
+      .set('x-test-roles', 'tools-admin')
+      .send({ whitelist: [' WHO.INT ', 'un.org'], web_search_enabled: true });
+    expect(response.status).toBe(200);
+    expect(toolsService.updateConfig).toHaveBeenCalledWith({
+      whitelist: ['who.int', 'un.org'],
+      web_search_enabled: true
+    });
   });
 });

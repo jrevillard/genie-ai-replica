@@ -433,3 +433,7 @@ Items deferred during code reviews. Revisit when the related component is next m
 ## Deferred from: code review of 1-5-otel-spans-on-governance-phases (2026-09-01)
 
 - **`with_span` never attaches OTel context — child spans don't nest** — `genie-ai-overlay/tracing.py:267` (`_SpanContext` wraps `start_span` without `trace.use_span`): spans created via `with_span` (governance phases, all five dataprep call sites) are never the *current* span, so auto-instrumented HTTP client spans inside them attach to the ambient request span and render as siblings in the trace waterfall, and `get_trace_context()` in phase-scoped logs reports the parent's span id. Fix belongs in `tracing.py` (`trace.use_span(span)` in `_SpanContext.__enter__`/`__exit__`) — one change fixes every `with_span` caller. Not done in story 1-5 (its AC5 forbade touching tracing.py); pick up as a small standalone change.
+
+## Deferred from: code review of 4-4-tool-management-and-domain-whitelist-editor (2026-09-01)
+
+- **Dedicated limited ArangoDB user for chatqna's tools_config read** — story 4-4 gave chatqna `ARANGO_USER=root` + password (matching every overlay service: dataprep, retriever, stream-ingestor all run on root). The chatqna container can now read/write every collection (users, conversations). A `_tools_config`-read-only user provisioned at stack init (Arango REST API or Foxx) would bound the blast radius; systemic change across services, not one story. Revisit alongside any Arango hardening pass.

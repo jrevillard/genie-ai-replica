@@ -7,6 +7,8 @@ degradation extraction from the megaservice result dict."""
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from chatqna.genieai_chatqna import ChatQnAService
 from workflows.tools.web_search import WebSearchError
 
@@ -489,3 +491,87 @@ class TestKillSwitchHardening:
             out_docs, degradation = self.svc._apply_web_search_fallback([_kb_doc()], "latest", 0.1)
         assert degradation is None
         assert out_docs is not None
+
+
+# ---------------------------------------------------------------------------
+# Story 4-4 — runtime tools config (whitelist + doc toggle)
+# ---------------------------------------------------------------------------
+class TestToolsConfigEnforcement:
+    def setup_method(self):
+        self.svc = create_chatqna_service()
+
+    @pytest.mark.asyncio
+    async def test_doc_disabled_behaves_as_kill_switch(self):
+        with (
+            patch.object(
+                self.svc,
+                "_fetch_tools_config",
+                return_value={"whitelist": [], "web_search_enabled": False},
+            ),
+            patch("workflows.tools.web_search.SearxngBackend.search_sync") as mock_search,
+        ):
+            out_docs, degradation = self.svc._apply_web_search_fallback([_kb_doc()], "latest deadlines", 0.1)
+        mock_search.assert_not_called()
+        assert degradation is None  # KB docs exist -> silent RAG-only (2-7 semantics)
+
+    @pytest.mark.asyncio
+    async def test_env_off_wins_over_doc_on(self):
+        with (
+            patch.object(self.svc, "_fetch_tools_config", return_value={"whitelist": [], "web_search_enabled": True}),
+            patch.dict("os.environ", {"WEB_SEARCH_ENABLED": "false"}),
+            patch("workflows.tools.web_search.SearxngBackend.search_sync") as mock_search,
+        ):
+            out_docs, degradation = self.svc._apply_web_search_fallback([_kb_doc()], "latest", 0.1)
+        mock_search.assert_not_called()
+        assert degradation is None
+
+    @pytest.mark.asyncio
+    async def test_whitelist_filters_results_before_fusion(self):
+        results = [
+            _web_result(title="WHO", url="https://www.who.int/news/a"),
+            _web_result(title="Random", url="https://blog.example.com/post"),
+            _web_result(title="UN", url="https://un.org/press"),
+        ]
+        config = {"whitelist": ["who.int", "un.org"], "web_search_enabled": True}
+        with (
+            patch.object(self.svc, "_fetch_tools_config", return_value=config),
+            patch("workflows.tools.web_search.SearxngBackend.search_sync", return_value=results),
+            patch(
+                "workflows.tools.fusion.ResultFusionEngine.fuse", side_effect=lambda rag, tool, tool_id: [*rag, *tool]
+            ),
+        ):
+            out_docs, degradation = self.svc._apply_web_search_fallback([_kb_doc()], "latest deadlines", 0.1)
+        urls = [d.get("tool_url") or d.get("url", "") for d in out_docs]
+        assert any("who.int" in u for u in urls)  # subdomain covered
+        assert any("un.org" in u for u in urls)  # exact match
+        assert not any("example.com" in u for u in urls)  # dropped
+
+    @pytest.mark.asyncio
+    async def test_all_results_whitelisted_out_low_quality(self):
+        results = [_web_result(url="https://blocked.example.com/x")]
+        config = {"whitelist": ["who.int"], "web_search_enabled": True}
+        with (
+            patch.object(self.svc, "_fetch_tools_config", return_value=config),
+            patch("workflows.tools.web_search.SearxngBackend.search_sync", return_value=results),
+        ):
+            out_docs, degradation = self.svc._apply_web_search_fallback([], "latest", 0.1)
+        assert out_docs == []
+        assert degradation["reason"] == "LOW_QUALITY"  # expected filtering, not an outage
+
+    @pytest.mark.asyncio
+    async def test_config_fetch_failure_degrades_to_env_behavior(self):
+        with (
+            patch.object(self.svc, "_fetch_tools_config", return_value=None),
+            patch("workflows.tools.web_search.SearxngBackend.search_sync", return_value=[_web_result()]) as mock_search,
+        ):
+            out_docs, degradation = self.svc._apply_web_search_fallback([], "latest", 0.1)
+        mock_search.assert_called_once()  # env default (on) applies; search proceeds
+        assert len(out_docs) == 1
+
+    def test_host_matches_whitelist_suffix_semantics(self):
+        wl = ["who.int"]
+        assert self.svc._host_matches_whitelist("https://www.who.int/a", wl) is True
+        assert self.svc._host_matches_whitelist("http://who.int", wl) is True
+        assert self.svc._host_matches_whitelist("https://notwho.int/a", wl) is False  # not a subdomain
+        assert self.svc._host_matches_whitelist("https://anything.test", []) is True  # empty = no filter
+        assert self.svc._host_matches_whitelist("not a url", wl) is False

@@ -1,6 +1,6 @@
 ---
 key: 1-3-env-j2-render-3-new-vars-unconditionally
-title: "\"env.j2: render 3 new vars unconditionally"
+title: "env.j2: render 3 new vars unconditionally"
 epic: epic-1
 status: done
 followup_review_recommended: false

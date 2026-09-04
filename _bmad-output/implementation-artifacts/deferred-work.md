@@ -2011,3 +2011,11 @@ source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
 severity: medium
 reason: `.gitlab-ci.yml:2981-2986`. Only the `run-melt-test.sh` line carries `|| true`. Both the missing chaos driver and its `reports/melt-chaos-report.xml` artifact belong to DW-325.
 status: open
+
+### DW-329: The Story 1.6 row in `epics.md` carries a `Files` cell copied from Story 7.5 (`verify allow_failure: true on scheduled:melt-correlation`), and the 1.3/1.4/1.5 rows carry stray trailing backticks.
+origin: spec-deferred 020e855723e5
+location: _bmad-output/planning-artifacts/epics.md:57
+source_spec: `1-6-docs-security-cve-triage-2026q3-md-update-optional.md`
+severity: low
+reason: `_bmad-output/planning-artifacts/epics.md:57-63` — the Story 1.6 Files cell names `.gitlab-ci.yml:2942-2984`, which is Story 7.5's subject, not this story's (`docs/security/cve-triage-2026q3.md`, per the row's own title). The generated story spec inherited the wrong value. Pre-existing planning-artifact drift, not caused by this change; corrected locally in this story's frontmatter and Spec Change Log, but the source table still misleads anyone reading `epics.md` directly.
+status: open

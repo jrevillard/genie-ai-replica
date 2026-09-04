@@ -1987,3 +1987,27 @@ resolution: stub only; no further work in admin-logs-victorialogs-migration scop
 - **DW-X1: Resource-cost impact of always-on VL + OTel Collector** — quantify baseline memory/CPU + `vlogs-data` persistent volume impact via Ansible runbook validation. Pre-existing — outside story scope.
 - **DW-X2: `site/content/en/docs/observability/` docstring alignment** — if it still says VL is opt-in, align in a dedicated docs MR.
 - **DW-X3: CI `config:validate` job under `ENABLE_OBSERVABILITY=0`** — confirm collector-config-file deployment + new structural tests pass when CI runs without the observability profile.
+
+### DW-326: No MR-pipeline automated test covers the melt-correlation stub contract (exit 0, two valid JUnit XML files, unknown-flag tolerance).
+origin: spec-deferred 4402ccdb83e0
+location: tests/melt-correlation/run-melt-test.sh
+source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
+severity: low
+reason: The only in-repo invokers are the `scheduled:melt-correlation` and `scheduled:melt-chaos` jobs, gated on `$CI_PIPELINE_SOURCE == "schedule" && $ENABLE_OBSERVABILITY == "1"`, so a regression in the stub is invisible on MR pipelines until a scheduled run weeks later. A real test belongs with the DW-325 suite that replaces the stub.
+status: open
+
+### DW-327: `.gitlab-ci.yml` comments attribute the melt jobs to a non-existent "Story 7-10".
+origin: spec-deferred b1fd8655b376
+location: .gitlab-ci.yml:2942
+source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
+severity: low
+reason: `.gitlab-ci.yml:2942` and `:2970` reference "Story 7-10"; no such story exists in this initiative. Pre-existing comment drift, not caused by this change.
+status: open
+
+### DW-328: `scheduled:melt-chaos` cannot pass even with the stub: it runs `npm ci` in a directory with no package.json and then `node chaos-resilience.test.js`, which does not exist.
+origin: spec-deferred 8304a8e9593e
+location: .gitlab-ci.yml:2981
+source_spec: `1-5-tests-melt-correlation-ci-stub-exit-0-readme.md`
+severity: medium
+reason: `.gitlab-ci.yml:2981-2986`. Only the `run-melt-test.sh` line carries `|| true`. Both the missing chaos driver and its `reports/melt-chaos-report.xml` artifact belong to DW-325.
+status: open

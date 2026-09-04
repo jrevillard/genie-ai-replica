@@ -2,7 +2,7 @@
 key: 2-12-prometheus-log_record_dropped_total-reason-counter
 title: Prometheus: `log_record_dropped_total{reason=...}` counter
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [2.6]
 files: components/gov-chat-backend/metrics.js

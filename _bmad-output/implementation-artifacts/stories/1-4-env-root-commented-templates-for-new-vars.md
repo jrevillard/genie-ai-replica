@@ -2,7 +2,7 @@
 key: 1-4-env-root-commented-templates-for-new-vars
 title: env (root): commented templates for new vars
 epic: epic-1
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: []
 files: env` (Section 12C)

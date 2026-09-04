@@ -2,7 +2,7 @@
 key: 4-7-tests-empty-melt_provider-whitelist-verification-on-boot
 title: tests: empty `MELT_PROVIDER` whitelist verification on boot
 epic: epic-4
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: [4.6]
 files: tests/config-validator/__tests__/melt-provider.test.js` (new)

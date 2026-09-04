@@ -2,7 +2,7 @@
 key: 3-2-document-repository-tracing-js-logs-only-path
 title: document-repository: tracing.js (logs-only path)
 epic: epic-3
-status: backlog
+status: ready-for-dev
 effort: 0.5
 depends_on: [3.1, Epic 2]
 files: components/document-repository/src/tracing.js` (new)

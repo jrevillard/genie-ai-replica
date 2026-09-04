@@ -2,7 +2,7 @@
 key: 2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes
 title: tests: PII scrubbing covers body field (not just attributes)
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [2.6]
 files: components/gov-chat-backend/__tests__/p-l-lig-pii-scrubbing.test.js` (new)

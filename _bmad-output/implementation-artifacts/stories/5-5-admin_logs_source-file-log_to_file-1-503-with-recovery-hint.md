@@ -2,7 +2,7 @@
 key: 5-5-admin_logs_source-file-log_to_file-1-503-with-recovery-hint
 title: ADMIN_LOGS_SOURCE=file + LOG_TO_FILE !== '1' → 503 with recovery hint
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: [5.3]
 files: logs-service.js

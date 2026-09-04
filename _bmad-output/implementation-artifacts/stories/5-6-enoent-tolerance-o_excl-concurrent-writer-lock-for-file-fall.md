@@ -2,7 +2,7 @@
 key: 5-6-enoent-tolerance-o_excl-concurrent-writer-lock-for-file-fall
 title: ENOENT tolerance + O_EXCL concurrent-writer lock for file fallback
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: [5.4]
 files: logs-service.js

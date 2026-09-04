@@ -2,7 +2,7 @@
 key: 2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra
 title: shared/lib/logger.js: format=json, drop traceFormat, add VL transport
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.5
 depends_on: [2.4]
 files: components/shared/lib/logger.js:24-30, 41-70, 77-122

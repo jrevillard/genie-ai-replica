@@ -2,7 +2,7 @@
 key: 2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter
 title: tests: `logger-vl-integration.test.js` (fake OTLPLogExporter)
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [2.6]
 files: components/gov-chat-backend/__tests__/logger-vl-integration.test.js` (new)

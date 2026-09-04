@@ -2,7 +2,7 @@
 key: 5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d
 title: frontend: `LogSearchDialog.vue` `computed.banner` from `response.degraded` + i18n keys
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [5.3]
 files: components/gov-chat-frontend/src/components/

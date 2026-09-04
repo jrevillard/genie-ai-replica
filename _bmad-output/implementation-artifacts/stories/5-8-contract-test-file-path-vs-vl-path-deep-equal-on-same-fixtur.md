@@ -2,7 +2,7 @@
 key: 5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur
 title: contract test: file path vs VL path deep-equal on same fixture
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.25
 depends_on: [5.1, 5.2]
 files: components/gov-chat-backend/__tests__/services/logs-vl-contract.test.js` (new)

@@ -2,7 +2,7 @@
 key: 5-12-grep-fix-other-printf-regex-assertions-in-test-suite
 title: grep + fix other printf regex assertions in test suite
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: [5.11]
 files: various

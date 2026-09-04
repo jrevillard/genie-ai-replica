@@ -2,7 +2,7 @@
 key: 4-6-tests-config-validator-whitelist-melt_provider-victorialogs
 title: tests/config-validator: whitelist `MELT_PROVIDER` ∈ {victorialogs}
 epic: epic-4
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: []
 files: tests/config-validator/validators/validate-features.js

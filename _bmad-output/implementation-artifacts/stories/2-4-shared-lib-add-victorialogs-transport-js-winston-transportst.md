@@ -2,7 +2,7 @@
 key: 2-4-shared-lib-add-victorialogs-transport-js-winston-transportst
 title: shared/lib: add `victorialogs-transport.js` (Winston TransportStream)
 epic: epic-2
-status: backlog
+status: ready-for-dev
 effort: 0.5
 depends_on: [2.1]
 files: components/shared/lib/victorialogs-transport.js` (new)

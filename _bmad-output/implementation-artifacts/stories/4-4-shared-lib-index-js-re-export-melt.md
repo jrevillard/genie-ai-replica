@@ -2,7 +2,7 @@
 key: 4-4-shared-lib-index-js-re-export-melt
 title: shared/lib/index.js: re-export `melt/`
 epic: epic-4
-status: backlog
+status: ready-for-dev
 effort: 0.05
 depends_on: [4.2]
 files: components/shared/lib/index.js

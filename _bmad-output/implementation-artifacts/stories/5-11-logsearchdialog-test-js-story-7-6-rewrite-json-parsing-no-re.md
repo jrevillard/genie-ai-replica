@@ -2,7 +2,7 @@
 key: 5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re
 title: LogSearchDialog.test.js Story 7.6 rewrite (JSON parsing, no regex)
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: [5.7]
 files: components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js:885-948

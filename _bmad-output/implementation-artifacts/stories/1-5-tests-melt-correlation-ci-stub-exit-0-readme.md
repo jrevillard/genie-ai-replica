@@ -2,7 +2,7 @@
 key: 1-5-tests-melt-correlation-ci-stub-exit-0-readme
 title: tests/melt-correlation/: CI stub (exit 0) + README
 epic: epic-1
-status: backlog
+status: ready-for-dev
 effort: 0.1
 depends_on: []
 files: tests/melt-correlation/{run-melt-test.sh,README.md}` (new)

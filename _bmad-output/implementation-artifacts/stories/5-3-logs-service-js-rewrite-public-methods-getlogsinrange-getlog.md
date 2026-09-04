@@ -2,7 +2,7 @@
 key: 5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog
 title: logs-service.js: rewrite public methods (`getLogsInRange`, `getLogsSummary`, `searchLogs`, `getDebugYesterday`) using `VictoriaLogsClient`; per-call env read for `ADMIN_LOGS_SOURCE`; `VL_FAIL_OPEN` + `VL_QUERY_TIMEOUT_MS`; `getLogFilesInRange` returns synthetic descriptors
 epic: epic-5
-status: backlog
+status: ready-for-dev
 effort: 1.0
 depends_on: [Epic 4]
 files: components/gov-chat-backend/services/logs-service.js

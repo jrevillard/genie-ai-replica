@@ -2,7 +2,7 @@
 key: 4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize
 title: shared/lib/melt/victorialogs-client.js: axios wire + `_normalizeRows` (AD-3 sub-shapes) + AcctID/ProjID headers + lazy health probe + `VL_QUERY_TIMEOUT_MS`
 epic: epic-4
-status: backlog
+status: ready-for-dev
 effort: 0.5
 depends_on: [4.1]
 files: components/shared/lib/melt/victorialogs-client.js` (new)

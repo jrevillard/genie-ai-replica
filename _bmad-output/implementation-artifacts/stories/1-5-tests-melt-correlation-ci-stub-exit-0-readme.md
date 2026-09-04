@@ -1,6 +1,6 @@
 ---
 key: 1-5-tests-melt-correlation-ci-stub-exit-0-readme
-title: tests/melt-correlation/: CI stub (exit 0) + README
+title: "tests/melt-correlation/: CI stub (exit 0) + README"
 epic: epic-1
 status: ready-for-dev
 effort: 0.1

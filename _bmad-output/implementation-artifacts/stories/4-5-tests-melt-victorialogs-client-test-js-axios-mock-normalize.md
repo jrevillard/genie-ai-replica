@@ -1,6 +1,6 @@
 ---
 key: 4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize
-title: tests: `melt/victorialogs-client.test.js` (axios mock + normalize + AccountID headers + retry behavior + empty trace_id drop + reserved-char escape)
+title: "tests: `melt/victorialogs-client.test.js` (axios mock + normalize + AccountID headers + retry behavior + empty trace_id drop + reserved-char escape)"
 epic: epic-4
 status: ready-for-dev
 effort: 0.25

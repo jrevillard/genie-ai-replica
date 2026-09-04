@@ -1,6 +1,6 @@
 ---
 key: 2-12-prometheus-log_record_dropped_total-reason-counter
-title: Prometheus: `log_record_dropped_total{reason=...}` counter
+title: "Prometheus: `log_record_dropped_total{reason=...}` counter"
 epic: epic-2
 status: ready-for-dev
 effort: 0.25

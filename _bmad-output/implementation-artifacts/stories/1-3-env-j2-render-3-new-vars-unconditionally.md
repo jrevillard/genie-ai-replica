@@ -1,13 +1,13 @@
 ---
 key: 1-3-env-j2-render-3-new-vars-unconditionally
-title: "env.j2: render 3 new vars unconditionally
+title: "\"env.j2: render 3 new vars unconditionally"
 epic: epic-1
 status: done
 followup_review_recommended: false
 effort: 0.25
 baseline_revision: 664c55d66c8e772fdf8c9f9d03f483ff99572be2
 depends_on: []
-files: deploy/ansible/templates/env.j2` (after `:239`)
+files: "deploy/ansible/templates/env.j2` (after `:239`)"
 ---
 
 ## Implementation Handoff

@@ -1,11 +1,11 @@
 ---
 key: 1-2-otel-collector-config-add-otlp-to-logs-receivers
-title: otel-collector-config: add `otlp` to logs receivers
+title: "otel-collector-config: add `otlp` to logs receivers"
 epic: epic-1
 status: done
 effort: 0.25
 depends_on: []
-files: configs/otel/otel-collector-config.yaml:183-189
+files: "configs/otel/otel-collector-config.yaml:183-189"
 baseline_commit: ffdab9c93
 ---
 

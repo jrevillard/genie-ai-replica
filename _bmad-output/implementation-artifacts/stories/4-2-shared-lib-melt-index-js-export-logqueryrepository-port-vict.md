@@ -1,6 +1,6 @@
 ---
 key: 4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict
-title: shared/lib/melt/index.js: export `LogQueryRepository` (port), `VictoriaLogsAdapter` (impl), `VictoriaLogsClient` (application)
+title: "shared/lib/melt/index.js: export `LogQueryRepository` (port), `VictoriaLogsAdapter` (impl), `VictoriaLogsClient` (application)"
 epic: epic-4
 status: ready-for-dev
 effort: 0.25

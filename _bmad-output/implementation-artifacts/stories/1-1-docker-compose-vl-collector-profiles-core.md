@@ -1,11 +1,11 @@
 ---
 key: 1-1-docker-compose-vl-collector-profiles-core
-title: docker-compose: VL + Collector → always-on (no profile)
+title: "docker-compose: VL + Collector → always-on (no profile)"
 epic: epic-1
 status: done
 effort: 0.5
 depends_on: []
-files: docker-compose.yaml:1650,1671,1749  # line numbers pre-edit; see `git diff feat/admin-logs-victorialogs/prd..HEAD -- docker-compose.yaml` for current
+files: "docker-compose.yaml:1650,1671,1749  # line numbers pre-edit; see `git diff feat/admin-logs-victorialogs/prd..HEAD -- docker-compose.yaml` for current"
 ---
 
 # Story 1.1 — docker-compose: VL + Collector → profiles:[core]

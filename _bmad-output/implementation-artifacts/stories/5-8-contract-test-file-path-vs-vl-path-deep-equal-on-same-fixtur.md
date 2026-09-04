@@ -1,6 +1,6 @@
 ---
 key: 5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur
-title: contract test: file path vs VL path deep-equal on same fixture
+title: "contract test: file path vs VL path deep-equal on same fixture"
 epic: epic-5
 status: ready-for-dev
 effort: 0.25

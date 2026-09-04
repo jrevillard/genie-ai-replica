@@ -1,6 +1,6 @@
 ---
 key: 3-1-document-repository-package-json-add-otel-deps-winston-forma
-title: document-repository: package.json add OTel deps + winston-format-json
+title: "document-repository: package.json add OTel deps + winston-format-json"
 epic: epic-3
 status: ready-for-dev
 effort: 0.1

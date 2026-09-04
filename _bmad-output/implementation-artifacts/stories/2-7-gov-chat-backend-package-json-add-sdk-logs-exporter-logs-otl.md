@@ -1,6 +1,6 @@
 ---
 key: 2-7-gov-chat-backend-package-json-add-sdk-logs-exporter-logs-otl
-title: gov-chat-backend: package.json add sdk-logs + exporter-logs-otlp-http
+title: "gov-chat-backend: package.json add sdk-logs + exporter-logs-otlp-http"
 epic: epic-2
 status: ready-for-dev
 effort: 0.1

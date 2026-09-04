@@ -1,6 +1,6 @@
 ---
 key: 2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass
-title: tests: extend logger-functions, logger-otel-trace (JSON-key assertions)
+title: "tests: extend logger-functions, logger-otel-trace (JSON-key assertions)"
 epic: epic-2
 status: ready-for-dev
 effort: 0.25

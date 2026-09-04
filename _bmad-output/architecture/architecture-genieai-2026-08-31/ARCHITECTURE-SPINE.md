@@ -8,7 +8,7 @@ scope: 'P0-P4 migration of admin logs + security-scan endpoints from Winston fil
 status: final
 created: '2026-08-31'
 updated: '2026-08-31'
-binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8]
+binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7]
 sources:
   - /home/jerome/.claude/plans/snuggly-mapping-aho.md
   - /home/jerome/git_projects/ITU/genie-ai/_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md

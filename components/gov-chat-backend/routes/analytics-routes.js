@@ -3,7 +3,7 @@ const router = express.Router();
 const AnalyticsController = require('../controllers/analyticsController');
 const { logger } = require('../shared-lib');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { parsePositiveInt } = require('../shared-lib');
 
 module.exports = (analyticsService) => {
   try {

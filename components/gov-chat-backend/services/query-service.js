@@ -5,7 +5,7 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { parsePositiveInt } = require('../shared-lib');
 
 class QueryService {
   constructor() {

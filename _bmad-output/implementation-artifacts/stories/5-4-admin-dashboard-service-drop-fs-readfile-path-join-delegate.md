@@ -17,6 +17,10 @@ files: "components/gov-chat-backend/services/admin-dashboard-service.js:466-585,
 
 See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bmad-output/planning-artifacts/epics.md#5` for the epic-level acceptance criteria; this story is one contributing step.
 
+**Concrete acceptance (added by Epic 5 review):**
+- F4 regex at `admin-dashboard-service.js:525` deleted (confirmed live).
+- File fallback path uses `JSON.parse(line)`, NOT regex. **NEW:** Add `it('uses JSON.parse, not regex, in file fallback')` assertion to `components/gov-chat-backend/__tests__/services/logs-vl-contract.test.js`. Pinned JSON-key assertion: `info.trace_id` / `info.span_id` are JSON keys, not printf substrings. (The 5.8 contract test alone is end-to-end parity; would not fail if a future refactor reverts to regex.)
+
 ## References
 
 - `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`

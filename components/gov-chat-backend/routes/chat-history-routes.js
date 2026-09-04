@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { parsePositiveInt } = require('../shared-lib');
 
 module.exports = (chatHistoryService) => {
   // Helper function to extract user ID from the JWT-authenticated request

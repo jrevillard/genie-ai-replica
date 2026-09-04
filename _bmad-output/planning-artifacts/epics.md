@@ -178,14 +178,6 @@
 | Files | `components/document-repository/src/tracing.js` (new)` |
 | Depends on | [3.1, Epic 2] |
 
-### Story 3.3: document-repository: require('./tracing') at app.js:1
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.05 SP |
-| Files | `components/document-repository/src/app.js` |
-| Depends on | [3.2] |
-
 ### Story 3.4: document-repository: ClamAV observability events (`clamav.scan.*`) per AD-20
 
 | Field | Value |
@@ -248,14 +240,6 @@
 | Files | `tests/config-validator/validators/validate-features.js` |
 | Depends on | [] |
 
-### Story 4.7: tests: empty `MELT_PROVIDER` whitelist verification on boot
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `tests/config-validator/__tests__/melt-provider.test.js` (new)` |
-| Depends on | [4.6] |
-
 ---
 
 ## Epic 5 — Logs facility rewire (admin endpoints + F4 fix)
@@ -293,22 +277,6 @@
 | Effort | 0.5 SP |
 | Files | `components/gov-chat-backend/services/admin-dashboard-service.js:466-585, 525, 591` |
 | Depends on | [5.3] |
-
-### Story 5.5: ADMIN_LOGS_SOURCE=file + LOG_TO_FILE !== '1' → 503 with recovery hint
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `logs-service.js` |
-| Depends on | [5.3] |
-
-### Story 5.6: ENOENT tolerance + O_EXCL concurrent-writer lock for file fallback
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `logs-service.js` |
-| Depends on | [5.4] |
 
 ### Story 5.7: frontend: `LogSearchDialog.vue` `computed.banner` from `response.degraded` + i18n keys
 
@@ -350,12 +318,12 @@
 | Files | `components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js:885-948` |
 | Depends on | [5.7] |
 
-### Story 5.12: grep + fix other printf regex assertions in test suite
+### Story 5.12: grep + fix other printf regex assertions — AdminDashboard.parseLogMessage + tests
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.1 SP |
-| Files | `various` |
+| Effort | 0.25 SP |
+| Files | `components/gov-chat-frontend/src/__tests__/AdminDashboard.test.js` (rewrite lines 1036, 1038, 1042, 1044, 1056); `components/gov-chat-frontend/src/components/AdminDashboard.vue` (rewrite `parseLogMessage()` from regex to JSON.parse) |
 | Depends on | [5.11] |
 
 ---
@@ -418,20 +386,20 @@
 | Files | `components/gov-chat-backend/routes/{admin,logger}-routes.js:170, 97, 198` |
 | Depends on | [Epic 5] |
 
-### Story 7.3: shared/lib/index.js: stop re-exporting `reconfigureLogger`, `triggerLogRollover`, `cleanupCombinedLog`; logger-routes.js imports internal `./logger` not via shared/lib
+### Story 7.3: shared/lib/index.js: ADD re-exports for `reconfigureLogger`, `triggerLogRollover`, `cleanupCombinedLog` (latent prod crash fix)
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.25 SP |
-| Files | `components/shared/lib/index.js` + `components/gov-chat-backend/routes/logger-routes.js:4` |
-| Depends on | [7.2] |
+| Effort | 0.05 SP |
+| Files | `components/shared/lib/index.js` |
+| Depends on | [] |
 
-### Story 7.4: tests: `linter-shared-lib-re-exports.test.js` (assert logger-routes.js imports from `./logger`); `routes/logger-routes.test.js` deprecated endpoints
+### Story 7.4: ESLint `no-restricted-imports` rule in `components/shared/eslint-rules-base.js` (ban `**/shared/lib/**` deep imports)
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.25 SP |
-| Files | `components/gov-chat-backend/__tests__/` (new)` |
+| Effort | 0.1 SP |
+| Files | `components/shared/eslint-rules-base.js` (modify — add `no-restricted-imports` rule to existing exports; propagates to backend + frontend + shared/lib via existing spread) |
 | Depends on | [7.3] |
 
 ### Story 7.5: ~~DELETED~~ — previously verify CI `allow_failure: true` on `scheduled:melt-correlation`. Cancelled 2026-09-04 (Epic 1 review): the scheduled CI jobs + stub are deleted; chaos/correlation testing is out of project scope. DW-325..DW-329 resolved by deletion.

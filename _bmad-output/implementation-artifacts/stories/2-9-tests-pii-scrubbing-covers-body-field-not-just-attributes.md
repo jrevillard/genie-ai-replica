@@ -5,17 +5,20 @@ epic: epic-2
 status: ready-for-dev
 effort: 0.25
 depends_on: [2.6]
-files: components/gov-chat-backend/__tests__/p-l-lig-pii-scrubbing.test.js` (new)
+files: components/gov-chat-backend/__tests__/pii-body-scrubbing.test.js` (new)
 ---
 
 # Story 2.9 — tests: PII scrubbing covers body field (not just attributes)
 
 **Epic**: epic-2 (0.25 SP)
-**Files**: `components/gov-chat-backend/__tests__/p-l-lig-pii-scrubbing.test.js` (new)`
+**Files**: `components/gov-chat-backend/__tests__/pii-body-scrubbing.test.js` (new)`
 
 ## Acceptance
 
 See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bmad-output/planning-artifacts/epics.md#2` for the epic-level acceptance criteria; this story is one contributing step.
+
+**Concrete acceptance (added by Epic 2 review):**
+- File path renamed `p-l-lig-pii-scrubbing.test.js` → `pii-body-scrubbing.test.js` for grep-ability (Epic 2 review).
 
 ## References
 

@@ -27,6 +27,8 @@
 #   - Orchestrator endpoints use ${VAR:-default} pattern; override from .env for remote GPU
 #   - profiles: [observability] controls Observability stack in compose up; Swarm ignores
 #     them and uses ENABLE_OBSERVABILITY env var instead (default: 0 = disabled)
+#   - profiles: [tools] controls SST services (searxng is always-on by design;
+#     presidio + stream-ingestor are gated)
 #   - build: enables local builds (docker compose up); Swarm ignores it and uses image:
 #   - GPU access via NVIDIA_VISIBLE_DEVICES env var (no runtime: nvidia)
 #
@@ -671,6 +673,10 @@ services:
   stream-ingestor:
     logging: *fluent-logging
     restart: unless-stopped
+    # SST service (Epic 3), gated like the other tools services — it depends on
+    # dataprep-arango-service (profiles: [opea]), so a bare `docker compose up`
+    # could never run it anyway; the profile fixes the default config render
+    profiles: [tools]
     build:
       context: .
       dockerfile: genie-ai-overlay/stream_ingestor/Dockerfile-stream-ingestor

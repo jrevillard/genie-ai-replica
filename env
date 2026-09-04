@@ -685,6 +685,49 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # GRAFANA_ALERT_WEBHOOK_URL=
 # GRAFANA_ALERT_EMAIL=
 
+# --- Admin Logs Migration: VictoriaLogs + OTel logs egress (CAP-7 / 1.5+) ---
+# Backend (Node.js) + doc-repo + OPEA services ship structured logs via OTel Collector.
+# VL is always-on; LOG_TO_VICTORIALOGS is still gated on ENABLE_OBSERVABILITY=1.
+# Uncomment to override defaults (all have sensible defaults in docker-compose):
+
+# OTLP logs endpoint — backend + doc-repo + OPEA export logs to Collector (P0)
+# Distinct from OTEL_EXPORTER_OTLP_ENDPOINT (base URL, used for traces + metrics)
+# OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://otel-collector:4318/v1/logs
+
+# VictoriaLogs base URL for VictoriaLogsClient (P0)
+# VICTORIALOGS_URL=http://victorialogs:9428
+
+# VL tenant header for /select/logsql/* (P1b) — AccountID:ProjectID (VL 1.50+ canonical)
+# 0:0 = default tenant
+# VICTORIALOGS_TENANT_ID=0:0
+
+# axios timeout for VictoriaLogsClient.query / .hits (P1b)
+# Raised for 7-day security scans
+# VL_QUERY_TIMEOUT_MS=30000
+
+# Enables VictoriaLogsTransport in components/shared/lib/logger.js (P1a)
+# Boolean coercion: 1 | true | TRUE | yes activates transport
+# LOG_TO_VICTORIALOGS=1
+
+# MELT backend selector (single implementation today) (P1b)
+# Whitelisted in tests/config-validator/
+# MELT_PROVIDER=victorialogs
+
+# When true, VL 5xx / ECONNREFUSED / ENOTFOUND / timeout returns {logs:[], degraded:true} (P2)
+# Pre-P2 deploys: no-op + warn log
+# VL_FAIL_OPEN=false
+
+# D2 fallback switch — permanent escape hatch (P2)
+# LogsService reads per-call (no restart needed)
+# ADMIN_LOGS_SOURCE=victorialogs
+
+# Falls back to worker_threads file scan if set to file (P3)
+# SECURITY_SCAN_BACKEND=victorialogs
+
+# Enables Winston DailyRotateFile + tailable File transports (P4)
+# Escape hatch for first 30 days post-cutover
+# LOG_TO_FILE=0
+
 # Grafana admin password (required secret, no default)
 # Used by: grafana service
 GRAFANA_ADMIN_PASSWORD=

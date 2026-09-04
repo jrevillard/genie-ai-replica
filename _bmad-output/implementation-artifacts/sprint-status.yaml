@@ -69,7 +69,7 @@ development_status:
   1-1-docker-compose-vl-collector-profiles-core: done
   1-2-otel-collector-config-add-otlp-to-logs-receivers: done
   1-3-env-j2-render-3-new-vars-unconditionally: done
-  1-4-env-root-commented-templates-for-new-vars: ready-for-dev
+  1-4-env-root-commented-templates-for-new-vars: done
   1-5-tests-melt-correlation-ci-stub-exit-0-readme: ready-for-dev
   1-6-docs-security-cve-triage-2026q3-md-update-optional: ready-for-dev
   epic-1-retrospective: optional

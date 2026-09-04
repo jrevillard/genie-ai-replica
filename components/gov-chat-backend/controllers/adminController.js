@@ -1,7 +1,7 @@
 const AdminDashboardService = require('../services/admin-dashboard-service');
 const LogsService = require('../services/logs-service');
 const { logger, triggerLogRollover } = require('../shared-lib');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { parsePositiveInt } = require('../shared-lib');
 
 const adminController = {
   async getSystemHealth(req, res) {

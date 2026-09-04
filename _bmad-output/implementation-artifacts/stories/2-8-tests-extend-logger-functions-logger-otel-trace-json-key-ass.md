@@ -5,7 +5,7 @@ epic: epic-2
 status: ready-for-dev
 effort: 0.25
 depends_on: [2.5]
-files: components/gov-chat-backend/__tests__/{logger-functions,logger-otel-trace}.test.js
+files: components/gov-chat-backend/__tests__/{logger-functions,logger-otel-trace}.test.js (DELETE `logFormat output (printf format)` block at logger-functions.test.js:224-278; assert `info.trace_id` / `info.span_id` are JSON keys, not printf substrings)
 ---
 
 # Story 2.8 — tests: extend logger-functions, logger-otel-trace (JSON-key assertions)

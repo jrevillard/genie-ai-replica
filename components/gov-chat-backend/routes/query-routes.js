@@ -7,7 +7,7 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger } = require('../shared-lib');
 const translationService = require('../services/translation-service');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
-const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const { parsePositiveInt } = require('../shared-lib');
 
 module.exports = (queryService) => {
   // Apply authentication middleware to all routes

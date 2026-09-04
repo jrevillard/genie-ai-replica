@@ -66,15 +66,11 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
 
 ## Decisions
 
-- **D1 (a)** Remove `profiles: [observability]` from VL + OTel Collector + otel-collector-init; pin `victorialogs.deploy.replicas: 1`. VL always-on; admin endpoints always functional regardless of `ENABLE_OBSERVABILITY`. Captured as constraint C-7 in production deploys.
+- **D1 (a)** Remove `profiles: [observability]` from VL + OTel Collector + otel-collector-init; pin `victorialogs.deploy.replicas: 1`. VL always-on; admin endpoints always functional regardless of `ENABLE_OBSERVABILITY`. Captured as constraint C-3 (egress via OTel Collector) + AD-7 (config split).
 - **D2** `ADMIN_LOGS_SOURCE=file|victorialogs` is a **permanent** escape hatch, never removed. Default is `victorialogs` after first release.
 - **D3** VL service filter scope = all services (`service:*`). Admin UI default filter = "All". Full-stack view.
 - **D4** Producer-first sequencing. Winston emits to VL before any consumer rewires land.
 - **D6** Apps POST OTLP logs via OTel Collector at `:4318/v1/logs`. Direct VL is allowed only as env override.
-
-## Success signal
-
-See [`verification.md` §Final success signal](verification.md#final-success-signal).
 
 ## Success signal
 

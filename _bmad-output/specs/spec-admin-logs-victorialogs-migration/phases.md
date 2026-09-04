@@ -96,11 +96,11 @@ One MR per phase. Branch `feat/admin-logs-victorialogs`; never commit to `main`.
   - Drop `const { Worker, isMainThread, parentPort, workerData } = require('worker_threads')` at `:9`.
   - Drop `processFile` `:418` and worker block `:1015-1125`.
   - Rewrite `processLogsInParallel` `:105-313` — build LogSQL `_msg:"needle1" OR _msg:"needle2" ... AND service:*` from the 14 patterns at `:111-226`; one `vlClient.query({q, start, end, limit: 100000})`; for hits-only pre-flight use `/select/logsql/hits`.
-  - **Dedupe hits**: a single log line can match multiple patterns (e.g. `401 forbidden` → patterns 6 + 9). Group by `${_time}|${_stream.service}|${_msg}` and dedupe so each record contributes to at most one vulnerability bucket. Without dedup, double-counting inflates critical/medium buckets and skews security posture.
-  - **Truncation guard**: if `vlClient.query` returns `length === limit`, loop with `_stream`/`_time` cursors, OR assert and set `degraded: true` in the response. Silent under-counts at >100k hits.
-  - **Retention check**: compare `Math.floor((now - start) / 86400e3)` against `VICTORIALOGS_RETENTION_DAYS` (parse the `30d` env). If retention < scan window, set `degraded: true` and cap the scan start to `now - retention`.
-  - Keep `/app/data/security/last-scan-results.json` cache write (verify exact line in MR description). **Schema-validate cache on read**: if the JSON doesn't match the new shape (e.g. legacy worker_threads output left on disk), treat as cache miss + regenerate.
-  - Constructor accepts `victoriaLogsClient` arg for DI.
+  - **Dedupe hits (sha1 per AD-19)**: a single log line can match multiple patterns (e.g. `401 forbidden` → patterns 6 + 9). Bucket key = `sha1(record._time + '|' + record._stream.service + '|' + record._msg).slice(0, 16)`; each record contributes to at most one vulnerability bucket. Without dedup, double-counting inflates critical/medium buckets.
+  - **Truncation guard (per AD-19)**: if `vlClient.query` returns `length === limit`, set `degraded: true` in the response. **Do not loop with cursors in P3** — the limit guards against silent under-count; cursor loop is a future optimization.
+  - **Retention check**: parse `VICTORIALOGS_RETENTION` (singular, `30d` format) — NOT `VICTORIALOGS_RETENTION_DAYS`. If retention < scan window, set `degraded: true` and cap the scan start to `now - retention`.
+  - Keep `/app/data/security/last-scan-results.json` cache write (verify exact line in MR description). **Schema-validate cache on read using AJV 8.17+** (AD-12 — no hand-rolled `typeof` checks). If the JSON doesn't match the new shape, treat as cache miss + regenerate.
+  - **Class refactor + setter injection**: convert `securityScanService` from singleton object literal to `class SecurityScanService` with `setVictoriaLogsClient(client)` setter (matches 9 sibling services convention; wire in `index.js:1167-1215`).
 
 **Acceptance:** `POST /api/admin/security-scan` returns same JSON shape; `grep -n "worker_threads" services/security-scan-service.js` returns 0; 7-day scan completes < 2 s; `security-scan-vl-degradation.test.js` asserts `{vulnerabilities:{critical:[],medium:[],low:[]}, degraded:true, error:'vl_unreachable'}` within 5 s when VL is down with `VL_FAIL_OPEN=true` (extends CAP-5 to cover security-scan).
 

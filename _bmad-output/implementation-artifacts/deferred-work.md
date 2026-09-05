@@ -1978,3 +1978,91 @@ status: open
 - **DW-X1: Resource-cost impact of always-on VL + OTel Collector** — quantify baseline memory/CPU + `vlogs-data` persistent volume impact via Ansible runbook validation. Pre-existing — outside story scope.
 - **DW-X2: `site/content/en/docs/observability/` docstring alignment** — if it still says VL is opt-in, align in a dedicated docs MR.
 - **DW-X3: CI `config:validate` job under `ENABLE_OBSERVABILITY=0`** — confirm collector-config-file deployment + new structural tests pass when CI runs without the observability profile.
+
+### DW-325: document-repository component must mirror these OTel deps at the same versions to avoid shared/lib peer-dep UNMET failures.
+origin: spec-deferred e3d227e7a624
+location: components/document-repository/package.json
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: Spec notes §"Coordinate with Epic 3 Story 3-1" explicitly defers this to Story 3-1 (ready-for-dev). Until 3-1 lands, any consumer of shared/lib that doesn't ship its own @opentelemetry/api-logs will fail npm install with an unmet peer.
+status: open
+
+### DW-326: The thin Winston→VL transport wrapper in shared/lib that consumes @opentelemetry/api-logs does not exist yet in this branch; later epic-2 stories (2-4, 2-5) wire it.
+origin: spec-deferred 5cc4dd4e18d5
+location: components/shared/lib/victorialogs-transport.js
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: spec §files / Acceptance cites "shared/lib/victorialogs-transport.js needs only this" but no such file exists. Adding the dep ahead of the wrapper is correct (so peer-dep consumers land coherently), but the wrapper itself is deferred.
+status: open
+
+### DW-327: @opentelemetry/exporter-trace-otlp-http remains at ^0.218.0 in backend while sdk-node was bumped to ^0.221.0; this duplicates the OTel core tree.
+origin: spec-deferred 44f4791c3015
+location: components/gov-chat-backend/package.json:71
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Backend package.json deps: `@opentelemetry/exporter-trace-otlp-http@^0.218.0` and `@opentelemetry/sdk-node@^0.221.0`. Spec instruction is explicit ("BUMP sdk-node"), no instruction to bump exporter-trace-otlp-http. After npm install both versions resolved cleanly (no UNMET PEER DEPENDENCY warnings), so the duplication is tolerable. Whether to align remains a separate decision.
+status: open
+
+### DW-328: Jest moduleNameMapper in gov-chat-backend does not add @opentelemetry/api-logs / sdk-logs / exporter-logs-otlp-http entries that will be needed once victorialogs-transport.js lands and tests import
+origin: spec-deferred a25f714b233e
+location: components/gov-chat-backend/package.json:jest.moduleNameMapper
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: `moduleNameMapper` maps only `@opentelemetry/api` today. Future stories that import the new packages in __tests__ will need mapping entries; not required for this dep-only story.
+status: open
+
+### DW-329: components/shared/lib/package.json has no `name` or `version` field; peerDependencies on an unnamed package is a weaker signal in npm 7+.
+origin: spec-deferred 779f3e29cb8b
+location: components/shared/lib/package.json
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Pre-existing issue, not introduced by this diff. Independent of this story.
+status: open
+
+### DW-330: logger.js (shared/lib) currently only imports @opentelemetry/api (trace API); the migration to import @opentelemetry/api-logs via logs.getLogger(...) is deferred to later stories.
+origin: spec-deferred 9b51b05d87ea
+location: components/shared/lib/logger.js
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Spec explicitly leaves consumer wiring to follow-up stories (2-4, 2-5, 2-6). logger.js unchanged in this diff.
+status: open
+
+### DW-331: CHANGELOG.md entry under [Unreleased] for the OTel minor-line bump + 3 new deps is missing; per `.claude/rules/RELEASE.md` this belongs in the release-process bookkeeping, not on this story.
+origin: spec-deferred a73261ea8bd1
+location: CHANGELOG.md
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Story scope is dep wiring only. Changelog update is conventionally done at the release-cut step, not the story step.
+status: open
+
+### DW-332: `auto-instrumentations-node@^0.76.0` nests its own `@opentelemetry/api-logs@0.218.0` under `instrumentation-bunyan`; the hoisted backend tree ships 0.221.0, so two api-logs versions co-exist on the
+origin: spec-deferred 334779e1ffcf
+location: components/gov-chat-backend/package.json:auto-instrumentations-node
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: `npm ls` in components/gov-chat-backend shows `auto-instrumentations-node@0.76.0` resolving api-logs@0.218.0 in its nested tree. Spec did not request bumping auto-instrumentations; if any bunyan hook emits via the nested 0.218 API while the SDK the app imports is 0.221.0, the runtime API surface differs from what the new SDK expects. Whether any code path imports the nested version is unanalyzed.
+status: open
+
+### DW-333: Production `NodeSDK` init (`components/gov-chat-backend/tracing.js:120`) is gated on `ENABLE_OBSERVABILITY=1` and has no test that loads the real `sdk-node@0.221.0` constructor option shape; CI mocks
+origin: spec-deferred db7bb1aabe1a
+location: components/gov-chat-backend/__tests__/tracing-non-test.test.js
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: medium
+reason: `__tests__/tracing-non-test.test.js` `jest.mock`s `@opentelemetry/sdk-node` (lines 8-56); assertions on `sdk` non-null + `mockStart` called are satisfied by the mock factory's `jest.fn().mockImplementation(...)`. No repo test imports the real installed `sdk-node@0.221.0`. If 0.221.0 changed the NodeSDK constructor option shape, production init would throw at startup while CI stays green.
+status: open
+
+### DW-334: Story frontmatter `depends_on: []` but correctness depends on Story 3-1 (doc-repo OTel mirror) landing before document-repository installs shared/lib; the dependency graph encoded in spec frontmatter
+origin: spec-deferred 8f9274348e59
+location: _bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md (frontmatter depends_on)
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: The first existing defer entry already routes doc-repo mirroring to Story 3-1. If 3-1 does not land before shared/lib is consumed by doc-repo (e.g. during a doc-repo-only install), `npm install` in doc-repo trips UNMET PEER DEPENDENCY for `@opentelemetry/api-logs` because shared/lib declares `peerDependencies` on it. `depends_on: []` is therefore dishonest about the sequencing contract.
+status: open
+
+### DW-335: Spec `## Verification` block does not record `npm run lint` / `npm run format:check` evidence; the work was review-ready without the local CI-equivalent checks being listed in the story.
+origin: spec-deferred af9e228662fc
+location: _bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md (## Verification)
+source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
+severity: low
+reason: Spec ACs are three shell assertions (two `npm ls`, one `json.load`). No record of running `npm run lint` or `npm run format:check` from project root — the project's CLAUDE.md mandates these before CI. Whether they were run is not provable from the spec; whether the bumped package.json files pass lint/format cannot be answered from this story alone.
+status: open

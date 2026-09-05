@@ -74,7 +74,7 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: backlog
-  2-1-add-otel-logs-deps-to-shared-lib-and-backend: ready-for-dev
+  2-1-add-otel-logs-deps-to-shared-lib-and-backend: done
   2-2-shared-lib-add-boolean-env-and-otel-batch-config-helpers:
     ready-for-dev
   2-4-shared-lib-add-victorialogs-transport-js-winston-transportst:

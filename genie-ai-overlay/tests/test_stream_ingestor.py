@@ -4,6 +4,7 @@
 """Story 3-4: json_api polling with content_mapping + parse_error DLQ gate.
 Also guards the RSS path staying unchanged through the feed_type dispatch."""
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,8 +18,13 @@ def make_ingestor():
     ingestor.db = MagicMock()
     ingestor.feeds_col = MagicMock()
     ingestor.feeds_col.update = MagicMock()
+    ingestor.feeds_col.get = MagicMock(return_value=None)
     ingestor.redis = MagicMock()
     ingestor.redis.xadd = AsyncMock(return_value="1-1")
+    ingestor.redis.xrange = AsyncMock(return_value=[])
+    ingestor.redis.xdel = AsyncMock(return_value=1)
+    # _auditRedis would open a real ioredis connection — reuse the mock redis
+    ingestor._auditRedis = AsyncMock(return_value=ingestor.redis)
     return ingestor
 
 
@@ -365,3 +371,69 @@ class TestWebhookIngestion:
         ingestor, handler, make_request, headers = self.make_client(monkeypatch, feed_overrides={"enabled": False})
         response = await handler(make_request(headers=headers, json_body={"title": "t", "content": "c"}))
         assert response.status == 404
+
+
+# ===========================================================================
+# Story 3-9 — per-feed resilience: breaker, DLQ replay, poll floor
+# ==========================================================================
+class TestBreakerStateMachine:
+    @pytest.fixture
+    def ingestor(self):
+        ing = make_ingestor()
+        ing._replay_dlq = AsyncMock()
+        return ing
+
+    @pytest.mark.asyncio
+    async def test_three_failures_open_breaker(self, ingestor):
+        feed = make_feed(type="rss")
+        # drive the bookkeeping directly — process_feed backs off after failure
+        # #1 (next_poll_at), so a 3-iteration poll loop never reaches 3 failures
+        for i in range(3):
+            ingestor._mark_feed_failure(feed, 60, f"down #{i}")
+        assert feed["failures"] == 3
+        assert feed["breaker_state"] == "open"
+
+    @pytest.mark.asyncio
+    async def test_open_breaker_suppressed_poll_writes_dlq(self, ingestor):
+        feed = make_feed(type="rss", breaker_state="open", next_poll_at=time.time() + 9999)
+        await ingestor.process_feed(feed)
+        dlq_call = [c for c in ingestor.redis.xadd.call_args_list if c.args[0] == "feed-ingestion-events-dlq"]
+        assert len(dlq_call) == 1
+        assert dlq_call[0].args[1]["reason"] == "breaker_open"
+
+    @pytest.mark.asyncio
+    async def test_half_open_probe_success_closes_and_replays(self, ingestor):
+        feed = make_feed(type="rss", breaker_state="open", next_poll_at=0)  # backoff elapsed
+        with patch.object(si_module.feedparser, "parse") as mock_parse:
+            mock_parse.return_value = MagicMock(bozo=False, entries=[])
+            await ingestor.process_feed(feed)
+        assert feed["breaker_state"] == "closed"
+        ingestor._replay_dlq.assert_awaited_once_with("feed-1")
+
+    @pytest.mark.asyncio
+    async def test_half_open_probe_failure_reopens(self, ingestor):
+        feed = make_feed(type="rss", breaker_state="half_open", next_poll_at=0)
+        with patch.object(si_module.feedparser, "parse", side_effect=RuntimeError("still down")):
+            await ingestor.process_feed(feed)
+        assert feed["breaker_state"] == "open"
+        assert feed["failures"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_success_resets_breaker_field(self, ingestor):
+        feed = make_feed(type="rss", breaker_state="half_open", next_poll_at=0)
+        with patch.object(si_module.feedparser, "parse") as mock_parse:
+            mock_parse.return_value = MagicMock(bozo=False, entries=[])
+            await ingestor.process_feed(feed)
+        assert feed["breaker_state"] == "closed"
+
+
+class TestPollRateFloor:
+    @pytest.mark.asyncio
+    async def test_poll_interval_zero_throttled_to_floor(self, monkeypatch):
+        monkeypatch.setenv("FEED_POLL_MIN_INTERVAL_SEC", "60")
+        ingestor = make_ingestor()
+        feed = make_feed(type="rss", poll_interval_sec=0, last_polled=time.time() - 10)
+        # 10s ago < 60s floor -> suppressed
+        with patch.object(si_module.feedparser, "parse") as mock_parse:
+            await ingestor.process_feed(feed)
+        mock_parse.assert_not_called()

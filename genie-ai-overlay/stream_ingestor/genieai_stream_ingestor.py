@@ -33,6 +33,7 @@ DATAPREP_INGEST_URL = os.getenv("DATAPREP_INGEST_URL", "http://dataprep-arango-s
 DATAPREP_RETRACT_URL = os.getenv("DATAPREP_RETRACT_URL", "http://dataprep-arango-service:5000/v1/dataprep/retract_file")
 
 POLL_INTERVAL_SEC = int(os.getenv("POLL_INTERVAL_SEC", "300"))
+DEFAULT_FEED_POLL_MIN_INTERVAL_SEC = 60
 RETRACT_INTERVAL_SEC = int(os.getenv("RETRACT_INTERVAL_SEC", "3600"))
 GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
@@ -64,14 +65,31 @@ class StreamIngestor:
                 # One broken feed must not starve the others (NFR15)
                 logger.error(f"Unhandled error processing feed {feed.get('_key')}: {e}")
 
-    def _mark_feed_success(self, feed):
+    async def _mark_feed_success(self, feed):
         feed["last_polled"] = time.time()
         feed["failures"] = 0
+        if feed.get("breaker_state") in ("open", "half_open"):
+            # FR41: breaker auto-closes on a successful poll — recovered feeds
+            # replay their DLQ entries (chronological) before new work
+            feed["breaker_state"] = "closed"
+            try:
+                await self._replay_dlq(feed.get("_key"))
+            except Exception as exc:
+                # replay must never re-mark a successful poll as failed
+                logger.error("DLQ replay failed (non-fatal): %s", exc)
         self.feeds_col.update(feed)
 
     def _mark_feed_failure(self, feed, poll_interval, error):
         failures = feed.get("failures", 0) + 1
         feed["failures"] = failures
+        # FR41 breaker: 3 consecutive failures OPEN the breaker for this feed
+        # only. OPEN feeds route subsequent early polls straight to the DLQ and
+        # are probed (HALF_OPEN) once the backoff elapses.
+        if feed.get("breaker_state") == "half_open":
+            # probe failed -> re-open immediately (FR41)
+            feed["breaker_state"] = "open"
+        elif failures >= 3:
+            feed["breaker_state"] = "open"
         # Exponential backoff max 24 hours
         backoff_sec = min(poll_interval * (2**failures), 86400)
         feed["next_poll_at"] = time.time() + backoff_sec
@@ -84,11 +102,29 @@ class StreamIngestor:
         url = feed.get("url")
         last_polled = feed.get("last_polled", 0)
         poll_interval = feed.get("poll_interval_sec") or feed.get("polling_interval") or POLL_INTERVAL_SEC
+        # D8 floor: an operator typo (poll_interval_sec: 0) must not hammer a source
+        poll_floor = int(os.getenv("FEED_POLL_MIN_INTERVAL_SEC", DEFAULT_FEED_POLL_MIN_INTERVAL_SEC))
+        poll_interval = max(poll_interval, poll_floor)
 
         next_poll_at = feed.get("next_poll_at", 0)
+        breaker_state = feed.get("breaker_state", "closed")
 
         now = time.time()
-        if now < next_poll_at or now - last_polled < poll_interval:
+        if now < next_poll_at:
+            # OPEN breaker whose backoff hasn't elapsed: subsequent triggered
+            # polls route to the DLQ instead of fetching (FR41) — recorded ONCE
+            # per backoff window (a tight loop would flood it)
+            if breaker_state == "open" and not feed.get("breaker_dlq_recorded"):
+                feed["breaker_dlq_recorded"] = True
+                self.feeds_col.update(feed)
+                await self._write_dlq(feed_id, "breaker_open", "poll suppressed: breaker OPEN", url)
+            return
+
+        if breaker_state == "open":
+            # Backoff elapsed on an OPEN breaker: this poll is the HALF_OPEN probe
+            feed["breaker_state"] = "half_open"
+            logger.info(f"Feed {feed_id} breaker HALF_OPEN — probing")
+        elif now - last_polled < poll_interval:
             return
 
         logger.info(f"Polling feed {feed_id} at {url}")
@@ -136,13 +172,98 @@ class StreamIngestor:
                 await self.ingest_entries(feed, new_entries)
 
             # Update feed status
-            self._mark_feed_success(feed)
+            await self._mark_feed_success(feed)
             feed["last_entry_date"] = new_last_entry_date
             self.feeds_col.update(feed)
 
         except Exception as e:
             logger.error(f"Error processing feed {feed_id}: {e}")
             self._mark_feed_failure(feed, poll_interval, str(e))
+
+    async def _replay_dlq(self, feed_id):
+        """FR43: on source recovery, replay this feed's DLQ entries
+        chronologically. Only webhook-origin entries are replayable — poll
+        parse_errors recover by the next poll by design. Entries that succeed
+        are removed; entries exceeding WEBHOOK_DLQ_MAX_RETRIES are PARKED on a
+        per-feed review list (never destroyed). Replay failures are isolated —
+        no exception escapes, so a Redis hiccup during replay can never corrupt
+        the poll's success bookkeeping."""
+        client = await self._auditRedis()
+        try:
+            raw = await client.xrange(DLQ_STREAM_KEY, "-", "+")
+        except Exception as exc:
+            logger.error("DLQ replay read failed for feed %s: %s", feed_id, exc)
+            return
+        max_retries = int(os.getenv("WEBHOOK_DLQ_MAX_RETRIES", "3"))
+        replayed, dropped = 0, 0
+        for entry_id, fields in raw:
+            try:
+                data = {fields[i]: fields[i + 1] for i in range(0, len(fields), 2)}
+                if data.get("feed_id") != feed_id or data.get("entry_type") != "webhook":
+                    continue
+                try:
+                    retries = int(data.get("retries", "0"))
+                except (TypeError, ValueError):
+                    retries = 0
+                if retries >= max_retries:
+                    # PARK for manual review (never destroy content): push the
+                    # full entry to a per-feed review list, then drop from DLQ
+                    await client.lpush(
+                        f"feed-dlq-parking:{feed_id}",
+                        str({**data, "dlq_entry_id": entry_id}),
+                    )
+                    await client.xdel(DLQ_STREAM_KEY, entry_id)
+                    logger.error("DLQ entry %s exceeded %d retries — parked", entry_id, max_retries)
+                    dropped += 1
+                    continue
+                ok = await self._replay_single(feed_id, data)
+                if ok:
+                    await client.xdel(DLQ_STREAM_KEY, entry_id)
+                    replayed += 1
+                else:
+                    # increment retries so entries eventually reach the manual
+                    # cap; failed entries move to the tail — strict
+                    # chronological order holds within a pass (accepted)
+                    await client.xadd(
+                        DLQ_STREAM_KEY,
+                        {**data, "retries": str(retries + 1)},
+                        maxlen=10_000,
+                    )
+                    await client.xdel(DLQ_STREAM_KEY, entry_id)
+                    dropped += 1
+            except Exception as exc:
+                # isolate per-entry failures — one bad entry must not abort the
+                # pass mid-stream
+                logger.error("DLQ replay entry %s failed: %s", entry_id, exc)
+        if replayed or dropped:
+            logger.info(f"DLQ replay for feed {feed_id}: {replayed} replayed, {dropped} dropped")
+
+    async def _replay_single(self, feed_id, data):
+        """Re-ingest one webhook-origin DLQ entry. Returns True on success."""
+        try:
+            feed = self.feeds_col.get(feed_id)
+        except Exception:
+            return False
+        if not feed:
+            return False
+        try:
+            original_ts = float(data.get("timestamp")) if data.get("timestamp") else time.time()
+        except (TypeError, ValueError):
+            original_ts = time.time()
+        entry = [
+            {
+                "title": data.get("title", "Webhook Replay"),
+                "link": data.get("link", ""),
+                "summary": data.get("content", ""),
+                "_date": original_ts,
+            }
+        ]
+        try:
+            await self.ingest_entries(feed, entry)
+            return True
+        except Exception as exc:
+            logger.error("DLQ replay ingest failed for feed %s: %s", feed_id, exc)
+            return False
 
     async def _write_dlq(self, feed_id, reason, error, payload_sample=None):
         """Dead-letter queue (story 3-4): malformed/config-error content is
@@ -153,6 +274,7 @@ class StreamIngestor:
                 DLQ_STREAM_KEY,
                 {
                     "feed_id": feed_id,
+                    "entry_type": "poll",
                     "reason": reason,
                     "error": str(error)[:500],
                     "payload_sample": str(payload_sample)[:500] if payload_sample else "",
@@ -286,7 +408,7 @@ class StreamIngestor:
         else:
             logger.info(f"No new JSON items for feed {feed_id}")
 
-        self._mark_feed_success(feed)
+        await self._mark_feed_success(feed)
         feed["last_entry_ids"] = last_entry_ids
         if dlq_errors:
             # A poll that DLQ'd items did NOT fully succeed — otherwise the

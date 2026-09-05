@@ -135,7 +135,7 @@ development_status:
   3-6-route-through-existing-tei-and-shared-arangodb: review # feeds route to existing dataprep pipeline (verify ingest path e2e)
   3-7-per-feed-lifecycle-retention-ttl-update-vs-append: review # per-feed expiry + retraction loop (update-vs-append semantics unverified)
   3-8-feed-definition-persistence: review # ArangoDB feeds collection (migration 005) + BFF CRUD — resolves OQ-SST-1 as "ingestor config"
-  3-9-per-feed-resilience-breaker-dlq-backoff: backlog # PARTIAL: backoff shipped (3-3) + DLQ write-side (3-4); REMAINING: breaker integration + DLQ consumer/replay + per-feed rate limits
+  3-9-per-feed-resilience-breaker-dlq-backoff: review # DONE 2026-09-05: per-feed breaker (3-fail OPEN, HALF_OPEN probe, auto-close + DLQ replay on recovery), DLQ replay w/ parking list + retry cap, poll rate floor; review patches (replay isolation, flood gate, timestamps); 831 green. REMAINING (3-11 scope): DLQ consumer monitoring/replay-metrics
   3-10-health-endpoints-and-per-feed-health: review # /health + /ready endpoints (per-feed health granularity unverified)
   3-11-regression-guard: backlog # PRODUCTION GATE; needs OQ-SST-4
   epic-3-retrospective: optional

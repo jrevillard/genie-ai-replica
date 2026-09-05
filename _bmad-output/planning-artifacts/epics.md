@@ -30,20 +30,12 @@
 | Files | `configs/otel/otel-collector-config.yaml:183-189` |
 | Depends on | [] |
 
-### Story 1.3: env.j2: render 3 new vars unconditionally
+### Story 1.3: env.j2 + env (root): render new vars unconditionally (MERGED 1-3 + 1-4)
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.25 SP |
-| Files | `deploy/ansible/templates/env.j2` (after `:239`)` |
-| Depends on | [] |
-
-### Story 1.4: env (root): commented templates for new vars
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `env` (Section 12C)` |
+| Effort | 0.35 SP |
+| Files | `deploy/ansible/templates/env.j2` (after `:239`); `env` (Section 12D after SECTION 12C) |
 | Depends on | [] |
 
 ### Story 1.6: docs/security/cve-triage-2026q3.md update (optional)
@@ -60,28 +52,20 @@
 
 **Stories:**
 
-### Story 2.1: shared/lib: add `@opentelemetry/api-logs` peer-dep
+### Story 2.1: shared/lib + gov-chat-backend: add OTel logs deps (MERGED 2-1 + 2-7)
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.1 SP |
-| Files | `components/shared/lib/package.json` |
+| Effort | 0.2 SP |
+| Files | `components/shared/lib/package.json`; `components/gov-chat-backend/package.json` |
 | Depends on | [] |
 
-### Story 2.2: shared/lib: add boolean-env helper (`boolean-env.js`)
+### Story 2.2: shared/lib: add `boolean-env.js` + `otel-batch-config.js` helpers (MERGED 2-2 + 2-3)
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.1 SP |
-| Files | `components/shared/lib/boolean-env.js` (new)` |
-| Depends on | [] |
-
-### Story 2.3: shared/lib: add shared `otel-batch-config.js`
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `components/shared/lib/otel-batch-config.js` (new)` |
+| Effort | 0.2 SP |
+| Files | `components/shared/lib/boolean-env.js` (new); `components/shared/lib/otel-batch-config.js` (new) |
 | Depends on | [] |
 
 ### Story 2.4: shared/lib: add `victorialogs-transport.js` (Winston TransportStream)
@@ -106,15 +90,9 @@
 | --- | --- |
 | Effort | 0.5 SP |
 | Files | `components/gov-chat-backend/tracing.js` (after `:117`)` |
-| Depends on | [2.3] |
+| Depends on | [2.1, 2.2] |
 
-### Story 2.7: gov-chat-backend: package.json add sdk-logs + exporter-logs-otlp-http
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.1 SP |
-| Files | `components/gov-chat-backend/package.json` |
-| Depends on | [2.6] |
+### Story 2.7 (MERGED into 2.1) ~~gov-chat-backend: package.json add sdk-logs + exporter-logs-otlp-http~~ — DELETED, content folded into Story 2.1.
 
 ### Story 2.8: tests: extend logger-functions, logger-otel-trace (JSON-key assertions)
 

@@ -22,7 +22,7 @@ epics:
     title: Pipeline enablement (D1)
     spec: _bmad-output/planning-artifacts/epics.md#epic-1
     status: backlog
-    stories: [1.1, 1.2, 1.3, 1.6]
+    stories: [1.1, 1.2, 1.3, 1.4, 1.6]
   - id: epic-2
     title: Producer — Winston → VictoriaLogs (+ JSON, OTel)
     spec: _bmad-output/planning-artifacts/epics.md#epic-2
@@ -68,7 +68,8 @@ development_status:
   epic-1: backlog
   1-1-docker-compose-vl-collector-profiles-core: done
   1-2-otel-collector-config-add-otlp-to-logs-receivers: done
-  1-3-env-j2-and-env-commented-templates-render-new-vars: done
+  1-3-env-j2-render-3-new-vars-unconditionally: done
+  1-4-env-root-commented-templates-for-new-vars: done
   1-6-docs-security-cve-triage-2026q3-md-update-optional: done
   epic-1-retrospective: optional
 
@@ -174,7 +175,7 @@ audit:
   closures: "Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure
     note appended to archived file"
 generated: '2026-08-31'
-last_updated: '2026-09-05 (Epic 2-7 review applied; 3 stories merged: 1-3+1-4, 2-1+2-7, 2-2+2-3)'
+last_updated: '2026-09-05 (Epic 2-7 review applied; 2 backlog stories merged: 2-1+2-7, 2-2+2-3; 1-3+1-4 undone — Epic 1 done, do not reorganize shipped stories)'
 project: admin-logs-victorialogs
 tracking_system: file-system
 story_location:

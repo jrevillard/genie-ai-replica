@@ -1,9 +1,11 @@
 import asyncio
 import base64
+import hashlib
 import logging
 import os
 import time
 import uuid
+from datetime import datetime
 
 import aiohttp
 import feedparser
@@ -23,6 +25,7 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "root")
 # Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis-cache:6379/0")
 REDIS_STREAM_KEY = "feed-ingestion-events"
+DLQ_STREAM_KEY = REDIS_STREAM_KEY + "-dlq"
 
 # Dataprep
 DATAPREP_INGEST_URL = os.getenv("DATAPREP_INGEST_URL", "http://dataprep-arango-service:5000/v1/dataprep/ingest_file")
@@ -54,13 +57,32 @@ class StreamIngestor:
             return
 
         for feed in feeds:
-            await self.process_feed(feed)
+            try:
+                await self.process_feed(feed)
+            except Exception as e:
+                # One broken feed must not starve the others (NFR15)
+                logger.error(f"Unhandled error processing feed {feed.get('_key')}: {e}")
+
+    def _mark_feed_success(self, feed):
+        feed["last_polled"] = time.time()
+        feed["failures"] = 0
+        self.feeds_col.update(feed)
+
+    def _mark_feed_failure(self, feed, poll_interval, error):
+        failures = feed.get("failures", 0) + 1
+        feed["failures"] = failures
+        # Exponential backoff max 24 hours
+        backoff_sec = min(poll_interval * (2**failures), 86400)
+        feed["next_poll_at"] = time.time() + backoff_sec
+        feed["last_polled"] = time.time()
+        self.feeds_col.update(feed)
+        logger.warning(f"Feed {feed.get('_key')} failed {failures} times. Backing off for {backoff_sec}s ({error})")
 
     async def process_feed(self, feed):
         feed_id = feed["_key"]
         url = feed.get("url")
         last_polled = feed.get("last_polled", 0)
-        poll_interval = feed.get("poll_interval_sec", POLL_INTERVAL_SEC)
+        poll_interval = feed.get("poll_interval_sec") or feed.get("polling_interval") or POLL_INTERVAL_SEC
 
         next_poll_at = feed.get("next_poll_at", 0)
 
@@ -69,6 +91,16 @@ class StreamIngestor:
             return
 
         logger.info(f"Polling feed {feed_id} at {url}")
+
+        if (feed.get("type") or "rss").strip().lower() == "json_api":
+            # JSON path owns its failure bookkeeping: a raise here would kill
+            # the whole poll cycle and starve every other feed (review: the
+            # dispatch sat outside process_feed's try)
+            try:
+                await self.process_json_api_feed(feed)
+            except Exception as e:
+                self._mark_feed_failure(feed, poll_interval, str(e))
+            return
 
         try:
             parsed = feedparser.parse(url)
@@ -103,21 +135,163 @@ class StreamIngestor:
                 await self.ingest_entries(feed, new_entries)
 
             # Update feed status
-            feed["last_polled"] = now
+            self._mark_feed_success(feed)
             feed["last_entry_date"] = new_last_entry_date
-            feed["failures"] = 0
             self.feeds_col.update(feed)
 
         except Exception as e:
             logger.error(f"Error processing feed {feed_id}: {e}")
-            failures = feed.get("failures", 0) + 1
-            feed["failures"] = failures
-            # Exponential backoff max 24 hours
-            backoff_sec = min(poll_interval * (2**failures), 86400)
-            feed["next_poll_at"] = now + backoff_sec
-            feed["last_polled"] = now
+            self._mark_feed_failure(feed, poll_interval, str(e))
+
+    async def _write_dlq(self, feed_id, reason, error, payload_sample=None):
+        """Dead-letter queue (story 3-4): malformed/config-error content is
+        parked here for inspection — NEVER sent to the corpus. 3-9's resilience
+        work consumes this same convention."""
+        try:
+            await self.redis.xadd(
+                DLQ_STREAM_KEY,
+                {
+                    "feed_id": feed_id,
+                    "reason": reason,
+                    "error": str(error)[:500],
+                    "payload_sample": str(payload_sample)[:500] if payload_sample else "",
+                    "timestamp": str(time.time()),
+                },
+                maxlen=10_000,
+            )
+        except Exception as exc:
+            logger.error("DLQ write failed for feed %s: %s", feed_id, exc)
+
+    @staticmethod
+    def _resolve_path(obj, dotted_path):
+        """Resolve a dot-separated path ('data.items') down a dict/list tree."""
+        current = obj
+        for part in dotted_path.split("."):
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, list) and part.isdigit():
+                idx = int(part)
+                current = current[idx] if idx < len(current) else None
+            else:
+                return None
+            if current is None:
+                return None
+        return current
+
+    @staticmethod
+    def _item_date(value, now):
+        """Accept epoch numbers (s or ms — JS-API default is ms) or ISO strings
+        (Z-suffix tolerated); unparseable -> now (same as RSS missing pubDate)."""
+        if value is None:
+            return now
+        try:
+            if isinstance(value, (int, float)):
+                seconds = float(value)
+            else:
+                text = str(value).strip()
+                if text.endswith("Z"):
+                    text = text[:-1] + "+00:00"
+                seconds = datetime.fromisoformat(text).timestamp()
+            if seconds > 1e11:  # ms epoch -> s
+                seconds /= 1000.0
+            return seconds
+        except (ValueError, TypeError, OSError):
+            return now
+
+    async def process_json_api_feed(self, feed):
+        """Story 3-4: json_api polling with content_mapping + parse_error DLQ gate."""
+        feed_id = feed["_key"]
+        url = feed.get("url")
+        mapping = feed.get("content_mapping") or {}
+        items_path = mapping.get("items_path")
+
+        if not items_path:
+            await self._write_dlq(feed_id, "config_error", "json_api feed missing content_mapping.items_path")
+            # Count as a failure so a permanently misconfigured feed backs off
+            # instead of polling at full frequency forever (parity with RSS)
+            raise RuntimeError("json_api feed missing content_mapping.items_path")
+
+        import httpx
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                body = response.json()
+        except Exception as exc:
+            await self._write_dlq(feed_id, "parse_error", f"fetch/JSON parse failed: {exc}", url)
+            raise
+
+        items = self._resolve_path(body, items_path)
+        if not isinstance(items, list):
+            await self._write_dlq(
+                feed_id,
+                "parse_error",
+                f"items_path '{items_path}' did not resolve to a list (got {type(items).__name__})",
+                str(body)[:300],
+            )
+            raise RuntimeError(f"json_api items_path '{items_path}' did not resolve to a list")
+
+        seen = list(feed.get("last_entry_ids", []))
+        now = time.time()
+        new_entries = []
+        dlq_errors = 0
+        for item in items:
+            if not isinstance(item, dict):
+                await self._write_dlq(feed_id, "parse_error", "item is not an object", str(item)[:300])
+                continue
+            title = self._resolve_path(item, mapping.get("title_field", "title"))
+            body_text = self._resolve_path(item, mapping.get("body_field", "body"))
+            link = self._resolve_path(item, mapping.get("link_field", "")) or url
+            date_value = self._resolve_path(item, mapping.get("date_field", ""))
+            item_id = self._resolve_path(item, mapping.get("id_field", ""))
+            if item_id is None:
+                # STABLE hash: Python's built-in hash() is salted per process,
+                # so persisted ids would break on every restart (re-ingestion)
+                item_id = hashlib.sha256((str(title) + "\x00" + str(body_text)).encode("utf-8")).hexdigest()
+            item_key = str(item_id)
+            if item_key in seen:
+                continue
+            # REQUIRED fields: a usable item needs title AND body text
+            if not title or not body_text:
+                if item_key not in seen:
+                    seen.append(item_key)  # remember so we don't re-DLQ every poll
+                    dlq_errors += 1
+                    await self._write_dlq(
+                        feed_id,
+                        "parse_error",
+                        f"item missing required mapped fields: {item_key}",
+                        str(item)[:300],
+                    )
+                continue
+            if item_key not in seen:
+                seen.append(item_key)
+            new_entries.append(
+                {
+                    "title": str(title),
+                    "link": str(link),
+                    "summary": str(body_text),
+                    "_date": self._item_date(date_value, now),
+                }
+            )
+
+        # Cap the seen-set keeping the NEWEST ids (insertion order) —
+        # unbounded growth on busy feeds is the failure mode
+        last_entry_ids = seen[-500:]
+
+        if new_entries:
+            logger.info(f"Found {len(new_entries)} new JSON items for feed {feed_id}")
+            await self.ingest_entries(feed, new_entries)
+        else:
+            logger.info(f"No new JSON items for feed {feed_id}")
+
+        self._mark_feed_success(feed)
+        feed["last_entry_ids"] = last_entry_ids
+        if dlq_errors:
+            # A poll that DLQ'd items did NOT fully succeed — otherwise the
+            # 4-7 health overview would show a green feed for a broken upstream
+            feed["failures"] = dlq_errors
             self.feeds_col.update(feed)
-            logger.warning(f"Feed {feed_id} failed {failures} times. Backing off for {backoff_sec}s")
 
     async def ingest_entries(self, feed, entries):
         feed_id = feed["_key"]

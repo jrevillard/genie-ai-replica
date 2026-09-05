@@ -2122,3 +2122,19 @@ source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.m
 severity: medium
 reason: logger-functions.test.js exercises `reconfigureLogger` only with both env vars unset, so the `[]` short-circuit path is the only branch tested; an inverted `||` or a renamed env var would silently disable the VL pipeline in production with no CI signal.
 status: open
+
+### DW-343: No regression test covers the production `loggerConfig.format` end-to-end (asserts JSON keys against the live logger, not a self-built pipeline).
+origin: spec-deferred 46cd42521873
+location: components/shared/lib/logger.js:73 (production format chain)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: `logger-otel-trace.test.js` and `logger-functions.test.js` both build their own `format.combine(...)` pipelines; reverting `logger.js:73` to `logFormat` (printf) would leave every existing test green.
+status: open
+
+### DW-344: No test exercises the 4-cell truth table of `LOG_TO_VICTORIALOGS` × `ENABLE_OBSERVABILITY` for the VL gate.
+origin: spec-deferred c129a5fb6f60
+location: components/shared/lib/logger.js:27 (gate), 60-62 (transport push)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: `victoriaLogsEnabled()` flips a transport list membership that no test asserts. An accidental `&&`→`||` flip at `logger.js:27` ships silently.
+status: open

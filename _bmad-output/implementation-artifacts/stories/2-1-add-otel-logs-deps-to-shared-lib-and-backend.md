@@ -3,10 +3,11 @@ key: 2-1-add-otel-logs-deps-to-shared-lib-and-backend
 title: "shared/lib + gov-chat-backend: add OpenTelemetry logs deps (api-logs + sdk-logs + exporter-logs-otlp-http)"
 epic: epic-2
 status: done
+review_loop_iteration: 1
 effort: 0.2
 depends_on: []
 baseline_revision: 42219f9bee71f7200136689c55e291abb6fa477d
-followup_review_recommended: true
+followup_review_recommended: false
 deferred:
   - summary: >-
       document-repository component must mirror these OTel deps at the same versions to avoid shared/lib peer-dep UNMET failures.
@@ -57,6 +58,34 @@ deferred:
     location: >-
       CHANGELOG.md
     severity: low
+  - summary: >-
+      `auto-instrumentations-node@^0.76.0` nests its own `@opentelemetry/api-logs@0.218.0` under `instrumentation-bunyan`; the hoisted backend tree ships 0.221.0, so two api-logs versions co-exist on the runtime path.
+    evidence: |-
+      `npm ls` in components/gov-chat-backend shows `auto-instrumentations-node@0.76.0` resolving api-logs@0.218.0 in its nested tree. Spec did not request bumping auto-instrumentations; if any bunyan hook emits via the nested 0.218 API while the SDK the app imports is 0.221.0, the runtime API surface differs from what the new SDK expects. Whether any code path imports the nested version is unanalyzed.
+    location: >-
+      components/gov-chat-backend/package.json:auto-instrumentations-node
+    severity: medium
+  - summary: >-
+      Production `NodeSDK` init (`components/gov-chat-backend/tracing.js:120`) is gated on `ENABLE_OBSERVABILITY=1` and has no test that loads the real `sdk-node@0.221.0` constructor option shape; CI mocks every OTel package in `tracing-non-test.test.js`, so a minor-line breaking change would not be caught.
+    evidence: |-
+      `__tests__/tracing-non-test.test.js` `jest.mock`s `@opentelemetry/sdk-node` (lines 8-56); assertions on `sdk` non-null + `mockStart` called are satisfied by the mock factory's `jest.fn().mockImplementation(...)`. No repo test imports the real installed `sdk-node@0.221.0`. If 0.221.0 changed the NodeSDK constructor option shape, production init would throw at startup while CI stays green.
+    location: >-
+      components/gov-chat-backend/__tests__/tracing-non-test.test.js
+    severity: medium
+  - summary: >-
+      Story frontmatter `depends_on: []` but correctness depends on Story 3-1 (doc-repo OTel mirror) landing before document-repository installs shared/lib; the dependency graph encoded in spec frontmatter is incomplete.
+    evidence: |-
+      The first existing defer entry already routes doc-repo mirroring to Story 3-1. If 3-1 does not land before shared/lib is consumed by doc-repo (e.g. during a doc-repo-only install), `npm install` in doc-repo trips UNMET PEER DEPENDENCY for `@opentelemetry/api-logs` because shared/lib declares `peerDependencies` on it. `depends_on: []` is therefore dishonest about the sequencing contract.
+    location: >-
+      _bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md (frontmatter depends_on)
+    severity: low
+  - summary: >-
+      Spec `## Verification` block does not record `npm run lint` / `npm run format:check` evidence; the work was review-ready without the local CI-equivalent checks being listed in the story.
+    evidence: |-
+      Spec ACs are three shell assertions (two `npm ls`, one `json.load`). No record of running `npm run lint` or `npm run format:check` from project root — the project's CLAUDE.md mandates these before CI. Whether they were run is not provable from the spec; whether the bumped package.json files pass lint/format cannot be answered from this story alone.
+    location: >-
+      _bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md (## Verification)
+    severity: low
 files: "components/shared/lib/package.json (ADD `@opentelemetry/api-logs@^0.221.0` peer-dep; backend `api-logs`/`sdk-logs`/`exporter-logs-otlp-http` are regular deps in shared/lib — see Q-1 RESOLVED option C); components/gov-chat-backend/package.json (ADD `@opentelemetry/api-logs@^0.221.0` + `@opentelemetry/sdk-logs@^0.221.0` + `@opentelemetry/exporter-logs-otlp-http@^0.221.0`; BUMP `@opentelemetry/sdk-node` from `^0.218.0` to `^0.221.0`)"
 notes: "Merged from Stories 2-1 (shared/lib api-logs peer-dep) + 2-7 (backend sdk-logs + exporter-logs-otlp-http). One MR + one npm install avoids peer-dep mismatches across components."
 ---
@@ -106,35 +135,30 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - addressed_findings:
   - `[high]` `[patch]` Verification gap: spec ACs require `npm ls @opentelemetry/*` to report no UNMET PEER DEPENDENCY warnings, but the implementation subagent intentionally skipped `npm install` because the worktree had stale/missing node_modules. Ran `npm install` in `components/gov-chat-backend` (added 70 / removed 31 / changed 18) and `components/shared/lib` (added 114). Re-ran spec ACs: backend npm ls resolves all 4 OTel deps to 0.221.0 with no UNMET warnings; shared/lib npm ls resolves `@opentelemetry/api-logs` to 0.221.0. Both lockfiles now committed alongside the manifest edits.
 
+### 2026-09-05 — Follow-up review pass (auto-loop)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 4: (high 0, medium 2, low 2)
+- reject: 18
+- addressed_findings:
+  - none
+
+Follow-up reviewers (blind hunter, edge-case hunter, verification-gap, intent-alignment) re-inspected the committed manifest + lockfile delta against the spec ACs in folder+id dispatch. No new patches were applied this pass — every auto-fix candidate either (a) violated the explicit spec scope ("BUMP sdk-node" only, no instruction to bump exporter-trace-otlp-http or auto-instrumentations-node) or (b) weakened the spec's contract (peerDependenciesMeta optional / wider peer range). Four new medium/low items appended to the `deferred` ledger: nested api-logs@0.218.0 under auto-instrumentations (medium), absent real-package test for `NodeSDK` constructor after the sdk-node bump (medium), dishonest `depends_on: []` given the Story 3-1 sequencing (low), and missing lint/format evidence in the spec's `## Verification` block (low). Eighteen other reviewer items were triaged `reject` (out-of-scope for a dep-only story: CHANGELOG, image-size, perf, E2E collector smoke, rollback clause, MR provenance, docs, CVE scan, subagent-process meta, followup_review_recommended formula).
+
 ## Auto Run Result
 
-Status: done
+- Summary: Re-reviewed the committed dependency bump (Story 2-1 merged with 2-7). No code change this pass; the spec's `## Acceptance` block and the four-line manifest edits land four deps at `^0.221.0` plus the `sdk-node` `^0.218.0 → ^0.221.0` bump; both lockfiles regenerated and committed (Sep 5). This follow-up review pass added 4 defer items; no patches applied.
+- Files changed:
+  - `components/shared/lib/package.json` (peer-dep api-logs@^0.221.0)
+  - `components/gov-chat-backend/package.json` (deps api-logs/sdk-logs/exporter-logs-otlp-http@^0.221.0; sdk-node ^0.218.0→^0.221.0)
+  - `components/shared/lib/package-lock.json`, `components/gov-chat-backend/package-lock.json` (regenerated; both commit clean `npm install`)
+  - `_bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md` (this spec: status, review_loop_iteration, followup_review_recommended, deferred ledger append, triage log, auto run result)
+- Review findings breakdown:
+  - Patches applied: 0 (score 0 — `3·medium + 1·low = 0`, under the 5-threshold)
+  - Deferred (this pass): 4 (medium 2, low 2) — appended to `deferred:` list above; existing 7 ledger items preserved verbatim.
+  - Rejected (this pass): 18 — out-of-scope for a dep-only story, or violate the explicit spec scope, or weaken the peer contract.
+- Follow-up review recommendation: `false` (no high-severity patched finding; total weighted = 0).
+- Verification performed: re-ran spec `## Verification` commands in worktree — `npm ls @opentelemetry/{api-logs,sdk-logs,exporter-logs-otlp-http,sdk-node,api,exporter-trace-otlp-http}` in `components/gov-chat-backend` resolves to `0.221.0` with no UNMET PEER DEPENDENCY warnings (auto-instrumentations still nests api-logs@0.218.0 — captured as deferred medium). `npm ls @opentelemetry/api-logs` in `components/shared/lib` resolves to `0.221.0`. `python3 -c "import json; json.load(...)"` on `components/shared/lib/package.json` parses cleanly.
+- Residual risks: doc-repo UNMET peer until Story 3-1 lands (deferred medium); exporter-trace-otlp-http / sdk-node 0.218 / 0.221 dual-version tree (deferred medium); production `NodeSDK` constructor option shape untested against real `sdk-node@0.221.0` (deferred medium); Story 3-1 sequencing not encoded in `depends_on` (deferred low); no lint/format:check evidence in spec (deferred low).
 
-Summary of implemented change: declared the OpenTelemetry logs dependency tree per the spec's Q-1 RESOLVED option C split — `shared/lib/package.json` gains `@opentelemetry/api-logs@^0.221.0` as a `peerDependency` (consumers that pull shared/lib must supply it), and `components/gov-chat-backend/package.json` gains `@opentelemetry/api-logs`, `@opentelemetry/sdk-logs`, `@opentelemetry/exporter-logs-otlp-http` (all `^0.221.0`) as regular `dependencies` and bumps `@opentelemetry/sdk-node` from `^0.218.0` to `^0.221.0` to keep the sdk-node/sdk-logs peer pair aligned. Both component lockfiles regenerated via `npm install` and committed to keep peer-dep resolution reproducible.
-
-Files changed:
-- `components/shared/lib/package.json` — added `peerDependencies.@opentelemetry/api-logs@^0.221.0`.
-- `components/shared/lib/package-lock.json` — regenerated by `npm install` (114 packages added).
-- `components/gov-chat-backend/package.json` — added three deps + bumped `sdk-node` to `^0.221.0`.
-- `components/gov-chat-backend/package-lock.json` — regenerated by `npm install` (added 70 / removed 31 / changed 18).
-- `_bmad-output/implementation-artifacts/stories/2-1-add-otel-logs-deps-to-shared-lib-and-backend.md` — workflow bookkeeping (status, baseline_revision, deferred list, Review Triage Log, Auto Run Result).
-
-Review findings breakdown:
-- 1 patch applied (high severity): the verification gap that the implementation subagent had skipped (`npm install` + lockfile commit). All spec ACs now confirmed.
-- 7 items deferred (see frontmatter `deferred:` list): document-repository mirror, victorialogs-transport.js wrapper, exporter-trace-otlp-http version alignment, Jest moduleNameMapper, shared/lib name+version, logger.js migration, CHANGELOG entry.
-- 9 items rejected: caret-version convention for OTel 0.x packages, `peerDependenciesMeta` optional flag, auto-instrumentations-node peer risk (unverifiable without resolution), alphabetical-ordering nit, baseline_revision as workflow bookkeeping field, `overrides` extension (depends on resolution outcome), effort 0.2 SP estimate, in-spec rollback step, MR/commit reference field, sdk-node@0.221 experimental-line concern.
-
-Follow-up review recommendation: true (patched count: high 1, medium 0, low 0 → score 1×3+0×0+0×0 = 3; any patched high-severity finding → true per the formula).
-
-Verification performed:
-- `python3 -c "import json; json.load(open('components/shared/lib/package.json'))"` → parse OK.
-- `python3 -c "import json; json.load(open('components/gov-chat-backend/package.json'))"` → parse OK.
-- `cd components/shared/lib && npm install --no-audit --no-fund` → added 114 packages in 929ms, no errors.
-- `cd components/gov-chat-backend && npm install --no-audit --no-fund` → added 70, removed 31, changed 18 in 9s, no errors.
-- `cd components/gov-chat-backend && npm ls @opentelemetry/api-logs @opentelemetry/sdk-logs @opentelemetry/exporter-logs-otlp-http @opentelemetry/sdk-node --depth=0` → all four resolve to `0.221.0`, no UNMET PEER DEPENDENCY warnings (spec AC #1 satisfied).
-- `cd components/shared/lib && npm ls @opentelemetry/api-logs --depth=0` → resolves to `0.221.0` (spec AC #2 satisfied).
-
-Residual risks:
-- document-repository consumer still on OTel 0.218.x → until Story 3-1 lands, any doc-repo install that consumes shared/lib will hit UNMET PEER DEPENDENCY for `@opentelemetry/api-logs`. Out of this story's scope; flagged in `deferred`.
-- `components/gov-chat-backend/package.json` carries both `@opentelemetry/sdk-node@^0.221.0` and `@opentelemetry/exporter-trace-otlp-http@^0.218.0`; the npm dedup currently hides any conflict, but a future bump of exporter-trace-otlp-http may surface a duplicate OTel core tree. Out of this story's scope; flagged in `deferred`.
-- No source-code consumer of the new packages exists yet on this branch — dep declaration is ahead of code wiring, which is intentional (later stories 2-4 / 2-5 / 2-6 wire victorialogs-transport.js / logger.js). If the team decides this story must ship with consumer code, that is a scope change against the merged 2-1+2-7 spec.

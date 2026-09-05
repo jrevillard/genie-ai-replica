@@ -2066,3 +2066,59 @@ source_spec: `2-1-add-otel-logs-deps-to-shared-lib-and-backend.md`
 severity: low
 reason: Spec ACs are three shell assertions (two `npm ls`, one `json.load`). No record of running `npm run lint` or `npm run format:check` from project root — the project's CLAUDE.md mandates these before CI. Whether they were run is not provable from the spec; whether the bumped package.json files pass lint/format cannot be answered from this story alone.
 status: open
+
+### DW-336: Producer-side PII redaction on OTel LogRecord body is required by AD-4 / CAP-1 / C-5; the VL transport writes `body = info.message` with no redaction at this call site.
+origin: spec-deferred 83697657250f
+location: components/shared/lib/victorialogs-transport.js + Story 2.6 (components/gov-chat-backend/tracing.js)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: high
+reason: logger.js does not register a `PIIRedactingLogRecordProcessor` against `body`; only the backend `tracing.js` span-attribute processor exists. `logger.info(`Login failed for ${email}`)` would emit the email into VL.
+status: open
+
+### DW-337: `log_record_dropped_total{reason="observability_disabled"}` counter at the AND-gate suppression point is missing.
+origin: spec-deferred a0e9016f313e
+location: components/shared/lib/logger.js:27-30 (gate) + components/gov-chat-backend/metrics.js (Story 2.12)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: phases.md P1a acceptance requires the counter to be visible when `LOG_TO_VICTORIALOGS=1 && ENABLE_OBSERVABILITY=0` suppresses emission; the gate in `vlTransport()` returns `[]` without any metric increment.
+status: open
+
+### DW-338: Downstream consumers that grep `[ERROR]`/`[WARN]`/`[INFO]`/`[DEBUG]` substrings in the new JSON file output will silently misclassify every record — error rate reads 0, security-scan vulnerability
+origin: spec-deferred 6aa98497813f
+location: components/gov-chat-backend/services/admin-dashboard-service.js + components/gov-chat-frontend/src/__tests__/components/LogSearchDialog.test.js
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: high
+reason: admin-dashboard-service.js:109 (errorLogs filter), :654 (`runSecurityScan` level gates), :941/955/971 (security-scan vulnerability classification); LogSearchDialog.test.js:893-927 printf regex. Existing tests use hand-crafted printf fixtures so the breakage is invisible to CI.
+status: open
+
+### DW-339: Pre-init records are dropped before `logs.setGlobalLoggerProvider(...)` wires the OTel `LoggerProvider`; a 100-record ring buffer flush is required by AD-1.
+origin: spec-deferred 33edbb487eaf
+location: components/shared/lib/victorialogs-transport.js (Story 2.4 + components/shared/lib/__tests__/victorialogs-transport.test.js Story 2.10)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: VictoriaLogsTransport calls `logs.getLogger(name).emit(...)` without a ring buffer; records emitted during backend startup before `tracing.js` initialises the provider are silently lost.
+status: open
+
+### DW-340: Console transport's `json: false` paired with the new upstream `format.json()` pipeline emits JSON objects to stdout; operator visual log-tailing may break or double-encode depending on winston
+origin: spec-deferred f896ffa44c44
+location: components/shared/lib/logger.js:42-47
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: low
+reason: loggerConfig.transports[0] sets `json: false, colorize: true`; with `format.combine(..., json())` upstream, the formatter already stringifies and Console's option no longer has the printf-style payload it was tuned for.
+status: open
+
+### DW-341: `service.name` is read from `process.env.SERVICE_NAME` rather than hardcoded per-component; ARCHITECTURE-SPINE.md AD-2 mandates `genie-backend` for backend and `genie-document-repository` for
+origin: spec-deferred 7f7d8af3d94d
+location: components/shared/lib/logger.js:21, 28 + components/shared/lib/victorialogs-transport.js:49
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: `traceFormat()` (logger.js:21) and `vlTransport()` (logger.js:28) both read `process.env.SERVICE_NAME || 'genie-backend'`; the constructor `service` option to `VictoriaLogsTransport` is dead code because `traceFormat` always populates `info.service` first.
+status: open
+
+### DW-342: Positive test coverage of the new `vlTransport()` AND-gate and the `reconfigureLogger` env-var re-evaluation path is absent.
+origin: spec-deferred 4585eca46c9c
+location: components/shared/lib/__tests__/victorialogs-transport.test.js (Story 2.10) + components/gov-chat-backend/__tests__/logger-vl-integration.test.js (Story 2.11)
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+severity: medium
+reason: logger-functions.test.js exercises `reconfigureLogger` only with both env vars unset, so the `[]` short-circuit path is the only branch tested; an inverted `||` or a renamed env var would silently disable the VL pipeline in production with no CI signal.
+status: open

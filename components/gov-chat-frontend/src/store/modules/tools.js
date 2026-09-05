@@ -6,14 +6,22 @@ const state = {
   error: null,
   config: null,
   isLoadingConfig: false,
-  configError: null
+  configError: null,
+  auditEntries: [],
+  auditNextCursor: null,
+  isLoadingAudit: false,
+  auditError: null,
+  _auditRequestId: 0
 };
 
 const getters = {
   feeds: (state) => state.feeds,
   isLoadingFeeds: (state) => state.isLoadingFeeds,
   toolsConfig: (state) => state.config,
-  isLoadingConfig: (state) => state.isLoadingConfig
+  isLoadingConfig: (state) => state.isLoadingConfig,
+  auditEntries: (state) => state.auditEntries,
+  auditNextCursor: (state) => state.auditNextCursor,
+  isLoadingAudit: (state) => state.isLoadingAudit
 };
 
 const actions = {
@@ -46,6 +54,35 @@ const actions = {
       commit('SET_CONFIG_ERROR', error.response?.data?.message || 'Failed to save tools configuration');
       console.error('Error saving tools config:', error);
       return false;
+    }
+  },
+
+  async fetchAudit({ commit, state }, { append = false, ...filters } = {}) {
+    // Race token: a stale slow response must not clobber a newer one
+    const request = ++state._auditRequestId;
+    commit('SET_AUDIT_LOADING', true);
+    commit('SET_AUDIT_ERROR', null);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') params.append(k, v);
+      });
+      const response = await httpService.get(`admin/tools/audit?${params.toString()}`);
+      if (request !== state._auditRequestId) return;
+      if (response.data && response.data.success) {
+        commit(append ? 'APPEND_AUDIT' : 'SET_AUDIT', response.data.data);
+      } else {
+        commit('SET_AUDIT_ERROR', 'Failed to fetch audit entries');
+      }
+    } catch (error) {
+      if (request === state._auditRequestId) {
+        commit('SET_AUDIT_ERROR', error.response?.data?.message || 'Failed to fetch audit entries');
+      }
+      console.error('Error fetching audit:', error);
+    } finally {
+      if (request === state._auditRequestId) {
+        commit('SET_AUDIT_LOADING', false);
+      }
     }
   },
 
@@ -138,6 +175,24 @@ const mutations = {
 
   SET_CONFIG_ERROR(state, value) {
     state.configError = value;
+  },
+
+  SET_AUDIT(state, { entries, next_cursor }) {
+    state.auditEntries = entries;
+    state.auditNextCursor = next_cursor || null;
+  },
+
+  APPEND_AUDIT(state, { entries, next_cursor }) {
+    state.auditEntries = [...state.auditEntries, ...entries];
+    state.auditNextCursor = next_cursor || null;
+  },
+
+  SET_AUDIT_LOADING(state, value) {
+    state.isLoadingAudit = value;
+  },
+
+  SET_AUDIT_ERROR(state, value) {
+    state.auditError = value;
   },
 
   SET_FEEDS(state, feeds) {

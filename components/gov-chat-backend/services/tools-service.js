@@ -1,4 +1,5 @@
 const { aql } = require('arangojs');
+const Redis = require('ioredis');
 const { logger, dbService } = require('../shared-lib');
 
 class ToolsService {
@@ -141,6 +142,135 @@ class ToolsService {
       logger.error(`Error deleting feed ${id}: ${error.message}`);
       throw error;
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Audit stream reader (story 4-6) — FOI access via tools-reader.
+  // PEEK ONLY: XREVRANGE, never XREADGROUP/XACK — consuming would steal
+  // entries from the future analytics consumer and break the audit trail.
+  // ------------------------------------------------------------------
+  async _auditRedis() {
+    if (!this._auditClient) {
+      const host = (process.env.REDIS_HOST || 'redis-cache').replace(/^redis:\/\//, '');
+      const port = parseInt(process.env.REDIS_PORT || '6379', 10);
+      const password = process.env.REDIS_PASSWORD || undefined;
+      this._auditClient = new Redis({
+        host,
+        port,
+        password,
+        lazyConnect: false,
+        maxRetriesPerRequest: 1,
+        // Fail fast when Redis is unreachable — a queued-forever xrevrange
+        // would hang the /audit request with no timeout (review: offline queue)
+        enableOfflineQueue: false
+      });
+      // Unhandled 'error' events crash the process — always attach a listener
+      this._auditClient.on('error', (err) => logger.error(`Audit Redis error: ${err.message}`));
+    }
+    return this._auditClient;
+  }
+
+  _decodeAuditEntry(id, flatFields) {
+    // ioredis returns [field, value, field, value, ...] — decode to an object.
+    // PUBLIC FIELDS ONLY: parameters_redacted and metadata carry invocation
+    // payloads and are deliberately excluded from the listing shape.
+    const raw = {};
+    for (let i = 0; i < flatFields.length; i += 2) {
+      raw[flatFields[i]] = flatFields[i + 1];
+    }
+    return {
+      id,
+      tool_id: raw.tool_id || '',
+      user_id: raw.user_id || '',
+      timestamp: parseFloat(raw.timestamp) || 0,
+      action: raw.action || 'invoke',
+      governance_decision: raw.governance_decision || '',
+      duration_ms: raw.duration_ms !== undefined ? parseFloat(raw.duration_ms) : null,
+      pii_entities_found: parseInt(raw.pii_entities_found || '0', 10) || 0,
+      // Cap at export/listing time — the writer truncates too, but a
+      // hand-written stream entry could carry an unbounded summary
+      result_summary: raw.result_summary ? raw.result_summary.slice(0, 200) : null
+    };
+  }
+
+  _csvCell(str) {
+    // Neutralize spreadsheet formula injection (=cmd()+-@) and always quote
+    // anything containing quotes/newlines/CR (review: CSV injection)
+    const dangerous = /^[=+\-@]/.test(str);
+    const needsQuoting = /[",\r\n]/.test(str) || dangerous;
+    const escaped = dangerous ? `'${str}` : str;
+    return needsQuoting ? `"${escaped.replace(/"/g, '""')}"` : escaped;
+  }
+
+  async getAuditEntries({ tool_id, action, user_id, from, to, limit = 50, cursor, _maxCap = 500 } = {}) {
+    const capped = Math.min(Math.max(parseInt(limit, 10) || 50, 1), _maxCap);
+    try {
+      const client = await this._auditRedis();
+      const stream = process.env.AUDIT_STREAM_NAME || 'tool-invocation-audit';
+      // '(' = EXCLUSIVE start (Redis 6.2+): re-entering at the cursor must not
+      // re-emit the boundary entry (review: inclusive cursor duplicated rows)
+      const start = cursor && /^\d+-\d+$/.test(cursor) ? `(${cursor}` : '+';
+      // Over-fetch to compensate for in-code filtering, then slice
+      const fetchCount = Math.min(capped * 4, _maxCap);
+      const raw = await client.xrevrange(stream, start, '-', 'COUNT', fetchCount);
+      const entries = [];
+      let lastSeenId = null;
+      for (const [id, fields] of raw) {
+        lastSeenId = id;
+        const entry = this._decodeAuditEntry(id, fields);
+        if (tool_id && entry.tool_id !== tool_id) continue;
+        if (action && entry.action !== action) continue;
+        if (user_id && entry.user_id !== user_id) continue;
+        // from/to are epoch SECONDS (the entry unit)
+        if (from !== undefined && !Number.isNaN(from) && entry.timestamp < from) continue;
+        if (to !== undefined && !Number.isNaN(to) && entry.timestamp > to) continue;
+        entries.push(entry);
+        if (entries.length >= capped) break;
+      }
+      // Cursor whenever the FETCH window was exhausted — even with zero filter
+      // matches, deeper entries may hold matches (review: sparse filters used
+      // to dead-end the pagination)
+      const nextCursor = raw.length >= fetchCount ? lastSeenId : null;
+      return { entries, next_cursor: entries.length >= capped ? nextCursor : null };
+    } catch (error) {
+      logger.error(`Error reading audit stream: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async exportAudit(filters) {
+    // _maxCap lifts the listing cap for one-shot exports (review: the export
+    // used to be silently truncated to the 500-row listing cap)
+    const { entries } = await this.getAuditEntries({ ...filters, limit: 10000, _maxCap: 10000 });
+    if (filters.format === 'csv') {
+      const header =
+        'id,timestamp,tool_id,action,governance_decision,duration_ms,pii_entities_found,user_id,result_summary';
+      const rows = entries.map((e) =>
+        [
+          e.id,
+          new Date(e.timestamp * 1000).toISOString(),
+          e.tool_id,
+          e.action,
+          e.governance_decision,
+          e.duration_ms !== null ? e.duration_ms : '',
+          e.pii_entities_found,
+          e.user_id,
+          e.result_summary || ''
+        ]
+          .map((v) => this._csvCell(String(v)))
+          .join(',')
+      );
+      return {
+        body: [header, ...rows].join('\r\n'),
+        contentType: 'text/csv',
+        filename: `tool-audit-${Date.now()}.csv`
+      };
+    }
+    return {
+      body: JSON.stringify(entries, null, 2),
+      contentType: 'application/json',
+      filename: `tool-audit-${Date.now()}.json`
+    };
   }
 }
 

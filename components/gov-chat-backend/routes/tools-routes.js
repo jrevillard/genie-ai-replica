@@ -152,6 +152,108 @@ module.exports = (toolsService) => {
     }
   });
 
+  // --- Audit log (story 4-6: FOI access via tools-reader; read-only) ---
+
+  /**
+   * @swagger
+   * /api/admin/tools/audit:
+   *   get:
+   *     summary: List tool-invocation audit entries (newest first)
+   *     description: Peek-only read (XREVRANGE) of the audit stream — never
+   *       consumes. Returns public summary fields only; parameters_redacted
+   *       and metadata are deliberately excluded. Readable by tools-reader.
+   *     tags: [Tools]
+   *     parameters:
+   *       - in: query
+   *         name: tool_id
+   *         schema: { type: string }
+   *       - in: query
+   *         name: action
+   *         schema: { type: string }
+   *       - in: query
+   *         name: user_id
+   *         schema: { type: string }
+   *       - in: query
+   *         name: from
+   *         description: Epoch seconds (inclusive)
+   *         schema: { type: number }
+   *       - in: query
+   *         name: to
+   *         description: Epoch seconds (inclusive)
+   *         schema: { type: number }
+   *       - in: query
+   *         name: limit
+   *         schema: { type: integer, default: 50, maximum: 500 }
+   *       - in: query
+   *         name: cursor
+   *         description: Entry ID cursor for pagination
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: Audit entries page
+   */
+  router.get('/audit', readGuard, async (req, res, _next) => {
+    try {
+      const { tool_id, action, user_id, from, to, limit, cursor } = req.query;
+      const result = await toolsService.getAuditEntries({
+        tool_id,
+        action,
+        user_id,
+        from: from ? parseFloat(from) : undefined,
+        to: to ? parseFloat(to) : undefined,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        cursor
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error(`[TOOLS-ROUTES] Error listing audit: ${error.message}`);
+      res.status(500).json({ success: false, message: 'Failed to retrieve audit entries' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/tools/audit/export:
+   *   get:
+   *     summary: Export audit entries as CSV or JSON (tools-reader FOI path)
+   *     tags: [Tools]
+   *     parameters:
+   *       - in: query
+   *         name: format
+   *         required: true
+   *         schema: { type: string, enum: [csv, json] }
+   *       - in: query
+   *         name: tool_id
+   *         schema: { type: string }
+   *       - in: query
+   *         name: action
+   *         schema: { type: string }
+   *       - in: query
+   *         name: user_id
+   *         schema: { type: string }
+   *     responses:
+   *       200:
+   *         description: Downloadable file
+   *       400:
+   *         description: Invalid format
+   */
+  router.get('/audit/export', readGuard, async (req, res, _next) => {
+    try {
+      const format = req.query.format;
+      if (format !== 'csv' && format !== 'json') {
+        return res.status(400).json({ success: false, message: 'format must be csv or json' });
+      }
+      const { tool_id, action, user_id } = req.query;
+      const file = await toolsService.exportAudit({ format, tool_id, action, user_id });
+      res.setHeader('Content-Type', file.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+      res.send(file.body);
+    } catch (error) {
+      logger.error(`[TOOLS-ROUTES] Error exporting audit: ${error.message}`);
+      res.status(500).json({ success: false, message: 'Failed to export audit entries' });
+    }
+  });
+
   // --- SearXNG ---
 
   // Basic testing proxy to SearXNG

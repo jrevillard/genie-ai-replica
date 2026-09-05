@@ -103,7 +103,6 @@ describe('AdminToolsView Configuration tab (story 4-4)', () => {
     expect(wrapper.vm.canEditConfig).toBe(false);
   });
 
-
   it('save calls the store with the parsed whitelist', async () => {
     const wrapper = createWrapper();
     await wrapper.vm.loadConfig();
@@ -123,6 +122,37 @@ describe('AdminToolsView Configuration tab (story 4-4)', () => {
     mockDispatch.mockClear();
     await wrapper.vm.saveConfig();
     expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it('renders the Audit Log nav item', () => {
+    const wrapper = createWrapper();
+    expect(wrapper.text()).toContain('Audit Log');
+  });
+
+  it('applyAuditFilters dispatches fetchAudit with filters', async () => {
+    const wrapper = createWrapper();
+    wrapper.vm.auditFilters = { tool_id: 'web_search', action: '', user_id: '' };
+    mockDispatch.mockClear();
+    await wrapper.vm.applyAuditFilters();
+    expect(mockDispatch).toHaveBeenCalledWith('fetchAudit', { tool_id: 'web_search', action: '', user_id: '' });
+  });
+
+  it('export URL carries format and applied filters', async () => {
+    const wrapper = createWrapper();
+    wrapper.vm.appliedAuditFilters = { tool_id: 'web_search' };
+    expect(wrapper.vm.auditExportUrl('csv')).toContain('format=csv');
+    expect(wrapper.vm.auditExportUrl('csv')).toContain('tool_id=web_search');
+  });
+
+  it('downloadAuditExport fetches via httpService (Bearer token path)', async () => {
+    const httpService = require('@/services/httpService');
+    const wrapper = createWrapper();
+    wrapper.vm.appliedAuditFilters = { tool_id: 'web_search' };
+    await wrapper.vm.downloadAuditExport('csv');
+    expect(httpService.get).toHaveBeenCalledWith(
+      expect.stringContaining('admin/tools/audit/export'),
+      expect.objectContaining({ responseType: 'blob' })
+    );
   });
 
   it('plain user with no tools role cannot edit (default-deny)', async () => {

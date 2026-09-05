@@ -37,6 +37,16 @@
                   <span>{{ translate('admin.tools.navConfig', 'Configuration') }}</span>
                 </a>
               </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'audit' }]"
+                  @click.prevent="activeTab = 'audit'"
+                >
+                  <i>📋</i>
+                  <span>{{ translate('admin.tools.navAudit', 'Audit Log') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
           <div class="nav-section">
@@ -236,6 +246,94 @@
             </div>
           </div>
         </div>
+
+        <!-- Audit Tab (story 4-6: FOI access via tools-reader; read-only) -->
+        <div v-if="activeTab === 'audit'" class="dashboard-card">
+          <div class="card-header">
+            <div class="card-title">{{ translate('admin.tools.auditTitle', 'Tool Invocation Audit Log') }}</div>
+            <div class="card-actions">
+              <!-- Authenticated blob download: a plain <a href> carries no
+                   Authorization header and would 401 behind the gateway -->
+              <a href="#" class="audit-export-link" @click.prevent="downloadAuditExport('csv')">
+                {{ translate('admin.tools.auditExportCsv', 'Export CSV') }}
+              </a>
+              <a href="#" class="audit-export-link" @click.prevent="downloadAuditExport('json')">
+                {{ translate('admin.tools.auditExportJson', 'Export JSON') }}
+              </a>
+            </div>
+          </div>
+
+          <div class="audit-filters p-4">
+            <DsInput
+              v-model="auditFilters.tool_id"
+              :placeholder="translate('admin.tools.auditFilterTool', 'Tool ID')"
+              style="max-width: 180px"
+            />
+            <DsInput
+              v-model="auditFilters.action"
+              :placeholder="translate('admin.tools.auditFilterAction', 'Action (invoke, block...)')"
+              style="max-width: 220px"
+            />
+            <DsInput
+              v-model="auditFilters.user_id"
+              :placeholder="translate('admin.tools.auditFilterUser', 'User ID')"
+              style="max-width: 220px"
+            />
+            <DsButton variant="primary" @click="applyAuditFilters">
+              {{ translate('admin.tools.auditApply', 'Apply') }}
+            </DsButton>
+          </div>
+
+          <DsStateDisplay v-if="isLoadingAudit" type="loading">
+            {{ translate('admin.tools.auditLoading', 'Loading audit entries...') }}
+          </DsStateDisplay>
+          <DsStateDisplay v-else-if="auditError" type="error">
+            {{ auditError }}
+          </DsStateDisplay>
+
+          <div v-else class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ translate('admin.tools.auditColTime', 'Time') }}</th>
+                  <th>{{ translate('admin.tools.auditColTool', 'Tool') }}</th>
+                  <th>{{ translate('admin.tools.auditColAction', 'Action') }}</th>
+                  <th>{{ translate('admin.tools.auditColDecision', 'Decision') }}</th>
+                  <th>{{ translate('admin.tools.auditColDuration', 'Duration (ms)') }}</th>
+                  <th>{{ translate('admin.tools.auditColPii', 'PII found') }}</th>
+                  <th>{{ translate('admin.tools.auditColUser', 'User') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="auditEntries.length === 0">
+                  <td colspan="7" class="table-message">
+                    {{
+                      translate(
+                        'admin.tools.auditEmpty',
+                        'No audit entries yet — entries appear once tool governance is processing invocations.'
+                      )
+                    }}
+                  </td>
+                </tr>
+                <tr v-for="entry in auditEntries" :key="entry.id">
+                  <td>{{ formatAuditTime(entry.timestamp) }}</td>
+                  <td class="cell-main">{{ entry.tool_id }}</td>
+                  <td>{{ entry.action }}</td>
+                  <td>{{ entry.governance_decision }}</td>
+                  <td>{{ entry.duration_ms !== null ? entry.duration_ms : '—' }}</td>
+                  <td>{{ entry.pii_entities_found }}</td>
+                  <td>{{ entry.user_id }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-if="auditNextCursor" class="audit-more p-4">
+            <DsButton variant="secondary" :disabled="isLoadingAudit" @click="loadMoreAudit">
+              {{ translate('admin.tools.auditMore', 'Load more') }}
+            </DsButton>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -285,6 +383,7 @@
 
 <script>
 import { mapState, mapActions } from 'vuex';
+import httpService from '@/services/httpService';
 import DsButton from '@/components/ds/Button.vue';
 import DsInput from '@/components/ds/Input.vue';
 import DsStateDisplay from '@/components/ds/StateDisplay.vue';
@@ -314,11 +413,25 @@ export default {
       searchResults: null,
       configForm: { whitelist: [], web_search_enabled: true },
       whitelistText: '',
-      isSavingConfig: false
+      isSavingConfig: false,
+      auditFilters: { tool_id: '', action: '', user_id: '' },
+      appliedAuditFilters: {}
     };
   },
   computed: {
-    ...mapState('tools', ['feeds', 'isLoadingFeeds', 'error', 'toolsConfig', 'isLoadingConfig']),
+    ...mapState('tools', [
+      'feeds',
+      'isLoadingFeeds',
+      'error',
+      'toolsConfig',
+      'isLoadingConfig',
+      'auditEntries',
+      'auditNextCursor',
+      'isLoadingAudit'
+    ]),
+    auditError() {
+      return this.$store.state.tools.auditError || null;
+    },
     configError() {
       // Dedicated: a FEED load error must not blank the Configuration tab
       return this.$store.state.tools.configError || null;
@@ -343,6 +456,14 @@ export default {
         : '';
     }
   },
+
+  watch: {
+    activeTab(tab) {
+      if (tab === 'audit' && this.auditEntries.length === 0 && !this.isLoadingAudit) {
+        this.applyAuditFilters();
+      }
+    }
+  },
   mounted() {
     this.fetchFeeds();
     this.loadConfig();
@@ -355,7 +476,8 @@ export default {
       'deleteFeed',
       'testSearch',
       'fetchToolsConfig',
-      'saveToolsConfig'
+      'saveToolsConfig',
+      'fetchAudit'
     ]),
 
     // Per-component helper (epic 4.9 convention) — this view is router-mounted,
@@ -405,6 +527,45 @@ export default {
     async removeFeed(id) {
       if (confirm(this.translate('admin.tools.deleteConfirm', 'Are you sure you want to delete this feed?'))) {
         await this.deleteFeed(id);
+      }
+    },
+
+    applyAuditFilters() {
+      this.appliedAuditFilters = { ...this.auditFilters };
+      this.fetchAudit(this.appliedAuditFilters);
+    },
+
+    loadMoreAudit() {
+      this.fetchAudit({ ...this.appliedAuditFilters, cursor: this.auditNextCursor, append: true });
+    },
+
+    formatAuditTime(epochSeconds) {
+      if (!epochSeconds) return '—';
+      return new Date(epochSeconds * 1000).toLocaleString();
+    },
+
+    auditExportUrl(format) {
+      const params = new URLSearchParams({ format });
+      Object.entries(this.appliedAuditFilters).forEach(([k, v]) => {
+        if (v) params.append(k, v);
+      });
+      return `admin/tools/audit/export?${params.toString()}`;
+    },
+
+    async downloadAuditExport(format) {
+      // httpService attaches the Bearer token; a raw <a href> would 401
+      try {
+        const response = await httpService.get(this.auditExportUrl(format), { responseType: 'blob' });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `tool-audit.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Audit export failed:', e);
       }
     },
 
@@ -681,6 +842,25 @@ export default {
   margin-top: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--danger);
+}
+
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.audit-export-link {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  margin-left: var(--space-md);
+  text-decoration: underline;
+}
+
+.audit-more {
+  display: flex;
+  justify-content: center;
 }
 
 .whitelist-editor {

@@ -231,3 +231,128 @@ describe('tools config routes (story 4-4)', () => {
     });
   });
 });
+
+// ============================================================
+// Story 4-6 — audit log viewer (FOI: tools-reader reads; read-only)
+// ============================================================
+describe('audit routes (story 4-6)', () => {
+  const rawEntry = (id, tool = 'web_search', action = 'invoke', user = 'u1') => [
+    id,
+    [
+      'tool_id',
+      tool,
+      'user_id',
+      user,
+      'timestamp',
+      '1690000000.5',
+      'action',
+      action,
+      'governance_decision',
+      'allow',
+      'duration_ms',
+      '12.5',
+      'pii_entities_found',
+      '1',
+      'parameters_redacted',
+      '{"query": "<EMAIL>"}',
+      'metadata',
+      '{"k": "v"}'
+    ]
+  ];
+
+  beforeEach(() => {
+    toolsService.getAuditEntries = jest.fn().mockResolvedValue({
+      entries: [
+        {
+          id: '1690000000000-0',
+          tool_id: 'web_search',
+          user_id: 'u1',
+          timestamp: 1690000000.5,
+          action: 'invoke',
+          governance_decision: 'allow',
+          duration_ms: 12.5,
+          pii_entities_found: 1,
+          result_summary: 'ok'
+        }
+      ],
+      next_cursor: null
+    });
+    toolsService.exportAudit = jest.fn().mockResolvedValue({
+      body: 'id,timestamp\n1690000000000-0,2023-07-22T...',
+      contentType: 'text/csv',
+      filename: 'tool-audit-1.csv'
+    });
+  });
+
+  it('GET /audit is readable by tools-reader (FOI path)', async () => {
+    const response = await get('/api/admin/tools/audit', 'tools-reader');
+    expect(response.status).toBe(200);
+    expect(response.body.data.entries.length).toBe(1);
+  });
+
+  it('GET /audit forwards filters to the service', async () => {
+    await request(app)
+      .get(
+        '/api/admin/tools/audit?tool_id=web_search&action=block&from=1690000000&to=1690000100&limit=10&cursor=1690000000000-0'
+      )
+      .set('x-test-roles', 'tools-reader');
+    expect(toolsService.getAuditEntries).toHaveBeenCalledWith({
+      tool_id: 'web_search',
+      action: 'block',
+      user_id: undefined,
+      from: 1690000000,
+      to: 1690000100,
+      limit: 10,
+      cursor: '1690000000000-0'
+    });
+  });
+
+  it('GET /audit returns 403 for a plain user', async () => {
+    const response = await get('/api/admin/tools/audit', 'user');
+    expect(response.status).toBe(403);
+  });
+
+  it('GET /audit/export streams CSV with download headers', async () => {
+    const response = await get('/api/admin/tools/audit/export?format=csv', 'tools-reader');
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('text/csv');
+    expect(response.headers['content-disposition']).toContain('attachment');
+    expect(response.text).toContain('id,timestamp');
+  });
+
+  it('GET /audit/export rejects an invalid format', async () => {
+    const response = await get('/api/admin/tools/audit/export?format=xml', 'tools-reader');
+    expect(response.status).toBe(400);
+  });
+});
+
+// Story 4-6 service-level: the decode EXCLUDES payload fields — the security
+// boundary of the listing endpoint (parameters_redacted / metadata).
+// Uses the REAL service (mocks shared-lib only) so the decode logic is the code under test.
+describe('_decodeAuditEntry field exclusion (story 4-6)', () => {
+  it('returns public fields only', () => {
+    jest.mock('../../services/tools-service', () => require('../../services/tools-service'));
+    const realService = jest.requireActual('../../services/tools-service');
+    const flat = [
+      'tool_id',
+      'web_search',
+      'parameters_redacted',
+      '{"q": "<EMAIL>"}',
+      'metadata',
+      '{"x": 1}',
+      'timestamp',
+      '1.5',
+      'action',
+      'invoke',
+      'user_id',
+      'u1'
+    ];
+    const entry = realService._decodeAuditEntry('1-1', flat);
+    expect(entry.tool_id).toBe('web_search');
+    expect(entry.timestamp).toBe(1.5);
+    expect(Object.keys(entry)).not.toContain('parameters_redacted');
+    expect(Object.keys(entry)).not.toContain('metadata');
+    expect(JSON.stringify(entry)).not.toContain('EMAIL');
+    expect(JSON.stringify(entry)).not.toContain('"x"');
+  });
+});

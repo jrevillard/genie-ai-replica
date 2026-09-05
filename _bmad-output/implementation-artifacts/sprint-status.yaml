@@ -76,8 +76,7 @@ development_status:
   epic-2: backlog
   2-1-add-otel-logs-deps-to-shared-lib-and-backend: done
   2-2-shared-lib-add-boolean-env-and-otel-batch-config-helpers: done
-  2-4-shared-lib-add-victorialogs-transport-js-winston-transportst:
-    ready-for-dev
+  2-4-shared-lib-add-victorialogs-transport-js-winston-transportst: done
   2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra:
     ready-for-dev
   2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr:

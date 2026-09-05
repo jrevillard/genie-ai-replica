@@ -145,6 +145,81 @@ class ToolsService {
   }
 
   // ------------------------------------------------------------------
+  // Health overview (story 4-7) — per-tool + per-feed green/yellow/red.
+  // Sources: live SearXNG probe (the epic AC), circuit-breaker keys
+  // (cb:{tool}:state — written once governance wiring lands; missing key =
+  // healthy-by-default), and per-feed failure counters (3-3).
+  // ------------------------------------------------------------------
+  static deriveFeedStatus(feed) {
+    // NFR15 isolation: statuses are computed per-feed, no shared state.
+    // A deliberately disabled feed is NOT a failure — 'disabled' renders grey
+    // (admin-intentional off must not be a permanent false alarm)
+    if (!feed.enabled) return 'disabled';
+    const failures = feed.failures || 0;
+    if (failures === 0) return 'green';
+    return failures >= 3 ? 'red' : 'yellow';
+  }
+
+  async _probeSearxng() {
+    const cached = ToolsService._probeCache;
+    if (Date.now() - cached.at < ToolsService.PROBE_CACHE_MS) {
+      return { reachable: cached.reachable, error: cached.error };
+    }
+    let reachable = false;
+    let error = null;
+    try {
+      const searxngUrl = process.env.SEARXNG_URL || 'http://searxng:8080';
+      // Probe the ROOT path (matches the searxng container's own healthcheck)
+      const response = await fetch(searxngUrl, { signal: AbortSignal.timeout(2000) });
+      reachable = response.ok;
+      if (!reachable) error = 'SearXNG responded with status ' + response.status;
+    } catch (err) {
+      error = 'SearXNG unreachable: ' + err.message;
+    }
+    ToolsService._probeCache = { at: Date.now(), reachable, error };
+    return { reachable, error };
+  }
+
+  async getToolsHealth() {
+    const tools = [];
+    // Tool registry arrives with governance wiring — web_search is the live one
+    for (const tool_id of ['web_search']) {
+      const row = { tool_id, circuit_state: 'closed', reachable: null, error: null };
+      if (tool_id === 'web_search') {
+        try {
+          const probe = await this._probeSearxng();
+          row.reachable = probe.reachable;
+          if (probe.error) row.error = probe.error;
+        } catch (err) {
+          row.reachable = false;
+          row.error = err.message;
+        }
+      }
+      try {
+        const client = await this._auditRedis();
+        const state = await client.get('cb:' + tool_id + ':state');
+        if (state) row.circuit_state = state;
+      } catch (err) {
+        // Redis unavailable: surface as unknown rather than faking healthy
+        row.circuit_state = 'unknown';
+        row.error = row.error || 'Breaker state unavailable: ' + err.message;
+      }
+      tools.push(row);
+    }
+
+    const feeds = (await this.getFeeds()).map((f) => ({
+      id: f._key,
+      title: f.title,
+      enabled: f.enabled !== false,
+      failures: f.failures || 0,
+      last_polled: f.last_polled || 0,
+      status: ToolsService.deriveFeedStatus(f)
+    }));
+
+    return { tools, feeds };
+  }
+
+  // ------------------------------------------------------------------
   // Audit stream reader (story 4-6) — FOI access via tools-reader.
   // PEEK ONLY: XREVRANGE, never XREADGROUP/XACK — consuming would steal
   // entries from the future analytics consumer and break the audit trail.
@@ -273,6 +348,8 @@ class ToolsService {
     };
   }
 }
+ToolsService._probeCache = { at: 0, reachable: null, error: null };
+ToolsService.PROBE_CACHE_MS = 30000;
 
 const instance = new ToolsService();
 module.exports = instance;

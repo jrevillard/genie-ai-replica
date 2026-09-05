@@ -356,3 +356,59 @@ describe('_decodeAuditEntry field exclusion (story 4-6)', () => {
     expect(JSON.stringify(entry)).not.toContain('"x"');
   });
 });
+
+// ============================================================
+// Story 4-7 — health overview
+// ============================================================
+describe('health route (story 4-7)', () => {
+  it('GET /health returns tools + feeds snapshot for tools-reader (FOI)', async () => {
+    toolsService.getToolsHealth = jest.fn().mockResolvedValue({
+      tools: [{ tool_id: 'web_search', circuit_state: 'closed', reachable: true, error: null }],
+      feeds: [{ id: 'f1', title: 'News', enabled: true, failures: 0, last_polled: 1690000000, status: 'green' }]
+    });
+    const response = await get('/api/admin/tools/health', 'tools-reader');
+    expect(response.status).toBe(200);
+    expect(response.body.data.tools[0].reachable).toBe(true);
+    expect(response.body.data.feeds[0].status).toBe('green');
+  });
+
+  it('GET /health returns 403 for a plain user', async () => {
+    const response = await get('/api/admin/tools/health', 'user');
+    expect(response.status).toBe(403);
+  });
+
+  it('deriveFeedStatus thresholds', () => {
+    const realService = jest.requireActual('../../services/tools-service');
+    const D = realService.constructor.deriveFeedStatus;
+    expect(D({ enabled: false, failures: 0 })).toBe('disabled');
+    expect(D({ enabled: true, failures: 0 })).toBe('green');
+    expect(D({ enabled: true, failures: 1 })).toBe('yellow');
+    expect(D({ enabled: true, failures: 2 })).toBe('yellow');
+    expect(D({ enabled: true, failures: 3 })).toBe('red');
+    expect(D({ enabled: true })).toBe('green');
+  });
+
+  it('_probeSearxng reports failure as data, never throws', async () => {
+    const realService = jest.requireActual('../../services/tools-service');
+    const S = realService.constructor;
+    const original = S._probeCache;
+    S._probeCache = { at: 0, reachable: null, error: null };
+    global.fetch = jest.fn().mockRejectedValue(new Error('connection refused'));
+    const probe = await realService._probeSearxng();
+    expect(probe.reachable).toBe(false);
+    expect(probe.error).toContain('connection refused');
+    S._probeCache = original;
+  });
+
+  it('_probeSearxng caches within the window', async () => {
+    const realService = jest.requireActual('../../services/tools-service');
+    const S = realService.constructor;
+    const original = S._probeCache;
+    S._probeCache = { at: Date.now(), reachable: true, error: null };
+    global.fetch = jest.fn();
+    const probe = await realService._probeSearxng();
+    expect(probe.reachable).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
+    S._probeCache = original;
+  });
+});

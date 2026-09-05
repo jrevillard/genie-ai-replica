@@ -11,7 +11,10 @@ const state = {
   auditNextCursor: null,
   isLoadingAudit: false,
   auditError: null,
-  _auditRequestId: 0
+  _auditRequestId: 0,
+  health: null,
+  isLoadingHealth: false,
+  healthError: null
 };
 
 const getters = {
@@ -21,7 +24,9 @@ const getters = {
   isLoadingConfig: (state) => state.isLoadingConfig,
   auditEntries: (state) => state.auditEntries,
   auditNextCursor: (state) => state.auditNextCursor,
-  isLoadingAudit: (state) => state.isLoadingAudit
+  isLoadingAudit: (state) => state.isLoadingAudit,
+  health: (state) => state.health,
+  isLoadingHealth: (state) => state.isLoadingHealth
 };
 
 const actions = {
@@ -83,6 +88,25 @@ const actions = {
       if (request === state._auditRequestId) {
         commit('SET_AUDIT_LOADING', false);
       }
+    }
+  },
+
+  async fetchHealth({ commit }, { refresh } = {}) {
+    commit('SET_HEALTH_LOADING', true);
+    commit('SET_HEALTH_ERROR', null);
+    try {
+      const qs = refresh ? `?refresh=${encodeURIComponent(refresh)}` : '';
+      const response = await httpService.get('admin/tools/health' + qs);
+      if (response.data && response.data.success) {
+        commit('SET_HEALTH', response.data.data);
+      } else {
+        commit('SET_HEALTH_ERROR', 'Failed to fetch health overview');
+      }
+    } catch (error) {
+      commit('SET_HEALTH_ERROR', error.response?.data?.message || 'Failed to fetch health overview');
+      console.error('Error fetching health:', error);
+    } finally {
+      commit('SET_HEALTH_LOADING', false);
     }
   },
 
@@ -193,6 +217,18 @@ const mutations = {
 
   SET_AUDIT_ERROR(state, value) {
     state.auditError = value;
+  },
+
+  SET_HEALTH(state, data) {
+    state.health = data;
+  },
+
+  SET_HEALTH_LOADING(state, value) {
+    state.isLoadingHealth = value;
+  },
+
+  SET_HEALTH_ERROR(state, value) {
+    state.healthError = value;
   },
 
   SET_FEEDS(state, feeds) {

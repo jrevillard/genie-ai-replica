@@ -254,6 +254,35 @@ module.exports = (toolsService) => {
     }
   });
 
+  // --- Health overview (story 4-7) ---
+
+  /**
+   * @swagger
+   * /api/admin/tools/health:
+   *   get:
+   *     summary: Tool + feed health overview (green/yellow/red)
+   *     description: Per-tool circuit state + live SearXNG probe; per-feed
+   *       status derived from the failure counter (NFR15 isolation).
+   *     tags: [Tools]
+   *     responses:
+   *       200:
+   *         description: Health snapshot
+   */
+  router.get('/health', readGuard, async (req, res, _next) => {
+    try {
+      // ?refresh=1 busts the 30s probe cache — an admin who just fixed SearXNG
+      // must not wait out a stale "unreachable"
+      if (req.query.refresh === '1' && typeof toolsService.bustProbeCache === 'function') {
+        toolsService.bustProbeCache();
+      }
+      const health = await toolsService.getToolsHealth();
+      res.json({ success: true, data: health });
+    } catch (error) {
+      logger.error(`[TOOLS-ROUTES] Error getting health: ${error.message}`);
+      res.status(500).json({ success: false, message: 'Failed to retrieve health overview' });
+    }
+  });
+
   // --- SearXNG ---
 
   // Basic testing proxy to SearXNG

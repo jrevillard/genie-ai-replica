@@ -47,6 +47,16 @@
                   <span>{{ translate('admin.tools.navAudit', 'Audit Log') }}</span>
                 </a>
               </li>
+              <li class="nav-item">
+                <a
+                  href="#"
+                  :class="['nav-link', { active: activeTab === 'health' }]"
+                  @click.prevent="activeTab = 'health'"
+                >
+                  <i>💚</i>
+                  <span>{{ translate('admin.tools.navHealth', 'Health') }}</span>
+                </a>
+              </li>
             </ul>
           </div>
           <div class="nav-section">
@@ -334,6 +344,86 @@
             </DsButton>
           </div>
         </div>
+
+        <!-- Health Tab (story 4-7) -->
+        <div v-if="activeTab === 'health'" class="dashboard-card">
+          <div class="card-header">
+            <div class="card-title">{{ translate('admin.tools.healthTitle', 'Health Overview') }}</div>
+            <div class="card-actions">
+              <DsButton variant="secondary" :disabled="isLoadingHealth" @click="fetchHealth({ refresh: '1' })">
+                {{ translate('admin.tools.healthRefresh', 'Refresh') }}
+              </DsButton>
+            </div>
+          </div>
+
+          <DsStateDisplay v-if="isLoadingHealth" type="loading">
+            {{ translate('admin.tools.healthLoading', 'Loading health overview...') }}
+          </DsStateDisplay>
+          <DsStateDisplay v-else-if="healthError" type="error">{{ healthError }}</DsStateDisplay>
+          <p v-else-if="health && health.feeds_error" class="config-error p-4">
+            {{ health.feeds_error }}
+          </p>
+
+          <div v-else class="p-4">
+            <h4 class="health-section-title">{{ translate('admin.tools.healthTools', 'Tools') }}</h4>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ translate('admin.tools.healthColTool', 'Tool') }}</th>
+                  <th>{{ translate('admin.tools.healthColCircuit', 'Circuit') }}</th>
+                  <th>{{ translate('admin.tools.healthColReachable', 'Reachable') }}</th>
+                  <th>{{ translate('admin.tools.healthColError', 'Error') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="tool in healthTools" :key="tool.tool_id">
+                  <td class="cell-main">{{ tool.tool_id }}</td>
+                  <td>
+                    <DsStatusTag :variant="circuitVariant(tool.circuit_state)">{{ tool.circuit_state }}</DsStatusTag>
+                  </td>
+                  <td>
+                    <DsStatusTag v-if="tool.reachable !== null" :variant="tool.reachable ? 'success' : 'danger'">
+                      {{
+                        tool.reachable
+                          ? translate('admin.tools.healthYes', 'Yes')
+                          : translate('admin.tools.healthNo', 'No')
+                      }}
+                    </DsStatusTag>
+                    <span v-else>—</span>
+                  </td>
+                  <td>{{ tool.error || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h4 class="health-section-title mt-4">{{ translate('admin.tools.healthFeeds', 'Feeds') }}</h4>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ translate('admin.tools.healthColFeed', 'Feed') }}</th>
+                  <th>{{ translate('admin.tools.healthColStatus', 'Status') }}</th>
+                  <th>{{ translate('admin.tools.healthColFailures', 'Failures') }}</th>
+                  <th>{{ translate('admin.tools.healthColLastPoll', 'Last polled') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="healthFeeds.length === 0">
+                  <td colspan="4" class="table-message">
+                    {{ translate('admin.tools.healthNoFeeds', 'No feeds configured.') }}
+                  </td>
+                </tr>
+                <tr v-for="feed in healthFeeds" :key="feed.id">
+                  <td class="cell-main">{{ feed.title }}</td>
+                  <td>
+                    <DsStatusTag :variant="feedVariant(feed.status)">{{ feed.status }}</DsStatusTag>
+                  </td>
+                  <td>{{ feed.failures }}</td>
+                  <td>{{ feed.last_polled ? formatAuditTime(feed.last_polled) : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -427,8 +517,19 @@ export default {
       'isLoadingConfig',
       'auditEntries',
       'auditNextCursor',
-      'isLoadingAudit'
+      'isLoadingAudit',
+      'health',
+      'isLoadingHealth'
     ]),
+    healthError() {
+      return this.$store.state.tools.healthError || null;
+    },
+    healthTools() {
+      return this.health?.tools || [];
+    },
+    healthFeeds() {
+      return this.health?.feeds || [];
+    },
     auditError() {
       return this.$store.state.tools.auditError || null;
     },
@@ -462,6 +563,9 @@ export default {
       if (tab === 'audit' && this.auditEntries.length === 0 && !this.isLoadingAudit) {
         this.applyAuditFilters();
       }
+      if (tab === 'health' && this.health === null && !this.isLoadingHealth) {
+        this.fetchHealth();
+      }
     }
   },
   mounted() {
@@ -477,7 +581,8 @@ export default {
       'testSearch',
       'fetchToolsConfig',
       'saveToolsConfig',
-      'fetchAudit'
+      'fetchAudit',
+      'fetchHealth'
     ]),
 
     // Per-component helper (epic 4.9 convention) — this view is router-mounted,
@@ -528,6 +633,22 @@ export default {
       if (confirm(this.translate('admin.tools.deleteConfirm', 'Are you sure you want to delete this feed?'))) {
         await this.deleteFeed(id);
       }
+    },
+
+    circuitVariant(state) {
+      // Fail-CLOSED: only the exact known-healthy string renders green — a
+      // typo'd/future state shows warning, not false success
+      if (state === 'closed') return 'success';
+      if (state === 'open') return 'danger';
+      if (state === 'half_open') return 'warning';
+      return 'warning'; // unknown/Redis-error = investigate
+    },
+
+    feedVariant(status) {
+      if (status === 'red') return 'danger';
+      if (status === 'yellow') return 'warning';
+      if (status === 'disabled') return 'pending'; // intentional off ≠ failure
+      return 'success';
     },
 
     applyAuditFilters() {
@@ -842,6 +963,11 @@ export default {
   margin-top: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--danger);
+}
+
+.health-section-title {
+  margin: var(--space-md) 0 var(--space-sm);
+  color: var(--fg);
 }
 
 .audit-filters {

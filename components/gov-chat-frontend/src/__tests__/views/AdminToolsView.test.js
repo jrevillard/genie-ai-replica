@@ -103,6 +103,24 @@ describe('AdminToolsView Configuration tab (story 4-4)', () => {
     expect(wrapper.vm.canEditConfig).toBe(false);
   });
 
+  it('renders the Health nav item', () => {
+    const wrapper = createWrapper();
+    expect(wrapper.text()).toContain('Health');
+  });
+
+  it('health badge variants map correctly', () => {
+    const wrapper = createWrapper();
+    expect(wrapper.vm.circuitVariant('open')).toBe('danger');
+    expect(wrapper.vm.circuitVariant('half_open')).toBe('warning');
+    expect(wrapper.vm.circuitVariant('unknown')).toBe('warning'); // fail-closed: investigate, not calm
+    expect(wrapper.vm.circuitVariant('closed')).toBe('success');
+    expect(wrapper.vm.circuitVariant('OPEN')).toBe('warning'); // fail-closed on unknown
+    expect(wrapper.vm.feedVariant('red')).toBe('danger');
+    expect(wrapper.vm.feedVariant('yellow')).toBe('warning');
+    expect(wrapper.vm.feedVariant('green')).toBe('success');
+    expect(wrapper.vm.feedVariant('disabled')).toBe('pending');
+  });
+
   it('save calls the store with the parsed whitelist', async () => {
     const wrapper = createWrapper();
     await wrapper.vm.loadConfig();

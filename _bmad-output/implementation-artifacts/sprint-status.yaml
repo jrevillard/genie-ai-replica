@@ -148,7 +148,7 @@ development_status:
   4-4-tool-management-and-domain-whitelist-editor: review # DONE 2026-09-01: tools_config ArangoDB singleton + BFF CRUD + chatqna per-query enforcement (whitelist suffix filter, doc toggle, env wins) + admin Configuration tab ×14 locales; review patches (strict booleans, default-deny UI, partial-payload 400s); 1694/1260/804 green
   4-5-feed-management-form: review # feeds CRUD wired end-to-end (store → BFF → ArangoDB)
   4-6-audit-log-viewer: review # DONE 2026-09-01: BFF XREVRANGE peek reader (never consumes; payload fields excluded), GET /audit + export (FOI tools-reader), admin Audit tab x14 locales; review patches (export cap, dead-end pagination, CSV injection, authenticated blob download); 1700/1266/804 green
-  4-7-health-overview: backlog # no health overview in AdminToolsView
+  4-7-health-overview: review # DONE 2026-09-05: GET /health (SearXNG live probe + breaker state + feed derivation w/ disabled state), admin Health tab x14; review patches (normalization, fail-closed badges, cache bust, error hygiene); 1705/1268/804 green
   4-8-list-and-grant-user-capabilities: review # code-review PASSED 2026-09-01: GET roles route + proxy getUserRealmRoles + the dialog template (never existed before), race guards, JIT pinned; 1688/1253 green. FLAG: epic's Keycloak deep-link replacement deferred to user
   4-9-i18n-across-all-14-locales: review # code-review PASSED 2026-08-31: 37 keys × 14 locales (real translations), per-component translate(), removeFeed confirm wired, phantom urlPlaceholder key dropped, 4 locale word fixes; gate + 1249 tests green. GAP: QueryInspector keys fallback-only (follow-up)
   4-10-ansible-tags-tools-and-profile-tools: review # deploy.yml + group_vars updated

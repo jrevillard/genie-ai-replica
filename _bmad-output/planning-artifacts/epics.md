@@ -30,12 +30,20 @@
 | Files | `configs/otel/otel-collector-config.yaml:183-189` |
 | Depends on | [] |
 
-### Story 1.3: env.j2 + env (root): render new vars unconditionally (MERGED 1-3 + 1-4)
+### Story 1.3: env.j2: render 3 new vars unconditionally
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.35 SP |
-| Files | `deploy/ansible/templates/env.j2` (after `:239`); `env` (Section 12D after SECTION 12C) |
+| Effort | 0.25 SP |
+| Files | `deploy/ansible/templates/env.j2` (after `:239`)` |
+| Depends on | [] |
+
+### Story 1.4: env (root): commented templates for new vars
+
+| Field | Value |
+| --- | --- |
+| Effort | 0.1 SP |
+| Files | `env` (Section 12C)` |
 | Depends on | [] |
 
 ### Story 1.6: docs/security/cve-triage-2026q3.md update (optional)

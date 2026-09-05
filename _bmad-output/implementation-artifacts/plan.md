@@ -29,15 +29,15 @@ Last updated: 2026-08-31
 
 ---
 
-## Where we are (30-second version)
+## Where we are (30-second version, updated 2026-09-05)
 
-- **Branch `feat/sst` → MR !279** (open, target `main`, pipeline green, **awaiting approvals**)
-- SST = **Server-Side Tools**: web search (SearXNG) + stream ingestor (RSS) + governance wrapper + admin UI
-- **MR !279: ~47 files, 17 commits** (count grows as stories land). Tracker synced (`sprint-status.yaml`)
-- **Fixed 2026-08-31:** web search was silently dead in the deployed image (chatqna Dockerfile never copied `workflows/`; the `try/except` swallowed the `ModuleNotFoundError`). Now wired: `COPY genie-ai-overlay/workflows/ /app/workflows/` + explicit `requests httpx` deps. Orphaned `tools/` dupe (1,875 lines) deleted.
-- **Story 4-1 complete through the full BMAD loop** (dev → 3-layer review → 4 patches → 1670 tests green → committed). Review caught the RBAC being inert behind admin-routes' mount order — fixed with an integration test pinning it.
-- **Nothing is merged yet** — but per the amended D2, the MR may be merged anytime (see operating procedure under D2).
-- Score (exact recount 2026-08-31): **21 review · 5 in-progress · 11 backlog · 1 blocked** — of 38 stories across 4 epics (+1 deferred)
+- **Branch `feat/sst` → MR !279** (open, target `main`). **PUSH DEFERRED per user** — 11+ commits queued locally; `git push origin feat/sst` when the network to opensource.unicc.org is back (no new MR needed, deltas auto-show).
+- **14 stories through the full BMAD loop this session** (create-story → dev → 3-layer review → patches → commit): 4-1, 2-7, 2-8, 4-9, 4-8, 2-4, 1-5, 1-1, 1-6, 3-4, 4-4, 4-6, 4-7 (+ stream-ingestor compose hotfix). 3-5 dev complete, review gate pending.
+- Suites all green: overlay **825** / backend **1705** / frontend **1268** / config-validator **25**.
+- Epic 1 complete except bump-gated 1-7. Epic 2 fully caught up (incl. D3 triggers + OQ-SST-7 resolved). Epic 4 admin UI core complete (4-1..4-9). Epic 3: 3-4 done; 3-9 partial (DLQ write-side shipped), 3-5 dev done pending review, 3-11 open.
+- **Web search is now operator-complete**: env kill-switch + fail-closed, runtime whitelist via admin UI (tools_config doc, next-query effect), FR9 time-sensitive triggers, FR24 quality gate, degradation truth table with SSE contract — all reviewed and pinned.
+- **Open for user:** D4 AGPL sign-off owner; 4-8 Keycloak deep-link UX call; whether to wire governance/Redis into chatqna (NFR11 backlog item — candidate next initiative).
+- Backlog remaining: 3-9 (breaker + DLQ consumer), 3-11 (regression guard, production gate needing OQ-SST-4), 2-10 Flutter (D5), 5-1 analytics (post-MVP), 1-7 (bump-gated).
 
 ---
 
@@ -127,7 +127,7 @@ Vue renders citations; mobile does not. No `mobile/` changes exist in the MR.
  
 ---
 
-## Remaining work — progress + ETA (updated 2026-08-31)
+## Remaining work — progress + ETA (updated 2026-09-05, post mega-session)
 
 **ETA unit = one BMAD-loop session** (create-story → dev-story → code-review → commit; measured from story 4-1 ≈ 1 session/story). Calibrated on actuals, not hope.
 
@@ -209,6 +209,7 @@ files (work went epics → code directly). That's exactly why the tracker drifte
 
 | Date | What happened |
 |------|---------------|
+| 2026-09-05 (22) | **Session total: 14 stories through the full BMAD loop** (4-1, 2-7, 2-8, 4-9, 4-8, 2-4, 1-5, 1-1, 1-6, 3-4, 4-4, 4-6, 4-7 + compose hotfix; 3-5 dev complete, review gate pending API-window). Every remaining epic core caught up: Epic 1 complete except bump-gated 1-7; Epic 2 fully caught up incl. D3's deferred triggers; Epic 4 admin UI core complete (4-1..4-9). **Push DEFERRED per user** — 11+ commits queued locally on feat/sst (GitLab was unreachable; push = `git push origin feat/sst`, no new MR). Suites: overlay **825** / backend **1705** / frontend **1268** / config-validator 25. **Still open for user:** D4 AGPL sign-off owner; 4-8 deep-link UX call. **Still open in backlog:** 3-9 breaker+DLQ consumer (partial), 3-11 regression guard (production gate, needs OQ-SST-4), 2-10 Flutter (D5 deferred), 5-1 analytics (post-MVP), 1-7 (bump-gated). Deferred-work file grew: with_span context attach, dedicated ArangoDB user, StreamIngestor seen-on-dataprep-failure, UI type/content_mapping form fields. |
 | 2026-09-05 (21) | **Story 3-4 done through full BMAD loop** — first Epic-3 backlog story; also introduces the DLQ write-side 3-9 consumes. json_api feed_type dispatch (RSS byte-identical, regression-guarded), dot-path content_mapping, parse_error/config_error DLQ gate, stable-sha256 dedup (newest-500). Review (Blind + Edge, both empirical) caught **3 CRITICALS**: httpx missing from the runtime image (deploy would have crashed every json poll), fetch-failure raise landing outside process_feed's try (no backoff + starved all other feeds), and arbitrary seen-cap eviction (perpetual re-ingestion on >500-item feeds). Fixed with shared bookkeeping helpers + per-feed isolation + insertion-order ids + httpx dep. 2-3-style stale-note correction: 3-9's "no backoff" note was stale (backoff shipped in 3-3) — updated. Overlay **815 green**. Deferred: UI type/content_mapping form fields (3-5/4-5 scope); item ids marked seen on dataprep failure (RSS-inherited, 3-9 scope). |
 | 2026-09-05 (20) | **Story 4-7 done through full BMAD loop — the admin-UI epic-4 core is complete.** `GET /health`: live SearXNG probe (root path, 30s cache, `?refresh=1` bust, 429/403 = up), breaker state from `cb:{tool}:state` (missing = healthy default; Redis error = unknown, never faked), feed status derived (disabled=grey / green / yellow 1–2 / red ≥3). Review patches: raw-doc vs normalized `enabled` contradiction, disabled≠red, fail-closed circuit badges, error-string hygiene (no host:port leak; fetch cause surfaced), feeds-read failure no longer 500s the whole endpoint, Arabic mojibake. **Push still blocked (GitLab unreachable) — 11 commits queued locally.** Suites: backend **1705** / frontend **1268** / overlay **804**. Remaining: Epic-3 backlog (3-4/3-5/3-9/3-11), 1-7 (bump-gated). |
 | 2026-09-01 (19) | **Story 4-6 done through full BMAD loop** — the FOI access path. BFF XREVRANGE **peek** reader over the tool-invocation-audit stream (never XREADGROUP/XACK — consuming would steal from the future analytics consumer); public-fields-only decode (`parameters_redacted`/`metadata` never leave the backend — test-pinned against the real service); GET /audit + CSV/JSON export behind readGuard (tools-reader = the FOI path); admin Audit tab ×14 locales with honest empty state (stream is empty until NFR11 wiring lands). Review caught 2 Highs: **export silently truncated to the 500-row listing cap** (`_maxCap` lift) and **sparse-filter pagination dead-ending** (cursor now set on window exhaustion); plus CSV formula injection, export `<a href>` bypassing auth (Edge's jsdom navigation confirmed it — now an authenticated blob download), Redis fail-fast + error listener, race-guarded store. Backend **1700** / frontend **1266** / overlay **804**. Remaining: 4-7 health overview, Epic-3 backlog, 1-7 (bump-gated). |

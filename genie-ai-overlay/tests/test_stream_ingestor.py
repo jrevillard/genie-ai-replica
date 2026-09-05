@@ -211,3 +211,157 @@ class TestJsonApiPolling:
     def test_resolve_path_dotted_and_list(self):
         assert StreamIngestor._resolve_path({"a": {"b": [10, 20]}}, "a.b.1") == 20
         assert StreamIngestor._resolve_path({"a": {}}, "a.b") is None
+
+
+# ===========================================================================
+# Story 3-5 — webhook push ingestion (FR27/D8/NFR9)
+# ===========================================================================
+# conftest poisons sys.modules["aiohttp"] with a MagicMock (for dataprep
+# tests) BEFORE this module imports the ingestor — so the ingestor's `web`
+# name is bound to the mock. Recover the REAL aiohttp.web and rebind it here;
+# the webhook tests assert on real response objects (.status/.headers).
+import importlib as _importlib
+import sys as _sys
+
+from stream_ingestor.genieai_stream_ingestor import _make_webhook_handler, build_web_app
+
+_aiohttp_saved = _sys.modules.get("aiohttp")
+_sys.modules.pop("aiohttp", None)
+try:
+    _real_web = _importlib.import_module("aiohttp.web")
+finally:
+    if _aiohttp_saved is not None:
+        _sys.modules["aiohttp"] = _aiohttp_saved
+si_module.web = _real_web
+
+
+class TestWebhookIngestion:
+    """Direct handler invocation — conftest poisons sys.modules["aiohttp"]
+    with a MagicMock, so a real TestClient is unavailable under pytest; the
+    handler is pure enough to test with fake request objects."""
+
+    @staticmethod
+    def make_client(monkeypatch, feeds=None, enabled=True, api_key="secret-key", jwt_mode=False, feed_overrides=None):
+        monkeypatch.setenv("WEBHOOK_INGESTION_ENABLED", "true" if enabled else "false")
+        if api_key is not None:
+            monkeypatch.setenv("WEBHOOK_API_KEY", api_key)
+        else:
+            monkeypatch.delenv("WEBHOOK_API_KEY", raising=False)
+        if jwt_mode:
+            monkeypatch.setenv("WEBHOOK_JWT_ENABLED", "true")
+        else:
+            monkeypatch.delenv("WEBHOOK_JWT_ENABLED", raising=False)
+
+        ingestor = make_ingestor()
+        feed = make_feed(type="webhook")
+        feed["enabled"] = True
+        if feed_overrides:
+            feed.update(feed_overrides)
+        ingestor.feeds_col.get = MagicMock(return_value=feed)
+        ingestor.ingest_entries = AsyncMock()
+        ingestor.redis.zremrangebyscore = AsyncMock()
+        ingestor.redis.zcard = AsyncMock(return_value=0)
+        ingestor.redis.zadd = AsyncMock()
+        ingestor.redis.expire = AsyncMock()
+        # sliding-window limiter uses a pipeline (zremrangebyscore + zcard batched)
+        pipe_mock = MagicMock()
+        pipe_mock.execute = AsyncMock(return_value=[0, 0])
+        ingestor.redis.pipeline = MagicMock(return_value=pipe_mock)
+
+        build_web_app(ingestor)
+        handler = _make_webhook_handler(ingestor)
+
+        def make_request(headers=None, json_body=None, feed_name="feed-1"):
+            request = MagicMock()
+            request.match_info = {"feed_name": feed_name}
+            request.headers = headers or {}
+            request.json = AsyncMock(return_value=json_body)
+            return request
+
+        default_headers = {"X-API-Key": api_key} if api_key else {}
+        return ingestor, handler, make_request, default_headers
+
+    @pytest.mark.asyncio
+    async def test_kill_switch_off_route_not_registered(self, monkeypatch):
+        monkeypatch.setenv("WEBHOOK_INGESTION_ENABLED", "false")
+        app = build_web_app(make_ingestor())
+        paths = [r.resource.canonical for r in app.router.routes()]
+        assert not any("webhook" in path for path in paths)
+
+    @pytest.mark.asyncio
+    async def test_unknown_feed_404(self, monkeypatch):
+        ingestor, handler, make_request, headers = self.make_client(monkeypatch)
+        ingestor.feeds_col.get = MagicMock(side_effect=Exception("not found"))
+        response = await handler(make_request(headers=headers, feed_name="nope"))
+        assert response.status == 404
+
+    @pytest.mark.asyncio
+    async def test_missing_api_key_401(self, monkeypatch):
+        ingestor, handler, make_request, _ = self.make_client(monkeypatch)
+        response = await handler(make_request())
+        assert response.status == 401
+
+    @pytest.mark.asyncio
+    async def test_wrong_api_key_401(self, monkeypatch):
+        ingestor, handler, make_request, _ = self.make_client(monkeypatch)
+        response = await handler(make_request(headers={"X-API-Key": "wrong"}))
+        assert response.status == 401
+
+    @pytest.mark.asyncio
+    async def test_no_auth_configured_401_fail_closed(self, monkeypatch):
+        ingestor, handler, make_request, _ = self.make_client(monkeypatch, api_key=None)
+        response = await handler(make_request())
+        assert response.status == 401
+
+    @pytest.mark.asyncio
+    async def test_jwt_mode_401_without_bearer(self, monkeypatch):
+        ingestor, handler, make_request, _ = self.make_client(monkeypatch, api_key=None, jwt_mode=True)
+        response = await handler(make_request())
+        assert response.status == 401
+
+    @pytest.mark.asyncio
+    async def test_missing_content_400(self, monkeypatch):
+        ingestor, handler, make_request, headers = self.make_client(monkeypatch)
+        response = await handler(make_request(headers=headers, json_body={"title": "only"}))
+        assert response.status == 400
+
+    @pytest.mark.asyncio
+    async def test_happy_path_202_ingests_and_publishes_event(self, monkeypatch):
+        ingestor, handler, make_request, headers = self.make_client(monkeypatch)
+        response = await handler(
+            make_request(
+                headers=headers,
+                json_body={"title": "Push Notice", "content": "Official content " * 5},
+            )
+        )
+        assert response.status == 202
+
+        ingestor.ingest_entries.assert_awaited_once()
+        entry = ingestor.ingest_entries.call_args.args[1][0]
+        assert entry["title"] == "Push Notice"
+        assert "Official content" in entry["summary"]
+
+        xadd_calls = ingestor.redis.xadd.call_args_list
+        event_call = next((c for c in xadd_calls if c.args[0] == "feed-ingestion-events"), None)
+        assert event_call is not None
+        assert event_call.args[1]["event_type"] == "webhook_received"
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_429_with_retry_after(self, monkeypatch):
+        ingestor, handler, make_request, headers = self.make_client(monkeypatch)
+        # Exhaust the window: the limiter's pipeline reports 10 entries already
+        # in the window (>= WEBHOOK_RATE_LIMIT_MAX default 10) -> denied
+        pipe_mock = MagicMock()
+        pipe_mock.execute = AsyncMock(return_value=[10, 10])
+        ingestor.redis.pipeline = MagicMock(return_value=pipe_mock)
+        ingestor.redis.zrange = AsyncMock(return_value=[str(1690000000.0)])
+        response = await handler(make_request(headers=headers, json_body={"title": "t", "content": "c"}))
+        assert response.status == 429
+        assert "Retry-After" in response.headers
+        assert int(response.headers["Retry-After"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_disabled_feed_404(self, monkeypatch):
+        ingestor, handler, make_request, headers = self.make_client(monkeypatch, feed_overrides={"enabled": False})
+        response = await handler(make_request(headers=headers, json_body={"title": "t", "content": "c"}))
+        assert response.status == 404

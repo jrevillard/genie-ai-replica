@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import hmac
 import logging
 import os
 import time
@@ -378,9 +379,21 @@ async def health_check(request):
     return web.Response(text="OK")
 
 
-async def start_web_server():
+def build_web_app(ingestor=None):
+    """Build the aiohttp app. Story 3-5: the webhook route is registered here
+    (ingestor injected so the handler can read feeds + publish)."""
     app = web.Application()
     app.add_routes([web.get("/health", health_check), web.get("/ready", health_check)])
+    if ingestor is not None and _webhook_enabled():
+        app.add_routes([web.post("/v1/tools/webhook/{feed_name}", _make_webhook_handler(ingestor))])
+        logger.info("Webhook ingestion ENABLED (POST /v1/tools/webhook/{feed_name})")
+    else:
+        logger.info("Webhook ingestion disabled (WEBHOOK_INGESTION_ENABLED not true)")
+    return app
+
+
+async def start_web_server(ingestor=None):
+    app = build_web_app(ingestor)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", 8080)
@@ -397,13 +410,147 @@ async def retract_loop(ingestor):
             logger.error(f"Error in retract loop: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Webhook push ingestion (story 3-5, FR27/D8/NFR9)
+# ---------------------------------------------------------------------------
+_WEBHOOK_JWKS_CACHE = {"jwks": None, "fetched_at": 0.0}
+
+
+def _webhook_enabled():
+    # Fail-closed allow-list: only explicit 1/true/yes enables push ingestion
+    return str(os.getenv("WEBHOOK_INGESTION_ENABLED", "false")).strip().lower() in ("1", "true", "yes")
+
+
+def _make_webhook_handler(ingestor):
+    async def handle_webhook(request):
+        feed_name = request.match_info["feed_name"]
+        # 404 first: unknown feed reveals nothing about the feature state
+        try:
+            feed = ingestor.feeds_col.get(feed_name)
+        except Exception:
+            feed = None
+        if not feed or feed.get("enabled") is False:
+            return web.json_response({"error": "Not Found"}, status=404)
+
+        ok, reason = await _authorize_webhook(request)
+        if not ok:
+            return web.json_response({"error": reason}, status=401)
+
+        limited, retry_after = await _webhook_rate_limited(ingestor, feed_name)
+        if limited:
+            response = web.json_response({"error": "Rate limit exceeded"}, status=429)
+            response.headers["Retry-After"] = str(int(retry_after) + 1)
+            return response
+
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "Body must be valid JSON"}, status=400)
+
+        title = str(body.get("title") or "Webhook Update")
+        content = body.get("content")
+        if not content or not str(content).strip():
+            return web.json_response({"error": "content is required"}, status=400)
+
+        entries = [
+            {
+                "title": title,
+                "link": str(body.get("link") or ""),
+                "summary": str(content),
+                "_date": float(body["timestamp"]) if body.get("timestamp") else time.time(),
+            }
+        ]
+        await ingestor.ingest_entries(feed, entries)
+        await ingestor.redis.xadd(
+            REDIS_STREAM_KEY,
+            {
+                "event_type": "webhook_received",
+                "feed_id": feed_name,
+                "title": title,
+                "timestamp": str(time.time()),
+            },
+            maxlen=100_000,
+        )
+        return web.json_response({"accepted": True}, status=202)
+
+    return handle_webhook
+
+
+async def _authorize_webhook(request):
+    """Two env-selected modes (both may be active; either passes):
+    API key (X-API-Key vs WEBHOOK_API_KEY, constant-time) or JWT Bearer
+    (Keycloak realm JWKS, PyJWT). Neither configured -> deny (fail-closed)."""
+    api_key = os.getenv("WEBHOOK_API_KEY")
+    if api_key:
+        provided = request.headers.get("X-API-Key", "")
+        if hmac.compare_digest(provided, api_key):
+            return True, ""
+        return False, "Invalid API key"
+
+    if str(os.getenv("WEBHOOK_JWT_ENABLED", "")).strip().lower() in ("1", "true", "yes"):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return False, "Bearer token required"
+        try:
+            await _verify_webhook_jwt(auth.removeprefix("Bearer ").strip())
+            return True, ""
+        except Exception as exc:
+            return False, f"Invalid token: {exc}"
+
+    return False, "Webhook authentication not configured"
+
+
+async def _verify_webhook_jwt(token):
+    """Minimal RS256 JWT check against the realm JWKS (machine-to-machine push
+    auth): signature + exp + iss. Uses PyJWT (pyjwt[crypto] in requirements)."""
+    import jwt
+    from jwt import PyJWKClient
+
+    realm_url = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}"
+    jwks_client = PyJWKClient(f"{realm_url}/protocol/openid-connect/certs", cache_jwk_set=True, lifespan=3600)
+    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    payload = jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        issuer=realm_url,
+        options={"require": ["exp", "iss"]},
+    )
+    return payload
+
+
+async def _webhook_rate_limited(ingestor, feed_name):
+    """Per-feed sliding window (FR27/D8). Local reimplementation of
+    redis_primitives.SlidingWindowRateLimiter — the stream-ingestor image does
+    NOT ship the workflows package (single-file Dockerfile)."""
+    max_requests = int(os.getenv("WEBHOOK_RATE_LIMIT_MAX", "10"))
+    window_seconds = 60
+    key = f"webhook-rl:{feed_name}"
+    now = time.time()
+    window_start = now - window_seconds
+    pipeline = ingestor.redis.pipeline()
+    pipeline.zremrangebyscore(key, 0, window_start)
+    pipeline.zcard(key)
+    counts = await pipeline.execute()
+    current = counts[1] if isinstance(counts, (list, tuple)) else 0
+    if current >= max_requests:
+        oldest = await ingestor.redis.zrange(key, 0, 0)
+        retry_after = 1
+        if oldest:
+            oldest_score = float(oldest[0] if not isinstance(oldest[0], (list, tuple)) else oldest[0][1])
+            retry_after = max(1, int(oldest_score + window_seconds - now))
+        return True, retry_after
+    await ingestor.redis.zadd(key, {str(now): now})
+    await ingestor.redis.expire(key, window_seconds * 2)
+    return False, 0
+
+
 async def main():
     logger.info("Starting Stream Ingestor")
 
-    await start_web_server()
-
     ingestor = StreamIngestor()
     await ingestor.init_db()
+    await start_web_server(ingestor)
 
     # Start background retraction task
     asyncio.create_task(retract_loop(ingestor))

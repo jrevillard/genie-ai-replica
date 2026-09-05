@@ -111,7 +111,7 @@ development_status:
   # ─────────────── Epic 2 — Web search (SearXNG) ───────────────
   # Second hard gate for #603. Depends on Epic 1 stories 1-1..1-4.
   epic-2: in-progress
-  2-1-searxng-deployment: review # compose service searxng + configs/searxng/settings.yml; AGPL sign-off (OQ-SST-5) still gates production
+  2-1-searxng-deployment: review # compose service searxng + configs/searxng/settings.yml; AGPL signed off 2026-09-05 by Adem Mcharek (ADR 0003) — OQ-SST-5 closed, production unblocked on this axis
   2-2-pluggable-search-backend-and-searxng-client: review # workflows/tools/web_search.py SearxngBackend; SearchBackend ABC exists only in orphaned tools/ dupe
   2-3-domain-whitelist-enforced-at-executor: review # CORRECTED 2026-09-01: enforcement is the chatqna seam filter (story 4-4) — governance.py's domain_whitelist field was declared-but-unwired (stale claim); NFR11 wiring remains the backlog item
   2-4-triggers-low-confidence-time-sensitive-llm-fallback: review # code-review PASSED 2026-09-01: FR9 time-sensitive + FR10 llm_requested triggers ported from c0008225f, FR8 delegated to engine; fail-closed kill-switch, env hardening; 755 tests green

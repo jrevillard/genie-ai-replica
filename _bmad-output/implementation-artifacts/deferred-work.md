@@ -2178,3 +2178,43 @@ source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
 severity: low
 reason: Grep over `phases.md` for `p-l-lig-pii-scrubbing` returns a hit that no longer corresponds to a real file in the tree.
 status: open
+
+### DW-350: Negative-path coverage for non-string `level` values other than `undefined` (number, boolean, object). The current `treats a non-string level as info` test covers only `undefined`. The transport's
+origin: spec-deferred 41be2a442549
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js:160
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged the gap; covered types today: only `undefined`. Out of scope for the "(severity + trace_id flow)" story title — left for a future hardening story.
+status: open
+
+### DW-351: Constructor robustness — `new VictoriaLogsTransport()` with no opts at all. The story's `makeTransport` helper passes `enabled: true`, so the no-opts branch is never exercised.
+origin: spec-deferred 408d61d01f0a
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged it. The transport's `enabled` default-on logic is tested, but only with `{}` and `{enabled: undefined}` — a literal `undefined` opts arg is unverified.
+status: open
+
+### DW-352: `info.timestamp` as a raw `Date` instance. The body/timestamp describe covers numeric-ms and ISO-8601-string inputs but not `new Date(...)`, which Winston commonly emits.
+origin: spec-deferred 7bc335ce5494
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged it. Untested path could emit an invalid nanosecond value (`NaN * 1e6`) if the transport doesn't coerce via `.getTime()`.
+status: open
+
+### DW-353: CAP-1 swallow does not cover a *rejected Promise* from `emit()` (async failure mode). Today the test uses synchronous `mockImplementation` that throws; an async rejection from a real OTLP exporter
+origin: spec-deferred bc4b0595149d
+location: components/gov-chat-backend/__tests__/victorialogs-transport.test.js
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: medium
+reason: Reviewer (edge-case-hunter) flagged it. CAP-1 (project-wide invariant) currently covers only synchronous throws; async path is implicit.
+status: open
+
+### DW-354: Story narrative says the test file was "moved from shared/lib/__tests__/" — it was actually created from scratch (the sibling directory never existed). Reviewers cross-checking lineage could be
+origin: spec-deferred 1abcf1ac0c88
+location: _bmad-output/implementation-artifacts/stories/2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md:9
+source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.md`
+severity: low
+reason: Reviewer (blind-hunter) flagged it. Cosmetic doc fix on the story frontmatter `files:` field.
+status: open

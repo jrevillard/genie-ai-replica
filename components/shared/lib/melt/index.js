@@ -69,24 +69,24 @@ class LogQueryRepository {
   /**
    * Run a LogSQL query and return normalized rows.
    *
-   * @param {import('./types').LogQuery} query
+   * @param {import('./types').LogQuery} _query
    * @returns {Promise<import('./types').VictoriaLogsRow[]>}
    */
-  async query(query) {
+  async query(_query) {
     throw new TypeError('LogQueryRepository.query() must be implemented by a concrete adapter.');
   }
 
   /**
    * Bucket-hit count for a field (e.g. counts per `level`, per `_msg`).
    *
-   * @param {object} query
-   * @param {string} query.q
-   * @param {string} query.start
-   * @param {string} query.end
-   * @param {string} query.field
+   * @param {object} _query
+   * @param {string} _query.q
+   * @param {string} _query.start
+   * @param {string} _query.end
+   * @param {string} _query.field
    * @returns {Promise<Record<string, number>>}
    */
-  async hits(query) {
+  async hits(_query) {
     throw new TypeError('LogQueryRepository.hits() must be implemented by a concrete adapter.');
   }
 }

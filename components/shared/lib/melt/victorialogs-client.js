@@ -99,12 +99,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
    * @param {boolean} [options.skipHealthProbe]   Test-fixture escape hatch (AD-16).
    * @param {number} [options.timeout]            axios timeout in ms (overrides `VL_QUERY_TIMEOUT_MS`).
    */
-  constructor({
-    baseURL,
-    tenantId,
-    skipHealthProbe,
-    timeout
-  } = {}) {
+  constructor({ baseURL, tenantId, skipHealthProbe, timeout } = {}) {
     super({ baseURL, tenantId });
 
     const resolvedTenant = tenantId || process.env.VICTORIALOGS_TENANT_ID || DEFAULT_TENANT_ID;
@@ -113,9 +108,12 @@ class VictoriaLogsAdapter extends LogQueryRepository {
     const projectId = tenantParts[1] || '0';
 
     const parsedEnvTimeout = parseInt(process.env.VL_QUERY_TIMEOUT_MS || String(DEFAULT_QUERY_TIMEOUT_MS), 10);
-    const resolvedTimeout = typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
-      ? timeout
-      : (Number.isFinite(parsedEnvTimeout) ? parsedEnvTimeout : DEFAULT_QUERY_TIMEOUT_MS);
+    const resolvedTimeout =
+      typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
+        ? timeout
+        : Number.isFinite(parsedEnvTimeout)
+          ? parsedEnvTimeout
+          : DEFAULT_QUERY_TIMEOUT_MS;
 
     this._axios = axios.create({
       baseURL,
@@ -277,13 +275,15 @@ class VictoriaLogsAdapter extends LogQueryRepository {
 
     const fieldsLevel = fields.level;
     const rawLevel = fieldsLevel !== undefined ? fieldsLevel : streamLevel;
-    const level = rawLevel !== undefined && rawLevel !== null && String(rawLevel).length > 0
-      ? String(rawLevel).toUpperCase()
-      : DEFAULT_LEVEL;
+    const level =
+      rawLevel !== undefined && rawLevel !== null && String(rawLevel).length > 0
+        ? String(rawLevel).toUpperCase()
+        : DEFAULT_LEVEL;
 
-    const service = streamService !== undefined && streamService !== null && String(streamService).length > 0
-      ? String(streamService)
-      : DEFAULT_SERVICE;
+    const service =
+      streamService !== undefined && streamService !== null && String(streamService).length > 0
+        ? String(streamService)
+        : DEFAULT_SERVICE;
 
     return {
       timestamp,

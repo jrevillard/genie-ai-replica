@@ -77,11 +77,9 @@ describe('metrics.js — log_record_dropped_total', () => {
     };
     metrics.getMeter.mockReturnValueOnce(mockMeter);
 
-    const counter = mod
-      .getMeter()
-      .createCounter(mod.LOG_RECORD_DROPPED_TOTAL, {
-        description: 'Otel log records dropped before export'
-      });
+    const counter = mod.getMeter().createCounter(mod.LOG_RECORD_DROPPED_TOTAL, {
+      description: 'Otel log records dropped before export'
+    });
 
     expect(mockMeter.createCounter).toHaveBeenCalledWith('log_record_dropped_total', {
       description: 'Otel log records dropped before export'

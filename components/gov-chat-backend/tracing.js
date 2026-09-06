@@ -236,8 +236,14 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
             ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
             : { 'deployment.environment': deploymentEnvironment })
         }),
-        logRecordProcessors: [
-          new PIIRedactingLogRecordProcessor(logExporter, sharedBatchConfig)
+        // sdk-logs 0.221.x reads `config.processors` (NOT `logRecordProcessors`).
+        // The 2-6 merge was reading the wrong config key; the processor list
+        // was silently dropped. See review findings on commit 251f99d57.
+        processors: [
+          new PIIRedactingLogRecordProcessor({
+            exporter: logExporter,
+            ...sharedBatchConfig
+          })
         ]
       });
       logs.setGlobalLoggerProvider(loggerProvider);

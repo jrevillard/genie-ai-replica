@@ -515,10 +515,7 @@ describe('logger OTel trace correlation', () => {
   describe('observability_disabled dropped counter increment (static check)', () => {
     const fs = require('fs');
     const path = require('path');
-    const loggerSource = fs.readFileSync(
-      path.join(__dirname, '..', '..', 'shared', 'lib', 'logger.js'),
-      'utf8'
-    );
+    const loggerSource = fs.readFileSync(path.join(__dirname, '..', '..', 'shared', 'lib', 'logger.js'), 'utf8');
 
     it('module-loads the log_record_dropped_total counter via getMeter().createCounter()', () => {
       expect(loggerSource).toMatch(/getMeter\(/);
@@ -526,7 +523,9 @@ describe('logger OTel trace correlation', () => {
     });
 
     it('increments the counter in the no-span branch with the bounded observability_disabled reason', () => {
-      expect(loggerSource).toMatch(/_droppedCounter\.add\(1,\s*\{\s*reason:\s*LOG_DROPPED_REASON\.OBSERVABILITY_DISABLED\s*\}\)/);
+      expect(loggerSource).toMatch(
+        /_droppedCounter\.add\(1,\s*\{\s*reason:\s*LOG_DROPPED_REASON\.OBSERVABILITY_DISABLED\s*\}\)/
+      );
     });
 
     it('gates the increment on ENABLE_OBSERVABILITY !== "1"', () => {

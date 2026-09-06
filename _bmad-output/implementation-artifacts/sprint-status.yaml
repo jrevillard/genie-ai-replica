@@ -77,26 +77,21 @@ development_status:
   2-1-add-otel-logs-deps-to-shared-lib-and-backend: done
   2-2-shared-lib-add-boolean-env-and-otel-batch-config-helpers: done
   2-4-shared-lib-add-victorialogs-transport-js-winston-transportst: done
-  2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra:
+  2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra: done
     ready-for-dev
+  2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr: done
     ready-for-dev
-  2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr:
-    ready-for-dev
-    ready-for-dev
-  2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass:
-    ready-for-dev
+  2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass: done
     ready-for-dev
   2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: done
-  2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow:
-    ready-for-dev
+  2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: done
     ready-for-dev
   2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: done
   2-12-prometheus-log_record_dropped_total-reason-counter: done
   epic-2-retrospective: optional
 
   epic-3: backlog
-  3-1-document-repository-package-json-add-otel-deps-winston-forma:
-    ready-for-dev
+  3-1-document-repository-package-json-add-otel-deps-winston-forma: done
     ready-for-dev
   3-2-document-repository-tracing-js-logs-only-path:
     ready-for-dev
@@ -198,7 +193,7 @@ audit:
   closures: "Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure
     note appended to archived file"
 generated: '2026-08-31'
-last_updated: '2026-09-06 (YAML fix + 13 stories confirmed done; 25 false-positives reverted to ready-for-dev per audit)'
+last_updated: '2026-09-06 (5 stranded stories merged: 2-5, 2-6, 2-8, 2-10, 3-1; bmad-loop Patch A applied; 18 done total)'
 project: admin-logs-victorialogs
 tracking_system: file-system
 story_location:

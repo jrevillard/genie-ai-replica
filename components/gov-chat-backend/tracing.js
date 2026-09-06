@@ -29,7 +29,11 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   module.exports = {
     sdk: null,
     withSpan: withSpanNoOp,
-    getTracer: () => noOpTracer
+    getTracer: () => noOpTracer,
+    // No-op branches export `null` loggerProvider + droppedCounter so test files can
+    // destructure them uniformly without conditional checks.
+    loggerProvider: null,
+    droppedCounter: null
   };
 } else {
   const { NodeSDK } = require('@opentelemetry/sdk-node');
@@ -45,8 +49,17 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { BatchSpanProcessor } = require('@opentelemetry/sdk-trace-base');
   const { W3CTraceContextPropagator } = require('@opentelemetry/core');
   const { trace } = require('@opentelemetry/api');
+  const { logs } = require('@opentelemetry/api-logs');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
   const { redactAttributes } = require('./tracing-pii');
+  const { OTLPLogExporter } = require('@opentelemetry/exporter-logs-otlp-http');
+  const { LoggerProvider } = require('@opentelemetry/sdk-logs');
+  const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
+  // AD-14: single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
+  const { booleanEnv } = require('../../shared/lib/boolean-env');
+  // AD-18: shared batch tuning — both backend and document-repository require this file
+  // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
+  const sharedBatchConfig = require('../../shared/lib/otel-batch-config');
   // otlp_unreachable call-site: module-load dropped counter.
   // Backed by the canonical enum exported from metrics.js — never pass raw
   // strings to `.add()` (cardinality-bounded set per Epic 2 review).
@@ -198,6 +211,46 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     throw err;
   }
 
+  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS (CAP-1) AND
+  // ENABLE_OBSERVABILITY (AD-7). NodeSDK owns traces/metrics; log export sits
+  // outside the SDK config so the gate stays local to this module.
+  // logRecordProcessors redact PII on every emitted record via the span-side
+  // redactAttributes contract (C-5, AD-4).
+  //
+  // PIIRedactingLogRecordProcessor (tracing-pii-logs.js) wraps an inner
+  // BatchLogRecordProcessor constructed with the sdk-logs 0.221.x positional
+  // (exporter, config) signature. sharedBatchConfig (otel-batch-config.js)
+  // pins maxExportBatchSize / scheduledDelayMillis / maxQueueSize for both
+  // backend + document-repository (AD-18).
+  let loggerProvider = null;
+  if (booleanEnv('LOG_TO_VICTORIALOGS') && booleanEnv('ENABLE_OBSERVABILITY')) {
+    try {
+      const logExporter = new OTLPLogExporter({
+        url: `${endpointBase}/v1/logs`
+      });
+      loggerProvider = new LoggerProvider({
+        resource: resourceFromAttributes({
+          [ATTR_SERVICE_NAME]: serviceName,
+          [ATTR_SERVICE_VERSION]: serviceVersion,
+          ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
+            ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
+            : { 'deployment.environment': deploymentEnvironment })
+        }),
+        logRecordProcessors: [
+          new PIIRedactingLogRecordProcessor(logExporter, sharedBatchConfig)
+        ]
+      });
+      logs.setGlobalLoggerProvider(loggerProvider);
+    } catch (err) {
+      try {
+        droppedCounter.add(1, { reason: LOG_DROPPED_REASON.OTLP_UNREACHABLE });
+      } catch {
+        // metric failure must never mask the underlying LoggerProvider init error
+      }
+      throw err;
+    }
+  }
+
   // Graceful shutdown
   const SHUTDOWN_TIMEOUT_MS = 5000;
   const gracefulShutdown = async () => {
@@ -208,6 +261,11 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     try {
       await sdk.shutdown();
       flushed = true;
+    } catch {
+      // Shutdown errors are non-fatal — best-effort flush
+    }
+    try {
+      await loggerProvider?.shutdown();
     } catch {
       // Shutdown errors are non-fatal — best-effort flush
     }
@@ -262,5 +320,5 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     }
   }
 
-  module.exports = { sdk, getTracer, withSpan };
+  module.exports = { sdk, getTracer, withSpan, loggerProvider, droppedCounter };
 }

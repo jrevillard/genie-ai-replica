@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 const { trace, context, metrics: otelMetrics } = require('@opentelemetry/api');
+const { booleanEnv } = require('./boolean-env');
+const { VictoriaLogsTransport } = require('./victorialogs-transport');
 
 // observability_disabled call-site: module-load counter.
 // AD-18 forbids shared/lib → backend require; the meter scope matches
@@ -66,25 +68,16 @@ const traceFormat = format((info) => {
   return info;
 });
 
-// Default log format
-const logFormat = format.printf(({ level, message, timestamp, trace_id, span_id }) => {
-  const base = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-  if (trace_id && trace_id !== '00000000000000000000000000000000') {
-    return `${base} trace_id="${trace_id}" span_id="${span_id}"`;
-  }
-  return base;
-});
+// Gate the VictoriaLogs transport on both flags so VL only fans out when the
+// observability stack is on AND the deployment opts in. Re-evaluated on every
+// reconfigure so env-var toggles take effect without restart.
+const victoriaLogsEnabled = () => booleanEnv('LOG_TO_VICTORIALOGS') && booleanEnv('ENABLE_OBSERVABILITY');
 
-// Default configuration for the logger
-const loggerConfig = {
-  level: process.env.LOG_LEVEL || 'info',
-  format: format.combine(
-    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    format.errors({ stack: true }),
-    traceFormat(),
-    logFormat
-  ),
-  transports: [
+// Single source of truth for the transport list — used by both the initial
+// `loggerConfig` and `reconfigureLogger`, so toggling env vars between
+// successive reconfigures (or between restart and first reconfig) is honoured.
+const buildTransports = (config = {}) => {
+  const list = [
     new transports.Console({
       handleExceptions: true, // Log unhandled exceptions
       json: false,
@@ -95,25 +88,41 @@ const loggerConfig = {
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       level: 'error',
-      maxSize: '10m',
-      maxFiles: '30d',
-      zippedArchive: true
+      maxSize: config.errorMaxSize || '10m',
+      maxFiles: config.errorMaxFiles || '30d',
+      zippedArchive: config.zippedArchive !== undefined ? config.zippedArchive : true
     }),
     new DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
-      maxSize: '10m',
-      maxFiles: '30d',
-      zippedArchive: true
+      maxSize: config.combinedMaxSize || '10m',
+      maxFiles: config.combinedMaxFiles || '30d',
+      zippedArchive: config.zippedArchive !== undefined ? config.zippedArchive : true
     }),
     new transports.File({
       filename: 'logs/combined.log',
-      maxsize: 5242880, // 5MB
-      maxFiles: 1,
+      maxsize: config.combinedLogMaxSize || 5242880, // 5MB
+      maxFiles: config.combinedLogMaxFiles || 1,
       tailable: true, // Recreate log file when max size is reached
       handleExceptions: true
     })
-  ]
+  ];
+  if (victoriaLogsEnabled()) {
+    list.push(new VictoriaLogsTransport({ service: process.env.SERVICE_NAME || 'genie-backend' }));
+  }
+  return list;
+};
+
+// Default configuration for the logger
+const loggerConfig = {
+  level: process.env.LOG_LEVEL || 'info',
+  format: format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    format.errors({ stack: true }),
+    traceFormat(), // injects info.trace_id / info.span_id / info.service; json() picks them up as keys
+    format.json()
+  ),
+  transports: buildTransports({})
 };
 
 // Create the initial logger instance
@@ -123,36 +132,10 @@ const logger = createLogger(loggerConfig);
 const reconfigureLogger = (newConfig) => {
   // Update the configuration with new values (if provided)
   loggerConfig.level = newConfig.level || loggerConfig.level;
-  loggerConfig.transports = [
-    new transports.Console({
-      handleExceptions: true,
-      json: false,
-      colorize: true,
-      stderrLevels: ['error']
-    }),
-    new DailyRotateFile({
-      filename: 'logs/error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxSize: newConfig.errorMaxSize || '10m',
-      maxFiles: newConfig.errorMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
-    }),
-    new DailyRotateFile({
-      filename: 'logs/combined-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      maxSize: newConfig.combinedMaxSize || '10m',
-      maxFiles: newConfig.combinedMaxFiles || '30d',
-      zippedArchive: newConfig.zippedArchive !== undefined ? newConfig.zippedArchive : true
-    }),
-    new transports.File({
-      filename: 'logs/combined.log',
-      maxsize: newConfig.combinedLogMaxSize || 5242880, // 5MB
-      maxFiles: newConfig.combinedLogMaxFiles || 1,
-      tailable: true,
-      handleExceptions: true
-    })
-  ];
+  // Re-build the transport list via the same helper so the VL gate runs again
+  // — toggling the env vars between restarts (or between successive
+  // reconfigures) is honoured.
+  loggerConfig.transports = buildTransports(newConfig);
 
   // Clear existing transports
   logger.clear();
@@ -233,6 +216,7 @@ module.exports = {
   triggerLogRollover,
   cleanupCombinedLog,
   flushLogs,
+  victoriaLogsEnabled,
   // Exposed for parity assertions in tests; canonical source of truth lives
   // in components/gov-chat-backend/metrics.js (AD-18 forbids a shared
   // helper crossing shared/lib → backend).

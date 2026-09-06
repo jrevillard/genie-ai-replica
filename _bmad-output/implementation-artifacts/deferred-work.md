@@ -2370,3 +2370,27 @@ location: components/gov-chat-backend/tracing.js
 severity: high
 reason: The 2-6 merge introduced `require('../../shared/lib/...')` for boolean-env and otel-batch-config. From `components/gov-chat-backend/tracing.js`, two `..` segments land at the repo root (one too many). The real files are at `components/shared/lib/...`. Production: tracing.js would throw on require when ENABLE_OBSERVABILITY=1, taking down the backend. CI caught via the test suite. Fixed in the review-followup commit.
 status: resolved
+
+### DW-370: No doc-repo-side Jest tests for the parallel-copy PII helpers (`src/tracing-pii.js`, `src/tracing-pii-logs.js`); backend equivalents have `__tests__/tracing-pii.test.js` and
+origin: spec-deferred dd2a12926bd4
+location: components/document-repository/src/__tests__/
+source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
+severity: medium
+reason: Backend tests load `../tracing-pii` / `../tracing-pii-logs` from `components/gov-chat-backend/`, not from the doc-repo copies. Drift between the two copies is unguarded; the parallel-copy preamble explicitly flags this.
+status: open
+
+### DW-371: Jest `collectCoverageFrom` excludes `src/tracing*.js`, so even if tests are added later they will not raise the coverage gate.
+origin: spec-deferred 66546af3808a
+location: components/document-repository/jest.config.js:30-38
+source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
+severity: low
+reason: `components/document-repository/jest.config.js` `collectCoverageFrom` lists `routes|services|middleware|controllers|utils` only.
+status: open
+
+### DW-372: No startup validation that `OTEL_EXPORTER_OTLP_ENDPOINT` is set when `ENABLE_OBSERVABILITY=1`; url becomes literal `undefined/v1/logs`.
+origin: spec-deferred c1ec4f899cef
+location: components/document-repository/src/tracing.js
+source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
+severity: low
+reason: Compose default exists in `env` + `docker-compose.yaml`, but no defensive check in `tracing.js`. Same shape as backend `components/gov-chat-backend/tracing.js` (already tracked as DW-366).
+status: open

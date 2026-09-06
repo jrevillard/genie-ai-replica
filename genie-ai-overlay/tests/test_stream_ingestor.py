@@ -23,8 +23,6 @@ def make_ingestor():
     ingestor.redis.xadd = AsyncMock(return_value="1-1")
     ingestor.redis.xrange = AsyncMock(return_value=[])
     ingestor.redis.xdel = AsyncMock(return_value=1)
-    # _auditRedis would open a real ioredis connection — reuse the mock redis
-    ingestor._auditRedis = AsyncMock(return_value=ingestor.redis)
     return ingestor
 
 
@@ -297,9 +295,17 @@ class TestWebhookIngestion:
     @pytest.mark.asyncio
     async def test_unknown_feed_404(self, monkeypatch):
         ingestor, handler, make_request, headers = self.make_client(monkeypatch)
-        ingestor.feeds_col.get = MagicMock(side_effect=Exception("not found"))
+        ingestor.feeds_col.get = MagicMock(return_value=None)
         response = await handler(make_request(headers=headers, feed_name="nope"))
         assert response.status == 404
+
+    @pytest.mark.asyncio
+    async def test_feed_lookup_outage_503_not_404(self, monkeypatch):
+        """DB outage must not read as 'unknown feed' (senders would deconfigure)."""
+        ingestor, handler, make_request, headers = self.make_client(monkeypatch)
+        ingestor.feeds_col.get = MagicMock(side_effect=Exception("arango down"))
+        response = await handler(make_request(headers=headers, feed_name="nope"))
+        assert response.status == 503
 
     @pytest.mark.asyncio
     async def test_missing_api_key_401(self, monkeypatch):

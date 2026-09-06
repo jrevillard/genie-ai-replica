@@ -692,6 +692,16 @@ services:
       - DATAPREP_RETRACT_URL=http://dataprep-arango-service:5000/v1/dataprep/retract_file
       - POLL_INTERVAL_SEC=${STREAM_INGESTOR_POLL_INTERVAL:-300}
       - RETRACT_INTERVAL_SEC=${STREAM_INGESTOR_RETRACT_INTERVAL:-3600}
+      # Webhook push ingestion (story 3-5) — kill switch defaults OFF (fail-closed)
+      - WEBHOOK_INGESTION_ENABLED=${WEBHOOK_INGESTION_ENABLED:-false}
+      - WEBHOOK_API_KEY=${WEBHOOK_API_KEY:-}
+      - WEBHOOK_JWT_ENABLED=${WEBHOOK_JWT_ENABLED:-false}
+      - WEBHOOK_JWT_AUDIENCE=${WEBHOOK_JWT_AUDIENCE:-}
+      - WEBHOOK_RATE_LIMIT_MAX=${WEBHOOK_RATE_LIMIT_MAX:-10}
+      - WEBHOOK_DLQ_MAX_RETRIES=${WEBHOOK_DLQ_MAX_RETRIES:-3}
+      - FEED_POLL_MIN_INTERVAL_SEC=${FEED_POLL_MIN_INTERVAL_SEC:-60}
+      - KEYCLOAK_URL=${KEYCLOAK_URL:-http://keycloak:8080}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-genie}
     networks:
       - genieai_network
     depends_on:

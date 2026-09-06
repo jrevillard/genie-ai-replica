@@ -68,6 +68,7 @@ class StreamIngestor:
     async def _mark_feed_success(self, feed):
         feed["last_polled"] = time.time()
         feed["failures"] = 0
+        feed.pop("breaker_dlq_recorded", None)  # re-arm per backoff window
         if feed.get("breaker_state") in ("open", "half_open"):
             # FR41: breaker auto-closes on a successful poll — recovered feeds
             # replay their DLQ entries (chronological) before new work
@@ -188,7 +189,7 @@ class StreamIngestor:
         per-feed review list (never destroyed). Replay failures are isolated —
         no exception escapes, so a Redis hiccup during replay can never corrupt
         the poll's success bookkeeping."""
-        client = await self._auditRedis()
+        client = self.redis
         try:
             raw = await client.xrange(DLQ_STREAM_KEY, "-", "+")
         except Exception as exc:
@@ -535,9 +536,6 @@ async def retract_loop(ingestor):
 # ---------------------------------------------------------------------------
 # Webhook push ingestion (story 3-5, FR27/D8/NFR9)
 # ---------------------------------------------------------------------------
-_WEBHOOK_JWKS_CACHE = {"jwks": None, "fetched_at": 0.0}
-
-
 def _webhook_enabled():
     # Fail-closed allow-list: only explicit 1/true/yes enables push ingestion
     return str(os.getenv("WEBHOOK_INGESTION_ENABLED", "false")).strip().lower() in ("1", "true", "yes")
@@ -546,17 +544,19 @@ def _webhook_enabled():
 def _make_webhook_handler(ingestor):
     async def handle_webhook(request):
         feed_name = request.match_info["feed_name"]
-        # 404 first: unknown feed reveals nothing about the feature state
-        try:
-            feed = ingestor.feeds_col.get(feed_name)
-        except Exception:
-            feed = None
-        if not feed or feed.get("enabled") is False:
-            return web.json_response({"error": "Not Found"}, status=404)
-
+        # AUTH FIRST (review: 404-before-auth was a feed-enumeration oracle —
+        # anonymous callers could distinguish existing/enabled feeds)
         ok, reason = await _authorize_webhook(request)
         if not ok:
             return web.json_response({"error": reason}, status=401)
+
+        try:
+            feed = ingestor.feeds_col.get(feed_name)
+        except Exception:
+            # DB outage is a 503, not a 404 (senders would deconfigure)
+            return web.json_response({"error": "Feed lookup unavailable"}, status=503)
+        if not feed or not feed.get("enabled", True) or feed.get("type") != "webhook":
+            return web.json_response({"error": "Not Found"}, status=404)
 
         limited, retry_after = await _webhook_rate_limited(ingestor, feed_name)
         if limited:
@@ -579,7 +579,7 @@ def _make_webhook_handler(ingestor):
                 "title": title,
                 "link": str(body.get("link") or ""),
                 "summary": str(content),
-                "_date": float(body["timestamp"]) if body.get("timestamp") else time.time(),
+                "_date": ingestor._item_date(body.get("timestamp"), time.time()),
             }
         ]
         await ingestor.ingest_entries(feed, entries)
@@ -599,43 +599,75 @@ def _make_webhook_handler(ingestor):
 
 
 async def _authorize_webhook(request):
-    """Two env-selected modes (both may be active; either passes):
-    API key (X-API-Key vs WEBHOOK_API_KEY, constant-time) or JWT Bearer
-    (Keycloak realm JWKS, PyJWT). Neither configured -> deny (fail-closed)."""
+    """Env-selected webhook auth. Each configured mode is evaluated
+    independently (both may be active; either passes — review: a hard else-if
+    made the JWT branch unreachable when an API key was also set):
+      - API key: X-API-Key vs WEBHOOK_API_KEY (constant-time, bytes-safe)
+      - JWT: Bearer RS256 token vs the realm JWKS (PyJWT)
+    Neither configured -> deny (fail-closed)."""
     api_key = os.getenv("WEBHOOK_API_KEY")
-    if api_key:
-        provided = request.headers.get("X-API-Key", "")
-        if hmac.compare_digest(provided, api_key):
-            return True, ""
-        return False, "Invalid API key"
+    jwt_mode = str(os.getenv("WEBHOOK_JWT_ENABLED", "")).strip().lower() in ("1", "true", "yes")
+    if not api_key and not jwt_mode:
+        return False, "Webhook authentication not configured"
 
-    if str(os.getenv("WEBHOOK_JWT_ENABLED", "")).strip().lower() in ("1", "true", "yes"):
+    provided_key = request.headers.get("X-API-Key")
+    if api_key and provided_key is not None:
+        try:
+            if hmac.compare_digest(provided_key.encode("utf-8"), api_key.encode("utf-8")):
+                return True, ""
+        except UnicodeEncodeError:
+            pass  # non-ASCII header — deny, never 500
+        # wrong key must NOT short-circuit: when both modes are configured the
+        # caller may legitimately be presenting a JWT instead
+
+    if jwt_mode:
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
             return False, "Bearer token required"
         try:
             await _verify_webhook_jwt(auth.removeprefix("Bearer ").strip())
             return True, ""
-        except Exception as exc:
-            return False, f"Invalid token: {exc}"
+        except Exception:
+            # no exception text in the body (Keycloak URLs leak topology)
+            return False, "Invalid token"
 
-    return False, "Webhook authentication not configured"
+    return False, "Invalid credentials"
+
+
+_webhook_jwks_client = None
+_webhook_jwt_issuer = None
 
 
 async def _verify_webhook_jwt(token):
-    """Minimal RS256 JWT check against the realm JWKS (machine-to-machine push
-    auth): signature + exp + iss. Uses PyJWT (pyjwt[crypto] in requirements)."""
+    """Minimal RS256 JWT check (machine-to-machine push auth): signature + exp
+    + iss (+ audience when WEBHOOK_JWT_AUDIENCE is set). Issuer and JWKS URI
+    are resolved from the realm's OIDC discovery document — same convention as
+    the backend's keycloak-auth-service — so KEYCLOAK_URL only needs to be
+    reachable FROM this container (internal URL); the issuer still matches the
+    public URL the realm declares. Discovery + client are module-level (cached
+    for the process lifetime; PyJWKClient additionally caches the key set 1h).
+    PyJWT's JWKS fetch is SYNC urllib — everything runs via asyncio.to_thread
+    so a slow Keycloak can't stall the event loop."""
+    import json
+    import urllib.request
+
     import jwt
     from jwt import PyJWKClient
 
-    realm_url = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}"
-    jwks_client = PyJWKClient(f"{realm_url}/protocol/openid-connect/certs", cache_jwk_set=True, lifespan=3600)
-    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    global _webhook_jwks_client, _webhook_jwt_issuer
+    if _webhook_jwks_client is None:
+        realm_url = f"{os.getenv('KEYCLOAK_URL')}/realms/{os.getenv('KEYCLOAK_REALM')}"
+        with urllib.request.urlopen(realm_url, timeout=10) as resp:  # noqa: S310 - operator-configured URL
+            doc = json.load(resp)
+        _webhook_jwt_issuer = doc["issuer"]
+        _webhook_jwks_client = PyJWKClient(doc["jwks_uri"], cache_jwk_set=True, lifespan=3600)
+    signing_key = await asyncio.to_thread(_webhook_jwks_client.get_signing_key_from_jwt, token)
     payload = jwt.decode(
         token,
         signing_key.key,
         algorithms=["RS256"],
-        issuer=realm_url,
+        issuer=_webhook_jwt_issuer,
+        audience=os.getenv("WEBHOOK_JWT_AUDIENCE") or None,
         options={"require": ["exp", "iss"]},
     )
     return payload
@@ -645,7 +677,10 @@ async def _webhook_rate_limited(ingestor, feed_name):
     """Per-feed sliding window (FR27/D8). Local reimplementation of
     redis_primitives.SlidingWindowRateLimiter — the stream-ingestor image does
     NOT ship the workflows package (single-file Dockerfile)."""
-    max_requests = int(os.getenv("WEBHOOK_RATE_LIMIT_MAX", "10"))
+    try:
+        max_requests = int(os.getenv("WEBHOOK_RATE_LIMIT_MAX", "10"))
+    except (TypeError, ValueError):
+        max_requests = 10
     window_seconds = 60
     key = f"webhook-rl:{feed_name}"
     now = time.time()

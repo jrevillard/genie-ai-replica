@@ -2394,3 +2394,19 @@ source_spec: `3-2-document-repository-tracing-js-logs-only-path.md`
 severity: low
 reason: Compose default exists in `env` + `docker-compose.yaml`, but no defensive check in `tracing.js`. Same shape as backend `components/gov-chat-backend/tracing.js` (already tracked as DW-366).
 status: open
+
+### DW-373: No co-located unit test for the seam itself (abstract-port guard, null-options guard, client delegation). The contract is exercised end-to-end by Story 4.5 (melt/victorialogs-client.test.js).
+origin: spec-deferred 77404815a818
+location: components/shared/lib/melt/__tests__/
+source_spec: `4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict.md`
+severity: low
+reason: Review pass identified the seam has no `__tests__` file in this diff. Story 4.5's spec covers axios-mock + normalization; the seam-level invariants (port abstract guard, VictoriaLogsClient null guard, MELT_PROVIDER discriminator) get transitive coverage there.
+status: open
+
+### DW-374: Port-level error contract (timeout / network / auth error types) is not documented. Adapter maps wire failures to errors; consumers must catch `unknown`.
+origin: spec-deferred 131cebddb1fb
+location: n/a
+source_spec: `4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict.md`
+severity: low
+reason: Review pass noted missing error hierarchy on the port. Architecture spine AD-3 / AD-16 keep error handling at the adapter layer, not the port — defer to 4.3 + Epic 5/6 contract tests for the concrete taxonomy.
+status: open

@@ -1,0 +1,6 @@
+drought/
+*.egg-info/
+__pycache__/
+output/
+.ruff_cache
+.venv/

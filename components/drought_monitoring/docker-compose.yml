@@ -1,0 +1,15 @@
+services:
+  drought-monitoring:
+    build: .
+    ports:
+      - "8001:8001"
+    volumes:
+      - ${HOME}/.config/earthengine:/root/.config/earthengine:ro
+      - ./reports:/app/reports
+    environment:
+      - GEE_PROJECT=${GEE_PROJECT:-mewa-493916}
+      - ARANGO_URL=${ARANGO_URL:-http://localhost:8529}
+      - ARANGO_DB_NAME=${ARANGO_DB_NAME:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD:-test}
+      - DROUGHT_REPORTS_DIR=/app/reports

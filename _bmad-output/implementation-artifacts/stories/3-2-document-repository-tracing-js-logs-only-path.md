@@ -5,7 +5,8 @@ epic: epic-3
 status: ready-for-dev
 effort: 0.5
 depends_on: [3.1, Epic 2]
-files: components/document-repository/src/tracing.js` (new); components/document-repository/src/app.js (line 1: `require('./tracing')` — merged from Story 3.3 which was deleted as single-line ceremony)
+files: |
+  components/document-repository/src/tracing.js` (new); components/document-repository/src/app.js (line 1: `require('./tracing')` — merged from Story 3.3 which was deleted as single-line ceremony)
 ---
 
 # Story 3.2 — document-repository: tracing.js (logs-only path)

@@ -2458,3 +2458,91 @@ source_spec: `4-4-shared-lib-index-js-re-export-melt.md`
 severity: low
 reason: Whole-repo `require.*shared/lib'` grep returns 0 hits against the real barrel. `jest.mock('../shared-lib', …, { virtual: true })` appears in `components/gov-chat-backend/__tests__/swagger-config.test.js:8`, `routes/chat-history-routes.test.js:5`; `moduleNameMapper: '.*shared-lib$'` in `components/document-repository/jest.config.js:43`; inline fixture in `components/gov-chat-backend/__tests__/mocks/shared-lib.js` re-exports `parsePositiveInt` only via a direct sibling require, bypassing the barrel.
 status: open
+
+### DW-381: VictoriaLogsAdapter.hits() public method has zero unit-test coverage in this file — title lists `query()`-centric surfaces only; downstream `logs-vl-contract.test.js` (Story 5.8) is the venue.
+origin: spec-deferred a7ae452d9e2b
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: File exercises `query()` end-to-end (probe, params, URL, normalize). `hits()` reshape (`[value, count]` tuples → `Record<string, number>`), its `/select/logsql/hits` URL, its `field` param, and its NaN/null tuple guards are all uncovered. Adapter source at `components/shared/lib/melt/victorialogs-client.js:163-179`.
+status: open
+
+### DW-382: `VL_QUERY_TIMEOUT_MS='0'` env value is not guarded by the `> 0` check that the constructor `timeout` option uses — adapter sets `axios.create({ timeout: 0 })` (interpreted by axios as "no timeout",
+origin: spec-deferred a7cc8e98167b
+location: components/shared/lib/melt/victorialogs-client.js:110-116
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: medium
+reason: Adapter constructor lines 110-116: `parsedEnvTimeout` is checked for `Number.isFinite` only, not `> 0`. Setting `VL_QUERY_TIMEOUT_MS=0` would pass the check and propagate `0` to axios. Pre-existing adapter bug from Story 4.3, not surfaced by Story 4.5's test file.
+status: open
+
+### DW-383: `_ensureHealth()` short-circuits via `if (!this.baseURL) return` when no `baseURL` is supplied — uncovered branch.
+origin: spec-deferred ea1d5504791a
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter line 194: the guard fires before the probe loop, letting `query()` proceed without a probe. No test pins this behaviour.
+status: open
+
+### DW-384: `tenantId` parsing edge cases (`''`, `':7'`, `'42:'`, `'42:7:99'`) are not pinned — only the happy-path `'42:7'`, default `'0:0'`, and missing-project-id `'42'` are tested.
+origin: spec-deferred cb63a21d63b9
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 105-108: `String(resolvedTenant).split(':')` — parts[0]||`'0'` and parts[1]||`'0'` produce non-obvious fallbacks for partial inputs.
+status: open
+
+### DW-385: `_stream` shape edge cases (`null`, string, `{ service: '' }`, `{ environment: null }`) are not pinned.
+origin: spec-deferred 6c1f513d74cf
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter `_normalizeRow` lines 272-274 guard `typeof _stream === 'object'`, but falsy / wrong-type branches are not exercised.
+status: open
+
+### DW-386: `_msg` and `_time` type edge cases (missing, non-string _time such as number/Date, `_msg: 0`/`null`/object → `String(_msg)` coercion of an object) are not pinned.
+origin: spec-deferred 923dc2616cfb
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 248-270: `typeof _time === 'string'` guard excludes non-strings; `String(_msg)` coerces objects. Only `_time: 'not-a-date'` edge case is covered.
+status: open
+
+### DW-387: `query()` param-builder edge cases (`limit: 0` should be included, `fields: []` and non-array `fields` should be omitted, non-array `response.data` should yield `[]`) are not pinned.
+origin: spec-deferred e53218064a32
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 140-146: `if (limit !== undefined && limit !== null)` includes `0`; `if (Array.isArray(fields) && fields.length > 0)` excludes `[]` and non-arrays; line 145 `Array.isArray (response.data)` falls back to `[]`. None exercised.
+status: open
+
+### DW-388: `level` numerics / empty-string encoded events (`fields.level: 0` or `''`) — currently the `level` line in `_normalizeRow` skips them (rawLevel `!== undefined && !== null && String(rawLevel).length >
+origin: spec-deferred 5fcba18a7f1c
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 278-281: `String(rawLevel).length > 0` rejects `''`. Realistic VL wire values like numeric level encodings and empty-string labels are unverified.
+status: open
+
+### DW-389: `VictoriaLogsHealthError` constructed directly (no `cause` → `cause` `undefined`; cause object roundtrip) is never pinned independently of the probe path.
+origin: spec-deferred c9d26e236f0b
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 72-79: typed error class with `name`, `code`, `cause` round-trip. Only validated through one probe-failure `it` block.
+status: open
+
+### DW-390: First co-located `__tests__/` under `components/shared/lib/` — no `jest.config.js` and no `test:shared` CI stage exist, so this file ships without any automated gate.
+origin: spec-deferred 369338b977b8
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: `components/shared/lib/package.json` lists no `jest` devDependency, no `test` script. `.gitlab-ci.yml` has no `test:shared` stage. The file is a co-located unit test for fast local human feedback only — downstream `logs-vl-contract.test.js` (Story 5.8) is the MR-blocking gate. Pattern needs infrastructure follow-up.
+status: open
+
+### DW-391: `HEALTH_PROBE_BACKOFF_MS` constant name conflates "backoff" with "timeout" — the value is used as the per-attempt axios `timeout`, not as an inter-attempt sleep delay.
+origin: spec-deferred b70212233759
+location: components/shared/lib/melt/victorialogs-client.js:55-57
+source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md`
+severity: low
+reason: Adapter lines 55-57 and 200: constant named "BACKOFF_MS" but passed to `axios.get(..., { timeout: HEALTH_PROBE_BACKOFF_MS })`. Pure naming — no behaviour change. A future maintainer could add `await sleep(HEALTH_PROBE_BACKOFF_MS)` between attempts and double the budget without breaking any test.
+status: open

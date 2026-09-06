@@ -96,7 +96,7 @@ development_status:
   4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: done
   4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict: done
   4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize: done
-  4-4-shared-lib-index-js-re-export-melt: ready-for-dev
+  4-4-shared-lib-index-js-re-export-melt: done
   4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize: ready-for-dev
   4-6-tests-config-validator-whitelist-melt_provider-victorialogs: ready-for-dev
   epic-4-retrospective: optional

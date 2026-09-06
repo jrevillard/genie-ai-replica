@@ -4,6 +4,7 @@ const securityHeaders = require('./security-headers');
 const SecurityMiddleware = require('./security-middleware');
 const dbService = require('./db-connection-service');
 const validationUtils = require('./validation-utils'); // parsePositiveInt helper
+const meltModule = require('./melt'); // MELT hexagonal seam (port + adapters + client); unconditional so a missing submodule fails loudly with MODULE_NOT_FOUND
 
 module.exports = {
   logger: loggerModule.logger, // Export the Winston logger instance
@@ -13,5 +14,6 @@ module.exports = {
   parsePositiveInt: validationUtils.parsePositiveInt,
   dbService,
   securityHeaders,
-  SecurityMiddleware
+  SecurityMiddleware,
+  melt: meltModule
 };

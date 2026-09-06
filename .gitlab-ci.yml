@@ -2486,6 +2486,11 @@ test:backend:
     npm_config_sharp_libvips_binary_host: "https://npmmirror.com/mirrors/sharp-libvips"
     npm_config_sharp_binary_host: "https://npmmirror.com/mirrors/sharp"
   before_script:
+    # shared/lib must install too — backend requires shared/lib/victorialogs-transport
+    # which requires winston-transport. Without shared/lib/node_modules, the test
+    # fails with "Cannot find module 'winston-transport'". Add shared/lib first so
+    # its node_modules is in the require-resolution path.
+    - cd components/shared/lib && npm ci
     - cd components/gov-chat-backend && npm ci
   script:
     - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand

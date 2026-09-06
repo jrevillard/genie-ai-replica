@@ -2491,7 +2491,10 @@ test:backend:
     # fails with "Cannot find module 'winston-transport'". Add shared/lib first so
     # its node_modules is in the require-resolution path.
     - cd components/shared/lib && npm ci
-    - cd components/gov-chat-backend && npm ci
+    # After cd into shared/lib, `cd components/gov-chat-backend` would resolve
+    # to `components/shared/lib/components/gov-chat-backend` (does not exist).
+    # Pop back to the worktree root first, then descend into gov-chat-backend.
+    - cd - && cd components/gov-chat-backend && npm ci
   script:
     - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura --runInBand
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'

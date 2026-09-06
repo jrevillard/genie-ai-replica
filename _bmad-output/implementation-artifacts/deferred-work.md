@@ -2450,3 +2450,11 @@ source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.m
 severity: low
 reason: Reviewer (intent-alignment) flagged a Reading A / Reading C divergence: with the spec's two-file scope as-written, the adapter cannot load (circular require, `extends` evaluates to `undefined`). Reading C permits the minimal `index.js` edit; classifying as `bad_spec` would have triggered a revert + re-derivation loop that re-introduces the same edit. Kept as a deferred finding so the spec amendment can be made on a future epic-4 retrospective.
 status: open
+
+### DW-380: No test exercises the real `shared/lib` barrel end-to-end. Every backend / document-repository test that touches `shared-lib` substitutes it via `jest.mock('../shared-lib', …, { virtual: true })` or
+origin: spec-deferred 11f3766328c1
+location: components/shared/lib/tests/
+source_spec: `4-4-shared-lib-index-js-re-export-melt.md`
+severity: low
+reason: Whole-repo `require.*shared/lib'` grep returns 0 hits against the real barrel. `jest.mock('../shared-lib', …, { virtual: true })` appears in `components/gov-chat-backend/__tests__/swagger-config.test.js:8`, `routes/chat-history-routes.test.js:5`; `moduleNameMapper: '.*shared-lib$'` in `components/document-repository/jest.config.js:43`; inline fixture in `components/gov-chat-backend/__tests__/mocks/shared-lib.js` re-exports `parsePositiveInt` only via a direct sibling require, bypassing the barrel.
+status: open

@@ -204,9 +204,6 @@ class VictoriaLogsAdapter extends LogQueryRepository {
           return;
         } catch (err) {
           lastError = err;
-          if (attempt < HEALTH_PROBE_ATTEMPTS) {
-            await Promise.resolve();
-          }
         }
       }
       throw new VictoriaLogsHealthError(

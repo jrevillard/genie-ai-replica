@@ -8,7 +8,8 @@ depends_on: [4.1]
 files: components/shared/lib/melt/victorialogs-client.js` (new); components/shared/lib/package.json (ADD `axios@^1.7.0` to dependencies — without this edit `require('axios')` fails in shared/lib; aligned with backend `^1.10.0` per architecture spine line 230)
 baseline_revision: 4e1b0b8a30fb5aac7f6161af911f4b04e3f80bfd
 review_loop_iteration: 0
-followup_review_recommended: true
+followup_review_recommended: false
+---
 deferred:
   - summary: >-
       No co-located unit test for the adapter. Contract is exercised
@@ -166,6 +167,25 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
   - No retry on `query()`/`hits()` 5xx — out of AD-16 scope.
   - Constants module-scoped — Story 4.5 testing concern.
 
+### 2026-09-06 — Follow-up review pass (story `done` re-opened)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1: (high 0, medium 0, low 1)
+- defer: 0
+- reject: 41
+
+- addressed_findings:
+  - `[low]` `[patch]` Dropped dead `await Promise.resolve()` block in `_ensureHealth` retry loop (lines 207-209 pre-patch). Leftover from the prior patch 2 which documented "Dropped the inter-attempt sleep entirely"; the microtask yield resolved on the next event-loop tick and provided no actual backoff, so retries hammered back-to-back. Removed the conditional entirely; the loop now runs 3 attempts synchronously back-to-back (matches the documented "3×5 s" budget = 3 attempts × 5 s axios timeout each, worst case ≤15 s). `node --check` passes.
+
+- **Reviewer observations rejected as noise (representative):**
+  - Intent-alignment auditor confirms Reading C is implemented; Reading A/C divergence already a `deferred:` entry (orchestrator-owned, not re-opened).
+  - No co-located unit test — already a `deferred:` entry; this pass did not re-open the orchestrator's ledger per dispatch contract.
+  - Validation guards (baseURL/tenantId/limit/q-start-end/fields element types) — out of AD-3/AD-15/AD-16 scope; VL server-side 400 already covers.
+  - `_healthProbed` never invalidated — out of AD-16 scope (probe is one-shot by design).
+  - `_time` numeric epoch / `_msg` object coercion — out of AD-3 (which pins `_time: string`, `_msg: string`).
+  - `level` duplicated across `fields` vs top-level — intentional per design (raw + normalized).
+  - No `AbortSignal`, no `query()`/`hits()` retry, no OTel spans, no winston logging, no PII filter, no status-code branching, hardcoded `/health` path, timezone-discard `toISOString()`, axios-per-instance, env-name inconsistency (`VL_*` vs `VICTORIALOGS_*`), `limit` unbounded, `AccountID`/`ProjectID` ignored on VL<1.50, `/health` body not validated, `VictoriaLogsHealthError` not re-exported from seam, `skipHealthProbe` permanent, no lint/format evidence — all out of AD-16 scope; surfaced as orchestrator-owned future work.
+
 ## Design Notes
 
 **Why a separate `victorialogs-client.js` from the seam in `melt/index.js`.** The seam layer (`melt/index.js`) stays vendor-neutral — `LogQueryRepository` is the abstract port, `VictoriaLogsClient` is the application service, `MELT_PROVIDER` is the discriminator. The actual VL HTTP wire (axios, header derivation, normalization, health probe) is encapsulated in the adapter file. Consumers (`LogsService`, `securityScanService`) reach the seam via `require('shared/lib/melt').VictoriaLogsClient` and never touch axios. This satisfies AD-3's hexagonal-layer rule ("Application consumers MUST consume via the port — NOT via raw axios") while letting Story 5.x and beyond treat the adapter as an opaque dependency.
@@ -196,39 +216,28 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - Open `melt/victorialogs-client.js` in IDE; hover `VictoriaLogsAdapter` — confirm JSDoc references AD-3, AD-15, AD-16.
 - Inspect `melt/victorialogs-client.js:188-215` — confirm the health probe is a single-attempt loop with Promise memoization (not a boolean).
 
-## Auto Run Result
-
-**Summary:** Implemented `VictoriaLogsAdapter` — the concrete MELT adapter for VictoriaLogs. The class extends `LogQueryRepository` (the abstract port from Story 4.2), wires axios against the VL LogSQL HTTP API with `AccountID`/`ProjectID` headers (AD-15), normalizes VL wire rows to the canonical 8-sub-shape `VictoriaLogsRow` per AD-3, lazily probes `/health` on first call (AD-16, 3×5 s, memoized in-flight Promise), and reads `VL_QUERY_TIMEOUT_MS` (default 30000) for the axios timeout. All 4 AD-3 / AD-15 / AD-16 contract surfaces exercised and verified post-patch.
-
-**Files changed:**
-- `components/shared/lib/melt/victorialogs-client.js` (new, ~300 lines) — concrete adapter; CommonJS only.
-- `components/shared/lib/melt/index.js` (modified) — load-order change (define port → expose on `module.exports` → require adapter) + destructure `{ VictoriaLogsAdapter }` from the new module's named exports. See Spec Change Log.
-- `components/shared/lib/package.json` (modified) — added `"axios": "^1.7.0"` to `dependencies`.
-
-**Review findings breakdown:**
-- patches applied: 8 (high 0, medium 4, low 4)
-- items deferred: 5 (no co-located unit test — Story 4.5; no `AbortSignal`; no retry on `query()`/`hits()`; module-scoped constants testability; `index.js` edit beyond spec scope)
-- items rejected: 27 (blind-hunter noise)
-- patched severity counts: high=0, medium=4, low=4
-- followup score: 3×4 + 1×4 = 16 → `followup_review_recommended: true` (threshold: any patched high OR score ≥ 5; score 16 ≥ 5)
-
-**Verification performed:**
-- All 9 verification commands printed expected values (see Verification section).
-- `node --check` exits 0 for both new and modified files.
-- `_normalizeRows` smoke against the documented fixture confirms all 8 AD-3 sub-shapes match (timestamp/message/stream/fields/date/time/level/service).
-- Invalid-`_time` smoke confirms graceful empty strings (no garbage slices).
-- `timeout:0` and `VL_QUERY_TIMEOUT_MS=garbage` smokes confirm fallback to `30000`.
-- `instanceof LogQueryRepository` confirms the adapter is a concrete port implementation.
-- Two-key tenant splitting (`42:7` → `AccountID:42, ProjectID:7`) confirms AD-15 header derivation.
-
-**Residual risks:**
-- No unit tests in this diff. Story 4.5 (`tests: melt/victorialogs-client.test.js`) is the contract gate.
-- `melt/index.js` was edited beyond the spec's listed `files:`. See Spec Change Log for rationale (Reading C — minimum viable seam edit). A future Epic 4 retrospective should consider amending the spec to explicitly call out the load-order change so the next adapter story doesn't repeat the divergence.
-- `VictoriaLogsHealthError` is not re-exported through `melt/index.js`. Consumers that want `instanceof` checks must `require('components/shared/lib/melt/victorialogs-client')` directly. Re-export is a one-liner if 4.5 needs it.
-- `ENABLE_OBSERVABILITY` and `ADMIN_LOGS_SOURCE` interactions are not enforced here — those are consumer-side (Story 5.x) concerns per CAP-5 / CAP-6.
-
 ## References
 
 - `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`
 - `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md`
 - `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`
+
+## Auto Run Result
+
+Status: done
+
+### Follow-up review pass summary (2026-09-06)
+
+**Files changed in this pass:**
+- `components/shared/lib/melt/victorialogs-client.js` — removed dead `await Promise.resolve()` block in `_ensureHealth` retry loop (no-op leftover from prior patch 2).
+
+**Review findings (this pass):**
+- Patches applied: 1 (low severity) — dead microtask yield.
+- Items deferred: 0 (existing deferred list untouched per orchestrator contract; no new entries added).
+- Items rejected: 41 (out-of-scope noise — validation guards, AbortSignal, retry, OTel spans, PII filter, etc.).
+- Follow-up review recommendation: **false** — patched count 1 low = score 1 (< 5).
+
+**Verification performed:**
+- `node --check components/shared/lib/melt/victorialogs-client.js` → `PROBE-OK` (syntax passes after patch).
+
+**Residual risks:** none new from this pass. Existing deferred list (orchestrator-owned) unchanged.

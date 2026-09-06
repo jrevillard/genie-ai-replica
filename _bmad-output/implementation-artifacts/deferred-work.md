@@ -2218,3 +2218,59 @@ source_spec: `2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow.m
 severity: low
 reason: Reviewer (blind-hunter) flagged it. Cosmetic doc fix on the story frontmatter `files:` field.
 status: open
+
+### DW-355: No Grafana dashboard panel or alert rule provisioned for `log_record_dropped_total` in `configs/grafana/provisioning/`; the metric ships without an operator-facing surface.
+origin: spec-deferred ecb2086ddb6b
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: medium
+reason: The metric name is referenced only in code; no dashboard JSON or alert YAML in `configs/grafana/provisioning/dashboards/` or `configs/grafana/provisioning/alerting/` declares `log_record_dropped_total`. Spec did not require this; a follow-up dashboards/alerting story should land at least one panel and one alert (e.g. rate > 0 for `otlp_unreachable` for 5m).
+status: open
+
+### DW-356: Counter payload lacks triage context (dropped log level, queue depth, otlp endpoint); cardinality constraint makes adding labels safe but the metric is too thin to act on in Prometheus without joining
+origin: spec-deferred 5f39e52c9063
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: Every `.add(1, { reason })` call passes only the bounded reason label; no `level`, `endpoint`, or `queue_depth` attribute is included. Spec did not require extra labels; reviewer flagged this as a follow-up.
+status: open
+
+### DW-357: `observability_disabled` counter increments on every Winston log emit when observability is OFF, putting OTel counter overhead on the very environment where ops will be looking for the metric;
+origin: spec-deferred 6a82c793b4e5
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: `shared/lib/logger.js` `traceFormat()` calls `_droppedCounter.add(1, ...)` on every no-span log emit when `process.env.ENABLE_OBSERVABILITY !== '1'`. Steady nonzero counter at any non-trivial log volume.
+status: open
+
+### DW-358: `OBSERVABILITY_DISABLED` latch evaluated once at module load; if a sibling module requires `shared/lib/logger.js` before `process.env.ENABLE_OBSERVABILITY` is finalized in a test fixture, the latch
+origin: spec-deferred e192d1e12b19
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: Same pattern exists in `components/gov-chat-backend/tracing.js` for the `NODE_ENV`/`ENABLE_OBSERVABILITY` test-mode guard; the existing pre-existing pattern is being followed. Future refactor could re-read env per emit.
+status: open
+
+### DW-359: `mobile/`, CLI scripts, or dev tooling that require `shared/lib/logger.js` without the OTel SDK initialized will read the OTel global at require time.
+origin: spec-deferred 56e7eda6340f
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: `shared/lib/logger.js` now calls `otelMetrics.getMeter(...)` at module load (guarded by PATCH 2 IIFE try/catch since this run — the guard absorbs the throw and falls through to a no-op stub, but downstream code may still observe different behavior). Mobile consumers of shared/lib logger should be smoke-tested.
+status: open
+
+### DW-360: No integration-style assertion that Prometheus can scrape `log_record_dropped_total`; unit tests prove `.add()` is called but not that the series appears in scrape output.
+origin: spec-deferred a3e150b8b5e9
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: low
+reason: No `@opentelemetry/exporter-prometheus` contract test renders the registry and checks for the series. A future contract-test story should add it.
+status: open
+
+### DW-361: Runtime increment tests for the `observability_disabled` (logger.js) and `queue_full` (victorialogs-transport.js) call-sites fell back to static source-pattern checks; jest.mock does NOT intercept
+origin: spec-deferred 7b9011c9c5ff
+location: n/a
+source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
+severity: medium
+reason: The same module-mocking limitation also breaks 7 PRE-EXISTING tests in `logger-otel-trace.test.js` (verified against base commit 3f8adc95c). The runtime path is therefore exercised manually against a real OTel SDK stack (not in this story's verification scope). A follow-up that restructures shared/lib tests under a backend rootDir, or moves the relevant tests alongside the modules they exercise, would unlock real runtime coverage.
+status: open

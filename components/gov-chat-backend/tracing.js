@@ -47,6 +47,25 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { trace } = require('@opentelemetry/api');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
   const { redactAttributes } = require('./tracing-pii');
+  // otlp_unreachable call-site: module-load dropped counter.
+  // Backed by the canonical enum exported from metrics.js — never pass raw
+  // strings to `.add()` (cardinality-bounded set per Epic 2 review).
+  // Module-load counter creation is guarded so the OTel SDK being absent (or
+  // `getMeter` throwing at require-time) never breaks tracing.js load —
+  // every other backend module depends on tracing.js requiring successfully.
+  // A throw leaves `droppedCounter` as the no-op stub below: subsequent
+  // `.add()` calls become absorbed and the SDK init still surfaces its real
+  // error.
+  const { getMeter, LOG_DROPPED_REASON, LOG_RECORD_DROPPED_TOTAL } = require('./metrics');
+  const droppedCounter = (() => {
+    try {
+      return getMeter().createCounter(LOG_RECORD_DROPPED_TOTAL, {
+        description: 'Otel log records dropped before export'
+      });
+    } catch {
+      return { add: () => {} };
+    }
+  })();
 
   // Custom SpanProcessor that redacts PII and drops noise spans before export
   class PIIRedactionProcessor {
@@ -160,8 +179,24 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     spanProcessors: [new PIIRedactionProcessor(exporter)]
   });
 
-  // Start the SDK
-  sdk.start();
+  // Start the SDK. OTLP exporters are lazy — they open the HTTP connection
+  // on first export. Failures surface synchronously here only when the
+  // endpoint URL is malformed, the DNS lookup fails synchronously, or the
+  // collector rejects the protocol handshake; otherwise the failure is
+  // recorded by the exporter's internal retry loop and the call below is a
+  // silent no-op. We wrap it anyway so the otlp_unreachable counter is wired
+  // at the module's contract surface; a true per-send failure detector (a
+  // custom exporter wrapping `_delegate.send`) is a follow-up.
+  try {
+    sdk.start();
+  } catch (err) {
+    try {
+      droppedCounter.add(1, { reason: LOG_DROPPED_REASON.OTLP_UNREACHABLE });
+    } catch {
+      // metric failure must never mask the underlying SDK init error
+    }
+    throw err;
+  }
 
   // Graceful shutdown
   const SHUTDOWN_TIMEOUT_MS = 5000;

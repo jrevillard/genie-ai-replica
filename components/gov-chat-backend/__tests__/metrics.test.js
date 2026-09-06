@@ -41,6 +41,77 @@ describe('metrics.js', () => {
   });
 });
 
+// log_record_dropped_total counter + bounded reason enum.
+// AD-18 forbids a shared `recordLogDropped(reason)` helper, so metrics.js
+// is the canonical source for the counter name and the cardinality-bounded
+// reason enum. Each call-site (transport, logger, tracing) module-loads its
+// own counter via getMeter() and increments with the matching enum value.
+describe('metrics.js — log_record_dropped_total', () => {
+  let mod;
+
+  beforeEach(() => {
+    jest.isolateModules(() => {
+      mod = require('../metrics');
+    });
+  });
+
+  it('exports the canonical counter name', () => {
+    expect(mod.LOG_RECORD_DROPPED_TOTAL).toBe('log_record_dropped_total');
+  });
+
+  it('exports a frozen reason enum with the three bounded values', () => {
+    expect(mod.LOG_DROPPED_REASON).toEqual({
+      QUEUE_FULL: 'queue_full',
+      OTLP_UNREACHABLE: 'otlp_unreachable',
+      OBSERVABILITY_DISABLED: 'observability_disabled'
+    });
+    // Frozen so an accidental mutation cannot widen the cardinality.
+    expect(Object.isFrozen(mod.LOG_DROPPED_REASON)).toBe(true);
+  });
+
+  it('creates the dropped counter with the canonical name + description', () => {
+    const mockCounter = { add: jest.fn() };
+    const mockMeter = {
+      createCounter: jest.fn().mockReturnValue(mockCounter),
+      createHistogram: jest.fn()
+    };
+    metrics.getMeter.mockReturnValueOnce(mockMeter);
+
+    const counter = mod
+      .getMeter()
+      .createCounter(mod.LOG_RECORD_DROPPED_TOTAL, {
+        description: 'Otel log records dropped before export'
+      });
+
+    expect(mockMeter.createCounter).toHaveBeenCalledWith('log_record_dropped_total', {
+      description: 'Otel log records dropped before export'
+    });
+    expect(counter).toBe(mockCounter);
+  });
+
+  it('increments the counter with the bounded enum values', () => {
+    const add = jest.fn();
+    metrics.getMeter.mockReturnValueOnce({
+      createCounter: jest.fn().mockReturnValue({ add }),
+      createHistogram: jest.fn()
+    });
+
+    // Mirror each call-site's increment pattern — every `.add()` uses an
+    // enum value, never a raw string.
+    const counter = mod.getMeter().createCounter(mod.LOG_RECORD_DROPPED_TOTAL, {
+      description: 'Otel log records dropped before export'
+    });
+
+    counter.add(1, { reason: mod.LOG_DROPPED_REASON.QUEUE_FULL });
+    counter.add(1, { reason: mod.LOG_DROPPED_REASON.OTLP_UNREACHABLE });
+    counter.add(1, { reason: mod.LOG_DROPPED_REASON.OBSERVABILITY_DISABLED });
+
+    expect(add).toHaveBeenNthCalledWith(1, 1, { reason: 'queue_full' });
+    expect(add).toHaveBeenNthCalledWith(2, 1, { reason: 'otlp_unreachable' });
+    expect(add).toHaveBeenNthCalledWith(3, 1, { reason: 'observability_disabled' });
+  });
+});
+
 describe('metrics-middleware.js', () => {
   let mockCounter;
   let mockHistogram;

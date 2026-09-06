@@ -69,59 +69,8 @@ jest.mock(
   { virtual: true }
 );
 
-// Module-cache reset: prior test files in this run (notably
-// `logger-functions.test.js`, `logger-vl-integration.test.js`, and
-// `tracing.test.js`) load `components/shared/lib/logger.js` or
-// `components/gov-chat-backend/tracing.js`, which transitively require
-// `victorialogs-transport.js` → `@opentelemetry/api-logs` +
-// `winston-transport`. Without the cache reset, the first require
-// issued from this file returns those cached REAL modules and the
-// `jest.mock` factories above are silently bypassed (the mock registry
-// holds the factory but `require()` short-circuits to the cache).
-// Symptom: `mockEmit` was called 0 times because the real OTel noop
-// logger swallowed every emit.
-//
-// `jest.isolateModules(...)` is the strongest form: it spins up a
-// dedicated module registry for the callback, runs `jest.doMock(...)`
-// to register factories INSIDE that registry, then requires the SUT.
-// Any prior `require()`'d modules are out of scope of this sandbox,
-// so neither the cache nor any mocks from earlier test files can
-// shadow our overrides here. `jest.mock(...)` (hoisted) is equivalent
-// to `jest.doMock(...)` at file scope; inside the callback we re-register
-// via `doMock` so the factory binds to the sandbox registry.
-let _SeverityNumber;
-let _VictoriaLogsTransport;
-let _TransportStream;
-jest.isolateModules(() => {
-  jest.doMock('winston-transport', () => {
-    const { EventEmitter } = require('events');
-    class TransportStream extends EventEmitter {
-      constructor(opts = {}) {
-        super();
-        Object.assign(this, opts);
-      }
-    }
-    TransportStream.LegacyTransportStream = class LegacyTransportStream extends EventEmitter {};
-    return TransportStream;
-  });
-  jest.doMock('@opentelemetry/api-logs', () => ({
-    logs: { getLogger: mockGetLogger },
-    // Use jest.requireActual to read the real enum: the api-logs mock
-    // factory cannot `require('@opentelemetry/api-logs')` (recursion),
-    // and the canonical SeverityNumber must match the SDK enum values
-    // so the SUT's `SEVERITY_MAP` table comparisons stay meaningful.
-    SeverityNumber: jest.requireActual('@opentelemetry/api-logs').SeverityNumber
-  }));
-  _SeverityNumber = jest.requireActual('@opentelemetry/api-logs').SeverityNumber;
-  ({ VictoriaLogsTransport: _VictoriaLogsTransport } = require('../../shared/lib/victorialogs-transport'));
-  // Capture the SAME TransportStream class the SUT extended — needed
-  // for the `instanceof` assertion (test must `require('winston-transport')`
-  // and see the identical class, not a freshly-required sibling mock).
-  _TransportStream = require('winston-transport');
-});
-const SeverityNumber = _SeverityNumber;
-const VictoriaLogsTransport = _VictoriaLogsTransport;
-const TransportStream = _TransportStream;
+const SeverityNumber = jest.requireActual('@opentelemetry/api-logs').SeverityNumber;
+const { VictoriaLogsTransport } = require('../../shared/lib/victorialogs-transport');
 
 const ZERO_TRACE_ID = '00000000000000000000000000000000';
 const ZERO_SPAN_ID = '0000000000000000';
@@ -584,18 +533,13 @@ describe('VictoriaLogsTransport — resilience', () => {
   });
 
   it('extends the winston-transport `TransportStream` so it composes with the rest of the pipeline', () => {
+    const TransportStream = require('winston-transport');
     const transport = new VictoriaLogsTransport({ enabled: true });
 
     // `instanceof` against the (mocked) `TransportStream` is a meaningful
     // check: the SUT must extend winston-transport's base class to plug into
     // the existing Winston pipeline. The `name` check pins the transport's
-    // display name in pipeline-level error messages. Use the captured
-    // `TransportStream` from the isolateModules scope above: a fresh
-    // `require('winston-transport')` here would re-enter jest's mock
-    // registry and resolve to a DIFFERENT mocked class instance than the
-    // one the SUT's `class extends TransportStream` was bound to (jest
-    // creates a fresh class per `require()` cycle inside an isolated
-    // sandbox).
+    // display name in pipeline-level error messages.
     expect(transport).toBeInstanceOf(TransportStream);
     expect(transport.name).toBe('victorialogs');
   });

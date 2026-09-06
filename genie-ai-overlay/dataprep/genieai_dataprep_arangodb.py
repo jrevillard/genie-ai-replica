@@ -35,7 +35,11 @@ from comps.dataprep.src.utils import get_separators
 from fastapi import HTTPException
 from langchain_arangodb import ArangoGraph
 from langchain_core.documents import Document
-from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    HTMLHeaderTextSplitter,
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
 from numpy import dot
 from numpy.linalg import norm
 from openai import AsyncOpenAI
@@ -468,10 +472,40 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 for item in content:
                     item_str = str(item)
                     if len(item_str) > doc_path.chunk_size:
-                        raw_chunks.extend(text_splitter.split_text(item_str))
+                        # HTMLHeaderTextSplitter.split_text returns Document objects
+                        # while RecursiveCharacterTextSplitter returns plain strings.
+                        # Normalise to strings, or Documents leak into plain_chunks and
+                        # every downstream consumer (is_valid_content, embedding,
+                        # labelling) receives the wrong type.
+                        split_result = text_splitter.split_text(item_str)
+                        raw_chunks.extend(
+                            r.page_content if hasattr(r, "page_content") else r
+                            for r in split_result
+                        )
                     else:
                         raw_chunks.append(item_str)
                 plain_chunks = raw_chunks
+            elif path.endswith(".md"):
+                # Split at markdown header boundaries so each section (e.g.
+                # "## October - Week 43") becomes its own chunk. strip_headers=False
+                # keeps the section header in the chunk text. The parent H1 title
+                # otherwise survives only in metadata, so re-inject it into each child
+                # chunk: without it, weekly data chunks carry no crop/region context and
+                # retrieval misses queries like "vegetative growth of potato in dhaka".
+                md_splitter = MarkdownHeaderTextSplitter(
+                    headers_to_split_on=[("#", "H1"), ("##", "H2"), ("###", "H3")],
+                    strip_headers=False,
+                )
+                md_docs = md_splitter.split_text(content)
+                for md_doc in md_docs:
+                    h1 = md_doc.metadata.get("H1", "")
+                    if h1 and not md_doc.page_content.lstrip().startswith("# "):
+                        md_doc.page_content = f"# {h1}\n{md_doc.page_content}"
+                # Secondary pass caps oversized sections for long prose markdown.
+                # text_splitter is the RecursiveCharacterTextSplitter configured above
+                # with this document's chunk_size/overlap/separators.
+                docs = text_splitter.split_documents(md_docs)
+                plain_chunks = [d.page_content for d in docs]
             else:
                 docs = text_splitter.create_documents([content])
                 plain_chunks = [d.page_content for d in docs]

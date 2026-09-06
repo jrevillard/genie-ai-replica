@@ -65,6 +65,7 @@ volumes:
   vlogs-data:
   vtraces-data:
   otel-queue:
+  drought_reports: {}
 
 # Fluentd logging driver configuration for centralized log aggregation.
 # All services forward stdout/stderr to the OTel Collector's fluentforward
@@ -636,6 +637,122 @@ services:
       start_period: 30s
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  # ===========================================================================
+  # CLIMATE / PolisenseAI services (profile: climate)
+  #
+  # Ported from Climate-PolisenseAI-branch and adapted to this file's
+  # conventions: no container_name (breaks Swarm scaling), no env_file (nothing
+  # else here uses one - variables are passed explicitly), ARANGO_DB rather than
+  # the branch's ARANGO_DB_NAME, hardcoded internal ArangoDB URL like every
+  # other service, plus the standard hardening/logging/deploy blocks.
+  # Opt-in so the core stack is unaffected:
+  #   docker compose --profile climate up -d
+  # ===========================================================================
+
+  drought-monitoring:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [climate]
+    restart: unless-stopped
+    build:
+      context: ./components/drought_monitoring
+      dockerfile: dockerfile
+    environment:
+      - GEE_PROJECT=${GEE_PROJECT:-}
+      - DROUGHT_REPORTS_DIR=/app/reports
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - drought_reports:/app/reports
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${CLIMATE_REPLICAS:-1}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  warning-system-engine:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [climate]
+    restart: unless-stopped
+    build:
+      context: ./components/warning_system_engine
+      dockerfile: Dockerfile
+    environment:
+      - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+      - ARANGO_URL=http://arango-vector-db:8529
+      - ARANGO_DB=${ARANGO_DB:-genie-ai}
+      - ARANGO_USER=${ARANGO_USER:-root}
+      - ARANGO_PASSWORD=${ARANGO_PASSWORD}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      arango-vector-db:
+        condition: service_healthy
+      drought-monitoring:
+        condition: service_started
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${CLIMATE_REPLICAS:-1}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
+  weather-mcp-service:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [climate]
+    restart: unless-stopped
+    build:
+      context: ./components/weather-mcp-service
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+      - WARNING_SYSTEM_ENGINE_DIR=/warning_system_engine
+      - DROUGHT_REPORTS_DIR=/app/drought_reports
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+    volumes:
+      - ./components/warning_system_engine:/warning_system_engine:ro
+      - drought_reports:/app/drought_reports:ro
+    networks:
+      - genieai_network
+    deploy:
+      replicas: ${CLIMATE_REPLICAS:-1}
       placement:
         constraints:
           - node.labels.genieai == true

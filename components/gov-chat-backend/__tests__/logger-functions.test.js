@@ -8,7 +8,18 @@
 // from any future default-context leak.
 jest.mock('@opentelemetry/api', () => ({
   trace: { getSpan: jest.fn() },
-  context: { active: jest.fn() }
+  context: { active: jest.fn() },
+  // shared/lib/logger.js + victorialogs-transport.js both module-load
+  // log_record_dropped_total via metrics.getMeter(...).createCounter(...).
+  // Provide a stub so the IIFE try/catch in the transport never sees a
+  // real OTel global, AND so logger-functions tests don't accumulate
+  // transport-side side effects when run in the same jest worker as
+  // victorialogs-transport.test.js.
+  metrics: {
+    getMeter: jest.fn().mockReturnValue({
+      createCounter: jest.fn().mockReturnValue({ add: jest.fn() })
+    })
+  }
 }));
 
 // Sentinel "no active span" IDs that traceFormat emits when the OTel API has

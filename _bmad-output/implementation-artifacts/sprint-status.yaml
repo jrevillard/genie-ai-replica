@@ -78,98 +78,54 @@ development_status:
   2-2-shared-lib-add-boolean-env-and-otel-batch-config-helpers: done
   2-4-shared-lib-add-victorialogs-transport-js-winston-transportst: done
   2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra: done
-    ready-for-dev
   2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr: done
-    ready-for-dev
   2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass: done
-    ready-for-dev
   2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: done
   2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: done
-    ready-for-dev
   2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: done
   2-12-prometheus-log_record_dropped_total-reason-counter: done
   epic-2-retrospective: optional
 
   epic-3: backlog
   3-1-document-repository-package-json-add-otel-deps-winston-forma: done
-    ready-for-dev
-  3-2-document-repository-tracing-js-logs-only-path:
-    ready-for-dev
-  3-4-document-repository-clamav-observability-events-clamav-scan:
-    ready-for-dev
+  3-2-document-repository-tracing-js-logs-only-path: ready-for-dev
+  3-4-document-repository-clamav-observability-events-clamav-scan: ready-for-dev
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre:
-    ready-for-dev
-    ready-for-dev
-  4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict:
-    ready-for-dev
-    ready-for-dev
-  4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize:
-    ready-for-dev
-    ready-for-dev
-  4-4-shared-lib-index-js-re-export-melt:
-    ready-for-dev
+  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: ready-for-dev
+  4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict: ready-for-dev
+  4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize: ready-for-dev
+  4-4-shared-lib-index-js-re-export-melt: ready-for-dev
   4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize: ready-for-dev
-  4-6-tests-config-validator-whitelist-melt_provider-victorialogs:
-    ready-for-dev
+  4-6-tests-config-validator-whitelist-melt_provider-victorialogs: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog
-  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj:
-    ready-for-dev
-    ready-for-dev
-  5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co:
-    ready-for-dev
-    ready-for-dev
-  5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog:
-    ready-for-dev
-    ready-for-dev
-  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate:
-    ready-for-dev
-  5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d:
-    ready-for-dev
-    ready-for-dev
-  5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur:
-    ready-for-dev
-    ready-for-dev
-  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li:
-    ready-for-dev
-    ready-for-dev
-  5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat:
-    ready-for-dev
-    ready-for-dev
-  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: 
-    ready-for-dev
+  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: ready-for-dev
+  5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co: ready-for-dev
+  5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog: ready-for-dev
+  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: ready-for-dev
+  5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d: ready-for-dev
+  5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: ready-for-dev
+  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: ready-for-dev
+  5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: ready-for-dev
+  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: ready-for-dev
   5-12-grep-fix-other-printf-regex-assertions-AdminDashboard-parseLogMessage: ready-for-dev
   epic-5-retrospective: optional
 
   epic-6: backlog
-  6-1-security-scan-service-drop-worker_threads-import-processfile:
-    ready-for-dev
-    ready-for-dev
-  6-2-security-scan-service-rewrite-processlogsinparallel-using-vi:
-    ready-for-dev
-    ready-for-dev
-  6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs:
-    ready-for-dev
-    ready-for-dev
-  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc:
-    ready-for-dev
-    ready-for-dev
+  6-1-security-scan-service-drop-worker_threads-import-processfile: ready-for-dev
+  6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: ready-for-dev
+  6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs: ready-for-dev
+  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: ready-for-dev
   epic-6-retrospective: optional
 
   epic-7: backlog
-  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf:
-    ready-for-dev
-    ready-for-dev
-  7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur: 
-    ready-for-dev
+  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf: ready-for-dev
+  7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur: ready-for-dev
   7-3-shared-lib-index-js-ADD-re-exports-reconfigurelogger-triggerLogRollover: done
-    ready-for-dev
   7-4-eslint-no-restricted-imports-rule-shared-eslint-rules-base: done
-    ready-for-dev
   epic-7-retrospective: optional
 rollback_switches:
   ADMIN_LOGS_SOURCE: "victorialogs | file (permanent, default flips to victorialogs
@@ -193,7 +149,7 @@ audit:
   closures: "Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure
     note appended to archived file"
 generated: '2026-08-31'
-last_updated: '2026-09-06 (5 stranded stories merged: 2-5, 2-6, 2-8, 2-10, 3-1; bmad-loop Patch A applied; 18 done total)'
+last_updated: '2026-09-06 (5 stranded stories merged: 2-5, 2-6, 2-8, 2-10, 3-1; bmad-loop Patch A applied; 18 done total; sprint-status malformed statuses collapsed — 22 stories had orphan indented `ready-for-dev` lines that YAML absorbed into the parent value as folded scalars)'
 project: admin-logs-victorialogs
 tracking_system: file-system
 story_location:

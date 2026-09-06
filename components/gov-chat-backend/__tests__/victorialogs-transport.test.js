@@ -13,6 +13,20 @@
 //   - The transport swallows errors from the OTel `logs` API (CAP-1) so a
 //     down/disabled VictoriaLogs never blocks a Node service.
 
+// Helper: clear call history ONLY on the two mocks we care about, without
+// touching their default implementations. `jest.clearAllMocks()` also rewinds
+// `mockGetLogger.mockImplementation` to `() => undefined` (the bare default),
+// which would rewind the factory-set `() => ({ emit: mockEmit })` and make
+// `logger.emit(...)` throw on `undefined` inside the transport's swallow.
+// `clearMockHistory` is the per-test equivalent of the global clear that
+// preserves mock implementations, which is the documented behaviour in
+// jest >= 28 (`jest.clearAllMocks` resets calls+results but not
+// implementations).
+function clearMockHistory() {
+  mockEmit.mockClear();
+  mockGetLogger.mockClear();
+}
+
 const mockEmit = jest.fn();
 const mockGetLogger = jest.fn(() => ({ emit: mockEmit }));
 
@@ -94,7 +108,14 @@ function baseInfo(extra = {}) {
 
 describe('VictoriaLogsTransport — severity mapping', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Clear only call history — NOT the default implementations of
+    // mockEmit / mockGetLogger. jest.clearAllMocks() also clears
+    // mockGetLogger.mockImplementation, which would rewind it to the bare
+    // `() => undefined` default, making `logger.emit(...)` throw on
+    // `undefined` and silently swallow the call. Clearing only the call
+    // history (the actual `jest.fn` instances) keeps the factory-set
+    // implementations across the test suite.
+    mockEmit.mockClear();
   });
 
   it('maps the `error` Winston level to the SeverityNumber.ERROR band', () => {
@@ -168,7 +189,7 @@ describe('VictoriaLogsTransport — severity mapping', () => {
 
 describe('VictoriaLogsTransport — trace_id and span_id flow', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearMockHistory();
   });
 
   it('propagates a real trace_id / span_id pair as OTel log attributes', () => {
@@ -285,7 +306,7 @@ describe('VictoriaLogsTransport — trace_id and span_id flow', () => {
 
 describe('VictoriaLogsTransport — body and timestamp', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearMockHistory();
   });
 
   it('passes a string `message` through to `body` unchanged', () => {
@@ -370,7 +391,7 @@ describe('VictoriaLogsTransport — body and timestamp', () => {
 
 describe('VictoriaLogsTransport — service identity and configuration', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearMockHistory();
   });
 
   it('defaults `service` to `genie-backend` when no constructor opts are given', () => {
@@ -419,7 +440,7 @@ describe('VictoriaLogsTransport — service identity and configuration', () => {
 
 describe('VictoriaLogsTransport — resilience', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    clearMockHistory();
   });
 
   it('skips emission entirely when constructed with `enabled: false` and still fires the Winston callback', () => {

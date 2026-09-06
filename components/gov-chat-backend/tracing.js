@@ -56,10 +56,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { LoggerProvider } = require('@opentelemetry/sdk-logs');
   const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
   // AD-14: single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
-  const { booleanEnv } = require('../../shared/lib/boolean-env');
+  const { booleanEnv } = require('../shared/lib/boolean-env');
   // AD-18: shared batch tuning — both backend and document-repository require this file
   // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
-  const sharedBatchConfig = require('../../shared/lib/otel-batch-config');
+  const sharedBatchConfig = require('../shared/lib/otel-batch-config');
   // otlp_unreachable call-site: module-load dropped counter.
   // Backed by the canonical enum exported from metrics.js — never pass raw
   // strings to `.add()` (cardinality-bounded set per Epic 2 review).

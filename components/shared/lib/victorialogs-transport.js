@@ -109,7 +109,8 @@ class VictoriaLogsTransport extends TransportStream {
       });
     } catch {
       // CAP-1: killing VL must not block any Node service. Drop counter lives
-      // in story 2-12 (metrics); increment the bounded `queue_full` reason so
+      // Mirror the canonical enum from `components/gov-chat-backend/metrics.js` (AD-18);
+      // increment the bounded `queue_full` reason so
       // the swallowed failure is observable in Prometheus. The metric call is
       // wrapped in its own try/catch because a counter failure MUST NOT
       // escape the transport (we are inside a swallow by design).

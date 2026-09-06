@@ -2,6 +2,21 @@
 // cleanupCombinedLog, flushLogs. These tests verify observable behavior, not
 // internal mock wiring.
 
+// Pin OTel context to "no active span" so traceFormat's `trace.getSpan(...)` is
+// deterministic in this file's hermetic JSON-pipeline tests. logger-otel-trace
+// already mocks the same module; mirror its setup so both files are isolated
+// from any future default-context leak.
+jest.mock('@opentelemetry/api', () => ({
+  trace: { getSpan: jest.fn() },
+  context: { active: jest.fn() }
+}));
+
+// Sentinel "no active span" IDs that traceFormat emits when the OTel API has
+// no current span. Centralised here so a future format-length change is a
+// single edit; logger-otel-trace.test.js uses the same constants.
+const ZERO_TRACE_ID = '00000000000000000000000000000000';
+const ZERO_SPAN_ID = '0000000000000000';
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -222,58 +237,85 @@ describe('logger.js utility functions', () => {
   });
 
   // -------------------------------------------------------------------
-  // logFormat output (printf format)
+  // traceFormat → winston.format.json pipeline (Story 2.8 — JSON-key schema)
+  //
+  // traceFormat writes `trace_id` and `span_id` as TOP-LEVEL keys on the
+  // Winston `info` object. When the pipeline ends with `winston.format.json()`
+  // (the production-target wire shape per Story 2.5's deferred work), those
+  // keys must surface as own properties of the parsed JSON record —
+  // consumed by VictoriaLogs LogSQL `trace_id:` filters, the Grafana
+  // trace_explorer, and the NDJSON file fallback. They MUST NOT be
+  // printf-template substrings (e.g. `trace_id=%s`) inside a JSON string.
+  //
+  // These tests exercise traceFormat + format.json() directly. They do NOT
+  // assert the production default `loggerConfig.format` (which still uses
+  // the printf `logFormat`) — that path is covered by logger-otel-trace and
+  // will be re-validated once Story 2.5 lands.
   // -------------------------------------------------------------------
-  describe('logFormat output', () => {
-    it('formats log entries as "TIMESTAMP [LEVEL]: message"', () => {
+  describe('traceFormat → winston.format.json pipeline', () => {
+    it('produces JSON output with trace_id and span_id as top-level keys (no active span)', () => {
       const { format, createLogger, transports: winstonTransports } = require('winston');
+      const { traceFormat } = loggerModule;
 
       const entries = [];
       const passThrough = new PassThrough();
-      passThrough.on('data', (chunk) => entries.push(chunk.toString().trim()));
+      passThrough.on('data', (chunk) => {
+        entries.push(JSON.parse(chunk.toString().trim()));
+      });
 
       const testLogger = createLogger({
         level: 'debug',
-        format: format.combine(
-          format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-          format.printf(({ level, message, timestamp }) => {
-            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-          })
-        ),
+        format: format.combine(format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), traceFormat, format.json()),
         transports: [new winstonTransports.Stream({ stream: passThrough })],
         exitOnError: false
       });
 
       testLogger.info('hello world');
 
-      // Verify the format matches the expected pattern
-      expect(entries[0]).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[INFO\]: hello world$/);
+      expect(entries).toHaveLength(1);
+      const entry = entries[0];
+      // Top-level keys on the JSON object (not printf substrings).
+      expect(entry).toHaveProperty('trace_id');
+      expect(entry).toHaveProperty('span_id');
+      // No active span → zeroed placeholder values, not undefined.
+      expect(entry.trace_id).toBe(ZERO_TRACE_ID);
+      expect(entry.span_id).toBe(ZERO_SPAN_ID);
     });
 
-    it('uses uppercase level in formatted output', () => {
+    it('emits trace_id and span_id as JSON keys, not printf `%s` substrings', () => {
       const { format, createLogger, transports: winstonTransports } = require('winston');
+      const { traceFormat } = loggerModule;
 
-      const entries = [];
+      const rawChunks = [];
       const passThrough = new PassThrough();
-      passThrough.on('data', (chunk) => entries.push(chunk.toString().trim()));
+      passThrough.on('data', (chunk) => {
+        rawChunks.push(chunk.toString());
+      });
 
       const testLogger = createLogger({
         level: 'debug',
-        format: format.combine(
-          format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-          format.printf(({ level, message, timestamp }) => {
-            return `${timestamp} [${level.toUpperCase()}]: ${message}`;
-          })
-        ),
+        format: format.combine(format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), traceFormat, format.json()),
         transports: [new winstonTransports.Stream({ stream: passThrough })],
         exitOnError: false
       });
 
-      testLogger.warn('warning');
-      testLogger.error('error');
+      testLogger.info('hello world');
 
-      expect(entries[0]).toContain('[WARN]');
-      expect(entries[1]).toContain('[ERROR]');
+      expect(rawChunks).toHaveLength(1);
+      const raw = rawChunks[0];
+      // Output is valid JSON — not a printf-formatted string.
+      expect(() => JSON.parse(raw.trim())).not.toThrow();
+      // Positive assertions: parsed object has the expected top-level keys.
+      const parsed = JSON.parse(raw.trim());
+      expect(Object.prototype.hasOwnProperty.call(parsed, 'trace_id')).toBe(true);
+      expect(Object.prototype.hasOwnProperty.call(parsed, 'span_id')).toBe(true);
+      expect(parsed.message).toBe('hello world');
+      // No printf placeholders leaked into the rendered output.
+      expect(raw).not.toMatch(/trace_id=%s/);
+      expect(raw).not.toMatch(/span_id=%s/);
+      // No legacy printf quote-wrapped form should be present.
+      expect(raw).not.toMatch(/trace_id="/);
+      expect(raw).not.toMatch(/span_id="/);
     });
   });
 

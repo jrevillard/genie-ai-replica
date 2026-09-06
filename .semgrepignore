@@ -1,0 +1,9 @@
+# semgrep config: skip files that semgrep mis-detects as YAML
+# (the engine auto-detects file type by extension + content heuristics;
+# these JS/ObjC++ files trigger the YAML parser and produce spurious
+# syntax errors in the logs).
+#
+# Each entry matches via semgrep's standard gitignore-style rules.
+components/shared/lib/security-middleware.js
+mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/macos/flutter_appauth/Sources/flutter_appauth/OIDExternalUserAgentMacNoSSO.h
+mobile/genie_ai_mobile/flutter_appauth/flutter_appauth/ios/flutter_appauth/Sources/flutter_appauth/OIDExternalUserAgentIOSNoSSO.h

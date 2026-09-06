@@ -111,21 +111,15 @@ describe('PIIRedactingLogRecordProcessor', () => {
   // Without redactLogRecordBody, raw emails and tokens land in VictoriaLogs. This
   // test pins the contract.
   it('redacts the record body via redactLogRecordBody before delegating to super.onEmit', () => {
-    const bodySpy = jest.fn();
-    const setBody = jest.fn();
     const setAttribute = jest.fn();
     const record = {
       body: 'User alice@example.com logged in',
-      setBody,
       setAttribute
     };
 
-    // Make the SUT call our spy by stubbing redactLogRecordBody to mutate the
-    // record's body and track the post-redaction call.
-    // tracing-pii's redactLogRecordBody is mocked above; its return value
-    // becomes the new body.
+    // tracing-pii's redactLogRecordBody is mocked at the top of the file; its
+    // return value becomes the new body.
     const tracingPii = require('../tracing-pii');
-    // Override just the body redaction for this test
     tracingPii.redactLogRecordBody.mockReturnValue('User [REDACTED]@example.com logged in');
 
     redactAttributes.mockReturnValue({});

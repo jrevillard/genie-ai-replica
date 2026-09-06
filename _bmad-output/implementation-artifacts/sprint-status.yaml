@@ -86,7 +86,7 @@ development_status:
   2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: done
   2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: 
     ready-for-dev
-  2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: ready-for-dev
+  2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: done
   2-12-prometheus-log_record_dropped_total-reason-counter: ready-for-dev
   epic-2-retrospective: optional
 

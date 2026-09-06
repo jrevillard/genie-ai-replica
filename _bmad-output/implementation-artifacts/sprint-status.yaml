@@ -137,7 +137,7 @@ development_status:
   3-8-feed-definition-persistence: review # ArangoDB feeds collection (migration 005) + BFF CRUD — resolves OQ-SST-1 as "ingestor config"
   3-9-per-feed-resilience-breaker-dlq-backoff: review # DONE 2026-09-05: per-feed breaker (3-fail OPEN, HALF_OPEN probe, auto-close + DLQ replay on recovery), DLQ replay w/ parking list + retry cap, poll rate floor; review patches (replay isolation, flood gate, timestamps); 831 green. REMAINING (3-11 scope): DLQ consumer monitoring/replay-metrics
   3-10-health-endpoints-and-per-feed-health: review # /health + /ready endpoints (per-feed health granularity unverified)
-  3-11-regression-guard: backlog # PRODUCTION GATE; needs OQ-SST-4
+  3-11-regression-guard: review # CI half COMPLETE 2026-09-06: TestRetractionIsolation (AQL pins source_type=='feed' invariant — verified present), ADR 0004 PROPOSED (curated-only anchor = baseline; anchor runs are on-demand operator tasks), FEED_BASELINE.md procedure; 835 green. ADR awaits user confirmation (OQ-SST-4)
   epic-3-retrospective: optional
 
   # ─────────────── Epic 4 — Admin surface ───────────────

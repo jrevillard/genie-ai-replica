@@ -762,9 +762,11 @@ class TestHttpPIIRedactor:
         BLOCK — treating it as zero entities would forward raw PII text."""
         from workflows.tools.pii_redactor import PIIRedactionError
 
-        with patch.object(redactor, "_post", new=AsyncMock(return_value={"results": []})):
-            with pytest.raises(PIIRedactionError, match="unexpected body shape"):
-                await redactor.redact("call john@doe.com")
+        with (
+            patch.object(redactor, "_post", new=AsyncMock(return_value={"results": []})),
+            pytest.raises(PIIRedactionError, match="unexpected body shape"),
+        ):
+            await redactor.redact("call john@doe.com")
 
     @pytest.mark.asyncio
     async def test_malformed_entity_fields_raise_redaction_error(self, redactor):

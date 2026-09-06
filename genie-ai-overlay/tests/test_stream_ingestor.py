@@ -443,3 +443,97 @@ class TestPollRateFloor:
         with patch.object(si_module.feedparser, "parse") as mock_parse:
             await ingestor.process_feed(feed)
         mock_parse.assert_not_called()
+
+
+# ===========================================================================
+# Story 3-11 — retraction isolation: feed retraction never touches file chunks
+# ==========================================================================
+class _FakeRetractSession:
+    """Records retract POSTs without touching the (conftest-mocked) aiohttp."""
+
+    def __init__(self):
+        self.posts = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def post(self, url, json=None):
+        self.posts.append((url, json))
+
+        class _Ctx:
+            async def __aenter__(self_inner):
+                return MagicMock(status=200)
+
+            async def __aexit__(self_inner, *exc):
+                return False
+
+        return _Ctx()
+
+
+class TestRetractionIsolation:
+    @pytest.mark.asyncio
+    async def test_retraction_aql_filters_on_feed_source_type(self):
+        """THE AC: the retraction query itself constrains deletion to
+        source_type == 'feed' — file-sourced chunks are unreachable by
+        construction, not by convention."""
+        ingestor = make_ingestor()
+        captured = {}
+
+        def fake_execute(aql, bind_vars=None):
+            captured["aql"] = aql
+            captured["bind_vars"] = bind_vars
+            return iter(["feed-chunk-1"])
+
+        ingestor.db.aql.execute = fake_execute
+        ingestor.db.has_collection = MagicMock(return_value=True)
+        session = _FakeRetractSession()
+        with (
+            patch.object(si_module, "GRAPH_NAME", "genie_graph"),
+            patch.object(si_module.aiohttp, "ClientSession", MagicMock(return_value=session)),
+        ):
+            await ingestor.retract_expired_chunks()
+
+        aql = captured["aql"]
+        # the isolation invariant lives IN the query text
+        assert "c.source_type == 'feed'" in aql
+        assert "c.expires_at < @now" in aql
+        assert isinstance(captured["bind_vars"]["now"], float)
+
+        # only the expired feed chunk's fileId was retracted
+        assert len(session.posts) == 1
+        url, payload = session.posts[0]
+        assert url == si_module.DATAPREP_RETRACT_URL
+        assert payload == {"fileId": "feed-chunk-1"}
+
+    @pytest.mark.asyncio
+    async def test_file_chunks_never_retracted_even_with_expires_at(self):
+        """The feed-only query returning nothing (e.g. a pathological file chunk
+        with expires_at set) means NO retract call — the source_type filter
+        dominates by construction."""
+        ingestor = make_ingestor()
+
+        def fake_execute(aql, bind_vars=None):
+            assert "c.source_type == 'feed'" in aql  # guard the shape we rely on
+            return iter([])
+
+        ingestor.db.aql.execute = fake_execute
+        ingestor.db.has_collection = MagicMock(return_value=True)
+        session = _FakeRetractSession()
+        with (
+            patch.object(si_module, "GRAPH_NAME", "genie_graph"),
+            patch.object(si_module.aiohttp, "ClientSession", MagicMock(return_value=session)),
+        ):
+            await ingestor.retract_expired_chunks()
+        assert session.posts == []
+
+    @pytest.mark.asyncio
+    async def test_missing_collection_is_a_noop(self):
+        ingestor = make_ingestor()
+        ingestor.db.has_collection = MagicMock(return_value=False)
+        ingestor.db.aql.execute = MagicMock()
+        with patch.object(si_module, "GRAPH_NAME", "genie_graph"):
+            await ingestor.retract_expired_chunks()
+        ingestor.db.aql.execute.assert_not_called()

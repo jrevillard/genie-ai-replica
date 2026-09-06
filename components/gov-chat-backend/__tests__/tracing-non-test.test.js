@@ -4,6 +4,14 @@
 const mockStart = jest.fn();
 const mockShutdown = jest.fn().mockResolvedValue(undefined);
 const mockGetTracer = jest.fn().mockReturnValue({ startSpan: jest.fn() });
+// tracing.js now requires metrics.js, which calls metrics.getMeter()
+// at module load (otlp_unreachable dropped counter). The @opentelemetry/api
+// mock must provide the `metrics` namespace or the counter init fails.
+// `mockCreateCounter` + `mockCounterAdd` are exposed at module scope so the
+// otlp_unreachable increment test can observe the `.add()` call.
+const mockCounterAdd = jest.fn();
+const mockCreateCounter = jest.fn().mockReturnValue({ add: mockCounterAdd });
+const mockGetMeter = jest.fn().mockReturnValue({ createCounter: mockCreateCounter });
 
 jest.mock('@opentelemetry/sdk-node', () => ({
   NodeSDK: jest.fn().mockImplementation(() => ({
@@ -40,7 +48,10 @@ jest.mock('@opentelemetry/core', () => ({
 }));
 
 jest.mock('@opentelemetry/api', () => ({
-  trace: { getTracer: mockGetTracer }
+  trace: { getTracer: mockGetTracer },
+  // shared/lib/logger.js + tracing.js both module-load a
+  // log_record_dropped_total counter via metrics.getMeter(...).createCounter(...).
+  metrics: { getMeter: mockGetMeter }
 }));
 
 jest.mock('@opentelemetry/resources', () => ({
@@ -150,5 +161,53 @@ describe('tracing.js non-test branch', () => {
         expect(process.exit).toHaveBeenCalledWith(0);
       }
     });
+  });
+});
+
+// otlp_unreachable call-site: tracing.js wraps `sdk.start()` in try/catch and
+// increments the dropped counter when the SDK init throws. This block
+// re-requires tracing.js under a synthetic `mockStart` failure and asserts
+// the counter was bumped with the bounded enum reason.
+describe('tracing.js — log_record_dropped_total{reason=otlp_unreachable}', () => {
+  const originalEnv = process.env.NODE_ENV;
+  const originalExit = process.exit;
+
+  let thrownError;
+
+  beforeAll(() => {
+    process.env.NODE_ENV = 'development';
+    process.env.ENABLE_OBSERVABILITY = '1';
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://otel-collector:4318';
+    process.exit = jest.fn();
+    // Replace this single invocation's behavior — every subsequent sdk.start()
+    // call (none, since the require throws) is unaffected. Reset afterwards.
+    mockStart.mockImplementationOnce(() => {
+      throw new Error('synthetic init fail');
+    });
+    mockCounterAdd.mockClear();
+
+    jest.isolateModules(() => {
+      try {
+        require('../tracing');
+      } catch (err) {
+        thrownError = err;
+      }
+    });
+  });
+
+  afterAll(() => {
+    process.env.NODE_ENV = originalEnv;
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    process.exit = originalExit;
+    mockStart.mockReset();
+  });
+
+  it('rethrows the underlying SDK init error', () => {
+    expect(thrownError).toBeDefined();
+    expect(thrownError.message).toBe('synthetic init fail');
+  });
+
+  it('increments the dropped counter with the otlp_unreachable reason', () => {
+    expect(mockCounterAdd).toHaveBeenCalledWith(1, { reason: 'otlp_unreachable' });
   });
 });

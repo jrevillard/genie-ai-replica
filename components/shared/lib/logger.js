@@ -3,7 +3,42 @@ const DailyRotateFile = require('winston-daily-rotate-file');
 const fs = require('fs');
 const path = require('path');
 
-const { trace, context } = require('@opentelemetry/api');
+const { trace, context, metrics: otelMetrics } = require('@opentelemetry/api');
+
+// observability_disabled call-site: module-load counter.
+// AD-18 forbids shared/lib → backend require; the meter scope matches
+// `components/gov-chat-backend/metrics.js` so all call-sites converge on the
+// same instrument. The local REASONS mirror is the canonical enum, kept in
+// sync via review — any `.add()` call that passes a raw string is rejected.
+const LOG_DROPPED_REASON = Object.freeze({
+  QUEUE_FULL: 'queue_full',
+  OTLP_UNREACHABLE: 'otlp_unreachable',
+  OBSERVABILITY_DISABLED: 'observability_disabled'
+});
+
+// Module-load counter creation is guarded so the OTel SDK being absent (or
+// `getMeter` throwing at require-time) never breaks module loading — every
+// consumer of this module depends on the require succeeding. A throw leaves
+// `_droppedCounter` as the no-op stub below: subsequent `.add()` calls
+// become absorbed and the rest of the logger pipeline keeps working.
+const _droppedCounter = (() => {
+  try {
+    return otelMetrics
+      .getMeter('genie-backend', process.env.npm_package_version || '1.0.0')
+      .createCounter('log_record_dropped_total', {
+        description: 'Otel log records dropped before export'
+      });
+  } catch {
+    return { add: () => {} };
+  }
+})();
+
+// Once-per-process latch — observability status is an environment knob, not a
+// per-log decision. Reading it at module load matches the existing test-mode
+// guard pattern in tracing.js:10. Used to attribute every log emitted while
+// observability is OFF as `observability_disabled` (no OTel correlation is
+// possible → log is effectively dropped from the OTel-victorialogs pipeline).
+const OBSERVABILITY_DISABLED = process.env.ENABLE_OBSERVABILITY !== '1';
 
 // Winston format that injects trace_id, span_id, and service from the active OTel span
 const traceFormat = format((info) => {
@@ -15,6 +50,17 @@ const traceFormat = format((info) => {
   } else {
     info.trace_id = '00000000000000000000000000000000';
     info.span_id = '0000000000000000';
+    if (OBSERVABILITY_DISABLED) {
+      // Log emitted without OTel correlation — count it as a drop from the
+      // OTel-victorialogs pipeline. The metric call is wrapped because a
+      // counter failure MUST NOT corrupt log records (the formatter is on the
+      // critical path of every log emit).
+      try {
+        _droppedCounter.add(1, { reason: LOG_DROPPED_REASON.OBSERVABILITY_DISABLED });
+      } catch {
+        // never break the log pipeline over a metric failure
+      }
+    }
   }
   info.service = process.env.SERVICE_NAME || 'genie-backend';
   return info;
@@ -186,5 +232,9 @@ module.exports = {
   reconfigureLogger,
   triggerLogRollover,
   cleanupCombinedLog,
-  flushLogs
+  flushLogs,
+  // Exposed for parity assertions in tests; canonical source of truth lives
+  // in components/gov-chat-backend/metrics.js (AD-18 forbids a shared
+  // helper crossing shared/lib → backend).
+  LOG_DROPPED_REASON
 };

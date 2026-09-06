@@ -12,7 +12,7 @@
 // commit 251f99d57.
 
 const { BatchLogRecordProcessor } = require('@opentelemetry/sdk-logs');
-const { redactAttributes } = require('./tracing-pii');
+const { redactAttributes, redactLogRecordBody } = require('./tracing-pii');
 
 class PIIRedactingLogRecordProcessor {
   constructor(options = {}) {
@@ -23,6 +23,13 @@ class PIIRedactingLogRecordProcessor {
 
   onEmit(logRecord, context) {
     try {
+      // SECURITY: redact the body (free-form log message) BEFORE attribute
+      // redaction. Without this, `logger.info('User ' + email + ' logged in')`
+      // writes the email verbatim into VictoriaLogs. Per AD-4 / C-5: every
+      // emitted record must pass through redactLogRecordBody.
+      if (logRecord.body !== undefined && logRecord.body !== null) {
+        logRecord.body = redactLogRecordBody(logRecord.body);
+      }
       const attrs = logRecord.attributes;
       if (attrs) {
         const redacted = redactAttributes(attrs);

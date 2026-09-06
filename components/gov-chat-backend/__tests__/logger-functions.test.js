@@ -91,7 +91,9 @@ describe('logger.js utility functions', () => {
 
       reconfigureLogger({ level: 'warn' });
 
-      // Transport count stays the same (4 transports: console + 2 rotate + file)
+      // Transport count stays the same (4 transports: console + 2 rotate + file).
+      // With LOG_TO_VICTORIALOGS=1 + ENABLE_OBSERVABILITY=1 the count is 5
+      // (the VictoriaLogsTransport is added by buildTransports in that env).
       expect(logger.transports.length).toBe(originalTransportCount);
     });
   });
@@ -237,11 +239,11 @@ describe('logger.js utility functions', () => {
   });
 
   // -------------------------------------------------------------------
-  // traceFormat → winston.format.json pipeline (Story 2.8 — JSON-key schema)
+  // traceFormat → winston.format.json pipeline (JSON-key schema)
   //
   // traceFormat writes `trace_id` and `span_id` as TOP-LEVEL keys on the
   // Winston `info` object. When the pipeline ends with `winston.format.json()`
-  // (the production-target wire shape per Story 2.5's deferred work), those
+  // (the production-target wire shape), those
   // keys must surface as own properties of the parsed JSON record —
   // consumed by VictoriaLogs LogSQL `trace_id:` filters, the Grafana
   // trace_explorer, and the NDJSON file fallback. They MUST NOT be
@@ -250,7 +252,7 @@ describe('logger.js utility functions', () => {
   // These tests exercise traceFormat + format.json() directly. They do NOT
   // assert the production default `loggerConfig.format` (which still uses
   // the printf `logFormat`) — that path is covered by logger-otel-trace and
-  // will be re-validated once Story 2.5 lands.
+  // will be re-validated once the JSON-format migration lands.
   // -------------------------------------------------------------------
   describe('traceFormat → winston.format.json pipeline', () => {
     it('produces JSON output with trace_id and span_id as top-level keys (no active span)', () => {

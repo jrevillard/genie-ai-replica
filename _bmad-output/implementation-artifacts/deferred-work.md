@@ -2338,3 +2338,35 @@ source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.m
 severity: medium
 reason: Other CVE-remediation stories handled image-size audit for backend; this story did not run the equivalent check for doc-repo. Three OTel packages plus winston-format-json grow node_modules; whether the runtime image picks them up depends on Dockerfile construction.
 status: open
+
+### DW-336: PII body redaction not wired into PIIRedactingLogRecordProcessor
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr.md`
+location: components/gov-chat-backend/tracing-pii-logs.js
+severity: high
+reason: OnEmit redacts `logRecord.attributes` via `redactAttributes` but never calls `redactLogRecordBody(logRecord.body)`. Free-form log messages (`logger.info('User ' + email + ' logged in')`) land in VictoriaLogs raw — email, tokens, etc. AD-4 / C-5 require every emitted record to pass through redactLogRecordBody. Code review on commit 6ae8af8b9 caught this; fix landed in the same review cycle by adding the body-redaction call. The `redactLogRecordBody` helper is already exported by `tracing-pii.js` (defined + tested under `pii-body-scrubbing.test.js`). Regression tests added in `tracing-pii-logs.test.js` (4 cases including the explicit body-redaction contract).
+status: resolved
+
+### DW-345: tracing-pii-logs.js — test coverage promotion
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr.md`
+location: components/gov-chat-backend/__tests__/tracing-pii-logs.test.js
+severity: medium
+reason: A 4-test file for PIIRedactingLogRecordProcessor existed in the bmad-loop worktree branch but never made it to the main `__tests__/` directory. Without coverage, the 2-6 wiring bugs (processors key, single options constructor) were invisible to CI. Now promoted to main repo as part of the review-followup commit. Status: resolved (4 original + 2 body-redaction cases = 6 tests now in main `__tests__/`).
+status: resolved
+
+### DW-353: stale transport-count comment in logger-functions.test.js
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.md`
+location: components/gov-chat-backend/__tests__/logger-functions.test.js
+severity: low
+reason: The comment claimed "4 transports: console + 2 rotate + file" as the post-reconfigure count. With LOG_TO_VICTORIALOGS=1 + ENABLE_OBSERVABILITY=1 the count is 5 (the VictoriaLogsTransport is added by buildTransports). Comment updated to qualify the default-vs-VL case. Status: resolved.
+status: resolved
+
+### DW-354: require path off-by-one (`../../shared/lib/...` vs `../shared/lib/...`)
+origin: review-findings-251f99d57-6ae8af8b9
+source_spec: `2-6-gov-chat-backend-tracing-js-loggerprovider-setgloballoggerpr.md`
+location: components/gov-chat-backend/tracing.js
+severity: high
+reason: The 2-6 merge introduced `require('../../shared/lib/...')` for boolean-env and otel-batch-config. From `components/gov-chat-backend/tracing.js`, two `..` segments land at the repo root (one too many). The real files are at `components/shared/lib/...`. Production: tracing.js would throw on require when ENABLE_OBSERVABILITY=1, taking down the backend. CI caught via the test suite. Fixed in the review-followup commit.
+status: resolved

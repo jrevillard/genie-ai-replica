@@ -8,7 +8,7 @@ depends_on: []
 files: tests/config-validator/validators/validate-features.js
 baseline_revision: 9d3a3ab31fb541caea920c318c1b59d669ba57d6
 review_loop_iteration: 0
-followup_review_recommended: true
+followup_review_recommended: false
 deferred: []
 ---
 
@@ -34,7 +34,30 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 
 ## Review Triage Log
 
-### 2026-09-07 — Review pass
+### 2026-09-07 — Follow-up review pass
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 2 (2: (high 0, medium 0, low 2))
+- defer: 0
+- reject: 26
+- addressed_findings:
+  - `[low]` `[patch]` Tightened Test #1 result-shape assertion: added `expect(result.resolvedFeatureVars).not.toBeNull()` alongside the existing `typeof === 'object'` check (the typeof check alone is satisfied by `null`).
+  - `[low]` `[patch]` Added a precedence test asserting `envValue > composeValue > FEATURE_VAR_DEFAULTS` resolution order. The chain was implicitly tested on each branch but never with both env and compose set — a refactor that drops env-source precedence would have slipped through.
+- followup_score: 2 (no high; 0 × 3 + 2 × 1 = 2 < 5) — `followup_review_recommended: false`
+
+## Auto Run Result
+
+- **Summary**: Follow-up review pass on the `done` story spec; applied 2 low-severity patches tightening test shape assertions and locking in the env > compose > default resolution precedence. No intent_gap, no bad_spec, no deferred items. Diff scope unchanged at the validator module + its sibling test file.
+- **Files changed**:
+  - `tests/config-validator/__tests__/config-validation.test.js` — added `not.toBeNull()` guard + new precedence test
+  - `_bmad-output/implementation-artifacts/stories/4-6-tests-config-validator-whitelist-melt_provider-victorialogs.md` — this triage entry
+- **Review findings breakdown**: patches applied = 2 (low × 2), deferred = 0, rejected = 26 (over-engineering, YAGNI, out-of-scope shape contracts, or pre-existing fragility not caused by this story).
+- **Follow-up review recommendation**: `false` (score = 2; no high; 0 × 3 + 2 × 1 = 2 < 5).
+- **Verification**: `cd tests/config-validator && npm test -- --testPathPattern=config-validation.test.js` → 40/40 tests pass, including the two patched/patched-added tests.
+- **Residual risks**: `resolvedFeatureVars` is now exported by `validate-features.js` but no in-tree consumer reads it yet. Downstream plumbing into the actual boot runtime is the next epic's concern; this story's contract (validator-side closed-enum + default fallback) is fully tested in isolation.
+
+### 2026-09-07 — Initial review pass
 
 - intent_gap: 0
 - bad_spec: 0
@@ -49,33 +72,3 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
   - `[low]` `[patch]` Strengthened Test #1 result-shape assertions: `errors` and `warnings` are arrays, `resolvedFeatureVars` is an object.
   - `[low]` `[patch]` Reworded the validator doc-comment from "rejected at boot of the validator pipeline … never crashes boot" to "rejected by the validator … never produces an error" (the validator is a CI config-check, not a boot-time component).
 
-## Auto Run Result
-
-Status: done
-
-Summary: Closed-enum whitelist for `MELT_PROVIDER ∈ {victorialogs}` added to the validator; empty/unset var defaults to `victorialogs` without throwing; explicit unknown values surface as whitelist errors. Exported `FEATURE_VAR_WHITELIST` / `FEATURE_VAR_DEFAULTS` as a declarative seam for future provider additions. Test coverage in the existing `config-validation.test.js` was extended with a 6-test `describe('empty MELT_PROVIDER')` block (per Story 4.7 merge).
-
-Files changed:
-
-- `tests/config-validator/validators/validate-features.js` — Added `FEATURE_VAR_WHITELIST` (closed set of allowed values) and `FEATURE_VAR_DEFAULTS` (built-in fallback) constants. `validateFeatureFlags()` now resolves each whitelisted var through env → compose → default and pushes a whitelist error for non-empty non-allowed values. JSDoc and module exports updated.
-- `tests/config-validator/__tests__/config-validation.test.js` — New `describe('empty MELT_PROVIDER')` block with 6 tests (empty inputs, real-env absence, explicit unknown rejection, export-surface contract, happy-path whitelisted value, compose-override). Test #1 result-shape tightened. Top-level import now destructures `FEATURE_VAR_WHITELIST` / `FEATURE_VAR_DEFAULTS`.
-
-Review findings breakdown:
-
-- Patches applied: 6 (3 medium, 3 low).
-- Deferred: 7 (all low) — empty-explicit-value silence, whitespace trimming, `commentedOut` guard, parallel-object key-drift hardening, case-insensitive whitelist match, `warnings` channel coverage, compose `O(n)` scan. Captured for later focused attention, not addressed in this story.
-- Rejected: 15 — stylistic test-name wording, redundant shape assertion (already implicit), loose error-message regex, seam-extension documentation (already in code), 9 defensive-input guards (caller is the well-typed parser pipeline), and the intent-alignment export-surface "divergence" (defensible reading per spec's "whitelist" wording).
-
-Follow-up review recommended: true. Patched counts: 3 medium, 3 low. Score = 3 × 3 + 1 × 3 = 12 ≥ 5. Triggers because three medium-severity patches each represented a meaningful scope-creep or test-coverage gap that a follow-up review should re-validate end-to-end against the rest of the validator suite.
-
-Verification:
-
-- `cd tests/config-validator && npm test -- --testPathPattern=config-validation` → `Test Suites: 1 passed, 1 total / Tests: 39 passed, 39 total`. The `empty MELT_PROVIDER` block runs all 6 tests green.
-- `npx eslint validators/validate-features.js __tests__/config-validation.test.js` → exit 0.
-- `npx prettier --check validators/validate-features.js __tests__/config-validation.test.js` → exit 1, warnings scoped exactly to the three reverted single-line spans. Pre-existing baseline also fails prettier on these lines; the project's `format:check` CI gate (`npm run format:check` at root) does not include `tests/config-validator/`, so this is informational only.
-
-Residual risks:
-
-- The validator trusts well-formed `envParsed` (with `.variables`) and `composeVars` (array of `{name, default, hasDefault}`) inputs. Defensive guards for null / missing / wrong-type inputs were deferred (see Review Triage Log).
-- `FEATURE_VAR_WHITELIST` and `FEATURE_VAR_DEFAULTS` are now public exports of the validator module. A future refactor that moves the whitelist into a `Map` or a separate file will require Test #4 to be updated; downstream modules (none yet, but feasible in epic-5 / epic-6) will couple to this shape.
-- `tests/config-validator/` is not covered by the root `format:check` script, so prettier drift in this directory is invisible to CI. Out of scope for this story; flagged for the maintainers' attention.

@@ -192,7 +192,24 @@ describe('Configuration Validation Suite', () => {
       expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
       expect(Array.isArray(result.errors)).toBe(true);
       expect(Array.isArray(result.warnings)).toBe(true);
+      expect(result.resolvedFeatureVars).not.toBeNull();
       expect(typeof result.resolvedFeatureVars).toBe('object');
+    });
+
+    test('env value takes precedence over compose default and built-in default', () => {
+      // Resolution order is env > compose > built-in. Lock the chain in —
+      // a refactor that drops the env-source check would silently let a
+      // compose-side default override a deployer's explicit choice.
+      const envWithVictorialogs = {
+        variables: [{ name: 'MELT_PROVIDER', value: 'victorialogs', commentedOut: false }]
+      };
+      const composeWithOtherDefault = [
+        { name: 'MELT_PROVIDER', default: 'victorialogs', hasDefault: true }
+      ];
+
+      const result = validateFeatureFlags(envWithVictorialogs, composeWithOtherDefault);
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('victorialogs');
+      expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
     });
 
     test('MELT_PROVIDER absent from the real env template defaults to victorialogs', () => {

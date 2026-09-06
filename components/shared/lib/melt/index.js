@@ -33,8 +33,6 @@
  * @module shared/lib/melt
  */
 
-const VictoriaLogsAdapter = require('./victorialogs-client');
-
 const MELT_PROVIDER = 'victorialogs';
 
 /**
@@ -92,6 +90,23 @@ class LogQueryRepository {
     throw new TypeError('LogQueryRepository.hits() must be implemented by a concrete adapter.');
   }
 }
+
+// Expose the port BEFORE requiring the adapter so `./victorialogs-client`
+// can extend it via circular `require('./index').LogQueryRepository`.
+// Module.exports is the hand-off surface that breaks the require cycle
+// (Node returns the partial exports object mid-load; populating
+// `LogQueryRepository` here makes the class available to the adapter's
+// own module-load).
+module.exports.LogQueryRepository = LogQueryRepository;
+
+// Required AFTER `LogQueryRepository` is defined AND exported so the
+// adapter can extend it. The require is intentionally unconditional so
+// a missing adapter fails LOUDLY at module load with
+// `Error: Cannot find module './victorialogs-client'` (code
+// `MODULE_NOT_FOUND`) — Epic 5 imports that bypass this seam crash the
+// same way, surfacing the dependency on 4.3 immediately rather than
+// silently re-exporting `undefined` from a deferred lookup.
+const { VictoriaLogsAdapter } = require('./victorialogs-client');
 
 /**
  * MELT application service — consumer-facing seam.

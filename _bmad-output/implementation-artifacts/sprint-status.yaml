@@ -93,7 +93,7 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: backlog
-  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: ready-for-dev
+  4-1-shared-lib-melt-types-js-logquery-victorialogsrow-logqueryre: done
   4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict: ready-for-dev
   4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize: ready-for-dev
   4-4-shared-lib-index-js-re-export-melt: ready-for-dev

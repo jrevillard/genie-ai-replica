@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { parseComposeEnvVars, crossReference, parseComposeImages, parseAnsibleImages, parseGitlabCiImages, parseComposeServiceContracts } = require('../validators/parse-compose');
-const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
+const { validateFeatureFlags, OPEA_VAR_NAMES, FEATURE_VAR_WHITELIST, FEATURE_VAR_DEFAULTS } = require('../validators/validate-features');
 const {
   validateHardwareProfile,
   validateProfileConsistency,
@@ -171,6 +171,99 @@ describe('Configuration Validation Suite', () => {
 
     test('all OPEA vars are accounted for', () => {
       expect(OPEA_VAR_NAMES.size).toBeGreaterThanOrEqual(20);
+    });
+  });
+
+  // --- empty MELT_PROVIDER future-provider seam ---
+  describe('empty MELT_PROVIDER', () => {
+    test('unset MELT_PROVIDER resolves to victorialogs and does not crash boot', () => {
+      // Minimal inputs: MELT_PROVIDER is absent from BOTH env template
+      // AND docker-compose — the validator's "boot" path. Resolution must
+      // fall back to the built-in default without throwing.
+      const emptyEnvParsed = { variables: [] };
+      const emptyComposeVars = [];
+
+      let result;
+      expect(() => {
+        result = validateFeatureFlags(emptyEnvParsed, emptyComposeVars);
+      }).not.toThrow();
+
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('victorialogs');
+      expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
+      expect(Array.isArray(result.errors)).toBe(true);
+      expect(Array.isArray(result.warnings)).toBe(true);
+      expect(result.resolvedFeatureVars).not.toBeNull();
+      expect(typeof result.resolvedFeatureVars).toBe('object');
+    });
+
+    test('env value takes precedence over compose default and built-in default', () => {
+      // Resolution order is env > compose > built-in. Lock the chain in —
+      // a refactor that drops the env-source check would silently let a
+      // compose-side default override a deployer's explicit choice.
+      const envWithVictorialogs = {
+        variables: [{ name: 'MELT_PROVIDER', value: 'victorialogs', commentedOut: false }]
+      };
+      const composeWithOtherDefault = [
+        { name: 'MELT_PROVIDER', default: 'victorialogs', hasDefault: true }
+      ];
+
+      const result = validateFeatureFlags(envWithVictorialogs, composeWithOtherDefault);
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('victorialogs');
+      expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
+    });
+
+    test('MELT_PROVIDER absent from the real env template defaults to victorialogs', () => {
+      // The real env file documents MELT_PROVIDER as a `#`-commented
+      // template (`# MELT_PROVIDER=victorialogs`) — so parseEnvTemplate
+      // strips it. With no compose-side override either, the validator
+      // must still produce a clean boot.
+      const realEnvVar = envParsed.variables.find((v) => v.name === 'MELT_PROVIDER');
+      const realComposeVar = composeVars.find((v) => v.name === 'MELT_PROVIDER');
+
+      expect(realEnvVar).toBeUndefined();
+      expect(realComposeVar).toBeUndefined();
+
+      const result = validateFeatureFlags(envParsed, composeVars);
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('victorialogs');
+      expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
+    });
+
+    test('explicit unknown MELT_PROVIDER is rejected with a whitelist error', () => {
+      // Negative control — a non-whitelisted value (e.g. a future ELK
+      // provider not yet wired) must surface as an error so a typo in
+      // a deployer-edited .env does not silently swap backends.
+      const pollutedEnv = {
+        variables: [{ name: 'MELT_PROVIDER', value: 'elasticsearch', commentedOut: false }]
+      };
+
+      const result = validateFeatureFlags(pollutedEnv, []);
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('elasticsearch');
+      expect(result.errors.some((e) => e.includes('MELT_PROVIDER') && e.includes('elasticsearch'))).toBe(true);
+    });
+
+    test('FEATURE_VAR_WHITELIST surface is exported', () => {
+      // Guards against accidental rename of the whitelist export — the
+      // closed-enum contract is part of the public validator surface.
+      expect(FEATURE_VAR_WHITELIST.MELT_PROVIDER).toEqual(['victorialogs']);
+      expect(FEATURE_VAR_DEFAULTS.MELT_PROVIDER).toBe('victorialogs');
+    });
+
+    test('explicit whitelisted MELT_PROVIDER=victorialogs produces no errors', () => {
+      const okEnv = {
+        variables: [{ name: 'MELT_PROVIDER', value: 'victorialogs', commentedOut: false }]
+      };
+      const result = validateFeatureFlags(okEnv, []);
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('victorialogs');
+      expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
+    });
+
+    test('MELT_PROVIDER from compose default resolves to victorialogs and does not error', () => {
+      const composeOverride = [
+        { name: 'MELT_PROVIDER', default: 'victorialogs', hasDefault: true }
+      ];
+      const result = validateFeatureFlags({ variables: [] }, composeOverride);
+      expect(result.resolvedFeatureVars.MELT_PROVIDER).toBe('victorialogs');
+      expect(result.errors.filter((e) => e.includes('MELT_PROVIDER'))).toEqual([]);
     });
   });
 

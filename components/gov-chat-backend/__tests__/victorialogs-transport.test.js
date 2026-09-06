@@ -53,19 +53,23 @@ jest.mock(
 
 jest.mock(
   '@opentelemetry/api-logs',
-  () => ({
-    // The SeverityNumber enum lives in `build/src/types/LogRecord.js`. We point
-    // there directly inside the mock factory (instead of via the package's
-    // public entry) to avoid an infinite recursion: the public `@opentelemetry/
-    // api-logs` re-exports from the very file we are mocking, so requiring
-    // `@opentelemetry/api-logs` here would route back into this same mock.
-    logs: { getLogger: mockGetLogger },
-    SeverityNumber: require('@opentelemetry/api-logs/build/src/types/LogRecord.js').SeverityNumber
-  }),
+  () => {
+    // Use jest.requireActual to break the recursion: importing api-logs
+    // here would re-route to the mock under construction. requireActual hits
+    // the real on-disk module and reads SeverityNumber from the build artifact
+    // (subpath varies across api-logs patch versions — the real public entry
+    // re-exports the canonical enum so the test is decoupled from that
+    // internal layout).
+    const actual = jest.requireActual('@opentelemetry/api-logs');
+    return {
+      logs: { getLogger: mockGetLogger },
+      SeverityNumber: actual.SeverityNumber
+    };
+  },
   { virtual: true }
 );
 
-const SeverityNumber = require('@opentelemetry/api-logs/build/src/types/LogRecord.js').SeverityNumber;
+const SeverityNumber = jest.requireActual('@opentelemetry/api-logs').SeverityNumber;
 const { VictoriaLogsTransport } = require('../../shared/lib/victorialogs-transport');
 
 const ZERO_TRACE_ID = '00000000000000000000000000000000';

@@ -2,15 +2,23 @@
 // Mirrors the composition pattern used by tracing.js (PIIRedactionProcessor for spans):
 // wrap an inner BatchLogRecordProcessor and redact attributes before delegating.
 //
-// Per the sdk-logs 0.221.x constructor signature, BatchLogRecordProcessor takes
-// (exporter, config) positionally — NOT a single options object.
+// Per sdk-logs 0.221.x: BatchLogRecordProcessor takes a SINGLE options object
+// { exporter, ...config }, NOT positional `(exporter, config)`. Verified against
+// `node_modules/@opentelemetry/sdk-logs/build/src/export/BatchLogRecordProcessorBase.js:101-102`:
+// `constructor(options) { this._exporter = options.exporter; ... }`.
+// The 2-6 merge used positional args (caller passed `logExporter, sharedBatchConfig`
+// positionally) which produced `_exporter = undefined` and silently dropped
+// every buffered log via the SDK's internal try/catch. See review findings on
+// commit 251f99d57.
 
 const { BatchLogRecordProcessor } = require('@opentelemetry/sdk-logs');
 const { redactAttributes } = require('./tracing-pii');
 
 class PIIRedactingLogRecordProcessor {
-  constructor(exporter, options = {}) {
-    this._delegate = new BatchLogRecordProcessor(exporter, options);
+  constructor(options = {}) {
+    // Forward the single options object to BatchLogRecordProcessor; it reads
+    // `options.exporter` for the exporter + spreads the rest as config.
+    this._delegate = new BatchLogRecordProcessor(options);
   }
 
   onEmit(logRecord, context) {

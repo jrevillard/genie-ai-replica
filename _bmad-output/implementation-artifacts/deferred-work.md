@@ -2274,3 +2274,67 @@ source_spec: `2-12-prometheus-log_record_dropped_total-reason-counter.md`
 severity: medium
 reason: The same module-mocking limitation also breaks 7 PRE-EXISTING tests in `logger-otel-trace.test.js` (verified against base commit 3f8adc95c). The runtime path is therefore exercised manually against a real OTel SDK stack (not in this story's verification scope). A follow-up that restructures shared/lib tests under a backend rootDir, or moves the relevant tests alongside the modules they exercise, would unlock real runtime coverage.
 status: open
+
+### DW-362: components/document-repository/package.json does not declare @opentelemetry/resources or @opentelemetry/semantic-conventions — sdk-logs@0.221.0 carries them as direct deps, so npm hoists them, but a
+origin: spec-deferred 4eb09bf5d658
+location: components/document-repository/src/tracing.js (Story 3.2)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: curl https://registry.npmjs.org/@opentelemetry/sdk-logs/0.221.0 reports `dependencies: [@opentelemetry/core, @opentelemetry/api-logs, @opentelemetry/resources, @opentelemetry/semantic-conventions]`. Hoisting is fine; Resource attachment is the next story's concern.
+status: open
+
+### DW-363: No @opentelemetry/instrumentation-winston (or equivalent bridge) declared — adding the OTel logs SDK does not capture winston records until a transport/bridge is wired.
+origin: spec-deferred f766bcfad691
+location: components/document-repository/src/tracing.js (Story 3.2)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: winston-format-json alone produces JSON strings on winston's `info` stream; it does not call OTel LoggerProvider.emit. Story 3.2 (tracing.js logs-only path) wires the actual provider + transport.
+status: open
+
+### DW-364: components/document-repository/package-lock.json is not regenerated alongside the manifest bump; CI's lockfile-freshness job (verify:dataprep-lock pattern) may flag staleness.
+origin: spec-deferred 19fe8da36839
+location: components/document-repository/package-lock.json
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Diff shows manifest edits only; no package-lock.json update. The Story 2-1 review pass added a similar `npm install` + lockfile-commit step on a follow-up review; this story mirrors that pattern but stops at the manifest level.
+status: open
+
+### DW-365: No logger initialization file (tracing.js) accompanies the dep additions; the packages are declared but unused until Story 3.2 lands.
+origin: spec-deferred 69977b2ec3d1
+location: components/document-repository/src/tracing.js (Story 3.2)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Spec scope is dep-only mirroring of Story 2-1; the actual `tracing.js` file for document-repository is created in Story 3.2 (`Depends on: [3.1, Epic 2]`).
+status: open
+
+### DW-366: OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_OTLP_LOGS_ENDPOINT env wiring for document-repository is not updated; once tracing.js initialises the provider, env-var propagation depends on
+origin: spec-deferred d345f9b9c25e
+location: docker-compose.yaml, env (component env-var surface)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Spec scope is package.json only; env-var wiring is captured separately.
+status: open
+
+### DW-367: No Jest test asserts the new OTel log packages resolve or that winston-format-json produces the expected JSON shape from document-repository's logger.
+origin: spec-deferred 520b1441f962
+location: components/document-repository/__tests__/ (Story 3.2 follow-up)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Verification is json-load + dep-list inspection only. Logger-instantiation tests are deferred to Story 3.2 (and analog of 2-11 for the backend).
+status: open
+
+### DW-368: No ADR / docs entry for the new document-repository log emission path; operators have no in-repo reference describing where logs land when ENABLE_OBSERVABILITY=1.
+origin: spec-deferred 01096ca199fb
+location: site/content/en/docs/observability/ (or docs/)
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Out of scope for a dep-only story; spec does not request docs. Logs observability doc updates belong to a follow-up once tracing.js + ClamAV events (Story 3.4) are wired.
+status: open
+
+### DW-369: Docker image size impact from the four new runtime deps not measured; multi-stage build separation (build vs runtime) not confirmed for document-repository.
+origin: spec-deferred c5eff46dfab7
+location: components/document-repository/Dockerfile
+source_spec: `3-1-document-repository-package-json-add-otel-deps-winston-forma.md`
+severity: medium
+reason: Other CVE-remediation stories handled image-size audit for backend; this story did not run the equivalent check for doc-repo. Three OTel packages plus winston-format-json grow node_modules; whether the runtime image picks them up depends on Dockerfile construction.
+status: open

@@ -88,7 +88,7 @@ development_status:
 
   epic-3: backlog
   3-1-document-repository-package-json-add-otel-deps-winston-forma: done
-  3-2-document-repository-tracing-js-logs-only-path: ready-for-dev
+  3-2-document-repository-tracing-js-logs-only-path: done
   3-4-document-repository-clamav-observability-events-clamav-scan: ready-for-dev
   epic-3-retrospective: optional
 

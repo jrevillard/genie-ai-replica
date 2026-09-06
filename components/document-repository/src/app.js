@@ -1,3 +1,6 @@
+// MUST be required first (before Express + all other modules) so OTel SDK init
+// runs before any module loads that might emit logs.
+require('./tracing');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

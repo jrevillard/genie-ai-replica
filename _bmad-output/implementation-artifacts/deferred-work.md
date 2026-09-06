@@ -2138,3 +2138,43 @@ source_spec: `2-5-shared-lib-logger-js-format-json-drop-traceformat-add-vl-tra.m
 severity: medium
 reason: `victoriaLogsEnabled()` flips a transport list membership that no test asserts. An accidental `&&`→`||` flip at `logger.js:27` ships silently.
 status: open
+
+### DW-345: `redactLogRecordBody` is exported but not yet called by any production code path. Story 2.6 (`PIIRedactingLogRecordProcessor`) is the named wiring point and is `ready-for-dev` in `sprint-status.yaml`;
+origin: spec-deferred c8464133ecad
+location: components/gov-chat-backend/tracing-pii.js:36 (definition site)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: medium
+reason: Repo-wide symbol search for `redactLogRecordBody` outside `__tests__/` and `node_modules/` returns only the definition in `components/gov-chat-backend/tracing-pii.js`. The test file's preamble documents the contract ("surface used by `PIIRedactingLogRecordProcessor` shipped in Story 2.6") but the wiring itself is out of scope here. Independently confirmed by `deferred-work.md` line 2075 (log-body processor not registered).
+status: open
+
+### DW-346: Cookie/refreshToken strings pass through the body walker verbatim because `cookie` is not in `SENSITIVE_KEY_PATTERNS`. The current test (`deeply-nested body` case) documents this as a known gap.
+origin: spec-deferred 3833eaf1d76f
+location: components/gov-chat-backend/__tests__/pii-body-scrubbing.test.js (deeply-nested PII case)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: medium
+reason: `components/gov-chat-backend/__tests__/pii-body-scrubbing.test.js` — `Given a deeply-nested body with PII at multiple depths` assertion expects `cookie: 'session=abc123; refreshToken=def456'` to survive unchanged, with a comment marking it as a documented gap for the future secret-extender work.
+status: open
+
+### DW-347: AD-4 vs AD-8 collision (backend vs document-repository PII processor registration) was raised in the architecture adversarial review and is not addressed by Story 2.9. The current change is
+origin: spec-deferred 8ba57ca01d21
+location: components/document-repository/ (no change here)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: medium
+reason: `_bmad-output/architecture/architecture-genieai-2026-08-31/reviews/review-adversarial.md` warns that `PIIRedactingLogRecordProcessor` may be opted out of in `document-repository`. Story 2.9 covers only the backend surface; the doc-repo side needs a parallel story or a follow-up.
+status: open
+
+### DW-348: PII regex / sensitive-key set is defined locally in `components/gov-chat-backend/tracing-pii.js` rather than hoisted to `shared/lib` for reuse by document-repository. Pre-existing, surfaced during
+origin: spec-deferred 52bdb98cdfa2
+location: components/gov-chat-backend/tracing-pii.js:5 (SENSITIVE_KEY_PATTERNS definition)
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: low
+reason: `components/gov-chat-backend/tracing-pii.js` exports `SENSITIVE_KEY_PATTERNS` from the backend module only. Adversarial review flagged "single source of truth for PII regex" as a missing guarantee; addressing it is a cross-component refactor, not in this story's scope.
+status: open
+
+### DW-349: `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md` still references the old filename `p-l-lig-pii-scrubbing.test.js`. Planning-doc drift, no runtime impact.
+origin: spec-deferred e09ea269d6c1
+location: _bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md
+source_spec: `2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes.md`
+severity: low
+reason: Grep over `phases.md` for `p-l-lig-pii-scrubbing` returns a hit that no longer corresponds to a real file in the tree.
+status: open

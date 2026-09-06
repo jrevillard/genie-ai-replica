@@ -32,4 +32,47 @@ function redactAttributes(attributes) {
   return redacted;
 }
 
-module.exports = { redactValue, isSensitiveKey, redactAttributes, SENSITIVE_KEY_PATTERNS };
+// PII scrubbing for the OTel LogRecord body field.
+// Required by Story 2-9 + AD-4: PII scrubbing applies to BOTH OTel span
+// attributes (covered by `redactAttributes`) AND the log record body field,
+// which may be a nested object holding the actual user input
+// (`body.user.email`, `body.request.headers.authorization`, etc.).
+// `redactAttributes` is shallow — it only walks the top-level keys. The body
+// field is frequently a deeply-nested payload, so we need a separate walker
+// that recurses into plain objects and arrays while preserving primitives,
+// null, undefined, and special objects (Date, Buffer, Error, Map, Set, etc.)
+// verbatim. This intentionally avoids any cloning of non-plain values.
+function redactLogRecordBody(body) {
+  if (body === null || body === undefined) return body;
+  if (typeof body !== 'object') {
+    return redactValue(body);
+  }
+  // Non-plain objects (Date, Buffer, Error, Map, Set, RegExp, etc.) and class
+  // instances are passed through untouched — redacting their internals would
+  // be both unsafe and lossy. Callers serialize them before logging in
+  // practice; the walker only owns plain data shapes.
+  if (Array.isArray(body)) {
+    return body.map((item) => redactLogRecordBody(item));
+  }
+  const proto = Object.getPrototypeOf(body);
+  if (proto !== null && proto !== Object.prototype) {
+    return body;
+  }
+  const redacted = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (isSensitiveKey(key)) {
+      redacted[key] = '[REDACTED]';
+    } else {
+      redacted[key] = redactLogRecordBody(value);
+    }
+  }
+  return redacted;
+}
+
+module.exports = {
+  redactValue,
+  isSensitiveKey,
+  redactAttributes,
+  redactLogRecordBody,
+  SENSITIVE_KEY_PATTERNS
+};

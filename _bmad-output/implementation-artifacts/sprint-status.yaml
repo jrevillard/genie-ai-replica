@@ -83,7 +83,7 @@ development_status:
     ready-for-dev
   2-8-tests-extend-logger-functions-logger-otel-trace-json-key-ass: 
     ready-for-dev
-  2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: ready-for-dev
+  2-9-tests-pii-scrubbing-covers-body-field-not-just-attributes: done
   2-10-tests-victorialogs-transport-test-js-severity-trace_id-flow: 
     ready-for-dev
   2-11-tests-logger-vl-integration-test-js-fake-otlplogexporter: ready-for-dev

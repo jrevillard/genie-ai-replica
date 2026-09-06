@@ -2410,3 +2410,43 @@ source_spec: `4-2-shared-lib-melt-index-js-export-logqueryrepository-port-vict.m
 severity: low
 reason: Review pass noted missing error hierarchy on the port. Architecture spine AD-3 / AD-16 keep error handling at the adapter layer, not the port — defer to 4.3 + Epic 5/6 contract tests for the concrete taxonomy.
 status: open
+
+### DW-375: No co-located unit test for the adapter. Contract is exercised by the contract test gate (CAP-3 / CAP-4) in downstream stories (4.5, 5.x).
+origin: spec-deferred 63acc12ee270
+location: components/shared/lib/__tests__/melt/victorialogs-client.test.js
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: No `__tests__/victorialogs-client.test.js` shipped in this diff. Story 4.5's spec covers axios mock + normalization + AccountID headers + retry behavior + reserved-char escape — adapter-level invariants get transitive coverage there.
+status: open
+
+### DW-376: No `AbortSignal` / cancellation hook on `query()` / `hits()`. Long-running admin calls hold open sockets if the user closes the logs tab.
+origin: spec-deferred ceeb5009616f
+location: n/a
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: Public methods accept no `signal` parameter; axios is invoked without `cancelToken`. Future Epic 5/6 may want cancellation when the admin UI abandons a request.
+status: open
+
+### DW-377: No retry on transient `query()` / `hits()` 5xx or timeout. AD-16 retry policy applies only to the health probe.
+origin: spec-deferred b0b935749f8d
+location: n/a
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: AD-16 pins retries only on the lazy health probe (`3×5 s`). Read-only LogSQL queries are idempotent and could safely retry; deferred to a future spike.
+status: open
+
+### DW-378: Adapter-level constants (`HEALTH_PROBE_ATTEMPTS`, `HEALTH_PROBE_BACKOFF_MS`, `DEFAULT_TENANT_ID`, `DEFAULT_LEVEL`, `DEFAULT_SERVICE`) are module-scoped and not overridable per-construction. Test
+origin: spec-deferred 1fda5195801c
+location: n/a
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: Story 4.5 spec is the venue for test fixture needs; if 4.5 surfaces a need to override these constants, hoist them onto the constructor options then. Module-level constants stay simpler for the production path.
+status: open
+
+### DW-379: `index.js` was edited (load-order change + destructure of `require('./victorialogs-client')`) beyond the spec's listed `files:`. Intent title listed only `victorialogs-client.js` + `package.json`; the
+origin: spec-deferred e91e27889294
+location: components/shared/lib/melt/index.js:94-109
+source_spec: `4-3-shared-lib-melt-victorialogs-client-js-axios-wire-_normalize.md`
+severity: low
+reason: Reviewer (intent-alignment) flagged a Reading A / Reading C divergence: with the spec's two-file scope as-written, the adapter cannot load (circular require, `extends` evaluates to `undefined`). Reading C permits the minimal `index.js` edit; classifying as `bad_spec` would have triggered a revert + re-derivation loop that re-introduces the same edit. Kept as a deferred finding so the spec amendment can be made on a future epic-4 retrospective.
+status: open

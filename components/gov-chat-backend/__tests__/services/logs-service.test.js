@@ -47,6 +47,12 @@ let logsService;
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
+  // Story 5.3 AD-6: pin the source-mode to file for these legacy
+  // file-path assertions; the file path is only reachable when both
+  // ADMIN_LOGS_SOURCE=file and LOG_TO_FILE=1 (VlFilesDisabledError
+  // otherwise — see Story 5.5).
+  process.env.ADMIN_LOGS_SOURCE = 'file';
+  process.env.LOG_TO_FILE = '1';
   const { isValidDateStr } = require('../../services/path-sanitizer');
   isValidDateStr.mockReturnValue(true);
   jest.isolateModules(() => {

@@ -3,7 +3,8 @@ key: 5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj
 title: "fixture: `tests/test-fixtures/logs/combined-2026-08-15.log` (NDJSON, ~500 records, schema {timestamp, level, message, service, trace_id, span_id})"
 epic: epic-5
 status: done
-followup_review_recommended: true
+followup_review_recommended: false
+review_loop_iteration: 0
 effort: 0.1
 depends_on: []
 files: new file
@@ -27,61 +28,57 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 
 ## Auto Run Result
 
-Status: done
+Status: done (follow-up review pass — pass 2)
 
 ### Summary
 
-Implemented the contract-test fixture required by story 5.1 and the AD-17 fixture convention. The 500-record NDJSON file at `tests/test-fixtures/logs/combined-2026-08-15.log` is now present, deterministic (Mulberry32 PRNG, seed `0xA8C015C0`), schema-conformant, and tracked in git.
+Follow-up review pass on the story committed in `05750dc34`. Four parallel review layers (blind-hunter, edge-case-hunter, verification-gap, intent-alignment) re-examined the diff vs. baseline `cb168834e`. The diff implements AD-17 fixture contract: 500 NDJSON records, schema-conformant, service enum pinned to AD-2, deterministic by construction. The pass-1 gitignore exclusion (which kept the fixture untracked on fresh CI clones) was applied and verified in HEAD. Pass-2 surfaced 25 unique findings after dedup, all routed to reject (no patches, no defers, no bad_spec, no intent_gap).
 
 ### Files changed
 
-- `tests/test-fixtures/logs/combined-2026-08-15.log` (new, 500 NDJSON records, ~110 KB): one record per line, schema `{timestamp, level, message, service, trace_id, span_id}` on every line. Levels: INFO=350, WARN=110, ERROR=40. Services: `genie-backend`=247, `genie-document-repository`=253 (AD-2 pinned). Timestamps span 2026-08-15T00:02:34.818Z → 23:59:59.999Z. `trace_id`/`span_id` populated together on 298 records (60%, 32-char/16-char lowercase hex) and empty-string together on 202 records (40%, mirrors AD-2 drop-empty rule).
-- `.gitignore` (modified): added `!tests/test-fixtures/logs/` and `!tests/test-fixtures/logs/*.log` exceptions below the `Logs` block. The new fixture path was previously matched by the broad `logs/` and `*.log` rules (lines 35–36), leaving the file untracked and invisible to a fresh CI clone. After the exception, `git check-ignore` returns negated (exit 0) and `git add` accepts the file.
-- `_bmad-output/implementation-artifacts/stories/5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj.md` (this file): status transition + baseline_revision marker.
+No code or fixture changes this pass — this is a follow-up review.
 
-### Review findings
+- `_bmad-output/implementation-artifacts/stories/5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj.md` (this file): review-loop metadata only (status → done, followup_review_recommended recomputed).
+
+### Review findings (pass 2)
 
 Triage breakdown for this pass:
 
-- patch: 1 (high)
+- patch: 0
 - intent_gap: 0
 - bad_spec: 0
 - defer: 0
-- reject: 34
+- reject: 25 (high 0, medium 0, low 25)
 
 Addressed in this pass:
 
-- `[high] [patch]` `.gitignore:35-36` (`logs/` + `*.log`) matched `tests/test-fixtures/logs/combined-2026-08-15.log`, leaving the fixture untracked and unavailable to downstream contract test (story 5.8). Action: added `!tests/test-fixtures/logs/` and `!tests/test-fixtures/logs/*.log` exceptions; verified with `git check-ignore` (negated) and `git add --dry-run` (file stages).
+- none (no patches applied)
 
-Rejected (noise / out of scope): 34 findings spanning content-coverage concerns (midnight boundaries, BOM, malformed JSON, invalid trace_id formats, orphan span_id pairs), spec-body conventions (AC list, References section, Dev Notes), metadata conventions (kebab-case title, `files:` path), and review-process notes (effort estimate, downstream consumer guidance, lint hooks for drift). The fixture contract is fully pinned by AD-17 (schema, level mix, service enum); all rejected items are either spec-author concerns or content-shape suggestions that exceed the AD-17 contract without an orchestrator signal to expand it.
+Rejected (25 findings): the parallel review layers surfaced concerns in five clusters, all judged as not this story's problem:
+
+1. **Structural/contract-coverage**: "no committed test in repo asserts the fixture contract" (verification-gap, intent-alignment) — pre-existing; the contract test is owned by story 5.8 (`logs-vl-contract.test.js`) per the deps graph, which this story feeds into.
+2. **Edge-case guards (no current violation)**: BOM, CRLF, trailing-newline, trace_id/span_id pairing guards, level/service enum drift guards, timestamp range guard — all target future drift that does not exist in the current artifact. The fixture as-shipped passes every invariant the generator enforces (independently re-verified by the verification-gap reviewer: 500 lines, 0 schema-key missing, 0 enum violations, 0 hex-format violations, timestamps monotonic).
+3. **Spec-authoring conventions**: no in-body AC list, `files: new file` placeholder, story-key=filename convention, kebab-case title shape — all owned by spec authoring, not by this change's surface.
+4. **Documentation commentary on orchestrator-owned artifacts**: `.gitignore` comment names one of two consumers; `followup_review_recommended: true` was unexplained; 34 rejected findings are referenced but live in the untracked `bmad-build-auto-result-…-story-track-dev-…-1.md` file owned by the orchestrator; untracked review artifact itself; `story_track-dev-1` suffix naming convention.
+5. **False-positive readings of current code state**: title and H1 unclosed backticks (the backticks DO close); diff-vs-current-spec staleness and `baseline_revision` staleness (both expected — this run is producing the current state by design); `.gitignore` line-number citations being inherently forward-stale (a property of prose narrative, not a defect).
+
+The orchestrator's command for this run explicitly forbids modifying, re-opening, or rewriting existing deferred-work ledger entries and reverts to the orchestrator's own bookkeeping for any `done` row. Per that gate and per the step-04 triage hierarchy ("when unsure between defer and reject, prefer reject"), none of these findings rise to a patch/bad_spec/intent_gap classification — every one is either pre-existing, future-proofing, orchestrator-owned, or already covered.
 
 ### Follow-up review recommendation
 
-`true` — patched 1 high-severity finding this pass (the gitignore exclusion). Score = 1 × high = 1 ≥ 1.
+`false` — zero patches this pass; score = 0. The previously-set `followup_review_recommended: true` (from pass-1, which patched the gitignore exclusion) is recomputed to `false`.
 
 ### Verification performed
 
-Independent verification on the produced file (Node 22 script):
+No new code under review; pass-2 reviewed the existing diff. Independent spot-check on the current fixture (re-confirming the pass-1 verification, since the file is unchanged in this pass):
 
-- `wc -l tests/test-fixtures/logs/combined-2026-08-15.log` → 500
-- `head -1` and `tail -1` → each a single JSON object containing all 6 schema keys
-- JSON.parse on all 500 lines → 0 failures
-- Required-key presence across 500 lines → 0 missing
-- `service` ∈ `{genie-backend, genie-document-repository}` → 0 violations (247/253)
-- `level` ∈ `{ERROR, WARN, INFO}` → 0 violations (350/110/40)
-- `trace_id`/`span_id` pairing → 0 violations (both empty OR both populated together)
-- Hex format (32-char trace_id, 16-char span_id, lowercase) → 0 violations
-- Timestamp range 2026-08-15T00:02:34.818Z → 23:59:59.999Z, monotonic non-decreasing
-- Deterministic regen: re-ran generator twice + `diff -q` against original → byte-identical
-
-Gitignore fix verification:
-
-- `git check-ignore -v tests/test-fixtures/logs/combined-2026-08-15.log` → `.gitignore:46:!tests/test-fixtures/logs/*.log ...` (negated rule, exit 0)
-- `git add --dry-run` lists the fixture alongside `.gitignore` and the spec
+- `git check-ignore -v tests/test-fixtures/logs/combined-2026-08-15.log` → returns negated (`!tests/test-fixtures/logs/*.log` exception active); fixture is tracked in commit `05750dc34`.
+- Fixture file present on disk at `tests/test-fixtures/logs/combined-2026-08-15.log`, byte-identical to the committed version (working tree clean for that path).
+- `.gitignore` lines 45–47 carry the whitelist exceptions as committed.
 
 ### Residual risks
 
-None for this story's surface. Downstream contract test (story 5.8) reads the fixture via `fs.readFileSync`; the now-tracked fixture will be present on fresh CI checkouts.
+None for this story's surface. The behavioural-vs-static surface tension flagged by the intent-alignment reviewer (the fixture is exercised as code only when story 5.8 lands its contract test) is acknowledged as out-of-scope for this story and is owned by the downstream story per the deps graph.
 
 ## Review Triage Log
 
@@ -94,3 +91,13 @@ None for this story's surface. Downstream contract test (story 5.8) reads the fi
 - reject: 34
 - addressed_findings:
   - `[high] [patch]` `.gitignore:35-36` matched the new fixture path (untracked in fresh CI clones). Fix: added `!tests/test-fixtures/logs/` and `!tests/test-fixtures/logs/*.log` exceptions.
+
+### 2026-09-07 — Review pass (follow-up)
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 0
+- reject: 25
+- addressed_findings:
+  - none

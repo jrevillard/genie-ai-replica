@@ -15,7 +15,9 @@ const args_ = args || {};
 const storyKey = args_.storyKey || null;
 const epicKey = args_.epicKey || null;
 const prdKey = args_.prdKey || null;
-const hitlEvery = args_.hitlEvery === undefined ? 5 : args_.hitlEvery;
+// hitlEvery: optional periodic checkpoint. 0 = no limit (default = fully autonomous).
+// Error halts (convergence_escalation, ci_hardfail, launch_failure, merge_conflict, merge_blocked) are INDEPENDENT of this — they always trigger.
+const hitlEvery = args_.hitlEvery === undefined ? 0 : args_.hitlEvery;
 const hitlFinalOnly = args_.hitlFinalOnly || false;
 const inferDeps = args_.inferDeps !== false;  // default true
 const noInfer = args_.noInfer || false;

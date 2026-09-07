@@ -198,7 +198,7 @@ Workflow({
     prdKey?: "optional — override discovery (default: from sprint-status.project_key)",
 
     // HITL
-    hitlEvery?: 5,              // halt every N stories (default: 5, 0 = never)
+    hitlEvery?: 0,              // halt every N stories (default: 0 = fully autonomous, no periodic halt)
     hitlFinalOnly?: false,      // halt only at PRD completion
 
     // Deps

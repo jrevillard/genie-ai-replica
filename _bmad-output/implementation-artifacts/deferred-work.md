@@ -2695,3 +2695,11 @@ severity: low
 reason: Behaviour change would touch envelope contract; not in the immediate scope of P1-P13.
 status: open
 
+
+### DW-410: admin-dashboard-service still parses logs with the legacy F4 regex in `debugYesterdayLogs` (line 573), `runSecurityScan` (line 849), and `getSystemHealth` (lines 103-108). Story 5.4 only targeted `getLogs` (line 525) and the rollover path. Same root cause as F4: the NDJSON producer no longer emits the triple-bracket format those parsers rely on, so each of those endpoints also returns an empty `logs[]`. Worth a follow-up story that delegates the rest to `LogsService`.
+origin: review-defer
+location: components/gov-chat-backend/services/admin-dashboard-service.js:103-108, 573, 849
+source_spec: `5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate.md`
+severity: medium
+reason: Same F4 regression that story 5.4 fixed for `getLogs` still affects `debugYesterdayLogs`, `runSecurityScan`, and `getSystemHealth`. LogsService already owns the parsing; the admin layer should delegate end-to-end before any of these endpoints are relied upon.
+status: pending

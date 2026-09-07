@@ -2,7 +2,6 @@ const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
-const { isValidDateStr } = require('./path-sanitizer');
 
 class AdminDashboardService {
   constructor() {
@@ -468,116 +467,29 @@ class AdminDashboardService {
     logger.info(`Getting system logs with options: ${JSON.stringify(options)}`);
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const logFiles = [];
-
-      if (dateRange === 'today' || dateRange === '') {
-        logFiles.push(path.join(__dirname, `../logs/combined-${today}.log`));
-      } else if (dateRange === 'yesterday') {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
-        logFiles.push(path.join(__dirname, `../logs/combined-${yesterdayStr}.log`));
-      } else if (dateRange === 'week') {
-        for (let i = 0; i < 7; i++) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
-        }
-      } else if (dateRange === 'month') {
-        for (let i = 0; i < 30; i++) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          const dateStr = date.toISOString().split('T')[0];
-          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
-        }
-      } else if (dateRange === 'custom' && startDate && endDate) {
-        if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
-          logger.warn('getLogs.invalid_custom_date_range', { startDate, endDate });
-          return { logs: [], totalLogs: 0 };
-        }
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const dayDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-
-        for (let i = 0; i <= dayDiff; i++) {
-          const date = new Date(start);
-          date.setDate(date.getDate() + i);
-          const dateStr = date.toISOString().split('T')[0];
-          logFiles.push(path.join(__dirname, `../logs/combined-${dateStr}.log`));
-        }
+      // Story 5.4: delegate the log read + parse to LogsService. The old
+      // triple-bracket regex parser (F4) was live-broken because the
+      // NDJSON producer no longer emits that format, so the endpoint
+      // always returned an empty `logs[]`. The producer is now NDJSON
+      // (parsed by `LogsService._parseNdjsonContent` with the
+      // N=4096 re-parse window) and VictoriaLogs queries go through
+      // `LogsService._getLogsInRangeFromVL`. `getLogsInRange` owns the
+      // source-mode dispatch (`file` vs `victorialogs` via
+      // `ADMIN_LOGS_SOURCE`); we just adapt the caller's options.
+      if (!this.logsService || typeof this.logsService.getLogsInRange !== 'function') {
+        logger.error('AdminDashboardService.getLogs called without LogsService wired in');
+        throw new Error('LogsService is not configured');
       }
-
-      let logs = [];
-      let totalLogs = 0;
-
-      for (const logFile of logFiles) {
-        logger.debug(`Reading log file: ${logFile}`);
-        try {
-          const logContent = await fs.readFile(logFile, 'utf8');
-          const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
-          totalLogs += logLines.length;
-          logger.debug(`Total log lines in ${logFile}: ${logLines.length}`);
-
-          const parsedLogs = logLines
-            .map((line) => {
-              const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-              if (!match) {
-                logger.debug(`Skipping unparseable log line: ${line}`);
-                return null;
-              }
-              const [, timestamp, level, service, message] = match;
-              const logDate = new Date(timestamp);
-
-              const parsedLog = {
-                date: logDate.toISOString().split('T')[0],
-                time: logDate.toLocaleTimeString(),
-                level: level.toUpperCase(),
-                service,
-                message,
-                messageKey: message.toLowerCase().replace(/\s+/g, '')
-              };
-              return parsedLog;
-            })
-            .filter((log) => log !== null);
-
-          logs = logs.concat(parsedLogs);
-        } catch (error) {
-          logger.error(`Error reading log file ${logFile}: ${error.message}`);
-        }
-      }
-
-      let filteredLogs = logs;
-      if (level) {
-        logger.debug(`Filtering logs by level: ${level}`);
-        filteredLogs = filteredLogs.filter((log) => log.level.toLowerCase() === level.toLowerCase());
-      }
-
-      if (service) {
-        logger.debug(`Filtering logs by service: ${service}`);
-        filteredLogs = filteredLogs.filter((log) => log.service.toLowerCase().includes(service.toLowerCase()));
-      }
-
-      logger.debug('Sorting logs by date and time (most recent first)');
-      filteredLogs.sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB - dateA;
+      const envelope = await this.logsService.getLogsInRange({
+        dateRange,
+        startDate,
+        endDate,
+        level,
+        service,
+        limit
       });
-
-      logger.debug(`Limiting logs to ${limit}`);
-      filteredLogs = filteredLogs.slice(0, parseInt(limit));
-
-      const response = {
-        logs: filteredLogs,
-        total: totalLogs,
-        limit: parseInt(limit),
-        offset: 0
-      };
-      logger.debug(`Logs response: ${JSON.stringify(response)}`);
-
-      return response;
+      logger.debug(`Logs response: ${JSON.stringify(envelope)}`);
+      return envelope;
     } catch (error) {
       logger.error(`Error in getLogs: ${error.message}`, { stack: error.stack });
       throw error;

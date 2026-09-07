@@ -299,85 +299,139 @@ describe('AdminDashboardService', () => {
   });
 
   describe('getLogs', () => {
-    const sampleLogContent = [
-      '[2026-05-26T10:00:00.000Z] [INFO] [AuthService] User logged in',
-      '[2026-05-26T10:01:00.000Z] [ERROR] [DatabaseService] Connection failed',
-      ''
-    ].join('\n');
+    let mockLogsService;
+    const sampleLogs = [
+      { date: '2026-05-26', time: '10:00:00', level: 'INFO', service: 'AuthService', message: 'User logged in' },
+      { date: '2026-05-26', time: '10:01:00', level: 'ERROR', service: 'DatabaseService', message: 'Connection failed' }
+    ];
+
+    beforeEach(() => {
+      // Story 5.4: getLogs delegates to LogsService.getLogsInRange; the
+      // old fs.readFile + regex path is gone. Inject a stub here so each
+      // test can program its return value (the legacy tests asserted on
+      // a triple-bracket string fixture that no longer matches the
+      // NDJSON producer).
+      mockLogsService = {
+        getLogsInRange: jest
+          .fn()
+          .mockResolvedValue({ logs: sampleLogs, total: sampleLogs.length, limit: 100, offset: 0 })
+      };
+      adminDashboardService.setLogsService(mockLogsService);
+    });
 
     it('should read today logs by default', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
       const result = await adminDashboardService.getLogs();
       expect(result.logs.length).toBeGreaterThan(0);
       expect(result).toHaveProperty('total');
       expect(result).toHaveProperty('limit', 100);
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'today' }));
     });
 
     it('should filter by level', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: sampleLogs.filter((log) => log.level === 'ERROR'),
+        total: 1,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({ level: 'error' });
       expect(result.logs.every((log) => log.level === 'ERROR')).toBe(true);
     });
 
     it('should filter by service', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: sampleLogs.filter((log) => log.service.toLowerCase().includes('auth')),
+        total: 1,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({ service: 'auth' });
       expect(result.logs.every((log) => log.service.toLowerCase().includes('auth'))).toBe(true);
     });
 
     it('should handle yesterday dateRange', async () => {
-      mockFs.readFile.mockResolvedValueOnce(sampleLogContent);
       const result = await adminDashboardService.getLogs({ dateRange: 'yesterday' });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'yesterday' }));
     });
 
     it('should handle week dateRange', async () => {
-      mockFs.readFile.mockResolvedValue(sampleLogContent);
       const result = await adminDashboardService.getLogs({ dateRange: 'week' });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'week' }));
     });
 
     it('should handle month dateRange', async () => {
-      mockFs.readFile.mockResolvedValue(sampleLogContent);
       const result = await adminDashboardService.getLogs({ dateRange: 'month' });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ dateRange: 'month' }));
     });
 
     it('should handle custom dateRange with valid dates', async () => {
       const { isValidDateStr } = require('../../services/path-sanitizer');
       isValidDateStr.mockReturnValue(true);
-      mockFs.readFile.mockResolvedValue(sampleLogContent);
       const result = await adminDashboardService.getLogs({
         dateRange: 'custom',
         startDate: '2026-05-20',
         endDate: '2026-05-26'
       });
       expect(result).toHaveProperty('logs');
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(
+        expect.objectContaining({ dateRange: 'custom', startDate: '2026-05-20', endDate: '2026-05-26' })
+      );
     });
 
     it('should return empty for invalid custom dates', async () => {
-      const { isValidDateStr } = require('../../services/path-sanitizer');
-      isValidDateStr.mockReturnValue(false);
+      // Story 5.4: the validation moved into LogsService, which returns an
+      // empty envelope on invalid dates. AdminDashboardService just
+      // forwards the call, so the mock is consulted.
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: [],
+        total: 0,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({
         dateRange: 'custom',
         startDate: 'invalid',
         endDate: 'invalid'
       });
       expect(result.logs).toEqual([]);
-      expect(result.totalLogs).toBe(0);
+      expect(result.total).toBe(0);
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(
+        expect.objectContaining({ dateRange: 'custom', startDate: 'invalid', endDate: 'invalid' })
+      );
     });
 
-    it('should handle file read errors gracefully', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
-      const result = await adminDashboardService.getLogs({ dateRange: 'today' });
-      expect(result.logs).toEqual([]);
+    it('should throw when logsService is not configured', async () => {
+      adminDashboardService.logsService = null;
+      await expect(adminDashboardService.getLogs({ dateRange: 'today' })).rejects.toThrow(
+        'LogsService is not configured'
+      );
     });
 
     it('should respect limit option', async () => {
-      const manyLogs = Array(200).fill('[2026-05-26T10:00:00.000Z] [INFO] [TestService] Message').join('\n');
-      mockFs.readFile.mockResolvedValueOnce(manyLogs);
+      const manyLogs = Array(200).fill({
+        date: '2026-05-26',
+        time: '10:00:00',
+        level: 'INFO',
+        service: 'TestService',
+        message: 'Message'
+      });
+      mockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: manyLogs.slice(0, 5),
+        total: manyLogs.length,
+        limit: 5,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs({ limit: 5 });
       expect(result.logs.length).toBeLessThanOrEqual(5);
+      expect(mockLogsService.getLogsInRange).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+    });
+
+    it('should propagate logsService errors', async () => {
+      mockLogsService.getLogsInRange.mockRejectedValueOnce(new Error('VL timeout'));
+      await expect(adminDashboardService.getLogs()).rejects.toThrow('VL timeout');
     });
   });
 
@@ -773,34 +827,50 @@ describe('AdminDashboardService', () => {
   });
 
   describe('getLogs - error paths', () => {
+    let errorMockLogsService;
+
+    beforeEach(() => {
+      // Story 5.4: getLogs delegates to LogsService. The legacy error-path
+      // tests for malformed lines / missing files / empty content are now
+      // expressed as the corresponding LogsService failure modes; the
+      // admin-dashboard error envelope is whatever LogsService returns.
+      errorMockLogsService = { getLogsInRange: jest.fn() };
+      adminDashboardService.setLogsService(errorMockLogsService);
+    });
+
     it('should handle missing log file', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT: log file not found'));
-      const result = await adminDashboardService.getLogs();
-      expect(result.logs).toEqual([]);
+      errorMockLogsService.getLogsInRange.mockRejectedValueOnce(
+        Object.assign(new Error('ENOENT: log file not found'), { code: 'ENOENT' })
+      );
+      await expect(adminDashboardService.getLogs()).rejects.toThrow('ENOENT: log file not found');
     });
 
     it('should handle malformed log lines', async () => {
-      const malformedLogs = [
-        'Invalid log line without brackets',
-        '[2026-05-26T10:00:00.000Z] [INFO] Valid log',
-        'Another invalid line',
-        '[] [] []'
-      ].join('\n');
-      mockFs.readFile.mockResolvedValueOnce(malformedLogs);
+      errorMockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: [],
+        total: 0,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs();
       expect(result.logs).toBeDefined();
+      expect(result.logs).toEqual([]);
     });
 
     it('should handle empty log file', async () => {
-      mockFs.readFile.mockResolvedValueOnce('');
+      errorMockLogsService.getLogsInRange.mockResolvedValueOnce({
+        logs: [],
+        total: 0,
+        limit: 100,
+        offset: 0
+      });
       const result = await adminDashboardService.getLogs();
       expect(result.logs).toEqual([]);
     });
 
     it('should handle log file read errors', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('Permission denied'));
-      const result = await adminDashboardService.getLogs();
-      expect(result.logs).toEqual([]);
+      errorMockLogsService.getLogsInRange.mockRejectedValueOnce(new Error('Permission denied'));
+      await expect(adminDashboardService.getLogs()).rejects.toThrow('Permission denied');
     });
   });
 

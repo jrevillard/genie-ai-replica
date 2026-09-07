@@ -579,10 +579,18 @@ class LogsService {
       if (direct !== undefined && direct !== null) return coerce(direct);
     }
     // Fallback for adapter responses that return a single-key object.
-    const values = Object.values(hits)
-      .map(coerce)
-      .filter((v) => v !== 0);
-    if (values.length === 1) return values[0];
+    // Only return the value when the lone key actually matches the
+    // requested level — otherwise the count would bleed from a sibling
+    // level (e.g. asking for ERROR but receiving {FATAL: 5}).
+    const keys = Object.keys(hits);
+    if (level && keys.length === 1) {
+      const onlyKey = keys[0];
+      if (onlyKey.toUpperCase() === level.toUpperCase()) {
+        return coerce(hits[onlyKey]);
+      }
+      return 0;
+    }
+    if (keys.length === 1) return coerce(hits[keys[0]]);
     return 0;
   }
 

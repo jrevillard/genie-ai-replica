@@ -392,7 +392,14 @@ class LogsService {
         if (!lock) continue; // concurrent holder — skip gracefully
         try {
           const content = await this._readLogFileAd10(logFile);
-          const rows = this._parseNdjsonContent(content);
+          // Cap per-file rows to MAX_LINES_TO_PROCESS. A wide date range
+          // (year) over multiple archives can otherwise blow the heap when
+          // a single hot day hits the cap. Mirrors the cap on the VL path
+          // and the legacy `_summarizeLogFile` helper.
+          let rows = this._parseNdjsonContent(content);
+          if (rows.length > MAX_LINES_TO_PROCESS) {
+            rows = rows.slice(0, MAX_LINES_TO_PROCESS);
+          }
           allRows.push(...rows);
         } finally {
           await this._releaseReadLock(lock);

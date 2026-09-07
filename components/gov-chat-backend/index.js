@@ -797,8 +797,14 @@ function createApp({ services = {} } = {}) {
       ip: req.ip,
       userAgent: req.get('User-Agent') || 'none'
     });
-    // Typed errors (AppError subclasses) carry their own status code
+    // Typed errors (AppError subclasses) carry their own status code.
+    // Typed errors with an explicit `body` (e.g. VlFilesDisabledError)
+    // forward that body verbatim so the route layer's contract shape
+    // reaches the client — `{error, message}` instead of just `{message}`.
     if (err.statusCode) {
+      if (err.body && typeof err.body === 'object') {
+        return res.status(err.statusCode).json(err.body);
+      }
       return res.status(err.statusCode).json({ message: err.message });
     }
     res.status(500).json({

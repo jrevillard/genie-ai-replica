@@ -316,6 +316,28 @@ describe('AC3: Log management endpoints', () => {
 
       expect(response.status).toBe(500);
     });
+
+    it('should forward VlFilesDisabledError body to HTTP client (503 + error/message)', async () => {
+      const VlFilesDisabledError = class extends Error {
+        constructor() {
+          super('Set LOG_TO_FILE=1 to use file-based log source');
+          this.name = 'VlFilesDisabledError';
+          this.statusCode = 503;
+          this.body = {
+            error: 'vl_files_disabled',
+            message: 'Set LOG_TO_FILE=1 to use file-based log source'
+          };
+        }
+      };
+      const err = new VlFilesDisabledError();
+      logsService.getLogsSummary.mockRejectedValue(err);
+
+      const response = await authGet('/api/admin/logs/summary');
+
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe('vl_files_disabled');
+      expect(response.body.message).toMatch(/LOG_TO_FILE=1/);
+    });
   });
 
   describe('GET /api/admin/logs/search', () => {

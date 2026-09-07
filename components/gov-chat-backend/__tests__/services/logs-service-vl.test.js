@@ -532,6 +532,19 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
   });
 
   describe('review follow-up — 2026-09-07 patches', () => {
+    it('_defaultStartIso throws on unknown dateRange (no silent today fallback)', () => {
+      // The previous behaviour fell through to "today" for any unknown
+      // value — silently widening the query range. The fix throws so the
+      // route layer surfaces a 400 rather than returning today's logs
+      // for a typo like 'todya' or a new dateRange we haven't taught
+      // the helper about.
+      expect(() => logsService._defaultStartIso('todya')).toThrow(/unknown dateRange/);
+      expect(() => logsService._defaultStartIso('last-week')).toThrow(/unknown dateRange/);
+    });
+    it('_defaultEndIso throws on unknown dateRange (no silent now fallback)', () => {
+      expect(() => logsService._defaultEndIso('todya')).toThrow(/unknown dateRange/);
+    });
+
     it('_defaultEndIso("yesterday") snaps to yesterday 23:59:59 (does NOT spill into today)', () => {
       const endIso = logsService._defaultEndIso('yesterday');
       const end = new Date(endIso);

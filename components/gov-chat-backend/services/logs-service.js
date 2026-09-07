@@ -450,6 +450,11 @@ class LogsService {
 
   _defaultStartIso(dateRange) {
     const now = new Date();
+    if (dateRange === 'today' || !dateRange) {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d.toISOString();
+    }
     if (dateRange === 'yesterday') {
       const d = new Date(now);
       d.setDate(d.getDate() - 1);
@@ -466,9 +471,7 @@ class LogsService {
       d.setDate(d.getDate() - 30);
       return d.toISOString();
     }
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
+    throw new Error(`_defaultStartIso: unknown dateRange ${JSON.stringify(dateRange)}`);
   }
 
   _defaultEndIso(dateRange) {
@@ -488,7 +491,7 @@ class LogsService {
       d.setHours(23, 59, 59, 999);
       return d.toISOString();
     }
-    return new Date().toISOString();
+    throw new Error(`_defaultEndIso: unknown dateRange ${JSON.stringify(dateRange)}`);
   }
 
   // ------------------------------------------------------------------

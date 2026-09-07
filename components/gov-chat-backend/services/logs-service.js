@@ -1217,7 +1217,13 @@ class LogsService {
       try {
         const buffer = Buffer.alloc(MAX_LOG_FILE_SIZE);
         await fh.read(buffer, 0, MAX_LOG_FILE_SIZE, 0);
-        return buffer.toString('utf8');
+        // Rewind to the last newline so a JSON object split across the
+        // truncation boundary never reaches the NDJSON parser (a partial
+        // line would crash JSON.parse and skew the row count). Fall back
+        // to the full buffer when no newline is present (one very long line).
+        const raw = buffer.toString('utf8');
+        const lastNl = raw.lastIndexOf('\n');
+        return lastNl >= 0 ? raw.slice(0, lastNl) : raw;
       } finally {
         await fh.close();
       }
@@ -1402,7 +1408,12 @@ class LogsService {
         const buffer = Buffer.alloc(MAX_LOG_FILE_SIZE);
         await fileHandle.read(buffer, 0, MAX_LOG_FILE_SIZE, 0);
         await fileHandle.close();
-        return buffer.toString('utf8');
+        // Rewind to the last newline so a JSON object split across the
+        // truncation boundary never reaches the NDJSON parser. Fall back
+        // to the full buffer when no newline is present (one very long line).
+        const raw = buffer.toString('utf8');
+        const lastNl = raw.lastIndexOf('\n');
+        return lastNl >= 0 ? raw.slice(0, lastNl) : raw;
       }
       if (filePath.endsWith('.gz')) {
         const compressedData = await fs.readFile(filePath);

@@ -942,4 +942,87 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(result.warnings[0].count).toBe(2);
     });
   });
+
+  describe('review follow-up #3 — 2026-09-07 patches (round 4)', () => {
+    describe('MAX_LOG_FILE_SIZE truncation rewind (file path)', () => {
+      beforeEach(() => {
+        process.env.ADMIN_LOGS_SOURCE = 'file';
+        process.env.LOG_TO_FILE = '1';
+      });
+
+      // Helper: feed a fixed-size buffer whose text content ends partway
+      // through a JSON object. The rewind must drop the trailing partial
+      // line, returning only the prefix that ends on a complete `\n`.
+      const buildTruncatedBuffer = () => {
+        const complete =
+          '{"timestamp":"2026-09-01T08:00:00.000Z","_msg":"complete-a"}\n' +
+          '{"timestamp":"2026-09-01T09:00:00.000Z","_msg":"complete-b"}\n';
+        const partial = '{"timestamp":"2026-09-01T10:00:00.000Z","_msg":"par';
+        const full = complete + partial;
+        const raw = Buffer.from(full, 'utf8');
+        // Pad to MAX_LOG_FILE_SIZE with NUL bytes — the read buffer is
+        // allocated to that size, but `toString('utf8')` will only emit
+        // up to the real content + the NULs (NUL is valid in JS strings).
+        // The rewind must still happen on the last `\n`, ignoring any
+        // post-content padding.
+        const padded = Buffer.alloc(20 * 1024 * 1024);
+        raw.copy(padded, 0);
+        return padded;
+      };
+
+      it('_getLogsInRangeFromFile truncates to last \\n when over MAX_LOG_FILE_SIZE (no half JSON token)', async () => {
+        mockFs.access.mockResolvedValue(undefined);
+        mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log']);
+        const mockLockHandle = { close: jest.fn().mockResolvedValue(undefined) };
+        mockFs.stat.mockResolvedValue({ size: 25 * 1024 * 1024 }); // > MAX_LOG_FILE_SIZE
+        const fh = { read: jest.fn(), close: jest.fn() };
+        // Return the padded buffer; `fh.read` fills the destination.
+        const padded = buildTruncatedBuffer();
+        fh.read.mockImplementation((buf) => {
+          padded.copy(buf, 0);
+          return Promise.resolve({ bytesRead: padded.length });
+        });
+        fh.close.mockResolvedValue(undefined);
+        // AD-10 lock acquire ('wx') returns the lock handle; file open ('r')
+        // returns the file handle — distinguished by the lock suffix.
+        mockFs.open.mockImplementation((p, _mode) => {
+          if (typeof p === 'string' && p.includes('.logs-read-lock-')) {
+            return Promise.resolve(mockLockHandle);
+          }
+          return Promise.resolve(fh);
+        });
+
+        const result = await logsService.getLogsInRange({
+          dateRange: 'custom',
+          startDate: '2026-09-01',
+          endDate: '2026-09-01',
+          limit: 10
+        });
+        // Rewind dropped the partial trailing line → 2 parsed rows.
+        // (Rows are sorted descending by timestamp.)
+        expect(result.logs).toHaveLength(2);
+        expect(result.logs.map((l) => l.message)).toEqual(['complete-b', 'complete-a']);
+        expect(fh.close).toHaveBeenCalled();
+      });
+
+      it('readLogFile: returns full buffer when no \\n is present (single huge line fallback)', async () => {
+        // Direct test of the standalone readLogFile helper.
+        mockFs.access.mockResolvedValue(undefined);
+        mockFs.stat.mockResolvedValue({ size: 25 * 1024 * 1024 });
+        const fh = { read: jest.fn(), close: jest.fn() };
+        const oneBigLine = Buffer.alloc(20 * 1024 * 1024, 0x41); // 20 MB of 'A', no newline
+        fh.read.mockImplementation((buf) => {
+          oneBigLine.copy(buf, 0);
+          return Promise.resolve({ bytesRead: oneBigLine.length });
+        });
+        fh.close.mockResolvedValue(undefined);
+        mockFs.open.mockResolvedValue(fh);
+
+        const out = await logsService.readLogFile('/var/log/combined-2026-09-01.log');
+        // lastIndexOf returns -1 → keeps whole buffer; length preserved.
+        expect(out.length).toBe(20 * 1024 * 1024);
+        expect(out[0]).toBe('A');
+      });
+    });
+  });
 });

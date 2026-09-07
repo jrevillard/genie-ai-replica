@@ -362,7 +362,7 @@ if (!ciResult || ciResult.error || !ciResult.mrIid) {
 log(`MR !${ciResult.mrIid} | CI ${ciResult.status} after ${ciResult.retries} retries (transient=${ciResult.transient})`)
 
 // ============================================================================
-// PHASE 5: AUTO-MERGE
+// PHASE 4: AUTO-MERGE
 // ============================================================================
 phase('Auto-merge')
 let mergeResult = null;
@@ -403,7 +403,7 @@ RETURN MERGE_SCHEMA.`,
 log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Sprint-status done: ${mergeResult.sprintStatusDone}`)
 
 // ============================================================================
-// PHASE 6: CLEANUP
+// PHASE 5: CLEANUP
 // ============================================================================
 phase('Cleanup')
 log(`Cleaning up worktree ${setup.worktreePath}, branch ${setup.storyBranch}...`)

@@ -21,7 +21,7 @@ When the user wants to drive a whole PRD autonomously, invoke this skill. For on
 
 On activation, this skill:
 1. Reads the canonical workflow script at `.claude/workflows/bmad-prd-orchestrate.js`
-2. Invokes the Workflow tool with `script: <js content>` and args from the user
+2. Invokes the Workflow tool with `scriptPath: <path>` and args from the user
 3. Returns the workflow result to the user
 
 Invocation shape:
@@ -52,6 +52,7 @@ The orchestrator halts and returns structured JSON on:
 - `dep_inference_confirm` — at start of Phase 3 if smart inference is ON and found deps
 - `convergence_escalation` — story hit max iterations cap
 - `ci_hardfail` — non-transient CI failure
+- `merge_blocked` — merge step rejected (CI rule such as merge-train gate)
 - `periodic_review` — every N stories (configurable)
 - `epic_boundary` — at end of each epic (if --retro=true)
 - `merge_conflict` — MR conflict on rebase (rare in sequential mode)

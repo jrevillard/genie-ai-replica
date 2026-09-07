@@ -2602,3 +2602,35 @@ source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.m
 severity: medium
 reason: Unit test at logs-service-vl.test.js:453-457 asserts the in-memory body; no route-level test asserts the HTTP wire body. Out-of-scope for this story's `files:` manifest (index.js owned by the BFF shell).
 status: open
+
+### DW-399: getLogsInRange VL path reports `total` as the page-window length (rows.length returned by VL with limit=limit+offset) rather than the dataset size in VL. Envelope contract implies a stable total for
+origin: spec-deferred 78d8061fe7a1
+location: components/gov-chat-backend/services/logs-service.js:_getLogsInRangeFromVL
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_getLogsInRangeFromVL` constructs `total = rows.length` where `rows = await client.query({limit: limitN + offsetN, ...})`. Fix requires a separate `client.query` with no limit or a `_count` API — performance-cost trade-off that belongs to a Story 5.4 / 5.8 contract-test follow-up.
+status: open
+
+### DW-400: _parseNdjsonContent retry window slices a fixed RE_PARSE_WINDOW_BYTES=4096 from the cursor and concatenates with the broken buffer; if the truncated line happens to complete by appending characters
+origin: spec-deferred da49b96d019a
+location: components/gov-chat-backend/services/logs-service.js:_parseNdjsonContent
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_parseNdjsonContent`. The retry buffer should be sliced to the next newline (or a newline-count cap), not a fixed byte count. Edge-case hardening; the 4096-byte window handles the AD-10 kill -9 truncation case today.
+status: open
+
+### DW-401: _acquireReadLock collides on stale /tmp/.logs-read-lock-* sentinels from previously-crashed PIDs whose PID has since been recycled. First read by the new PID throws EEXIST and skips the file until
+origin: spec-deferred cd2027e6b83f
+location: components/gov-chat-backend/services/logs-service.js:_acquireReadLock
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_acquireReadLock`. Same hardening as the `_logVlUnavailableOnce` cooldown-file sweep — stale sentinels need either a TTL or a PID-still-alive check at open time.
+status: open
+
+### DW-402: booleanEnv regex is inlined in logs-service.js and mirrors the canonical shared/lib/boolean-env.js helper. One of two regex literals (/^(1|true|TRUE|yes)$/) can drift if the canonical helper adds new
+origin: spec-deferred 721679e9cf70
+location: components/gov-chat-backend/services/logs-service.js:19
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: The inline copy exists to keep __mocks__/shared-lib.js self-contained. Future consolidation when the test mock plumbing stops requiring the inline copy.
+status: open

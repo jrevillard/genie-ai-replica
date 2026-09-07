@@ -4,8 +4,7 @@ export const meta = {
   phases: [
     { title: 'Setup' },
     { title: 'Build with convergence' },
-    { title: 'Push & MR' },
-    { title: 'Monitor CI' },
+    { title: 'Push & MR + Monitor CI' },
     { title: 'Auto-merge' },
     { title: 'Cleanup' },
   ],

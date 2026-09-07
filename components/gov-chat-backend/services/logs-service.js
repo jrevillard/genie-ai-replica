@@ -385,6 +385,7 @@ class LogsService {
     }
     const logFiles = await this.getLogFilesInRange(s, e, includeArchived);
     const allRows = [];
+    let degraded = false;
     for (const logFile of logFiles) {
       try {
         const lock = await this._acquireReadLock(logFile);
@@ -397,6 +398,10 @@ class LogsService {
           await this._releaseReadLock(lock);
         }
       } catch (fileErr) {
+        // Surface the read failure on the returned envelope so the caller
+        // (admin UI) can flag the page as incomplete rather than
+        // presenting partial results as authoritative.
+        degraded = true;
         logger.error(`Error reading log file ${logFile}: ${fileErr.message}`);
       }
     }
@@ -422,12 +427,14 @@ class LogsService {
     const limitN = Math.max(0, Math.min(Number.isFinite(parsedLimitFile) ? parsedLimitFile : 100, 10000));
     const offsetN = Math.max(0, Number.isFinite(parsedOffsetFile) ? parsedOffsetFile : 0);
     const total = filtered.length;
-    return {
+    const envelope = {
       logs: filtered.slice(offsetN, offsetN + limitN),
       total,
       limit: limitN,
       offset: offsetN
     };
+    if (degraded) envelope.degraded = true;
+    return envelope;
   }
 
   _emptyEnvelope(options) {

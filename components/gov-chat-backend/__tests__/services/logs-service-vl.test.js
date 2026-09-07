@@ -504,6 +504,31 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(messages).toContain('next');
       expect(messages.some((m) => /truncated/.test(m))).toBe(true);
     });
+
+    it('returns degraded:true envelope when a file read throws (file path)', async () => {
+      // Simulate a partial scan: one file is read OK, the next file's
+      // _readLogFileAd10 throws an unrecognised error. The previous
+      // behaviour silently swallowed it; the fix surfaces `degraded:true`
+      // on the returned envelope so the admin UI can flag partial results.
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log', 'combined-2026-09-02.log']);
+      const mockHandle = { close: jest.fn().mockResolvedValue(undefined) };
+      // First open() returns the lock handle for the first file; subsequent
+      // opens resolve to handles too so both files are entered.
+      mockFs.open.mockResolvedValue(mockHandle);
+      // First stat OK, second stat throws an unknown error (EACCES).
+      mockFs.stat
+        .mockResolvedValueOnce({ size: 50 })
+        .mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
+
+      const result = await logsService.getLogsInRange({
+        dateRange: 'custom',
+        startDate: '2026-09-01',
+        endDate: '2026-09-02',
+        limit: 10
+      });
+      expect(result.degraded).toBe(true);
+    });
   });
 
   describe('review follow-up — 2026-09-07 patches', () => {

@@ -389,7 +389,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Log te min benta i la ñiningo to',
-        resultsFound: 'Log suw {count} jeta'
+        resultsFound: 'Log suw {count} jeta',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {

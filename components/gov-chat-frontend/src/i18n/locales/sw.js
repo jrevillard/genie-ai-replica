@@ -393,7 +393,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Hakuna kumbukumbu zinazofanana na vigezo vyako vya utafutaji',
-        resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu'
+        resultsFound: 'Imepatikana {count} viingizo vya kumbukumbu',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {

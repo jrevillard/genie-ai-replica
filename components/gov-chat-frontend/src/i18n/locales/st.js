@@ -390,7 +390,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Ha ho na lilog tse tshoanang le patlo ya hao',
-        resultsFound: 'Ho fumanwe dikeno tsa log tse {count}'
+        resultsFound: 'Ho fumanwe dikeno tsa log tse {count}',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {

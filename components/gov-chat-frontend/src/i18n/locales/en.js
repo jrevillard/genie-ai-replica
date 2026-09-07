@@ -391,7 +391,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'No logs matched your search criteria',
-        resultsFound: 'Found {count} log entries'
+        resultsFound: 'Found {count} log entries',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {

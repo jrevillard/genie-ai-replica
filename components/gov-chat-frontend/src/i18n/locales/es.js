@@ -392,7 +392,9 @@ export default {
       },
       logSearch: {
         noResultsFound: 'No se encontraron registros que coincidan con sus criterios de búsqueda',
-        resultsFound: 'Encontradas {count} entradas de registro'
+        resultsFound: 'Encontradas {count} entradas de registro',
+        degraded:
+          'Mostrando resultados parciales debido a una interrupción de VictoriaLogs. Es posible que falten algunas entradas de registro recientes.'
       }
     },
     security: {

@@ -392,7 +392,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'ไม่มีบันทึกที่ตรงกับเกณฑ์การค้นหาของคุณ',
-        resultsFound: 'พบ {count} รายการบันทึก'
+        resultsFound: 'พบ {count} รายการบันทึก',
+        degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {

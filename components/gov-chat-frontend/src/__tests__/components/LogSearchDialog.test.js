@@ -652,6 +652,114 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Story 5.7 — degraded banner from response.data.degraded
+  // -------------------------------------------------------------------------
+  describe('Story 5.7 — degraded banner (response.data.degraded)', () => {
+    it('does not render the degraded banner by default', () => {
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.hasSearched = true;
+      wrapper.vm.lastResponseDegraded = false;
+      wrapper.vm.searchResults = createMockLogs(1);
+
+      expect(wrapper.vm.banner).toBeNull();
+      expect(wrapper.find('[data-test-id="degraded-banner"]').exists()).toBe(false);
+    });
+
+    it('renders the degraded banner when response.data.degraded is true', async () => {
+      const mockLogs = createMockLogs(2);
+      mockSearchLogs.mockResolvedValueOnce({
+        data: { logs: mockLogs, degraded: true }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+      expect(wrapper.vm.banner).toBeTruthy();
+      expect(wrapper.find('[data-test-id="degraded-banner"]').exists()).toBe(true);
+    });
+
+    it('does not render the degraded banner when response.data.degraded is false', async () => {
+      const mockLogs = createMockLogs(1);
+      mockSearchLogs.mockResolvedValueOnce({
+        data: { logs: mockLogs, degraded: false }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+      expect(wrapper.find('[data-test-id="degraded-banner"]').exists()).toBe(false);
+    });
+
+    it('does not render the banner before any search has run', () => {
+      const wrapper = createLogSearchDialogWrapper();
+      expect(wrapper.vm.hasSearched).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+
+    it('clears the degraded flag when resetSearch is called', async () => {
+      const mockLogs = createMockLogs(1);
+      mockSearchLogs.mockResolvedValueOnce({
+        data: { logs: mockLogs, degraded: true }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+
+      wrapper.vm.resetSearch();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+
+    it('clears the degraded flag when a search fails', async () => {
+      mockSearchLogs.mockRejectedValueOnce(new Error('boom'));
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+
+    it('clears the degraded flag when the response envelope is malformed (no .data)', async () => {
+      // First, simulate a successful degraded search so the flag is sticky.
+      mockSearchLogs.mockResolvedValueOnce({
+        data: { logs: createMockLogs(1), degraded: true }
+      });
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      expect(wrapper.vm.lastResponseDegraded).toBe(true);
+
+      // Now simulate a subsequent search that returns a malformed envelope.
+      mockSearchLogs.mockResolvedValueOnce(undefined);
+      wrapper.vm.searchParams.dateRange = 'yesterday';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.lastResponseDegraded).toBe(false);
+      expect(wrapper.vm.banner).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Story 5f: Emit events
   // -------------------------------------------------------------------------
   describe('Story 5f — emit events', () => {

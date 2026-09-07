@@ -393,7 +393,9 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Keine Protokolle entsprechen Ihren Suchkriterien',
-        resultsFound: '{count} Protokolleinträge gefunden'
+        resultsFound: '{count} Protokolleinträge gefunden',
+        degraded:
+          'Aufgrund eines VictoriaLogs-Ausfalls werden nur teilweise Ergebnisse angezeigt. Einige kürzliche Protokolleinträge fehlen möglicherweise.'
       }
     },
     security: {

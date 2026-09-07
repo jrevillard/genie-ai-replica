@@ -1075,9 +1075,7 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
         }
         const content = `${lines.join('\n')}\n`;
         jest.spyOn(logsService, '_readLogFileAd10').mockResolvedValue(content);
-        jest.spyOn(logsService, 'getLogFilesInRange').mockResolvedValue([
-          '/var/log/combined-2026-09-01.log'
-        ]);
+        jest.spyOn(logsService, 'getLogFilesInRange').mockResolvedValue(['/var/log/combined-2026-09-01.log']);
         const mockLockHandle = { close: jest.fn().mockResolvedValue(undefined) };
         mockFs.open.mockResolvedValue(mockLockHandle);
         mockFs.unlink.mockResolvedValue(undefined);
@@ -1139,9 +1137,7 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
         }
         const content = `${lines.join('\n')}\n`;
         jest.spyOn(logsService, '_readLogFileAd10').mockResolvedValue(content);
-        jest.spyOn(logsService, 'getLogFilesInRange').mockResolvedValue([
-          '/var/log/combined-2026-09-01.log'
-        ]);
+        jest.spyOn(logsService, 'getLogFilesInRange').mockResolvedValue(['/var/log/combined-2026-09-01.log']);
         const mockLockHandle = { close: jest.fn().mockResolvedValue(undefined) };
         mockFs.open.mockResolvedValue(mockLockHandle);
         mockFs.unlink.mockResolvedValue(undefined);

@@ -244,7 +244,10 @@ class LogsService {
       // see why their traffic is degraded. Otherwise a broken cooldown
       // file would silently mute every downstream outage for the rest
       // of the host lifetime.
-      logger.error(`VL fail-open cooldown write failed (${writeErr.code || writeErr.message}); incident still surfaced once:`, err && err.message);
+      logger.error(
+        `VL fail-open cooldown write failed (${writeErr.code || writeErr.message}); incident still surfaced once:`,
+        err && err.message
+      );
     }
     logger.warn(`[${opName}] VictoriaLogs unreachable (VL_FAIL_OPEN=true): ${err.message}`, {
       code: err && err.code,
@@ -848,9 +851,7 @@ class LogsService {
     const canonical = upper === 'WARNING' ? 'WARN' : upper;
     if (!this.ALLOWED_LEVELS.includes(canonical)) {
       throw new Error(
-        `searchLogs level filter must be one of ${this.ALLOWED_LEVELS.join(
-          ', '
-        )} (got ${JSON.stringify(level)})`
+        `searchLogs level filter must be one of ${this.ALLOWED_LEVELS.join(', ')} (got ${JSON.stringify(level)})`
       );
     }
     return canonical;

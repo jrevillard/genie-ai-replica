@@ -90,9 +90,7 @@ const securityScanService = {
         failedLoginDetails: failedLogins,
         suspiciousDetails: suspiciousActivities,
         status: skipped ? 'skipped' : 'completed',
-        message: skipped
-          ? `Security scan skipped: ${reason}`
-          : 'Security scan completed successfully',
+        message: skipped ? `Security scan skipped: ${reason}` : 'Security scan completed successfully',
         skipped: skipped === true,
         reason: reason || null
       };

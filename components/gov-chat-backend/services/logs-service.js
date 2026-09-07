@@ -1085,7 +1085,16 @@ class LogsService {
 
     // AD-10: re-read directory listing before each scan to tolerate a
     // concurrent rotation removing/renaming files mid-walk.
-    const files = await fs.readdir(logDir);
+    let files;
+    try {
+      files = await fs.readdir(logDir);
+    } catch (err) {
+      // The directory may vanish between `fs.access` and `fs.readdir` if
+      // a rotation runs concurrently. Treat the same as the access()
+      // check above: log and return an empty list.
+      logger.warn(`readdir failed for ${logDir}: ${err.message}`);
+      return [];
+    }
     const logFiles = [];
     const today = new Date().toISOString().split('T')[0];
 

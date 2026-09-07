@@ -505,6 +505,17 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(messages.some((m) => /truncated/.test(m))).toBe(true);
     });
 
+    it('tolerates readdir ENOENT between access() and readdir() (file path)', async () => {
+      // access() succeeds, then a concurrent rotation removes the dir
+      // before readdir() runs. The previous code bubbled the ENOENT up
+      // to the caller as an unhandled rejection. The fix returns [].
+      mockFs.access.mockResolvedValue(undefined);
+      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      mockFs.readdir.mockRejectedValueOnce(enoent);
+      const result = await logsService.getLogFilesInRange('2026-09-01', '2026-09-01', true);
+      expect(result).toEqual([]);
+    });
+
     it('returns degraded:true envelope when a file read throws (file path)', async () => {
       // Simulate a partial scan: one file is read OK, the next file's
       // _readLogFileAd10 throws an unrecognised error. The previous

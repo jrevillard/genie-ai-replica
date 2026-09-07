@@ -2,7 +2,8 @@
 key: 5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d
 title: "frontend: `LogSearchDialog.vue` `computed.banner` from `response.degraded` + i18n keys"
 epic: epic-5
-status: ready-for-dev
+status: in-progress
+baseline_commit: 5ed656385b610f86c72a55cfc49a4a5b03433450
 effort: 0.25
 depends_on: [5.3]
 files: |

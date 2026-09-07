@@ -105,7 +105,7 @@ development_status:
   5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: done
   5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co: done
   5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog: done
-  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: in-progress
+  5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: review
   5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d: ready-for-dev
   5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: ready-for-dev
   5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: ready-for-dev

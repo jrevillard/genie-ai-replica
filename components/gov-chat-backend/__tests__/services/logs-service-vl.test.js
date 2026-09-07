@@ -667,6 +667,46 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       });
     });
 
+    describe('_parseNdjsonContent retry-success cursor handling', () => {
+      it('does not over-advance the cursor after a successful retry', () => {
+        // Construct content where:
+        //   iter 1 segment = '{"trunc":' (length 9, invalid JSON)
+        //   newlineIdx + RE_PARSE_WINDOW_BYTES <= content.length (retry fires)
+        //   tail = '[1,1,...,1]}' (4096 bytes ending in '}')
+        //   segment + tail = '{"trunc":[1,1,...,1]}' — VALID JSON, retry succeeds.
+        //
+        // The tail line itself is intentionally NOT valid JSON standalone
+        // (it ends with `}`), so iter 2 (re-entered at newlineIdx+1) records
+        // a parse_error and skips the line. With the bug, the over-advance
+        // would have skipped it entirely (no parse_error either, because
+        // iter 2's cursor landed on a blank line).
+        const tailArray = '[' + '1,'.repeat(2046) + '1]}'; // 4096 bytes, ends with '}'
+        const content = '{"trunc":\n' + tailArray + '\n{"message":"next"}\n';
+        // Use jest.isolateModules so we capture the SAME logger mock the
+        // service uses, and count its warn calls (parseError++ path).
+        let isolatedService;
+        let parseErrorCount = 0;
+        jest.isolateModules(() => {
+          const { logger } = require('../../shared-lib');
+          const origWarn = logger.warn;
+          logger.warn = jest.fn((...args) => {
+            if (String(args[0]).includes('parse error')) parseErrorCount++;
+            return origWarn.apply(logger, args);
+          });
+          isolatedService = require('../../services/logs-service');
+          isolatedService.initialized = false;
+        });
+        const rows = isolatedService._parseNdjsonContent(content);
+        // With the fix: 2 rows (retry-success + {"msg":"next"}), 1 parse_error.
+        // With the bug: 2 rows (retry-success + {"msg":"next"}), 0 parse_errors
+        //   (the tail line is skipped by cursor over-advance into a blank line,
+        //   not by parse_error).
+        expect(rows.length).toBe(2);
+        expect(rows[1].message).toBe('next');
+        expect(parseErrorCount).toBe(1);
+      });
+    });
+
     it('getLogsInRange clamps limit=-1 and offset=-5 to safe values', async () => {
       mockVlClient.query.mockResolvedValue([]);
       const result = await logsService.getLogsInRange({

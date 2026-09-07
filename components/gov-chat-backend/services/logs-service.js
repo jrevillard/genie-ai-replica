@@ -1246,7 +1246,11 @@ class LogsService {
           const tail = content.slice(newlineIdx + 1, newlineIdx + 1 + RE_PARSE_WINDOW_BYTES);
           try {
             parsed = JSON.parse(segment + tail);
-            consumedTo = newlineIdx + 1 + tail.length;
+            // On retry success, advance exactly one past the original
+            // newline. We don't know where in the tail the JSON object
+            // actually ended, so over-advancing by `tail.length` would
+            // skip valid lines that follow.
+            consumedTo = newlineIdx + 1;
           } catch (retryErr) {
             parseError = retryErr;
           }

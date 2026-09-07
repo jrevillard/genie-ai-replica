@@ -393,7 +393,9 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
-        resultsFound: '{count} entrées de journal trouvées'
+        resultsFound: '{count} entrées de journal trouvées',
+        degraded:
+          "Affichage de résultats partiels en raison d'une panne de VictoriaLogs. Certaines entrées de journal récentes peuvent être manquantes."
       }
     },
     security: {

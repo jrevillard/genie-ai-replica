@@ -392,7 +392,8 @@ export default {
       },
       logSearch: {
         noResultsFound: '未找到匹配搜索条件的日志',
-        resultsFound: '找到 {count} 条日志条目'
+        resultsFound: '找到 {count} 条日志条目',
+        degraded: '由于 VictoriaLogs 故障,正在显示部分结果。某些最近的日志条目可能缺失。'
       }
     },
     security: {

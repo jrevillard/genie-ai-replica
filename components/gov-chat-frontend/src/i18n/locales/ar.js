@@ -391,7 +391,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'لم يتم العثور على سجلات مطابقة لمعايير البحث الخاصة بك',
-        resultsFound: 'تم العثور على {count} مدخلات سجل'
+        resultsFound: 'تم العثور على {count} مدخلات سجل',
+        degraded: 'يتم عرض نتائج جزئية بسبب انقطاع VictoriaLogs. قد تكون بعض إدخالات السجل الحديثة مفقودة.'
       }
     },
     security: {

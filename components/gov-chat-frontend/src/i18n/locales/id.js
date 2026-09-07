@@ -392,7 +392,8 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Tidak ada log yang cocok dengan kriteria pencarian Anda',
-        resultsFound: 'Ditemukan {count} entri log'
+        resultsFound: 'Ditemukan {count} entri log',
+        degraded: 'Menampilkan hasil sebagian karena gangguan VictoriaLogs. Beberapa entri log terbaru mungkin hilang.'
       }
     },
     security: {

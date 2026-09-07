@@ -163,6 +163,9 @@
 
         <!-- Search results -->
         <div v-if="hasSearched" class="search-results" data-test-id="search-results">
+          <div v-if="banner" class="degraded-banner" role="status" data-test-id="degraded-banner">
+            {{ banner }}
+          </div>
           <div class="results-header">
             <h3>
               {{ translate('admin.logSearch.results', 'Search Results') }}
@@ -261,8 +264,18 @@ export default {
       isSearching: false,
       searchResults: [],
       tableKey: 0,
-      searchError: null
+      searchError: null,
+      lastResponseDegraded: false
     };
+  },
+  computed: {
+    banner() {
+      if (!this.hasSearched || !this.lastResponseDegraded) return null;
+      return this.translate(
+        'admin.logSearch.degraded',
+        'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
+      );
+    }
   },
   mounted() {},
   updated() {},
@@ -334,7 +347,9 @@ export default {
         }
         const response = await adminDashboardService.searchLogs(searchParams);
         let logs = [];
+        this.lastResponseDegraded = false;
         if (response && response.data) {
+          this.lastResponseDegraded = Boolean(response.data.degraded);
           logs = response.data.logs || response.data.data?.logs || [];
           if (this.searchParams.level && logs.length > 0) {
             if (this.searchParams.level === 'WARN') {
@@ -362,6 +377,7 @@ export default {
         console.error('Error searching logs:', error);
         this.searchError = error.message || 'An error occurred while searching logs';
         this.searchResults = [];
+        this.lastResponseDegraded = false;
         this.$emit('search-completed', []);
       } finally {
         this.isSearching = false;
@@ -379,6 +395,7 @@ export default {
       this.hasSearched = false;
       this.searchResults = [];
       this.searchError = null;
+      this.lastResponseDegraded = false;
     },
     exportLogs() {
       if (!this.searchResults.length) return;
@@ -552,6 +569,15 @@ export default {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.degraded-banner {
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  font-size: var(--text-base);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
 }
 
 .results-header {

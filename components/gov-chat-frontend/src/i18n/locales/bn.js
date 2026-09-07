@@ -389,7 +389,9 @@ export default {
       },
       logSearch: {
         noResultsFound: 'আপনার অনুসন্ধানের মানদণ্ডের সাথে কোনো লগ মেলেনি',
-        resultsFound: '{count} টি লগ এন্ট্রি পাওয়া গেছে'
+        resultsFound: '{count} টি লগ এন্ট্রি পাওয়া গেছে',
+        degraded:
+          'VictoriaLogs এর বিভ্রাটের কারণে আংশিক ফলাফল দেখানো হচ্ছে। কিছু সাম্প্রতিক লগ এন্ট্রি অনুপস্থিত থাকতে পারে।'
       }
     },
     security: {

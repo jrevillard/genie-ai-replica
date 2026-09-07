@@ -283,3 +283,247 @@ if (userChoice) {
   await writeStateAgent()
   // FALL THROUGH — Phase 3 (future) appends here
 }
+
+// ============================================================================
+// PHASE 3: EXECUTE — per-story loop with dep-check + converge dispatch
+// ============================================================================
+phase('Execute')
+log('Starting execute loop...')
+
+// State init (snapshot of planResult; will be overwritten by loadState on resume)
+let state = {
+  runId: timestamp,
+  ts: timestamp,
+  prdKey: setup.prdKey,
+  storyQueue: planResult.storyQueue,
+  completed: planResult.completed,
+  blocked: planResult.blocked,
+  skipped: planResult.skipped,
+  awaitingOperator: planResult.awaitingOperator,
+  halts: [],
+  iterationCount: 0,
+  inferred: planResult.inferred,  // keep graph available across resumes
+}
+
+// State persistence helpers (Phase 3 owns these; Task 2 inlined a parallel helper for plan-time)
+const writeState = async (stateObj) => {
+  return await agent(
+    `You are the writeState helper for bmad-prd-orchestrate (Phase 3 loop).
+
+Persist the current orchestrator LOOP state to disk so a halted run can resume from any iteration.
+
+WRITE TO: ${runDir}/state.json
+
+CONTENT (overwrite the file with this exact JSON):
+${JSON.stringify(stateObj, null, 2)}
+
+STEPS:
+1. mkdir -p ${runDir}
+2. Write the JSON above to ${runDir}/state.json (use Write tool).
+3. Verify the file exists with: \`ls -la ${runDir}/state.json\`
+4. Return JSON: { "written": true, "path": "${runDir}/state.json" }
+
+CONSTRAINTS:
+- ONLY write to ${runDir}/. DO NOT touch any file outside.
+- DO NOT modify ${setup.sprintStatusPath}. The orchestrator is the sole writer; transitions happen in Phase 4 (Task 4).`,
+    { label: `state-write-${stateObj.iterationCount || 0}`, phase: 'Execute', schema: WRITE_STATE_SCHEMA, agentType: 'general-purpose' }
+  );
+};
+
+const appendJournal = async (event) => {
+  const entry = { ts: timestamp, ...event };
+  return await agent(
+    `Append one JSONL line to ${runDir}/journal.jsonl.
+
+LINE TO APPEND (single line, no trailing newline added):
+${JSON.stringify(entry)}
+
+STEPS:
+1. Use bash: \`echo '${JSON.stringify(entry)}' >> ${runDir}/journal.jsonl\`
+   (single-quoted echo is safe because the JSON string itself does not contain single quotes — agent must verify).
+2. Return JSON: { "appended": true }`,
+    { label: `journal-${event.event || 'unknown'}`, phase: 'Execute', schema: {
+      type: 'object', properties: { appended: { type: 'boolean' } }, required: ['appended'],
+    }, agentType: 'general-purpose' }
+  );
+};
+
+const loadState = async () => {
+  return await agent(
+    `Read ${runDir}/state.json and return its parsed JSON object.
+
+If the file does not exist (first-run / wiped state), return { "missing": true }.
+
+STEPS:
+1. Read ${runDir}/state.json with the Read tool.
+2. Parse JSON.
+3. Return the parsed object as-is.`,
+    { label: `state-load`, phase: 'Execute', schema: {
+      type: 'object', additionalProperties: true,
+    }, agentType: 'general-purpose' }
+  );
+};
+
+// Resume handling — load persisted state if resume token present
+if (resume) {
+  const loaded = await loadState();
+  if (loaded && typeof loaded === 'object' && !loaded.missing) {
+    state = { ...state, ...loaded };
+    log(`Resumed from ${resume}: queueSize=${state.storyQueue.length} completed=${state.completed.length} blocked=${state.blocked.length} iterationCount=${state.iterationCount}`)
+  } else {
+    log(`WARNING: resume=${resume} but loadState returned no usable data; proceeding with fresh state`)
+  }
+
+  // Apply userChoice (periodic HITL options)
+  if (userChoice === 'continue') {
+    // no-op: keep storyQueue as-is
+  } else if (userChoice === 'retry_blocked') {
+    // Re-add blocked stories to front of queue
+    const blockedStories = state.blocked
+      .map(b => typeof b === 'string' ? b : (b && b.story) ? b.story : null)
+      .filter(Boolean);
+    state.storyQueue = [...blockedStories, ...state.storyQueue];
+    state.blocked = [];
+    log(`retry_blocked: re-queued ${blockedStories.length} blocked stories at front of queue`)
+  } else if (userChoice === 'skip_blocked') {
+    log(`skip_blocked: leaving blocked as-is, continuing with remaining queue`)
+  } else if (userChoice === 'abort_prd') {
+    log('User aborted PRD; returning final report')
+    await writeState(state);
+    await appendJournal({ event: 'abort_prd', queueSize: state.storyQueue.length });
+    return { haltReason: 'final_complete', aborted: true, context: state, runDir };
+  } else if (userChoice === 'fix_then_resume') {
+    log('Resuming with fix_then_resume; user should have pushed fix commits externally')
+  } else {
+    log(`Unknown userChoice=${userChoice}; defaulting to continue`)
+  }
+  await appendJournal({ event: 'resume', userChoice, queueSize: state.storyQueue.length });
+}
+
+// Persist loop state before starting iteration (resume safety)
+await writeState(state);
+
+// Per-story loop
+while (state.storyQueue.length > 0) {
+  const sk = state.storyQueue[0];
+  state.iterationCount++;
+
+  log(`--- Iteration ${state.iterationCount}: story ${sk} (queue remaining: ${state.storyQueue.length}) ---`)
+
+  // Read current sprint-status (status may have moved between plan and now)
+  const currentStatus = await agent(
+    `Read ${setup.sprintStatusPath}. Find development_status['${sk}'].
+
+Return JSON: { "status": <value> }
+
+If the key is missing, return { "status": "missing" }.`,
+    { label: `read-status-${sk}`, phase: 'Execute', schema: {
+      type: 'object',
+      properties: { status: { type: 'string' } },
+      required: ['status'],
+    }, agentType: 'general-purpose' }
+  );
+
+  // awaiting-operator parking (do NOT execute — park in awaitingOperator[], continue)
+  if (currentStatus && currentStatus.status === 'awaiting-operator') {
+    log(`Story ${sk} in awaiting-operator; parking (not executing)`)
+    state.awaitingOperator.push(sk);
+    state.storyQueue.shift();
+    continue;
+  }
+
+  // already done: skip re-execution (defensive — covers races with external status writes)
+  if (currentStatus && currentStatus.status === 'done') {
+    log(`Story ${sk} already done per sprint-status; marking completed`)
+    state.completed.push(sk);
+    state.storyQueue.shift();
+    continue;
+  }
+
+  // Dep check: if any depends_on entry in inferred graph is not in state.completed
+  const inferredEdge = planResult.inferred.find(e => e.story === sk);
+  const deps = inferredEdge ? inferredEdge.depends_on : [];
+  const unmetDeps = deps.filter(d => !state.completed.includes(d));
+  if (unmetDeps.length > 0) {
+    log(`Story ${sk} has unmet deps: ${unmetDeps.join(', ')}; skipping`)
+    state.skipped.push({ story: sk, reason: 'unmet_deps', deps: unmetDeps });
+    state.storyQueue.shift();
+    await appendJournal({ event: 'skip', storyKey: sk, reason: 'unmet_deps', deps: unmetDeps });
+    continue;
+  }
+
+  // Dispatch bmad-build-converge sub-workflow (1 level nesting)
+  log(`Dispatching bmad-build-converge for ${sk}...`)
+  await appendJournal({ event: 'dispatch', storyKey: sk, iteration: state.iterationCount });
+  let convergeResult = null;
+  let launchError = null;
+  try {
+    convergeResult = await workflow({ scriptPath: convergeScriptPath, args: {
+      storyKey: sk,
+      maxIterations,
+      timestamp: timestamp + '-' + sk,
+    }});
+  } catch (e) {
+    launchError = String(e);
+  }
+
+  // Handle launch failure (workflow() threw)
+  if (launchError || !convergeResult) {
+    log(`Sub-workflow launch failed for ${sk}: ${launchError}`)
+    state.blocked.push({ story: sk, reason: 'launch_failed', details: launchError });
+    state.storyQueue.shift();
+    await appendJournal({ event: 'launch_failed', storyKey: sk, iteration: state.iterationCount });
+    continue;
+  }
+
+  // MR-creation / CI-failure / merge-aborted: halt with merge_conflict (RESOLVED AMBIGUITIES)
+  // converge sub-workflow returns converged:true even on CI failure, with `aborted` populated
+  // when MR creation failed. Detect this case and halt instead of silently marking completed.
+  if (convergeResult.aborted) {
+    log(`Sub-workflow halted for ${sk}: ${convergeResult.aborted}`)
+    state.halts.push({ reason: 'merge_conflict', story: sk, iteration: state.iterationCount, details: String(convergeResult.aborted) });
+    await writeState(state);
+    await appendJournal({ event: 'halt_merge_conflict', storyKey: sk, iteration: state.iterationCount, details: String(convergeResult.aborted) });
+    return {
+      haltReason: 'merge_conflict',
+      context: { story: sk, completed: state.completed, blocked: state.blocked, skipped: state.skipped, awaitingOperator: state.awaitingOperator, details: String(convergeResult.aborted) },
+      resumeToken: timestamp,
+      runDir,
+      userOptions: ['continue', 'retry_blocked', 'skip_blocked', 'abort_prd', 'fix_then_resume'],
+    };
+  }
+
+  // Apply result
+  if (convergeResult.converged) {
+    state.completed.push(sk);
+    log(`Story ${sk} converged (iter ${convergeResult.iterations}, finalSha=${(convergeResult.finalSha || '').substring(0, 7)})`)
+    await appendJournal({ event: 'converged', storyKey: sk, iteration: state.iterationCount, iterations: convergeResult.iterations });
+  } else {
+    state.blocked.push({ story: sk, reason: convergeResult.escalateReason || 'not_converged' });
+    log(`Story ${sk} blocked: ${convergeResult.escalateReason || 'not_converged'}`)
+    await appendJournal({ event: 'blocked', storyKey: sk, iteration: state.iterationCount, reason: convergeResult.escalateReason || 'not_converged' });
+  }
+
+  state.storyQueue.shift();
+
+  // Periodic HITL halt
+  if (!hitlFinalOnly && hitlEvery > 0 && state.iterationCount % hitlEvery === 0) {
+    log(`Periodic HITL checkpoint at iteration ${state.iterationCount}`)
+    state.halts.push({ reason: 'periodic_review', iteration: state.iterationCount });
+    await writeState(state);
+    await appendJournal({ event: 'halt_periodic', iteration: state.iterationCount });
+    return {
+      haltReason: 'periodic_review',
+      context: { completed: state.completed, blocked: state.blocked, skipped: state.skipped, awaitingOperator: state.awaitingOperator },
+      resumeToken: timestamp,
+      runDir,
+      userOptions: ['continue', 'retry_blocked', 'skip_blocked', 'abort_prd', 'fix_then_resume'],
+    };
+  }
+}
+
+// Loop exited cleanly: queue empty
+log(`Execute loop complete: completed=${state.completed.length} blocked=${state.blocked.length} skipped=${state.skipped.length} awaitingOperator=${state.awaitingOperator.length}`)
+await writeState(state);
+await appendJournal({ event: 'execute_complete', completed: state.completed.length, blocked: state.blocked.length, skipped: state.skipped.length, awaitingOperator: state.awaitingOperator.length, halts: state.halts.length });
+// FALL THROUGH to Phase 4 (Epic boundary + auto-merge + sprint-status sync — added by Task 4)

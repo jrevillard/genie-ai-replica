@@ -77,9 +77,8 @@ const MERGE_SCHEMA = {
     mrIid: { type: 'integer' },
     merged: { type: 'boolean' },
     error: { type: 'string' },
-    sprintStatusDone: { type: 'boolean' },
   },
-  required: ['storyKey', 'mrIid', 'merged', 'sprintStatusDone'],
+  required: ['storyKey', 'mrIid', 'merged'],
 };
 
 const CLEANUP_SCHEMA = {
@@ -371,35 +370,26 @@ if (ciResult.status === 'success') {
     `Merge MR !${ciResult.mrIid} for story ${setup.storyKey}.
 
 CONTEXT:
-- prdWorktreePath: ${setup.prdWorktreePath}
 - baseBranch: ${setup.baseBranch}
-- sprintStatusPath: ${setup.sprintStatusPath}
 - gitlabHost: ${setup.gitlabHost}
 - project: <from _bmad/custom/issue-tracking.yaml>
 
 Use: \`GITLAB_HOST=${setup.gitlabHost} glab mr merge --yes --repo <project> ${ciResult.mrIid}\`
 Capture stdout/stderr. If exit != 0, set merged=false with error string.
 
-After successful merge:
-- Sync sprint-status to done. Operate from the PRD worktree (${setup.prdWorktreePath}).
-- cd to ${setup.prdWorktreePath}.
-- Read ${setup.sprintStatusPath}.
-- Update development_status[${setup.storyKey}] = done.
-- Update last_updated to "${timestamp}".
-- \`git add ${setup.sprintStatusPath} && git commit -m "chore(sprint-status): story ${setup.storyKey} → done (MR !${ciResult.mrIid} merged)" && git push origin ${setup.baseBranch}\`
-- sprintStatusDone = true only if push succeeded.
+DO NOT modify sprint-status.yaml. The orchestrator (bmad-prd-orchestrate) is the sole writer of sprint-status. After this merge returns, the orchestrator will re-read sprint-status and apply the done transition itself.
 
 Note: ${setup.worktreePath} was branched from ${setup.baseBranch} and the MR --remove-source-branch already deleted ${setup.storyBranch} on merge. The story worktree at ${setup.worktreePath} should auto-cleanup via MR --remove-source-branch. If not, the Cleanup phase handles it.
 
-RETURN MERGE_SCHEMA.`,
+RETURN MERGE_SCHEMA (storyKey, mrIid, merged, error?).`,
     { label: `merge-${setup.storyKey}`, phase: 'Auto-merge', schema: MERGE_SCHEMA, agentType: 'general-purpose' }
   )
 } else {
   log(`CI ${ciResult.status} — NOT auto-merging. Manual review needed.`)
-  mergeResult = { storyKey: setup.storyKey, mrIid: ciResult.mrIid, merged: false, error: `CI ${ciResult.status}`, sprintStatusDone: false }
+  mergeResult = { storyKey: setup.storyKey, mrIid: ciResult.mrIid, merged: false, error: `CI ${ciResult.status}` }
 }
 
-log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Sprint-status done: ${mergeResult.sprintStatusDone}`)
+log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Orchestrator will sync sprint-status`)
 
 // ============================================================================
 // PHASE 5: CLEANUP
@@ -456,6 +446,6 @@ return {
   },
   mr: { mrIid: ciResult.mrIid, mrUrl: ciResult.mrUrl, pipelineId: ciResult.pipelineId },
   monitor: { status: ciResult.status, retries: ciResult.retries, transient: ciResult.transient, failedJobs: ciResult.failedJobs },
-  merge: { merged: mergeResult.merged, error: mergeResult.error, sprintStatusDone: mergeResult.sprintStatusDone },
+  merge: { merged: mergeResult.merged, error: mergeResult.error },
   cleanup: { worktrees: cleanup.removedWorktrees, branches: cleanup.deletedBranches, errors: cleanup.errors },
 }

@@ -41,6 +41,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Test fixture: NDJSON log fixture used by logs-vl-contract.test.js (story 5.1)
+!tests/test-fixtures/logs/
+!tests/test-fixtures/logs/*.log
+
 # Centralized data directories (bind mounts)
 data/logs/
 data/database_backups/

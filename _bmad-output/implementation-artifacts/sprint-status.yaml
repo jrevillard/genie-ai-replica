@@ -102,7 +102,7 @@ development_status:
   epic-4-retrospective: optional
 
   epic-5: backlog
-  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: ready-for-dev
+  5-1-fixture-tests-test-fixtures-logs-combined-2026-08-15-log-ndj: done
   5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co: ready-for-dev
   5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog: ready-for-dev
   5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: ready-for-dev

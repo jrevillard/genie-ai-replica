@@ -134,7 +134,7 @@ STEPS:
       - If new: \`git -C repoRoot rev-parse origin/<baseBranch>\`.
 6. Create worktree:
    worktreePath = repoRoot + '/' + worktree_base + '/' + storyBranch-with-slashes-replaced-by-dashes.
-   Example: /home/x/git_projects/y/genie-ai/.claude/worktrees/feat-admin-logs-victorialogs-5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate
+   Example: <repoRoot>/<worktree_base>/<storyBranch-slashes-to-dashes>
    Command: \`git -C repoRoot worktree add <worktreePath> <storyBranch>\`.
 7. Sync sprint-status INSIDE the story worktree (it's a tracked file; commit goes onto storyBranch):
    cd <worktreePath>

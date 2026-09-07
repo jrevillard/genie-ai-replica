@@ -2546,3 +2546,27 @@ source_spec: `4-5-tests-melt-victorialogs-client-test-js-axios-mock-normalize.md
 severity: low
 reason: Adapter lines 55-57 and 200: constant named "BACKOFF_MS" but passed to `axios.get(..., { timeout: HEALTH_PROBE_BACKOFF_MS })`. Pure naming — no behaviour change. A future maintainer could add `await sleep(HEALTH_PROBE_BACKOFF_MS)` between attempts and double the budget without breaking any test.
 status: open
+
+### DW-392: Producer unit-test harness for `post-fixture-to-vl-otlp.sh`: invoke the jq translation portion against tiny fixtures and assert on the produced OTLP shape (severity numbers, timeUnixNano precision,
+origin: spec-deferred a98a4f443ba4
+location: n/a
+source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.md`
+severity: medium
+reason: The script's 60-line jq programme is the load-bearing piece and is currently exercised only by story 5.8's contract test, which is a consumer-side gate. A standalone test would catch regressions before the contract test runs.
+status: open
+
+### DW-393: Wire the script into CI (`.gitlab-ci.yml` deploy or test job, and optionally a `package.json` test script) so it actually runs before the contract test.
+origin: spec-deferred 987b63be19f6
+location: n/a
+source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.md`
+severity: medium
+reason: The script ships as a runnable orphan. The deps graph names 5.8 as the consumer, but nothing in this repo invokes the producer yet.
+status: open
+
+### DW-394: Pin the OTel semconv version for `deployment.environment` — semconv 1.27+ renamed the attribute to `deployment.environment.name`. Coordinate with the consumer story before flipping.
+origin: spec-deferred aefd8c4cd986
+location: n/a
+source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.md`
+severity: low
+reason: The producer currently emits `deployment.environment`. If the downstream VL query / Grafana panel reads `deployment.environment.name`, the attribute will not match.
+status: open

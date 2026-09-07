@@ -723,6 +723,31 @@ describe('SecurityScanService', () => {
       expect(result.vulnerabilities.critical).toEqual([]);
     });
 
+    it('returns explicit skipped signal when descriptors are synthetic (VL mode)', async () => {
+      const descriptors = [
+        { date: '2026-05-26', service: 'victorialogs', source: 'victorialogs', query: 'q=*' },
+        { date: '2026-05-25', service: 'victorialogs', source: 'victorialogs', query: 'q=*' }
+      ];
+      const mockLogsService = {
+        getLogFilesInRange: jest.fn().mockResolvedValue(descriptors)
+      };
+
+      const result = await securityScanService.processLogsInParallel(mockLogsService);
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('vl_mode_no_file_scan');
+      expect(result.vulnerabilities.critical).toEqual([]);
+      expect(result.vulnerabilities.medium).toEqual([]);
+      expect(result.vulnerabilities.low).toEqual([]);
+      expect(result.failedLogins).toEqual([]);
+      expect(result.suspiciousActivities).toEqual([]);
+
+      const scanResult = await securityScanService.runSecurityScan(mockLogsService);
+      expect(scanResult.skipped).toBe(true);
+      expect(scanResult.reason).toBe('vl_mode_no_file_scan');
+      expect(scanResult.status).toBe('skipped');
+      expect(scanResult.message).toMatch(/vl_mode_no_file_scan/);
+    });
+
     it('should handle processFile errors gracefully', async () => {
       const mockLogsService = {
         getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])

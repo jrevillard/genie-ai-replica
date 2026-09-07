@@ -40,6 +40,10 @@ const MAX_LINES_TO_PROCESS = 200000;
 // AD-10: NDJSON re-parse window after a `SyntaxError` (truncated line from
 // `kill -9` mid-write). Read the next N bytes, append, attempt re-parse.
 const RE_PARSE_WINDOW_BYTES = 4096;
+// Hard cap on the date span served by `getLogFilesInRange` (one descriptor
+// per UTC day; prevents memory blow-up on a wide admin range). 366 covers
+// a full year + leap day.
+const MAX_LOG_FILES_RANGE_DAYS = 366;
 // Lock-file directory for the AD-10 / AD-11 O_EXCL claim primitives.
 const LOCK_DIR = '/tmp';
 // Rate-limit state file for VL-unreachable logging (AD-11). Unix ms on a
@@ -133,7 +137,11 @@ class LogsService {
    * @returns {'victorialogs'|'file'}
    */
   _sourceMode() {
-    return process.env.ADMIN_LOGS_SOURCE === 'file' ? 'file' : 'victorialogs';
+    return String(process.env.ADMIN_LOGS_SOURCE || '')
+      .trim()
+      .toLowerCase() === 'file'
+      ? 'file'
+      : 'victorialogs';
   }
 
   /**
@@ -167,7 +175,8 @@ class LogsService {
 
   /**
    * Classify a thrown error as a VL outage: ECONNREFUSED / ENOTFOUND /
-   * ETIMEDOUT / ECONNABORTED / 5xx response. Used to gate `VL_FAIL_OPEN`.
+   * ETIMEDOUT / ECONNABORTED / ECONNRESET / EPIPE / EAI_AGAIN /
+   * EHOSTUNREACH / 5xx response. Used to gate `VL_FAIL_OPEN`.
    *
    * @param {Error & {code?: string, response?: {status?: number}}} err
    * @returns {boolean}
@@ -175,10 +184,20 @@ class LogsService {
   _isVlUnavailable(err) {
     if (!err) return false;
     const code = err.code;
-    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ETIMEDOUT' || code === 'ECONNABORTED') {
+    if (
+      code === 'ECONNREFUSED' ||
+      code === 'ENOTFOUND' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ECONNABORTED' ||
+      code === 'ECONNRESET' ||
+      code === 'EPIPE' ||
+      code === 'EAI_AGAIN' ||
+      code === 'EHOSTUNREACH'
+    ) {
       return true;
     }
-    if (err.response && typeof err.response.status === 'number' && err.response.status >= 500) {
+    const status = err.response && err.response.status;
+    if (typeof status === 'number' && status >= 500 && status < 600) {
       return true;
     }
     if (err.name === 'VictoriaLogsHealthError') {
@@ -312,8 +331,10 @@ class LogsService {
 
   async _getLogsInRangeFromVL(options = {}) {
     const { start, end, q = '*', limit = 100, offset = 0 } = options;
-    const limitN = parseInt(limit, 10) || 100;
-    const offsetN = parseInt(offset, 10) || 0;
+    const parsedLimit = parseInt(limit, 10);
+    const parsedOffset = parseInt(offset, 10);
+    const limitN = Math.max(0, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 100, 10000));
+    const offsetN = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
 
     // Build a sensible default window when the caller did not provide one
     // (admin UI defaults to today, but defensive coding prevents a NaN
@@ -350,10 +371,11 @@ class LogsService {
    * @returns {string}
    */
   _vlFilter(q) {
+    const baseQ = typeof q === 'string' && q.trim() !== '' ? q : '*';
     if (booleanEnv('LOG_TO_VICTORIALOGS') && !booleanEnv('LOG_TO_FILE')) {
-      return `${q} AND NOT (_stream:genie.backend OR _stream:genie.document-repository)`;
+      return `${baseQ} AND NOT (_stream:genie.backend OR _stream:genie.document-repository)`;
     }
-    return q;
+    return baseQ;
   }
 
   async _getLogsInRangeFromFile(options = {}) {
@@ -399,8 +421,10 @@ class LogsService {
     }
     filtered.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
-    const limitN = parseInt(options.limit, 10) || 100;
-    const offsetN = parseInt(options.offset, 10) || 0;
+    const parsedLimitFile = parseInt(options.limit, 10);
+    const parsedOffsetFile = parseInt(options.offset, 10);
+    const limitN = Math.max(0, Math.min(Number.isFinite(parsedLimitFile) ? parsedLimitFile : 100, 10000));
+    const offsetN = Math.max(0, Number.isFinite(parsedOffsetFile) ? parsedOffsetFile : 0);
     const total = filtered.length;
     return {
       logs: filtered.slice(offsetN, offsetN + limitN),
@@ -448,6 +472,12 @@ class LogsService {
       d.setHours(23, 59, 59, 999);
       return d.toISOString();
     }
+    if (dateRange === 'yesterday') {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      d.setHours(23, 59, 59, 999);
+      return d.toISOString();
+    }
     return new Date().toISOString();
   }
 
@@ -490,8 +520,10 @@ class LogsService {
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
-        const errorHits = await client.hits({ q: 'level:ERROR', start: startIso, end: endIso, field: 'level' });
-        const warnHits = await client.hits({ q: 'level:WARN', start: startIso, end: endIso, field: 'level' });
+        const [errorHits, warnHits] = await Promise.all([
+          client.hits({ q: 'level:ERROR', start: startIso, end: endIso, field: 'level' }),
+          client.hits({ q: 'level:WARN', start: startIso, end: endIso, field: 'level' })
+        ]);
         const errorCount = this._sumHits(errorHits, 'ERROR');
         const warnCount = this._sumHits(warnHits, 'WARN');
         return {
@@ -518,12 +550,22 @@ class LogsService {
    */
   _sumHits(hits, level) {
     if (!hits || typeof hits !== 'object') return 0;
+    const coerce = (v) => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
     if (level) {
       const direct = hits[level] ?? hits[level.toUpperCase()] ?? hits[level.toLowerCase()];
-      if (typeof direct === 'number') return direct;
+      if (direct !== undefined && direct !== null) return coerce(direct);
     }
     // Fallback for adapter responses that return a single-key object.
-    const values = Object.values(hits).filter((v) => typeof v === 'number');
+    const values = Object.values(hits)
+      .map(coerce)
+      .filter((v) => v !== 0);
     if (values.length === 1) return values[0];
     return 0;
   }
@@ -886,6 +928,11 @@ class LogsService {
       logger.warn('getLogFilesInRange.invalid_date_range', { startDate, endDate });
       return [];
     }
+    const spanDays = Math.ceil((end - start) / 86400000) + 1;
+    if (spanDays > MAX_LOG_FILES_RANGE_DAYS) {
+      logger.warn('getLogFilesInRange.range_too_wide', { startDate, endDate, spanDays });
+      return [];
+    }
     const descriptors = [];
     const cursor = new Date(start);
     while (cursor <= end) {
@@ -967,14 +1014,6 @@ class LogsService {
   // ------------------------------------------------------------------
 
   /**
-   * Acquire the per-file O_EXCL PID lock (AD-10 / AD-11).  Returns
-   * `null` when another reader/writer already holds it (EEXIST); the
-   * caller skips the file gracefully in that case.
-   *
-   * @param {string} filePath
-   * @returns {Promise<import('fs').FileHandle|null>}
-   */
-  /**
    * Acquire an AD-10 O_EXCL read lock for `filePath`. Returns the lock
    * descriptor (or `null` if another holder has the lock); callers MUST
    * invoke `_releaseReadLock` once the read finishes so the sentinel
@@ -984,6 +1023,9 @@ class LogsService {
    * @returns {Promise<{handle: import('fs').FileHandle, lockPath: string}|null>}
    */
   async _acquireReadLock(filePath) {
+    if (typeof filePath !== 'string' || filePath.length === 0) {
+      throw new TypeError('_acquireReadLock: filePath must be a non-empty string');
+    }
     const baseName = path.basename(filePath);
     const lockPath = path.join(LOCK_DIR, `.logs-read-lock-${baseName}-${process.pid}`);
     try {

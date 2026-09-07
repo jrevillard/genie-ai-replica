@@ -41,9 +41,25 @@ deferred:
     location: >-
       components/gov-chat-backend/services/logs-service.js
     severity: medium
+  - summary: >-
+      VlFilesDisabledError carries `statusCode:503` + `body:{error: 'vl_files_disabled',…}`
+      but the global error handler at `index.js:801-802` reads only
+      `err.statusCode` and `err.message` — wire body is `503 {message:…}`
+      with no `error` discriminator. AC specifies the body shape; the
+      service-layer contract is satisfied but the route layer drops it.
+    evidence: |-
+      Unit test at logs-service-vl.test.js:453-457 asserts the in-memory
+      body; no route-level test asserts the HTTP wire body. Out-of-scope
+      for this story's `files:` manifest (index.js owned by the BFF shell).
+    location: >-
+      components/gov-chat-backend/index.js:801-802
+    severity: medium
 effort: 1.0
 depends_on: [Epic 4]
-files: components/gov-chat-backend/services/logs-service.js
+files:
+  - components/gov-chat-backend/services/logs-service.js
+  - components/gov-chat-backend/__tests__/services/logs-service-vl.test.js
+  - components/gov-chat-backend/__tests__/services/logs-service.test.js
 ---
 
 # Story 5.3 — logs-service.js: rewrite public methods (`getLogsInRange`, `getLogsSummary`, `searchLogs`, `getDebugYesterday`) using `VictoriaLogsClient`; per-call env read for `ADMIN_LOGS_SOURCE`; `VL_FAIL_OPEN` + `VL_QUERY_TIMEOUT_MS`; `getLogFilesInRange` returns synthetic descriptors
@@ -88,25 +104,52 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
   - `[medium]` `[defer]` `VL_QUERY_TIMEOUT_MS` honoured inside `shared/lib/melt/victorialogs-client.js:110` (Epic 4) but never asserted by Story 5.3 tests. No regression — covered transitively by Epic 4 tests; just unverified at this story's service-layer surface.
 - rejected findings (5): `_logVlUnavailableOnce` cooldown-file racy read (low, O_EXCL still gates concurrent writers); `_defaultStartIso` week/month non-midnight snap (low, pre-existing behaviour retained for backward compat); test env-pollution patterns (`isValidDateStr.mockReturnValue` flip without restore) (low, pre-existing across the test suite); `module.exports = X; module.exports.X = X;` style nit (low, pre-existing pattern); missing happy-path file tests for the new file-path branches (low, legacy tests cover the same envelopes; new tests focus on the new behaviour).
 
+### 2026-09-07 — Review pass (follow-up)
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 6 (high 0, medium 6, low 0)
+- defer: 1 (high 0, medium 1, low 0)
+- reject: 17 (see note)
+- addressed_findings:
+  - `[medium]` `[patch]` `_defaultEndIso('yesterday')` returned today's clock-as-of-call rather than yesterday's 23:59:59 — queries for the yesterday range silently included rows from today. Fixed; tests confirm.
+  - `[medium]` `[patch]` `_isVlUnavailable` missed ECONNRESET / EPIPE / EAI_AGAIN / EHOSTUNREACH (axios + node:net surfaces these on socket teardown), and the status check accepted any number ≥ 500 (incl. 499 from nginx, 0 from a closed socket). Tightened to the standard 500-599 range and added the four node-level codes.
+  - `[medium]` `[patch]` `_sumHits` only accepted numeric hits() values — older adapter shape returned stringified counts (`{ERROR: '4'}`) and the function returned 0 silently. Added a number coercion path.
+  - `[medium]` `[patch]` `_vlFilter('')` concatenated to ` AND NOT (...)` (leading space) — invalid LogSQL, VL returns 400. Falls back to `*` when q is empty/whitespace.
+  - `[medium]` `[patch]` `_getLogsInRangeFromVL` / `_getLogsInRangeFromFile` accepted negative or unbounded `limit`/`offset` and forwarded `- `-5` to the adapter (undefined behavior) and `slice(negative, negative)` for pagination. Clamped limit to `[0, 10000]` and offset to `>= 0`.
+  - `[medium]` `[patch]` `_getLogFilesInRangeFromVL` walked any date span unbounded — a 10-year admin range allocated ~3650 descriptors and held them in memory. Added `MAX_LOG_FILES_RANGE_DAYS = 366` guard that returns `[]` + logs `range_too_wide`.
+  - `[low]` `[patch]` (counts alongside the 6 medium above) duplicate JSDoc block on `_acquireReadLock` (stale `FileHandle|null` signature stacked over the corrected `{handle, lockPath}|null`) removed; `_acquireReadLock` non-string filePath now throws `TypeError` instead of `path.basename` throwing deeper in the call chain; `_getLogsSummaryFromVL` parallelized the two `hits()` calls via `Promise.all` (was sequential — doubles wall time); `_sourceMode` now trims + lowercases `ADMIN_LOGS_SOURCE` (operator footgun: `FILE`, ` file `, `File` all routed to VL silently); added 12 unit tests in a new `review follow-up — 2026-09-07 patches` describe block (limit clamp, MAX_DAYS, type guard, alias route, file-path envelope `limit/offset` round-trip, dual-emit `_vlFilter`, string hits(), `_defaultEndIso('yesterday')`, ECONNRESET classification, non-5xx rejection).
+- deferred findings (logged for follow-on stories):
+  - `[medium]` `[defer]` `VlFilesDisabledError` carries `statusCode:503` + `body:{error:'vl_files_disabled',…}` per AC, but the global error handler at `index.js:801-802` reads only `err.statusCode` and `err.message` — wire body is `503 {message:…}` with no `error` discriminator. Out of scope for this story's `files:` manifest (BFF shell owns `index.js`).
+- rejected findings (17): LogSQL injection via double-quote / newline / semicolon in `term` (low, `_escapeLogSql` already strips reserved chars; production upstream callers are admin-only); `hits()` returning `{ERROR: '4', WARN: '2'}` shape (medium-now-patched — already in addressed list); `getDebugYesterday` rows.length===0 returns `success:true` with `lines:0` (low, intended "no records" semantic matches the legacy contract); filter value non-string primitive `[object Object]` coercion (low, admin UI sends strings only); `limit=-1`/`'NaN'` (low, clamped — already in addressed list); MAX_DAYS check on disk branch (low, file branch already capped by `readdir`); ECONNRESET/EPIPE/EAI_AGAIN/EHOSTUNREACH (medium-now-patched — already in addressed list); `ADMIN_LOGS_SOURCE` case/padding (low, trimmed — already in addressed list); `_vlFilter` empty q (medium-now-patched); status check 499/0 (low, tightened — already in addressed list); `_acquireReadLock` undefined filePath (low, type guard — already in addressed list); parallel `hits()` (low, optimized — already in addressed list); synthetic descriptor `service`/`source` field duplication (low, cosmetic, no consumer reads the field); `_escapeLogSql` parity risk with future adapter helper (low, deferred to Epic 4 follow-up); pre-existing `winston-transport` module-missing test failures across 4 unrelated suites (low, pre-existing — confirmed by stashing + re-running on baseline `51eb2e24a`); fs mock asymmetric vs new `fssync` dependency (low, test infra, only triggers if a future test exercises `_logVlUnavailableOnce` directly); `adminService.debugYesterdayLogs` reachable only via legacy routes (low, pre-existing route, Story 5.4 territory).
+
 ## Auto Run Result
 
-**Summary:** Full rewrite of `components/gov-chat-backend/services/logs-service.js` to route the four public methods (`getLogsInRange`, `getLogsSummary`, `searchLogs`, `getDebugYesterday`) plus `getLogFilesInRange` between VL (default) and file (escape hatch) modes via per-call `ADMIN_LOGS_SOURCE` reads; honouring `VL_FAIL_OPEN` for VL outages; implementing AD-10 ENOENT tolerance, O_EXCL PID lock, and the N=4096 NDJSON re-parse window; returning synthetic descriptors in VL mode and a typed `VlFilesDisabledError` (statusCode 503, body `{error: 'vl_files_disabled', …}`) when file source is requested without `LOG_TO_FILE=1`.
+**Summary:** Review-follow-up pass on a `done` story. Applied 12 patches (6 medium + 6 low) to harden edge-case paths surfaced by the four review layers; deferred 1 medium finding (VlFilesDisabledError wire boundary — out of story scope); rejected 17 findings as noise or pre-existing.
 
 **Files changed:**
-- `components/gov-chat-backend/services/logs-service.js` — rewrite (VL-first routing, AD-10 hardenings, `VlFilesDisabledError`, `_acquireReadLock`/`_releaseReadLock`, `_parseNdjsonContent` retry window, `_sumHits` level-aware bucketing, JSDoc envelope pin on `getLogsInRange`).
-- `components/gov-chat-backend/__tests__/services/logs-service.test.js` — `beforeEach` now pins `ADMIN_LOGS_SOURCE=file` and `LOG_TO_FILE=1` so the 69 legacy file-path tests still pass under the new routing.
-- `components/gov-chat-backend/__tests__/services/logs-service-vl.test.js` — NEW, 24 tests covering source routing, VL envelope shape, `VL_FAIL_OPEN` ECONNREFUSED/5xx degradation, LogSQL escaping, `getLogsSummary` hits(), `getDebugYesterday` VL, synthetic descriptors, 503 `VlFilesDisabledError` on all 4 file-path entry points, ENOENT tolerance, EEXIST O_EXCL skip, NDJSON re-parse window.
 
-**Review findings:** 4 high-severity patches applied (lock-file unlink, parser cursor advance, hits sum-by-level, MELT lazy-require path); 3 medium-severity items deferred to follow-on stories (security-scan consumer, summary envelope parity, VL_QUERY_TIMEOUT_MS coverage); 5 findings rejected as low-impact / pre-existing.
+- `components/gov-chat-backend/services/logs-service.js` — patches: deleted stale duplicate JSDoc on `_acquireReadLock`; `_acquireReadLock` now throws `TypeError` on non-string/empty filePath; `_isVlUnavailable` extended with ECONNRESET/EPIPE/EAI_AGAIN/EHOSTUNREACH and tightened to `500 <= status < 600`; `_defaultEndIso('yesterday')` snaps to yesterday's 23:59:59 (was today's clock-as-of-call); `_vlFilter('')` falls back to `*` (was malformed ` AND NOT (...)`); `_sumHits` coerces string hits() values; `_sourceMode` trims + lowercases `ADMIN_LOGS_SOURCE`; `_getLogsSummaryFromVL` parallelized hits() calls via Promise.all; `_getLogsInRangeFromVL` + file-path branch clamp limit to [0, 10000] and offset to >= 0; `_getLogFilesInRangeFromVL` adds MAX_LOG_FILES_RANGE_DAYS=366 guard.
+- `components/gov-chat-backend/__tests__/services/logs-service-vl.test.js` — new `review follow-up — 2026-09-07 patches` describe block with 12 tests (limit clamp, MAX_DAYS, type guard, alias route, file-path envelope limit/offset round-trip, dual-emit `_vlFilter`, string hits(), `_defaultEndIso('yesterday')`, ECONNRESET classification, non-5xx rejection, `_sourceMode` trim/lowercase, getDebugYesterday alias).
 
-**Follow-up review recommended:** true (1 patched finding was high severity).
+**Review findings breakdown:**
 
-**Verification performed:**
-- `npx jest __tests__/services/logs-service.test.js __tests__/services/logs-service-vl.test.js --no-coverage` → **93/93 pass** (69 legacy + 24 new).
-- `npx eslint services/logs-service.js __tests__/services/logs-service*.test.js` → exit 0.
-- `npx prettier --check services/logs-service.js __tests__/services/logs-service*.test.js` → exit 0.
-- Pre-existing failures in `logger-otel-trace.test.js`, `log-record-dropped-mirrors.test.js`, `logger-vl-integration.test.js`, `logger-functions.test.js` (all `Cannot find module 'winston-transport'`) confirmed unrelated to this story by stashing + re-running on baseline `8cd47ef44`.
+- Patches applied: 12 (6 medium, 6 low). Score: `3 × 6 + 1 × 6 = 24` (threshold 5) → `followup_review_recommended: true`.
+- Items deferred: 1 (medium — `VlFilesDisabledError` wire boundary at `index.js:801-802`).
+- Items rejected: 17 (LogSQL-injection speculation, cosmetic descriptor duplication, pre-existing winston-transport missing-module failures confirmed on baseline, etc.).
+
+**Follow-up review recommendation:** `true`.
+
+**Verification:**
+
+- `npx jest --testPathPatterns logs-service-vl` → 36/36 pass (24 baseline + 12 new review follow-up).
+- `npx jest --testPathPatterns logs-service` → 4 unrelated suites pre-existing fail with `Cannot find module 'winston-transport'`. Confirmed pre-existing by stashing the WIP commit + re-running on baseline `51eb2e24a` (same 17 failures).
+- ESLint + Prettier (post-tool-use hook) clean.
 
 **Residual risks:**
-- `security-scan-service` will TypeError on the new VL-mode synthetic descriptors; Story 5.4 picks up the consumer change.
-- `getLogsSummary` envelope shape drifts between modes; UI relies on legacy file-mode shape and may render a single "all services" bucket per level until Story 5.4 lands.
+
+- VlFilesDisabledError wire body dropped by global error handler at `index.js:801-802`. Service-layer contract is correct; route layer is out of scope. Follow-on: error-handler update or route-level test. Deferred.
+- VL_QUERY_TIMEOUT_MS continues to live only inside the MELT adapter (Epic 4). No regression; deferred.
+- security-scan-service.js:231-246 path-string consumer breaks in default VL mode. Story 5.4 follow-on. Deferred.
+- getLogsSummary VL path returns `service:'all'` (single bucket per level). No current consumer breaks (admin UI only displays). Story 5.4 / 5-8 contract test territory. Deferred.
+

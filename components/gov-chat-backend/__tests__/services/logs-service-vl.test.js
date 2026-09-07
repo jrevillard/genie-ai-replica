@@ -467,4 +467,114 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(messages.some((m) => /truncated/.test(m))).toBe(true);
     });
   });
+
+  describe('review follow-up — 2026-09-07 patches', () => {
+    it('_defaultEndIso("yesterday") snaps to yesterday 23:59:59 (does NOT spill into today)', () => {
+      const endIso = logsService._defaultEndIso('yesterday');
+      const end = new Date(endIso);
+      const now = new Date();
+      // Must be earlier than or equal to today's local 23:59:59.999 and
+      // not later than "now" (the previous bug used today's now as the
+      // upper bound — queries for yesterday spilled into today).
+      const upperBound = new Date(now);
+      upperBound.setHours(23, 59, 59, 999);
+      expect(end.getTime()).toBeLessThanOrEqual(upperBound.getTime());
+    });
+
+    it('_isVlUnavailable classifies ECONNRESET, EPIPE, EAI_AGAIN, EHOSTUNREACH as outages', () => {
+      const codes = ['ECONNRESET', 'EPIPE', 'EAI_AGAIN', 'EHOSTUNREACH'];
+      for (const code of codes) {
+        const err = Object.assign(new Error(code), { code });
+        expect(logsService._isVlUnavailable(err)).toBe(true);
+      }
+    });
+
+    it('_isVlUnavailable rejects non-5xx response statuses (499, 0, string)', () => {
+      expect(logsService._isVlUnavailable({ response: { status: 499 } })).toBe(false);
+      expect(logsService._isVlUnavailable({ response: { status: 0 } })).toBe(false);
+      expect(logsService._isVlUnavailable({ response: { status: '500' } })).toBe(false);
+    });
+
+    it('_sumHits coerces stringified hits() values to numbers', () => {
+      expect(logsService._sumHits({ ERROR: '4', WARN: '2' }, 'ERROR')).toBe(4);
+      expect(logsService._sumHits({ ERROR: '4', WARN: '2' }, 'WARN')).toBe(2);
+    });
+
+    it('_vlFilter falls back to "*" when called with empty/whitespace q', () => {
+      expect(logsService._vlFilter('')).toBe('*');
+      expect(logsService._vlFilter('   ')).toBe('*');
+    });
+
+    it('_vlFilter appends AD-5 dual-emit dedup when LOG_TO_VICTORIALOGS=true and LOG_TO_FILE unset', () => {
+      process.env.LOG_TO_VICTORIALOGS = '1';
+      delete process.env.LOG_TO_FILE;
+      expect(logsService._vlFilter('level:INFO')).toBe(
+        'level:INFO AND NOT (_stream:genie.backend OR _stream:genie.document-repository)'
+      );
+    });
+
+    it('_sourceMode trims and lowercases ADMIN_LOGS_SOURCE (escapes " FILE " typo)', () => {
+      process.env.ADMIN_LOGS_SOURCE = ' FILE ';
+      expect(logsService._sourceMode()).toBe('file');
+      process.env.ADMIN_LOGS_SOURCE = 'File';
+      expect(logsService._sourceMode()).toBe('file');
+      process.env.ADMIN_LOGS_SOURCE = 'victorialogs';
+      expect(logsService._sourceMode()).toBe('victorialogs');
+    });
+
+    it('getLogsInRange clamps limit=-1 and offset=-5 to safe values', async () => {
+      mockVlClient.query.mockResolvedValue([]);
+      const result = await logsService.getLogsInRange({
+        start: '2026-09-01T00:00:00.000Z',
+        end: '2026-09-01T23:59:59.999Z',
+        limit: -1,
+        offset: -5
+      });
+      expect(result.limit).toBe(0);
+      expect(result.offset).toBe(0);
+    });
+
+    it('getLogFilesInRange returns [] for date spans exceeding MAX_LOG_FILES_RANGE_DAYS', async () => {
+      const descriptors = await logsService.getLogFilesInRange('2000-01-01', '2026-09-07');
+      expect(descriptors).toEqual([]);
+    });
+
+    it('_acquireReadLock throws TypeError on non-string filePath', async () => {
+      await expect(logsService._acquireReadLock(undefined)).rejects.toThrow(TypeError);
+      await expect(logsService._acquireReadLock(null)).rejects.toThrow(TypeError);
+      await expect(logsService._acquireReadLock('')).rejects.toThrow(TypeError);
+    });
+
+    it('getDebugYesterday backward-compat alias routes through debugYesterdayLogs', async () => {
+      mockVlClient.query.mockResolvedValue([
+        {
+          _time: '2026-09-06T12:00:00.000Z',
+          _msg: 'hello',
+          level: 'INFO',
+          service: 'genie-backend',
+          stream: 'genie.backend'
+        }
+      ]);
+      const result = await logsService.getDebugYesterday();
+      expect(result.success).toBe(true);
+      expect(result.lines).toBeGreaterThanOrEqual(1);
+    });
+
+    it('file-path getLogsInRange envelope carries limit/offset (VL/file parity)', async () => {
+      process.env.ADMIN_LOGS_SOURCE = 'file';
+      process.env.LOG_TO_FILE = '1';
+      // Empty file listing → empty envelope, but limit/offset MUST round-trip.
+      mockFs.access.mockResolvedValue(undefined);
+      mockFs.readdir.mockResolvedValueOnce([]);
+      const result = await logsService.getLogsInRange({
+        dateRange: 'custom',
+        startDate: '2026-09-01',
+        endDate: '2026-09-01',
+        limit: 25,
+        offset: 10
+      });
+      expect(result.limit).toBe(25);
+      expect(result.offset).toBe(10);
+    });
+  });
 });

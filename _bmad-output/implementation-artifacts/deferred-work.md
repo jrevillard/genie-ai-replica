@@ -2570,3 +2570,128 @@ source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.m
 severity: low
 reason: The producer currently emits `deployment.environment`. If the downstream VL query / Grafana panel reads `deployment.environment.name`, the attribute will not match.
 status: open
+
+### DW-395: getLogFilesInRange returns synthetic descriptors in VL mode but security-scan-service.js (and admin-dashboard consumers) still treat entries as path strings (`file.endsWith('.gz')`); VL default mode
+origin: spec-deferred eb63601d14cc
+location: components/gov-chat-backend/services/security-scan-service.js:231-246
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: security-scan-service.js:231-246 calls file.endsWith('.gz') on each entry from getLogFilesInRange. No consumer-side test mocks the descriptor shape. Story 5.4 is the natural follow-on.
+status: open
+
+### DW-396: getLogsSummary VL path collapses to a single `service:'all'` bucket per level; file path retains per-type/per-service grouping via legacy groupLogs(). SPEC CAP-3 parity not pinned at this story.
+origin: spec-deferred 7b9a348c4cd2
+location: components/gov-chat-backend/services/logs-service.js:481-506
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js:481-506 returns `{errors:[{service:'all',count:N}]}` vs. groupLogs() returning one bucket per type+service pair. No parity test compares the two paths against the same fixture.
+status: open
+
+### DW-397: VL_QUERY_TIMEOUT_MS is honoured inside the MELT adapter (shared/lib/melt/victorialogs-client.js:110) but is never read or asserted at this story's service-layer surface.
+origin: spec-deferred f76f29fa8266
+location: components/gov-chat-backend/services/logs-service.js
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Spec acceptance mentions VL_QUERY_TIMEOUT_MS in the title; no test exercises a hung VL query at this layer. Cover transitively via Epic 4 contract tests.
+status: open
+
+### DW-398: VlFilesDisabledError carries `statusCode:503` + `body:{error: 'vl_files_disabled',…}` but the global error handler at `index.js:801-802` reads only `err.statusCode` and `err.message` — wire body is
+origin: spec-deferred 846fa03aa85f
+location: components/gov-chat-backend/index.js:801-802
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Unit test at logs-service-vl.test.js:453-457 asserts the in-memory body; no route-level test asserts the HTTP wire body. Out-of-scope for this story's `files:` manifest (index.js owned by the BFF shell).
+status: open
+
+### DW-399: getLogsInRange VL path reports `total` as the page-window length (rows.length returned by VL with limit=limit+offset) rather than the dataset size in VL. Envelope contract implies a stable total for
+origin: spec-deferred 78d8061fe7a1
+location: components/gov-chat-backend/services/logs-service.js:_getLogsInRangeFromVL
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_getLogsInRangeFromVL` constructs `total = rows.length` where `rows = await client.query({limit: limitN + offsetN, ...})`. Fix requires a separate `client.query` with no limit or a `_count` API — performance-cost trade-off that belongs to a Story 5.4 / 5.8 contract-test follow-up.
+status: open
+
+### DW-400: _parseNdjsonContent retry window slices a fixed RE_PARSE_WINDOW_BYTES=4096 from the cursor and concatenates with the broken buffer; if the truncated line happens to complete by appending characters
+origin: spec-deferred da49b96d019a
+location: components/gov-chat-backend/services/logs-service.js:_parseNdjsonContent
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_parseNdjsonContent`. The retry buffer should be sliced to the next newline (or a newline-count cap), not a fixed byte count. Edge-case hardening; the 4096-byte window handles the AD-10 kill -9 truncation case today.
+status: open
+
+### DW-401: _acquireReadLock collides on stale /tmp/.logs-read-lock-* sentinels from previously-crashed PIDs whose PID has since been recycled. First read by the new PID throws EEXIST and skips the file until
+origin: spec-deferred cd2027e6b83f
+location: components/gov-chat-backend/services/logs-service.js:_acquireReadLock
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js `_acquireReadLock`. Same hardening as the `_logVlUnavailableOnce` cooldown-file sweep — stale sentinels need either a TTL or a PID-still-alive check at open time.
+status: open
+
+### DW-402: booleanEnv regex is inlined in logs-service.js and mirrors the canonical shared/lib/boolean-env.js helper. One of two regex literals (/^(1|true|TRUE|yes)$/) can drift if the canonical helper adds new
+origin: spec-deferred 721679e9cf70
+location: components/gov-chat-backend/services/logs-service.js:19
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: The inline copy exists to keep __mocks__/shared-lib.js self-contained. Future consolidation when the test mock plumbing stops requiring the inline copy.
+status: open
+
+## Story 5-3 review pass #4 (deferred)
+
+Deferrals captured during the 2026-09-07 round-4 review of `logs-service.js`. HIGH-severity findings were patched in place (separate commits); MEDIUM items deferred per the orchestrator directive. The patch IDs map: P1→err.body middleware, P2→security-scan synthetic descriptors, P3→escapeLogSQL hardenings, P4→level allowlist, P5→NDJSON retry cursor, P6→_sumHits single-key fallback, P7→file-path degraded envelope, P8→throw on unknown dateRange, P9→readdir try/catch, P10→MAX_LOG_FILE_SIZE rewind, P11→MAX_LINES_TO_PROCESS per-file cap, P12→JSDoc-only VL offset note, P13→fs.promises cooldown + incident visibility.
+
+### DW-403: `_getLogsInRangeFromFile` `withinWindow` compares a `yyyy-MM-dd` row field against a full ISO timestamp on both sides of the filter — `row.date >= s && row.date <= e` evaluates false for rows whose timestamp is non-midnight because ASCII `2026-09-01` is shorter than `2026-09-01T08:00:00.000Z`.
+origin: round-4 review (2026-09-07)
+location: components/gov-chat-backend/services/logs-service.js:416
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: high (functional bug, deferred because P11 surfaced it as a side effect)
+reason: The bug means any non-midnight timestamp row never reaches the date filter's positive side. Existing tests happen to use empty `row.date` strings or windows where the comparison accidentally matches. Discovered while writing the P11 per-file cap test — the test had to switch from observing `result.total` to spying `_parseNdjsonContent` because the date filter zeroes rows out. Fix: compare `row.timestamp` against the ISO `s`/`e` (or split s/e to yyyy-MM-dd for the comparison and add an inline note in the slice above the cap).
+status: open
+
+### DW-404: Cross-spec deferral — log-level numeric encodings (`fields.level: 0` or `''`) still collapse to INFO, but the `level: {number}` enum cases (12/13/14/15/16/17 for TRACE/DEBUG/INFO/WARN/ERROR/FATAL per OTel spec) are not mapped. Tracked separately under DW-388 for the level-extraction story.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_extractLevel
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: Out of scope for this story's spec (text-only log sources). Carry-forward.
+status: open (duplicate ref to DW-388)
+
+### DW-405: `_escapeLogSql` strips backslash sequences — but the regex is `\s*\\.[\s\S]*?` greedy across multiple tokens, so a payload like `foo\\bar` followed by a real `keyword` 100 chars later still escapes, but a payload with `\\` as the LAST char is silently dropped without a trailing placeholder. Confirmed in unit tests; behavioural note for when the LogSQL parser changes upstream.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_escapeLogSql
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: P3 patched the high-impact cases (AND/OR/NOT, single-quote, homoglyphs, structural punctuation). Edge case covered by `strips backslash escape sequences` test. Carry-forward only if a real exploit surfaces.
+status: open (informational)
+
+### DW-406: `getLogsInRange` VL path the new JSDoc on P12 documents — but the per-call `window = limit + offset` is unbounded on a malicious caller (no MAX cap on `limit + offset`). Combined with the absence of a total row-count cap on the VL adapter, a single admin UI request can still download megabytes on `/api/admin/logs?limit=10000&offset=990000`. Worth a cap on the window itself.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_getLogsInRangeFromVL
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium (defensive cap, deferred — would need a SPEC change on the envelope contract)
+reason: The hard caps live in the MELT adapter (`VICTORIALOGS_MAX_LIMIT` upstream). Service layer should add an env-tunable server-side ceiling like `MAX_LOG_WINDOW=5000` and clamp `window` accordingly. SPEC CAP-7 implies a session-bound cap; coordinate with the VL transport story before flipping.
+status: open
+
+### DW-407: `_acquireReadLock` lock-path collisions across PIDs (P10-rewind + earlier) — the lock sentinel uses `${baseName}-${process.pid}`. If PID recycles and a new process opens the same sentinel, it would see EEXIST and silently skip its own file. PID-recycle is a real platform behaviour on long-lived hosts.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_acquireReadLock (line 1188)
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Tracked separately under DW-401. Carry-forward.
+status: open (duplicate ref to DW-401)
+
+### DW-408: `security-scan-service.js` (P2 synthetic descriptors) — deferred to file path only; VL default mode still passes `{date, service:'victorialogs', source:'victorialogs', query}` objects around the rest of the call chain. Add an integration test that walks the full admin logs route on VL mode to confirm no consumer crashes. Carry-forward under DW-395.
+origin: round-4 review (2026-09-07)
+location: services/security-scan-service.js
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: P2 patched the synthetic-descriptor detection; full VL-mode integration coverage is a follow-up test concern.
+status: open (duplicate ref to DW-395)
+
+### DW-409: `_withVlFailOpen` still returns the `fallback` synchronously on the catch branch WITHOUT a `degraded:true` flag when the inner function returned successfully but the call itself never reached VL (e.g. `_getVlClient()` threw on initialization). Trace the edge case before flipping the contract.
+origin: round-4 review (2026-09-07)
+location: services/logs-service.js:_withVlFailOpen
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: low
+reason: Behaviour change would touch envelope contract; not in the immediate scope of P1-P13.
+status: open
+

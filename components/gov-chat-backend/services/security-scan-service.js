@@ -75,7 +75,8 @@ const securityScanService = {
       logger.info('Running security scan');
       if (!logsService) throw new Error('LogsService is required for security scan');
 
-      const { vulnerabilities, failedLogins, suspiciousActivities } = await this.processLogsInParallel(logsService);
+      const { vulnerabilities, failedLogins, suspiciousActivities, skipped, reason } =
+        await this.processLogsInParallel(logsService);
 
       const scanResult = {
         scanTime: new Date().toISOString(),
@@ -88,8 +89,10 @@ const securityScanService = {
         vulnerabilityDetails: vulnerabilities,
         failedLoginDetails: failedLogins,
         suspiciousDetails: suspiciousActivities,
-        status: 'completed',
-        message: 'Security scan completed successfully'
+        status: skipped ? 'skipped' : 'completed',
+        message: skipped ? `Security scan skipped: ${reason}` : 'Security scan completed successfully',
+        skipped: skipped === true,
+        reason: reason || null
       };
 
       await this.saveScanResults(scanResult);
@@ -229,6 +232,24 @@ const securityScanService = {
     try {
       console.log(`Starting unified log scan for period ${startDate} to ${endDate}`);
       const allLogFiles = await logsService.getLogFilesInRange(startDate, endDate, true);
+      // VL mode returns synthetic `{date, service, source, query}`
+      // descriptors, not real fs paths. The downstream regex / gzip /
+      // scan pipeline only handles strings; feeding it objects throws
+      // a TypeError and the route surfaces a 500 — silent zero output
+      // in default deployments. Return an explicit skipped signal so
+      // the UI can tell the operator the file path is unavailable.
+      if (allLogFiles.length > 0 && allLogFiles.some((entry) => typeof entry !== 'string')) {
+        logger.info(
+          'Security scan requested in VL mode (synthetic descriptors): file-path scan disabled, review via VL LogSQL instead.'
+        );
+        return {
+          vulnerabilities: { critical: [], medium: [], low: [] },
+          failedLogins: [],
+          suspiciousActivities: [],
+          skipped: true,
+          reason: 'vl_mode_no_file_scan'
+        };
+      }
       const validLogFiles = (
         await Promise.all(
           allLogFiles.map(async (file) => {

@@ -137,6 +137,66 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md`
 - `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`
 
+## Suggested Review Order
+
+**VL integration — entry point & source mode**
+- Per-call env read for `ADMIN_LOGS_SOURCE` via `_sourceMode()` (AD-6, no module-level cache).
+  [`logs-service.js:139`](../../components/gov-chat-backend/services/logs-service.js#L139)
+- VL adapter lazy-init via `_getVlClient()` so unit tests can swap it without re-importing.
+  [`logs-service.js:162`](../../components/gov-chat-backend/services/logs-service.js#L162)
+- `VlFilesDisabledError` carries `statusCode=503` + `{error,message}` body that the middleware now forwards.
+  [`logs-service.js:60`](../../components/gov-chat-backend/services/logs-service.js#L60)
+
+**VL fail-open + cooldown**
+- `_withVlFailOpen(fn, opName, fallback)` wraps every VL path; trip path emits one cooldown log per minute.
+  [`logs-service.js:265`](../../components/gov-chat-backend/services/logs-service.js#L265)
+- Cooldown file now uses `fs.promises` + warns on unexpected error codes (was sync I/O on hot path).
+  [`logs-service.js:218`](../../components/gov-chat-backend/services/logs-service.js#L218)
+
+**Read paths (`getLogsInRange`, `getLogsSummary`, `searchLogs`, `debugYesterdayLogs`)**
+- Public entry point with pinned envelope JSDoc — `{logs, total, limit, offset}` per AD-3.
+  [`logs-service.js:289`](../../components/gov-chat-backend/services/logs-service.js#L289)
+- VL mode for `getLogsInRange` — `limit+offset` window, slices client-side, JSDoc notes VL lacks native offset.
+  [`logs-service.js:354`](../../components/gov-chat-backend/services/logs-service.js#L354)
+- `_sumHits` single-key fallback no longer bleeds sibling levels (was: level=INFO returned ERROR count).
+  [`logs-service.js:610`](../../components/gov-chat-backend/services/logs-service.js#L610)
+- `_escapeLogSql` hardened: AND/OR/NOT, single-quote, Unicode homoglyphs all stripped.
+  [`logs-service.js:799`](../../components/gov-chat-backend/services/logs-service.js#L799)
+- `level` filter now goes through a canonical allowlist — kills LogSQL injection via crafted level values.
+  [`logs-service.js:679`](../../components/gov-chat-backend/services/logs-service.js#L679)
+- `_defaultStartIso`/`_defaultEndIso` throw on unknown `dateRange` instead of returning an incoherent pair.
+  [`logs-service.js:484`](../../components/gov-chat-backend/services/logs-service.js#L484)
+
+**File-mode fallback (AD-10 read lock + concurrent-writer safety)**
+- `_acquireReadLock` uses `fs.open(path,'wx')` O_EXCL; EEXIST returns `null` (read-only another writer).
+  [`logs-service.js:1053`](../../components/gov-chat-backend/services/logs-service.js#L1053)
+- ENOENT-tolerant file read in `_readLogFileAd10` — missing log file is not a failure.
+  [`logs-service.js:1097`](../../components/gov-chat-backend/services/logs-service.js#L1097)
+- Per-file row cap `MAX_LINES_TO_PROCESS` (was unbounded on `getLogsInRange` file path).
+  [`logs-service.js:386`](../../components/gov-chat-backend/services/logs-service.js#L386)
+- File-path `searchLogs` now surfaces `{degraded:true, error:'file_read_failed'}` envelope on partial reads.
+  [`logs-service.js:729`](../../components/gov-chat-backend/services/logs-service.js#L729)
+- `_getLogFilesInRangeFromVL` emits synthetic `{date, service, source, query}` descriptors per UTC day.
+  [`logs-service.js:944`](../../components/gov-chat-backend/services/logs-service.js#L944)
+- `MAX_LOG_FILE_SIZE` (20 MB) read now rewinds to the last newline (no half-UTF8 / half-JSON token).
+  [`logs-service.js:1109`](../../components/gov-chat-backend/services/logs-service.js#L1109)
+- `_parseNdjsonContent` retry-success no longer over-advances the cursor and swallows complete tail lines.
+  [`logs-service.js:1138`](../../components/gov-chat-backend/services/logs-service.js#L1138)
+- `readdir(logDir)` ENOENT between `access()` and `readdir()` returns `[]` instead of 500.
+  [`logs-service.js:991`](../../components/gov-chat-backend/services/logs-service.js#L991)
+
+**Cross-cutting (middleware + downstream consumer)**
+- Global error middleware now forwards `err.body` so typed errors reach HTTP clients as `{error, message}`.
+  [`index.js:804`](../../components/gov-chat-backend/index.js#L804)
+- `security-scan-service` detects synthetic VL descriptors and returns an explicit `skipped` signal (no silent zero).
+  [`security-scan-service.js:236`](../../components/gov-chat-backend/services/security-scan-service.js#L236)
+
+**Peripherals (tests)**
+- New `logs-service-vl.test.js` — 79 tests covering VL paths, fail-open, EEXIST, source mode, escape hardening.
+  [`logs-service-vl.test.js:1`](../../components/gov-chat-backend/__tests__/services/logs-service-vl.test.js#L1)
+- Existing `logs-service.test.js` — minor tweak to keep `combined-*.log` date-filter assertions aligned.
+  [`logs-service.test.js:1`](../../components/gov-chat-backend/__tests__/services/logs-service.test.js#L1)
+
 ## Review Triage Log
 
 ### 2026-09-07 — Review pass

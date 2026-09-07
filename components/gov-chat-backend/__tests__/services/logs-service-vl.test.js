@@ -560,6 +560,67 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(logsService._sourceMode()).toBe('victorialogs');
     });
 
+    describe('_escapeLogSql adversarial inputs', () => {
+      // Adversarial payloads that attempt to break out of the surrounding
+      // `_msg:"..."` wrapper. The escape must leave LogSQL unable to parse
+      // a secondary clause / character class.
+      const t = (raw) => logsService._escapeLogSql(raw);
+
+      it('strips ASCII double-quote (LogSQL string terminator)', () => {
+        expect(t('foo"bar')).not.toMatch(/"/);
+      });
+      it('strips backslash escape sequences', () => {
+        expect(t('foo\\"bar')).not.toMatch(/\\/);
+      });
+      it('strips newline/CR (multi-line string terminator)', () => {
+        expect(t('foo\nbar')).not.toMatch(/\n/);
+        expect(t('foo\r\nbar')).not.toMatch(/\r/);
+      });
+      it('strips Unicode curly double-quotes (homoglyph defence)', () => {
+        // The Unicode “” pair must not survive into the sanitised string.
+        const sanitized = t('foo“bar”');
+        expect(sanitized).not.toMatch(/[“”]/);
+      });
+      it('strips curly single-quotes (homoglyph defence)', () => {
+        const sanitized = t('foo‘bar’');
+        expect(sanitized).not.toMatch(/[‘’]/);
+      });
+      it('strips ASCII single-quote (defence-in-depth)', () => {
+        expect(t("foo'bar")).not.toMatch(/'/);
+      });
+      it('strips LogSQL clause keywords AND/OR/NOT whole-word, case-insensitive', () => {
+        expect(t('a) OR (_stream:"*")')).not.toMatch(/\bOR\b/i);
+        expect(t('a AND level:ERROR')).not.toMatch(/\bAND\b/i);
+        expect(t('a Not level:ERROR')).not.toMatch(/\bNOT\b/i);
+        expect(t('a and level:ERROR')).not.toMatch(/\bAND\b/i);
+      });
+      it('strips LogSQL structural punctuation (: ( ) { } ; , = * ? `)', () => {
+        // Each one must be replaced with whitespace.
+        for (const ch of [':', '(', ')', '{', '}', ';', ',', '=', '*', '?', '`']) {
+          expect(t(`a${ch}b`)).not.toContain(ch);
+        }
+      });
+      it('preserves allowed word characters and spaces between tokens', () => {
+        const input = 'normal search term with spaces';
+        const sanitized = t(input);
+        // Verbatim — every char in the allowlist is preserved.
+        expect(sanitized).toBe('normal search term with spaces');
+      });
+      it('canonical injected payload: a) OR (_stream:"*") cannot break out', () => {
+        const sanitized = t('a) OR (_stream:"*")');
+        // Compose the full filter the caller would emit.
+        const filter = `_msg:"${sanitized}"`;
+        expect(filter).not.toMatch(/\)\s*OR\s*\(/i);
+        expect(filter).not.toMatch(/\bOR\s*\(_stream/i);
+        // The literal payload characters that mattered are gone.
+        expect(sanitized).not.toContain('(');
+        expect(sanitized).not.toContain(')');
+        expect(sanitized).not.toContain(':');
+        expect(sanitized).not.toContain('*');
+        expect(sanitized).not.toContain('"');
+      });
+    });
+
     it('getLogsInRange clamps limit=-1 and offset=-5 to safe values', async () => {
       mockVlClient.query.mockResolvedValue([]);
       const result = await logsService.getLogsInRange({

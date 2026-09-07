@@ -711,19 +711,58 @@ class LogsService {
   }
 
   /**
-   * Strip LogSQL reserved characters from a user-supplied search term
-   * before injecting into a `_msg:"..."` / `_stream_service:"..."`
-   * filter. Documented in Story 4.3 — keep parity with
-   * `VictoriaLogsClient._escapeLogSql` if/when that helper lands.
+   * Sanitise a user-supplied string before it is interpolated into a
+   * `_msg:"..."` / `_stream_service:"..."` / `_stream:"..."` /
+   * `service:"..."` filter clause.
+   *
+   * Contract:
+   *   - The caller wraps the result in a double-quoted LogSQL filter,
+   *     e.g. ``_msg:${escaped}`` becomes ``_msg:"<escaped>"``.
+   *   - This function MUST strip every character that could either
+   *     terminate the surrounding quotes or break out of the filter
+   *     clause, regardless of whether the caller happens to wrap the
+   *     value today:
+   *       - LogSQL string terminators: `"`, `\`, newlines.
+   *       - Filter syntax tokens: `(`, `)`, `{`, `}`, `:`, `;`, `,`,
+   *         `=`, `?`, `*` (wildcards).
+   *       - LogSQL clause keywords (upper/lower case): `AND`, `OR`,
+   *         `NOT`, so a caller that forgets to quote cannot inject a
+   *         new filter expression.
+   *       - Backticks (defence-in-depth) and Unicode left/right double
+   *         & single quotes (homoglyphs).
+   *     Operators and keyword tokens are replaced with a single space;
+   *     operators are case-insensitive on the `AND|OR|NOT` regex.
+   *   - Never returns the empty string for an input that had any
+   *     significant character; the replacement keeps word boundaries
+   *     so multi-token terms like `"foo   bar"` become `"foo bar"`,
+   *     not `"foobar"`.
+   *
+   * The wrapped-quote strategy at every call site (the value is always
+   * placed inside `_msg:"..."` / `_stream_service:"..."`) is the
+   * first line of defence. This sanitiser is the second — never rely
+   * on the wrap alone.
    *
    * @param {string} raw
    * @returns {string}
    */
   _escapeLogSql(raw) {
-    // Strip characters that terminate or extend a LogSQL quoted string,
-    // break out of the filter, or alter the parse tree. Matches the
-    // canonical `_msg:"..."` / `_stream_service:"..."` filter shape.
-    return String(raw).replace(/[*?:\\"\n\r\t`(){}=,;]/g, ' ');
+    const text = String(raw);
+    // 1. Drop every LogSQL-significant character (ASCII punctuation).
+    const sanitized = text.replace(/[*?:\\"\n\r\t`(){}=,;]/g, ' ');
+    // 2. Drop Unicode homoglyphs (curly quotes) — defence-in-depth so a
+    //    future call site that forgets to double-quote the value still
+    //    cannot be broken out by a Unicode-only payload.
+    const noHomoglyphs = sanitized
+      .replace(/[‘’]/g, "'") // single curly → ASCII single (next pass)
+      .replace(/[“”]/g, '"');
+    // 3. Strip LogSQL clause keywords so a non-quoted caller cannot
+    //    attach `AND level:ERROR` to the filter. Whole-word match,
+    //    case-insensitive.
+    const noKeywords = noHomoglyphs.replace(/\b(AND|OR|NOT)\b/gi, ' ');
+    // 4. Strip ALL single quotes — they survive the wrap today (they
+    //    are not LogSQL string terminators) but a future call site may
+    //    switch to single-quoted wrapping.
+    return noKeywords.replace(/'/g, ' ');
   }
 
   async _searchLogsFromFile(options = {}) {

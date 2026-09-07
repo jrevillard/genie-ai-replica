@@ -621,6 +621,52 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       });
     });
 
+    describe('level filter allowlist', () => {
+      it('accepts every canonical level (TRACE/DEBUG/INFO/WARN/ERROR/FATAL)', () => {
+        for (const lvl of ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']) {
+          expect(logsService._normalizeLevelFilter(lvl)).toBe(lvl);
+        }
+      });
+      it('uppercases and trims input', () => {
+        expect(logsService._normalizeLevelFilter('  info ')).toBe('INFO');
+        expect(logsService._normalizeLevelFilter('warn')).toBe('WARN');
+      });
+      it('maps the legacy WARNING synonym to WARN', () => {
+        expect(logsService._normalizeLevelFilter('WARNING')).toBe('WARN');
+        expect(logsService._normalizeLevelFilter('warning')).toBe('WARN');
+      });
+      it('rejects injection payloads outside the allowlist', () => {
+        const hostile = 'INFO OR _stream:*';
+        expect(() => logsService._normalizeLevelFilter(hostile)).toThrow(
+          /must be one of TRACE, DEBUG, INFO, WARN, ERROR, FATAL/
+        );
+      });
+      it('rejects empty / non-string level', () => {
+        expect(() => logsService._normalizeLevelFilter('')).toThrow(/non-empty string/);
+        expect(() => logsService._normalizeLevelFilter(null)).toThrow(/non-empty string/);
+        expect(() => logsService._normalizeLevelFilter(undefined)).toThrow(/non-empty string/);
+        expect(() => logsService._normalizeLevelFilter(42)).toThrow(/non-empty string/);
+      });
+      it('searchLogs — VL path: hostile level throws before the VL call', async () => {
+        mockVlClient.query.mockResolvedValue([]);
+        await expect(
+          logsService.searchLogs({ level: 'INFO OR _stream:*', startDate: '2026-09-01', endDate: '2026-09-01' })
+        ).rejects.toThrow(/must be one of/);
+        expect(mockVlClient.query).not.toHaveBeenCalled();
+      });
+      it('searchLogs — VL path: valid level passes and reaches VL', async () => {
+        mockVlClient.query.mockResolvedValue([]);
+        await logsService.searchLogs({
+          level: 'INFO',
+          startDate: '2026-09-01',
+          endDate: '2026-09-01'
+        });
+        expect(mockVlClient.query).toHaveBeenCalledTimes(1);
+        const call = mockVlClient.query.mock.calls[0][0];
+        expect(call.q).toMatch(/level:INFO\b/);
+      });
+    });
+
     it('getLogsInRange clamps limit=-1 and offset=-5 to safe values', async () => {
       mockVlClient.query.mockResolvedValue([]);
       const result = await logsService.getLogsInRange({

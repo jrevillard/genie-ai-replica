@@ -676,7 +676,7 @@ class LogsService {
       filterParts.push(`_msg:"${escaped}"`);
     }
     if (level && String(level).trim() !== '') {
-      filterParts.push(`level:${String(level).toUpperCase()}`);
+      filterParts.push(`level:${this._normalizeLevelFilter(level)}`);
     }
     if (service && String(service).trim() !== '') {
       const escaped = this._escapeLogSql(String(service));
@@ -763,6 +763,46 @@ class LogsService {
     //    are not LogSQL string terminators) but a future call site may
     //    switch to single-quoted wrapping.
     return noKeywords.replace(/'/g, ' ');
+  }
+
+  /**
+   * Canonical set of log levels the search filter accepts. Anything
+   * outside this set is rejected (LogSQL injection vector — a hostile
+   * caller could otherwise pass `INFO OR _stream:*` to widen the
+   * filter beyond the requested level).
+   *
+   * @type {ReadonlyArray<string>}
+   */
+  get ALLOWED_LEVELS() {
+    return Object.freeze(['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL']);
+  }
+
+  /**
+   * Validate a caller-supplied `level` filter value against the
+   * canonical allowlist. Unknown / malformed input throws so the
+   * route layer can surface a 400 rather than silently swallowing an
+   * injection attempt.
+   *
+   * @param {unknown} level
+   * @returns {string} Normalised upper-case level in the allowlist
+   */
+  _normalizeLevelFilter(level) {
+    if (typeof level !== 'string' || level.trim() === '') {
+      throw new Error('searchLogs level filter must be a non-empty string');
+    }
+    const upper = level.trim().toUpperCase();
+    // Map the legacy `WARNING` synonym onto `WARN` so existing
+    // callers stay compatible while the underlying level remains
+    // allowlisted.
+    const canonical = upper === 'WARNING' ? 'WARN' : upper;
+    if (!this.ALLOWED_LEVELS.includes(canonical)) {
+      throw new Error(
+        `searchLogs level filter must be one of ${this.ALLOWED_LEVELS.join(
+          ', '
+        )} (got ${JSON.stringify(level)})`
+      );
+    }
+    return canonical;
   }
 
   async _searchLogsFromFile(options = {}) {

@@ -36,6 +36,7 @@ jest.mock(
 
 const mockFs = {
   readFile: jest.fn(),
+  writeFile: jest.fn(),
   access: jest.fn(),
   mkdir: jest.fn(),
   readdir: jest.fn(),
@@ -836,25 +837,53 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
   });
 
   describe('review follow-up #2 — 2026-09-07 patches (round 3)', () => {
-    it('_logVlUnavailableOnce: cooldown file is updated each successful log (writeFileSync path)', () => {
-      mockFsSync.existsSync.mockReturnValue(true);
-      mockFsSync.readFileSync.mockReturnValueOnce(String(Date.now() - 10 * 60 * 1000)); // 10 min ago
-      logsService._logVlUnavailableOnce('test-op', new Error('boom'));
-      // writeFileSync (not openSync 'wx') — must have been called to refresh
+    it('_logVlUnavailableOnce: cooldown file is updated each successful log (fs.writeFile path)', async () => {
+      mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 10 * 60 * 1000)); // 10 min ago
+      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      await logsService._logVlUnavailableOnce('test-op', new Error('boom'));
+      // fs.writeFile (not openSync 'wx') — must have been called to refresh
       // the cooldown timestamp.
-      expect(mockFsSync.writeFileSync).toHaveBeenCalled();
-      const [pathArg, valueArg] = mockFsSync.writeFileSync.mock.calls[mockFsSync.writeFileSync.mock.calls.length - 1];
+      expect(mockFs.writeFile).toHaveBeenCalled();
+      const [pathArg, valueArg] = mockFs.writeFile.mock.calls[mockFs.writeFile.mock.calls.length - 1];
       expect(typeof pathArg).toBe('string');
       expect(Number.isFinite(Number(valueArg))).toBe(true);
     });
 
-    it('_logVlUnavailableOnce: still skips log when within cooldown window', () => {
-      mockFsSync.existsSync.mockReturnValue(true);
-      mockFsSync.readFileSync.mockReturnValueOnce(String(Date.now() - 1000)); // 1s ago
-      const writeBefore = mockFsSync.writeFileSync.mock.calls.length;
-      logsService._logVlUnavailableOnce('test-op', new Error('boom'));
-      const writeAfter = mockFsSync.writeFileSync.mock.calls.length;
+    it('_logVlUnavailableOnce: still skips log when within cooldown window', async () => {
+      mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 1000)); // 1s ago
+      const writeBefore = mockFs.writeFile.mock.calls.length;
+      await logsService._logVlUnavailableOnce('test-op', new Error('boom'));
+      const writeAfter = mockFs.writeFile.mock.calls.length;
       expect(writeAfter).toBe(writeBefore);
+    });
+
+    it('_logVlUnavailableOnce: surfaces the original incident via logger.warn when writeFile fails', async () => {
+      // Re-require the service inside its own isolateModules registry so
+      // we share the same `shared-lib` module instance the service bound
+      // `logger` from — `beforeEach` resetModules would otherwise hand us
+      // a different mock.
+      mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 10 * 60 * 1000));
+      const err = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+      mockFs.writeFile.mockRejectedValueOnce(err);
+      let sharedLogger;
+      let service;
+      jest.isolateModules(() => {
+        sharedLogger = require('../../shared-lib').logger;
+        service = require('../../services/logs-service');
+        service.initialized = false;
+        service.setVictoriaLogsClient(mockVlClient);
+      });
+      sharedLogger.warn.mockClear();
+      await service._logVlUnavailableOnce('test-op', new Error('boom'));
+      expect(sharedLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('VictoriaLogs unreachable'),
+        expect.any(Object)
+      );
+      // The broken-cooldown incident is also surfaced via logger.error.
+      expect(sharedLogger.error).toHaveBeenCalled();
+      const errArgs = sharedLogger.error.mock.calls[sharedLogger.error.mock.calls.length - 1];
+      expect(String(errArgs[0])).toMatch(/cooldown write failed/i);
+      expect(String(errArgs[1])).toMatch(/boom/);
     });
 
     it('_emptyEnvelope clamps limit=-1 / offset=-5 to safe values', () => {

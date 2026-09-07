@@ -215,31 +215,36 @@ class LogsService {
    * @param {string} opName
    * @param {Error} err
    */
-  _logVlUnavailableOnce(opName, err) {
+  async _logVlUnavailableOnce(opName, err) {
     let lastTs = 0;
     try {
-      const raw = fssync.readFileSync(VL_FAIL_OPEN_TS_FILE, 'utf8');
+      const raw = await fs.readFile(VL_FAIL_OPEN_TS_FILE, 'utf8');
       lastTs = parseInt(raw, 10) || 0;
     } catch (readErr) {
-      // Filesystem-level failure should not block the call path; fall
-      // through to the rate-limit check below (best-effort logging).
-      if (readErr.code !== 'ENOENT' && readErr.code !== 'EACCES') {
-        // EACCES is fine (e.g. read-only fs); surface unexpected codes
-        // via the rate-limit path so the operator can investigate.
+      // ENOENT is the common first-run path (file does not exist yet);
+      // everything else is unexpected but should not break the call
+      // path — record a debug line so a future operator can spot it.
+      if (readErr && readErr.code !== 'ENOENT') {
+        logger.debug(`VL fail-open cooldown probe read failed: ${readErr.message}`);
       }
     }
     const now = Date.now();
     if (now - lastTs < VL_FAIL_OPEN_LOG_COOLDOWN_MS) return;
 
-    // writeFileSync truncates-and-writes; for small files this is
-    // effectively atomic on POSIX. Avoids the previous `openSync('wx')`
-    // pattern that always threw EEXIST after the first successful write
-    // and silently muted every subsequent incident for the host lifetime.
+    // Persist the new "last logged" timestamp. fs.promises.writeFile
+    // is atomic-truncate on POSIX for small files, avoiding the
+    // earlier `openSync('wx')` pattern that always threw EEXIST after
+    // the first successful write and silently muted every subsequent
+    // incident for the host lifetime.
     try {
-      fssync.writeFileSync(VL_FAIL_OPEN_TS_FILE, String(now));
-    } catch {
-      // Don't propagate lock failures — the call path must still degrade.
-      return;
+      await fs.writeFile(VL_FAIL_OPEN_TS_FILE, String(now));
+    } catch (writeErr) {
+      // Lock failure must not block the call path itself, but the
+      // original incident MUST still be surfaced so the operator can
+      // see why their traffic is degraded. Otherwise a broken cooldown
+      // file would silently mute every downstream outage for the rest
+      // of the host lifetime.
+      logger.error(`VL fail-open cooldown write failed (${writeErr.code || writeErr.message}); incident still surfaced once:`, err && err.message);
     }
     logger.warn(`[${opName}] VictoriaLogs unreachable (VL_FAIL_OPEN=true): ${err.message}`, {
       code: err && err.code,
@@ -262,7 +267,10 @@ class LogsService {
       return await fn();
     } catch (err) {
       if (this._isVlUnavailable(err) && booleanEnv('VL_FAIL_OPEN')) {
-        this._logVlUnavailableOnce(opName, err);
+        // Fire-and-await best-effort: a failed cooldown write must not
+        // block the call path, but the original incident must still be
+        // surfaced once (see the implementation for the rationale).
+        await this._logVlUnavailableOnce(opName, err);
         return { ...fallback, degraded: true };
       }
       throw err;

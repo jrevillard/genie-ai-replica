@@ -325,6 +325,24 @@ class LogsService {
     return this._getLogsInRangeFromVL(options);
   }
 
+  /**
+   * Execute `getLogsInRange` against VictoriaLogs.
+   *
+   * Note on pagination: VictoriaLogs' `/_internal/logsql/query` endpoint
+   * accepts only a `limit` parameter — there is **no native offset**. The
+   * adapter passes `limit = limit + offset` (the "window") and this
+   * method then slices `[offset, offset + limit)` client-side. Wide
+   * ranges therefore download the full window every call; an explicit
+   * `q` filter and a tight window are how we keep the payload bounded.
+   *
+   * @param {object} options
+   * @param {string} [options.start]
+   * @param {string} [options.end]
+   * @param {string} [options.q='*']
+   * @param {number} [options.limit=100]
+   * @param {number} [options.offset=0]
+   * @returns {Promise<{logs: object[], total: number, limit: number, offset: number}>}
+   */
   async _getLogsInRangeFromVL(options = {}) {
     const { start, end, q = '*', limit = 100, offset = 0 } = options;
     const parsedLimit = parseInt(limit, 10);

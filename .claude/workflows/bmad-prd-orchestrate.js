@@ -25,6 +25,7 @@ const resume = args_.resume || null;
 const userChoice = args_.userChoice || null;
 const confirmedDeps = args_.confirmedDeps || null;
 const maxIterations = args_.maxIterations || 5;
+const cleanup = args_.cleanup || false;
 const timestamp = args_.timestamp || 'unknown';
 const projectRoot = '/home/jerome/git_projects/ITU/genie-ai';
 // runDir + convergeScriptPath are derived AFTER Setup (HIGH 5 fix).
@@ -526,4 +527,255 @@ If the key is missing, return { "status": "missing" }.`,
 log(`Execute loop complete: completed=${state.completed.length} blocked=${state.blocked.length} skipped=${state.skipped.length} awaitingOperator=${state.awaitingOperator.length}`)
 await writeState(state);
 await appendJournal({ event: 'execute_complete', completed: state.completed.length, blocked: state.blocked.length, skipped: state.skipped.length, awaitingOperator: state.awaitingOperator.length, halts: state.halts.length });
-// FALL THROUGH to Phase 4 (Epic boundary + auto-merge + sprint-status sync — added by Task 4)
+
+// ============================================================================
+// PHASE 4: EPIC BOUNDARY — sprint-status sync + optional retrospective
+// ============================================================================
+phase('Epic boundary')
+log('Syncing sprint-status: completed stories → done (orchestrator is sole writer of done transitions)...')
+
+// 4.1 Sprint-status sync (ALWAYS — the orchestrator is the sole writer of the
+// done transition). After each story MR merges into the PRD branch,
+// sprint-status.yaml holds `in-progress` (committed by the converge setup
+// agent onto the story branch, propagated via MR merge). The orchestrator
+// advances to `done` here so the file's terminal state is correct.
+//
+// Implementation note: sprint_plan.py has no `advance` subcommand. The brief
+// references one (RESOLVED AMBIGUITY) but the script's actual subcommands are
+// generate/status/validate (see .claude/skills/bmad-sprint-planning/SKILL.md).
+// `generate --set <key>=<status>` is the documented equivalent: re-parses the
+// epics, merges with existing statuses (preserving in-progress, etc.), and the
+// `--set` flag forces the targeted keys to the desired status.
+const sprintStatusSync = await agent(
+  `You are the sprint-status sync agent for bmad-prd-orchestrate (Phase 4).
+
+PRD_WORKTREE_PATH: ${setup.prdWorktreePath}
+SPRINT_STATUS_PATH: ${setup.sprintStatusPath}
+COMPLETED_STORIES: ${JSON.stringify(state.completed)}
+TIMESTAMP: ${timestamp}
+
+GOAL: Advance sprint-status.yaml on the PRD branch so every converged story
+      is 'done' and every epic whose stories are all done is 'done' too.
+      Then commit + push so the remote reflects the final state.
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Discover an epic file under ${setup.prdWorktreePath}/_bmad-output/planning-artifacts/:
+   - Prefer 'epics.md' or any 'epics*.md' / 'epic-*.md' file in that dir.
+   - If multiple match, use the first one (the script tolerates any valid epics file).
+3. Read ${setup.sprintStatusPath} to extract 'project' and 'generated' fields (preserve them).
+4. Build the --set flags:
+   - For each <key> in COMPLETED_STORIES: add --set <key>=done
+   - For each epic-N in the file: if EVERY story belonging to epic-N has status 'done', add --set epic-N=done
+   (Numeric → canonical mapping: a story key like '5-7-foo' belongs to epic-5; the prefix '5-' matches.)
+5. Run ONE batched invocation (avoids partial-write races):
+   python3 ${setup.repoRoot}/.claude/skills/bmad-sprint-planning/scripts/sprint_plan.py generate \\
+     --epic-file <EPIC_FILE> \\
+     --status-file ${setup.sprintStatusPath} \\
+     --stories-dir ${setup.prdWorktreePath}/_bmad-output/implementation-artifacts/stories \\
+     --project "<project_name>" \\
+     --date "${timestamp}" \\
+     <all --set flags>
+   The script emits a JSON report — verify it returned {"ok": true, ...}.
+6. If the status file was modified (advanced > 0):
+   - git -C ${setup.prdWorktreePath} add _bmad-output/implementation-artifacts/sprint-status.yaml
+   - git -C ${setup.prdWorktreePath} commit -m "chore(sprint-status): Phase 4 sync — <N> stories + <M> epics to done"
+   - git -C ${setup.prdWorktreePath} push origin ${setup.prdBranch}
+7. If advanced == 0 (everything already done — rare idempotent rerun):
+   - Skip commit + push. Return committed=false, pushed=false.
+8. Return JSON: { advanced: <int>, advancedEpics: [<epicKey>], committed: <bool>, pushed: <bool>, projectName: <string> }
+
+CONSTRAINTS:
+- ONLY write to ${setup.prdWorktreePath}/_bmad-output/implementation-artifacts/sprint-status.yaml.
+- DO NOT modify any other tracked file.
+- DO NOT skip commit + push when advanced > 0 — without it the remote stays stale.
+- The orchestrator is the SOLE writer of the done transition; the converge setup
+  agent only writes 'in-progress' on the story branch.`,
+  { label: `sprint-status-sync-${timestamp}`, phase: 'Epic boundary', schema: {
+    type: 'object',
+    properties: {
+      advanced: { type: 'integer' },
+      advancedEpics: { type: 'array', items: { type: 'string' } },
+      committed: { type: 'boolean' },
+      pushed: { type: 'boolean' },
+      projectName: { type: 'string' },
+    },
+    required: ['advanced', 'advancedEpics', 'committed', 'pushed'],
+  }, agentType: 'general-purpose' }
+);
+
+log(`Sprint-status sync: ${sprintStatusSync.advanced} stories → done, ${sprintStatusSync.advancedEpics.length} epics → done (committed=${sprintStatusSync.committed}, pushed=${sprintStatusSync.pushed})`)
+await appendJournal({
+  event: 'phase4_sprint_status_sync',
+  advanced: sprintStatusSync.advanced,
+  advancedEpics: sprintStatusSync.advancedEpics,
+  committed: sprintStatusSync.committed,
+  pushed: sprintStatusSync.pushed,
+});
+
+// 4.2 Optional retrospective at epic boundaries (--retro flag).
+// Only fires when (a) --retro=true AND (b) at least one epic advanced to done.
+if (retro && sprintStatusSync.advancedEpics.length > 0) {
+  // Determine which retros still need to run (skip epics whose retro is already 'done').
+  const retroCheck = await agent(
+    `Read ${setup.sprintStatusPath}.
+
+For each of these epic keys: ${JSON.stringify(sprintStatusSync.advancedEpics)}
+Find the corresponding retro key 'epic-N-retrospective'.
+
+Return JSON: { retrosNeeded: [<epicKey>] }
+where <epicKey> entries are the epics whose retro key is NOT 'done' (i.e., the retro still needs to run).`,
+    { label: `retro-check-${timestamp}`, phase: 'Epic boundary', schema: {
+      type: 'object',
+      properties: { retrosNeeded: { type: 'array', items: { type: 'string' } } },
+      required: ['retrosNeeded'],
+    }, agentType: 'general-purpose' }
+  );
+
+  const retrosNeeded = retroCheck.retrosNeeded || [];
+
+  if (retrosNeeded.length === 0) {
+    log('All epics already have done retros; skipping retro dispatch')
+    await appendJournal({ event: 'phase4_retro_skip', reason: 'all_done' });
+  } else if (userChoice !== 'proceed_retro' && userChoice !== 'skip_retro') {
+    // Halt for user approval before invoking retros (the brief mandates a manual gate here).
+    log(`Halting for retro approval: ${retrosNeeded.length} epic(s) ready for retrospective...`)
+    await writeState(state);
+    await appendJournal({ event: 'halt_epic_retro', epics: retrosNeeded });
+    return {
+      haltReason: 'epic_retro',
+      context: { retrosNeeded, completed: state.completed, blocked: state.blocked, runDir },
+      resumeToken: timestamp,
+      runDir,
+      userOptions: ['proceed_retro', 'skip_retro', 'abort_prd'],
+    };
+  } else if (userChoice === 'skip_retro') {
+    log('Retro skipped per userChoice')
+    await appendJournal({ event: 'phase4_retro_skip', reason: 'user_choice', epics: retrosNeeded });
+  } else {
+    // userChoice === 'proceed_retro': invoke one retro per epic. The skill is the
+    // SOLE writer of the retro key status and action_items — the agent only verifies.
+    log(`Invoking bmad-retrospective for ${retrosNeeded.length} epic(s)...`)
+    const retrosCompleted = [];
+    for (const epicKey of retrosNeeded) {
+      // Extract numeric N from 'epic-N' so we can pass -H <N> to the skill.
+      const epicNumMatch = /^epic-(\d+)$/.exec(epicKey);
+      if (!epicNumMatch) {
+        log(`WARNING: skipping malformed epicKey ${epicKey} (expected 'epic-N')`)
+        continue;
+      }
+      const epicNum = epicNumMatch[1];
+
+      const retroResult = await agent(
+        `You are the retro dispatch agent for bmad-prd-orchestrate (Phase 4).
+
+EPIC_KEY: ${epicKey}
+EPIC_NUM: ${epicNum}
+PRD_WORKTREE_PATH: ${setup.prdWorktreePath}
+TIMESTAMP: ${timestamp}
+
+GOAL: Invoke bmad-retrospective in headless mode for epic ${epicNum}.
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Invoke the bmad-retrospective skill in headless mode (the stable orchestrator-facing interface per SKILL.md):
+   \`Skill: bmad-retrospective -H ${epicNum}\`
+   Pass the numeric epic id; the skill handles discovery + sprint-status update + action items.
+3. After the skill returns, re-read ${setup.sprintStatusPath}.
+4. Verify development_status['epic-${epicNum}-retrospective'] === 'done'.
+   - If not done: HALT — return retroDone=false with the failing field.
+5. If the status file was modified during the retro (or to record an assumption),
+   commit + push:
+   - git -C ${setup.prdWorktreePath} add _bmad-output/implementation-artifacts/sprint-status.yaml
+   - git -C ${setup.prdWorktreePath} commit -m "chore(sprint-status): retro for ${epicKey} done"
+   - git -C ${setup.prdWorktreePath} push origin ${setup.prdBranch}
+6. Return JSON: { epicKey: '${epicKey}', retroDone: <bool>, committed: <bool>, pushed: <bool>, actionItemsCount: <int> }
+
+CONSTRAINTS:
+- ONLY write to ${setup.prdWorktreePath}/_bmad-output/implementation-artifacts/sprint-status.yaml.
+- The bmad-retrospective skill is the SOLE writer of the retro key status and action_items.
+- DO NOT manually edit action_items.`,
+        { label: `retro-${epicKey}-${timestamp}`, phase: 'Epic boundary', schema: {
+          type: 'object',
+          properties: {
+            epicKey: { type: 'string' },
+            retroDone: { type: 'boolean' },
+            committed: { type: 'boolean' },
+            pushed: { type: 'boolean' },
+            actionItemsCount: { type: 'integer' },
+          },
+          required: ['epicKey', 'retroDone', 'committed'],
+        }, agentType: 'general-purpose' }
+      );
+
+      log(`Retro for ${epicKey}: done=${retroResult.retroDone} committed=${retroResult.committed}`)
+      if (retroResult.retroDone) {
+        retrosCompleted.push(epicKey);
+      }
+    }
+    await appendJournal({
+      event: 'phase4_retro_complete',
+      epics: retrosCompleted,
+      attempted: retrosNeeded.length,
+    });
+  }
+} else if (retro) {
+  log('Retro requested but no completed epics found; skipping retro')
+  await appendJournal({ event: 'phase4_retro_skip', reason: 'no_completed_epics' });
+} else {
+  log('Retro not requested (--retro not set)')
+}
+
+// ============================================================================
+// PHASE 5: FINAL REPORT
+// ============================================================================
+phase('Final report')
+log('Generating final report...')
+const finalReport = {
+  runId: timestamp,
+  prdKey: setup.prdKey,
+  completed: state.completed,
+  blocked: state.blocked,
+  skipped: state.skipped,
+  awaitingOperator: state.awaitingOperator,
+  halts: state.halts,
+  iterations: state.iterationCount,
+  haltReason: 'final_complete',
+}
+await writeState(state);
+await appendJournal({
+  event: 'final_complete',
+  completed: state.completed.length,
+  blocked: state.blocked.length,
+  skipped: state.skipped.length,
+  awaitingOperator: state.awaitingOperator.length,
+  iterations: state.iterationCount,
+});
+
+// ============================================================================
+// PHASE 6: CLEANUP (--cleanup flag)
+// ============================================================================
+phase('Cleanup')
+if (cleanup) {
+  log(`Removing run dir ${runDir}...`)
+  await agent(
+    `rm -rf ${runDir}. Return { removed: true, path: "${runDir}" }.
+
+CONSTRAINTS:
+- ONLY remove ${runDir}. Verify it has no symlinks that could escape before removing.
+- DO NOT touch any file outside ${runDir}.
+- If ${runDir} does not exist, return removed=false, path="${runDir}".`,
+    { label: `cleanup-${timestamp}`, phase: 'Cleanup', schema: {
+      type: 'object',
+      properties: {
+        removed: { type: 'boolean' },
+        path: { type: 'string' },
+      },
+      required: ['removed', 'path'],
+    }, agentType: 'general-purpose' }
+  );
+} else {
+  log('Cleanup not requested (--cleanup not set); run dir preserved at ' + runDir)
+}
+
+return finalReport

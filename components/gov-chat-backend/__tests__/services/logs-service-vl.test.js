@@ -44,7 +44,24 @@ const mockFs = {
   constants: { R_OK: 4 }
 };
 
+const mockFsSync = {
+  readFileSync: jest.fn(),
+  writeFileSync: jest.fn(),
+  openSync: jest.fn(),
+  closeSync: jest.fn(),
+  writeSync: jest.fn(),
+  existsSync: jest.fn(),
+  unlinkSync: jest.fn()
+};
+
 jest.mock('fs', () => ({
+  readFileSync: mockFsSync.readFileSync,
+  writeFileSync: mockFsSync.writeFileSync,
+  openSync: mockFsSync.openSync,
+  closeSync: mockFsSync.closeSync,
+  writeSync: mockFsSync.writeSync,
+  existsSync: mockFsSync.existsSync,
+  unlinkSync: mockFsSync.unlinkSync,
   promises: mockFs,
   constants: { R_OK: 4 }
 }));
@@ -273,11 +290,32 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(result).toEqual({ logs: rows, total: 1, limit: 50, offset: 0 });
     });
 
-    it('escapes LogSQL reserved chars in the term', async () => {
+    it('strips LogSQL reserved chars in the term (replaces with space)', async () => {
       mockVlClient.query.mockResolvedValueOnce([]);
       await logsService.searchLogs({ dateRange: 'today', term: 'a*b?c:d"e\\f' });
       const callArg = mockVlClient.query.mock.calls[0][0];
-      expect(callArg.q).toContain('a\\*b\\?c\\:d\\"e\\\\f');
+      // Reserved chars are replaced with spaces — safer than backslash
+      // escaping (LogSQL has no escape sequence for newline/control chars;
+      // a literal newline in the source would break out of the quoted
+      // segment and inject arbitrary filter syntax).
+      expect(callArg.q).toContain('_msg:"a b c d e f"');
+    });
+
+    it('strips newline + LogSQL control chars to prevent injection', async () => {
+      mockVlClient.query.mockResolvedValueOnce([]);
+      // Newline + quoted-string terminator + backtick + control chars.
+      // After stripping, the `_stream:"evil"` filter clause cannot
+      // appear verbatim — the `"`, `:` and newline that close the
+      // outer `_msg:"..."` segment are removed.
+      await logsService.searchLogs({
+        dateRange: 'today',
+        term: 'safe\n_stream:"evil" _msg:`injected'
+      });
+      const callArg = mockVlClient.query.mock.calls[0][0];
+      expect(callArg.q).not.toContain('_stream:"evil"');
+      expect(callArg.q).not.toContain('_msg:"evil"');
+      expect(callArg.q).not.toContain('`');
+      expect(callArg.q).not.toContain('\n');
     });
   });
 
@@ -575,6 +613,115 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       });
       expect(result.limit).toBe(25);
       expect(result.offset).toBe(10);
+    });
+  });
+
+  describe('review follow-up #2 — 2026-09-07 patches (round 3)', () => {
+    it('_logVlUnavailableOnce: cooldown file is updated each successful log (writeFileSync path)', () => {
+      mockFsSync.existsSync.mockReturnValue(true);
+      mockFsSync.readFileSync.mockReturnValueOnce(String(Date.now() - 10 * 60 * 1000)); // 10 min ago
+      logsService._logVlUnavailableOnce('test-op', new Error('boom'));
+      // writeFileSync (not openSync 'wx') — must have been called to refresh
+      // the cooldown timestamp.
+      expect(mockFsSync.writeFileSync).toHaveBeenCalled();
+      const [pathArg, valueArg] = mockFsSync.writeFileSync.mock.calls[mockFsSync.writeFileSync.mock.calls.length - 1];
+      expect(typeof pathArg).toBe('string');
+      expect(Number.isFinite(Number(valueArg))).toBe(true);
+    });
+
+    it('_logVlUnavailableOnce: still skips log when within cooldown window', () => {
+      mockFsSync.existsSync.mockReturnValue(true);
+      mockFsSync.readFileSync.mockReturnValueOnce(String(Date.now() - 1000)); // 1s ago
+      const writeBefore = mockFsSync.writeFileSync.mock.calls.length;
+      logsService._logVlUnavailableOnce('test-op', new Error('boom'));
+      const writeAfter = mockFsSync.writeFileSync.mock.calls.length;
+      expect(writeAfter).toBe(writeBefore);
+    });
+
+    it('_emptyEnvelope clamps limit=-1 / offset=-5 to safe values', () => {
+      const env = logsService._emptyEnvelope({ limit: -1, offset: -5 });
+      expect(env.limit).toBe(0);
+      expect(env.offset).toBe(0);
+    });
+
+    it('_emptyEnvelope clamps limit > 10000', () => {
+      const env = logsService._emptyEnvelope({ limit: 99999, offset: 5 });
+      expect(env.limit).toBe(10000);
+      expect(env.offset).toBe(5);
+    });
+
+    it('_defaultEndIso("week") snaps to end-of-day (no minute drift)', () => {
+      const before = new Date();
+      before.setHours(23, 59, 59, 999);
+      const expected = before.toISOString();
+      const actual = logsService._defaultEndIso('week');
+      expect(actual).toBe(expected);
+    });
+
+    it('_defaultEndIso("month") snaps to end-of-day', () => {
+      const before = new Date();
+      before.setHours(23, 59, 59, 999);
+      const expected = before.toISOString();
+      const actual = logsService._defaultEndIso('month');
+      expect(actual).toBe(expected);
+    });
+
+    it('searchLogs — VL path honours caller offset (paginates the result window)', async () => {
+      const rows = Array.from({ length: 25 }, (_, i) => ({ _msg: `row-${i}` }));
+      mockVlClient.query.mockResolvedValueOnce(rows);
+      const result = await logsService.searchLogs({
+        dateRange: 'today',
+        limit: 10,
+        offset: 5
+      });
+      // Adapter asked for limit + offset = 15 rows, then we slice [5, 15).
+      expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+      expect(result.logs).toHaveLength(10);
+      expect(result.logs[0]).toEqual({ _msg: 'row-5' });
+      expect(result.limit).toBe(10);
+      expect(result.offset).toBe(5);
+    });
+
+    it('searchLogs — VL path clamps negative limit/offset to safe values', async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => ({ _msg: `r${i}` }));
+      mockVlClient.query.mockResolvedValueOnce(rows);
+      const result = await logsService.searchLogs({
+        dateRange: 'today',
+        limit: -5,
+        offset: -10
+      });
+      // limit=0 → no rows in slice; offset=0 → start from 0
+      expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 0 }));
+      expect(result.logs).toHaveLength(0);
+      expect(result.limit).toBe(0);
+      expect(result.offset).toBe(0);
+    });
+
+    it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
+      mockVlClient.hits.mockResolvedValueOnce({ ERROR: 7 }).mockResolvedValueOnce({ WARN: 99 });
+      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
+      expect(mockVlClient.hits).toHaveBeenCalledTimes(1);
+      expect(mockVlClient.hits).toHaveBeenCalledWith(expect.objectContaining({ q: 'level:ERROR' }));
+      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'all', count: 7 }]);
+      expect(result.warnings).toEqual([]);
+    });
+
+    it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
+      mockVlClient.hits.mockResolvedValueOnce({ INFO: 42 });
+      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
+      expect(mockVlClient.hits).toHaveBeenCalledTimes(1);
+      expect(mockVlClient.hits).toHaveBeenCalledWith(expect.objectContaining({ q: 'level:INFO' }));
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([]);
+      expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'all', count: 42 }]);
+    });
+
+    it('getLogsSummary — VL path with level unset queries both ERROR + WARN (parallel)', async () => {
+      mockVlClient.hits.mockResolvedValueOnce({ ERROR: 4 }).mockResolvedValueOnce({ WARN: 2 });
+      const result = await logsService.getLogsSummary({ date: '2026-09-06' });
+      expect(mockVlClient.hits).toHaveBeenCalledTimes(2);
+      expect(result.errors[0].count).toBe(4);
+      expect(result.warnings[0].count).toBe(2);
     });
   });
 });

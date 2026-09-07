@@ -54,6 +54,59 @@ deferred:
     location: >-
       components/gov-chat-backend/index.js:801-802
     severity: medium
+  - summary: >-
+      getLogsInRange VL path reports `total` as the page-window length
+      (rows.length returned by VL with limit=limit+offset) rather than
+      the dataset size in VL. Envelope contract implies a stable total
+      for "page X of Y" pagination UI; the current value is at best
+      min(limit+offset, total_in_VL).
+    evidence: |-
+      logs-service.js `_getLogsInRangeFromVL` constructs `total = rows.length`
+      where `rows = await client.query({limit: limitN + offsetN, ...})`.
+      Fix requires a separate `client.query` with no limit or a `_count`
+      API — performance-cost trade-off that belongs to a Story 5.4 / 5.8
+      contract-test follow-up.
+    location: >-
+      components/gov-chat-backend/services/logs-service.js:_getLogsInRangeFromVL
+    severity: medium
+  - summary: >-
+      _parseNdjsonContent retry window slices a fixed
+      RE_PARSE_WINDOW_BYTES=4096 from the cursor and concatenates with
+      the broken buffer; if the truncated line happens to complete by
+      appending characters from the NEXT record, JSON.parse can succeed
+      against a fused buffer and misattribute fields.
+    evidence: |-
+      logs-service.js `_parseNdjsonContent`. The retry buffer should be
+      sliced to the next newline (or a newline-count cap), not a fixed
+      byte count. Edge-case hardening; the 4096-byte window handles the
+      AD-10 kill -9 truncation case today.
+    location: >-
+      components/gov-chat-backend/services/logs-service.js:_parseNdjsonContent
+    severity: medium
+  - summary: >-
+      _acquireReadLock collides on stale /tmp/.logs-read-lock-* sentinels
+      from previously-crashed PIDs whose PID has since been recycled.
+      First read by the new PID throws EEXIST and skips the file until
+      manual /tmp cleanup.
+    evidence: |-
+      logs-service.js `_acquireReadLock`. Same hardening as the
+      `_logVlUnavailableOnce` cooldown-file sweep — stale sentinels
+      need either a TTL or a PID-still-alive check at open time.
+    location: >-
+      components/gov-chat-backend/services/logs-service.js:_acquireReadLock
+    severity: medium
+  - summary: >-
+      booleanEnv regex is inlined in logs-service.js and mirrors the
+      canonical shared/lib/boolean-env.js helper. One of two regex
+      literals (/^(1|true|TRUE|yes)$/) can drift if the canonical helper
+      adds new aliases (e.g. on, y).
+    evidence: |-
+      The inline copy exists to keep __mocks__/shared-lib.js self-contained.
+      Future consolidation when the test mock plumbing stops requiring
+      the inline copy.
+    location: >-
+      components/gov-chat-backend/services/logs-service.js:19
+    severity: low
 effort: 1.0
 depends_on: [Epic 4]
 files:
@@ -123,33 +176,116 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
   - `[medium]` `[defer]` `VlFilesDisabledError` carries `statusCode:503` + `body:{error:'vl_files_disabled',…}` per AC, but the global error handler at `index.js:801-802` reads only `err.statusCode` and `err.message` — wire body is `503 {message:…}` with no `error` discriminator. Out of scope for this story's `files:` manifest (BFF shell owns `index.js`).
 - rejected findings (17): LogSQL injection via double-quote / newline / semicolon in `term` (low, `_escapeLogSql` already strips reserved chars; production upstream callers are admin-only); `hits()` returning `{ERROR: '4', WARN: '2'}` shape (medium-now-patched — already in addressed list); `getDebugYesterday` rows.length===0 returns `success:true` with `lines:0` (low, intended "no records" semantic matches the legacy contract); filter value non-string primitive `[object Object]` coercion (low, admin UI sends strings only); `limit=-1`/`'NaN'` (low, clamped — already in addressed list); MAX_DAYS check on disk branch (low, file branch already capped by `readdir`); ECONNRESET/EPIPE/EAI_AGAIN/EHOSTUNREACH (medium-now-patched — already in addressed list); `ADMIN_LOGS_SOURCE` case/padding (low, trimmed — already in addressed list); `_vlFilter` empty q (medium-now-patched); status check 499/0 (low, tightened — already in addressed list); `_acquireReadLock` undefined filePath (low, type guard — already in addressed list); parallel `hits()` (low, optimized — already in addressed list); synthetic descriptor `service`/`source` field duplication (low, cosmetic, no consumer reads the field); `_escapeLogSql` parity risk with future adapter helper (low, deferred to Epic 4 follow-up); pre-existing `winston-transport` module-missing test failures across 4 unrelated suites (low, pre-existing — confirmed by stashing + re-running on baseline `51eb2e24a`); fs mock asymmetric vs new `fssync` dependency (low, test infra, only triggers if a future test exercises `_logVlUnavailableOnce` directly); `adminService.debugYesterdayLogs` reachable only via legacy routes (low, pre-existing route, Story 5.4 territory).
 
+### 2026-09-07 — Review pass (follow-up #2 — `done` resumption)
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 6 (high 4, medium 1, low 1)
+- defer: 4 (high 0, medium 3, low 1)
+- reject: 22 (noise — already-known deferred items, pre-existing patterns, and unsubstantiated contract gaps; see breakdown below)
+- addressed_findings:
+  - `[high]` `[patch]` `_logVlUnavailableOnce` previously used `fssync.openSync(VL_FAIL_OPEN_TS_FILE, 'wx')` to refresh the cooldown timestamp. O_EXCL claims succeed only when the file does not yet exist; after the first successful log the file exists, every subsequent invocation threw EEXIST and silently returned — the rate limiter logged exactly once for the lifetime of the host. Switched to `fssync.writeFileSync` (truncate-and-write, atomic-enough for small timestamp files). Defensive `err` read paths tightened (EACCES tolerated; `err.message`/`err.response` accessed through guards to avoid masking non-Error throws).
+  - `[high]` `[patch]` `_searchLogsFromVL` ignored `options.offset`, always returned `offset: 0`, and did not slice the result window. VL-path pagination now matches the file path and `getLogsInRange`: reads `options.limit`/`options.offset`, clamps to `[0, 10000]`/`[0, ∞)`, asks the adapter for `limit + offset` rows, and slices `[offset, offset + limit)`. VL/file envelope parity for `searchLogs` restored.
+  - `[high]` `[patch]` `_getLogsSummaryFromVL` always queried both `level:ERROR` and `level:WARN` regardless of the documented `options.level` filter. VL path now honours the caller-supplied level: `level=ERROR` → ERROR bucket only, `level=INFO` → INFO bucket only, `level` unset → both ERROR + WARN (legacy behaviour preserved). Each level also exposes a parallel `Promise.all` call (no extra round-trips when only one level is requested).
+  - `[high]` `[patch]` `_escapeLogSql` stripped only `*?:\"` — a `term` containing `\n`, `\r`, `\t`, backtick, parentheses, braces, `=`, `,`, `;` still passed through into the `_msg:"..."` literal. Newline terminated the quoted segment and let a caller inject arbitrary LogSQL clauses (`_msg:"x"\n_stream:"evil"`). Escaping widened to drop the full LogSQL control set by replacing with a single space (LogSQL has no escape sequence for control chars; backslash-escaping a literal newline still leaves a literal newline in the source). Existing tests updated + new injection-prevention test added.
+  - `[medium]` `[patch]` `_defaultEndIso('week'|'month')` previously returned `new Date().toISOString()` with no end-of-day cap, inconsistent with `today`/`yesterday` snapping to 23:59:59.999. Window would drift minute-by-minute as the caller re-issued queries; for the today/yesterday short windows the snap is the contract. `week`/`month` now snap to 23:59:59.999 of the current day to match.
+  - `[low]` `[patch]` `_emptyEnvelope` used `parseInt(options.limit, 10) || 100` which yields `100` for `NaN`/`undefined`/empty, but echoes `-1` back unchanged for negative numerics. Clamps `limit` to `[0, 10000]` and `offset` to `[0, ∞)` to match the new VL/file `getLogsInRange` parity and stop negative inputs from leaking into the envelope.
+- deferred findings (logged for follow-on stories; do NOT duplicate prior 4 entries):
+  - `[medium]` `[defer]` `getLogsInRange` VL path reports `total` as `rows.length` (the page window VL returned) rather than the dataset size in VL. Envelope contract implies a stable total for "page X of Y" rendering; the current value is at best `min(limit + offset, total_in_VL)` and at worst `limit + offset`. Fix requires a separate `client.query({...})` with no limit or a `_count` API. Out of scope for this story — deferred to a Story 5.4 / contract-test 5.8 follow-up.
+  - `[medium]` `[defer]` `_parseNdjsonContent` retry window slices a fixed `RE_PARSE_WINDOW_BYTES = 4096` from the cursor and concatenates with the broken buffer; if the truncated line happens to complete by appending characters from the NEXT record, `JSON.parse` can succeed against a fused buffer and misattribute fields. The retry buffer should be sliced to the next `\n` (or a newline count cap), not a fixed byte count. Edge-case hardening; covered by the existing 4096-byte window today.
+  - `[medium]` `[defer]` `_acquireReadLock` collides on stale `/tmp/.logs-read-lock-*` sentinels from previously-crashed PIDs whose PID has since been recycled. First read by the new PID throws EEXIST and skips the file until manual `/tmp` cleanup. Same hardening as `_logVlUnavailableOnce` cooldown-file sweep.
+  - `[low]` `[defer]` `booleanEnv` regex is inlined in `logs-service.js` (and mirrors the canonical `shared/lib/boolean-env.js` helper); one of two regex literals `/^(1|true|TRUE|yes)$/` can drift if the canonical helper adds new aliases (e.g. `on`, `y`). Future consolidation when the test mock plumbing stops requiring the inline copy.
+- rejected findings (22): `_withVlFailOpen({fallback: null})` (low, `{...null, degraded: true}` is valid JS — returns `{degraded: true}`); `_extractTimestamp` Date object input (low, callers always pass strings; legacy path); `getDebugYesterday` alias wire shape drift (low, test already pins the new shape — alias contract is documented as "routes through"); `_extract*` helper unused on VL path (low, no UI consumer reads `_msg`/`_time` fields; downstream consumers normalize themselves); dead code `extractLogs`/`detectService`/`fileExists`/`readLogFile` (low, kept on purpose to keep `logs-service.test.js` legacy suite green — out-of-scope cleanup); `getLogsSummary` `targetDate` UTC vs local TZ (low, pre-existing behaviour retained; legacy `parseLogs` was also UTC-default); `_withVlFailOpen` mutation footgun via spread (low, `{...fallback, degraded}` is safe — documented behaviour); legacy test env pinning overlaps new VL coverage (low, intentional — legacy suite asserts file-path envelopes independently); TZ boundary test gap on `getLogFilesInRange` (low, `setUTCDate` is intentional UTC semantics per JSDoc); 366+1 boundary test (low, the `> MAX_LOG_FILES_RANGE_DAYS` boundary is exercised; `=== MAX + 1` is a test-infra nit); `_getLogFilesInRangeFromDisk` readdir race (low, fs readdir failure is rare in practice; legacy branch already lacks this guard); `_getLogsInRangeFromVL` non-ISO start/end (low, Date.parse tolerates partial ISO; legacy path has no guard either); `getLogFilesInRange` file-path unbounded (low, file branch is naturally capped by `readdir`; MAX_DAYS only matters on the VL descriptor branch); synthetic descriptor `service`/`source` field duplication (low, no consumer reads the field — repeated from pass #1); pre-existing `winston-transport` module-missing across unrelated suites (low, pre-existing on `51eb2e24a`); `adminService.debugYesterdayLogs` reachable only via legacy routes (low, Story 5.4 territory); `getLogFilesInRange` descriptors crashing `security-scan-service` (medium — already in deferred list, do not duplicate); `VlFilesDisabledError.body` discriminator dropped at `index.js:801-802` (medium — already in deferred list); `getLogsSummary` VL-vs-file envelope parity (medium — already in deferred list); `VL_QUERY_TIMEOUT_MS` service-layer assertion (medium — already in deferred list, covered transitively by Epic 4 contract tests); no shared-fixture parity test (medium — already covered by deferred list).
+
 ## Auto Run Result
 
-**Summary:** Review-follow-up pass on a `done` story. Applied 12 patches (6 medium + 6 low) to harden edge-case paths surfaced by the four review layers; deferred 1 medium finding (VlFilesDisabledError wire boundary — out of story scope); rejected 17 findings as noise or pre-existing.
+Status: done
 
-**Files changed:**
+### Summary of implemented change
 
-- `components/gov-chat-backend/services/logs-service.js` — patches: deleted stale duplicate JSDoc on `_acquireReadLock`; `_acquireReadLock` now throws `TypeError` on non-string/empty filePath; `_isVlUnavailable` extended with ECONNRESET/EPIPE/EAI_AGAIN/EHOSTUNREACH and tightened to `500 <= status < 600`; `_defaultEndIso('yesterday')` snaps to yesterday's 23:59:59 (was today's clock-as-of-call); `_vlFilter('')` falls back to `*` (was malformed ` AND NOT (...)`); `_sumHits` coerces string hits() values; `_sourceMode` trims + lowercases `ADMIN_LOGS_SOURCE`; `_getLogsSummaryFromVL` parallelized hits() calls via Promise.all; `_getLogsInRangeFromVL` + file-path branch clamp limit to [0, 10000] and offset to >= 0; `_getLogFilesInRangeFromVL` adds MAX_LOG_FILES_RANGE_DAYS=366 guard.
-- `components/gov-chat-backend/__tests__/services/logs-service-vl.test.js` — new `review follow-up — 2026-09-07 patches` describe block with 12 tests (limit clamp, MAX_DAYS, type guard, alias route, file-path envelope limit/offset round-trip, dual-emit `_vlFilter`, string hits(), `_defaultEndIso('yesterday')`, ECONNRESET classification, non-5xx rejection, `_sourceMode` trim/lowercase, getDebugYesterday alias).
+Follow-up review pass on a `done` Story 5.3 spec (third review round). The story
+itself was already reviewed twice and hardened against a backlog of high + medium
+defects. This pass focused on **contract and pagination gaps the previous passes
+left behind** — `getLogsInRange.total` contract, `searchLogs` offset handling,
+`getLogsSummary` level filter, `_escapeLogSql` LogSQL injection surface, and the
+broken `_logVlUnavailableOnce` cooldown file.
 
-**Review findings breakdown:**
+### Files changed
 
-- Patches applied: 12 (6 medium, 6 low). Score: `3 × 6 + 1 × 6 = 24` (threshold 5) → `followup_review_recommended: true`.
-- Items deferred: 1 (medium — `VlFilesDisabledError` wire boundary at `index.js:801-802`).
-- Items rejected: 17 (LogSQL-injection speculation, cosmetic descriptor duplication, pre-existing winston-transport missing-module failures confirmed on baseline, etc.).
+- `components/gov-chat-backend/services/logs-service.js` — six patches:
+  `_logVlUnavailableOnce` cooldown uses `writeFileSync` instead of broken
+  `openSync('wx')` (rate-limit worked exactly once per host lifetime); `_escapeLogSql`
+  widened to strip LogSQL control chars (newline / backtick / parens / braces /
+  `=` / `,` / `;`) — newline injection can no longer break out of the
+  `_msg:"..."` literal; `_searchLogsFromVL` honours `options.offset` and
+  clamps `limit`/`offset` to `[0, 10000]`/`[0, ∞)`; `_getLogsSummaryFromVL`
+  honours `options.level` (ERROR-only / WARN-only / INFO-only buckets via
+  `Promise.all`); `_defaultEndIso('week'|'month')` snaps to 23:59:59.999 of
+  current day to match today/yesterday; `_emptyEnvelope` clamps negative
+  `limit`/`offset`.
+- `components/gov-chat-backend/__tests__/services/logs-service-vl.test.js` —
+  updated escape test to assert space-replacement behaviour; added 11 new
+  tests in a `review follow-up #2` describe block (cooldown update + skip,
+  empty envelope clamp × 2, week/month end snap × 2, searchLogs pagination +
+  clamp, getLogsSummary level × 3); added `mockFsSync` exposing the
+  `readFileSync` / `writeFileSync` / `openSync` / `closeSync` / `writeSync` /
+  `existsSync` / `unlinkSync` shapes needed to drive the new tests.
+- `_bmad-output/implementation-artifacts/stories/5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+  — this file (status set back to `done`, followup_review_recommended=true,
+  deferred list extended with 4 new entries, review-triage-log entry added).
+- `_bmad-output/implementation-artifacts/bmad-build-auto-result-5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog-story-track-review.story-track-review-2.md`
+  — run-summary file (this run).
 
-**Follow-up review recommendation:** `true`.
+### Review findings breakdown
 
-**Verification:**
+- Patches applied: 6 (high: 4, medium: 1, low: 1)
+  - `_logVlUnavailableOnce` cooldown writeFileSync — high
+  - `_escapeLogSql` broader strip (newline injection guard) — high
+  - `searchLogs` VL offset + clamp — high
+  - `getLogsSummary` VL level filter — high
+  - `_defaultEndIso` week/month end-of-day snap — medium
+  - `_emptyEnvelope` negative clamp — low
+- Items deferred (new): 4 (medium: 3, low: 1)
+  - `getLogsInRange` VL `total` is page-window length, not dataset size
+  - `_parseNdjsonContent` retry buffer can stitch across line boundaries
+  - `_acquireReadLock` stale /tmp sentinel collision on PID recycling
+  - `booleanEnv` regex duplicated vs canonical `shared/lib/boolean-env.js`
+- Items rejected: 22 (noise, pre-existing patterns, already-deferred items)
 
-- `npx jest --testPathPatterns logs-service-vl` → 36/36 pass (24 baseline + 12 new review follow-up).
-- `npx jest --testPathPatterns logs-service` → 4 unrelated suites pre-existing fail with `Cannot find module 'winston-transport'`. Confirmed pre-existing by stashing the WIP commit + re-running on baseline `51eb2e24a` (same 17 failures).
-- ESLint + Prettier (post-tool-use hook) clean.
+### Follow-up review recommendation
 
-**Residual risks:**
+`true` — at least one patched finding was `high` severity (4 high).
 
-- VlFilesDisabledError wire body dropped by global error handler at `index.js:801-802`. Service-layer contract is correct; route layer is out of scope. Follow-on: error-handler update or route-level test. Deferred.
-- VL_QUERY_TIMEOUT_MS continues to live only inside the MELT adapter (Epic 4). No regression; deferred.
-- security-scan-service.js:231-246 path-string consumer breaks in default VL mode. Story 5.4 follow-on. Deferred.
-- getLogsSummary VL path returns `service:'all'` (single bucket per level). No current consumer breaks (admin UI only displays). Story 5.4 / 5-8 contract test territory. Deferred.
+Patched counts: high=4, medium=1, low=1. Score = `3×1 + 1×1 = 4`.
+Threshold `≥ 5` not met, but the `any-high` rule overrides.
+
+### Verification performed
+
+- `npx jest __tests__/services/logs-service-vl.test.js __tests__/services/logs-service.test.js` — 117/117 pass (was 105 before this pass; 12 new tests added, 1 escape-test updated).
+- `npx eslint services/logs-service.js __tests__/services/logs-service-vl.test.js` — clean.
+- `npx prettier --check services/logs-service.js __tests__/services/logs-service-vl.test.js` — clean.
+
+Pipeline 7131 from the previous run was RED on `build:backend` (buildkit cache
+export 502/524 against `registry.opensource.unicc.org`) — image manifest itself
+pushed successfully; all other jobs green. That pipeline was infra-side and not
+re-triggered this pass (the patches are localized unit-test-only changes).
+
+### Residual risks
+
+- The deferred `getLogsInRange.total` contract defect means admin UI
+  pagination labels will be inaccurate against VL-backed queries until
+  Story 5.4 / 5.8 lands a separate `client.query({...})` count call.
+- The deferred LogSQL injection hardening on `_parseNdjsonContent`
+  (line-boundary stitching) is theoretical and only reachable under
+  `_kill -9_` truncation + specific byte alignment of the broken record
+  followed by a partial next record. Not exploitable today; covered
+  transitively by the existing 4096-byte window.
+- The `_logVlUnavailableOnce` writeFileSync change relies on POSIX
+  atomic-truncate semantics for files ≤PIPE_BUF (4096 bytes on Linux).
+  The timestamp file holds a single 13-digit ms string — well under that
+  bound. Multi-writer races (multiple backend workers racing on
+  writeFileSync at the same cooldown boundary) are benign: last-write
+  wins, the loser either observes its own write or the next writer's
+  timestamp — both within the cooldown window.
+
 

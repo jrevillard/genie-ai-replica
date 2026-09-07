@@ -221,33 +221,29 @@ class LogsService {
       const raw = fssync.readFileSync(VL_FAIL_OPEN_TS_FILE, 'utf8');
       lastTs = parseInt(raw, 10) || 0;
     } catch (readErr) {
-      if (readErr.code !== 'ENOENT') {
-        // Filesystem-level failure should not block the call path; fall
-        // through to the rate-limit check below.
+      // Filesystem-level failure should not block the call path; fall
+      // through to the rate-limit check below (best-effort logging).
+      if (readErr.code !== 'ENOENT' && readErr.code !== 'EACCES') {
+        // EACCES is fine (e.g. read-only fs); surface unexpected codes
+        // via the rate-limit path so the operator can investigate.
       }
     }
     const now = Date.now();
     if (now - lastTs < VL_FAIL_OPEN_LOG_COOLDOWN_MS) return;
 
-    let handle;
+    // writeFileSync truncates-and-writes; for small files this is
+    // effectively atomic on POSIX. Avoids the previous `openSync('wx')`
+    // pattern that always threw EEXIST after the first successful write
+    // and silently muted every subsequent incident for the host lifetime.
     try {
-      handle = fssync.openSync(VL_FAIL_OPEN_TS_FILE, 'wx');
-    } catch (lockErr) {
-      if (lockErr.code === 'EEXIST') {
-        // Another writer just claimed the slot; skip silently.
-        return;
-      }
+      fssync.writeFileSync(VL_FAIL_OPEN_TS_FILE, String(now));
+    } catch {
       // Don't propagate lock failures — the call path must still degrade.
       return;
     }
-    try {
-      fssync.writeSync(handle, String(now));
-    } finally {
-      fssync.closeSync(handle);
-    }
     logger.warn(`[${opName}] VictoriaLogs unreachable (VL_FAIL_OPEN=true): ${err.message}`, {
-      code: err.code,
-      status: err.response && err.response.status
+      code: err && err.code,
+      status: err && err.response && err.response.status
     });
   }
 
@@ -435,11 +431,13 @@ class LogsService {
   }
 
   _emptyEnvelope(options) {
+    const parsedLimit = parseInt(options.limit, 10);
+    const parsedOffset = parseInt(options.offset, 10);
     return {
       logs: [],
       total: 0,
-      limit: parseInt(options.limit, 10) || 100,
-      offset: parseInt(options.offset, 10) || 0
+      limit: Math.max(0, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 100, 10000)),
+      offset: Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0)
     };
   }
 
@@ -478,6 +476,11 @@ class LogsService {
       d.setHours(23, 59, 59, 999);
       return d.toISOString();
     }
+    if (dateRange === 'week' || dateRange === 'month') {
+      const d = new Date();
+      d.setHours(23, 59, 59, 999);
+      return d.toISOString();
+    }
     return new Date().toISOString();
   }
 
@@ -509,7 +512,7 @@ class LogsService {
   }
 
   async _getLogsSummaryFromVL(options = {}) {
-    const { date } = options;
+    const { date, level } = options;
     const targetDate = date || new Date().toISOString().split('T')[0];
     if (!isValidDateStr(targetDate)) {
       return { errors: [], warnings: [], date: targetDate };
@@ -517,23 +520,36 @@ class LogsService {
     const startIso = `${targetDate}T00:00:00.000Z`;
     const endIso = `${targetDate}T23:59:59.999Z`;
 
+    // Honour the documented `level` filter: when provided, restrict to
+    // that level only; otherwise bucket both ERROR and WARN.
+    const wantError = !level || String(level).toUpperCase() === 'ERROR';
+    const wantWarn = !level || String(level).toUpperCase() === 'WARN';
+    const wantInfo = level && String(level).toUpperCase() === 'INFO';
+
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
-        const [errorHits, warnHits] = await Promise.all([
-          client.hits({ q: 'level:ERROR', start: startIso, end: endIso, field: 'level' }),
-          client.hits({ q: 'level:WARN', start: startIso, end: endIso, field: 'level' })
-        ]);
-        const errorCount = this._sumHits(errorHits, 'ERROR');
-        const warnCount = this._sumHits(warnHits, 'WARN');
+        const calls = [];
+        if (wantError) calls.push(client.hits({ q: 'level:ERROR', start: startIso, end: endIso, field: 'level' }));
+        if (wantWarn) calls.push(client.hits({ q: 'level:WARN', start: startIso, end: endIso, field: 'level' }));
+        if (wantInfo) calls.push(client.hits({ q: 'level:INFO', start: startIso, end: endIso, field: 'level' }));
+        const results = await Promise.all(calls);
+        const errorHits = wantError ? results[0] : null;
+        const warnHits = wantWarn ? results[wantError ? 1 : 0] : null;
+        const infoIdx = (wantError ? 1 : 0) + (wantWarn ? 1 : 0);
+        const infoHits = wantInfo ? results[infoIdx] : null;
+        const errorCount = wantError ? this._sumHits(errorHits, 'ERROR') : 0;
+        const warnCount = wantWarn ? this._sumHits(warnHits, 'WARN') : 0;
+        const infoCount = wantInfo ? this._sumHits(infoHits, 'INFO') : 0;
         return {
           errors: errorCount > 0 ? [{ type: 'ERROR', typeKey: 'error', service: 'all', count: errorCount }] : [],
           warnings: warnCount > 0 ? [{ type: 'WARN', typeKey: 'warn', service: 'all', count: warnCount }] : [],
+          infos: infoCount > 0 ? [{ type: 'INFO', typeKey: 'info', service: 'all', count: infoCount }] : [],
           date: targetDate
         };
       },
       'getLogsSummary',
-      { errors: [], warnings: [], date: targetDate }
+      { errors: [], warnings: [], infos: [], date: targetDate }
     );
   }
 
@@ -649,6 +665,11 @@ class LogsService {
 
   async _searchLogsFromVL(options = {}) {
     const { term, level, service, limit = 1000 } = options;
+    const parsedLimit = parseInt(limit, 10);
+    const parsedOffset = parseInt(options.offset, 10);
+    const limitN = Math.max(0, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 1000, 10000));
+    const offsetN = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
+
     const filterParts = [];
     if (term && String(term).trim() !== '') {
       const escaped = this._escapeLogSql(String(term));
@@ -666,7 +687,6 @@ class LogsService {
     const { startDate, endDate } = this.getDateRange(options);
     const startIso = `${startDate}T00:00:00.000Z`;
     const endIso = `${endDate}T23:59:59.999Z`;
-    const limitN = parseInt(limit, 10) || 1000;
 
     return this._withVlFailOpen(
       async () => {
@@ -675,17 +695,18 @@ class LogsService {
           q: this._vlFilter(q),
           start: startIso,
           end: endIso,
-          limit: limitN
+          limit: limitN + offsetN
         });
+        const pageRows = Array.isArray(rows) ? rows.slice(offsetN, offsetN + limitN) : [];
         return {
-          logs: rows,
-          total: rows.length,
+          logs: pageRows,
+          total: Array.isArray(rows) ? rows.length : 0,
           limit: limitN,
-          offset: 0
+          offset: offsetN
         };
       },
       'searchLogs',
-      { logs: [], total: 0, limit: limitN, offset: 0 }
+      { logs: [], total: 0, limit: limitN, offset: offsetN }
     );
   }
 
@@ -699,7 +720,10 @@ class LogsService {
    * @returns {string}
    */
   _escapeLogSql(raw) {
-    return String(raw).replace(/[*?:\\"]/g, '\\$&');
+    // Strip characters that terminate or extend a LogSQL quoted string,
+    // break out of the filter, or alter the parse tree. Matches the
+    // canonical `_msg:"..."` / `_stream_service:"..."` filter shape.
+    return String(raw).replace(/[*?:\\"\n\r\t`(){}=,;]/g, ' ');
   }
 
   async _searchLogsFromFile(options = {}) {

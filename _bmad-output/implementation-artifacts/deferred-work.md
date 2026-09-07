@@ -2570,3 +2570,35 @@ source_spec: `5-2-ingestion-script-post-same-fixture-to-v1-logs-otlp-before-co.m
 severity: low
 reason: The producer currently emits `deployment.environment`. If the downstream VL query / Grafana panel reads `deployment.environment.name`, the attribute will not match.
 status: open
+
+### DW-395: getLogFilesInRange returns synthetic descriptors in VL mode but security-scan-service.js (and admin-dashboard consumers) still treat entries as path strings (`file.endsWith('.gz')`); VL default mode
+origin: spec-deferred eb63601d14cc
+location: components/gov-chat-backend/services/security-scan-service.js:231-246
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: security-scan-service.js:231-246 calls file.endsWith('.gz') on each entry from getLogFilesInRange. No consumer-side test mocks the descriptor shape. Story 5.4 is the natural follow-on.
+status: open
+
+### DW-396: getLogsSummary VL path collapses to a single `service:'all'` bucket per level; file path retains per-type/per-service grouping via legacy groupLogs(). SPEC CAP-3 parity not pinned at this story.
+origin: spec-deferred 7b9a348c4cd2
+location: components/gov-chat-backend/services/logs-service.js:481-506
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: logs-service.js:481-506 returns `{errors:[{service:'all',count:N}]}` vs. groupLogs() returning one bucket per type+service pair. No parity test compares the two paths against the same fixture.
+status: open
+
+### DW-397: VL_QUERY_TIMEOUT_MS is honoured inside the MELT adapter (shared/lib/melt/victorialogs-client.js:110) but is never read or asserted at this story's service-layer surface.
+origin: spec-deferred f76f29fa8266
+location: components/gov-chat-backend/services/logs-service.js
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Spec acceptance mentions VL_QUERY_TIMEOUT_MS in the title; no test exercises a hung VL query at this layer. Cover transitively via Epic 4 contract tests.
+status: open
+
+### DW-398: VlFilesDisabledError carries `statusCode:503` + `body:{error: 'vl_files_disabled',…}` but the global error handler at `index.js:801-802` reads only `err.statusCode` and `err.message` — wire body is
+origin: spec-deferred 846fa03aa85f
+location: components/gov-chat-backend/index.js:801-802
+source_spec: `5-3-logs-service-js-rewrite-public-methods-getlogsinrange-getlog.md`
+severity: medium
+reason: Unit test at logs-service-vl.test.js:453-457 asserts the in-memory body; no route-level test asserts the HTTP wire body. Out-of-scope for this story's `files:` manifest (index.js owned by the BFF shell).
+status: open

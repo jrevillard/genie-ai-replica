@@ -28,7 +28,8 @@ const maxIterations = args_.maxIterations || 5;
 const cleanup = args_.cleanup || false;
 const timestamp = args_.timestamp || 'unknown';
 const projectRoot = '/home/jerome/git_projects/ITU/genie-ai';
-// runDir + convergeScriptPath are derived AFTER Setup (HIGH 5 fix).
+// runDir + convergeScriptPath are derived AFTER Setup (so the discovery step
+// can fail fast without leaving stale run-dir references in code).
 
 const SETUP_SCHEMA = {
   type: 'object',
@@ -107,7 +108,10 @@ if (!setup || !setup.prdWorktreePath) {
   return { aborted: true, stage: 'setup', error: 'setup agent failed' }
 }
 
-// HIGH 5: derive runDir + convergeScriptPath from setup; honor prdKey arg
+// Derive runDir + convergeScriptPath from the setup agent's discovery output
+// rather than hardcoding any specific PRD worktree path. The optional prdKey
+// arg is only honored if it matches the discovered value (else we log a
+// warning and use discovery).
 const runDir = setup.prdWorktreePath + '/_bmad-output/implementation-artifacts/orchestrate-runs/' + timestamp;
 const convergeScriptPath = setup.repoRoot + '/.claude/workflows/bmad-build-converge.js';
 if (prdKey && prdKey !== setup.prdKey) {
@@ -118,6 +122,26 @@ if (prdKey && prdKey !== setup.prdKey) {
 
 log(`Discovered: prdKey=${setup.prdKey}, prdBranch=${setup.prdBranch}`)
 log(`runDir=${runDir} | convergeScriptPath=${convergeScriptPath}`)
+
+// On resume, load the previously persisted inference graph BEFORE Phase 2 so
+// the plan agent can compare its fresh inference against the prior one and
+// surface any delta to the operator. Without this, every resume recomputes
+// from scratch and silently overwrites the operator's earlier confirmation.
+let previousInference = null;
+if (resume) {
+  const prevState = await agent(
+    `Read ${runDir}/state.json and return its parsed JSON object.
+If the file does not exist (first-run / wiped state), return { "missing": true }.
+Use the Read tool, parse JSON, return the parsed object as-is.`,
+    { label: `state-load-plan`, phase: 'Plan', schema: {
+      type: 'object', additionalProperties: true,
+    }, agentType: 'general-purpose' }
+  );
+  if (prevState && typeof prevState === 'object' && !prevState.missing && Array.isArray(prevState.inferred)) {
+    previousInference = prevState.inferred;
+    log(`Loaded previous inference graph (${previousInference.length} edges) for resume comparison`)
+  }
+}
 
 // ============================================================================
 // PHASE 2: PLAN — story queue + dep inference
@@ -131,19 +155,20 @@ SETUP: ${JSON.stringify(setup)}
 RUN_DIR: ${runDir}
 INFER_DEPS: ${inferDeps}, NO_INFER: ${noInfer}
 EPIC_FILTER: ${epicKey || 'all'}, STORY_FILTER: ${storyKey || 'all'}
+PREVIOUS_INFERENCE: ${previousInference ? JSON.stringify(previousInference) : 'null'}
 
 STEPS:
 1. Read ${setup.sprintStatusPath}.
-2. Build numeric → canonical story key lookup (HIGH 1):
+2. Build numeric → canonical story key lookup:
    a. The sprint-status has TWO different ID forms:
-      - epics[N].stories[] uses NUMERIC ids like "5.7"
-      - development_status keys are CANONICAL like "5-7-frontend-..."
-   b. Walk development_status keys; for each canonical key extract the leading "X-Y[a-z]?" prefix. A numeric id "X.Y" matches canonical "X-Y-..." by that prefix.
+      - epics[N].stories[] uses NUMERIC ids like "<epic-num>.<story-num>"
+      - development_status keys are CANONICAL like "<epic-num>-<story-num><suffix>-..."
+   b. Walk development_status keys; for each canonical key extract the leading "<epic-num>-<story-num>[a-z]?" prefix. A numeric id matches the canonical form by that prefix.
    c. The canonical key is the storyQueue / completed / blocked / etc. entry. The numeric id is only used to walk epics[N].stories[] in epic order.
 3. Compute storyQueue:
    a. Iterate sprint-status.epics in order. For each epic:
       - Skip if epicFilter set and epic.id != epicFilter.
-      - Epic dep check (HIGH 2): if epic.depends_on contains epic IDs, that dep is satisfied ONLY when EVERY story in the dep epic has development_status[canonicalKey] === 'done'. DERIVE this — do NOT read epic.status (stays "backlog" forever even when all stories done).
+      - Epic dep check: if epic.depends_on contains epic IDs, that dep is satisfied ONLY when EVERY story in the dep epic has development_status[canonicalKey] === 'done'. DERIVE this — do NOT read epic.status (stays "backlog" forever even when all stories done).
       - If unsatisfied, mark epic as blocked (skip its stories, add to skipped[] with reason: 'epic_blocked').
       - Otherwise, iterate epic.stories (numeric ids) in order. For each numeric id:
         - Resolve canonical key via the lookup from step 2.
@@ -152,7 +177,7 @@ STEPS:
         - If status == 'done': add canonicalKey to completed[].
         - If status in ('backlog', 'in-progress', 'review', 'blocked', 'ready-for-dev'): add canonicalKey to storyQueue.
         - If status == 'awaiting-operator': add canonicalKey to awaitingOperator[] (skip in queue).
-4. Seed intra-epic sequential dependencies (HIGH 3) BEFORE inference:
+4. Seed intra-epic sequential dependencies BEFORE inference:
    For each epic that contributes stories to storyQueue:
      - Walk storyQueue entries from this epic in their epic-order (epics[N].stories[] order).
      - For each story at index > 0: seed inferred entry {story, depends_on: [previousStoryCanonical]}.
@@ -163,6 +188,10 @@ STEPS:
    b. Extract depends_on from spec frontmatter if present.
    c. If absent, scan spec body for story key mentions (regex: /\\b\\d+-\\d+[a-z]?\\b/g) and "depends on story X" phrasing.
    d. Apply overrides: for each story, merge frontmatter depends_on over the seed (override = union, seed entries stay if not overridden). Use CANONICAL keys throughout (both story and depends_on fields).
+   e. PREVIOUS_INFERENCE comparison (only when PREVIOUS_INFERENCE is non-null):
+      - Build a {story -> sorted depends_on} map from PREVIOUS_INFERENCE and from your fresh inference.
+      - For each story present in BOTH maps where depends_on differs, list the story + old deps + new deps in a "delta" note in your reply text (not in the JSON schema).
+      - If the user wants to keep the previous graph despite the delta, the orchestrator passes confirmedDeps on resume; your fresh inference is only used when no previous exists.
 6. Write ${runDir}/deps.json with { "inferred": <graph> }.
 7. Append to ${runDir}/journal.jsonl: {"ts":"${timestamp}","event":"plan_complete","storyQueueSize":<n>,"inferredEdges":<m>}
 8. Return JSON matching the schema: { storyQueue, completed, blocked, skipped, awaitingOperator, inferred: [{story, depends_on}, ...] }
@@ -170,7 +199,7 @@ STEPS:
 CONSTRAINTS:
 - Read-only on sprint-status. Do NOT modify.
 - Do NOT modify any spec file.
-- All storyQueue / completed / blocked / skipped / awaitingOperator entries MUST be CANONICAL keys (X-Y-...).
+- All storyQueue / completed / blocked / skipped / awaitingOperator entries MUST be CANONICAL keys.
 - inferred entries MUST use CANONICAL keys in BOTH story and depends_on fields.`,
   { label: `plan-${timestamp}`, phase: 'Plan', schema: {
     type: 'object',
@@ -191,7 +220,10 @@ if (!planResult) {
 log(`Queue: ${planResult.storyQueue.length} stories, ${planResult.inferred.length} inferred edges`)
 
 // ============================================================================
-// STATE PERSIST + RESUME HANDLING (CRITICAL 1 + HIGH 4)
+// STATE PERSIST + RESUME HANDLING
+// The persisted state.json is the single source of truth for resuming a
+// halted run; the operator's userChoice on resume mutates that state before
+// Phase 3 begins iteration.
 // ============================================================================
 const writeStateAgent = async () => {
   const stateContent = {
@@ -228,7 +260,10 @@ CONSTRAINTS:
   );
 };
 
-// CRITICAL 1: handle resume before fresh-run halt
+// Resume handling: when an operator resumes a halted run with a userChoice
+// (e.g. confirm_deps, proceed_without_inference, abort_prd), apply that
+// choice BEFORE the fresh-run halt block below so a resumed run never
+// re-prompts the dep-inference confirmation that was already given.
 if (userChoice) {
   if (userChoice === 'confirm_deps' && confirmedDeps) {
     log(`Resuming with confirm_deps (confirmedDeps entries: ${Array.isArray(confirmedDeps) ? confirmedDeps.length : Object.keys(confirmedDeps).length})`)
@@ -242,19 +277,16 @@ if (userChoice) {
     }
     log(`Updated inferred to ${planResult.inferred.length} confirmed entries`)
     await writeStateAgent()
-    // FALL THROUGH — Phase 3 (future) appends here
   } else if (userChoice === 'proceed_without_inference') {
     log(`Resuming with proceed_without_inference (clearing inferred graph)`)
     planResult.inferred = []
     await writeStateAgent()
-    // FALL THROUGH — Phase 3 (future) appends here
   } else if (userChoice === 'abort_prd') {
     log(`Aborting per userChoice=abort_prd`)
     return { aborted: true, haltReason: 'aborted', timestamp, runDir }
   } else {
     log(`WARNING: unrecognized userChoice=${userChoice}; falling through to Phase 3`)
     await writeStateAgent()
-    // FALL THROUGH — Phase 3 (future) appends here
   }
 } else if (resume) {
   // Resume token without userChoice → re-halt with current state
@@ -282,7 +314,6 @@ if (userChoice) {
   // No inferred deps — persist and fall through to Phase 3
   log('No inferred deps — persisting state and falling through to Phase 3')
   await writeStateAgent()
-  // FALL THROUGH — Phase 3 (future) appends here
 }
 
 // ============================================================================
@@ -365,6 +396,37 @@ STEPS:
   );
 };
 
+// Cross-run CI retry helper (retryPolicy semantics: once | always | never).
+// Re-queues stories whose previous attempt halted with reason='ci_hardfail'.
+// 'once' marks each halt entry with retried=true so subsequent resumes skip
+// it; 'always' re-queues every resume without marking; 'never' is a no-op.
+// Stories already present in the queue or completed list are skipped to avoid
+// double-dispatch.
+const requeueCIHardfails = () => {
+  if (retryPolicy === 'never') return 0;
+  const queueSet = new Set(state.storyQueue);
+  const completedSet = new Set(state.completed);
+  const seen = new Set(); // de-dupe across multiple halt entries for the same story
+  let count = 0;
+  for (const h of (state.halts || [])) {
+    if (!h || h.reason !== 'ci_hardfail' || !h.story) continue;
+    if (retryPolicy === 'once' && h.retried === true) continue;
+    if (seen.has(h.story)) continue;
+    if (queueSet.has(h.story) || completedSet.has(h.story)) continue;
+    state.storyQueue.unshift(h.story);
+    queueSet.add(h.story);
+    seen.add(h.story);
+    if (retryPolicy === 'once') h.retried = true;
+    count++;
+  }
+  if (count > 0) {
+    // Drop these stories from state.blocked so retry_blocked doesn't re-add them too
+    state.blocked = state.blocked.filter(b => !seen.has(typeof b === 'string' ? b : (b && b.story) || null));
+    log(`retryPolicy=${retryPolicy}: re-queued ${count} ci_hardfail stor(y/ies) at front of queue`)
+  }
+  return count;
+};
+
 // Resume handling — load persisted state if resume token present
 if (resume) {
   const loaded = await loadState();
@@ -374,6 +436,10 @@ if (resume) {
   } else {
     log(`WARNING: resume=${resume} but loadState returned no usable data; proceeding with fresh state`)
   }
+
+  // Auto-requeue CI hard-fail halts per retryPolicy, BEFORE userChoice processing
+  // so the operator's userChoice can still override (e.g. abort_prd still wins).
+  requeueCIHardfails();
 
   // Apply userChoice (periodic HITL options)
   if (userChoice === 'continue') {
@@ -477,17 +543,59 @@ If the key is missing, return { "status": "missing" }.`,
     continue;
   }
 
-  // MR-creation / CI-failure / merge-aborted: halt with merge_conflict (RESOLVED AMBIGUITIES)
-  // converge sub-workflow returns converged:true even on CI failure, with `aborted` populated
-  // when MR creation failed. Detect this case and halt instead of silently marking completed.
+  // MR-creation failure: the converge sub-workflow returns converged:true with
+  // an aborted field populated when MR creation itself fails (no pipeline was
+  // ever launched). Treat as merge_conflict — the story needs operator review.
   if (convergeResult.aborted) {
     log(`Sub-workflow halted for ${sk}: ${convergeResult.aborted}`)
+    // Also push to state.blocked so retry_blocked re-queues this story on resume
+    // (the story is left at storyQueue[0] so the natural shift below would lose it).
+    state.blocked.push({ story: sk, reason: 'merge_conflict', details: String(convergeResult.aborted) });
     state.halts.push({ reason: 'merge_conflict', story: sk, iteration: state.iterationCount, details: String(convergeResult.aborted) });
+    state.storyQueue.shift();
     await writeState(state);
     await appendJournal({ event: 'halt_merge_conflict', storyKey: sk, iteration: state.iterationCount, details: String(convergeResult.aborted) });
     return {
       haltReason: 'merge_conflict',
       context: { story: sk, completed: state.completed, blocked: state.blocked, skipped: state.skipped, awaitingOperator: state.awaitingOperator, details: String(convergeResult.aborted) },
+      resumeToken: timestamp,
+      runDir,
+      userOptions: ['continue', 'retry_blocked', 'skip_blocked', 'abort_prd', 'fix_then_resume'],
+    };
+  }
+
+  // CI hard-fail: converge returns converged:true even when CI failed (its
+  // internal retry loop already exhausted transient retries). Treat any non-
+  // success monitor.status as a hard fail — halt instead of silently marking
+  // completed. Also catches merge blocked by a CI rule such as the merge-train
+  // gate (status: 'success' but merge.merged: false).
+  const ciStatus = convergeResult.monitor && convergeResult.monitor.status;
+  const mergeBlocked = convergeResult.merge && convergeResult.merge.merged === false;
+  if (ciStatus && ciStatus !== 'success') {
+    log(`CI hard-fail for ${sk}: monitor.status=${ciStatus}`)
+    state.blocked.push({ story: sk, reason: 'ci_hardfail', details: { ciStatus, failedJobs: convergeResult.monitor.failedJobs, retries: convergeResult.monitor.retries, transient: convergeResult.monitor.transient } });
+    state.halts.push({ reason: 'ci_hardfail', story: sk, iteration: state.iterationCount, details: { ciStatus, failedJobs: convergeResult.monitor.failedJobs } });
+    state.storyQueue.shift();
+    await writeState(state);
+    await appendJournal({ event: 'halt_ci_hardfail', storyKey: sk, iteration: state.iterationCount, ciStatus });
+    return {
+      haltReason: 'ci_hardfail',
+      context: { story: sk, ciStatus, failedJobs: convergeResult.monitor.failedJobs, completed: state.completed, blocked: state.blocked, skipped: state.skipped, awaitingOperator: state.awaitingOperator },
+      resumeToken: timestamp,
+      runDir,
+      userOptions: ['continue', 'retry_blocked', 'skip_blocked', 'abort_prd', 'fix_then_resume'],
+    };
+  }
+  if (mergeBlocked) {
+    log(`Merge blocked for ${sk}: ${convergeResult.merge.error || 'unknown'}`)
+    state.blocked.push({ story: sk, reason: 'merge_blocked', details: convergeResult.merge.error || null });
+    state.halts.push({ reason: 'merge_blocked', story: sk, iteration: state.iterationCount, details: convergeResult.merge.error || null });
+    state.storyQueue.shift();
+    await writeState(state);
+    await appendJournal({ event: 'halt_merge_blocked', storyKey: sk, iteration: state.iterationCount, error: convergeResult.merge.error });
+    return {
+      haltReason: 'merge_blocked',
+      context: { story: sk, error: convergeResult.merge.error, completed: state.completed, blocked: state.blocked, skipped: state.skipped, awaitingOperator: state.awaitingOperator },
       resumeToken: timestamp,
       runDir,
       userOptions: ['continue', 'retry_blocked', 'skip_blocked', 'abort_prd', 'fix_then_resume'],
@@ -541,7 +649,7 @@ log('Syncing sprint-status: completed stories → done (orchestrator is sole wri
 // advances to `done` here so the file's terminal state is correct.
 //
 // Implementation note: sprint_plan.py has no `advance` subcommand. The brief
-// references one (RESOLVED AMBIGUITY) but the script's actual subcommands are
+// references an `advance` subcommand, but the script's actual subcommands are
 // generate/status/validate (see .claude/skills/bmad-sprint-planning/SKILL.md).
 // `generate --set <key>=<status>` is the documented equivalent: re-parses the
 // epics, merges with existing statuses (preserving in-progress, etc.), and the
@@ -567,7 +675,7 @@ STEPS:
 4. Build the --set flags:
    - For each <key> in COMPLETED_STORIES: add --set <key>=done
    - For each epic-N in the file: if EVERY story belonging to epic-N has status 'done', add --set epic-N=done
-   (Numeric → canonical mapping: a story key like '5-7-foo' belongs to epic-5; the prefix '5-' matches.)
+   (Numeric → canonical mapping: a story canonical key begins with the epic number prefix; epic-N's stories are those whose canonical key starts with that prefix.)
 5. Run ONE batched invocation (avoids partial-write races):
    python3 ${setup.repoRoot}/.claude/skills/bmad-sprint-planning/scripts/sprint_plan.py generate \\
      --epic-file <EPIC_FILE> \\

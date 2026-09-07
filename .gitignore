@@ -134,3 +134,7 @@ genie-ai-overlay/*.egg-info/
 .bmad-loop/cache/
 .bmad-loop/policy.toml
 _bmad/render/
+
+# bmad-prd-orchestrate per-run state + orchestrator logs (per-machine ephemeral)
+_bmad-output/implementation-artifacts/orchestrate-runs/
+_bmad-output/implementation-artifacts/bmad-build-auto-result-*.md

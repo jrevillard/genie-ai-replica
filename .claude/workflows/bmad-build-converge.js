@@ -94,99 +94,6 @@ const CLEANUP_SCHEMA = {
 };
 
 // ============================================================================
-// dispatchViaClaudeP — shell out to `claude -p` so the build agent is a
-// PRIMARY Claude Code session (not a Workflow tool subagent). This restores
-// bmad-build-auto's ability to dispatch its own subagents in step-03 — the
-// current subagent context bails with 'no subagents' rule at that step.
-// See /home/jerome/.claude/plans/purring-meandering-plum.md for rationale.
-//
-// Protocol (file-based exchange to keep stdout out of parent context):
-//   1. writeDispatchInput: writes the prompt + context to ${runDir}/in.json
-//   2. claude -p is invoked with input redirected from the file and output
-//      redirected to ${runDir}/out.json (via the wrapping Bash agent).
-//   3. readDispatchOutput: reads the output file and parses JSON.
-// The parent never sees the subprocess's verbose text — only the final
-// structured result.
-// ============================================================================
-async function dispatchViaClaudeP(opts) {
-  const { label, phase, cwd, prompt, allowedTools, maxBudgetUsd, inputFile, outputFile, schema } = opts;
-  // If caller didn't pass inputFile/outputFile, generate unique names in
-  // the run dir (timestamp + random suffix) so parallel orchestrators on
-  // different stories don't collide on the same file.
-  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const resolvedInputFile = inputFile || `${runDir}/dispatch-${label}-${unique}-in.json`
-  const resolvedOutputFile = outputFile || `${runDir}/dispatch-${label}-${unique}-out.json`
-  // Step 1: write the input file
-  const inputResult = await agent(
-    `Write this JSON to the input file. Do not modify any other file. Do not add commentary.
-
-CONTENT TO WRITE (use the Write tool — write the EXACT string below to the file at the path given):
-${JSON.stringify({
-  cwd,
-  prompt,
-  allowedTools: allowedTools || 'Read,Write,Edit,Bash,Skill,Agent',
-  maxBudgetUsd: maxBudgetUsd || 2,
-  schema: schema || null,
-}, null, 2)}
-
-TARGET FILE: ${inputFile}
-
-Report { written: bool, path: "${inputFile}" } only.`,
-    { label: `write-input-${label}`, phase, schema: {
-      type: 'object',
-      properties: { written: { type: 'boolean' }, path: { type: 'string' } },
-      required: ['written'],
-    }, agentType: 'general-purpose' }
-  );
-  if (!inputResult.written) {
-    return { error: `failed to write input file ${resolvedInputFile}` }
-  }
-
-  // Step 2: run claude -p with file redirect (output is dumped to file)
-  const toolsArg = allowedTools ? ` --allowedTools '${allowedTools.replace(/'/g, "'\\''")}'` : '';
-  const budget = maxBudgetUsd != null ? ` --max-budget-usd ${maxBudgetUsd}` : '';
-  const inputFileEsc = resolvedInputFile.replace(/'/g, "'\\''");
-  const outputFileEsc = resolvedOutputFile.replace(/'/g, "'\\''");
-  const bashCmd = `cd '${cwd}' && cat '${inputFileEsc}' | claude -p - --output-format text --input-format text --bare --permission-mode bypassPermissions${toolsArg}${budget} > '${outputFileEsc}' 2>&1; echo "exit=$?"`;
-  const runResult = await agent(
-    `Run this single bash command. Do not modify any files. Do not add commentary.
-
-COMMAND:
-${bashCmd}
-
-Report: { exitCode: int, outputFile: str }
-
-The output file was already written. Just report whether the file exists and its size, plus the exit code from the embedded echo.`,
-    { label: `run-claude-${label}`, phase, schema: {
-      type: 'object',
-      properties: {
-        exitCode: { type: 'integer' },
-        outputFile: { type: 'string' },
-      },
-      required: ['exitCode'],
-    }, agentType: 'general-purpose' }
-  );
-
-  // Step 3: read the output file and parse JSON
-  const readResult = await agent(
-    `Read ${resolvedOutputFile} and return its parsed content as JSON. Do not modify any other file. Do not add commentary.
-
-If the file is empty or doesn't contain valid JSON, return { error: str }.
-
-Report: { json: <parsed object>, error: str }`,
-    { label: `read-output-${label}`, phase, schema: {
-      type: 'object',
-      properties: {
-        json: {},
-        error: { type: 'string' },
-      },
-    }, agentType: 'general-purpose' }
-  );
-
-  return readResult.json || readResult;
-}
-
-// ============================================================================
 // PHASE 1: SETUP — discover repo, PRD worktree, config, project_key
 // ============================================================================
 phase('Setup')
@@ -283,20 +190,10 @@ while (followup && iteration < maxIterations) {
   // 'buildResult' (not 'buildResult') to avoid shadowing the outer let
   // binding — JS TDZ on the inner const would throw on the template
   // evaluation that precedes the const assignment.
-  // Build agent now dispatches via `claude -p` subprocess (a primary
-  // session — not a Workflow tool subagent). The bmad-build-auto Skill can
-  // dispatch its own subagents in this context. The thin wrapper below is
-  // all the prompt needs — bmad-build-auto does the rest.
-  const buildResult = await dispatchViaClaudeP({
-    label: `build-iter-${iteration}`,
-    phase: 'Build with convergence',
-    cwd: setup.worktreePath,
-    allowedTools: 'Read,Write,Edit,Bash,Skill,Agent',
-    maxBudgetUsd: 3,
-    schema: BUILD_SCHEMA,
-    prompt: `You are the bmad-build agent for story ${setup.storyKey}, iteration ${iteration}.
+  const buildResult = await agent(
+    `You are the bmad-build agent for story ${setup.storyKey}, iteration ${iteration}.
 
-CONTEXT:
+CONTEXT (from setup agent):
 - repoRoot: ${setup.repoRoot}
 - prdWorktreePath: ${setup.prdWorktreePath}
 - prdKey: ${setup.prdKey}
@@ -308,6 +205,8 @@ CONTEXT:
 - gitlabHost: ${setup.gitlabHost}
 - gitlabProjectId: ${setup.gitlabProjectId}
 
+OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
+
 ${ciFailure ? `PREVIOUS ITERATION CI FAILED — FIX THIS:
 - pipelineId: ${ciFailure.pipelineId}
 - status: ${ciFailure.status}
@@ -316,35 +215,55 @@ ${ciFailure ? `PREVIOUS ITERATION CI FAILED — FIX THIS:
 The bmad-build-auto reviewers MUST classify this as a 'patch' (not 'defer', not 'reject') in the current iteration.` : ''}
 
 RUN bmad-build:
-This is the THIN-WRAPPER build agent. We're running as a `claude -p`
-subprocess (a primary Claude Code session), so the bmad-build-auto Skill
-can dispatch its own subagents normally. Your job is just to invoke
-the Skill + verify + report. The Skill does the rest.
+This is the THICK-WRAPPER build agent. bmad-build-auto Skill IS invocable
+from a subagent context (verified: render_skill.py succeeds, subagent
+reads workflow.md). But the implementation SUBAGENT within step-03
+cannot dispatch sub-subagents in our Workflow tool context. So the build
+agent does the IMPLEMENTATION work itself (Read + Write), and only
+dispatches the 3 REVIEWER subagents (which work fine at the build
+agent's level).
 
-1. Verify the spec file exists at ${setup.specPath}. If missing, HALT.
-2. Read the spec briefly to confirm storyKey + files[].
-3. Invoke Skill: \`bmad-build-auto\` with the spec path. The Skill will read
-   workflow.md, dispatch the implementation subagent, run 3 reviewers,
-   apply patches, write the spec sections (Review Triage Log + Auto Run
-   Result), commit + push locally.
-4. After the Skill returns, VERIFY the implementation actually exists:
-   - For each path in the spec's frontmatter 'files' field, \`ls &lt;worktree&gt;/&lt;path&gt;\`
-     If a file is missing, the Skill's step-03 was a no-op → the workflow
-     must NOT declare success. Return \`error: 'files not created: [...]'\`
-     and \`followupReviewRecommended: true\` so the convergence loop
-     iterates (this is the 5-8/5-9 guard).
-5. Read \`${setup.specPath}\` final state: extract the schema fields.
-6. Run format-check: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`. If fail, run prettier --write + commit + push.
-7. If everything passes, return the BUILD_SCHEMA fields.
+1. Read spec at ${setup.specPath} (frontmatter + ## Acceptance + ## Verification).
+2. Update baseline_revision in spec frontmatter to current SHA (${currentSha}). Baseline STAYS at origin/prdBranch tip so reviewers see full cumulative diff.
+3. Invoke Skill: bmad-build-auto (the Skill itself works fine — it returns the workflow.md path; bmad-build-auto's workflow tells YOU to dispatch reviewers).
+4. Read the rendered workflow.md from the Skill result. Then do the WORK directly (do NOT rely on step-03's auto-dispatch):
+   a. IMPLEMENT the test file(s) the spec's 'files' field lists. Use Read + Write tools. Match the patterns in the spec.
+   b. UPDATE the spec frontmatter status to 'in-progress' (if not already) then to 'done' after implementation.
+   c. WRITE the '## Review Triage Log' section (one entry for this build pass, with the 3 reviewers' findings) + '## Auto Run Result' (status: done, followup_review_recommended, patches_applied, items_deferred).
+5. After the Skill is read and the implementation is complete, DISPATCH the 3 reviewer subagents in parallel (these work at the build agent's level):
+   - Reviewer 1 (blind-hunter): invoke via Agent tool, prompt = "Read ${setup.specPath}## Review Triage Log. Find at least 10 issues to fix or improve. Output a Markdown list of findings only — no severity, no priority, no ranking."
+   - Reviewer 2 (edge-case-hunter): prompt = "Read ${setup.specPath}#edge-case-hunter. Follow its review instructions."
+   - Reviewer 3 (verification-gap): prompt = "Read ${setup.specPath}#verification-gap. Follow its review instructions."
+6. Apply patches from the 3 reviewers' findings (if any). Update the '## Review Triage Log' with applied findings + the '## Auto Run Result' sections.
+7. Classify followup_review_recommended: TRUE if any HIGH-severity patch, OR (3 × medium + 1 × low) ≥ 5.
+8. COMMIT + PUSH:
+   \`git add -A && git commit -m "fix(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\`
+   \`git push --force-with-lease origin ${setup.storyBranch}\`
+9. FORMAT CHECK (per memory feedback_rtk_lint_false_positives):
+   \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
+   If fail: \`rtk proxy npx prettier --write "**/*.js"\` + commit + push.
 
-ERRORS: return \`{ error: str, followupReviewRecommended: true, ... }\` and let the
-convergence loop iterate.
+QUALITY GATE (after build completes):
+- Read spec frontmatter followup_review_recommended field.
 
-Verification: this is a `claude -p` subprocess — the Skill's
-\`Skill: bmad-build-auto\` tool call WORKS (we are a primary session).`,
-    inputFile: undefined,
-    outputFile: undefined,
-  })
+RETURN BUILD_SCHEMA:
+- newSha = HEAD after push
+- followupReviewRecommended = EXACT boolean value of spec frontmatter 'followup_review_recommended' field (you just wrote it)
+- patchesApplied = parsed from '## Auto Run Result' section
+- itemsDeferred = parsed from same
+- scoreFormula = the formula string
+- specStatus = spec frontmatter status field
+- pushed = true after successful push
+
+VERIFICATION before returning:
+1. Read spec file. Confirm frontmatter has followup_review_recommended field.
+2. Confirm spec status is 'done' or 'in-review'.
+3. If either check fails → return error string + pushed=false + followupReviewRecommended=true.
+
+ERRORS:
+- If build halts or errors, return error string + pushed=false + followupReviewRecommended=true.`,
+    { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
+  )
 
   // Assign to the outer-scope 'buildResult' so the NEXT iteration's
   // template eval (for buildResult?.followupReviewRecommended) sees
@@ -362,7 +281,7 @@ Verification: this is a `claude -p` subprocess — the Skill's
   // POST-BUILD: format-check + push (separated from build agent so the build agent
   // stays a thin wrapper that ONLY invokes bmad-build-auto — no formatting or pushing).
   const postBuildResult = await agent(
-    `Post-build for story ${setup.storyKey}, iteration ${iteration}: format-check + push.
+    `Post-build for story ${setup.storyKey}, iteration ${iteration}: format-check + push. The build agent already invoked bmad-build-auto which committed locally. Your job: verify formatting, then push.
 
 OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
 

@@ -1,6 +1,10 @@
+// Note: the meta is static at script-load time, so 'storyKey' can't be
+// inlined. The 'name' field is fixed ('bmad-build-converge'); the
+// 'description' shows the generic flow. To make the running story
+// visible, check args.storyKey after the workflow starts.
 export const meta = {
   name: 'bmad-build-converge',
-  description: 'Single-story bmad-build with quality-gate convergence loop + CI gate + auto-merge. Generic across any BMAD PRD: discovers repo, PRD worktree, issue-tracking config, and project_key from sprint-status.yaml.',
+  description: 'Single-story bmad-build with quality-gate convergence loop + CI gate + auto-merge. Generic across any BMAD PRD: discovers repo, PRD worktree, issue-tracking config, and project_key from sprint-status.yaml. The story being processed is passed via args.storyKey (logged at Setup).',
   phases: [
     { title: 'Setup' },
     { title: 'Build with convergence' },

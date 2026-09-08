@@ -152,7 +152,6 @@ development_status:
   7-3-shared-lib-index-js-ADD-re-exports-reconfigurelogger-triggerLogRollover: done
   7-4-eslint-no-restricted-imports-rule-shared-eslint-rules-base: done
   epic-7-retrospective: optional
-  5-13-fake-minimal-converge-test: ready-for-dev
 rollback_switches:
   ADMIN_LOGS_SOURCE: victorialogs | file (permanent, default flips to victorialogs
     after first release)

@@ -1033,28 +1033,49 @@ describe('AdminDashboard', () => {
       expect(result).toEqual({ type: 'UNKNOWN', message: 'null' });
     });
 
-    it('extracts ERROR type from "[ERROR]: something went wrong"', () => {
+    it('extracts ERROR type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage('[ERROR]: something went wrong');
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'ERROR', message: 'something went wrong' }));
       expect(result).toEqual({ type: 'ERROR', message: 'something went wrong' });
     });
 
-    it('extracts INFO type from "[INFO] status update" (no colon after bracket)', () => {
+    it('extracts INFO type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage('[INFO] status update');
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'INFO', message: 'status update' }));
       expect(result).toEqual({ type: 'INFO', message: 'status update' });
     });
 
-    it('defaults to INFO type for plain string without prefix', () => {
+    it('returns UNKNOWN for plain string without JSON parseable shape', () => {
       const wrapper = createAdminDashboardWrapper();
       const result = wrapper.vm.parseLogMessage('plain log message');
-      expect(result).toEqual({ type: 'INFO', message: 'plain log message' });
+      expect(result).toEqual({ type: 'UNKNOWN', message: 'plain log message' });
     });
 
-    it('handles "[WARNING]:" format correctly', () => {
+    it('extracts WARNING type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage('[WARNING]: this is a warning');
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'WARNING', message: 'this is a warning' }));
       expect(result).toEqual({ type: 'WARNING', message: 'this is a warning' });
+    });
+
+    it('parses JSON-encoded log entries that carry extra fields', () => {
+      // The actual JSON.parse-discrimination proof is the next test (malformed JSON -> UNKNOWN).
+      // This test pins the JSON input shape: { level, message } plus any extra fields are tolerated.
+      const wrapper = createAdminDashboardWrapper();
+      const json = JSON.stringify({
+        level: 'ERROR',
+        message: 'parsed',
+        trace_id: 'abc123',
+        span_id: 'def456'
+      });
+      const result = wrapper.vm.parseLogMessage(json);
+      expect(result.type).toBe('ERROR');
+      expect(result.message).toBe('parsed');
+    });
+
+    it('falls back to UNKNOWN on malformed JSON input', () => {
+      const wrapper = createAdminDashboardWrapper();
+      const result = wrapper.vm.parseLogMessage('{not valid json');
+      expect(result).toEqual({ type: 'UNKNOWN', message: '{not valid json' });
     });
   });
 

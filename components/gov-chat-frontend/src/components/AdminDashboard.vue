@@ -2533,22 +2533,27 @@ export default {
     // Load security metrics from the service
 
     /**
-     * Parses a log message string to extract the log level.
-     * @param {string} logString - The raw log message.
+     * Parses a structured log message string (NDJSON) to extract the log level.
+     * Uses JSON.parse with try/catch; malformed input falls back to UNKNOWN with the raw payload.
+     * @param {string} logString - The raw log message (expected JSON with `level` + `message` keys).
      * @returns {{type: string, message: string}}
      */
     parseLogMessage(logString) {
       if (typeof logString !== 'string') {
         return { type: 'UNKNOWN', message: String(logString) };
       }
-      const match = logString.match(/^\[([A-Z]+)\]:?\s*/);
-      if (match) {
-        return {
-          type: match[1], // e.g., "INFO", "ERROR"
-          message: logString.substring(match[0].length)
-        };
+      try {
+        const parsed = JSON.parse(logString);
+        if (parsed && typeof parsed === 'object') {
+          const level = typeof parsed.level === 'string' ? parsed.level.toUpperCase() : 'UNKNOWN';
+          const message = typeof parsed.message === 'string' ? parsed.message : logString;
+          return { type: level, message };
+        }
+        return { type: 'UNKNOWN', message: logString };
+      } catch {
+        // Malformed JSON — return UNKNOWN with the raw payload (no regex fallback)
+        return { type: 'UNKNOWN', message: logString };
       }
-      return { type: 'INFO', message: logString }; // Default if no prefix
     },
 
     // Load detailed security information

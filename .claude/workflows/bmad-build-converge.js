@@ -192,12 +192,12 @@ CONTEXT:
 - storyBranch: ${setup.storyBranch}
 - iteration: ${iteration}
 - prdKey: ${setup.prdKey}
-${(ciFailure || buildResult.followupReviewRecommended) ? `**PREVIOUS ITERATION FAILED — BOTH CHECKS RE-RUN THIS ITER**:
+${(ciFailure || buildResult?.followupReviewRecommended) ? `**PREVIOUS ITERATION FAILED — BOTH CHECKS RE-RUN THIS ITER**:
 The bmad-build-auto reviewers MUST treat these as the highest-priority patch targets.
 ${ciFailure ? `CI FAILURE (pipeline ${ciFailure.pipelineId}, status=${ciFailure.status}):
 - failedJobs: ${JSON.stringify(ciFailure.failedJobs || [], null, 2).substring(0, 1500)}
 - traceTail: ${(ciFailure.traceTail || '').substring(0, 1500)}` : ''}
-${buildResult.followupReviewRecommended ? `REVIEW FINDINGS: previous iteration's bmad-build-auto wrote followup_review_recommended=true. Read the spec file ${setup.specPath} ## Review Triage Log + ## Auto Run Result sections to see what was found, and target those specifically.` : ''}` : ''}
+${buildResult?.followupReviewRecommended ? `REVIEW FINDINGS: previous iteration's bmad-build-auto wrote followup_review_recommended=true. Read the spec file ${setup.specPath} ## Review Triage Log + ## Auto Run Result sections to see what was found, and target those specifically.` : ''}` : ''}
 
 STEPS (do ONLY these):
 

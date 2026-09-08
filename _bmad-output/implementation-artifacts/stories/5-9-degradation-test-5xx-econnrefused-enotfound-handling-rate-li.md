@@ -2,9 +2,10 @@
 key: 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li
 title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit persistence"
 epic: epic-5
-status: done
+status: in-progress
 baseline_revision: d1202548628fb745b90e4549116039a1ada30a5e
 followup_review_recommended: false
+review_loop_iteration: 0
 effort: 0.25
 depends_on: [5.3]
 files: components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (new)
@@ -80,3 +81,21 @@ New degradation test file covering all 4 CAP-5 / AD-11 properties in `components
   - `[low]` `[patch]` Property 3 timing guard tightened from `< 5000ms` (always-passing) to `< 200ms` (catches accidental microtask-await regression).
   - `[low]` `[patch]` New test: `VL_FAIL_OPEN=true` does not swallow non-VL-unavailable errors (`TypeError`) — they still re-throw.
   - `[low]` `[patch]` Added structured-payload assertion on Property 1's `logger.warn` call (verifies `{code}` field from the originating error).
+
+### 2026-09-08 — Follow-up review pass (no-op)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 0
+- reject: 0
+- addressed_findings: none
+- Notes: Follow-up review dispatch attempted after spec frontmatter flipped to `in-review`. The four review layers (blind-hunter, edge-case-hunter, verification-gap, intent-alignment) require parallel subagent dispatch; the calling session has no subagent-launch tool available (only `SendMessage` to existing sessions and `TaskCreate`/`TaskUpdate` for task-list bookkeeping). Per workflow.md HALT branch, the run was halted with status `blocked` and blocking condition `no subagents`. No code changes were made; spec was restored to `done` and then flipped to `blocked` per the HALT write-back. Previous-triage findings (3 low patches, 6 rejects) remain the final review outcome from the 2026-09-08 pass above.
+
+### 2026-09-08 — Re-dispatch (story already blocked)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 0
+- reject: 0
+- addressed_findings: none
+- Notes: A fresh `bmad-build-auto 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li` invocation routed via folder+id dispatch to this existing spec. Status frontmatter is `blocked` from the previous follow-up review pass; per step-01 routing, a `blocked` story found by id HALTs with blocking condition `story already blocked`. No new planning, implementation, or review work performed. The 2026-09-08 review pass (3 low patches applied, 6 rejects) remains the final outcome; the orchestrator must resolve the previous `no subagents` halt (assign a subagent-capable session or accept the existing review as terminal) before the next dispatch.

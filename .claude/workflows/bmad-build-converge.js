@@ -90,11 +90,13 @@ const CLEANUP_SCHEMA = {
   properties: {
     removedWorktrees: { type: 'array', items: { type: 'string' } },
     deletedBranches: { type: 'array', items: { type: 'string' } },
+    keptWorktrees: { type: 'array', items: { type: 'string' } },
+    keptBranches: { type: 'array', items: { type: 'string' } },
     prunedRefs: { type: 'integer' },
     removedLogs: { type: 'array', items: { type: 'string' } },
     errors: { type: 'array', items: { type: 'string' } },
   },
-  required: ['removedWorktrees', 'deletedBranches', 'prunedRefs', 'removedLogs', 'errors'],
+  required: ['removedWorktrees', 'deletedBranches', 'keptWorktrees', 'keptBranches', 'prunedRefs', 'removedLogs', 'errors'],
 };
 
 // ============================================================================
@@ -140,15 +142,19 @@ async function dispatchViaClaudeP(opts) {
   const modelArg = ` --model opus`;
   const cmd = `(${cwdPrefix}cat <<'${marker}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'}\n${prompt}\n${marker})`;
   const wrapperResult = await agent(
-    `Run this bash command. Return stdout parsed as JSON. No commentary, no extra steps.
+    `Run this bash command. Wait for it to finish — it can take several minutes (claude -p subprocess invokes a Skill workflow). Run synchronously: do NOT use run_in_background, do NOT call TaskStop on your own bash dispatch.
 
 COMMAND:
 ${cmd}
 
-PARSE RULES:
-- claude -p's JSON envelope: {"type":"result","subtype":"...","result":"<text>","json":<parsed schema>,"usage":{...}}.
-- If --json-schema was used, the parsed object lives in the envelope's \`json\` field — return it WRAPPED: { "json": <envelope.json> }.
-- If exit != 0, return { error: <stderr last 500 chars> }.
+CRITICAL: stderr may contain the line \`[claude-code:unrecognized_model] {"model":"MiniMax (Global)/MiniMax-M3[1m]","query_source":"sdk"}\`. This is NOISE from the local claude-code-router gateway (which maps the 'opus' alias to a sandbox model). It is NOT a fatal error. The actual JSON response appears on stdout. IGNORE this stderr line.
+
+PARSE RULES (only after the bash command exits):
+- Check the EXIT CODE first, not stderr warnings.
+- If exit code == 0: parse the stdout JSON envelope. claude -p envelope shape: {"type":"result","subtype":"...","result":"<text>","json":<parsed schema>,"usage":{...}}.
+  - When --json-schema is used, the parsed schema object lives in envelope.json. Return it WRAPPED: { "json": <envelope.json> }.
+- If exit code != 0: return { error: <last 500 chars of stderr> }.
+- DO NOT abort on the [unrecognized_model] stderr line.
 - DO NOT modify any files. DO NOT add goal restatements.`,
     { label, phase, schema: {
       type: 'object',
@@ -555,7 +561,7 @@ log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Sprint-status: ${mergeRes
 // PHASE 5: CLEANUP
 // ============================================================================
 phase('Cleanup')
-log(`Cleaning up worktree ${setup.worktreePath}, branch ${setup.storyBranch}...`)
+log(`Cleaning up worktree ${setup.worktreePath}, branch ${setup.storyBranch} (merged=${mergeResult?.merged})...`)
 const cleanup = await agent(
   `Cleanup bmad-build artifacts for story ${setup.storyKey}.
 
@@ -564,23 +570,38 @@ CONTEXT:
 - prdWorktreePath: ${setup.prdWorktreePath}
 - worktreePath: ${setup.worktreePath}
 - storyBranch: ${setup.storyBranch}
+- mergeResult.merged: ${mergeResult?.merged === true}  ← CRITICAL: only delete worktree/branch if true
 
 WORKING FROM: ${setup.repoRoot} (the bare git root — worktree commands work from here).
 
 STEPS:
-1. Remove story worktree:
-   \`git worktree remove --force ${setup.worktreePath}\`
-   If already removed (branch merged → MR --remove-source-branch cleaned it), skip silently.
-2. Delete local branch if it still exists (the MR was created with --remove-source-branch, so usually gone, but be defensive):
-   \`git branch -D ${setup.storyBranch}\` (errors if missing — ignore).
-3. Prune remote refs:
-   \`git remote prune origin\`
-4. Remove orchestrator log files in ${setup.prdWorktreePath}/_bmad-output/implementation-artifacts/ matching pattern bmad-build-auto-result-*${setup.storyKey}* (only those for the just-completed story).
-5. Return CLEANUP_SCHEMA.
+0. IF mergeResult.merged === true (MR successfully merged into prd branch):
+   1a. Remove story worktree:
+       \`git worktree remove --force ${setup.worktreePath}\`
+       If already removed (MR --remove-source-branch cleaned it), skip silently.
+   1b. Delete local branch if it still exists:
+       \`git branch -D ${setup.storyBranch}\` (errors if missing — ignore).
+   1c. Prune remote refs:
+       \`git remote prune origin\`
+   ELSE (merge failed, skipped, or story deferred):
+   - DO NOT delete the worktree or branch — keep them for retry.
+   - Report keptWorktrees=[worktreePath], keptBranches=[storyBranch] in the return.
+1. ALWAYS (regardless of merge status):
+   Remove orchestrator log files in ${setup.prdWorktreePath}/_bmad-output/implementation-artifacts/ matching pattern bmad-build-auto-result-*${setup.storyKey}* (only those for the just-completed story). These are always safe to remove because they're regenerated on retry.
+2. Return CLEANUP_SCHEMA with:
+   - removedWorktrees: [paths deleted, or empty]
+   - deletedBranches: [names deleted, or empty]
+   - keptWorktrees: [paths kept, or empty]
+   - keptBranches: [names kept, or empty]
+   - prunedRefs: count
+   - removedLogs: [file paths deleted]
+   - errors: [any error strings]
 
 DO NOT remove files outside _bmad-output/.
 DO NOT touch sprint-status.yaml or the spec file (those are tracked artifacts).
 `,
+  { label: `cleanup-${setup.storyKey}`, phase: 'Cleanup', schema: CLEANUP_SCHEMA, agentType: 'general-purpose' }
+)
   { label: `cleanup-${setup.storyKey}`, phase: 'Cleanup', schema: CLEANUP_SCHEMA, agentType: 'general-purpose' }
 )
 

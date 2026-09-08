@@ -395,7 +395,7 @@ OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
 
 STEPS:
 1. Read spec frontmatter 'files' field at ${setup.specPath}.
-2. FILE-EXISTENCE CHECK (5-8/5-9 guard): for each path in 'files' field, run \`ls -1 <worktree>/<path> | head -1\`. If ANY missing → return BUILD_SCHEMA with error + pushed=false + followupReviewRecommended=true.
+2. FILE-EXISTENCE CHECK (deliverable guard): for each path in 'files' field, run \`ls -1 <worktree>/<path> | head -1\`. If ANY missing → return BUILD_SCHEMA with error + pushed=false + followupReviewRecommended=true.
 3. PUSH: \`git push --force-with-lease origin ${setup.storyBranch}\`.
 4. Get final SHA: \`git rev-parse HEAD\`.
 5. Read spec frontmatter fields: followup_review_recommended, status.
@@ -551,7 +551,7 @@ OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
 
 STEPS:
 1. Read spec frontmatter 'files' field at ${setup.specPath}.
-2. FILE-EXISTENCE CHECK (5-8/5-9 guard): for each path in 'files' field, run \`ls -1 <worktree>/<path> | head -1\`. If ANY missing → return BUILD_SCHEMA with error + pushed=false + followupReviewRecommended=true.
+2. FILE-EXISTENCE CHECK (deliverable guard): for each path in 'files' field, run \`ls -1 <worktree>/<path> | head -1\`. If ANY missing → return BUILD_SCHEMA with error + pushed=false + followupReviewRecommended=true.
 3. PUSH: \`git push --force-with-lease origin ${setup.storyBranch}\`.
 4. Get final SHA: \`git rev-parse HEAD\`.
 5. Read spec frontmatter fields: followup_review_recommended, status.

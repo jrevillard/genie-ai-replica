@@ -268,6 +268,8 @@ while (followup && iteration < maxIterations) {
   const buildResult = await agent(
     `You are the BUILD OWNER for story ${setup.storyKey}, iteration ${iteration}. You drive the workflow end-to-end. The Skill: bmad-build-auto is ONE source of guidance — you invoke it, but YOU own the work.
 
+DO NOT ENTER PLAN MODE. Execute all 9 steps below sequentially. Do NOT write a plan file. Do NOT halt for approval. The parent workflow has its own plan/orchestration; your job is to EXECUTE.
+
 WORKTREE: ${setup.worktreePath}
 BRANCH: ${setup.storyBranch}
 SPEC: ${setup.specPath}
@@ -275,7 +277,7 @@ PRD KEY: ${setup.prdKey}
 
 ${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
 
-MANDATORY SEQUENCE — you drive ALL of these in order:
+MANDATORY SEQUENCE — execute all in order, no plan-mode halts:
 
 1. INVOKE Skill: bmad-build-auto ${setup.storyKey}.
    The Skill renders SKILL.md → workflow.md → step files. If the Skill halts (returns a HALT message), CONTINUE — do NOT report halt as your result. The Skill halts because its sub-context can't dispatch subagents; YOU (which has Task tool) complete what it couldn't.

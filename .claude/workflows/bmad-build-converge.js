@@ -19,6 +19,10 @@ const timestamp = args.timestamp || 'unknown';
 // agent passes this to bmad-build-auto's reviewers so the next iteration targets
 // the actual CI failure rather than guessing.
 let ciFailure = args.ciFailure || null;
+// lastCIStatus is set inside the convergence loop and read after the loop
+// to drive the auto-merge decision + the final log line. Must be declared
+// at the same scope as the loop (not inside it) so it survives loop exit.
+let lastCIStatus = null;
 
 const SETUP_SCHEMA = {
   type: 'object',
@@ -306,7 +310,6 @@ CONSTRAINTS:
 
   currentSha = buildResult.newSha
   followup = buildResult.followupReviewRecommended
-  let lastCIStatus = null  // tracks the most recent CI verdict (success|failed|...)
 
   // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
   // a pipeline. We poll the pipeline after the push and, if it failed, we

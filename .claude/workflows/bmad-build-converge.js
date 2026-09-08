@@ -99,6 +99,34 @@ const CLEANUP_SCHEMA = {
   required: ['removedWorktrees', 'deletedBranches', 'keptWorktrees', 'keptBranches', 'prunedRefs', 'removedLogs', 'errors'],
 };
 
+// Pure-JS UTF-8 → base64 encoder. Workflow scripts have neither Buffer
+// nor btoa, so encode manually. The result is the same string that
+// `echo '...' | base64 -d` would produce on the bash side.
+function base64Encode(input) {
+  const bytes = [];
+  for (let i = 0; i < input.length; i++) {
+    let c = input.charCodeAt(i);
+    if (c < 0x80) bytes.push(c);
+    else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    else if (c < 0xd800 || c >= 0xe000) bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    else {
+      i++;
+      c = 0x10000 + (((c & 0x3ff) << 10) | (input.charCodeAt(i) & 0x3ff));
+      bytes.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b1 = bytes[i], b2 = i + 1 < bytes.length ? bytes[i + 1] : 0, b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += A[b1 >> 2];
+    out += A[((b1 & 3) << 4) | (b2 >> 4)];
+    out += i + 1 < bytes.length ? A[((b2 & 0xf) << 2) | (b3 >> 6)] : '=';
+    out += i + 2 < bytes.length ? A[b3 & 0x3f] : '=';
+  }
+  return out;
+}
+
 // ============================================================================
 // dispatchViaClaudeP: replace agent() with `claude -p` subprocess.
 //
@@ -142,10 +170,7 @@ async function dispatchViaClaudeP(opts) {
   const modelArg = ` --model opus`;
   // Base64 transport: encode prompt to avoid all shell-quoting issues
   // (apostrophes, backticks, $vars, newlines). bash decodes via base64 -d.
-  // btoa() is a JS global (Node + browser); Buffer is NOT available in
-  // workflow scripts. btoa requires Unicode-safe encoding — use
-  // unescape(encodeURIComponent(...)) to UTF-8 escape before base64.
-  const promptB64 = btoa(unescape(encodeURIComponent(prompt)));
+  const promptB64 = base64Encode(prompt);
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
   const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'})`;
   const wrapperResult = await agent(

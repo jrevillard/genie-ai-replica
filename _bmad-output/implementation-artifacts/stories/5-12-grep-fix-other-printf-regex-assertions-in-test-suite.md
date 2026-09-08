@@ -2,8 +2,8 @@
 key: 5-12-grep-fix-other-printf-regex-assertions-in-test-suite
 title: "grep + fix other printf regex assertions: AdminDashboard.parseLogMessage + tests"
 epic: epic-5
-status: done
-baseline_revision: d977704f57290e1d84ea5a2e8bf6a100180cdb84
+status: in-progress
+baseline_revision: 7998b450bdc823c2f27ac4c9d1846f60e3793f1e
 effort: 0.25
 depends_on: [5.11]
 followup_review_recommended: false

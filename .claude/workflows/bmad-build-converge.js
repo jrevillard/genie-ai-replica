@@ -211,43 +211,47 @@ ${ciFailure ? `PREVIOUS ITERATION CI FAILED — FIX THIS:
 The bmad-build-auto reviewers MUST classify this as a 'patch' (not 'defer', not 'reject') in the current iteration.` : ''}
 
 RUN bmad-build:
-1. Read spec at ${setup.specPath}.
-2. Update baseline_revision in spec frontmatter to current SHA (${currentSha}). bmad-build-auto's step-04 reads baseline_revision to compute the reviewer diff. Baseline STAYS at origin/prdBranch tip across iterations so reviewers see full cumulative diff for context — do NOT reset to previous iteration's SHA.
-3. Run bmad-build via Skill: \`Skill: bmad-build-auto ${setup.storyKey}\` (NOT bmad-build — the auto version writes the followup_review_recommended flag the outer workflow reads). Follow step-01..05 exactly.
-   - Step-01: routing (spec is in-progress → step-03)
-   - Step-03: implement (subagent dispatches implementation)
-   - Step-04: 3 parallel reviewers (blind hunter, edge-case, verification-gap) → classify + apply patches + write followup_review_recommended in spec frontmatter + increment review_loop_iteration counter
-   - Step-05: present (build review-order section, mark done)
-4. The Skill call may not give you the full workflow.md inline — use Read on the rendered path the Skill returns.
+This is the THICK-WRAPPER build agent. bmad-build-auto Skill doesn't work
+in subagent context (it detects "no subagents" rule), so we do the work
+directly. The workflow mirrors bmad-build-auto's step-01..05:
+
+1. Read spec at ${setup.specPath} (frontmatter + ## Acceptance + ## Verification).
+2. Update baseline_revision in spec frontmatter to current SHA (${currentSha}). Baseline STAYS at origin/prdBranch tip so reviewers see full cumulative diff.
+3. IMPLEMENT the deliverables (the files in the spec's frontmatter 'files' field). Use Read + Write tools. Write production-quality code — match the patterns in the spec.
+4. WRITE the test file(s) the spec's 'files' field lists (new files). Use Read + Write tools.
+5. WRITE 3 reviewer subagents in parallel using the Agent tool:
+   - Reviewer 1 (blind-hunter): "Find at least 10 issues to fix or improve. Output a Markdown list of findings only — no severity, no priority, no ranking."
+   - Reviewer 2 (edge-case-hunter): "Read ${setup.specPath}#edge-case-hunter. Follow its review instructions. Output a Markdown list of findings only."
+   - Reviewer 3 (verification-gap): "Read ${setup.specPath}#verification-gap. Follow its review instructions. Output a Markdown list of findings only."
+6. Classify each finding as 'patch' (fix), 'defer' (file a follow-up), or 'reject' (drop). The score formula: followup = (any high-severity patch) OR (3 × medium + 1 × low ≥ 5).
+7. WRITE the spec sections: '## Review Triage Log' + '## Auto Run Result' (status: done, followup_review_recommended flag, patches_applied count, items_deferred count). Update spec frontmatter: followup_review_recommended, baseline_revision.
+8. COMMIT + PUSH:
+   \`git add -A && git commit -m "fix(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\`
+   \`git push --force-with-lease origin ${setup.storyBranch}\`
+9. FORMAT CHECK (per memory feedback_rtk_lint_false_positives):
+   \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
+   If fail: \`rtk proxy npx prettier --write "**/*.js"\` + commit + push.
 
 QUALITY GATE (after build completes):
 - Read spec frontmatter followup_review_recommended field.
-- Formula reminder: followup = TRUE if any patched finding was HIGH severity, OR if (3 × medium_count + 1 × low_count) ≥ 5.
-- bmad-build-auto writes this flag automatically. Your job: read it back + return to outer workflow.
-
-COMMIT + PUSH:
-- \`git add -A && git commit -m "fix(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\` (amend if only orchestrator artifacts)
-- \`git push --force-with-lease origin ${setup.storyBranch}\`
-
-FORMAT CHECK (per memory feedback_rtk_lint_false_positives):
-- After push, run: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
-- If fail: \`rtk proxy npx prettier --write "**/*.js"\` + commit + push.
+- followup = TRUE if any patched finding was HIGH severity, OR (3 × medium + 1 × low) ≥ 5.
 
 RETURN BUILD_SCHEMA:
 - newSha = HEAD after push
-- followupReviewRecommended = EXACT boolean value of spec frontmatter 'followup_review_recommended' field. bmad-build-auto writes this in its finalize step. Read it via Read or Grep. Do NOT infer, hallucinate, or compute it yourself.
-- patchesApplied / itemsDeferred = from spec Auto Run Result section (parse the "Patches applied" + "Items deferred" lines)
+- followupReviewRecommended = EXACT boolean value of spec frontmatter 'followup_review_recommended' field (you just wrote it)
+- patchesApplied = parsed from '## Auto Run Result' section
+- itemsDeferred = parsed from same
 - scoreFormula = the formula string
-- specStatus = spec frontmatter status field
+- specStatus = 'done' or 'in-review'
 - pushed = true after successful push
 
 VERIFICATION before returning:
-1. Read spec file. Confirm frontmatter has followup_review_recommended field (boolean).
-2. Confirm spec status is 'done' or 'in-review' (NOT 'draft', NOT 'ready-for-dev', NOT 'in-progress').
-3. If either check fails, return error string + set pushed=false + followupReviewRecommended=true (forces outer loop to retry).
+1. Read spec file. Confirm frontmatter has followup_review_recommended field.
+2. Confirm spec status is 'done' or 'in-review'.
+3. If either check fails → return error string + pushed=false + followupReviewRecommended=true.
 
 ERRORS:
-- If bmad-build halts or errors, return error string in error field, set pushed=false, followupReviewRecommended=true.`,
+- If build halts or errors, return error string + pushed=false + followupReviewRecommended=true.`,
     { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
   )
 

@@ -238,6 +238,11 @@ STEPS:
    worktreePath = repoRoot + '/' + worktree_base + '/' + storyBranch-with-slashes-replaced-by-dashes.
    Example: <repoRoot>/<worktree_base>/<storyBranch-slashes-to-dashes>
    Command: \`git -C repoRoot worktree add <worktreePath> <storyBranch>\`.
+6b. Copy Skill files from prd worktree into story worktree (CRITICAL — skill files are gitignored and not present on story branches):
+   - The Skill: bmad-build-auto needs .claude/skills/bmad-build-auto/{workflow.md,step-*.md,customize.toml,references/,review-prompts/,spec-template.md,compile-epic-context.md} to render. Without these, the Skill HALTs with "render entry is missing: workflow.md".
+   - mkdir -p <worktreePath>/.claude/skills
+   - cp -r <prdWorktreePath>/.claude/skills/bmad-build-auto/. <worktreePath>/.claude/skills/bmad-build-auto/
+   - Verify workflow.md exists: test -f <worktreePath>/.claude/skills/bmad-build-auto/workflow.md || HALT with error.
 7. Sync sprint-status INSIDE the story worktree (it's a tracked file; commit goes onto storyBranch):
    cd <worktreePath>
    - Update development_status[<storyKey>] = in-progress

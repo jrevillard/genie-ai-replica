@@ -179,11 +179,15 @@ ${cmd}`,
 
   let parsed;
   try {
-    // claude -p may prepend stderr noise like `[claude-code:unrecognized_model] {...}` before the JSON envelope.
-    // Skip everything before the first `{` to find the actual JSON envelope.
+    // The wrapper's stdout may contain stderr noise lines like
+    // `[claude-code:unrecognized_model] {"model":"...","query_source":"sdk"}`
+    // BEFORE the real JSON envelope. The noise itself is a valid JSON object,
+    // so a naive `indexOf('{')` returns the noise's `{` and parses the wrong
+    // object. Strip noise lines first, then locate the envelope's `{`.
     const raw = wrapperResult.stdout || '';
-    const jsonStart = raw.indexOf('{');
-    const jsonText = jsonStart >= 0 ? raw.substring(jsonStart) : raw;
+    const stripped = raw.replace(/^\[claude-code:[^\n]*\n?/gm, '');
+    const jsonStart = stripped.indexOf('{');
+    const jsonText = jsonStart >= 0 ? stripped.substring(jsonStart) : stripped;
     parsed = JSON.parse(jsonText);
   } catch (e) {
     return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${(wrapperResult.stdout || '').slice(-500)}` };

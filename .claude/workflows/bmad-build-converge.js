@@ -142,7 +142,10 @@ async function dispatchViaClaudeP(opts) {
   const modelArg = ` --model opus`;
   // Base64 transport: encode prompt to avoid all shell-quoting issues
   // (apostrophes, backticks, $vars, newlines). bash decodes via base64 -d.
-  const promptB64 = Buffer.from(prompt).toString('base64');
+  // btoa() is a JS global (Node + browser); Buffer is NOT available in
+  // workflow scripts. btoa requires Unicode-safe encoding — use
+  // unescape(encodeURIComponent(...)) to UTF-8 escape before base64.
+  const promptB64 = btoa(unescape(encodeURIComponent(prompt)));
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
   const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'})`;
   const wrapperResult = await agent(

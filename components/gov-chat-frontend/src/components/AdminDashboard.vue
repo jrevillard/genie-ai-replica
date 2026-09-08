@@ -2589,14 +2589,15 @@ export default {
         const mapAndParseLogDetail = (log) => {
           if (log && typeof log.level === 'string' && log.level !== '') {
             return {
-              timestamp: log.timestamp,
+              timestamp: log.timestamp || '',
               type: log.level.toUpperCase(),
               message: typeof log.message === 'string' ? log.message : ''
             };
           }
-          const parsed = this.parseLogMessage(log && log.message ? log.message : '');
+          const message = log && typeof log.message === 'string' ? log.message : '';
+          const parsed = this.parseLogMessage(message);
           return {
-            timestamp: log && log.timestamp,
+            timestamp: (log && log.timestamp) || '',
             type: parsed.type,
             message: parsed.message
           };

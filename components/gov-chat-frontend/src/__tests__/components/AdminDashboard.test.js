@@ -722,6 +722,51 @@ describe('AdminDashboard', () => {
         { timestamp: '2026-09-08T10:02:00Z', type: 'WARNING', message: 'Anomalous IP' }
       ]);
     });
+
+    it('loadSecurityDetails falls back to parseLogMessage when log.level is missing (legacy/printf path)', async () => {
+      // Pairs with the previous test: when a backend row lacks `level`, the mapper
+      // must feed `log.message` (a JSON-encoded string) through parseLogMessage.
+      // Pins the fallback branch of mapAndParseLogDetail.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-08T11:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        failedLoginDetails: [
+          { timestamp: '2026-09-08T11:00:00Z', message: JSON.stringify({ level: 'ERROR', message: 'Legacy failure' }) }
+        ],
+        suspiciousDetails: []
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.failedLoginDetails).toEqual([
+        { timestamp: '2026-09-08T11:00:00Z', type: 'ERROR', message: 'Legacy failure' }
+      ]);
+    });
+
+    it('loadSecurityDetails does not propagate literal "null" timestamp when log row is missing fields', async () => {
+      // Regression guard: mapAndParseLogDetail must coalesce a missing timestamp
+      // to an empty string rather than propagating JS null through to the UI table.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-08T12:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        failedLoginDetails: [{ level: 'ERROR', message: 'no timestamp here' }],
+        suspiciousDetails: []
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.failedLoginDetails[0]).toEqual({
+        timestamp: '',
+        type: 'ERROR',
+        message: 'no timestamp here'
+      });
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -1083,8 +1128,9 @@ describe('AdminDashboard', () => {
 
     it('extracts WARNING type from JSON-encoded log entry', () => {
       const wrapper = createAdminDashboardWrapper();
-      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'WARNING', message: 'this is a warning' }));
-      expect(result).toEqual({ type: 'WARNING', message: 'this is a warning' });
+      // Feed lowercase 'warn' so the assertion exercises parsed.level.toUpperCase() — not just an already-upper value.
+      const result = wrapper.vm.parseLogMessage(JSON.stringify({ level: 'warn', message: 'this is a warning' }));
+      expect(result).toEqual({ type: 'WARN', message: 'this is a warning' });
     });
 
     it('parses JSON-encoded log entries that carry extra fields', () => {

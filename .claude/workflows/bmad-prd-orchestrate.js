@@ -81,8 +81,11 @@ const setup = await agent(
 TIMESTAMP: ${timestamp}
 
 STEPS:
-1. Discover repo:
-   a. Run \`git rev-parse --show-toplevel\` → repoRoot
+1. Discover BARE repo (not the worktree):
+   a. \`git rev-parse --git-dir\` returns the path to .git (e.g. '.git' from inside a worktree, or '/path/to/bare/.git' from the bare repo).
+   b. The BARE repo root = parent of --git-dir. Use this script to derive it:
+      \`GIT_DIR=$(git rev-parse --git-dir); if [ "$GIT_DIR" = ".git" ]; then REPO_ROOT=$(cd .. && pwd); else REPO_ROOT=$(dirname "$GIT_DIR"); fi; echo "$REPO_ROOT"\`
+   c. SETUP.repoRoot = the bare repo root (NOT the worktree path). \`git rev-parse --show-toplevel\` is WRONG — it returns the worktree path, not the bare repo. The converge sub-workflow's scriptPath is computed as \`repoRoot + '/.claude/workflows/bmad-build-converge.js'\` — if repoRoot is the worktree, the file isn't there.
 2. Find PRD worktree (worktree on a 'feat/*/prd' branch):
    a. Run \`git worktree list --porcelain\`
    b. Parse output: each entry starts with 'worktree <path>', followed by 'branch refs/heads/<name>'.

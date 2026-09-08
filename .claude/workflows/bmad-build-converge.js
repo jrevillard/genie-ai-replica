@@ -531,7 +531,7 @@ STEPS:
 
 CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}
 
-sprint-status.yaml is owned by the orchestrator: never write it.
+sprint-status.yaml is owned by the orchestrator: never write it, and never revert a change to it. A row at done or awaiting-operator is the orchestrator's own bookkeeping — not a defect to fix, and not proof that the work is verified.
 
 If Skill HALTs (terminal status != done), return { skillCompleted: false, error: <halt reason> }. Otherwise { skillCompleted: true }.`,
     schema: { type: 'object', properties: { skillCompleted: { type: 'boolean' }, error: { type: 'string' } }, required: ['skillCompleted'] },
@@ -545,7 +545,31 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
   }
 
   const postBuildResult = await agent(
-    `Post-build (CI-fix iter ${ciIter}) for ${setup.storyKey}, iter ${iteration}. Same as before: verify files, push, return BUILD_SCHEMA.`,
+    `Post-build for story ${setup.storyKey}, iter ${iteration}. Build agent already invoked Skill: bmad-build-auto and committed locally. Your job: verify deliverables + push + return BUILD_SCHEMA.
+
+OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
+
+STEPS:
+1. Read spec frontmatter 'files' field at ${setup.specPath}.
+2. FILE-EXISTENCE CHECK (5-8/5-9 guard): for each path in 'files' field, run \`ls -1 <worktree>/<path> | head -1\`. If ANY missing → return BUILD_SCHEMA with error + pushed=false + followupReviewRecommended=true.
+3. PUSH: \`git push --force-with-lease origin ${setup.storyBranch}\`.
+4. Get final SHA: \`git rev-parse HEAD\`.
+5. Read spec frontmatter fields: followup_review_recommended, status.
+
+RETURN BUILD_SCHEMA:
+- storyKey: ${setup.storyKey}
+- iteration: ${iteration}
+- newSha: <final SHA>
+- followupReviewRecommended: <spec frontmatter followup_review_recommended>
+- specStatus: <spec frontmatter status>
+- pushed: true (after successful push)
+- patchesApplied, itemsDeferred, scoreFormula: parsed from spec's '## Auto Run Result' section
+
+CONSTRAINTS:
+- DO NOT run Skill: bmad-build-auto (build agent did that)
+- DO NOT create MR — Phase 2 (Create MR) already created it; you just push commits to its branch
+- DO NOT modify spec file other than verifying frontmatter fields
+- DO NOT run format-check / linters — CI lint job handles those (workflow stays generic)`,
     { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
   );
 

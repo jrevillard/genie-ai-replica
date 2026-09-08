@@ -1,3 +1,5 @@
+import { writeFileSync, unlinkSync } from 'node:fs';
+
 // Note: the meta is static at script-load time, so 'storyKey' can't be
 // inlined. The 'name' field is fixed ('bmad-build-converge'); the
 // 'description' shows the generic flow. To make the running story
@@ -94,6 +96,60 @@ const CLEANUP_SCHEMA = {
 };
 
 // ============================================================================
+// dispatchViaClaudeP: replace agent() with `claude -p` subprocess.
+//
+// `claude -p` runs in a primary Claude Code session, which has full Skill
+// tool access AND can dispatch its own subagents. The Workflow tool's nested
+// agent() context blocks subagent dispatch (step-03 of bmad-build-auto bails
+// with "no subagents"). Spawning claude -p unblocks that.
+//
+// Only the Build phase uses this helper (it invokes Skill: bmad-build-auto).
+// Other phases keep using agent() — they don't dispatch subagents.
+//
+// Transport: prompt written to a temp file, then `cat file | claude -p -`.
+// Avoids shell quoting hell (apostrophes, backticks, $vars in prompts).
+//
+// cwd: optional. When omitted, the bash-agent wrapping claude -p uses its
+// own CWD. Build always passes cwd=setup.worktreePath.
+//
+// Temp file cleanup is wrapped in try/finally so leaks don't accumulate
+// when the wrapper agent throws mid-dispatch.
+// ============================================================================
+async function dispatchViaClaudeP(opts) {
+  const { label, phase, prompt, schema, cwd, allowedTools, maxBudgetUsd } = opts;
+  const promptFile = `/tmp/bmad-bc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
+  writeFileSync(promptFile, prompt);
+  try {
+    const cwdPrefix = cwd ? `cd '${cwd}' && ` : '';
+    const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
+    const cmd = `${cwdPrefix}cat '${promptFile}' | claude -p - --output-format json --bare --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'}`;
+    const wrapperResult = await agent(
+      `Run this bash command. Return stdout parsed as JSON. No commentary, no extra steps.
+
+COMMAND:
+${cmd}
+
+PARSE RULES:
+- claude -p's JSON envelope: {"type":"result","subtype":"...","result":"<text>","json":<parsed schema>,"usage":{...}}.
+- If --json-schema was used, the parsed object lives in the envelope's \`json\` field — return it WRAPPED: { "json": <envelope.json> }.
+- If exit != 0, return { error: <stderr last 500 chars> }.
+- DO NOT modify any files. DO NOT add goal restatements.`,
+      { label, phase, schema: {
+        type: 'object',
+        properties: {
+          json: {},
+          error: { type: 'string' },
+        },
+      }, agentType: 'general-purpose' }
+    );
+    if (wrapperResult?.error) return { error: wrapperResult.error };
+    return wrapperResult?.json ?? wrapperResult;
+  } finally {
+    try { unlinkSync(promptFile); } catch {}
+  }
+}
+
+// ============================================================================
 // PHASE 1: SETUP — discover repo, PRD worktree, config, project_key
 // ============================================================================
 phase('Setup')
@@ -176,12 +232,6 @@ let followup = true;
 let currentSha = setup.baselineSha;
 let convergedSha = null;
 let iterationsLog = [];
-// buildResult from the PREVIOUS iteration feeds the next iteration's context
-// (review followup + ci failure). Declared at outer scope so the build
-// agent's template literal can safely access it. First iteration: undefined
-// → the conditional check `buildResult?.followupReviewRecommended` is false →
-// no prev context injected.
-let buildResult = null;
 
 while (followup && iteration < maxIterations) {
   iteration++;
@@ -190,127 +240,70 @@ while (followup && iteration < maxIterations) {
   // 'buildResult' (not 'buildResult') to avoid shadowing the outer let
   // binding — JS TDZ on the inner const would throw on the template
   // evaluation that precedes the const assignment.
-  const buildResult = await agent(
-    `You are the bmad-build agent for story ${setup.storyKey}, iteration ${iteration}.
+  const buildResult = await dispatchViaClaudeP({
+    label: `build-iter-${iteration}`,
+    phase: 'Build with convergence',
+    cwd: setup.worktreePath,
+    prompt: `/bmad-build-auto ${setup.storyKey}
 
-CONTEXT (from setup agent):
-- repoRoot: ${setup.repoRoot}
-- prdWorktreePath: ${setup.prdWorktreePath}
-- prdKey: ${setup.prdKey}
-- baseBranch: ${setup.baseBranch}
-- storyBranch: ${setup.storyBranch}
-- worktreePath: ${setup.worktreePath}
-- specPath: ${setup.specPath}
-- baselineSha: ${currentSha}
-- gitlabHost: ${setup.gitlabHost}
-- gitlabProjectId: ${setup.gitlabProjectId}
+${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
 
-OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
+sprint-status.yaml is owned by the orchestrator: never write it, and never revert a change to it. A row at done or awaiting-operator is the orchestrator's own bookkeeping — not a defect to fix, and not proof that the work is verified.
 
-${ciFailure ? `PREVIOUS ITERATION CI FAILED — FIX THIS:
-- pipelineId: ${ciFailure.pipelineId}
-- status: ${ciFailure.status}
-- failedJobs: ${JSON.stringify(ciFailure.failedJobs || [], null, 2).substring(0, 1500)}
-- traceTail: ${(ciFailure.traceTail || '').substring(0, 1500)}
-The bmad-build-auto reviewers MUST classify this as a 'patch' (not 'defer', not 'reject') in the current iteration.` : ''}
+If Skill HALTs (terminal status != done), return { skillCompleted: false, error: <halt reason> }. Otherwise { skillCompleted: true }.`,
+    schema: {
+      type: 'object',
+      properties: {
+        skillCompleted: { type: 'boolean' },
+        error: { type: 'string' },
+      },
+      required: ['skillCompleted'],
+    },
+    allowedTools: 'Read,Write,Edit,Bash,Skill,Agent,Bash(git *),Bash(cd *),Bash(rtk *),Bash(npx *),Bash(ls *)',
+    maxBudgetUsd: 5,
+  })
 
-RUN bmad-build:
-This is the THICK-WRAPPER build agent. bmad-build-auto Skill IS invocable
-from a subagent context (verified: render_skill.py succeeds, subagent
-reads workflow.md). But the implementation SUBAGENT within step-03
-cannot dispatch sub-subagents in our Workflow tool context. So the build
-agent does the IMPLEMENTATION work itself (Read + Write), and only
-dispatches the 3 REVIEWER subagents (which work fine at the build
-agent's level).
-
-1. Read spec at ${setup.specPath} (frontmatter + ## Acceptance + ## Verification).
-2. Update baseline_revision in spec frontmatter to current SHA (${currentSha}). Baseline STAYS at origin/prdBranch tip so reviewers see full cumulative diff.
-3. Invoke Skill: bmad-build-auto (the Skill itself works fine — it returns the workflow.md path; bmad-build-auto's workflow tells YOU to dispatch reviewers).
-4. Read the rendered workflow.md from the Skill result. Then do the WORK directly (do NOT rely on step-03's auto-dispatch):
-   a. IMPLEMENT the test file(s) the spec's 'files' field lists. Use Read + Write tools. Match the patterns in the spec.
-   b. UPDATE the spec frontmatter status to 'in-progress' (if not already) then to 'done' after implementation.
-   c. WRITE the '## Review Triage Log' section (one entry for this build pass, with the 3 reviewers' findings) + '## Auto Run Result' (status: done, followup_review_recommended, patches_applied, items_deferred).
-5. After the Skill is read and the implementation is complete, DISPATCH the 3 reviewer subagents in parallel (these work at the build agent's level):
-   - Reviewer 1 (blind-hunter): invoke via Agent tool, prompt = "Read ${setup.specPath}## Review Triage Log. Find at least 10 issues to fix or improve. Output a Markdown list of findings only — no severity, no priority, no ranking."
-   - Reviewer 2 (edge-case-hunter): prompt = "Read ${setup.specPath}#edge-case-hunter. Follow its review instructions."
-   - Reviewer 3 (verification-gap): prompt = "Read ${setup.specPath}#verification-gap. Follow its review instructions."
-6. Apply patches from the 3 reviewers' findings (if any). Update the '## Review Triage Log' with applied findings + the '## Auto Run Result' sections.
-7. Classify followup_review_recommended: TRUE if any HIGH-severity patch, OR (3 × medium + 1 × low) ≥ 5.
-8. COMMIT + PUSH:
-   \`git add -A && git commit -m "fix(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\`
-   \`git push --force-with-lease origin ${setup.storyBranch}\`
-9. FORMAT CHECK (per memory feedback_rtk_lint_false_positives):
-   \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
-   If fail: \`rtk proxy npx prettier --write "**/*.js"\` + commit + push.
-
-QUALITY GATE (after build completes):
-- Read spec frontmatter followup_review_recommended field.
-
-RETURN BUILD_SCHEMA:
-- newSha = HEAD after push
-- followupReviewRecommended = EXACT boolean value of spec frontmatter 'followup_review_recommended' field (you just wrote it)
-- patchesApplied = parsed from '## Auto Run Result' section
-- itemsDeferred = parsed from same
-- scoreFormula = the formula string
-- specStatus = spec frontmatter status field
-- pushed = true after successful push
-
-VERIFICATION before returning (FILE-EXISTENCE CHECK — this is the 5-8/5-9 guard):
-0. For each path in the spec's frontmatter 'files' field, run \`ls -1 <worktreePath>/<path> | head -1\`.
-   - If ANY file is missing, the build agent short-circuited the work → return error='build agent did not create expected files: [<missing paths>]' + pushed=false + followupReviewRecommended=true.
-1. Read spec file. Confirm frontmatter has followup_review_recommended field.
-2. Confirm spec status is 'done' or 'in-review'.
-3. If either check fails → return error string + pushed=false + followupReviewRecommended=true.
-
-ERRORS:
-- If build halts or errors, return error string + pushed=false + followupReviewRecommended=true.`,
-    { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
-  )
-
-  // Assign to the outer-scope 'buildResult' so the NEXT iteration's
-  // template eval (for buildResult?.followupReviewRecommended) sees
-  // this iteration's review verdict. Without this, buildResult is
-  // always null → the template's review-findings branch is dead.
-  buildResult = buildResult
-
-  if (buildResult.error) {
-    log(`Build agent failed: ${buildResult.error}`)
-    iterationsLog.push({ iter: iteration, error: buildResult.error })
+  // 'buildResult'/'postBuildResult' are inner consts, but the NEXT iteration's
+  // template eval (for the optional ciFailure injection) doesn't need them —
+  // ciFailure is captured into the outer-scope `let` below.
+  if (!buildResult || !buildResult.skillCompleted || buildResult.error) {
+    log(`Build agent (Skill) failed: ${buildResult?.error || 'skill did not complete'}`)
+    iterationsLog.push({ iter: iteration, error: `build: ${buildResult?.error || 'skill did not complete'}` })
     followup = false
     break
   }
 
-  // POST-BUILD: format-check + push (separated from build agent so the build agent
-  // stays a thin wrapper that ONLY invokes bmad-build-auto — no formatting or pushing).
+  // POST-BUILD: file-existence check (5-8/5-9 guard) + push + emit BUILD_SCHEMA.
+  // Build agent is a bare Skill invocation (bmad-loop pattern); all
+  // post-skill scaffolding lives here. Format-check is delegated to CI
+  // (lint job) to keep this workflow generic across BMAD PRDs.
   const postBuildResult = await agent(
-    `Post-build for story ${setup.storyKey}, iteration ${iteration}: format-check + push. The build agent already invoked bmad-build-auto which committed locally. Your job: verify formatting, then push.
+    `Post-build for story ${setup.storyKey}, iter ${iteration}. Build agent already invoked Skill: bmad-build-auto and committed locally. Your job: verify deliverables + push + return BUILD_SCHEMA.
 
 OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
 
 STEPS:
-1. Run format-check: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
-2. If format-check FAILS:
-   - Run: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --write "**/*.js"\`
-   - Commit the formatting fixes: \`cd ${setup.worktreePath} && git add -A && git commit -m "style(${setup.prdKey}): story ${setup.storyKey} format-fix iter ${iteration}"\`
-3. Push branch: \`cd ${setup.worktreePath} && git push --force-with-lease origin ${setup.storyBranch}\`
-4. Get final SHA: \`cd ${setup.worktreePath} && git rev-parse HEAD\`
+1. Read spec frontmatter 'files' field at ${setup.specPath}.
+2. FILE-EXISTENCE CHECK (5-8/5-9 guard): for each path in 'files' field, run \`ls -1 <worktree>/<path> | head -1\`. If ANY missing → return BUILD_SCHEMA with error + pushed=false + followupReviewRecommended=true.
+3. PUSH: \`git push --force-with-lease origin ${setup.storyBranch}\`.
+4. Get final SHA: \`git rev-parse HEAD\`.
+5. Read spec frontmatter fields: followup_review_recommended, status.
 
-RETURN JSON: { pushed: bool, finalSha: string, formatFixed: bool, error: string }
+RETURN BUILD_SCHEMA:
+- storyKey: ${setup.storyKey}
+- iteration: ${iteration}
+- newSha: <final SHA>
+- followupReviewRecommended: <spec frontmatter followup_review_recommended>
+- specStatus: <spec frontmatter status>
+- pushed: true (after successful push)
+- patchesApplied, itemsDeferred, scoreFormula: parsed from spec's '## Auto Run Result' section
 
 CONSTRAINTS:
-- DO NOT write any code other than format fixes
-- DO NOT run bmad-build-auto (build agent did that)
-- DO NOT create MR (Phase 3 does that)`,
-    { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: {
-      type: 'object',
-      properties: {
-        pushed: { type: 'boolean' },
-        finalSha: { type: 'string' },
-        formatFixed: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-      required: ['pushed'],
-    }, agentType: 'general-purpose' }
+- DO NOT run Skill: bmad-build-auto (build agent did that)
+- DO NOT create MR (Phase 3 does that)
+- DO NOT modify spec file other than verifying frontmatter fields
+- DO NOT run format-check / linters — CI lint job handles those (workflow stays generic)`,
+    { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
   )
 
   if (!postBuildResult || !postBuildResult.pushed) {
@@ -319,20 +312,18 @@ CONSTRAINTS:
     followup = false
     break
   }
-  // Update SHA to post-push value
-  buildResult.newSha = postBuildResult.finalSha || buildResult.newSha
 
   iterationsLog.push({
     iter: iteration,
-    sha: buildResult.newSha,
-    followup: buildResult.followupReviewRecommended,
-    specStatus: buildResult.specStatus,
-    patchesApplied: buildResult.patchesApplied,
-    itemsDeferred: buildResult.itemsDeferred,
+    sha: postBuildResult.newSha,
+    followup: postBuildResult.followupReviewRecommended,
+    specStatus: postBuildResult.specStatus,
+    patchesApplied: postBuildResult.patchesApplied,
+    itemsDeferred: postBuildResult.itemsDeferred,
   })
 
-  currentSha = buildResult.newSha
-  followup = buildResult.followupReviewRecommended
+  currentSha = postBuildResult.newSha
+  followup = postBuildResult.followupReviewRecommended
 
   // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
   // a pipeline. We poll the pipeline after the push and, if it failed, we
@@ -375,7 +366,7 @@ STEPS:
     // OR logic: the loop iterates if EITHER the build agent wants another
     // pass (review found high-severity findings) OR CI failed. CI being
     // green does NOT override the build agent's followup signal.
-    const buildWantsFollowup = buildResult.followupReviewRecommended === true
+    const buildWantsFollowup = postBuildResult.followupReviewRecommended === true
     const ciFailed = ciCheck && ciCheck.status !== 'success'
     if (buildWantsFollowup || ciFailed) {
       if (ciFailed) {
@@ -399,7 +390,7 @@ STEPS:
   }
 
   if (!followup) {
-    convergedSha = buildResult.newSha
+    convergedSha = postBuildResult.newSha
     log(`Converged after iteration ${iteration}`)
   }
 }
@@ -517,17 +508,7 @@ STEPS:
 Note: when invoked from bmad-prd-orchestrate, the orchestrator may re-apply the done transition in Phase 4. sprint_plan.py advance is idempotent (never-regress), so a redundant write is a no-op. The merge agent here is the SOLE WRITER for standalone (non-orchestrator) invocations.
 
 RETURN MERGE_SCHEMA (storyKey, mrIid, merged, sprintStatusDone, error?).`,
-    { label: `merge-${setup.storyKey}`, phase: 'Auto-merge', schema: {
-      type: 'object',
-      properties: {
-        storyKey: { type: 'string' },
-        mrIid: { type: 'integer' },
-        merged: { type: 'boolean' },
-        sprintStatusDone: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-      required: ['storyKey', 'mrIid', 'merged', 'sprintStatusDone'],
-    }, agentType: 'general-purpose' }
+    { label: `merge-${setup.storyKey}`, phase: 'Auto-merge', schema: MERGE_SCHEMA, agentType: 'general-purpose' }
   )
 } else {
   log(`CI ${lastCIStatus || 'NOT CHECKED'} — NOT auto-merging. Manual review needed.`)

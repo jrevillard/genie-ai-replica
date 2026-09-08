@@ -215,20 +215,27 @@ ${ciFailure ? `PREVIOUS ITERATION CI FAILED — FIX THIS:
 The bmad-build-auto reviewers MUST classify this as a 'patch' (not 'defer', not 'reject') in the current iteration.` : ''}
 
 RUN bmad-build:
-This is the THICK-WRAPPER build agent. bmad-build-auto Skill doesn't work
-in subagent context (it detects "no subagents" rule), so we do the work
-directly. The workflow mirrors bmad-build-auto's step-01..05:
+This is the THICK-WRAPPER build agent. bmad-build-auto Skill IS invocable
+from a subagent context (verified: render_skill.py succeeds, subagent
+reads workflow.md). But the implementation SUBAGENT within step-03
+cannot dispatch sub-subagents in our Workflow tool context. So the build
+agent does the IMPLEMENTATION work itself (Read + Write), and only
+dispatches the 3 REVIEWER subagents (which work fine at the build
+agent's level).
 
 1. Read spec at ${setup.specPath} (frontmatter + ## Acceptance + ## Verification).
 2. Update baseline_revision in spec frontmatter to current SHA (${currentSha}). Baseline STAYS at origin/prdBranch tip so reviewers see full cumulative diff.
-3. IMPLEMENT the deliverables (the files in the spec's frontmatter 'files' field). Use Read + Write tools. Write production-quality code — match the patterns in the spec.
-4. WRITE the test file(s) the spec's 'files' field lists (new files). Use Read + Write tools.
-5. WRITE 3 reviewer subagents in parallel using the Agent tool:
-   - Reviewer 1 (blind-hunter): "Find at least 10 issues to fix or improve. Output a Markdown list of findings only — no severity, no priority, no ranking."
-   - Reviewer 2 (edge-case-hunter): "Read ${setup.specPath}#edge-case-hunter. Follow its review instructions. Output a Markdown list of findings only."
-   - Reviewer 3 (verification-gap): "Read ${setup.specPath}#verification-gap. Follow its review instructions. Output a Markdown list of findings only."
-6. Classify each finding as 'patch' (fix), 'defer' (file a follow-up), or 'reject' (drop). The score formula: followup = (any high-severity patch) OR (3 × medium + 1 × low ≥ 5).
-7. WRITE the spec sections: '## Review Triage Log' + '## Auto Run Result' (status: done, followup_review_recommended flag, patches_applied count, items_deferred count). Update spec frontmatter: followup_review_recommended, baseline_revision.
+3. Invoke Skill: bmad-build-auto (the Skill itself works fine — it returns the workflow.md path; bmad-build-auto's workflow tells YOU to dispatch reviewers).
+4. Read the rendered workflow.md from the Skill result. Then do the WORK directly (do NOT rely on step-03's auto-dispatch):
+   a. IMPLEMENT the test file(s) the spec's 'files' field lists. Use Read + Write tools. Match the patterns in the spec.
+   b. UPDATE the spec frontmatter status to 'in-progress' (if not already) then to 'done' after implementation.
+   c. WRITE the '## Review Triage Log' section (one entry for this build pass, with the 3 reviewers' findings) + '## Auto Run Result' (status: done, followup_review_recommended, patches_applied, items_deferred).
+5. After the Skill is read and the implementation is complete, DISPATCH the 3 reviewer subagents in parallel (these work at the build agent's level):
+   - Reviewer 1 (blind-hunter): invoke via Agent tool, prompt = "Read ${setup.specPath}## Review Triage Log. Find at least 10 issues to fix or improve. Output a Markdown list of findings only — no severity, no priority, no ranking."
+   - Reviewer 2 (edge-case-hunter): prompt = "Read ${setup.specPath}#edge-case-hunter. Follow its review instructions."
+   - Reviewer 3 (verification-gap): prompt = "Read ${setup.specPath}#verification-gap. Follow its review instructions."
+6. Apply patches from the 3 reviewers' findings (if any). Update the '## Review Triage Log' with applied findings + the '## Auto Run Result' sections.
+7. Classify followup_review_recommended: TRUE if any HIGH-severity patch, OR (3 × medium + 1 × low) ≥ 5.
 8. COMMIT + PUSH:
    \`git add -A && git commit -m "fix(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\`
    \`git push --force-with-lease origin ${setup.storyBranch}\`
@@ -238,7 +245,6 @@ directly. The workflow mirrors bmad-build-auto's step-01..05:
 
 QUALITY GATE (after build completes):
 - Read spec frontmatter followup_review_recommended field.
-- followup = TRUE if any patched finding was HIGH severity, OR (3 × medium + 1 × low) ≥ 5.
 
 RETURN BUILD_SCHEMA:
 - newSha = HEAD after push
@@ -246,7 +252,7 @@ RETURN BUILD_SCHEMA:
 - patchesApplied = parsed from '## Auto Run Result' section
 - itemsDeferred = parsed from same
 - scoreFormula = the formula string
-- specStatus = 'done' or 'in-review'
+- specStatus = spec frontmatter status field
 - pushed = true after successful push
 
 VERIFICATION before returning:

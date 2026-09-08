@@ -112,7 +112,6 @@ STEPS:
       - Line 'branch refs/heads/<name>' gives the checked-out branch.
       Find the worktree whose branch matches pattern 'refs/heads/feat/*/prd' (the PRD umbrella branch per _bmad/custom/issue-tracking.yaml branch_patterns.prd). That worktree is prdWorktreePath. The branch suffix after 'refs/heads/feat/' and before '/prd' is the prdKey.
    c. If no worktree matches → HALT (return error in storyKey, prdWorktreePath empty). This workflow requires a PRD umbrella branch + worktree.
-   d. FETCH latest remote refs BEFORE reading origin/<baseBranch> tip: \`git -C ${setup.repoRoot} fetch origin ${setup?.baseBranch || '<baseBranch>'}\` (substitute the discovered base branch). Without this, origin/${baseBranch} may be stale (last fetch was at the previous story's run) and the next story branches from an old tip → merge conflict.
 2. Read config:
    a. From prdWorktreePath, read _bmad/custom/issue-tracking.yaml. Parse YAML. Required fields:
       - git_platform: gitlab
@@ -194,6 +193,8 @@ CONTEXT:
 - prdKey: ${setup.prdKey}
 
 STEPS (do ONLY these):
+
+0. FETCH latest remote refs: \`git -C ${setup.repoRoot} fetch origin ${setup.baseBranch}\` (without this, origin/${setup.baseBranch} is stale from the previous story's run and the next story branches from an old tip → merge conflict)
 
 1. Update spec frontmatter baseline_revision field to: ${currentSha}
    - Use Read + Edit tools on ${setup.specPath}

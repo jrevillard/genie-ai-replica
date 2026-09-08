@@ -902,4 +902,4 @@ CONSTRAINTS:
   log('Cleanup not requested (--cleanup not set); run dir preserved at ' + runDir)
 }
 
-return finalReport
+return finalReport;

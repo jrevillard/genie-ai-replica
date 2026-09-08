@@ -556,11 +556,15 @@ If the key is missing, return { "status": "missing" }.`,
   let convergeResult = null;
   let launchError = null;
   try {
-    convergeResult = await workflow({ scriptPath: convergeScriptPath, args: {
+    // workflow(nameOrRef, args?) is a 2-arg call: first is the name/scriptPath ref,
+    // second is the args object. Passing args as a KEY inside the options object
+    // (e.g. workflow({scriptPath, args: {...}})) is silently ignored — the sub-workflow
+    // sees args=undefined and crashes on args.storyKey.
+    convergeResult = await workflow({ scriptPath: convergeScriptPath }, {
       storyKey: sk,
       maxIterations,
       timestamp: timestamp + '-' + sk,
-    }});
+    });
   } catch (e) {
     launchError = String(e);
   }

@@ -187,7 +187,7 @@ INSTRUCTIONS — use TaskOutput to wait for completion:
 5. IGNORE stderr lines starting with \`[claude-code:unrecognized_model]\` — harmless gateway noise. The real JSON envelope is on stdout.
 6. Return JSON: { stdout: <full stdout of the bash cmd>, exitCode: <integer 0=success> }.
 
-Do NOT use Bash tool's `kill` command on the task. Do NOT cancel the task. Do NOT return early — TaskOutput's notification IS the completion signal.`,
+Do NOT use Bash tool kill on the task. Do NOT cancel the task. Do NOT return early — TaskOutput notification IS the completion signal.`,
     { label, phase, schema: {
       type: 'object',
       properties: {

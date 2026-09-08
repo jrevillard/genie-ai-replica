@@ -381,7 +381,7 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
       },
       required: ['skillCompleted'],
     },
-    allowedTools: 'Read,Write,Edit,Bash,Skill,Agent,Bash(git *),Bash(cd *),Bash(rtk *),Bash(npx *),Bash(ls *)',
+    allowedTools: 'Read,Write,Edit,Bash,Skill,Agent',
     maxBudgetUsd: 5,
   });
 

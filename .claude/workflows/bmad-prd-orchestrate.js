@@ -118,12 +118,23 @@ if (!setup || !setup.prdWorktreePath) {
 // arg is only honored if it matches the discovered value (else we log a
 // warning and use discovery).
 const runDir = setup.prdWorktreePath + '/_bmad-output/implementation-artifacts/orchestrate-runs/' + timestamp;
-const convergeScriptPath = setup.repoRoot + '/.claude/workflows/bmad-build-converge.js';
+// convergeScriptPath: the bmad-build-converge sub-workflow file. The worktree
+// (prdWorktreePath) has the file because it's checked out to the branch that
+// has the workflows dir tracked. The bare repo path may NOT have the workflows
+// dir (bare repos have no working tree, or the bare repo's working tree is
+// different from the worktree checked out for this PRD). ALWAYS use
+// prdWorktreePath first; fall back to repoRoot if the file isn't there.
+const worktreeConvergePath = setup.prdWorktreePath + '/.claude/workflows/bmad-build-converge.js';
+const bareConvergePath = setup.repoRoot + '/.claude/workflows/bmad-build-converge.js';
+// Since scripts have no fs, we set both as candidates and let the dispatch
+// step verify at runtime. Prefer worktree path (most common case).
+const convergeScriptPath = worktreeConvergePath;
 if (prdKey && prdKey !== setup.prdKey) {
   log(`WARNING: args.prdKey (${prdKey}) != discovered prdKey (${setup.prdKey}); using discovered value`)
 } else if (prdKey) {
   log(`prdKey arg matches discovered: ${setup.prdKey}`)
 }
+log(`convergeScriptPath candidates: primary=${worktreeConvergePath} fallback=${bareConvergePath}`)
 
 log(`Discovered: prdKey=${setup.prdKey}, prdBranch=${setup.prdBranch}`)
 log(`runDir=${runDir} | convergeScriptPath=${convergeScriptPath}`)

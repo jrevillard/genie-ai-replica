@@ -266,47 +266,13 @@ while (followup && iteration < maxIterations) {
   // limit. No claude -p subprocess, no Skill-halt-on-workflow-tool, no
   // model/auth overhead.
   const buildResult = await agent(
-    `You are the BUILD OWNER for story ${setup.storyKey}, iteration ${iteration}. You drive the workflow end-to-end. The Skill: bmad-build-auto is ONE source of guidance — you invoke it, but YOU own the work.
-
-DO NOT ENTER PLAN MODE. Execute all 9 steps below sequentially. Do NOT write a plan file. Do NOT halt for approval. The parent workflow has its own plan/orchestration; your job is to EXECUTE.
-
-WORKTREE: ${setup.worktreePath}
-BRANCH: ${setup.storyBranch}
-SPEC: ${setup.specPath}
-PRD KEY: ${setup.prdKey}
+    `/bmad-build-auto ${setup.storyKey}
 
 ${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
 
-MANDATORY SEQUENCE — execute all in order, no plan-mode halts:
+sprint-status.yaml is owned by the orchestrator: never write it, and never revert a change to it. A row at done or awaiting-operator is the orchestrator's own bookkeeping — not a defect to fix, and not proof that the work is verified.
 
-1. INVOKE Skill: bmad-build-auto ${setup.storyKey}.
-   The Skill renders SKILL.md → workflow.md → step files. If the Skill halts (returns a HALT message), CONTINUE — do NOT report halt as your result. The Skill halts because its sub-context can't dispatch subagents; YOU (which has Task tool) complete what it couldn't.
-
-2. READ the spec at ${setup.specPath}. Identify 'files' field.
-   Check if each required file exists in ${setup.worktreePath}. If file already exists (from a prior run that did partial work), verify tests pass. If file missing, write it to satisfy spec's '## Acceptance' section.
-
-3. IMPLEMENT the deliverable. Write files. Use \`git -C ${setup.worktreePath}\` for ALL git ops (NEVER \`cd <worktree> && git ...\`).
-
-4. RUN tests: \`git -C ${setup.worktreePath} exec npm test\` or \`node_modules/.bin/jest <test-file>\`. Tests must pass before proceeding.
-
-5. DISPATCH 3 reviewer subagents IN PARALLEL via the Task tool:
-   - Task(prompt="You are blind-hunter reviewer. Read /home/jerome/git_projects/ITU/genie-ai/.claude/worktrees/${setup.storyBranch}/_bmad-output/implementation-artifacts/stories/${setup.storyKey}.md then \`git -C ${setup.worktreePath} diff baseline_revision..HEAD\`. Find 10+ blind-spot issues. Return Markdown list.")
-   - Task(prompt="You are edge-case-hunter. Read the diff. Find untested edge cases. Return Markdown.")
-   - Task(prompt="You are verification-gap reviewer. For each AC in the spec, check a test verifies it. Report gaps.")
-
-6. TRIAGE findings. Dedupe by claim+action. Apply HIGH severity only.
-
-7. UPDATE spec: status='in-review', followup_review_recommended=false.
-
-8. COMMIT (NOT push — post-build agent does):
-   \`git -C ${setup.worktreePath} add -A\`
-   \`git -C ${setup.worktreePath} commit -m "test(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\`
-
-9. RETURN JSON: { skillCompleted: true, error: null }. ONLY return false if you actually couldn't do the work.
-
-NEVER return skillCompleted=false with the Skill's halt message as error. The Skill's halt is normal — you handle it. Treat the Skill as GUIDANCE, not as a success/failure check.
-
-Do NOT modify sprint-status.yaml — that's orchestrator-owned. Do NOT touch files outside the spec's 'files' field.`,
+If Skill HALTs (terminal status != done), return { skillCompleted: false, error: <halt reason> }. Otherwise { skillCompleted: true }.`,
     { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: {
       type: 'object',
       properties: {
@@ -314,7 +280,7 @@ Do NOT modify sprint-status.yaml — that's orchestrator-owned. Do NOT touch fil
         error: { type: 'string' },
       },
       required: ['skillCompleted'],
-    }, agentType: 'general-purpose', allowedTools: 'Read,Write,Edit,Bash,Skill,Agent,Task' }
+    }, agentType: 'general-purpose' }
   )
 
   // 'buildResult'/'postBuildResult' are inner consts, but the NEXT iteration's

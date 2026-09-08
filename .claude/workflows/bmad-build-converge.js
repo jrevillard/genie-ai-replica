@@ -4,7 +4,8 @@
 // visible, check args.storyKey after the workflow starts.
 //
 // IMPORTANT: Workflow tool requires `export const meta = {...}` as the
-// FIRST statement. No static imports allowed above it.
+// FIRST statement. No static imports allowed above it. No fs usage
+// (dispatchViaClaudeP creates its temp file via the bash wrapper agent).
 export const meta = {
   name: 'bmad-build-converge',
   description: 'Single-story bmad-build with quality-gate convergence loop + CI gate + auto-merge. Generic across any BMAD PRD: discovers repo, PRD worktree, issue-tracking config, and project_key from sprint-status.yaml. The story being processed is passed via args.storyKey (logged at Setup).',
@@ -98,6 +99,102 @@ const CLEANUP_SCHEMA = {
   required: ['removedWorktrees', 'deletedBranches', 'keptWorktrees', 'keptBranches', 'prunedRefs', 'removedLogs', 'errors'],
 };
 
+
+// ============================================================================
+// base64Encode: pure-JS UTF-8 → base64 (workflow scripts lack Buffer + btoa).
+// ============================================================================
+function base64Encode(input) {
+  const bytes = [];
+  for (let i = 0; i < input.length; i++) {
+    let c = input.charCodeAt(i);
+    if (c < 0x80) bytes.push(c);
+    else if (c < 0x800) bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    else if (c < 0xd800 || c >= 0xe000) bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    else {
+      i++;
+      c = 0x10000 + (((c & 0x3ff) << 10) | (input.charCodeAt(i) & 0x3ff));
+      bytes.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b1 = bytes[i], b2 = i + 1 < bytes.length ? bytes[i + 1] : 0, b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += A[b1 >> 2];
+    out += A[((b1 & 3) << 4) | (b2 >> 4)];
+    out += i + 1 < bytes.length ? A[((b2 & 0xf) << 2) | (b3 >> 6)] : '=';
+    out += i + 2 < bytes.length ? A[(b3 & 0x3f)] : '=';
+  }
+  return out;
+}
+
+// ============================================================================
+// dispatchViaClaudeP: replace agent() with `claude -p` subprocess.
+//
+// `claude -p` runs in a primary Claude Code session, which has full Skill
+// tool access AND can dispatch its own subagents. The Workflow tool's nested
+// agent() context blocks subagent dispatch (step-03 of bmad-build-auto bails
+// with "no subagents"). Spawning claude -p unblocks that.
+//
+// Only the Build phase uses this helper (it invokes Skill: bmad-build-auto).
+// Other phases keep using agent() — they don't dispatch subagents.
+//
+// Transport: prompt → base64 → bash `echo | base64 -d > /tmp/...` → `cat | claude -p -`.
+// Avoids shell quoting hell (apostrophes, backticks, $vars in prompts).
+//
+// cwd: optional. When omitted, the bash-agent wrapping claude -p uses its
+// own CWD. Build always passes cwd=setup.worktreePath.
+// ============================================================================
+// Per-run counter for marker uniqueness. Workflow tool forbids
+// Date.now()/Math.random() (they break resume), so use a simple increment.
+let dispatchSeq = 0;
+
+async function dispatchViaClaudeP(opts) {
+  const { label, phase, prompt, schema, cwd, allowedTools, maxBudgetUsd } = opts;
+  dispatchSeq++;
+  const marker = `BMADBC_DISPATCH_${dispatchSeq}`;
+  const cwdPrefix = cwd ? `cd '${cwd}'; ` : '';
+  const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
+  const modelArg = ` --model opus`;
+  const promptB64 = base64Encode(prompt);
+  const promptFile = `/tmp/bmad-bc-${marker}.txt`;
+  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'})`;
+  const wrapperResult = await agent(
+    `Run this bash command via your Bash tool with timeout 7200000 (2 hours). claude -p invokes the bmad-build-auto Skill which dispatches subagents — the whole chain can take up to an hour.
+
+COMMAND:
+${cmd}
+
+INSTRUCTIONS — use TaskOutput to wait for completion:
+1. Call the Bash tool with the command above (timeout 7200000).
+2. The Bash tool will likely move the cmd to background after ~600s. That's normal. You'll see a "taskId" in the result (e.g., "moved to the background (ID: xxx)").
+3. If bg taskId returned: use the TaskOutput tool with that taskId to block-wait until the task completes (TaskOutput blocks until terminal status). Do NOT poll TaskOutput manually — call it ONCE and let it block.
+4. When the bg task completes, read its output via TaskOutput's read=true OR Read the output file from the tool result message.
+5. IGNORE stderr lines starting with \`[claude-code:unrecognized_model]\` — harmless gateway noise. The real JSON envelope is on stdout.
+6. Return JSON: { stdout: <full stdout of the bash cmd>, exitCode: <integer 0=success> }.
+
+Do NOT use Bash tool kill on the task. Do NOT cancel the task. Do NOT return early — TaskOutput notification IS the completion signal.`,
+    { label, phase, schema: {
+      type: 'object',
+      properties: {
+        stdout: { type: 'string' },
+        exitCode: { type: 'integer' },
+      },
+      required: ['exitCode'],
+    }, agentType: 'general-purpose' }
+  );
+
+  if (!wrapperResult) return { error: 'wrapper returned no result' };
+  if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}: ${(wrapperResult.stdout || '').slice(-500)}` };
+
+  let parsed;
+  try {
+    parsed = JSON.parse(wrapperResult.stdout);
+  } catch (e) {
+    return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${wrapperResult.stdout.slice(-500)}` };
+  }
+  return parsed;
+}
 
 // ============================================================================
 // PHASE 1: SETUP — discover repo, PRD worktree, config, project_key
@@ -265,23 +362,28 @@ while (followup && iteration < maxIterations) {
   // subagent (1) → Skill's implementation subagent (2). Within depth-3
   // limit. No claude -p subprocess, no Skill-halt-on-workflow-tool, no
   // model/auth overhead.
-  const buildResult = await agent(
-    `/bmad-build-auto ${setup.storyKey}
+  const buildResult = await dispatchViaClaudeP({
+    label: `build-iter-${iteration}`,
+    phase: 'Build with convergence',
+    cwd: setup.worktreePath,
+    prompt: `/bmad-build-auto ${setup.storyKey}
 
 ${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
 
 sprint-status.yaml is owned by the orchestrator: never write it, and never revert a change to it. A row at done or awaiting-operator is the orchestrator's own bookkeeping — not a defect to fix, and not proof that the work is verified.
 
 If Skill HALTs (terminal status != done), return { skillCompleted: false, error: <halt reason> }. Otherwise { skillCompleted: true }.`,
-    { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: {
+    schema: {
       type: 'object',
       properties: {
         skillCompleted: { type: 'boolean' },
         error: { type: 'string' },
       },
       required: ['skillCompleted'],
-    }, agentType: 'general-purpose' }
-  )
+    },
+    allowedTools: 'Read,Write,Edit,Bash,Skill,Agent,Bash(git *),Bash(cd *),Bash(rtk *),Bash(npx *),Bash(ls *)',
+    maxBudgetUsd: 5,
+  });
 
   // 'buildResult'/'postBuildResult' are inner consts, but the NEXT iteration's
   // template eval (for the optional ciFailure injection) doesn't need them —

@@ -6,7 +6,8 @@ status: done
 baseline_revision: d977704f57290e1d84ea5a2e8bf6a100180cdb84
 effort: 0.25
 depends_on: [5.11]
-followup_review_recommended: false
+followup_review_recommended: true
+review_loop_iteration: 0
 deferred:
   - summary: >-
       Spec frontmatter `files:` lists `src/__tests__/AdminDashboard.test.js` but
@@ -103,6 +104,18 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 
 ## Review Triage Log
 
+### 2026-09-08 — Follow-up review pass (done → done)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 4: (high 1, medium 0, low 3)
+- defer: 6: (high 0, medium 2, low 4) — pre-existing items carried forward
+- reject: 0 actionable (edge-case hunter again suggested whitespace-trim guards and a KNOWN-set whitelist; both exceed the spec's "try/catch + AD-10 invariants" acceptance and were rejected for the same reason as the previous pass).
+- addressed_findings:
+  - `[high]` `[patch]` Caller-path gap — the previous implementation collapsed every UI security entry to `UNKNOWN` because `mapAndParseLogDetail` (AdminDashboard.vue ~line 2583) fed only `log.message` to `parseLogMessage`, ignoring the backend's `log.level` (security-scan-service.js produces `{ timestamp, level, message }`). Fixed: `mapAndParseLogDetail` now reads `log.level` when present and upper-cases it; falls back to `parseLogMessage(log.message)` for legacy/printf payloads. Added an integration test (`AdminDashboard.test.js` "loadSecurityDetails populates failedLoginDetails with backend log.level") that mocks the security-details endpoint and asserts `securityDetails.failedLoginDetails[*].type` and `securityDetails.suspiciousDetails[*].type` carry the structured level. Re-ran full frontend suite: 1256/1256 pass (was 1255).
+  - `[low]` `[patch]` JSDoc on `parseLogMessage` called the input "NDJSON" (a stream format) when the helper takes a single line; `@returns` omitted the UNKNOWN outcome. Updated JSDoc to "Parses a single JSON-encoded log line" and documented UNKNOWN in `@returns`.
+  - `[low]` `[patch]` JSON arrays (`JSON.parse('[1,2,3]')`) slipped past the `typeof parsed === 'object'` guard and entered the level-extraction branch. Added `Array.isArray(parsed)` rejection so arrays return `UNKNOWN`.
+  - `[low]` `[patch]` Empty `parsed.message` strings (e.g. `JSON.stringify({level:'ERROR',message:''})`) silently produced `{type:'ERROR', message:''}`. Added `parsed.message !== ''` guard so empty messages fall back to the raw `logString` for downstream visibility.
+
 ### 2026-09-08 — Review pass
 - intent_gap: 0
 - bad_spec: 0
@@ -149,37 +162,48 @@ to `UNKNOWN`. Acceptance grep returns zero matches.
   — this spec file (status flip in-review → done; added triage log + result).
 
 ### Review findings breakdown
-- Patches applied: 1 (low severity — misleading test name + comment in
-  AdminDashboard.test.js, fixed by rename and tightened comment).
+- Patches applied across both passes: 5 total (high 1, medium 0, low 4).
+  - High 1 (follow-up pass): caller-path gap in `mapAndParseLogDetail`
+    (frontend mapper ignored backend `log.level`; every UI security entry
+    silently collapsed to `UNKNOWN`).
+  - Low 3 (follow-up pass): JSDoc NDJSON mismatch + incomplete `@returns`;
+    `Array.isArray` guard for JSON arrays; empty `parsed.message` fallback.
+  - Low 1 (initial pass): misleading test name + comment in
+    `AdminDashboard.test.js`, fixed by rename and tightened comment.
 - Items deferred: 6 (see `deferred:` list in frontmatter). 2 medium-severity
   deferred items:
   1. Spec frontmatter `files:` path typo (real path is
      `src/__tests__/components/AdminDashboard.test.js`, not
      `src/__tests__/AdminDashboard.test.js`) — purely documentation, the work
      was applied at the correct real path.
-  2. "plain string → UNKNOWN" behavior change is silent (no changelog entry
-     surfaced for downstream UI callers) — regression risk low because the
-     component is fed only from the structured-payload API path; worth a
-     release-note line.
+  2. Story 5.11's uncommitted `LogSearchDialog.test.js` changes must travel
+     in the story 5.11 commit, not story 5.12 — coordination, not code.
 - Items rejected: 0 actionable; the edge-case hunter's suggested guards
   (whitespace trim, KNOWN-set whitelist, primitive-JSON handling, etc.) are
   reasonable hardening but exceed the spec's "try/catch + AD-10 invariants"
   acceptance and were not introduced by this change.
 
 ### Follow-up review recommendation
-- Patched counts by severity: high 0, medium 0, low 1.
-- Score: `3 × 0 + 1 × 1 = 1`. Threshold is 5, so `false`.
-- `followup_review_recommended: false`.
+- Patched counts (this follow-up pass only): high 1, medium 0, low 3.
+- Score per workflow formula `3 × medium + 1 × low` = `3 × 0 + 1 × 3 = 3`
+  (under threshold 5), but the formula also returns `true` whenever any
+  patched finding was `high` severity — which is the case here (the
+  caller-path regression in `mapAndParseLogDetail`).
+- The high-severity regression has been fixed in this pass and is now
+  pinned by an integration test (`AdminDashboard.test.js`); no further
+  review loop is triggered, but the recommendation flag is set per formula.
+- `followup_review_recommended: true`.
 
 ### Verification performed
 - `grep -rn '\[\(ERROR\|WARN\|INFO\|DEBUG\)\]' components/gov-chat-frontend/src/`
   → exit 1, zero matches. AC #4 satisfied.
-- `npx jest src/__tests__/components/AdminDashboard.test.js` (post-patch) →
-  `PASS (1255) FAIL (0)`. AC #1, #2, #3 satisfied (all 8 `parseLogMessage`
-  cases pass: 5 rewritten + 2 new + 1 pre-existing UNKNOWN-fallback).
-- Full frontend suite (`npm test`, output saved to
-  `/tmp/admin-dashboard-test-output-final.log` during implementation) →
-  53/53 suites, 1255/1255 tests pass.
+- `npx jest src/__tests__/components/AdminDashboard.test.js` (post-patch,
+  follow-up pass) → `PASS (112) FAIL (0)`. AC #1, #2, #3 satisfied
+  (all `parseLogMessage` cases pass plus the new caller-path integration
+  test for `loadSecurityDetails`).
+- Full frontend suite (`npm test`) → 53/53 suites, 1256/1256 tests pass
+  (was 1255 after the initial pass; +1 for the new caller-path integration
+  test added in this follow-up).
 - `npm run lint` → no issues.
 - `npm run format:check` → all matched files use Prettier code style.
 

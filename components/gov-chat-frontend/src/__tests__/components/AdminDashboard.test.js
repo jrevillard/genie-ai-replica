@@ -692,6 +692,36 @@ describe('AdminDashboard', () => {
         vulnerabilities: { critical: 0, medium: 0, low: 0 }
       });
     });
+
+    it('loadSecurityDetails populates failedLoginDetails with backend log.level (caller-path for parseLogMessage)', async () => {
+      // Backend `security-scan-service.js` produces { timestamp, level, message };
+      // the AdminDashboard mapper must propagate `level` to the UI table — not
+      // collapse every entry to UNKNOWN via parseLogMessage(plainString).
+      // Use mockResolvedValue (persistent) rather than Once to bypass any stale
+      // once-queues left over from earlier tests in this suite.
+      mockGetSecurityDetails.mockReset();
+      mockGetSecurityDetails.mockResolvedValue({
+        lastScan: '2026-09-08T10:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        failedLoginDetails: [
+          { timestamp: '2026-09-08T10:00:00Z', level: 'ERROR', message: 'Invalid credentials' },
+          { timestamp: '2026-09-08T10:01:00Z', level: 'WARN', message: 'Repeated failures' }
+        ],
+        suspiciousDetails: [{ timestamp: '2026-09-08T10:02:00Z', level: 'WARNING', message: 'Anomalous IP' }]
+      });
+      const wrapper = createAdminDashboardWrapper();
+
+      await wrapper.vm.loadSecurityDetails();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.securityDetails.failedLoginDetails).toEqual([
+        { timestamp: '2026-09-08T10:00:00Z', type: 'ERROR', message: 'Invalid credentials' },
+        { timestamp: '2026-09-08T10:01:00Z', type: 'WARN', message: 'Repeated failures' }
+      ]);
+      expect(wrapper.vm.securityDetails.suspiciousDetails).toEqual([
+        { timestamp: '2026-09-08T10:02:00Z', type: 'WARNING', message: 'Anomalous IP' }
+      ]);
+    });
   });
 
   // -----------------------------------------------------------------------

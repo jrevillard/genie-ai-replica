@@ -120,7 +120,7 @@ development_status:
   2-7-degradation-and-transparent-insufficiency: review # code-review PASSED 2026-08-31: 6 patches applied (never-kill-chat broad guard, null-safe gate+scores, KB-aware wording, script-aware threshold, wiring test); 722 tests green; 2-8 must settle tool_id spelling + reason enum
   2-8-sse-metadata-contract-extension: review # code-review PASSED 2026-08-31: 7 patches — parser spreads producer keys (degradation was stripped BELOW the whitelist), rerank reconstruction rescues tool fields, cross-seam memo, conf-scale separation, Vue dedupe/labels; 728/1673/1249 green
   2-9-vue-citation-and-degradation-rendering: review # ChatBotComponent.vue has citation/web_search rendering
-  2-10-flutter-citation-and-degradation-parity: backlog # no mobile/ changes in MR !279
+  2-10-flutter-citation-and-degradation-parity: deferred # D5 (user decision): defer Flutter parity out of this initiative; contract it would consume is frozen in 2-8 (SSE_METADATA_FIELDS)
   epic-2-retrospective: optional
 
   # ─────────────── Epic 3 — Stream ingestor ───────────────
@@ -130,14 +130,14 @@ development_status:
   3-1-chunk-source-type-and-additive-chunk-metadata: review # genie-ai-overlay/core/source_type.py exists (also resolves OQ-SST-6)
   3-2-retract-expired-feed-chunks: review # retract_expired_chunks + retract_loop, calls dataprep retract_file
   3-3-rss-atom-polling: review # feedparser + poll_feeds/process_feed
-  3-4-json-api-polling-with-field-mapping: backlog # not in stream_ingestor
+  3-4-json-api-polling-with-field-mapping: review # CORRECTION 2026-09-06: the 'backlog # not in stream_ingestor' line was stale — shipped + reviewed 2026-09-05 (session log 21): json_api dispatch (RSS byte-identical, regression-guarded), content_mapping dot-paths, parse_error/config_error DLQ gate, stable-sha256 dedup; review caught 3 criticals (httpx missing from runtime image, raise outside try, seen-cap eviction); TestJsonApiPolling pins it
   3-5-webhook-push-ingestion: review # dev+review COMPLETE 2026-09-06: webhook route (auth-first: 401 before 404 — enumeration-oracle fix, outage→503), dual auth (api-key constant-time + JWT via OIDC discovery, aud opt-in), per-feed sliding window, kill-switch default OFF; 2 review bugs fixed in passing (3-9 carryovers: _replay_dlq self._auditRedis undefined, breaker_dlq_recorded never reset); 832 overlay green, ruff clean
   3-6-route-through-existing-tei-and-shared-arangodb: review # feeds route to existing dataprep pipeline (verify ingest path e2e)
   3-7-per-feed-lifecycle-retention-ttl-update-vs-append: review # per-feed expiry + retraction loop (update-vs-append semantics unverified)
   3-8-feed-definition-persistence: review # ArangoDB feeds collection (migration 005) + BFF CRUD — resolves OQ-SST-1 as "ingestor config"
   3-9-per-feed-resilience-breaker-dlq-backoff: review # DONE 2026-09-05: per-feed breaker (3-fail OPEN, HALF_OPEN probe, auto-close + DLQ replay on recovery), DLQ replay w/ parking list + retry cap, poll rate floor; review patches (replay isolation, flood gate, timestamps); 831 green. REMAINING (3-11 scope): DLQ consumer monitoring/replay-metrics
   3-10-health-endpoints-and-per-feed-health: review # /health + /ready endpoints (per-feed health granularity unverified)
-  3-11-regression-guard: review # CI half COMPLETE 2026-09-06: TestRetractionIsolation (AQL pins source_type=='feed' invariant — verified present), ADR 0004 PROPOSED (curated-only anchor = baseline; anchor runs are on-demand operator tasks), FEED_BASELINE.md procedure; 835 green. ADR awaits user confirmation (OQ-SST-4)
+  3-11-regression-guard: review # CI half COMPLETE 2026-09-06: TestRetractionIsolation (AQL pins source_type=='feed' invariant — verified present) + TestDLQReplay (7 direct _replay_dlq tests — 3-9's promised coverage delivered, impl held unchanged), ADR 0004 PROPOSED (curated-only anchor = baseline; anchor runs are on-demand operator tasks), FEED_BASELINE.md procedure; 842 green. ADR awaits user confirmation (OQ-SST-4)
   epic-3-retrospective: optional
 
   # ─────────────── Epic 4 — Admin surface ───────────────

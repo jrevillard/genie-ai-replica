@@ -61,6 +61,7 @@ _Code review 2026-09-06 — compact single-pass review (Blind-equivalent, in-ses
 - [x] [Review][Verified] Part 2 produces no harness code (AC respected): FEED_BASELINE.md is procedure-only, driving the existing `run_eval.py anchor`.
 - [x] [Review][Note] A pre-compaction test attempt left a broken partial `tests/test_stream_ingestor.py` at the REPO ROOT (wrong cwd) — deleted; the real tests live in the overlay suite.
 - [x] [Review][Note] The anchor runs (baseline/mixed/retraction) remain on-demand operator tasks — recorded in ADR 0004 Consequences, not silently dropped.
+- [x] [Review][Closed] **3-9's promised deferral delivered**: "replay had zero direct coverage — deferred to 3-11's regression-guard suite (which owns DLQ consumer tests)". `TestDLQReplay` (7 tests) now drives `_replay_dlq` through real XRANGE-shaped data: webhook replay + removal (original timestamp restored), poll-origin and other-feed entries untouched, retry-cap parking (full content preserved — the destroyed-payload bug pinned), failed replay increments retries and stays, garbage `retries` → 0, Redis read failure never escapes. All pass unchanged against the reviewed 3-9 implementation — the code held up, only coverage was missing.
 
 ## Dev Agent Record
 
@@ -71,7 +72,8 @@ GLM-5.2 (Claude Code harness)
 ### Debug Log References
 
 - TestRetractionIsolation: 3 tests green (AQL shape pin incl. `source_type == 'feed'` + `expires_at < @now` + float bind; empty-result → zero retract POSTs; missing collection → no query). Uses a `_FakeRetractSession` recording POSTs — conftest's aiohttp mock can't do real async context managers.
-- Full overlay suite **835 green** (832 + 3), ruff check + format clean.
+- TestDLQReplay (2026-09-06 follow-up): 7 tests green against the 3-9 implementation, no code changes needed.
+- Full overlay suite **842 green** (832 + 3 + 7), ruff check + format clean.
 
 ### Completion Notes List
 

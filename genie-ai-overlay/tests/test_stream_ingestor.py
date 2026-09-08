@@ -537,3 +537,112 @@ class TestRetractionIsolation:
         with patch.object(si_module, "GRAPH_NAME", "genie_graph"):
             await ingestor.retract_expired_chunks()
         ingestor.db.aql.execute.assert_not_called()
+
+
+# ===========================================================================
+# Story 3-11 (scope carried from 3-9's review): DLQ replay direct coverage.
+# 3-9's breaker-transition tests pin the HOOKS; these drive _replay_dlq
+# through real XRANGE-shaped data.
+# ==========================================================================
+def _flatten(fields):
+    flat = []
+    for k, v in fields.items():
+        flat.extend([str(k), str(v)])
+    return flat
+
+
+class TestDLQReplay:
+    def _ingestor_with(self, entries, feed=None):
+        ingestor = make_ingestor()
+        ingestor.redis.xrange = AsyncMock(return_value=[(e[0], _flatten(e[1])) for e in entries])
+        ingestor.redis.lpush = AsyncMock()
+        ingestor.ingest_entries = AsyncMock()
+        ingestor.feeds_col.get = MagicMock(return_value=feed or make_feed())
+        return ingestor
+
+    @staticmethod
+    def _webhook_entry(entry_id="1-1", feed_id="feed-1", retries="0", **extra):
+        fields = {
+            "feed_id": feed_id,
+            "entry_type": "webhook",
+            "title": "Push Notice",
+            "content": "Official content",
+            "link": "https://example.gov/1",
+            "timestamp": "1690000000.0",
+            "retries": retries,
+        }
+        fields.update(extra)
+        return (entry_id, fields)
+
+    @pytest.mark.asyncio
+    async def test_webhook_entry_replayed_and_removed(self):
+        ingestor = self._ingestor_with([self._webhook_entry()])
+        await ingestor._replay_dlq("feed-1")
+
+        ingestor.ingest_entries.assert_awaited_once()
+        feed_arg, entries_arg = ingestor.ingest_entries.call_args.args
+        assert feed_arg["_key"] == "feed-1"
+        # original arrival timestamp restored from the DLQ entry
+        assert entries_arg[0]["_date"] == 1690000000.0
+        assert entries_arg[0]["title"] == "Push Notice"
+        ingestor.redis.xdel.assert_awaited_once_with(si_module.DLQ_STREAM_KEY, "1-1")
+
+    @pytest.mark.asyncio
+    async def test_poll_origin_entries_never_replayed(self):
+        """Poll parse_errors carry failure summaries, not restorable content —
+        replay must touch them (their recovery is the next poll)."""
+        ingestor = self._ingestor_with([self._webhook_entry(entry_id="1-1", entry_type="poll")])
+        await ingestor._replay_dlq("feed-1")
+        ingestor.ingest_entries.assert_not_called()
+        ingestor.redis.xdel.assert_not_called()
+        ingestor.redis.xadd.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_other_feeds_entries_untouched(self):
+        ingestor = self._ingestor_with([self._webhook_entry(feed_id="feed-2")])
+        await ingestor._replay_dlq("feed-1")
+        ingestor.ingest_entries.assert_not_called()
+        ingestor.redis.xdel.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_retry_cap_parks_never_destroys(self):
+        """At WEBHOOK_DLQ_MAX_RETRIES the entry is PARKED on the per-feed
+        review list with full content — xdel without parking is the 3-9
+        review's destroyed-payload bug."""
+        ingestor = self._ingestor_with([self._webhook_entry(retries=3)])
+        await ingestor._replay_dlq("feed-1")
+        ingestor.ingest_entries.assert_not_called()
+        parked = ingestor.redis.lpush.call_args
+        assert parked.args[0] == "feed-dlq-parking:feed-1"
+        assert "Push Notice" in parked.args[1]  # full content preserved
+        assert "1-1" in parked.args[1]  # dlq id reference
+        ingestor.redis.xdel.assert_awaited_once_with(si_module.DLQ_STREAM_KEY, "1-1")
+
+    @pytest.mark.asyncio
+    async def test_failed_replay_increments_retries_and_stays(self):
+        ingestor = self._ingestor_with([self._webhook_entry(retries=1)])
+        ingestor.ingest_entries = AsyncMock(side_effect=RuntimeError("dataprep down"))
+        await ingestor._replay_dlq("feed-1")
+
+        readd = ingestor.redis.xadd.call_args
+        assert readd.args[0] == si_module.DLQ_STREAM_KEY
+        assert readd.args[1]["retries"] == "2"  # incremented, not reset
+        assert readd.args[1]["title"] == "Push Notice"
+        ingestor.redis.xdel.assert_awaited_once_with(si_module.DLQ_STREAM_KEY, "1-1")
+        ingestor.redis.lpush.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_garbage_retries_field_treated_as_zero(self):
+        ingestor = self._ingestor_with([self._webhook_entry(retries="not-a-number")])
+        await ingestor._replay_dlq("feed-1")
+        ingestor.ingest_entries.assert_awaited_once()  # replayed, not parked
+
+    @pytest.mark.asyncio
+    async def test_redis_read_failure_never_raises(self):
+        """A Redis hiccup during replay must not corrupt the poll's success
+        bookkeeping — no exception escapes _replay_dlq."""
+        ingestor = make_ingestor()
+        ingestor.redis.xrange = AsyncMock(side_effect=RuntimeError("redis down"))
+        ingestor.ingest_entries = AsyncMock()
+        await ingestor._replay_dlq("feed-1")  # must not raise
+        ingestor.ingest_entries.assert_not_called()

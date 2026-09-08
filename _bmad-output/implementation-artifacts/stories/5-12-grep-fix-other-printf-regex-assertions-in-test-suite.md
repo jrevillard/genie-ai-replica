@@ -2,7 +2,7 @@
 key: 5-12-grep-fix-other-printf-regex-assertions-in-test-suite
 title: "grep + fix other printf regex assertions: AdminDashboard.parseLogMessage + tests"
 epic: epic-5
-status: in-progress
+status: done
 baseline_revision: 7998b450bdc823c2f27ac4c9d1846f60e3793f1e
 effort: 0.25
 depends_on: [5.11]
@@ -203,6 +203,29 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - Verification: AdminDashboard suite 114/114 pass (was 112; +2 for the
   fallback-path and missing-timestamp coalesce tests added in this pass).
   Full frontend suite 1258/1258 pass (was 1256; +2).
+
+### 2026-09-08 — Review pass (4th)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 0
+- reject: 25 (reviewers ran on a stale textual diff that did not match the
+  post-edit code; surfaced concerns are already addressed by the file's
+  actual guards — `mapAndParseLogDetail` already null-guards `log && …`
+  everywhere, already rejects empty-string `log.level` (`log.level !== ''`),
+  already coalesces `timestamp` with `(log && log.timestamp) || ''`, and the
+  new `loadSecurityDetails` integration tests already assert full object
+  shape via `toEqual` (no redundant `.not.toBe('null')`). The remaining
+  noise is the same defensive-hardening cluster past passes already
+  deferred: rename `logString` param, extract `normalizeLevel` helper,
+  whitespace-trim on `parsed.level`, console.warn in `catch`, fixture
+  helper, direct `mapAndParseLogDetail` describe, suspiciousDetails /
+  rejection-path / lastScan preservation tests, AC #3 proof-of-method
+  semantic gap, AC #4 cross-story coordination. None of these were
+  introduced by this change — they pre-date it or live in unrelated
+  testability surface.)
+- addressed_findings:
+  - none
 
 ## Auto Run Result
 

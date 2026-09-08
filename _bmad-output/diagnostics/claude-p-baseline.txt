@@ -1,0 +1,2 @@
+[claude-code:unrecognized_model] {"model":"MiniMax (Global)/MiniMax-M3[1m]","query_source":"sdk"}
+Yo, sup.

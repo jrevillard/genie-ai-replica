@@ -4,7 +4,7 @@ export const meta = {
   phases: [
     { title: 'Setup' },
     { title: 'Build with convergence' },
-    { title: 'Push & MR + Monitor CI' },
+    { title: 'Create MR' },
     { title: 'Auto-merge' },
     { title: 'Cleanup' },
   ],
@@ -14,6 +14,11 @@ const storyKey = args.storyKey;
 if (!storyKey) throw new Error('args.storyKey required');
 const maxIterations = args.maxIterations || 5;
 const timestamp = args.timestamp || 'unknown';
+// On resume (e.g., after CI failure halted the workflow), the orchestrator re-invokes
+// the sub-workflow with args.ciFailure describing the previous CI failure. The build
+// agent passes this to bmad-build-auto's reviewers so the next iteration targets
+// the actual CI failure rather than guessing.
+const ciFailure = args.ciFailure || null;
 
 const SETUP_SCHEMA = {
   type: 'object',
@@ -191,6 +196,14 @@ CONTEXT:
 - storyBranch: ${setup.storyBranch}
 - iteration: ${iteration}
 - prdKey: ${setup.prdKey}
+${ciFailure ? `**PREVIOUS ITERATION'S CI FAILURE — FIX THIS**:
+- pipelineId: ${ciFailure.pipelineId}
+- status: ${ciFailure.status}
+- failedJobs: ${JSON.stringify(ciFailure.failedJobs || [], null, 2).substring(0, 2000)}
+- traceTail: ${(ciFailure.traceTail || '').substring(0, 2000)}
+The bmad-build-auto reviewers MUST treat this CI failure as the highest-priority
+patch target. The previous iteration's bmad-build-auto missed it — make sure the
+current iteration's reviewers classify it as a 'patch' (not 'defer', not 'reject').` : ''}
 
 STEPS (do ONLY these):
 
@@ -307,6 +320,59 @@ CONSTRAINTS:
 
   currentSha = buildResult.newSha
   followup = buildResult.followupReviewRecommended
+
+  // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
+  // a pipeline. We poll the pipeline after the push and, if it failed, we
+  // prepare a ciFailure payload for the next iteration's build agent. The
+  // build agent passes ciFailure to bmad-build-auto's reviewers so the next
+  // pass targets the actual CI failure rather than guessing.
+  if (followup && postBuildResult.pushed) {
+    log(`Iteration ${iteration}: build converged — checking CI...`)
+    const ciCheck = await agent(
+      `Check the CI pipeline for branch ${setup.storyBranch} (story ${setup.storyKey}, iter ${iteration}).
+
+STEPS:
+1. Get latest pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` → first entry. If no MR exists yet, run:
+   \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/pipelines?ref=${setup.storyBranch}&per_page=1"\` → first entry.
+2. Poll status: \`Bash(command="/tmp/ci-monitor.sh <pipelineId> 30", run_in_background=true)\` + \`TaskOutput(block=true, timeout=1800000)\`. Read the "TERMINAL:<status>" line.
+3. If status='success': return { pipelineId, status: 'success' }.
+4. If status != 'success': classify the failure.
+   - Get failed jobs: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/pipelines/<pipelineId>/jobs?per_page=50"\`
+   - For each failed job, fetch trace tail: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/jobs/<id>/trace" | tail -80\`
+   - Compose a CONCISE summary of each failed job (job name + 5-10 line excerpt of the relevant error).
+5. Return JSON: { pipelineId, status, failedJobs: [{name, exitCode, excerpt}], traceTail: <concatenated excerpts> }`,
+      { label: `ci-check-${iteration}`, phase: 'Build with convergence', schema: {
+        type: 'object',
+        properties: {
+          pipelineId: { type: 'integer' },
+          status: { type: 'string' },
+          failedJobs: { type: 'array', items: {
+            type: 'object', properties: { name: { type: 'string' }, exitCode: { type: 'integer' }, excerpt: { type: 'string' } }
+          } },
+          traceTail: { type: 'string' },
+        },
+        required: ['status'],
+      }, agentType: 'general-purpose' }
+    )
+
+    if (ciCheck.status === 'success') {
+      log(`Iteration ${iteration}: CI green ✓`)
+      followup = false  // BOTH build + CI converged; exit loop
+    } else {
+      log(`Iteration ${iteration}: CI FAILED — feeding back to next iteration`)
+      // Carry the failure forward as ciFailure for the next iteration
+      ciFailure = {
+        pipelineId: ciCheck.pipelineId,
+        status: ciCheck.status,
+        failedJobs: ciCheck.failedJobs || [],
+        traceTail: (ciCheck.traceTail || '').substring(0, 3000),
+      }
+      followup = true  // ensure next iteration
+    }
+  } else if (followup) {
+    log(`Iteration ${iteration}: followup recommended but post-build didn't push — relying on build agent's classification`)
+  }
+
   if (!followup) {
     convergedSha = buildResult.newSha
     log(`Converged after iteration ${iteration}`)
@@ -321,20 +387,21 @@ if (followup) {
     iterations: iteration,
     finalSha: currentSha,
     iterationsLog,
-    escalateReason: `followup_review_recommended stayed true through ${maxIterations} iterations`,
+    ciFailure,  // expose the last CI failure for the orchestrator to feed back
+    escalateReason: `convergence did not complete within ${maxIterations} iterations (last failure: ${ciFailure ? `CI pipeline ${ciFailure.pipelineId} status=${ciFailure.status}` : 'followup_review_recommended=true'})`,
     worktreePath: setup.worktreePath,
     branch: setup.storyBranch,
   }
 }
 
-log(`Story ${setup.storyKey} converged at ${convergedSha} after ${iteration} iteration(s)`)
+log(`Story ${setup.storyKey} converged at ${convergedSha} after ${iteration} iteration(s) — last CI was ${ciFailure ? `FAILED (${ciFailure.status})` : 'GREEN'}`)
 
 // ============================================================================
-// PHASE 3: PUSH & MR + MONITOR CI (combined into one agent)
+// PHASE 3: CREATE MR + AUTO-MERGE (CI was already checked inside the loop)
 // ============================================================================
-phase('Push & MR + Monitor CI')
-log(`Creating MR + monitoring CI for ${setup.storyBranch}...`)
-const ciResult = await agent(
+phase('Create MR')
+log(`Creating MR for ${setup.storyBranch}...`)
+const mrResult = await agent(
   `Create MR + monitor CI pipeline for branch ${setup.storyBranch} → ${setup.baseBranch}, story ${setup.storyKey}.
 
 CONTEXT (from setup agent):
@@ -349,33 +416,17 @@ CONTEXT (from setup agent):
 
 OPERATE FROM: ${setup.worktreePath}
 
-PART A — CREATE MR:
-1. Verify branch pushed: \`git ls-remote origin ${setup.storyBranch}\` — if missing, push: \`git push --force-with-lease origin ${setup.storyBranch}\`
-2. Check existing MR: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` — if found, use existing mrIid.
-3. If no MR: create via:
-   \`GITLAB_HOST=${setup.gitlabHost} glab mr create --yes --repo <config-project> --source-branch "${setup.storyBranch}" --target-branch "${setup.baseBranch}" --title "Story ${setup.storyKey} — bmad-build-converge" --description "Auto-generated by bmad-build-converge. Converged after ${iteration} iteration(s). See spec file for review order." --remove-source-branch\`
+The CI was already checked inside the convergence loop (Phase 2). If we got here, the LAST ci-check returned 'success'. The branch has been pushed at least once. Just create or fetch the MR.
+
+1. Check existing MR: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` — if found, use existing mrIid.
+2. If no MR: create via:
+   \`GITLAB_HOST=${setup.gitlabHost} glab mr create --yes --repo <config-project> --source-branch "${setup.storyBranch}" --target-branch "${setup.baseBranch}" --title "Story ${setup.storyKey} — bmad-build-converge" --description "Auto-generated by bmad-build-converge. Converged after ${iteration} iteration(s) with CI green. See spec file for review order." --remove-source-branch\`
    (config-project is read from _bmad/custom/issue-tracking.yaml: project field.)
-4. Parse mrIid from URL pattern /merge_requests/<NID>.
-5. Fetch pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/<NID>/pipelines"\` → first id.
+3. Parse mrIid from URL pattern /merge_requests/<NID>.
+4. Fetch pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/<NID>/pipelines"\` → first id.
 
-PART B — MONITOR CI (do this in the SAME agent call, do NOT return after Part A):
-6. Launch ci-monitor in background: \`Bash(command="/tmp/ci-monitor.sh <pipelineId> 60", run_in_background=true)\` → returns task_id.
-7. Await: \`TaskOutput(task_id=<task_id>, block=true, timeout=1800000)\` (30 min max). Read the "TERMINAL:<status>" line.
-8. Parse status (success/failed/canceled/skipped).
-9. If failed, classify transient vs hard fail:
-   - Fetch failed jobs: \`Bash(command="GITLAB_HOST=${setup.gitlabHost} glab api 'projects/${setup.gitlabProjectId}/pipelines/<pipelineId>/jobs?per_page=50'")\`
-   - For each failed job, trace tail: \`Bash(command="GITLAB_HOST=${setup.gitlabHost} glab api 'projects/${setup.gitlabProjectId}/jobs/<id>/trace' | tail -80")\`
-   - TRANSIENT (retry candidate): 'build:*' or 'scan:*' or 'promote:*' jobs + error mentions 'registry'/'cache'/'502'/'524'/'connection refused'; OR any job with 'runner'/'no space left'/'disk full'/'timeout'.
-   - FIXABLE (not transient): 'lint:*'/'format:check' with prettier formatting issues (return failedJobs with file list).
-   - HARD FAIL: everything else.
-10. INTERNAL RETRY (up to 2 times, no sleep in your context — use Bash(run_in_background:true)):
-    If transient: empty commit + push to retrigger pipeline. Wait 10s via Bash sleep. Fetch new pipelineId. Go back to step 6.
-    Count retries. Return final retries count in the result.
-11. Return JSON: { storyKey: ${setup.storyKey}, mrIid, mrUrl, pipelineId, branch: ${setup.storyBranch}, status, failedJobs, retries, transient, error? }
-
-DO NOT poll or sleep in your own context. Use Bash(run_in_background:true) + TaskOutput(block:true) for ci-monitor.
-DO NOT return between Part A and Part B — do both in this single invocation.`,
-  { label: `ci-${setup.storyKey}`, phase: 'Push & MR + Monitor CI', schema: {
+RETURN JSON: { storyKey: ${setup.storyKey}, mrIid, mrUrl, pipelineId, branch: ${setup.storyBranch}, error? }`,
+  { label: `mr-create-${setup.storyKey}`, phase: 'Create MR', schema: {
     type: 'object',
     properties: {
       storyKey: { type: 'string' },
@@ -383,41 +434,37 @@ DO NOT return between Part A and Part B — do both in this single invocation.`,
       mrUrl: { type: 'string' },
       pipelineId: { type: 'integer' },
       branch: { type: 'string' },
-      status: { type: 'string', enum: ['success', 'failed', 'canceled', 'skipped', 'running'] },
-      failedJobs: { type: 'array', items: { type: 'object' } },
-      retries: { type: 'integer' },
-      transient: { type: 'boolean' },
       error: { type: 'string' },
     },
-    required: ['storyKey', 'branch', 'status', 'retries', 'transient'],
+    required: ['storyKey', 'branch'],
   }, agentType: 'general-purpose' }
 )
 
-if (!ciResult || ciResult.error || !ciResult.mrIid) {
+if (!mrResult || mrResult.error || !mrResult.mrIid) {
   return {
     storyKey: setup.storyKey,
     converged: true,
     iterations: iteration,
     finalSha: convergedSha,
     iterationsLog,
-    ciResult,
+    mrResult,
     worktreePath: setup.worktreePath,
     branch: setup.storyBranch,
-    aborted: ciResult?.error || 'no MR created',
+    aborted: mrResult?.error || 'no MR created',
   }
 }
 
-log(`MR !${ciResult.mrIid} | CI ${ciResult.status} after ${ciResult.retries} retries (transient=${ciResult.transient})`)
+log(`MR !${mrResult.mrIid} created (pipeline ${mrResult.pipelineId}; CI was already checked green in the loop)`)
 
 // ============================================================================
 // PHASE 4: AUTO-MERGE
 // ============================================================================
 phase('Auto-merge')
 let mergeResult = null;
-if (ciResult.status === 'success') {
-  log(`Auto-merging MR !${ciResult.mrIid}...`)
+if (mrResult.status === 'success') {
+  log(`Auto-merging MR !${mrResult.mrIid}...`)
   mergeResult = await agent(
-    `Merge MR !${ciResult.mrIid} for story ${setup.storyKey}, then sync sprint-status to done.
+    `Merge MR !${mrResult.mrIid} for story ${setup.storyKey}, then sync sprint-status to done.
 
 CONTEXT:
 - prdWorktreePath: ${setup.prdWorktreePath}  (worktree on ${setup.baseBranch} — operate from here for sprint-status)
@@ -428,14 +475,14 @@ CONTEXT:
 - storyKey: ${setup.storyKey}
 
 STEPS:
-1. Merge: \`GITLAB_HOST=${setup.gitlabHost} glab mr merge --yes --repo <project> ${ciResult.mrIid}\`
+1. Merge: \`GITLAB_HOST=${setup.gitlabHost} glab mr merge --yes --repo <project> ${mrResult.mrIid}\`
    Capture stdout/stderr. If exit != 0, set merged=false with error string.
 2. After successful merge, sync sprint-status to done. Operate from the PRD worktree (${setup.prdWorktreePath}).
    - cd ${setup.prdWorktreePath}
    - Read ${setup.sprintStatusPath}.
    - Update development_status[${setup.storyKey}] = done.
    - Update last_updated to "${timestamp}".
-   - \`git add ${setup.sprintStatusPath} && git commit -m "chore(sprint-status): story ${setup.storyKey} → done (MR !${ciResult.mrIid} merged)" && git push origin ${setup.baseBranch}\`
+   - \`git add ${setup.sprintStatusPath} && git commit -m "chore(sprint-status): story ${setup.storyKey} → done (MR !${mrResult.mrIid} merged)" && git push origin ${setup.baseBranch}\`
    - sprintStatusDone = true only if push succeeded.
 
 Note: when invoked from bmad-prd-orchestrate, the orchestrator may re-apply the done transition in Phase 4. sprint_plan.py advance is idempotent (never-regress), so a redundant write is a no-op. The merge agent here is the SOLE WRITER for standalone (non-orchestrator) invocations.
@@ -454,8 +501,8 @@ RETURN MERGE_SCHEMA (storyKey, mrIid, merged, sprintStatusDone, error?).`,
     }, agentType: 'general-purpose' }
   )
 } else {
-  log(`CI ${ciResult.status} — NOT auto-merging. Manual review needed.`)
-  mergeResult = { storyKey: setup.storyKey, mrIid: ciResult.mrIid, merged: false, sprintStatusDone: false, error: `CI ${ciResult.status}` }
+  log(`CI ${mrResult.status} — NOT auto-merging. Manual review needed.`)
+  mergeResult = { storyKey: setup.storyKey, mrIid: mrResult.mrIid, merged: false, sprintStatusDone: false, error: `CI ${mrResult.status}` }
 }
 
 log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Sprint-status: ${mergeResult.sprintStatusDone ? 'done' : 'pending'}`)
@@ -513,8 +560,8 @@ return {
     worktreePath: setup.worktreePath,
     baselineSha: setup.baselineSha,
   },
-  mr: { mrIid: ciResult.mrIid, mrUrl: ciResult.mrUrl, pipelineId: ciResult.pipelineId },
-  monitor: { status: ciResult.status, retries: ciResult.retries, transient: ciResult.transient, failedJobs: ciResult.failedJobs },
+  mr: { mrIid: mrResult.mrIid, mrUrl: mrResult.mrUrl, pipelineId: mrResult.pipelineId },
+  monitor: { status: mrResult.status, retries: mrResult.retries, transient: mrResult.transient, failedJobs: mrResult.failedJobs },
   merge: { merged: mergeResult.merged, sprintStatusDone: mergeResult.sprintStatusDone, error: mergeResult.error },
   cleanup: { worktrees: cleanup.removedWorktrees, branches: cleanup.deletedBranches, errors: cleanup.errors },
 }

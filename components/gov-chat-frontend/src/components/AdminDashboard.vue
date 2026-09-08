@@ -2533,22 +2533,30 @@ export default {
     // Load security metrics from the service
 
     /**
-     * Parses a log message string to extract the log level.
-     * @param {string} logString - The raw log message.
-     * @returns {{type: string, message: string}}
+     * Parses a single JSON-encoded log line to extract the log level.
+     * Uses JSON.parse with try/catch; malformed input, arrays, primitives, and
+     * objects missing `level` or `message` fall back to UNKNOWN with the raw payload.
+     * @param {string} logString - The raw log line (expected JSON with `level` + `message` keys).
+     * @returns {{type: string, message: string}} `type` is the upper-cased `level` (or 'UNKNOWN');
+     *   `message` is the original `message` field, or the raw input when no parseable message exists.
      */
     parseLogMessage(logString) {
       if (typeof logString !== 'string') {
         return { type: 'UNKNOWN', message: String(logString) };
       }
-      const match = logString.match(/^\[([A-Z]+)\]:?\s*/);
-      if (match) {
-        return {
-          type: match[1], // e.g., "INFO", "ERROR"
-          message: logString.substring(match[0].length)
-        };
+      try {
+        const parsed = JSON.parse(logString);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const level =
+            typeof parsed.level === 'string' && parsed.level !== '' ? parsed.level.toUpperCase() : 'UNKNOWN';
+          const message = typeof parsed.message === 'string' && parsed.message !== '' ? parsed.message : logString;
+          return { type: level, message };
+        }
+        return { type: 'UNKNOWN', message: logString };
+      } catch {
+        // Malformed JSON — return UNKNOWN with the raw payload (no regex fallback)
+        return { type: 'UNKNOWN', message: logString };
       }
-      return { type: 'INFO', message: logString }; // Default if no prefix
     },
 
     // Load detailed security information
@@ -2574,11 +2582,22 @@ export default {
           lineNumbers: v.lineNumbers
         });
 
-        // REVISED: Define a helper to map and parse log details
+        // REVISED: Define a helper to map and parse log details.
+        // Backend (`security-scan-service.js`) emits { timestamp, level, message };
+        // prefer `log.level` when present so the structured level reaches the UI table,
+        // and fall back to parsing `log.message` for legacy/printf payloads.
         const mapAndParseLogDetail = (log) => {
-          const parsed = this.parseLogMessage(log.message || '');
+          if (log && typeof log.level === 'string' && log.level !== '') {
+            return {
+              timestamp: log.timestamp || '',
+              type: log.level.toUpperCase(),
+              message: typeof log.message === 'string' ? log.message : ''
+            };
+          }
+          const message = log && typeof log.message === 'string' ? log.message : '';
+          const parsed = this.parseLogMessage(message);
           return {
-            timestamp: log.timestamp,
+            timestamp: (log && log.timestamp) || '',
             type: parsed.type,
             message: parsed.message
           };

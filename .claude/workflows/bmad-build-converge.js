@@ -18,7 +18,7 @@ const timestamp = args.timestamp || 'unknown';
 // the sub-workflow with args.ciFailure describing the previous CI failure. The build
 // agent passes this to bmad-build-auto's reviewers so the next iteration targets
 // the actual CI failure rather than guessing.
-const ciFailure = args.ciFailure || null;
+let ciFailure = args.ciFailure || null;
 
 const SETUP_SCHEMA = {
   type: 'object',
@@ -59,20 +59,6 @@ const BUILD_SCHEMA = {
     error: { type: 'string' },
   },
   required: ['storyKey', 'iteration', 'newSha', 'followupReviewRecommended', 'specStatus', 'pushed'],
-};
-
-const MONITOR_SCHEMA = {
-  type: 'object',
-  properties: {
-    storyKey: { type: 'string' },
-    mrIid: { type: 'integer' },
-    pipelineId: { type: 'integer' },
-    status: { type: 'string', enum: ['success', 'failed', 'canceled', 'skipped', 'running'] },
-    failedJobs: { type: 'array', items: { type: 'object' } },
-    retries: { type: 'integer' },
-    transient: { type: 'boolean' },
-  },
-  required: ['storyKey', 'mrIid', 'pipelineId', 'status', 'retries', 'transient'],
 };
 
 const MERGE_SCHEMA = {
@@ -320,14 +306,15 @@ CONSTRAINTS:
 
   currentSha = buildResult.newSha
   followup = buildResult.followupReviewRecommended
+  let lastCIStatus = null  // tracks the most recent CI verdict (success|failed|...)
 
   // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
   // a pipeline. We poll the pipeline after the push and, if it failed, we
   // prepare a ciFailure payload for the next iteration's build agent. The
   // build agent passes ciFailure to bmad-build-auto's reviewers so the next
   // pass targets the actual CI failure rather than guessing.
-  if (followup && postBuildResult.pushed) {
-    log(`Iteration ${iteration}: build converged — checking CI...`)
+  if (postBuildResult.pushed) {
+    log(`Iteration ${iteration}: build ${followup ? 'still wants followup' : 'looks converged'} — checking CI...`)
     const ciCheck = await agent(
       `Check the CI pipeline for branch ${setup.storyBranch} (story ${setup.storyKey}, iter ${iteration}).
 
@@ -355,10 +342,14 @@ STEPS:
       }, agentType: 'general-purpose' }
     )
 
-    if (ciCheck.status === 'success') {
+    if (ciCheck && ciCheck.status) {
+      lastCIStatus = ciCheck.status
+    }
+
+    if (ciCheck && ciCheck.status === 'success') {
       log(`Iteration ${iteration}: CI green ✓`)
       followup = false  // BOTH build + CI converged; exit loop
-    } else {
+    } else if (ciCheck) {
       log(`Iteration ${iteration}: CI FAILED — feeding back to next iteration`)
       // Carry the failure forward as ciFailure for the next iteration
       ciFailure = {
@@ -368,6 +359,10 @@ STEPS:
         traceTail: (ciCheck.traceTail || '').substring(0, 3000),
       }
       followup = true  // ensure next iteration
+    } else {
+      log(`Iteration ${iteration}: CI check returned no result — treating as transient failure`)
+      ciFailure = { pipelineId: null, status: 'unknown', failedJobs: [], traceTail: 'CI check agent returned null' }
+      followup = true
     }
   } else if (followup) {
     log(`Iteration ${iteration}: followup recommended but post-build didn't push — relying on build agent's classification`)
@@ -394,10 +389,10 @@ if (followup) {
   }
 }
 
-log(`Story ${setup.storyKey} converged at ${convergedSha} after ${iteration} iteration(s) — last CI was ${ciFailure ? `FAILED (${ciFailure.status})` : 'GREEN'}`)
+log(`Story ${setup.storyKey} converged at ${convergedSha} after ${iteration} iteration(s) — last CI was ${lastCIStatus ? lastCIStatus.toUpperCase() : 'NOT CHECKED'}`)
 
 // ============================================================================
-// PHASE 3: CREATE MR + AUTO-MERGE (CI was already checked inside the loop)
+// PHASE 3: CREATE MR (CI was already checked inside the loop)
 // ============================================================================
 phase('Create MR')
 log(`Creating MR for ${setup.storyBranch}...`)
@@ -461,7 +456,11 @@ log(`MR !${mrResult.mrIid} created (pipeline ${mrResult.pipelineId}; CI was alre
 // ============================================================================
 phase('Auto-merge')
 let mergeResult = null;
-if (mrResult.status === 'success') {
+// lastCIStatus was set inside the convergence loop (Phase 2). The merged
+// Push&MR+Monitor agent is gone — the loop's CI check is the SOLE source
+// of CI verdict now. If lastCIStatus is null, the loop never reached the
+// CI check (push failed, build was treated as converged without CI).
+if (lastCIStatus === 'success') {
   log(`Auto-merging MR !${mrResult.mrIid}...`)
   mergeResult = await agent(
     `Merge MR !${mrResult.mrIid} for story ${setup.storyKey}, then sync sprint-status to done.
@@ -501,8 +500,8 @@ RETURN MERGE_SCHEMA (storyKey, mrIid, merged, sprintStatusDone, error?).`,
     }, agentType: 'general-purpose' }
   )
 } else {
-  log(`CI ${mrResult.status} — NOT auto-merging. Manual review needed.`)
-  mergeResult = { storyKey: setup.storyKey, mrIid: mrResult.mrIid, merged: false, sprintStatusDone: false, error: `CI ${mrResult.status}` }
+  log(`CI ${lastCIStatus || 'NOT CHECKED'} — NOT auto-merging. Manual review needed.`)
+  mergeResult = { storyKey: setup.storyKey, mrIid: mrResult.mrIid, merged: false, sprintStatusDone: false, error: `CI ${lastCIStatus || 'unknown'}` }
 }
 
 log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Sprint-status: ${mergeResult.sprintStatusDone ? 'done' : 'pending'}`)
@@ -561,7 +560,7 @@ return {
     baselineSha: setup.baselineSha,
   },
   mr: { mrIid: mrResult.mrIid, mrUrl: mrResult.mrUrl, pipelineId: mrResult.pipelineId },
-  monitor: { status: mrResult.status, retries: mrResult.retries, transient: mrResult.transient, failedJobs: mrResult.failedJobs },
+  monitor: { status: lastCIStatus, retries: iteration > 1 ? iteration - 1 : 0, transient: false, failedJobs: ciFailure?.failedJobs || [] },
   merge: { merged: mergeResult.merged, sprintStatusDone: mergeResult.sprintStatusDone, error: mergeResult.error },
   cleanup: { worktrees: cleanup.removedWorktrees, branches: cleanup.deletedBranches, errors: cleanup.errors },
 }

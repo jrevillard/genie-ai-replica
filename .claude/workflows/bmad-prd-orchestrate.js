@@ -437,21 +437,22 @@ const requeueCIHardfails = () => {
 // state. Skipping the load there avoids the spread-merge overwriting
 // array fields with undefined / stale values (the bug that crashed run 1).
 const isResumingFromInferConfirm = (resume && userChoice === 'confirm_deps' && Array.isArray(confirmedDeps) && confirmedDeps.length > 0)
-if (resume && !isResumingFromInferConfirm) {
-  const loaded = await loadState();
-  if (loaded && typeof loaded === 'object' && !loaded.missing) {
-    state = { ...state, ...loaded };
-    // Defensive: ensure all collection fields stay arrays (disk state may be missing fields)
-    for (const k of ['storyQueue', 'completed', 'blocked', 'skipped', 'awaitingOperator', 'halts']) {
-      if (!Array.isArray(state[k])) state[k] = []
+if (resume) {
+  if (!isResumingFromInferConfirm) {
+    const loaded = await loadState();
+    if (loaded && typeof loaded === 'object' && !loaded.missing) {
+      state = { ...state, ...loaded };
+      // Defensive: ensure all collection fields stay arrays (disk state may be missing fields)
+      for (const k of ['storyQueue', 'completed', 'blocked', 'skipped', 'awaitingOperator', 'halts']) {
+        if (!Array.isArray(state[k])) state[k] = []
+      }
+      log(`Resumed from ${resume}: queueSize=${state.storyQueue.length} completed=${state.completed.length} blocked=${state.blocked.length} iterationCount=${state.iterationCount}`)
+    } else {
+      log(`WARNING: resume=${resume} but loadState returned no usable data; proceeding with fresh state`)
     }
-    log(`Resumed from ${resume}: queueSize=${state.storyQueue.length} completed=${state.completed.length} blocked=${state.blocked.length} iterationCount=${state.iterationCount}`)
   } else {
-    log(`WARNING: resume=${resume} but loadState returned no usable data; proceeding with fresh state`)
+    log(`Resume from dep_inference_confirm — skipping loadState (state is fresh from Plan agent)`)
   }
-} else if (resume && isResumingFromInferConfirm) {
-  log(`Resume from dep_inference_confirm — skipping loadState (state is fresh from Plan agent)`)
-}
 
   // Auto-requeue CI hard-fail halts per retryPolicy, BEFORE userChoice processing
   // so the operator's userChoice can still override (e.g. abort_prd still wins).

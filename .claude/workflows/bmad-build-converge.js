@@ -186,148 +186,91 @@ while (followup && iteration < maxIterations) {
   // 'iterResult' (not 'buildResult') to avoid shadowing the outer let
   // binding — JS TDZ on the inner const would throw on the template
   // evaluation that precedes the const assignment.
-  const iterResult = await agent(
-    `You are a THIN WRAPPER for story ${setup.storyKey}, iteration ${iteration}. Your ONLY job: invoke bmad-build-auto, then return the result. Do NOT write code, commit, push, or run format-check — those happen in SEPARATE agents dispatched by the workflow script.
+  const buildResult = await agent(
+    `You are the bmad-build agent for story ${setup.storyKey}, iteration ${iteration}.
 
-CONTEXT:
+CONTEXT (from setup agent):
+- repoRoot: ${setup.repoRoot}
+- prdWorktreePath: ${setup.prdWorktreePath}
+- prdKey: ${setup.prdKey}
+- baseBranch: ${setup.baseBranch}
+- storyBranch: ${setup.storyBranch}
 - worktreePath: ${setup.worktreePath}
 - specPath: ${setup.specPath}
-- storyBranch: ${setup.storyBranch}
-- iteration: ${iteration}
-- prdKey: ${setup.prdKey}
-${(ciFailure || buildResult?.followupReviewRecommended) ? `**PREVIOUS ITERATION FAILED — BOTH CHECKS RE-RUN THIS ITER**:
-The bmad-build-auto reviewers MUST treat these as the highest-priority patch targets.
-${ciFailure ? `CI FAILURE (pipeline ${ciFailure.pipelineId}, status=${ciFailure.status}):
-- failedJobs: ${JSON.stringify(ciFailure.failedJobs || [], null, 2).substring(0, 1500)}
-- traceTail: ${(ciFailure.traceTail || '').substring(0, 1500)}` : ''}
-${buildResult?.followupReviewRecommended ? `REVIEW FINDINGS: previous iteration's bmad-build-auto wrote followup_review_recommended=true. Read the spec file ${setup.specPath} ## Review Triage Log + ## Auto Run Result sections to see what was found, and target those specifically.` : ''}` : ''}
-
-STEPS (do ONLY these):
-
-0. FETCH latest remote refs: \`git -C ${setup.repoRoot} fetch origin ${setup.baseBranch}\` (without this, origin/${setup.baseBranch} is stale from the previous story's run and the next story branches from an old tip → merge conflict)
-
-1. Update spec frontmatter baseline_revision field to: ${currentSha}
-   - Use Read + Edit tools on ${setup.specPath}
-   - Set \`baseline_revision: ${currentSha}\` in the frontmatter (one backtick line to start, one to end; the dollar-brace inserts the value)
-   - Do NOT commit yet (the skill or a later agent will commit)
-
-2. Invoke bmad-build-auto: \`Skill: bmad-build-auto ${setup.storyKey}\`
-   - Follow its workflow.md + step files exactly
-   - It does step-01 (routing) → step-03 (implement) → step-04 (3 reviewers, classify, patch, write followup_review_recommended) → step-05 (present, mark done, commit locally)
-   - The skill writes the local commit (not the push)
-   - The skill writes '## Review Triage Log' + '## Auto Run Result' sections + sets followup_review_recommended in spec frontmatter
-   - DO NOT do any of this work yourself. The skill is the source of truth.
-
-3. After skill returns, Read ${setup.specPath} and extract:
-   - followup_review_recommended (boolean, EXACT value from frontmatter)
-   - specStatus (from frontmatter)
-   - patchesApplied (parse from '## Auto Run Result' section, 'Patches applied:' line)
-   - itemsDeferred (parse from same section, 'Items deferred:' line)
-   - newSha = the current HEAD SHA (run \`git -C ${setup.worktreePath} rev-parse HEAD\`)
-
-4. EXTERNAL VERIFICATION (catches shortcut attempts):
-   - Use Bash to run: \`grep -q "^## Review Triage Log" ${setup.specPath}\` to check the section exists
-   - If false (section missing) → return error='bmad-build-auto did not write Review Triage Log section' and followupReviewRecommended=true (forces outer loop to retry)
-   - This prevents you from shortcutting the skill
-
-5. Return JSON matching BUILD_SCHEMA:
-   {
-     storyKey: ${setup.storyKey},
-     iteration: ${iteration},
-     newSha: <HEAD>,
-     followupReviewRecommended: <EXACT boolean from spec frontmatter>,
-     specStatus: 'done' or 'in-review' or 'in-progress',
-     patchesApplied: <int>,
-     itemsDeferred: <int>,
-     scoreFormula: '3*medium + 1*low ≥ 5 OR any high',
-     pushed: false,   // post-build agent will push
-     error: <string or omit>
-   }
-
-HARD CONSTRAINTS:
-- DO NOT write any code outside the spec's baseline_revision edit
-- DO NOT commit (skill does it)
-- DO NOT push (post-build agent does it)
-- DO NOT run prettier / format-check (post-build agent does it)
-- DO NOT create MR (Phase 3 does it)
-- DO NOT write the followup_review_recommended field yourself — read it from the spec
-- DO NOT skip the Skill invocation under any circumstance
-
-If the skill fails or returns incomplete, return error=string and followupReviewRecommended=true.`,
-    { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
-  )
-
-  // Assign to the outer-scope 'buildResult' so the NEXT iteration's
-  // template eval (for buildResult?.followupReviewRecommended) sees
-  // this iteration's review verdict. Without this, buildResult is
-  // always null → the template's review-findings branch is dead.
-  buildResult = iterResult
-
-  if (iterResult.error) {
-    log(`Build agent failed: ${iterResult.error}`)
-    iterationsLog.push({ iter: iteration, error: iterResult.error })
-    followup = false
-    break
-  }
-
-  // POST-BUILD: format-check + push (separated from build agent so the build agent
-  // stays a thin wrapper that ONLY invokes bmad-build-auto — no formatting or pushing).
-  const postBuildResult = await agent(
-    `Post-build for story ${setup.storyKey}, iteration ${iteration}: format-check + push. The build agent already invoked bmad-build-auto which committed locally. Your job: verify formatting, then push.
+- baselineSha: ${currentSha}
+- gitlabHost: ${setup.gitlabHost}
+- gitlabProjectId: ${setup.gitlabProjectId}
 
 OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
 
-STEPS:
-1. Run format-check: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
-2. If format-check FAILS:
-   - Run: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --write "**/*.js"\`
-   - Commit the formatting fixes: \`cd ${setup.worktreePath} && git add -A && git commit -m "style(${setup.prdKey}): story ${setup.storyKey} format-fix iter ${iteration}"\`
-3. Push branch: \`cd ${setup.worktreePath} && git push --force-with-lease origin ${setup.storyBranch}\`
-4. Get final SHA: \`cd ${setup.worktreePath} && git rev-parse HEAD\`
+RUN bmad-build:
+1. Read spec at ${setup.specPath}.
+2. Update baseline_revision in spec frontmatter to current SHA (${currentSha}). bmad-build-auto's step-04 reads baseline_revision (NOT baseline_commit) to compute the reviewer diff. Baseline STAYS at origin/prdBranch tip across iterations so reviewers see full cumulative diff for context — do NOT reset to previous iteration's SHA.
+3. Run bmad-build via Skill: \`Skill: bmad-build-auto ${setup.storyKey}\` (NOT bmad-build — the auto version writes the followup_review_recommended flag the outer workflow reads). Follow step-01..05 exactly.
+   - Step-01: routing (spec is in-progress → step-03)
+   - Step-03: implement (subagent dispatches implementation)
+   - Step-04: 3 parallel reviewers (blind hunter, edge-case, verification-gap) → classify + apply patches + write followup_review_recommended in spec frontmatter + increment review_loop_iteration counter
+   - Step-05: present (build review-order section, mark done)
+4. The Skill call may not give you the full workflow.md inline — use Read on the rendered path the Skill returns.
 
-RETURN JSON: { pushed: bool, finalSha: string, formatFixed: bool, error: string }
+QUALITY GATE (after build completes):
+- Read spec frontmatter followup_review_recommended field.
+- Formula reminder: followup = TRUE if any patched finding was HIGH severity, OR if (3 × medium_count + 1 × low_count) ≥ 5.
+- bmad-build-auto writes this flag automatically. Your job: read it back + return to outer workflow.
 
-CONSTRAINTS:
-- DO NOT write any code other than format fixes
-- DO NOT run bmad-build-auto (build agent did that)
-- DO NOT create MR (Phase 3 does that)`,
-    { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: {
-      type: 'object',
-      properties: {
-        pushed: { type: 'boolean' },
-        finalSha: { type: 'string' },
-        formatFixed: { type: 'boolean' },
-        error: { type: 'string' },
-      },
-      required: ['pushed'],
-    }, agentType: 'general-purpose' }
+COMMIT + PUSH:
+- \`git add -A && git commit -m "fix(${setup.prdKey}): story ${setup.storyKey} bmad-build iter ${iteration}"\` (amend if only orchestrator artifacts)
+- \`git push --force-with-lease origin ${setup.storyBranch}\`
+
+FORMAT CHECK (per memory feedback_rtk_lint_false_positives):
+- After push, run: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
+- If fail: \`rtk proxy npx prettier --write "**/*.js"\` + commit + push.
+
+RETURN BUILD_SCHEMA:
+- newSha = HEAD after push
+- **followupReviewRecommended = EXACT boolean value of spec frontmatter 'followup_review_recommended' field**. bmad-build-auto writes this in its finalize step. Read it via Read or Grep. Do NOT infer, hallucinate, or compute it yourself — the outer workflow depends on this value being correct. If the field is missing or empty, set followupReviewRecommended=false (treat as converged).
+- patchesApplied / itemsDeferred = from spec Auto Run Result section (parse the "Patches applied" + "Items deferred" lines)
+- scoreFormula = the formula string
+- specStatus = spec frontmatter status field
+- pushed = true after successful push
+
+VERIFICATION before returning:
+1. Read spec file. Confirm frontmatter has followup_review_recommended field (boolean).
+2. Confirm spec status is 'done' or 'in-review' (NOT 'draft', NOT 'ready-for-dev', NOT 'in-progress').
+3. If either check fails, return error string + set pushed=false + followupReviewRecommended=true (forces outer loop to retry).
+
+ERRORS:
+- If bmad-build halts or errors, return error string in error field, set pushed=false, followupReviewRecommended=true.`,
+    { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
   )
 
-  if (!postBuildResult || !postBuildResult.pushed) {
-    log(`Post-build failed: ${postBuildResult?.error || 'no result'}`)
-    iterationsLog.push({ iter: iteration, error: `post-build: ${postBuildResult?.error || 'unknown'}` })
+  if (!buildResult || buildResult.error) {
+    log(`Build agent failed: ${buildResult && buildResult.error}`)
+    iterationsLog.push({ iter: iteration, error: buildResult?.error || 'no result' })
     followup = false
     break
   }
-  // Update SHA to post-push value
-  iterResult.newSha = postBuildResult.finalSha || iterResult.newSha
 
   iterationsLog.push({
     iter: iteration,
-    sha: iterResult.newSha,
-    followup: iterResult.followupReviewRecommended,
-    specStatus: iterResult.specStatus,
-    patchesApplied: iterResult.patchesApplied,
-    itemsDeferred: iterResult.itemsDeferred,
+    sha: buildResult.newSha,
+    followup: buildResult.followupReviewRecommended,
+    specStatus: buildResult.specStatus,
+    patchesApplied: buildResult.patchesApplied,
+    itemsDeferred: buildResult.itemsDeferred,
   })
 
-  currentSha = iterResult.newSha
-  followup = iterResult.followupReviewRecommended
+  currentSha = buildResult.newSha
+  followup = buildResult.followupReviewRecommended
+  if (!followup) {
+    convergedSha = buildResult.newSha
+    log(`Converged after iteration ${iteration}`)
+  }
+}
 
-  // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
-  // a pipeline. We poll the pipeline after the push and, if it failed, we
-  // prepare a ciFailure payload for the next iteration's build agent. The
-  // build agent passes ciFailure to bmad-build-auto's reviewers so the next
+if (followup) {
+  log(`HIT ITERATION CAP (${maxIterations}) without convergence — ESCALATING`)
+  return {
   // pass targets the actual CI failure rather than guessing.
   if (postBuildResult.pushed) {
     log(`Iteration ${iteration}: build ${followup ? 'still wants followup' : 'looks converged'} — checking CI...`)
@@ -365,7 +308,7 @@ STEPS:
     // OR logic: the loop iterates if EITHER the build agent wants another
     // pass (review found high-severity findings) OR CI failed. CI being
     // green does NOT override the build agent's followup signal.
-    const buildWantsFollowup = iterResult.followupReviewRecommended === true
+    const buildWantsFollowup = buildResult.followupReviewRecommended === true
     const ciFailed = ciCheck && ciCheck.status !== 'success'
     if (buildWantsFollowup || ciFailed) {
       if (ciFailed) {
@@ -389,7 +332,7 @@ STEPS:
   }
 
   if (!followup) {
-    convergedSha = iterResult.newSha
+    convergedSha = buildResult.newSha
     log(`Converged after iteration ${iteration}`)
   }
 }

@@ -192,7 +192,7 @@ ${cmd}`,
   } catch (e) {
     return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${(wrapperResult.stdout || '').slice(-500)}` };
   }
-  return parsed;
+  return parsed.structured_output || parsed;
 }
 
 // ============================================================================

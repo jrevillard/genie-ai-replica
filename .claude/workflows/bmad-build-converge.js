@@ -257,32 +257,22 @@ If the skill fails or returns incomplete, return error=string and followupReview
   // POST-BUILD: format-check + push (separated from build agent so the build agent
   // stays a thin wrapper that ONLY invokes bmad-build-auto — no formatting or pushing).
   const postBuildResult = await agent(
-    `Post-build for story ${setup.storyKey}, iteration ${iteration}: lint-check + format-check + push. The build agent already invoked bmad-build-auto which committed locally. Your job: catch lint + format issues BEFORE pushing, then push.
+    `Post-build for story ${setup.storyKey}, iteration ${iteration}: format-check + push. The build agent already invoked bmad-build-auto which committed locally. Your job: verify formatting, then push.
 
 OPERATE FROM: ${setup.worktreePath} (git checkout branch ${setup.storyBranch}).
 
 STEPS:
-1. Run lint-check: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx eslint . --ext .js\`
-   - If FAIL: capture which files + rules violated.
-2. Run format-check: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
-3. If EITHER lint or format check FAILS:
-   a. Try to auto-fix:
-      - Lint auto-fix: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx eslint . --ext .js --fix\`
-        (handles no-unused-vars, no-extra-bind, etc. — most rule violations)
-      - Format auto-fix: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --write "**/*.js"\`
-   b. Re-run BOTH checks to confirm clean.
-   c. If still dirty after --fix (some lint rules aren't auto-fixable):
-      - Return error='lint_unfixable' with the list of remaining issues.
-      - Do NOT push. The next CI run will fail; user must fix manually.
-   d. If clean after auto-fix:
-      - Commit the fixes: \`cd ${setup.worktreePath} && git add -A && git commit -m "style(${setup.prdKey}): story ${setup.storyKey} lint+format-fix iter ${iteration}"\`
-4. Push branch: \`cd ${setup.worktreePath} && git push --force-with-lease origin ${setup.storyBranch}\`
-5. Get final SHA: \`cd ${setup.worktreePath} && git rev-parse HEAD\`
+1. Run format-check: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --check "**/*.js"\`
+2. If format-check FAILS:
+   - Run: \`cd ${setup.worktreePath}/components/gov-chat-backend && rtk proxy npx prettier --write "**/*.js"\`
+   - Commit the formatting fixes: \`cd ${setup.worktreePath} && git add -A && git commit -m "style(${setup.prdKey}): story ${setup.storyKey} format-fix iter ${iteration}"\`
+3. Push branch: \`cd ${setup.worktreePath} && git push --force-with-lease origin ${setup.storyBranch}\`
+4. Get final SHA: \`cd ${setup.worktreePath} && git rev-parse HEAD\`
 
-RETURN JSON: { pushed: bool, finalSha: string, lintFixed: bool, formatFixed: bool, error: string }
+RETURN JSON: { pushed: bool, finalSha: string, formatFixed: bool, error: string }
 
 CONSTRAINTS:
-- DO NOT write any code other than lint/format fixes
+- DO NOT write any code other than format fixes
 - DO NOT run bmad-build-auto (build agent did that)
 - DO NOT create MR (Phase 3 does that)`,
     { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: {

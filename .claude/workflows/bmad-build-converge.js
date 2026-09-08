@@ -255,7 +255,9 @@ RETURN BUILD_SCHEMA:
 - specStatus = spec frontmatter status field
 - pushed = true after successful push
 
-VERIFICATION before returning:
+VERIFICATION before returning (FILE-EXISTENCE CHECK — this is the 5-8/5-9 guard):
+0. For each path in the spec's frontmatter 'files' field, run \`ls -1 <worktreePath>/<path> | head -1\`.
+   - If ANY file is missing, the build agent short-circuited the work → return error='build agent did not create expected files: [<missing paths>]' + pushed=false + followupReviewRecommended=true.
 1. Read spec file. Confirm frontmatter has followup_review_recommended field.
 2. Confirm spec status is 'done' or 'in-review'.
 3. If either check fails → return error string + pushed=false + followupReviewRecommended=true.

@@ -1,16 +1,18 @@
-import { writeFileSync, unlinkSync } from 'node:fs';
-
 // Note: the meta is static at script-load time, so 'storyKey' can't be
 // inlined. The 'name' field is fixed ('bmad-build-converge'); the
 // 'description' shows the generic flow. To make the running story
 // visible, check args.storyKey after the workflow starts.
+//
+// IMPORTANT: Workflow tool requires `export const meta = {...}` as the
+// FIRST statement. No static imports allowed above it. dispatchViaClaudeP
+// uses dynamic import('node:fs') inside the helper to work around this.
 export const meta = {
   name: 'bmad-build-converge',
   description: 'Single-story bmad-build with quality-gate convergence loop + CI gate + auto-merge. Generic across any BMAD PRD: discovers repo, PRD worktree, issue-tracking config, and project_key from sprint-status.yaml. The story being processed is passed via args.storyKey (logged at Setup).',
   phases: [
     { title: 'Setup' },
-    { title: 'Build with convergence' },
     { title: 'Create MR' },
+    { title: 'Build with convergence' },
     { title: 'Auto-merge' },
     { title: 'Cleanup' },
   ],
@@ -115,16 +117,30 @@ const CLEANUP_SCHEMA = {
 // Temp file cleanup is wrapped in try/finally so leaks don't accumulate
 // when the wrapper agent throws mid-dispatch.
 // ============================================================================
+// Per-run counter for heredoc marker uniqueness. Workflow tool forbids
+// Date.now()/Math.random() (they break resume), so use a simple increment.
+let dispatchSeq = 0;
+
 async function dispatchViaClaudeP(opts) {
   const { label, phase, prompt, schema, cwd, allowedTools, maxBudgetUsd } = opts;
-  const promptFile = `/tmp/bmad-bc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
-  writeFileSync(promptFile, prompt);
-  try {
-    const cwdPrefix = cwd ? `cd '${cwd}' && ` : '';
-    const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
-    const cmd = `${cwdPrefix}cat '${promptFile}' | claude -p - --output-format json --bare --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'}`;
-    const wrapperResult = await agent(
-      `Run this bash command. Return stdout parsed as JSON. No commentary, no extra steps.
+  // Heredoc transport: prompt is fed to claude -p via stdin, avoiding any
+  // shell-quoting issues with apostrophes, backticks, or $vars. The
+  // 'MARKER' (single-quoted EOF delimiter) disables shell expansion inside
+  // the heredoc body — the prompt is treated as literal text. The marker
+  // is unique per dispatch via `dispatchSeq` (no Date.now/Math.random in
+  // workflow scripts). No filesystem access needed — Workflow tool forbids
+  // both static imports (above meta) and dynamic import().
+  dispatchSeq++;
+  const marker = `BMADBC_DISPATCH_${dispatchSeq}`;
+  const cwdPrefix = cwd ? `cd '${cwd}'; ` : '';
+  const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
+  // Minimal `claude -p` invocation. Auth via OAuth (auto-detected from
+  // claude CLI storage). Local gateway serves sandbox models under 'opus'.
+  // Subshell `()` for future-proofing (if env manipulation becomes needed).
+  const modelArg = ` --model opus`;
+  const cmd = `(${cwdPrefix}cat <<'${marker}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'}\n${prompt}\n${marker})`;
+  const wrapperResult = await agent(
+    `Run this bash command. Return stdout parsed as JSON. No commentary, no extra steps.
 
 COMMAND:
 ${cmd}
@@ -134,19 +150,16 @@ PARSE RULES:
 - If --json-schema was used, the parsed object lives in the envelope's \`json\` field — return it WRAPPED: { "json": <envelope.json> }.
 - If exit != 0, return { error: <stderr last 500 chars> }.
 - DO NOT modify any files. DO NOT add goal restatements.`,
-      { label, phase, schema: {
-        type: 'object',
-        properties: {
-          json: {},
-          error: { type: 'string' },
-        },
-      }, agentType: 'general-purpose' }
-    );
-    if (wrapperResult?.error) return { error: wrapperResult.error };
-    return wrapperResult?.json ?? wrapperResult;
-  } finally {
-    try { unlinkSync(promptFile); } catch {}
-  }
+    { label, phase, schema: {
+      type: 'object',
+      properties: {
+        json: {},
+        error: { type: 'string' },
+      },
+    }, agentType: 'general-purpose' }
+  );
+  if (wrapperResult?.error) return { error: wrapperResult.error };
+  return wrapperResult?.json ?? wrapperResult;
 }
 
 // ============================================================================
@@ -198,18 +211,18 @@ STEPS:
    - Find epic-{N} where N = first numeric segment of <storyKey>. Set to in-progress if currently backlog.
    - Update last_updated to "${timestamp}"
    - git add + commit -m "chore(sprint-status): story <storyKey> → in-progress"
-   - DO NOT push this commit.
+   - DO push this commit (so MR create phase has something to point at): \`git push origin \${storyBranch}\` (use --force-with-lease if local is ahead).
 8. Update spec frontmatter:
    specPath = <worktreePath>/_bmad-output/implementation-artifacts/stories/<storyKey>.md
    Edit specPath:
    - status: in-progress
    - baseline_revision: <baselineSha>  # bmad-build-auto reads THIS field (NOT baseline_commit)
-   git add + commit (no push).
+   git add + commit (push too — same branch).
 9. Return SETUP_SCHEMA JSON with ALL fields filled. The other phases depend on these — incomplete context = broken workflow.
 
 CONSTRAINTS:
 - DO NOT modify prdWorktreePath (the PRD worktree). Only create the story worktree.
-- DO NOT push to remote (build agent handles).
+- DO push the sprint-status + spec commits to remote (MR create needs them).
 - DO NOT skip the sprint-status sync.
 - If discovery fails at any step, HALT with the failing field empty + clear error in storyKey.`,
   { label: `setup-${storyKey}`, phase: 'Setup', schema: SETUP_SCHEMA, agentType: 'general-purpose' }
@@ -222,7 +235,71 @@ log(`Repo: ${setup.repoRoot} | PRD worktree: ${setup.prdWorktreePath} | prdKey: 
 log(`Story branch: ${setup.storyBranch} | Worktree: ${setup.worktreePath} | Baseline: ${setup.baselineSha}`)
 
 // ============================================================================
-// PHASE 2: BUILD WITH CONVERGENCE
+// PHASE 2: CREATE MR (runs ONCE, before Build loop)
+// ============================================================================
+// MR exists when the Build loop's CI check runs — guarantees a single CI
+// surface (MR pipeline), no branch/MR fallback path. Setup just pushed
+// sprint-status + spec commits to remote, so MR creation now has a diff.
+phase('Create MR')
+log(`Creating MR for ${setup.storyBranch}...`)
+const mrResult = await agent(
+  `Create MR for branch ${setup.storyBranch} → ${setup.baseBranch}, story ${setup.storyKey}.
+
+CONTEXT (from setup agent):
+- repoRoot: ${setup.repoRoot}
+- prdKey: ${setup.prdKey}
+- baseBranch: ${setup.baseBranch}
+- storyBranch: ${setup.storyBranch}
+- worktreePath: ${setup.worktreePath}
+- gitlabHost: ${setup.gitlabHost}
+- gitlabProjectId: ${setup.gitlabProjectId}
+
+OPERATE FROM: ${setup.worktreePath}
+
+STEPS:
+1. Check existing MR: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` — if found, use existing mrIid.
+2. If no MR: create via:
+   \`GITLAB_HOST=${setup.gitlabHost} glab mr create --yes --repo <config-project> --source-branch "${setup.storyBranch}" --target-branch "${setup.baseBranch}" --title "Story ${setup.storyKey} — bmad-build-converge" --description "Auto-generated by bmad-build-converge. See spec file at ${setup.specPath} for review order." --remove-source-branch\`
+   (config-project is read from _bmad/custom/issue-tracking.yaml: project field.)
+3. Parse mrIid from URL pattern /merge_requests/<NID>.
+4. Fetch first pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/<NID>/pipelines?per_page=1"\` → first id.
+
+RETURN JSON: { storyKey: ${setup.storyKey}, mrIid, mrUrl, pipelineId, branch: ${setup.storyBranch}, error? }
+
+CONSTRAINTS:
+- DO NOT run CI check (Build loop's CI agent does that per iteration)
+- DO NOT run Skill: bmad-build-auto (Build agent does that)
+- DO NOT modify any code or spec files`,
+  { label: `mr-create-${setup.storyKey}`, phase: 'Create MR', schema: {
+    type: 'object',
+    properties: {
+      storyKey: { type: 'string' },
+      mrIid: { type: 'integer' },
+      mrUrl: { type: 'string' },
+      pipelineId: { type: 'integer' },
+      branch: { type: 'string' },
+      error: { type: 'string' },
+    },
+    required: ['storyKey', 'branch'],
+  }, agentType: 'general-purpose' }
+)
+
+if (!mrResult || mrResult.error || !mrResult.mrIid) {
+  return {
+    storyKey: setup.storyKey,
+    aborted: true,
+    stage: 'create-mr',
+    iterations: 0,
+    mrResult,
+    worktreePath: setup.worktreePath,
+    branch: setup.storyBranch,
+    error: mrResult?.error || 'no MR created',
+  }
+}
+log(`MR !${mrResult.mrIid} created (CI will run on first push during Build loop)`)
+
+// ============================================================================
+// PHASE 3: BUILD WITH CONVERGENCE
 // ============================================================================
 phase('Build with convergence')
 log(`Running bmad-build convergence loop (max ${maxIterations} iterations)...`)
@@ -232,6 +309,11 @@ let followup = true;
 let currentSha = setup.baselineSha;
 let convergedSha = null;
 let iterationsLog = [];
+// lastSpecStatus captured across loop iterations — used by Auto-merge
+// guard to skip merge for deferred/blocked stories (awaiting-operator,
+// blocked). Skill may finalize spec status to one of these if human
+// action is required or an unresolved issue blocked completion.
+let lastSpecStatus = null;
 
 while (followup && iteration < maxIterations) {
   iteration++;
@@ -300,7 +382,7 @@ RETURN BUILD_SCHEMA:
 
 CONSTRAINTS:
 - DO NOT run Skill: bmad-build-auto (build agent did that)
-- DO NOT create MR (Phase 3 does that)
+- DO NOT create MR — Phase 2 (Create MR) already created it; you just push commits to its branch
 - DO NOT modify spec file other than verifying frontmatter fields
 - DO NOT run format-check / linters — CI lint job handles those (workflow stays generic)`,
     { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
@@ -322,6 +404,7 @@ CONSTRAINTS:
     itemsDeferred: postBuildResult.itemsDeferred,
   })
 
+  lastSpecStatus = postBuildResult.specStatus
   currentSha = postBuildResult.newSha
   followup = postBuildResult.followupReviewRecommended
 
@@ -333,11 +416,12 @@ CONSTRAINTS:
   if (postBuildResult.pushed) {
     log(`Iteration ${iteration}: build ${followup ? 'still wants followup' : 'looks converged'} — checking CI...`)
     const ciCheck = await agent(
-      `Check the CI pipeline for branch ${setup.storyBranch} (story ${setup.storyKey}, iter ${iteration}).
+      `Check the CI pipeline for MR !${mrResult.mrIid} (story ${setup.storyKey}, iter ${iteration}).
+
+MR was created in Phase 2 — guaranteed to exist. Use MR pipeline only (single CI surface).
 
 STEPS:
-1. Get latest pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` → first entry. If no MR exists yet, run:
-   \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/pipelines?ref=${setup.storyBranch}&per_page=1"\` → first entry.
+1. Get latest MR pipeline: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/${mrResult.mrIid}/pipelines?per_page=1"\` → first entry.
 2. Poll status: \`Bash(command="/tmp/ci-monitor.sh <pipelineId> 30", run_in_background=true)\` + \`TaskOutput(block=true, timeout=1800000)\`. Read the "TERMINAL:<status>" line.
 3. If status='success': return { pipelineId, status: 'success' }.
 4. If status != 'success': classify the failure.
@@ -413,76 +497,23 @@ if (followup) {
 log(`Story ${setup.storyKey} converged at ${convergedSha} after ${iteration} iteration(s) — last CI was ${lastCIStatus ? lastCIStatus.toUpperCase() : 'NOT CHECKED'}`)
 
 // ============================================================================
-// PHASE 3: CREATE MR (CI was already checked inside the loop)
-// ============================================================================
-phase('Create MR')
-log(`Creating MR for ${setup.storyBranch}...`)
-const mrResult = await agent(
-  `Create MR + monitor CI pipeline for branch ${setup.storyBranch} → ${setup.baseBranch}, story ${setup.storyKey}.
-
-CONTEXT (from setup agent):
-- repoRoot: ${setup.repoRoot}
-- prdKey: ${setup.prdKey}
-- baseBranch: ${setup.baseBranch}
-- storyBranch: ${setup.storyBranch}
-- worktreePath: ${setup.worktreePath}
-- gitlabHost: ${setup.gitlabHost}
-- gitlabProjectId: ${setup.gitlabProjectId}
-- iteration: ${iteration}
-
-OPERATE FROM: ${setup.worktreePath}
-
-The CI was already checked inside the convergence loop (Phase 2). If we got here, the LAST ci-check returned 'success'. The branch has been pushed at least once. Just create or fetch the MR.
-
-1. Check existing MR: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` — if found, use existing mrIid.
-2. If no MR: create via:
-   \`GITLAB_HOST=${setup.gitlabHost} glab mr create --yes --repo <config-project> --source-branch "${setup.storyBranch}" --target-branch "${setup.baseBranch}" --title "Story ${setup.storyKey} — bmad-build-converge" --description "Auto-generated by bmad-build-converge. Converged after ${iteration} iteration(s) with CI green. See spec file for review order." --remove-source-branch\`
-   (config-project is read from _bmad/custom/issue-tracking.yaml: project field.)
-3. Parse mrIid from URL pattern /merge_requests/<NID>.
-4. Fetch pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/<NID>/pipelines"\` → first id.
-
-RETURN JSON: { storyKey: ${setup.storyKey}, mrIid, mrUrl, pipelineId, branch: ${setup.storyBranch}, error? }`,
-  { label: `mr-create-${setup.storyKey}`, phase: 'Create MR', schema: {
-    type: 'object',
-    properties: {
-      storyKey: { type: 'string' },
-      mrIid: { type: 'integer' },
-      mrUrl: { type: 'string' },
-      pipelineId: { type: 'integer' },
-      branch: { type: 'string' },
-      error: { type: 'string' },
-    },
-    required: ['storyKey', 'branch'],
-  }, agentType: 'general-purpose' }
-)
-
-if (!mrResult || mrResult.error || !mrResult.mrIid) {
-  return {
-    storyKey: setup.storyKey,
-    converged: true,
-    iterations: iteration,
-    finalSha: convergedSha,
-    iterationsLog,
-    mrResult,
-    worktreePath: setup.worktreePath,
-    branch: setup.storyBranch,
-    aborted: mrResult?.error || 'no MR created',
-  }
-}
-
-log(`MR !${mrResult.mrIid} created (pipeline ${mrResult.pipelineId}; CI was already checked green in the loop)`)
-
-// ============================================================================
 // PHASE 4: AUTO-MERGE
 // ============================================================================
 phase('Auto-merge')
 let mergeResult = null;
-// lastCIStatus was set inside the convergence loop (Phase 2). The merged
+// lastCIStatus was set inside the convergence loop (Phase 3). The merged
 // Push&MR+Monitor agent is gone — the loop's CI check is the SOLE source
 // of CI verdict now. If lastCIStatus is null, the loop never reached the
 // CI check (push failed, build was treated as converged without CI).
-if (lastCIStatus === 'success') {
-  log(`Auto-merging MR !${mrResult.mrIid}...`)
+//
+// Auto-merge GUARD: skip merge when spec status indicates human action
+// required or unresolved blocker. awaiting-operator = partial completion
+// (buy domain, grant API key); blocked = skill flagged an issue.
+const SPEC_STATUSES_BLOCKING_MERGE = new Set(['awaiting-operator', 'blocked']);
+const canAutoMerge = lastCIStatus === 'success'
+  && !SPEC_STATUSES_BLOCKING_MERGE.has(lastSpecStatus);
+if (canAutoMerge) {
+  log(`Auto-merging MR !${mrResult.mrIid} (CI green, spec status: ${lastSpecStatus})...`)
   mergeResult = await agent(
     `Merge MR !${mrResult.mrIid} for story ${setup.storyKey}, then sync sprint-status to done.
 
@@ -511,8 +542,11 @@ RETURN MERGE_SCHEMA (storyKey, mrIid, merged, sprintStatusDone, error?).`,
     { label: `merge-${setup.storyKey}`, phase: 'Auto-merge', schema: MERGE_SCHEMA, agentType: 'general-purpose' }
   )
 } else {
-  log(`CI ${lastCIStatus || 'NOT CHECKED'} — NOT auto-merging. Manual review needed.`)
-  mergeResult = { storyKey: setup.storyKey, mrIid: mrResult.mrIid, merged: false, sprintStatusDone: false, error: `CI ${lastCIStatus || 'unknown'}` }
+  const reason = !lastSpecStatus || !SPEC_STATUSES_BLOCKING_MERGE.has(lastSpecStatus)
+    ? `CI ${lastCIStatus || 'NOT CHECKED'}`
+    : `spec status "${lastSpecStatus}" (human action required or unresolved blocker)`;
+  log(`${reason} — NOT auto-merging. Manual review needed.`)
+  mergeResult = { storyKey: setup.storyKey, mrIid: mrResult.mrIid, merged: false, sprintStatusDone: false, error: reason }
 }
 
 log(`Merge: ${mergeResult.merged ? 'OK' : 'SKIPPED'} | Sprint-status: ${mergeResult.sprintStatusDone ? 'done' : 'pending'}`)

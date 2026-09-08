@@ -3,7 +3,7 @@ key: 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li
 title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit persistence"
 epic: epic-5
 status: in-progress
-baseline_revision: 3a15e5abb566485c260255691700c73f1ef7218d
+baseline_revision: 9a07c811b172e02c4d28b3d3b84854ec7e721fc2
 effort: 0.25
 depends_on: [5.3]
 files: components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (new)

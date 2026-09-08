@@ -20,7 +20,10 @@ export const meta = {
 
 const storyKey = args.storyKey;
 if (!storyKey) throw new Error('args.storyKey required');
+// maxIterations: REVIEW convergence budget (build + post-build per iter; no CI wait).
+// ciMaxIterations: CI-FIX budget (separate counter; only consumed after build converges).
 const maxIterations = args.maxIterations || 5;
+const ciMaxIterations = args.ciMaxIterations || 3;
 const timestamp = args.timestamp || 'unknown';
 // On resume (e.g., after CI failure halted the workflow), the orchestrator re-invokes
 // the sub-workflow with args.ciFailure describing the previous CI failure. The build
@@ -335,9 +338,10 @@ log(`MR !${mrResult.mrIid} created (CI will run on first push during Build loop)
 // PHASE 3: BUILD WITH CONVERGENCE
 // ============================================================================
 phase('Build with convergence')
-log(`Running bmad-build convergence loop (max ${maxIterations} iterations)...`)
+log(`Running bmad-build convergence loop (${maxIterations} review + ${ciMaxIterations} CI-fix iterations)...`)
 
 let iteration = 0;
+let ciIter = 0;
 let followup = true;
 let currentSha = setup.baselineSha;
 let convergedSha = null;
@@ -348,19 +352,13 @@ let iterationsLog = [];
 // action is required or an unresolved issue blocked completion.
 let lastSpecStatus = null;
 
+// PHASE A: REVIEW CONVERGENCE LOOP
+// Build + postBuild + push. NO CI WAIT. If build wants followup, loop immediately
+// (saves ~3-5min per iter vs old behavior which polled CI between reviews).
 while (followup && iteration < maxIterations) {
   iteration++;
-  log(`--- Iteration ${iteration}/${maxIterations} (baseline ${currentSha.substring(0, 7)}) ---`)
+  log(`--- Review iteration ${iteration}/${maxIterations} (baseline ${currentSha.substring(0, 7)}) ---`)
 
-  // 'buildResult' (not 'buildResult') to avoid shadowing the outer let
-  // binding — JS TDZ on the inner const would throw on the template
-  // evaluation that precedes the const assignment.
-  //
-  // Plain agent() dispatch. Skill: bmad-build-auto invocation happens
-  // INSIDE the subagent via its Skill tool. Depth: workflow (0) → agent
-  // subagent (1) → Skill's implementation subagent (2). Within depth-3
-  // limit. No claude -p subprocess, no Skill-halt-on-workflow-tool, no
-  // model/auth overhead.
   const buildResult = await dispatchViaClaudeP({
     label: `build-iter-${iteration}`,
     phase: 'Build with convergence',
@@ -383,9 +381,6 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
     allowedTools: 'Read,Write,Edit,Bash,Skill,Agent',
   });
 
-  // 'buildResult'/'postBuildResult' are inner consts, but the NEXT iteration's
-  // template eval (for the optional ciFailure injection) doesn't need them —
-  // ciFailure is captured into the outer-scope `let` below.
   if (!buildResult || !buildResult.skillCompleted || buildResult.error) {
     log(`Build agent (Skill) failed: ${buildResult?.error || 'skill did not complete'}`)
     iterationsLog.push({ iter: iteration, error: `build: ${buildResult?.error || 'skill did not complete'}` })
@@ -393,10 +388,6 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
     break
   }
 
-  // POST-BUILD: file-existence check (5-8/5-9 guard) + push + emit BUILD_SCHEMA.
-  // Build agent is a bare Skill invocation (bmad-loop pattern); all
-  // post-skill scaffolding lives here. Format-check is delegated to CI
-  // (lint job) to keep this workflow generic across BMAD PRDs.
   const postBuildResult = await agent(
     `Post-build for story ${setup.storyKey}, iter ${iteration}. Build agent already invoked Skill: bmad-build-auto and committed locally. Your job: verify deliverables + push + return BUILD_SCHEMA.
 
@@ -446,93 +437,156 @@ CONSTRAINTS:
   currentSha = postBuildResult.newSha
   followup = postBuildResult.followupReviewRecommended
 
-  // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
-  // a pipeline. We poll the pipeline after the push and, if it failed, we
-  // prepare a ciFailure payload for the next iteration's build agent. The
-  // build agent passes ciFailure to bmad-build-auto's reviewers so the next
-  // pass targets the actual CI failure rather than guessing.
-  if (postBuildResult.pushed) {
-    log(`Iteration ${iteration}: build ${followup ? 'still wants followup' : 'looks converged'} — checking CI...`)
-    const ciCheck = await agent(
-      `Check the CI pipeline for MR !${mrResult.mrIid} (story ${setup.storyKey}, iter ${iteration}).
-
-MR was created in Phase 2 — guaranteed to exist. Use MR pipeline only (single CI surface).
-
-STEPS:
-1. Get latest MR pipeline: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/${mrResult.mrIid}/pipelines?per_page=1"\` → first entry.
-2. Poll status: \`Bash(command="/tmp/ci-monitor.sh <pipelineId> 30", run_in_background=true)\` + \`TaskOutput(block=true, timeout=1800000)\`. Read the "TERMINAL:<status>" line.
-3. If status='success': return { pipelineId, status: 'success' }.
-4. If status != 'success': classify the failure.
-   - Get failed jobs: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/pipelines/<pipelineId>/jobs?per_page=50"\`
-   - For each failed job, fetch trace tail: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/jobs/<id>/trace" | tail -80\`
-   - Compose a CONCISE summary of each failed job (job name + 5-10 line excerpt of the relevant error).
-5. Return JSON: { pipelineId, status, failedJobs: [{name, exitCode, excerpt}], traceTail: <concatenated excerpts> }`,
-      { label: `ci-check-${iteration}`, phase: 'Build with convergence', schema: {
-        type: 'object',
-        properties: {
-          pipelineId: { type: 'integer' },
-          status: { type: 'string' },
-          failedJobs: { type: 'array', items: {
-            type: 'object', properties: { name: { type: 'string' }, exitCode: { type: 'integer' }, excerpt: { type: 'string' } }
-          } },
-          traceTail: { type: 'string' },
-        },
-        required: ['status'],
-      }, agentType: 'general-purpose' }
-    )
-
-    if (ciCheck && ciCheck.status) {
-      lastCIStatus = ciCheck.status
-    }
-
-    // OR logic: the loop iterates if EITHER the build agent wants another
-    // pass (review found high-severity findings) OR CI failed. CI being
-    // green does NOT override the build agent's followup signal.
-    const buildWantsFollowup = postBuildResult.followupReviewRecommended === true
-    const ciFailed = ciCheck && ciCheck.status !== 'success'
-    if (buildWantsFollowup || ciFailed) {
-      if (ciFailed) {
-        log(`Iteration ${iteration}: CI FAILED — feeding back to next iteration`)
-        ciFailure = {
-          pipelineId: ciCheck.pipelineId,
-          status: ciCheck.status,
-          failedJobs: ciCheck.failedJobs || [],
-          traceTail: (ciCheck.traceTail || '').substring(0, 3000),
-        }
-      } else {
-        log(`Iteration ${iteration}: build agent requested followup (review found issues) — re-running with same args`)
-      }
-      followup = true
-    } else {
-      log(`Iteration ${iteration}: BOTH build converged + CI green — exiting loop ✓`)
-      followup = false
-    }
-  } else if (followup) {
-    log(`Iteration ${iteration}: followup recommended but post-build didn't push — relying on build agent's classification`)
-  }
-
   if (!followup) {
     convergedSha = postBuildResult.newSha
-    log(`Converged after iteration ${iteration}`)
+    log(`Build converged at iter ${iteration} (no followup). Now CI gate.`)
+  } else {
+    log(`Iter ${iteration}: build wants followup → re-build immediately (no CI wait)`)
   }
 }
 
 if (followup) {
-  log(`HIT ITERATION CAP (${maxIterations}) without convergence — ESCALATING`)
+  log(`HIT REVIEW CAP (${maxIterations}) without convergence — ESCALATING`)
   return {
     storyKey: setup.storyKey,
     converged: false,
     iterations: iteration,
     finalSha: currentSha,
     iterationsLog,
-    ciFailure,  // expose the last CI failure for the orchestrator to feed back
-    escalateReason: `convergence did not complete within ${maxIterations} iterations (last failure: ${ciFailure ? `CI pipeline ${ciFailure.pipelineId} status=${ciFailure.status}` : 'followup_review_recommended=true'})`,
+    ciFailure,
+    escalateReason: `review convergence did not complete within ${maxIterations} iterations (last failure: ${ciFailure ? `CI pipeline ${ciFailure.pipelineId} status=${ciFailure.status}` : 'followup_review_recommended=true'})`,
     worktreePath: setup.worktreePath,
     branch: setup.storyBranch,
   }
 }
 
-log(`Story ${setup.storyKey} converged at ${convergedSha} after ${iteration} iteration(s) — last CI was ${lastCIStatus ? lastCIStatus.toUpperCase() : 'NOT CHECKED'}`)
+// PHASE B: CI GATE — only check CI after build converges. If CI fails, re-build
+// (counter ciIter). Separate budget from review iterations.
+log(`Build converged at ${convergedSha}. Starting CI gate (max ${ciMaxIterations} CI-fix iterations)...`)
+let ciConverged = false;
+ciFailure = null;  // reset for CI loop
+while (ciIter < ciMaxIterations) {
+  ciIter++;
+  log(`--- CI iter ${ciIter}/${ciMaxIterations} ---`)
+  const ciCheck = await agent(
+    `Check CI for MR !${mrResult.mrIid} (story ${setup.storyKey}, CI iter ${ciIter}).
+
+MR was created in Phase 2 — guaranteed to exist. Use MR pipeline only.
+
+STEPS:
+1. Get latest MR pipeline: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/${mrResult.mrIid}/pipelines?per_page=1"\` → first entry.
+2. Poll status: \`Bash(command="/tmp/ci-monitor.sh <pipelineId> 30", run_in_background=true)\` + \`TaskOutput(block=true, timeout=1800000)\`. Read the "TERMINAL:<status>" line.
+3. If status='success': return { pipelineId, status: 'success' }.
+4. If status != 'success': classify failure.
+   - Get failed jobs: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/pipelines/<pipelineId>/jobs?per_page=50"\`
+   - For each failed job, fetch trace tail: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/jobs/<id>/trace" | tail -80\`
+5. Return JSON: { pipelineId, status, failedJobs: [{name, exitCode, excerpt}], traceTail: <concatenated excerpts> }`,
+    { label: `ci-check-${ciIter}`, phase: 'Build with convergence', schema: {
+      type: 'object',
+      properties: {
+        pipelineId: { type: 'integer' },
+        status: { type: 'string' },
+        failedJobs: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, exitCode: { type: 'integer' }, excerpt: { type: 'string' } } } },
+        traceTail: { type: 'string' },
+      },
+      required: ['status'],
+    }, agentType: 'general-purpose' }
+  )
+
+  if (!ciCheck || !ciCheck.status) {
+    log(`CI check failed (no result) — escalating`)
+    ciFailure = { error: 'ci_check_failed' }
+    break
+  }
+  lastCIStatus = ciCheck.status
+
+  if (ciCheck.status === 'success') {
+    log(`CI green ✓`)
+    ciConverged = true
+    break
+  }
+
+  // CI failed → record + re-build (if budget remains)
+  log(`CI failed (status=${ciCheck.status}) — re-build with CI failure context`)
+  ciFailure = {
+    pipelineId: ciCheck.pipelineId,
+    status: ciCheck.status,
+    failedJobs: ciCheck.failedJobs || [],
+    traceTail: (ciCheck.traceTail || '').substring(0, 3000),
+  }
+
+  if (ciIter >= ciMaxIterations) {
+    log(`CI-fix budget exhausted (${ciMaxIterations}) — escalating`)
+    break
+  }
+
+  // Re-build to fix CI failures (counts as a NEW REVIEW iteration)
+  log(`Re-building with ciFailure context...`)
+  iteration++;
+  const buildResult = await dispatchViaClaudeP({
+    label: `build-iter-${iteration}`,
+    phase: 'Build with convergence',
+    cwd: setup.worktreePath,
+    prompt: `/bmad-build-auto ${setup.storyKey}
+
+CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}
+
+sprint-status.yaml is owned by the orchestrator: never write it.
+
+If Skill HALTs (terminal status != done), return { skillCompleted: false, error: <halt reason> }. Otherwise { skillCompleted: true }.`,
+    schema: { type: 'object', properties: { skillCompleted: { type: 'boolean' }, error: { type: 'string' } }, required: ['skillCompleted'] },
+    allowedTools: 'Read,Write,Edit,Bash,Skill,Agent',
+  });
+
+  if (!buildResult || !buildResult.skillCompleted || buildResult.error) {
+    log(`Re-build failed: ${buildResult?.error || 'skill did not complete'}`)
+    iterationsLog.push({ iter: iteration, error: `ci-fix build: ${buildResult?.error || 'skill did not complete'}` })
+    break
+  }
+
+  const postBuildResult = await agent(
+    `Post-build (CI-fix iter ${ciIter}) for ${setup.storyKey}, iter ${iteration}. Same as before: verify files, push, return BUILD_SCHEMA.`,
+    { label: `postbuild-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
+  );
+
+  if (!postBuildResult || !postBuildResult.pushed) {
+    log(`Post-build (CI-fix) failed: ${postBuildResult?.error || 'no result'}`)
+    iterationsLog.push({ iter: iteration, error: `post-build (ci-fix): ${postBuildResult?.error || 'unknown'}` })
+    break
+  }
+
+  iterationsLog.push({
+    iter: iteration,
+    sha: postBuildResult.newSha,
+    followup: postBuildResult.followupReviewRecommended,
+    specStatus: postBuildResult.specStatus,
+    patchesApplied: postBuildResult.patchesApplied,
+    itemsDeferred: postBuildResult.itemsDeferred,
+  })
+  lastSpecStatus = postBuildResult.specStatus
+  currentSha = postBuildResult.newSha
+
+  // After re-build, loop back to top of CI gate to re-check CI
+  log(`Re-build pushed at ${postBuildResult.newSha}. Looping back to CI check.`)
+}
+
+if (!ciConverged) {
+  log(`CI gate FAILED after ${ciIter} CI-fix iterations — escalating`)
+  return {
+    storyKey: setup.storyKey,
+    converged: false,
+    iterations: iteration,
+    ciIterations: ciIter,
+    finalSha: currentSha,
+    iterationsLog,
+    ciFailure,
+    escalateReason: `CI gate failed after ${ciIter} iterations (last status: ${lastCIStatus || 'unknown'})`,
+    worktreePath: setup.worktreePath,
+    branch: setup.storyBranch,
+  }
+}
+
+log(`Story ${setup.storyKey} converged at ${convergedSha} (${iteration} review iter + ${ciIter} CI iter) — CI green`)
 
 // ============================================================================
 // PHASE 4: AUTO-MERGE

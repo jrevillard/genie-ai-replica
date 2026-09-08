@@ -158,7 +158,7 @@ async function dispatchViaClaudeP(opts) {
   const modelArg = ` --model opus`;
   const promptB64 = base64Encode(prompt);
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
-  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'})`;
+  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg})`;
   const wrapperResult = await agent(
     `Run this bash command via your Bash tool with timeout 7200000 (2 hours). When it finishes (use TaskOutput if Bash moves to background — do NOT poll with sleep loops), return JSON: { stdout: <the JSON envelope>, exitCode: <integer 0=success> }. Note: stdout may have stderr noise like \`[claude-code:unrecognized_model] {...}\` prepended — the JSON envelope starts at the first \`{\`.
 
@@ -381,7 +381,6 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
       required: ['skillCompleted'],
     },
     allowedTools: 'Read,Write,Edit,Bash,Skill,Agent',
-    maxBudgetUsd: 5,
   });
 
   // 'buildResult'/'postBuildResult' are inner consts, but the NEXT iteration's

@@ -197,7 +197,7 @@ STEPS (do ONLY these):
 
 1. Update spec frontmatter baseline_revision field to: ${currentSha}
    - Use Read + Edit tools on ${setup.specPath}
-   - Set `baseline_revision: ${currentSha}` in the frontmatter
+   - Set \`baseline_revision: ${currentSha}\` in the frontmatter (one backtick line to start, one to end; the dollar-brace inserts the value)
    - Do NOT commit yet (the skill or a later agent will commit)
 
 2. Invoke bmad-build-auto: \`Skill: bmad-build-auto ${setup.storyKey}\`

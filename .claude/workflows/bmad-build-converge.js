@@ -160,20 +160,10 @@ async function dispatchViaClaudeP(opts) {
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
   const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'})`;
   const wrapperResult = await agent(
-    `Run this bash command via your Bash tool with timeout 7200000 (2 hours). claude -p invokes the bmad-build-auto Skill which dispatches subagents — the whole chain can take up to an hour.
+    `Run this bash command via your Bash tool with timeout 7200000 (2 hours). When it finishes (use TaskOutput if Bash moves to background — do NOT poll with sleep loops), return JSON: { stdout: <the JSON envelope>, exitCode: <integer 0=success> }. Note: stdout may have stderr noise like \`[claude-code:unrecognized_model] {...}\` prepended — the JSON envelope starts at the first \`{\`.
 
 COMMAND:
-${cmd}
-
-INSTRUCTIONS — use TaskOutput to wait for completion:
-1. Call the Bash tool with the command above (timeout 7200000).
-2. The Bash tool will likely move the cmd to background after ~600s. That's normal. You'll see a "taskId" in the result (e.g., "moved to the background (ID: xxx)").
-3. If bg taskId returned: use the TaskOutput tool with that taskId to block-wait until the task completes (TaskOutput blocks until terminal status). Do NOT poll TaskOutput manually — call it ONCE and let it block.
-4. When the bg task completes, read its output via TaskOutput's read=true OR Read the output file from the tool result message.
-5. IGNORE stderr lines starting with \`[claude-code:unrecognized_model]\` — harmless gateway noise. The real JSON envelope is on stdout.
-6. Return JSON: { stdout: <full stdout of the bash cmd>, exitCode: <integer 0=success> }.
-
-Do NOT use Bash tool kill on the task. Do NOT cancel the task. Do NOT return early — TaskOutput notification IS the completion signal.`,
+${cmd}`,
     { label, phase, schema: {
       type: 'object',
       properties: {
@@ -189,9 +179,14 @@ Do NOT use Bash tool kill on the task. Do NOT cancel the task. Do NOT return ear
 
   let parsed;
   try {
-    parsed = JSON.parse(wrapperResult.stdout);
+    // claude -p may prepend stderr noise like `[claude-code:unrecognized_model] {...}` before the JSON envelope.
+    // Skip everything before the first `{` to find the actual JSON envelope.
+    const raw = wrapperResult.stdout || '';
+    const jsonStart = raw.indexOf('{');
+    const jsonText = jsonStart >= 0 ? raw.substring(jsonStart) : raw;
+    parsed = JSON.parse(jsonText);
   } catch (e) {
-    return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${wrapperResult.stdout.slice(-500)}` };
+    return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${(wrapperResult.stdout || '').slice(-500)}` };
   }
   return parsed;
 }

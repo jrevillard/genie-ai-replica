@@ -183,7 +183,10 @@ while (followup && iteration < maxIterations) {
   iteration++;
   log(`--- Iteration ${iteration}/${maxIterations} (baseline ${currentSha.substring(0, 7)}) ---`)
 
-  const buildResult = await agent(
+  // 'iterResult' (not 'buildResult') to avoid shadowing the outer let
+  // binding — JS TDZ on the inner const would throw on the template
+  // evaluation that precedes the const assignment.
+  const iterResult = await agent(
     `You are a THIN WRAPPER for story ${setup.storyKey}, iteration ${iteration}. Your ONLY job: invoke bmad-build-auto, then return the result. Do NOT write code, commit, push, or run format-check — those happen in SEPARATE agents dispatched by the workflow script.
 
 CONTEXT:
@@ -254,8 +257,8 @@ If the skill fails or returns incomplete, return error=string and followupReview
     { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
   )
 
-  if (!buildResult || buildResult.error) {
-    log(`Build agent failed: ${buildResult && buildResult.error}`)
+  if (!buildResult || iterResult.error) {
+    log(`Build agent failed: ${buildResult && iterResult.error}`)
     iterationsLog.push({ iter: iteration, error: buildResult?.error || 'no result' })
     followup = false
     break
@@ -301,19 +304,19 @@ CONSTRAINTS:
     break
   }
   // Update SHA to post-push value
-  buildResult.newSha = postBuildResult.finalSha || buildResult.newSha
+  iterResult.newSha = postBuildResult.finalSha || iterResult.newSha
 
   iterationsLog.push({
     iter: iteration,
-    sha: buildResult.newSha,
-    followup: buildResult.followupReviewRecommended,
-    specStatus: buildResult.specStatus,
-    patchesApplied: buildResult.patchesApplied,
-    itemsDeferred: buildResult.itemsDeferred,
+    sha: iterResult.newSha,
+    followup: iterResult.followupReviewRecommended,
+    specStatus: iterResult.specStatus,
+    patchesApplied: iterResult.patchesApplied,
+    itemsDeferred: iterResult.itemsDeferred,
   })
 
-  currentSha = buildResult.newSha
-  followup = buildResult.followupReviewRecommended
+  currentSha = iterResult.newSha
+  followup = iterResult.followupReviewRecommended
 
   // CI check INSIDE the loop. Each iteration pushes a commit → GitLab runs
   // a pipeline. We poll the pipeline after the push and, if it failed, we
@@ -376,7 +379,7 @@ STEPS:
   }
 
   if (!followup) {
-    convergedSha = buildResult.newSha
+    convergedSha = iterResult.newSha
     log(`Converged after iteration ${iteration}`)
   }
 }

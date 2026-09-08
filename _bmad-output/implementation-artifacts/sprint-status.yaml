@@ -138,7 +138,7 @@ development_status:
   5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: ready-for-dev
   5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: ready-for-dev
   5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: ready-for-dev
-  5-12-grep-fix-other-printf-regex-assertions-AdminDashboard-parseLogMessage: ready-for-dev
+  5-12-grep-fix-other-printf-regex-assertions-AdminDashboard-parseLogMessage: in-progress
   epic-5-retrospective: optional
   epic-6: backlog
   6-1-security-scan-service-drop-worker_threads-import-processfile: ready-for-dev
@@ -171,7 +171,7 @@ audit:
   closures: Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; closure
     note appended to archived file
 generated: '2026-08-31'
-last_updated: 2026-09-08T08:05:00Z-5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li
+last_updated: 2026-09-08T08:10:00Z-5-12-grep-fix-other-printf-regex-assertions-AdminDashboard-parseLogMessage
 project: admin-logs-victorialogs
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts/stories

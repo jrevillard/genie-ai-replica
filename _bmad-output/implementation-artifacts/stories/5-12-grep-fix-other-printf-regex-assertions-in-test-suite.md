@@ -2,7 +2,8 @@
 key: 5-12-grep-fix-other-printf-regex-assertions-in-test-suite
 title: "grep + fix other printf regex assertions: AdminDashboard.parseLogMessage + tests"
 epic: epic-5
-status: ready-for-dev
+status: in-progress
+baseline_revision: ad6b3ecb56d25aa49f59977738c6e2de471a4c8f
 effort: 0.25
 depends_on: [5.11]
 files: components/gov-chat-frontend/src/__tests__/AdminDashboard.test.js (rewrite lines 1036, 1038, 1042, 1044, 1056 — all `[ERROR]/[INFO]/[WARNING]` printf-regex tests); components/gov-chat-frontend/src/components/AdminDashboard.vue (rewrite `parseLogMessage()` function from regex to JSON.parse)

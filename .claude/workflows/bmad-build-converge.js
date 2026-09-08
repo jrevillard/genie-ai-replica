@@ -172,6 +172,12 @@ let followup = true;
 let currentSha = setup.baselineSha;
 let convergedSha = null;
 let iterationsLog = [];
+// buildResult from the PREVIOUS iteration feeds the next iteration's context
+// (review followup + ci failure). Declared at outer scope so the build
+// agent's template literal can safely access it. First iteration: undefined
+// → the conditional check `buildResult?.followupReviewRecommended` is false →
+// no prev context injected.
+let buildResult = null;
 
 while (followup && iteration < maxIterations) {
   iteration++;

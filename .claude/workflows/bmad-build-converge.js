@@ -140,32 +140,40 @@ async function dispatchViaClaudeP(opts) {
   // claude CLI storage). Local gateway serves sandbox models under 'opus'.
   // Subshell `()` for future-proofing (if env manipulation becomes needed).
   const modelArg = ` --model opus`;
-  const cmd = `(${cwdPrefix}cat <<'${marker}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'}\n${prompt}\n${marker})`;
+  // Base64 transport: encode prompt to avoid all shell-quoting issues
+  // (apostrophes, backticks, $vars, newlines). bash decodes via base64 -d.
+  const promptB64 = Buffer.from(prompt).toString('base64');
+  const promptFile = `/tmp/bmad-bc-${marker}.txt`;
+  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} --max-budget-usd ${maxBudgetUsd || '2'})`;
   const wrapperResult = await agent(
-    `Run this bash command. Wait for it to finish — it can take several minutes (claude -p subprocess invokes a Skill workflow). Run synchronously: do NOT use run_in_background, do NOT call TaskStop on your own bash dispatch.
+    `Run this bash command via your Bash tool. Wait for it to finish — it can take up to an hour because claude -p invokes the bmad-build-auto Skill which dispatches subagents. Use Bash tool timeout 7200000 (2 hours). Don't overthink it: just run, wait, return stdout.
 
 COMMAND:
 ${cmd}
 
-CRITICAL: stderr may contain the line \`[claude-code:unrecognized_model] {"model":"MiniMax (Global)/MiniMax-M3[1m]","query_source":"sdk"}\`. This is NOISE from the local claude-code-router gateway (which maps the 'opus' alias to a sandbox model). It is NOT a fatal error. The actual JSON response appears on stdout. IGNORE this stderr line.
+IGNORE stderr lines starting with \`[claude-code:unrecognized_model]\` — harmless noise from the local claude-code-router gateway. The real JSON response is on stdout.
 
-PARSE RULES (only after the bash command exits):
-- Check the EXIT CODE first, not stderr warnings.
-- If exit code == 0: parse the stdout JSON envelope. claude -p envelope shape: {"type":"result","subtype":"...","result":"<text>","json":<parsed schema>,"usage":{...}}.
-  - When --json-schema is used, the parsed schema object lives in envelope.json. Return it WRAPPED: { "json": <envelope.json> }.
-- If exit code != 0: return { error: <last 500 chars of stderr> }.
-- DO NOT abort on the [unrecognized_model] stderr line.
-- DO NOT modify any files. DO NOT add goal restatements.`,
+Return JSON: { stdout: <full stdout>, exitCode: <integer 0=success> }. Do NOT add commentary, do NOT inspect other workflows' task outputs, do NOT return early with a "still running" status — the bash tool's task notification system will tell you when the cmd finishes.`,
     { label, phase, schema: {
       type: 'object',
       properties: {
-        json: {},
-        error: { type: 'string' },
+        stdout: { type: 'string' },
+        exitCode: { type: 'integer' },
       },
+      required: ['exitCode'],
     }, agentType: 'general-purpose' }
   );
-  if (wrapperResult?.error) return { error: wrapperResult.error };
-  return wrapperResult?.json ?? wrapperResult;
+
+  if (!wrapperResult) return { error: 'wrapper returned no result' };
+  if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}` };
+  const stdout = wrapperResult.stdout || '';
+  // stdout may have the [unrecognized_model] line first; find the JSON envelope
+  const jsonStart = stdout.indexOf('\n{');
+  const jsonText = jsonStart >= 0 ? stdout.slice(jsonStart + 1) : stdout;
+  let envelope;
+  try { envelope = JSON.parse(jsonText); }
+  catch (e) { return { error: `JSON parse failed: ${e.message}. stdout first 500: ${stdout.slice(0, 500)}` }; }
+  return envelope.json ?? envelope;
 }
 
 // ============================================================================

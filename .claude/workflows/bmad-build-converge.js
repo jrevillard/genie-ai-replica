@@ -280,7 +280,7 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
         error: { type: 'string' },
       },
       required: ['skillCompleted'],
-    }, agentType: 'general-purpose' }
+    }, agentType: 'general-purpose', allowedTools: 'Read,Write,Edit,Bash,Skill,Agent,Task,Bash(git *),Bash(cd *),Bash(rtk *),Bash(npx *),Bash(ls *)' }
   )
 
   // 'buildResult'/'postBuildResult' are inner consts, but the NEXT iteration's

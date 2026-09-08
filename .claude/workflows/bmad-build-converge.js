@@ -257,9 +257,15 @@ If the skill fails or returns incomplete, return error=string and followupReview
     { label: `build-iter-${iteration}`, phase: 'Build with convergence', schema: BUILD_SCHEMA, agentType: 'general-purpose' }
   )
 
-  if (!buildResult || iterResult.error) {
-    log(`Build agent failed: ${buildResult && iterResult.error}`)
-    iterationsLog.push({ iter: iteration, error: buildResult?.error || 'no result' })
+  // Assign to the outer-scope 'buildResult' so the NEXT iteration's
+  // template eval (for buildResult?.followupReviewRecommended) sees
+  // this iteration's review verdict. Without this, buildResult is
+  // always null → the template's review-findings branch is dead.
+  buildResult = iterResult
+
+  if (iterResult.error) {
+    log(`Build agent failed: ${iterResult.error}`)
+    iterationsLog.push({ iter: iteration, error: iterResult.error })
     followup = false
     break
   }
@@ -356,23 +362,27 @@ STEPS:
       lastCIStatus = ciCheck.status
     }
 
-    if (ciCheck && ciCheck.status === 'success') {
-      log(`Iteration ${iteration}: CI green ✓`)
-      followup = false  // BOTH build + CI converged; exit loop
-    } else if (ciCheck) {
-      log(`Iteration ${iteration}: CI FAILED — feeding back to next iteration`)
-      // Carry the failure forward as ciFailure for the next iteration
-      ciFailure = {
-        pipelineId: ciCheck.pipelineId,
-        status: ciCheck.status,
-        failedJobs: ciCheck.failedJobs || [],
-        traceTail: (ciCheck.traceTail || '').substring(0, 3000),
+    // OR logic: the loop iterates if EITHER the build agent wants another
+    // pass (review found high-severity findings) OR CI failed. CI being
+    // green does NOT override the build agent's followup signal.
+    const buildWantsFollowup = iterResult.followupReviewRecommended === true
+    const ciFailed = ciCheck && ciCheck.status !== 'success'
+    if (buildWantsFollowup || ciFailed) {
+      if (ciFailed) {
+        log(`Iteration ${iteration}: CI FAILED — feeding back to next iteration`)
+        ciFailure = {
+          pipelineId: ciCheck.pipelineId,
+          status: ciCheck.status,
+          failedJobs: ciCheck.failedJobs || [],
+          traceTail: (ciCheck.traceTail || '').substring(0, 3000),
+        }
+      } else {
+        log(`Iteration ${iteration}: build agent requested followup (review found issues) — re-running with same args`)
       }
-      followup = true  // ensure next iteration
-    } else {
-      log(`Iteration ${iteration}: CI check returned no result — treating as transient failure`)
-      ciFailure = { pipelineId: null, status: 'unknown', failedJobs: [], traceTail: 'CI check agent returned null' }
       followup = true
+    } else {
+      log(`Iteration ${iteration}: BOTH build converged + CI green — exiting loop ✓`)
+      followup = false
     }
   } else if (followup) {
     log(`Iteration ${iteration}: followup recommended but post-build didn't push — relying on build agent's classification`)

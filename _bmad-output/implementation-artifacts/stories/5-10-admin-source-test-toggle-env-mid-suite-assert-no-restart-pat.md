@@ -2,7 +2,8 @@
 key: 5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat
 title: "admin-source test: toggle env mid-suite assert no-restart path switch"
 epic: epic-5
-status: ready-for-dev
+status: in-progress
+baseline_revision: e78d660b6265e6cc4b114dc3b766e8e235ec08d0
 effort: 0.1
 depends_on: [5.3]
 files: components/gov-chat-backend/__tests__/services/logs-service-admin-source.test.js` (new)

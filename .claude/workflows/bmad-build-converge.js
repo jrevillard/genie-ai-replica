@@ -217,7 +217,7 @@ STEPS:
      - The file path is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stdout (the
        marker is in the COMMAND below — extract it from the command string).
      - The stderr file is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stderr. Use it
-       to detect activity: Bash `stat -c '%Y' <stderr>` to get mtime.
+       to detect activity: Bash "stat -c '%Y' $stderrFile" to get mtime.
        If mtime hasn't changed in 30 minutes (= 1800 sec), claude -p is
        likely hung → fast-fail with { stdout: "", exitCode: 1 }.
      - Each loop iteration:

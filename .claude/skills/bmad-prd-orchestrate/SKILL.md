@@ -17,13 +17,32 @@ A Claude Code Workflow-tool meta-orchestrator. Runs the **entire PRD** (every st
 
 On activation, this skill:
 
-1. **Configuration Q&A** (see below) — collects all args from the user
-2. Invokes the Workflow tool with `scriptPath: <repo>/.claude/workflows/bmad-prd-orchestrate.js` and the collected args
-3. Handles the result:
+1. **Detect invocation mode**:
+   - User invoked with no args (or just `/bmad-prd-orchestrate`): treat as fresh-run, start Q&A from question 1
+   - User invoked with `resume <token>` or `<token>` alone: treat as resume, jump to Resume Flow
+   - User invoked with `epic-N` or canonical story key: scope Q&A question 1 is auto-answered
+2. **Configuration Q&A** (see below) — collects remaining args from the user, skipping what's already inferred from invocation
+3. Invokes the Workflow tool with `scriptPath: <repo>/.claude/workflows/bmad-prd-orchestrate.js` and the collected args
+4. Handles the result:
    - On halt (resume token returned): asks the user which `userChoice` to apply, then re-invokes with `resume` + `userChoice`
    - On completion: reports the final state and stops
 
 The user never touches the Workflow tool directly — the skill wraps it.
+
+### Empty invocation
+
+`/bmad-prd-orchestrate` with nothing else:
+- Mode = fresh-run
+- Skips Q&A questions 1-2 (scope = "all remaining stories", prdKey = auto-discover)
+- Asks question 3 (HITL cadence), default = never
+- Asks question 4 (dep inference), default = confirm at start
+- Asks question 5 (retro), default = no
+- Asks question 6 (retry policy), default = once
+- Asks question 7 (max iterations), default = 5
+- Generates `timestamp` automatically (ISO timestamp + short random suffix)
+- Proceeds
+
+If the user wants zero questions: skip Q&A entirely, use all defaults, launch immediately with auto-timestamp. The skill SHOULD offer this as a "Just go" option in the welcome.
 
 ## Invocation Shape
 

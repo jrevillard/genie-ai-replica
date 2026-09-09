@@ -236,12 +236,20 @@ STEPS:
    b. Read sprintStatusPath. Find development_status[<storyKey>]. Status MUST be 'ready-for-dev' or 'review'. If not, HALT with sprintStatusUpdated:false.
 5. Find or create storyBranch = feat/<prd_key>/<story_key>:
    a. \`git -C repoRoot ls-remote origin <storyBranch>\` — if exists remotely, use it. resumedFromBranch=true.
-   b. ALWAYS: fast-forward story branch to origin/<baseBranch> (sync skill files, etc.):
-      \`git -C repoRoot push --force-with-lease origin origin/<baseBranch>:refs/heads/<storyBranch>\`
-      This is required because Skill tool discovery happens at session start; if story branch was created BEFORE skill files were committed to prd branch, the worktree lacks them.
-   c. If the push above fails (no remote story branch yet), create it:
-      \`git -C repoRoot push origin origin/<baseBranch>:refs/heads/<storyBranch>\`. resumedFromBranch=false.
-   d. baselineSha: \`git -C repoRoot rev-parse origin/<storyBranch>\` (always current tip after fast-forward).
+   b. Sync story branch with prd branch, preserving any Skill's unique commits (rebase):
+      i.   \`git -C repoRoot fetch origin <baseBranch> <storyBranch>\`
+      ii.  Count unique commits on story branch (not in prd):
+           \`storyCount=$(git -C repoRoot rev-list --count origin/<baseBranch>..origin/<storyBranch>)\`
+      iii. If storyCount == 0 (story is ancestor of prd): simple fast-forward via
+           \`git -C repoRoot push --force-with-lease origin origin/<baseBranch>:refs/heads/<storyBranch>\`
+      iv.  If storyCount > 0 (story has unique commits from prior Skill run): rebase story onto prd
+           \`git -C repoRoot checkout -b _rebase_story_$$ origin/<storyBranch>\`
+           \`git -C repoRoot rebase origin/<baseBranch>\`  (replays story's commits on top of prd tip)
+           \`git -C repoRoot push --force-with-lease origin _rebase_story_$$:<storyBranch>\`
+           \`git -C repoRoot branch -D _rebase_story_$$\`
+      This preserves Skill's partial work across runs (essential for resume).
+   c. If the push fails (no remote story branch yet), create it: \`git -C repoRoot push origin origin/<baseBranch>:refs/heads/<storyBranch>\`. resumedFromBranch=false.
+   d. baselineSha: \`git -C repoRoot rev-parse origin/<storyBranch>\` (always current tip after sync).
 6. Create worktree:
    worktreePath = repoRoot + '/' + worktree_base + '/' + storyBranch-with-slashes-replaced-by-dashes.
    Example: <repoRoot>/<worktree_base>/<storyBranch-slashes-to-dashes>

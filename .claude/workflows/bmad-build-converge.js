@@ -363,9 +363,9 @@ while (followup && iteration < maxIterations) {
     label: `build-iter-${iteration}`,
     phase: 'Build with convergence',
     cwd: setup.worktreePath,
-    prompt: `Use the Skill tool to invoke EXACTLY: bmad-build-auto ${setup.storyKey}
+    prompt: `/bmad-build-auto ${setup.storyKey}
 
-DO NOT load or invoke bmad-build-converge (different skill — would create recursion). DO NOT load any other BMAD skill. ONLY bmad-build-auto.
+DO NOT load the bmad-build-converge skill (would create recursion — the converge workflow would re-enter claude -p and loop).
 
 ${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
 

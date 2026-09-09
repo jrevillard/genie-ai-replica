@@ -426,7 +426,18 @@ while (followup && iteration < maxIterations) {
 
 DO NOT load the bmad-build-converge skill (would cause recursion).
 
-${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
+${ciFailure ? `CI FAILED LAST ITER — fix it.
+
+Pipeline: ${ciFailure.pipelineId}  Status: ${ciFailure.status}
+
+Failed jobs:
+${(ciFailure.failedJobs || []).map(j => `  - ${j.name} (exit ${j.exitCode})`).join('\n') || '  (none reported)'}
+
+CI trace tail (last ${(ciFailure.traceTail || '').length} chars shown):
+\`\`\`
+${(ciFailure.traceTail || '').substring(0, 5000)}
+\`\`\`
+` : ''}
 
 sprint-status.yaml is owned by the orchestrator: never write it, and never revert a change to it. A row at done or awaiting-operator is the orchestrator's own bookkeeping — not a defect to fix, and not proof that the work is verified.
 

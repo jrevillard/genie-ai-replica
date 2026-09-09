@@ -137,7 +137,7 @@ development_status:
   5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: done
   5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: done
   5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: done
-  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: in-progress
+  5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: done
   5-12-grep-fix-other-printf-regex-assertions-AdminDashboard-parseLogMessage: done
   epic-5-retrospective: optional
   epic-6: backlog

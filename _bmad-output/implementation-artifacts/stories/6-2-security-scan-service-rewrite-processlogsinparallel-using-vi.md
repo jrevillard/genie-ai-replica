@@ -2,8 +2,9 @@
 key: 6-2-security-scan-service-rewrite-processlogsinparallel-using-vi
 title: "security-scan-service: rewrite `processLogsInParallel` using `VictoriaLogsClient.query` with sha1 bucket key + truncation guard + retention check + cache schema validation via AJV 8.17+"
 epic: epic-6
-status: ready-for-dev
+status: in-progress
 effort: 1.0
+baseline_revision: aa4b1e3d9925a2332ad3c2fc5d04e5fee71da808
 depends_on: [6.1]
 files: "components/gov-chat-backend/services/security-scan-service.js:105-313"
 ---

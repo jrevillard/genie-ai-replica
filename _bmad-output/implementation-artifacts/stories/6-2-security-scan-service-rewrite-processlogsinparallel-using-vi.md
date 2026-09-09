@@ -2,9 +2,10 @@
 key: 6-2-security-scan-service-rewrite-processlogsinparallel-using-vi
 title: "security-scan-service: rewrite `processLogsInParallel` using `VictoriaLogsClient.query` with sha1 bucket key + truncation guard + retention check + cache schema validation via AJV 8.17+"
 epic: epic-6
-status: in-progress
+status: done
+followup_review_recommended: true
 effort: 1.0
-baseline_revision: 53a7c6e52737f0c6ec631aefef7d2252cc715db5
+baseline_revision: db091a367746372f2b31d7b8895834c813bd2d45
 depends_on: [6.1]
 files: "components/gov-chat-backend/services/security-scan-service.js:105-313"
 ---
@@ -25,8 +26,50 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - **AJV 8.17+** added to `components/gov-chat-backend/package.json` (`dependencies`). AD-12 forbids hand-rolled schema checks.
 - **CLASS REFACTOR + setter injection**: convert `securityScanService` from singleton object literal to `class SecurityScanService` with `setVictoriaLogsClient(client)` setter (matches 9 sibling services convention). Wire setter in `index.js:1167-1215` with `typeof === 'function'` guard + log debug + idempotent (mirrors existing 6 setter-injection blocks). Add 1 new test group for setter (mirror `admin-dashboard-service.test.js:119-130`).
 
+## Review Triage Log
+
+### 2026-09-09 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 7 (high 4, medium 2, low 1)
+- defer: 0
+- reject: 0
+- addressed_findings:
+  - `[high]` `[patch]` Added normalized/raw VictoriaLogs row compatibility so actual VictoriaLogsClient.query() results are classified and bucketed.
+  - `[high]` `[patch]` Restored failedLogins and suspiciousActivities output parity and added P3 bulk/degradation test coverage.
+  - `[high]` `[patch]` Added AJV to the backend lockfile as a direct dependency so npm ci remains valid.
+  - `[high]` `[patch]` Removed worker_threads/processFile/story-reference text from service comments to satisfy the zero-match acceptance check.
+  - `[medium]` `[patch]` Routed new bulk-scan logs through the project logger.
+  - `[medium]` `[patch]` Added negative cache, retention-boundary, and generic-error fail-open tests.
+  - `[low]` `[patch]` Reverted unrelated recommendation-string edits.
+
 ## References
 
 - `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`
 - `_bmad-output/specs/spec-admin-logs-victorialogs-migration/phases.md`
 - `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`
+
+## Auto Run Result
+
+Summary: Rewrote security scanning around a single VictoriaLogs bulk query, class-based service injection, SHA-1 dedupe buckets, truncation/retention degradation signals, AJV cache validation, and preserved scan output categories. Added P3 bulk/degradation tests and updated dependency lock metadata.
+
+Files changed:
+- `components/gov-chat-backend/services/security-scan-service.js` — class service, VictoriaLogs bulk query, normalized-row compatibility, scan classification, cache validation, and degraded behavior.
+- `components/gov-chat-backend/index.js` — guarded VictoriaLogs client setter injection.
+- `components/gov-chat-backend/package.json` — AJV dependency declaration.
+- `components/gov-chat-backend/package-lock.json` — AJV lockfile resolution and dependency tree.
+- `components/gov-chat-backend/__tests__/services/security-scan-service.test.js` — updated service tests and fixtures.
+- `components/gov-chat-backend/__tests__/services/security-scan-vl-bulk.test.js` — normalized-row bulk-query and output-parity coverage.
+- `components/gov-chat-backend/__tests__/services/security-scan-vl-degradation.test.js` — outage, retention, and invalid-cache coverage.
+- `_bmad-output/implementation-artifacts/stories/6-2-security-scan-service-rewrite-processlogsinparallel-using-vi.md` — review result and final tracking state.
+
+Review findings: 7 patches applied; 0 deferred; 0 rejected. Patched severity: high 4, medium 2, low 1. Follow-up review recommended: true (high-severity patches and score 7).
+
+Verification:
+- `npx jest __tests__/services/security-scan --runInBand` — 3 suites, 93 tests passed.
+- `npx eslint` on all touched JavaScript files — passed.
+- `npx prettier --check` on all touched JavaScript files — passed.
+- `npm ci --dry-run --ignore-scripts --no-audit --no-fund` — passed.
+- Manual checks — `worker_threads`, `processFile`, and story-reference text removed from security-scan-service comments; no network calls in new tests.
+
+Residual risks: AJV resolves to 8.20.0 from the declared `^8.17.0` range. The broader backend test run can still report four pre-existing logger-suite failures when `winston-transport` is absent from the isolated node_modules. Root `npm run lint` cannot start frontend lint because this worktree's frontend `node_modules` lacks the `eslint` binary; touched backend JavaScript passes targeted ESLint. Security-scan `SECURITY_SCAN_BACKEND=file` rollback behavior remains owned by story 6.4.

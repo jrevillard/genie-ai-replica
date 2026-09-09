@@ -454,10 +454,19 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
   });
 
   if (!buildResult || !buildResult.skillCompleted || buildResult.error) {
-    log(`Build agent (Skill) failed: ${buildResult?.error || 'skill did not complete'}`)
-    iterationsLog.push({ iter: iteration, error: `build: ${buildResult?.error || 'skill did not complete'}` })
-    followup = false
-    break
+    const err = buildResult?.error || 'skill did not complete';
+    log(`Build agent (Skill) failed: ${err}`)
+    iterationsLog.push({ iter: iteration, error: `build: ${err}` });
+    // Classify: transient (subagent kill, await timeout) → retry. Persistent
+    // (intent gap, config error, explicit halt with reason) → escalate.
+    const transient = /awaiting|subagent.*kill|system.*kill|timeout/i.test(err);
+    if (transient && iteration < maxIterations) {
+      log(`Transient build failure — retrying (iter ${iteration}/${maxIterations})`)
+      followup = true;  // continue loop
+    } else {
+      followup = false;
+      break;
+    }
   }
 
   const postBuildResult = await agent(

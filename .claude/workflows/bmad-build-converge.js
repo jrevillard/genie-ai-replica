@@ -230,7 +230,13 @@ ${cmd}`,
   if (!wrapperResult) return { error: 'wrapper returned no result' };
   if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}: ${wrapperResult.stdout || ''}` };
 
-  const stdoutText = (wrapperResult.stdout || '').trim();
+  // Defensively strip the EXIT_CODE=<n> line that the bash command appends
+  // to the stdout file. The wrapper prompt instructs it to strip, but
+  // wrapper LLMs sometimes don't — and a trailing "EXIT_CODE=0" breaks
+  // JSON.parse below.
+  let stdoutText = (wrapperResult.stdout || '').trim();
+  stdoutText = stdoutText.replace(/\nEXIT_CODE=\d+\s*$/, '');
+  let parsed;
   let parsed;
   try {
     parsed = JSON.parse(stdoutText);

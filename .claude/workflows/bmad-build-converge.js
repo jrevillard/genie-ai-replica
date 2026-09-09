@@ -25,6 +25,10 @@ if (!storyKey) throw new Error('args.storyKey required');
 const maxIterations = args.maxIterations || 5;
 const ciMaxIterations = args.ciMaxIterations || 3;
 const timestamp = args.timestamp || 'unknown';
+// Wall-clock anchor for elapsed-time checks. Caller passes a fixed timestamp
+// (workflow tool rejects Date.now() inside scripts — they break resume).
+// Falls back to 0 if omitted; safety caps still work but use elapsed-since-script-start.
+const now = args.now || 0;
 // On resume (e.g., after CI failure halted the workflow), the orchestrator re-invokes
 // the sub-workflow with args.ciFailure describing the previous CI failure. The build
 // agent passes this to bmad-build-auto's reviewers so the next iteration targets
@@ -344,7 +348,7 @@ log(`Running bmad-build convergence loop (${maxIterations} review + ${ciMaxItera
 let iteration = 0;
 let ciIter = 0;
 let ciWait = 0;  // INFO counter for non-terminal CI state re-polls (no budget — just for logging)
-let ciWaitStartedAt = Date.now();
+let ciWaitStartedAt = now;
 const CI_WAIT_MAX_MS = 2 * 60 * 60 * 1000;  // 2h safety cap (matches wrapper bash timeout 7200000ms)
 let followup = true;
 let currentSha = setup.baselineSha;
@@ -508,7 +512,7 @@ STEPS:
     // Network error / GitLab API down / agent timeout. Treat as WAIT (not failure).
     ciIter--  // don't consume ciMaxIterations
     ciWait++  // info counter
-    if (Date.now() - ciWaitStartedAt > CI_WAIT_MAX_MS) {
+    if (ciWaitStartedAt && Date.now && (Date.now() - ciWaitStartedAt > CI_WAIT_MAX_MS)) {
       log(`CI check failed repeatedly (ciWait=${ciWait}, no status returned) — wait safety cap hit, escalating`)
       ciFailure = { error: 'ci_check_timeout', waitCount: ciWait }
       break
@@ -531,7 +535,7 @@ STEPS:
   if (NON_TERMINAL.has(ciCheck.status)) {
     ciIter--  // non-terminal is a WAIT (info only) — does NOT consume ciMaxIterations
     ciWait++  // info counter only — no budget, just for logging
-    if (Date.now() - ciWaitStartedAt > CI_WAIT_MAX_MS) {
+    if (ciWaitStartedAt && Date.now && (Date.now() - ciWaitStartedAt > CI_WAIT_MAX_MS)) {
       // safety: avoid infinite loop if pipeline never reaches terminal state
       log(`CI ${ciCheck.status} — wait safety cap hit (${ciWait} waits, ${Math.round((Date.now() - ciWaitStartedAt) / 60000)}min elapsed) — escalating`)
       ciFailure = { error: 'ci_wait_timeout', status: ciCheck.status, waitCount: ciWait }

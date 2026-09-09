@@ -101,6 +101,28 @@ under AD-10 — adjusted the shape-preservation assertion to check
 the canonical 4 keys are present in both backends rather than asserting
 exact equality of the key set).
 
+### Re-verification (2026-09-09)
+
+Re-ran the acceptance command against the current code state:
+
+```bash
+cd components/gov-chat-backend
+NODE_ENV=test npx jest __tests__/services/logs-service-admin-source.test.js --no-coverage --reporters=default
+# Test Suites: 1 passed, 1 total
+# Tests:       13 passed, 13 total
+```
+
+One gap found and fixed: an unused `createMockCursor` helper left in the
+suite failed `eslint` with `no-unused-vars` (CI lint stage would have
+blocked the MR). Removed; `eslint` and `prettier --check` now clean.
+
+Full backend suite also green after the fix: 74 suites / 1940 tests passed.
+(Four unrelated `logger-*` suites fail on a fresh checkout until
+`components/shared/lib` dependencies are installed — `@opentelemetry/api-logs`
+resolves from `components/shared/lib/node_modules`, not the backend's;
+`npm ci` in that directory makes the whole suite pass. Environmental, not
+a code regression.)
+
 ### Residual risks
 
 - Suite only exercises the dispatch in the `getLogsInRange` path; the

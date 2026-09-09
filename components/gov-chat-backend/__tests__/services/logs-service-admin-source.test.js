@@ -60,13 +60,6 @@ let logsService;
 let adminDashboardService;
 let mockVlClient;
 
-function createMockCursor(results) {
-  return {
-    next: jest.fn().mockResolvedValue(results.length > 0 ? results[0] : null),
-    all: jest.fn().mockResolvedValue(results)
-  };
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();

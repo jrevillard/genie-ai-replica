@@ -159,15 +159,24 @@ let dispatchSeq = 0;
 async function dispatchViaClaudeP(opts) {
   const { label, phase, prompt, schema, cwd, allowedTools, maxBudgetUsd } = opts;
   dispatchSeq++;
-  const marker = `BMADBC_DISPATCH_${dispatchSeq}`;
+  const marker = `BMADBC_${storyKey.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dispatchSeq}`;
   const cwdPrefix = cwd ? `cd '${cwd}'; ` : '';
   const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
-  const modelArg = ` --model opus`;
+  const modelArg = '';
   const promptB64 = base64Encode(prompt);
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
-  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg})`;
+  const stdoutFile = `/tmp/bmad-bc-${marker}.stdout`;
+  const stderrFile = `/tmp/bmad-bc-${marker}.stderr`;
+  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}{ cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} 2> '${stderrFile}'; } > '${stdoutFile}'; echo "EXIT_CODE=$?"; echo '<<<STDOUT>>>'; cat '${stdoutFile}'; echo '<<<STDERR>>>'; cat '${stderrFile}')`;
   const wrapperResult = await agent(
-    `Run this bash command via your Bash tool with timeout 7200000 (2 hours). When it finishes (use TaskOutput if Bash moves to background — do NOT poll with sleep loops), return JSON: { stdout: <the JSON envelope>, exitCode: <integer 0=success> }. Note: stdout may have stderr noise like \`[claude-code:unrecognized_model] {...}\` prepended — the JSON envelope starts at the first \`{\`.
+    `Run this bash command. It runs claude -p which may take 10-30 minutes (Skill loads MCP servers, dispatches subagents).
+
+STEPS:
+1. Call Bash tool with the command. If Bash returns a background task ID (likely after ~600s), call TaskOutput with that ID — TaskOutput blocks until terminal status. Do NOT poll manually.
+2. When the bash command completes, read its captured stdout.
+3. Return the raw stdout verbatim (no synthesis). If bash wrote nothing, stdout is empty string.
+
+Return JSON: { stdout: <verbatim bash stdout>, exitCode: <integer, 0 on success> }
 
 COMMAND:
 ${cmd}`,
@@ -177,39 +186,31 @@ ${cmd}`,
         stdout: { type: 'string' },
         exitCode: { type: 'integer' },
       },
-      required: ['exitCode'],
+      required: ['exitCode', 'stdout'],
     }, agentType: 'general-purpose' }
   );
 
   if (!wrapperResult) return { error: 'wrapper returned no result' };
-  if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}: ${(wrapperResult.stdout || '').slice(-500)}` };
+  if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}: ${wrapperResult.stdout || ''}` };
 
+  // Extract the <<<STDOUT>>> section only — stderr noise (e.g. MCP warning lines)
+  // is captured separately and CANNOT corrupt the JSON parse.
+  const raw = wrapperResult.stdout || '';
+  const stdoutMatch = raw.match(/<<<STDOUT>>>\s*([\s\S]*?)\s*<<<STDERR>>>/);
+  const stdoutText = stdoutMatch ? stdoutMatch[1].trim() : raw.trim();
   let parsed;
   try {
-    // The wrapper's stdout may contain stderr noise lines like
-    // `[claude-code:unrecognized_model] {"model":"...","query_source":"sdk"}`
-    // BEFORE the real JSON envelope. The noise itself is a valid JSON object,
-    // so a naive `indexOf('{')` returns the noise's `{` and parses the wrong
-    // object. Strip noise lines first, then locate the envelope's `{`.
-    const raw = wrapperResult.stdout || '';
-    const stripped = raw.replace(/^\[claude-code:[^\n]*\n?/gm, '');
-    // Try lastIndexOf('{') first (the envelope is usually the last JSON object
-    // in stdout; Skill may echo spec text after the envelope).
-    // Fall back to indexOf('{') if last-parse fails.
-    let parsed = null;
-    const lastBrace = stripped.lastIndexOf('{');
-    if (lastBrace >= 0) {
-      try { parsed = JSON.parse(stripped.substring(lastBrace)); } catch (e) { parsed = null; }
-    }
-    if (!parsed) {
-      const firstBrace = stripped.indexOf('{');
-      const jsonText = firstBrace >= 0 ? stripped.substring(firstBrace) : stripped;
-      parsed = JSON.parse(jsonText);
-    }
+    parsed = JSON.parse(stdoutText);
   } catch (e) {
-    return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${(wrapperResult.stdout || '').slice(-500)}` };
+    return { error: `claude -p stdout not JSON: ${e.message}; stdout: ${stdoutText}` };
   }
-  return parsed.structured_output || parsed;
+  // Schema contract: --output-format json --json-schema envelope wraps the
+  // schema-conformant payload in `.structured_output`. Missing key = fundamental
+  // failure (process killed, output truncated). Defense-in-depth guard.
+  if (!parsed || typeof parsed !== 'object' || !('structured_output' in parsed)) {
+    return { error: `claude -p envelope missing structured_output (got: ${JSON.stringify(parsed)})` };
+  }
+  return parsed.structured_output;
 }
 
 // ============================================================================

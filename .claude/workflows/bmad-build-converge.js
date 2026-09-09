@@ -461,6 +461,11 @@ if (followup) {
     branch: setup.storyBranch,
   }
 }
+if (!convergedSha) {
+  // Build phase exited without converging (build/post-build failure, or build set followup=false on error).
+  // followup=false alone is NOT proof of convergence — escalate instead of falling through to CI gate.
+  return { storyKey: setup.storyKey, converged: false, iterations: iteration, finalSha: currentSha, iterationsLog, ciFailure, escalateReason: `build phase exited without converging (last build: ${iterationsLog[iterationsLog.length-1]?.error || 'no iteration log'})`, worktreePath: setup.worktreePath, branch: setup.storyBranch };
+}
 
 // PHASE B: CI GATE — only check CI after build converges. If CI fails, re-build
 // (counter ciIter). Separate budget from review iterations.

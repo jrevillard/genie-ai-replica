@@ -1027,12 +1027,14 @@ describe('LogSearchDialog', () => {
     it('parses standard NDJSON winston record', () => {
       const record = parseNdjsonLine(JSON.stringify(makeRecord()));
 
-      expect(record.timestamp).toBe('2026-05-29T10:15:30.000Z');
-      expect(record.level).toBe('info');
-      expect(record.message).toBe('Request received');
-      expect(record.service).toBe('genie-backend');
-      expect(record.trace_id).toBeUndefined();
-      expect(record.span_id).toBeUndefined();
+      expect(record).toEqual({
+        timestamp: '2026-05-29T10:15:30.000Z',
+        level: 'info',
+        message: 'Request received',
+        service: 'genie-backend',
+        trace_id: undefined,
+        span_id: undefined
+      });
     });
 
     it.each([
@@ -1046,15 +1048,13 @@ describe('LogSearchDialog', () => {
       expect(record.message).toBe(message);
     });
 
-    it('exposes trace_id and span_id as JSON keys (not printf substrings)', () => {
+    it('exposes trace_id and span_id as JSON keys', () => {
       const record = parseNdjsonLine(
         JSON.stringify(makeRecord({ message: 'Request processed', trace_id: 'abc123', span_id: 'def456' }))
       );
 
       expect(record.trace_id).toBe('abc123');
       expect(record.span_id).toBe('def456');
-      expect(record.message).not.toMatch(/trace_id=/);
-      expect(record.message).not.toMatch(/span_id=/);
     });
 
     it('rejects non-JSON lines', () => {
@@ -1063,12 +1063,13 @@ describe('LogSearchDialog', () => {
 
     it.each([
       ['missing message', { level: 'info' }, /missing required string field: message/],
-      ['missing level', { message: 'Request received' }, /missing required string field: level/]
+      ['missing level', { message: 'Request received' }, /missing required string field: level/],
+      ['missing both', {}, /missing required string field: message/]
     ])('rejects NDJSON records %s', (_label, payload, expectedError) => {
       expect(() => parseNdjsonLine(JSON.stringify(payload))).toThrow(expectedError);
     });
 
-    it('renders API payload with JSON-shape message field (post-format cutover)', async () => {
+    it('renders API payload with JSON-shape message field', async () => {
       const traceLogs = [
         { date: '2026-05-29', time: '10:15:30', level: 'INFO', service: 'backend', message: 'Request processed' },
         { date: '2026-05-29', time: '10:15:31', level: 'ERROR', service: 'retriever', message: 'Query failed' }

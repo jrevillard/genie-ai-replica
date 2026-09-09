@@ -4,7 +4,7 @@ title: "security-scan-service: rewrite `processLogsInParallel` using `VictoriaLo
 epic: epic-6
 status: in-progress
 effort: 1.0
-baseline_revision: aa4b1e3d9925a2332ad3c2fc5d04e5fee71da808
+baseline_revision: 53a7c6e52737f0c6ec631aefef7d2252cc715db5
 depends_on: [6.1]
 files: "components/gov-chat-backend/services/security-scan-service.js:105-313"
 ---

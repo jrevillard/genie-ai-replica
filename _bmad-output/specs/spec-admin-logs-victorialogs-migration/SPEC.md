@@ -1,5 +1,7 @@
 ---
 id: SPEC-admin-logs-victorialogs-migration
+status: in-progress
+baseline_revision: 81c270b6a89121332be760fb0c5deab77fe696b6
 companions:
   - phases.md
   - env-vars.md

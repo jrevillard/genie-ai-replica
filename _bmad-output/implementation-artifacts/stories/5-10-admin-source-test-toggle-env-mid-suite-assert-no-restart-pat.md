@@ -2,7 +2,7 @@
 key: 5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat
 title: "admin-source test: toggle env mid-suite assert no-restart path switch"
 epic: epic-5
-status: in-progress
+status: done
 baseline_revision: 5944a35f7c800eb0e2c7ec7dd2fa925af3f0add3
 effort: 0.1
 depends_on: [5.3]
@@ -35,6 +35,15 @@ NODE_ENV=test npx jest __tests__/services/logs-service-admin-source.test.js --no
 - `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`
 
 ## Review Triage Log
+
+### 2026-09-09 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 0
+- reject: 18 (blind-hunter nits on re-verification narrative; false positives; pre-existing facts)
+- addressed_findings:
+  - none
 
 ### 2026-09-08 — Review pass
 - intent_gap: 0

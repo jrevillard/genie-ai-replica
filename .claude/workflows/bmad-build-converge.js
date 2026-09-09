@@ -181,7 +181,7 @@ async function dispatchViaClaudeP(opts) {
   // This worked for story 5-11 (completed via this exact pattern, with the
   // wrapper recovering by manually reading the output file after a self-matching
   // pgrep loop hung). The fix: pass the EXACT PID to watch, no pattern matching.
-  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && ${schemaEnvPrefix}nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowed-tools ${allowedTools}${schemaEnvArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; break; fi; sleep 5; done`;
+  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && ${schemaEnvPrefix}nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format json --verbose --permission-mode bypassPermissions --allowed-tools ${allowedTools}${schemaEnvArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); trap 'echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=$?"' EXIT; while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=pid_dead"; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=polling_timeout"; break; fi; sleep 5; done`;
   const wrapperResult = await agent(
     `PROHIBITIONS:
 
@@ -210,8 +210,24 @@ STEPS:
      Poll that file via Read tool every ~60s (use Bash "sleep 60" between
      Reads). Loop until the file ends with EXIT_CODE=<n>. Max ~10 Reads.
      When found, parse as above.
-   - If empty or unrecognized: return { stdout: "", exitCode: 1 } immediately.
-     DO NOT retry, DO NOT poll, DO NOT investigate.
+   - If empty or unrecognized: DO NOT fast-fail. claude -p may still be
+     running detached (the nohup'd bash + claude -p survive Bash tool
+     timeouts; --verbose wrote progress to stderr). Read-poll the stdout
+     file via the Read tool until EXIT_CODE appears:
+     - The file path is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stdout (the
+       marker is in the COMMAND below — extract it from the command string).
+     - The stderr file is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stderr. Use it
+       to detect activity: Bash `stat -c '%Y' <stderr>` to get mtime.
+       If mtime hasn't changed in 30 minutes (= 1800 sec), claude -p is
+       likely hung → fast-fail with { stdout: "", exitCode: 1 }.
+     - Each loop iteration:
+         a. stat the stderr file's mtime
+         b. If mtime changed within last 5 min → continue (claude -p is alive)
+         c. Read stdout. If ends with EXIT_CODE=<n>: parse, return.
+         d. Read stderr tail (last 500 chars), report progress event types.
+         e. sleep 60
+     - Pure activity-based polling: keeps waiting while claude -p writes
+       to stderr, fast-fails when stderr goes silent for 30+ min. No hard cap.
 
 3. Return JSON: { stdout: <verbatim content>, exitCode: <integer> }.
 

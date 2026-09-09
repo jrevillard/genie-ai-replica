@@ -135,7 +135,7 @@ development_status:
   5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate: done
   5-7-frontend-logsearchdialog-vue-computed-banner-from-response-d: done
   5-8-contract-test-file-path-vs-vl-path-deep-equal-on-same-fixtur: done
-  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: ready-for-dev
+  5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li: in-progress
   5-10-admin-source-test-toggle-env-mid-suite-assert-no-restart-pat: ready-for-dev
   5-11-logsearchdialog-test-js-story-7-6-rewrite-json-parsing-no-re: ready-for-dev
   5-12-grep-fix-other-printf-regex-assertions-AdminDashboard-parseLogMessage: done

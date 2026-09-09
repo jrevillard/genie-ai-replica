@@ -17,6 +17,13 @@ A Claude Code Workflow-tool meta-orchestrator. Runs the **entire PRD** (every st
 
 On activation, this skill:
 
+0. **Read sprint-status** from `prdWorktreePath/_bmad-output/implementation-artifacts/sprint-status.yaml`. Build:
+   - `epicsWithRemaining` — epic IDs where ANY story has status ≠ done (i.e. `backlog`, `in-progress`, `review`, `blocked`, `ready-for-dev`, `awaiting-operator`)
+   - `storiesReady` — canonical story keys with status = `ready-for-dev` (for one-story scope)
+   - `storiesInProgress` — canonical keys with status ∈ {`in-progress`, `review`, `blocked`}
+   - `storiesAwaiting` — canonical keys with status = `awaiting-operator`
+   - If all epics are done: report "PRD already complete" and ask the user to confirm before proceeding.
+
 1. **Detect invocation mode**:
    - User invoked with no args (or just `/bmad-prd-orchestrate`): fresh-run, **ask ALL Q&A questions** in order
    - User invoked with `resume <token>` or `<token>` alone: resume, jump to Resume Flow (skip Q&A 1-7)
@@ -34,6 +41,18 @@ The user never touches the Workflow tool directly — the skill wraps it.
 `/bmad-prd-orchestrate` with nothing else → **ask ALL Q&A questions 1-7 in order**. Do not assume defaults. The user must answer each one.
 
 (Only `timestamp` is auto-generated since it's an internal identifier, not a user choice.)
+
+### Question 1 (Scope) options — filtered by sprint-status
+
+When asking Q1, only offer choices with remaining work:
+
+- **All remaining stories** in the PRD (only if `epicsWithRemaining.length > 0`)
+- **One epic only** — show ONLY epic IDs from `epicsWithRemaining` (not done epics)
+- **One story only** — show ONLY canonical keys from `storiesReady` (not done stories)
+- **Resume a halted run** — show recent run dirs from `prdWorktreePath/_bmad-output/implementation-artifacts/orchestrate-runs/` (last 5)
+- **Cancel** — exit
+
+If `epicsWithRemaining.length === 0`: the PRD has no remaining stories. Show a summary of what was completed and ask the user if they want to retry a halted run instead.
 
 ## Invocation Shape
 

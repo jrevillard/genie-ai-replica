@@ -193,9 +193,19 @@ ${cmd}`,
     // object. Strip noise lines first, then locate the envelope's `{`.
     const raw = wrapperResult.stdout || '';
     const stripped = raw.replace(/^\[claude-code:[^\n]*\n?/gm, '');
-    const jsonStart = stripped.indexOf('{');
-    const jsonText = jsonStart >= 0 ? stripped.substring(jsonStart) : stripped;
-    parsed = JSON.parse(jsonText);
+    // Try lastIndexOf('{') first (the envelope is usually the last JSON object
+    // in stdout; Skill may echo spec text after the envelope).
+    // Fall back to indexOf('{') if last-parse fails.
+    let parsed = null;
+    const lastBrace = stripped.lastIndexOf('{');
+    if (lastBrace >= 0) {
+      try { parsed = JSON.parse(stripped.substring(lastBrace)); } catch (e) { parsed = null; }
+    }
+    if (!parsed) {
+      const firstBrace = stripped.indexOf('{');
+      const jsonText = firstBrace >= 0 ? stripped.substring(firstBrace) : stripped;
+      parsed = JSON.parse(jsonText);
+    }
   } catch (e) {
     return { error: `claude -p output not JSON: ${e.message}; stdout tail: ${(wrapperResult.stdout || '').slice(-500)}` };
   }

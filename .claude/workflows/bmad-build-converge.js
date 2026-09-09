@@ -505,9 +505,16 @@ STEPS:
   )
 
   if (!ciCheck || !ciCheck.status) {
-    log(`CI check failed (no result) — escalating`)
-    ciFailure = { error: 'ci_check_failed' }
-    break
+    // Network error / GitLab API down / agent timeout. Treat as WAIT (not failure).
+    ciIter--  // don't consume ciMaxIterations
+    ciWait++  // info counter
+    if (Date.now() - ciWaitStartedAt > CI_WAIT_MAX_MS) {
+      log(`CI check failed repeatedly (ciWait=${ciWait}, no status returned) — wait safety cap hit, escalating`)
+      ciFailure = { error: 'ci_check_timeout', waitCount: ciWait }
+      break
+    }
+    log(`CI check failed (no status — likely network/API issue), waiting (ciWait=${ciWait})`)
+    continue
   }
   lastCIStatus = ciCheck.status
 

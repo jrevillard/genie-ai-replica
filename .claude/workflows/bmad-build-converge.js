@@ -258,10 +258,22 @@ ${cmd}`,
   } catch (e) {
     return { error: `claude -p stdout not JSON: ${e.message}; stdout: ${stdoutText}` };
   }
-  if (!parsed || typeof parsed !== 'object' || !('structured_output' in parsed)) {
-    return { error: `claude -p envelope missing structured_output (got: ${JSON.stringify(parsed)})` };
+  // Two accepted shapes:
+  // A. Single envelope object: { structured_output: {...}, ... }
+  // B. NDJSON-wrapped array of events: [{type:"system",...}, ..., {type:"result",structured_output:{...}}]
+  //    (with --verbose, claude -p emits events as NDJSON wrapped in an array)
+  let envelope = null;
+  if (Array.isArray(parsed)) {
+    // Find the last result event (claude -p's --output-format json + --verbose emits an array)
+    const lastResult = [...parsed].reverse().find(e => e && e.type === 'result');
+    envelope = lastResult || parsed[parsed.length - 1] || null;
+  } else if (parsed && typeof parsed === 'object' && 'structured_output' in parsed) {
+    envelope = parsed;
   }
-  return parsed.structured_output;
+  if (!envelope || typeof envelope !== 'object' || !('structured_output' in envelope)) {
+    return { error: `claude -p envelope missing structured_output (got: ${JSON.stringify(parsed).substring(0, 500)})` };
+  }
+  return envelope.structured_output;
 }
 
 // ============================================================================

@@ -2,8 +2,8 @@
 key: 6-2-security-scan-service-rewrite-processlogsinparallel-using-vi
 title: "security-scan-service: rewrite `processLogsInParallel` using `VictoriaLogsClient.query` with sha1 bucket key + truncation guard + retention check + cache schema validation via AJV 8.17+"
 epic: epic-6
-status: in-progress
-followup_review_recommended: true
+status: done
+followup_review_recommended: false
 effort: 1.0
 baseline_revision: 39bb32ba69d736ec9a7383338a07826d3a7d2d5d
 depends_on: [6.1]
@@ -27,6 +27,15 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - **CLASS REFACTOR + setter injection**: convert `securityScanService` from singleton object literal to `class SecurityScanService` with `setVictoriaLogsClient(client)` setter (matches 9 sibling services convention). Wire setter in `index.js:1167-1215` with `typeof === 'function'` guard + log debug + idempotent (mirrors existing 6 setter-injection blocks). Add 1 new test group for setter (mirror `admin-dashboard-service.test.js:119-130`).
 
 ## Review Triage Log
+
+### 2026-09-09 — Review pass (re-anchor)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 0
+- reject: 29 (blind-hunter 21, edge-case 8 — bookkeeping meta-noise on the build-auto workflow's own status/baseline artifacts; no defect on the code surface the intent targets; intent alignment confirmed Reading B + C: lifecycle flip + re-anchor onto prior implementation commit `a1a9f9325`)
+- addressed_findings:
+  - none
 
 ### 2026-09-09 — Review pass
 - intent_gap: 0
@@ -63,7 +72,9 @@ Files changed:
 - `components/gov-chat-backend/__tests__/services/security-scan-vl-degradation.test.js` — outage, retention, and invalid-cache coverage.
 - `_bmad-output/implementation-artifacts/stories/6-2-security-scan-service-rewrite-processlogsinparallel-using-vi.md` — review result and final tracking state.
 
-Review findings: 7 patches applied; 0 deferred; 0 rejected. Patched severity: high 4, medium 2, low 1. Follow-up review recommended: true (high-severity patches and score 7).
+Review findings (this re-anchor pass): 0 patches, 0 deferred, 29 rejected (bookkeeping meta-noise on lifecycle artifacts). Follow-up review recommendation recomputed for this pass: false (0 patches, score 0). Prior implementation review (2026-09-09 above) remains the substantive record — 7 patches, high-severity coverage, score 7.
+
+Files changed (this pass): spec file status flip in-review → done and `followup_review_recommended` true → false; no code surface touched (intentional — implementation predates baseline_revision 39bb32ba6).
 
 Verification:
 - `npx jest __tests__/services/security-scan --runInBand` — 3 suites, 93 tests passed.

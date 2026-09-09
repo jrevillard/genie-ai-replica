@@ -309,6 +309,16 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
       const warnArgs = sharedLogger.warn.mock.calls[0];
       expect(String(warnArgs[0])).toMatch(/getLogsInRange.*VictoriaLogs unreachable/);
       expect(warnArgs[1]).toEqual(expect.objectContaining({ code: 'ECONNREFUSED' }));
+
+      // AD-11 wiring (file side): the integration call MUST also write
+      // the rate-limit cooldown timestamp — without the write, the
+      // warn-once-per-minute contract is silently broken (the warn
+      // would re-fire on every subsequent outage). Mirrors Property 2's
+      // endsWith + Number() pattern to pin the file side of the wiring
+      // independently of the warn side.
+      const cooldownWrite = mockFs.writeFile.mock.calls.find((c) => c[0].endsWith('vl-fail-open-ts'));
+      expect(cooldownWrite).toBeDefined();
+      expect(Number.isFinite(Number(cooldownWrite[1]))).toBe(true);
     });
   });
 
@@ -331,7 +341,7 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
           limit: 100,
           offset: 0
         })
-      ).rejects.toThrow(/ECONNREFUSED/);
+      ).rejects.toBe(err);
     });
 
     it('re-throws 5xx errors when VL_FAIL_OPEN=false — caller (route handler) renders 500', async () => {

@@ -333,8 +333,10 @@ let state = {
   inferred: planResult.inferred,  // keep graph available across resumes
 }
 
-// State persistence helpers (Phase 3 owns these; Task 2 inlined a parallel helper for plan-time)
-const writeState = async (stateObj) => {
+// State persistence helpers (Phase 3 owns these; Task 2 inlined a parallel helper for plan-time).
+// Declared as function declarations so they hoist — Phase 2 already calls writeState
+// before this source position executes (TDZ on `const` would otherwise throw).
+async function writeState(stateObj) {
   // Grouped coupled write via bash helper: single Bash call writes BOTH
   // state.json AND deps.json atomically (.tmp + mv) and validates JSON.
   // deps.json mirrors state.json.inferred — single source of truth = state.json.
@@ -355,9 +357,9 @@ COMMAND:
 ${bashCmd}`,
     { label: `state-write-${stateObj.iterationCount || 0}`, phase: 'Execute', schema: WRITE_STATE_SCHEMA, agentType: 'general-purpose' }
   );
-};
+}
 
-const appendJournal = async (event) => {
+async function appendJournal(event) {
   const entry = { ts: timestamp, ...event };
   return await agent(
     `Append one JSONL line to ${runDir}/journal.jsonl.
@@ -373,9 +375,9 @@ STEPS:
       type: 'object', properties: { appended: { type: 'boolean' } }, required: ['appended'],
     }, agentType: 'general-purpose' }
   );
-};
+}
 
-const loadState = async () => {
+async function loadState() {
   return await agent(
     `Read ${runDir}/state.json and return its parsed JSON object.
 
@@ -389,7 +391,7 @@ STEPS:
       type: 'object', additionalProperties: true,
     }, agentType: 'general-purpose' }
   );
-};
+}
 
 // Cross-run CI retry helper (retryPolicy semantics: once | always | never).
 // Re-queues stories whose previous attempt halted with reason='ci_hardfail'.

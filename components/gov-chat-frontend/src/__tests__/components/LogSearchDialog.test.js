@@ -991,66 +991,88 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 7.6 — Log format preservation smoke test
-  // Validates that the winston log format (YYYY-MM-DD HH:mm:ss [LEVEL]: message)
-  // is preserved after VictoriaLogs deployment. The component parses structured
-  // log objects from the API — this test verifies the format regex matches
-  // the expected pattern including trace_id and span_id fields.
+  // JSON log format shape — winston emits NDJSON records with the wire schema
+  // {timestamp, level, message, service, trace_id, span_id}. This block asserts
+  // the parsed shape via JSON.parse rather than a printf regex.
   // -------------------------------------------------------------------------
-  describe('Story 7.6 — log format preservation', () => {
-    const logFormatRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[(ERROR|WARN|INFO|DEBUG)\]: .+$/;
+  describe('JSON log format shape', () => {
+    function parseNdjsonLine(line) {
+      const parsed = JSON.parse(line);
+      if (typeof parsed.message !== 'string') {
+        throw new Error('NDJSON record missing required string field: message');
+      }
+      if (typeof parsed.level !== 'string') {
+        throw new Error('NDJSON record missing required string field: level');
+      }
+      return {
+        timestamp: parsed.timestamp,
+        level: parsed.level,
+        message: parsed.message,
+        service: parsed.service,
+        trace_id: parsed.trace_id,
+        span_id: parsed.span_id
+      };
+    }
 
-    it('matches standard winston log format', () => {
-      const logLine = '2026-05-29 10:15:30 [INFO]: Request received';
-      expect(logLine).toMatch(logFormatRegex);
+    function makeRecord(overrides = {}) {
+      return {
+        timestamp: '2026-05-29T10:15:30.000Z',
+        level: 'info',
+        message: 'Request received',
+        service: 'genie-backend',
+        ...overrides
+      };
+    }
+
+    it('parses standard NDJSON winston record', () => {
+      const record = parseNdjsonLine(JSON.stringify(makeRecord()));
+
+      expect(record).toEqual({
+        timestamp: '2026-05-29T10:15:30.000Z',
+        level: 'info',
+        message: 'Request received',
+        service: 'genie-backend',
+        trace_id: undefined,
+        span_id: undefined
+      });
     });
 
-    it('matches ERROR level log lines', () => {
-      const logLine = '2026-05-29 10:15:30 [ERROR]: Connection refused';
-      expect(logLine).toMatch(logFormatRegex);
+    it.each([
+      ['error', 'Connection refused'],
+      ['warn', 'Slow query detected'],
+      ['debug', 'Cache hit for key user:123']
+    ])('parses %s level NDJSON records', (level, message) => {
+      const record = parseNdjsonLine(JSON.stringify(makeRecord({ level, message })));
+
+      expect(record.level).toBe(level);
+      expect(record.message).toBe(message);
     });
 
-    it('matches WARN level log lines', () => {
-      const logLine = '2026-05-29 10:15:30 [WARN]: Slow query detected';
-      expect(logLine).toMatch(logFormatRegex);
+    it('exposes trace_id and span_id as JSON keys', () => {
+      const record = parseNdjsonLine(
+        JSON.stringify(makeRecord({ message: 'Request processed', trace_id: 'abc123', span_id: 'def456' }))
+      );
+
+      expect(record.trace_id).toBe('abc123');
+      expect(record.span_id).toBe('def456');
     });
 
-    it('matches DEBUG level log lines', () => {
-      const logLine = '2026-05-29 10:15:30 [DEBUG]: Cache hit for key user:123';
-      expect(logLine).toMatch(logFormatRegex);
+    it('rejects non-JSON lines', () => {
+      expect(() => parseNdjsonLine('2026/05/29 10:15:30 ERROR: message')).toThrow(SyntaxError);
     });
 
-    it('matches log lines with JSON trace context (from story 7-4 traceFormat)', () => {
-      const logLine = '2026-05-29 10:15:30 [INFO]: Request processed';
-      expect(logLine).toMatch(logFormatRegex);
+    it.each([
+      ['missing message', { level: 'info' }, /missing required string field: message/],
+      ['missing level', { message: 'Request received' }, /missing required string field: level/],
+      ['missing both', {}, /missing required string field: message/]
+    ])('rejects NDJSON records %s', (_label, payload, expectedError) => {
+      expect(() => parseNdjsonLine(JSON.stringify(payload))).toThrow(expectedError);
     });
 
-    it('rejects malformed log lines', () => {
-      const badLine = '2026/05/29 10:15:30 ERROR: message';
-      expect(badLine).not.toMatch(logFormatRegex);
-    });
-
-    it('rejects log lines without level brackets', () => {
-      const badLine = '2026-05-29 10:15:30 ERROR: message';
-      expect(badLine).not.toMatch(logFormatRegex);
-    });
-
-    it('component renders with trace-enhanced log data', async () => {
+    it('renders API payload with JSON-shape message field', async () => {
       const traceLogs = [
-        {
-          date: '2026-05-29',
-          time: '10:15:30',
-          level: 'INFO',
-          service: 'backend',
-          message: 'Request processed trace_id=abc123 span_id=def456'
-        },
-        {
-          date: '2026-05-29',
-          time: '10:15:31',
-          level: 'ERROR',
-          service: 'retriever',
-          message: 'Query failed trace_id=abc123 span_id=def456'
-        }
+        { date: '2026-05-29', time: '10:15:30', level: 'INFO', service: 'backend', message: 'Request processed' },
+        { date: '2026-05-29', time: '10:15:31', level: 'ERROR', service: 'retriever', message: 'Query failed' }
       ];
       mockSearchLogs.mockResolvedValueOnce({ data: { logs: traceLogs } });
 
@@ -1062,8 +1084,9 @@ describe('LogSearchDialog', () => {
 
       expect(wrapper.vm.searchResults).toHaveLength(2);
       expect(wrapper.vm.searchResults[0].level).toBe('INFO');
-      expect(wrapper.vm.searchResults[0].message).toContain('trace_id=');
+      expect(wrapper.vm.searchResults[0].message).toBe('Request processed');
       expect(wrapper.vm.searchResults[1].level).toBe('ERROR');
+      expect(wrapper.vm.searchResults[1].message).toBe('Query failed');
     });
   });
 });

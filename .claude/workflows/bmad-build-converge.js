@@ -244,17 +244,19 @@ STEPS:
 4. Confirm story is ready:
    a. sprintStatusPath = prdWorktreePath + '/_bmad-output/implementation-artifacts/sprint-status.yaml'.
    b. Read sprintStatusPath. Find development_status[<storyKey>]. Status MUST be 'ready-for-dev' or 'review'. If not, HALT with sprintStatusUpdated:false.
-5. Sync story branch with prd:
-   a. \`git -C repoRoot fetch origin <baseBranch> <storyBranch>\`
-   b. \`storyCount=$(git -C repoRoot rev-list --count origin/<baseBranch>..origin/<storyBranch>)\`
-   c. If storyCount == 0: \`git -C repoRoot push --force-with-lease origin origin/<baseBranch>:refs/heads/<storyBranch>\`
+5. Sync story branch with prd (use prdWorktreePath for rebase, NOT repoRoot — that would corrupt the main checkout):
+   a. \`git -C prdWorktreePath fetch origin <baseBranch> <storyBranch>\`
+   b. \`storyCount=$(git -C prdWorktreePath rev-list --count origin/<baseBranch>..origin/<storyBranch>)\`
+   c. If storyCount == 0: \`git -C prdWorktreePath push --force-with-lease origin origin/<baseBranch>:refs/heads/<storyBranch>\` (resumedFromBranch=true)
    d. If storyCount > 0 (rebase to preserve unique commits):
-      \`git -C repoRoot checkout -b _rebase_story_$$ origin/<storyBranch>\`
-      \`git -C repoRoot rebase origin/<baseBranch>\`
-      \`git -C repoRoot push --force-with-lease origin _rebase_story_$$:<storyBranch>\`
-      \`git -C repoRoot branch -D _rebase_story_$$\`
-   e. If no remote story branch: \`git -C repoRoot push origin origin/<baseBranch>:refs/heads/<storyBranch>\` (resumedFromBranch=false)
-   f. baselineSha: \`git -C repoRoot rev-parse origin/<storyBranch>\`
+      BRANCH=_rebase_story_${storyKey.replace(/\//g, '_')}
+      \`git -C prdWorktreePath checkout -b $BRANCH origin/<storyBranch>\`
+      \`git -C prdWorktreePath rebase origin/<baseBranch>\`
+      \`git -C prdWorktreePath push --force-with-lease origin $BRANCH:<storyBranch>\` || \`git -C prdWorktreePath branch -D $BRANCH\`
+      \`git -C prdWorktreePath branch -D $BRANCH\`
+      resumedFromBranch=true
+   e. If no remote story branch: \`git -C prdWorktreePath push origin origin/<baseBranch>:refs/heads/<storyBranch>\` (resumedFromBranch=false)
+   f. baselineSha: \`git -C prdWorktreePath rev-parse origin/<storyBranch>\`
 6. Create worktree:
    worktreePath = repoRoot + '/' + worktree_base + '/' + storyBranch-with-slashes-replaced-by-dashes.
    Example: <repoRoot>/<worktree_base>/<storyBranch-slashes-to-dashes>

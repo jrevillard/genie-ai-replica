@@ -45,8 +45,9 @@ const SETUP_SCHEMA = {
     issueTrackingConfig: { type: 'object' },
     gitlabHost: { type: 'string' },
     gitlabProjectId: { type: 'integer' },
+    convergeScriptPath: { type: 'string' },
   },
-  required: ['repoRoot', 'prdWorktreePath', 'prdKey', 'baseBranch', 'prdBranch', 'sprintStatusPath', 'issueTrackingConfig', 'gitlabHost', 'gitlabProjectId'],
+  required: ['repoRoot', 'prdWorktreePath', 'prdKey', 'baseBranch', 'prdBranch', 'sprintStatusPath', 'issueTrackingConfig', 'gitlabHost', 'gitlabProjectId', 'convergeScriptPath'],
 };
 
 const DEP_ENTRY_SCHEMA = {
@@ -93,7 +94,12 @@ STEPS:
 3. Read _bmad/custom/issue-tracking.yaml from prdWorktreePath. Required fields: git_platform, host, project, worktree_base, branch_patterns.prd, branch_patterns.story.
 4. Resolve gitlabProjectId:
    a. \`GITLAB_HOST=<host> glab api "projects?search=<project>&simple=true"\` → first match's id.
-5. baseBranch = 'feat/<prdKey>/prd'. prdBranch = baseBranch.
+5. Resolve convergeScriptPath — the bmad-build-converge.js file MUST exist for Phase 3 dispatch to work.
+   a. Try <prdWorktreePath>/.claude/workflows/bmad-build-converge.js (worktree is on the branch that tracks it).
+   b. If absent, try <repoRoot>/.claude/workflows/bmad-build-converge.js (bare-repo fallback for detached / branchless worktrees).
+   c. Use \`ls -1 <candidate> 2>/dev/null && echo EXISTS\` to check. Pick the first EXISTing path.
+   d. If neither exists, return convergeScriptPath="" so Phase 3 fails fast with a clear error instead of throwing mid-loop.
+6. baseBranch = 'feat/<prdKey>/prd'. prdBranch = baseBranch.
 6. sprintStatusPath = prdWorktreePath + '/_bmad-output/implementation-artifacts/sprint-status.yaml'.
 7. Initialize run dir (THE RUN DIR IS THE ONLY PERMITTED WRITE LOCATION):
    a. Compute runDir = prdWorktreePath + '/_bmad-output/implementation-artifacts/orchestrate-runs/${timestamp}'
@@ -113,28 +119,21 @@ if (!setup || !setup.prdWorktreePath) {
   return { aborted: true, stage: 'setup', error: 'setup agent failed' }
 }
 
-// Derive runDir + convergeScriptPath from the setup agent's discovery output
-// rather than hardcoding any specific PRD worktree path. The optional prdKey
-// arg is only honored if it matches the discovered value (else we log a
-// warning and use discovery).
+// Derive runDir from the setup agent's discovery output rather than hardcoding
+// any specific PRD worktree path. The optional prdKey arg is only honored if
+// it matches the discovered value (else we log a warning and use discovery).
 const runDir = setup.prdWorktreePath + '/_bmad-output/implementation-artifacts/orchestrate-runs/' + timestamp;
-// convergeScriptPath: the bmad-build-converge sub-workflow file. The worktree
-// (prdWorktreePath) has the file because it's checked out to the branch that
-// has the workflows dir tracked. The bare repo path may NOT have the workflows
-// dir (bare repos have no working tree, or the bare repo's working tree is
-// different from the worktree checked out for this PRD). ALWAYS use
-// prdWorktreePath first; fall back to repoRoot if the file isn't there.
-const worktreeConvergePath = setup.prdWorktreePath + '/.claude/workflows/bmad-build-converge.js';
-const bareConvergePath = setup.repoRoot + '/.claude/workflows/bmad-build-converge.js';
-// Since scripts have no fs, we set both as candidates and let the dispatch
-// step verify at runtime. Prefer worktree path (most common case).
-const convergeScriptPath = worktreeConvergePath;
+// convergeScriptPath: the bmad-build-converge sub-workflow file. Setup agent
+// verifies which path exists (worktree path first, bare-repo fallback) and
+// returns the resolvable path. Empty string = both candidates missing — Phase 3
+// fails fast with a clear log line instead of throwing inside workflow().
+const convergeScriptPath = setup.convergeScriptPath || '';
 if (prdKey && prdKey !== setup.prdKey) {
   log(`WARNING: args.prdKey (${prdKey}) != discovered prdKey (${setup.prdKey}); using discovered value`)
 } else if (prdKey) {
   log(`prdKey arg matches discovered: ${setup.prdKey}`)
 }
-log(`convergeScriptPath candidates: primary=${worktreeConvergePath} fallback=${bareConvergePath}`)
+log(`convergeScriptPath=${convergeScriptPath || '(NOT FOUND — Phase 3 will fail)'}`)
 
 log(`Discovered: prdKey=${setup.prdKey}, prdBranch=${setup.prdBranch}`)
 log(`runDir=${runDir} | convergeScriptPath=${convergeScriptPath}`)
@@ -241,40 +240,21 @@ log(`Queue: ${planResult.storyQueue.length} stories, ${planResult.inferred.lengt
 // halted run; the operator's userChoice on resume mutates that state before
 // Phase 3 begins iteration.
 // ============================================================================
-const writeStateAgent = async () => {
-  const stateContent = {
-    runId: timestamp,
-    ts: timestamp,
-    prdKey: setup.prdKey,
-    storyQueue: planResult.storyQueue,
-    completed: planResult.completed,
-    blocked: planResult.blocked,
-    skipped: planResult.skipped,
-    awaitingOperator: planResult.awaitingOperator,
-    halts: [],
-    inferred: planResult.inferred,
-  };
-  return await agent(
-    `You are the writeState helper for bmad-prd-orchestrate.
-
-Persist the current orchestrator state to disk so a halted run can resume.
-
-WRITE TO: ${runDir}/state.json
-
-CONTENT (overwrite the file with this exact JSON):
-${JSON.stringify(stateContent, null, 2)}
-
-STEPS:
-1. mkdir -p ${runDir}
-2. Write the JSON above to ${runDir}/state.json (use Write tool or python -m json.tool for validation).
-3. Append to ${runDir}/journal.jsonl: {"ts":"${timestamp}","event":"state_persisted","storyQueueSize":${planResult.storyQueue.length}}
-4. Return JSON: { "written": true, "path": "${runDir}/state.json" }
-
-CONSTRAINTS:
-- ONLY write to ${runDir}/. DO NOT touch any file outside.`,
-    { label: `writeState-${timestamp}`, phase: 'Plan', schema: WRITE_STATE_SCHEMA, agentType: 'general-purpose' }
-  );
-};
+// Plan-phase state writer: builds the post-Plan state object and delegates to
+// the unified writeState (defined in Phase 3) for the coupled atomic write.
+// Phase 3's writeState handles BOTH state.json and deps.json in lockstep.
+const buildPlanState = () => ({
+  runId: timestamp,
+  ts: timestamp,
+  prdKey: setup.prdKey,
+  storyQueue: planResult.storyQueue,
+  completed: planResult.completed,
+  blocked: planResult.blocked,
+  skipped: planResult.skipped,
+  awaitingOperator: planResult.awaitingOperator,
+  halts: [],
+  inferred: planResult.inferred,
+});
 
 // Resume handling: when an operator resumes a halted run with a userChoice
 // (e.g. confirm_deps, proceed_without_inference, abort_prd), apply that
@@ -292,22 +272,22 @@ if (userChoice) {
       }))
     }
     log(`Updated inferred to ${planResult.inferred.length} confirmed entries`)
-    await writeStateAgent()
+    await writeState(buildPlanState())
   } else if (userChoice === 'proceed_without_inference') {
     log(`Resuming with proceed_without_inference (clearing inferred graph)`)
     planResult.inferred = []
-    await writeStateAgent()
+    await writeState(buildPlanState())
   } else if (userChoice === 'abort_prd') {
     log(`Aborting per userChoice=abort_prd`)
     return { aborted: true, haltReason: 'aborted', timestamp, runDir }
   } else {
     log(`WARNING: unrecognized userChoice=${userChoice}; falling through to Phase 3`)
-    await writeStateAgent()
+    await writeState(buildPlanState())
   }
 } else if (resume) {
   // Resume token without userChoice → re-halt with current state
   log(`Resume token provided but no userChoice; re-halting`)
-  await writeStateAgent()
+  await writeState(buildPlanState())
   return {
     haltReason: 'dep_inference_confirm',
     context: { inferred: planResult.inferred, storyQueue: planResult.storyQueue },
@@ -318,7 +298,7 @@ if (userChoice) {
 } else if (inferDeps && !noInfer && planResult.inferred.length > 0) {
   // First-run halt to confirm inferred graph
   log('Halting to confirm inferred dependency graph...')
-  await writeStateAgent()
+  await writeState(buildPlanState())
   return {
     haltReason: 'dep_inference_confirm',
     context: { inferred: planResult.inferred, storyQueue: planResult.storyQueue },
@@ -329,7 +309,7 @@ if (userChoice) {
 } else {
   // No inferred deps — persist and fall through to Phase 3
   log('No inferred deps — persisting state and falling through to Phase 3')
-  await writeStateAgent()
+  await writeState(buildPlanState())
 }
 
 // ============================================================================
@@ -355,25 +335,24 @@ let state = {
 
 // State persistence helpers (Phase 3 owns these; Task 2 inlined a parallel helper for plan-time)
 const writeState = async (stateObj) => {
-  return await agent(
-    `You are the writeState helper for bmad-prd-orchestrate (Phase 3 loop).
-
-Persist the current orchestrator LOOP state to disk so a halted run can resume from any iteration.
-
-WRITE TO: ${runDir}/state.json
-
-CONTENT (overwrite the file with this exact JSON):
+  // Grouped coupled write via bash helper: single Bash call writes BOTH
+  // state.json AND deps.json atomically (.tmp + mv) and validates JSON.
+  // deps.json mirrors state.json.inferred — single source of truth = state.json.
+  // Bash script does the work; agent is just transport. This function replaces
+  // the prior verbose agent-based writeState that only wrote state.json.
+  const depsContent = { inferred: stateObj.inferred };
+  const bashCmd = `STATE_CONTENT=$(cat <<'STATE_EOF'
 ${JSON.stringify(stateObj, null, 2)}
+STATE_EOF
+) && DEPS_CONTENT=$(cat <<'DEPS_EOF'
+${JSON.stringify(depsContent, null, 2)}
+DEPS_EOF
+) && STATE_FILE=/tmp/bmad-orch-state-$$.json && DEPS_FILE=/tmp/bmad-orch-deps-$$.json && printf '%s' "$STATE_CONTENT" > "$STATE_FILE" && printf '%s' "$DEPS_CONTENT" > "$DEPS_FILE" && "${setup.prdWorktreePath}/.claude/scripts/write-state.sh" '${runDir}' "$STATE_FILE" "$DEPS_FILE" && rm -f "$STATE_FILE" "$DEPS_FILE"`;
+  return await agent(
+    `Run this exact bash command. Return its stdout verbatim. Do NOT modify, summarize, or diagnose.
 
-STEPS:
-1. mkdir -p ${runDir}
-2. Write the JSON above to ${runDir}/state.json (use Write tool).
-3. Verify the file exists with: \`ls -la ${runDir}/state.json\`
-4. Return JSON: { "written": true, "path": "${runDir}/state.json" }
-
-CONSTRAINTS:
-- ONLY write to ${runDir}/. DO NOT touch any file outside.
-- DO NOT modify ${setup.sprintStatusPath}. The orchestrator is the sole writer; transitions happen in Phase 4 (Task 4).`,
+COMMAND:
+${bashCmd}`,
     { label: `state-write-${stateObj.iterationCount || 0}`, phase: 'Execute', schema: WRITE_STATE_SCHEMA, agentType: 'general-purpose' }
   );
 };
@@ -491,7 +470,110 @@ if (resume) {
     await appendJournal({ event: 'abort_prd', queueSize: state.storyQueue.length });
     return { haltReason: 'final_complete', aborted: true, context: state, runDir };
   } else if (userChoice === 'fix_then_resume') {
-    log('Resuming with fix_then_resume; user should have pushed fix commits externally')
+    // After a ci_hardfail / merge_blocked halt, the story sits at 'in-progress'
+    // (set by converge setup on the story branch). User has pushed fix commits
+    // to the story branch externally. We must transition the status back to
+    // 'ready-for-dev' before the next converge dispatch — converge setup
+    // halts on any status other than ready-for-dev or review. The status
+    // transition is THIS handler's responsibility; no other code path does it.
+    const blockedStories = state.blocked
+      .map(b => typeof b === 'string' ? b : (b && b.story) ? b.story : null)
+      .filter(Boolean);
+    log(`fix_then_resume: resetting ${blockedStories.length} blocked story status(es) → ready-for-dev...`)
+    const resetResult = await agent(
+      `You are the fix_then_resume status-reset agent for bmad-prd-orchestrate.
+
+PRD_WORKTREE_PATH: ${setup.prdWorktreePath}
+SPRINT_STATUS_PATH: ${setup.sprintStatusPath}
+BLOCKED_STORIES: ${JSON.stringify(blockedStories)}
+TIMESTAMP: ${timestamp}
+
+GOAL: Transition each blocked story's sprint-status from 'in-progress' back to
+'ready-for-dev' so the next converge dispatch passes its setup gate (which
+requires ready-for-dev or review). Operator has already pushed fix commits to
+the story branch(es) externally — DO NOT touch any story branch.
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Read ${setup.sprintStatusPath}.
+3. For each story in BLOCKED_STORIES:
+   - Skip if development_status[<story>] is already 'ready-for-dev' or 'done'
+     (idempotent — defensive against concurrent external writes).
+   - Otherwise set development_status[<story>] = 'ready-for-dev'.
+   - If status was anything OTHER than 'in-progress', log a WARNING in the
+     journal (unexpected state — operator should know).
+4. Update last_updated to "${timestamp}".
+5. git add _bmad-output/implementation-artifacts/sprint-status.yaml
+6. git commit -m "chore(sprint-status): fix_then_resume — reset <N> blocked stories to ready-for-dev"
+7. Capture the commit SHA: \`git rev-parse HEAD\` → commitSha (used by orchestrator for SHA-based verify).
+8. git push origin ${setup.prdBranch}
+9. Append to ${runDir}/journal.jsonl: {"ts":"${timestamp}","event":"fix_then_resume_reset","stories":<list>,"commitSha":"<sha>","pushed":<bool>}
+10. Return JSON: { reset: [<story>], skipped: [<story>], warnings: [<story>], commitSha: <sha>, committed: <bool>, pushed: <bool>, error? }`,
+      { label: `fix-then-resume-reset-${timestamp}`, phase: 'Execute', schema: {
+        type: 'object',
+        properties: {
+          reset: { type: 'array', items: { type: 'string' } },
+          skipped: { type: 'array', items: { type: 'string' } },
+          warnings: { type: 'array', items: { type: 'string' } },
+          commitSha: { type: 'string' },
+          committed: { type: 'boolean' },
+          pushed: { type: 'boolean' },
+          error: { type: 'string' },
+        },
+        required: ['reset', 'commitSha', 'committed', 'pushed'],
+      }, agentType: 'general-purpose' }
+    );
+
+    // HALT on push failure — silent push failure leaves stale 'in-progress'
+    // status, next converge dispatch halts again, operator wastes a resume
+    // cycle. Better to surface the failure explicitly with a resume token.
+    if (!resetResult.pushed) {
+      log(`fix_then_resume push FAILED: ${resetResult.error || 'unknown'}; halting for operator review`)
+      state.halts.push({ reason: 'fix_then_resume_push_failed', iteration: state.iterationCount, details: resetResult.error || null });
+      await writeState(state);
+      await appendJournal({ event: 'halt_fix_then_resume_push', error: resetResult.error || 'unknown' });
+      return {
+        haltReason: 'fix_then_resume_push_failed',
+        context: { resetResult, completed: state.completed, blocked: state.blocked, runDir },
+        resumeToken: timestamp,
+        runDir,
+        userOptions: ['continue', 'retry_blocked', 'abort_prd'],
+      };
+    }
+
+    // SHA-VERIFY: confirm remote prd branch tip matches the commit the reset
+    // agent claims it pushed. Cheap (~200ms) — single Bash dispatch vs the
+    // previous 5-15s Read agent. Catches: model hallucination on pushed:true,
+    // push raced with concurrent write, file system corruption.
+    const shaVerify = await agent(
+      `Run this exact bash command and return its stdout verbatim:
+
+git -C ${setup.prdWorktreePath} ls-remote origin ${setup.prdBranch} | awk '{print $1}'
+
+Return JSON: { remoteSha: <exact stdout string>, exitCode: <integer> }. Do NOT modify, summarize, or diagnose.`,
+      { label: `fix-then-resume-sha-verify-${timestamp}`, phase: 'Execute', schema: {
+        type: 'object',
+        properties: {
+          remoteSha: { type: 'string' },
+          exitCode: { type: 'integer' },
+        },
+        required: ['remoteSha', 'exitCode'],
+      }, agentType: 'general-purpose' }
+    );
+    if (shaVerify.exitCode !== 0 || shaVerify.remoteSha !== resetResult.commitSha) {
+      log(`fix_then_resume SHA VERIFY FAILED: local commitSha=${resetResult.commitSha} remote=${shaVerify.remoteSha} exitCode=${shaVerify.exitCode}; halting`)
+      state.halts.push({ reason: 'fix_then_resume_sha_verify_failed', iteration: state.iterationCount, details: { localSha: resetResult.commitSha, remoteSha: shaVerify.remoteSha, exitCode: shaVerify.exitCode } });
+      await writeState(state);
+      await appendJournal({ event: 'halt_fix_then_resume_sha_verify', localSha: resetResult.commitSha, remoteSha: shaVerify.remoteSha });
+      return {
+        haltReason: 'fix_then_resume_sha_verify_failed',
+        context: { resetResult, shaVerify, runDir },
+        resumeToken: timestamp,
+        runDir,
+        userOptions: ['continue', 'retry_blocked', 'abort_prd'],
+      };
+    }
+    log(`fix_then_resume: ${resetResult.reset.length} story(ies) reset, remote SHA ${shaVerify.remoteSha.substring(0, 7)} verified`)
   } else {
     log(`Unknown userChoice=${userChoice}; defaulting to continue`)
   }
@@ -509,21 +591,32 @@ while (state.storyQueue.length > 0) {
   log(`--- Iteration ${state.iterationCount}: story ${sk} (queue remaining: ${state.storyQueue.length}) ---`)
 
   // Read current sprint-status (status may have moved between plan and now)
-  const currentStatus = await agent(
-    `Read ${setup.sprintStatusPath}. Find development_status['${sk}'].
+  // Grouped sprint-status read: bash helper returns BOTH current story status
+  // AND every dep status in one call. Replaces the previous 2 separate
+  // general-purpose agents (read-status + dep-check) — saves a system prompt
+  // per loop iter. The helper does the YAML grep, agent is transport.
+  const inferredEdge = planResult.inferred.find(e => e.story === sk);
+  const deps = inferredEdge ? inferredEdge.depends_on : [];
+  const bashReadCmd = `"${setup.prdWorktreePath}/.claude/scripts/orchestrate-helper.sh" all-read '${setup.sprintStatusPath}' '${sk}' '${deps.join(',')}'`;
+  const allRead = await agent(
+    `Run this exact bash command. Return its stdout verbatim. Do NOT modify, summarize, or diagnose.
 
-Return JSON: { "status": <value> }
-
-If the key is missing, return { "status": "missing" }.`,
-    { label: `read-status-${sk}`, phase: 'Execute', schema: {
+COMMAND:
+${bashReadCmd}`,
+    { label: `all-read-${sk}`, phase: 'Execute', schema: {
       type: 'object',
-      properties: { status: { type: 'string' } },
-      required: ['status'],
+      properties: {
+        currentStatus: { type: 'string' },
+        depStatuses: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+      required: ['currentStatus', 'depStatuses'],
     }, agentType: 'general-purpose' }
   );
+  const currentStatus = allRead.currentStatus;
+  const depStatusCheck = { statuses: allRead.depStatuses };
 
   // awaiting-operator parking (do NOT execute — park in awaitingOperator[], continue)
-  if (currentStatus && currentStatus.status === 'awaiting-operator') {
+  if (currentStatus === 'awaiting-operator') {
     log(`Story ${sk} in awaiting-operator; parking (not executing)`)
     state.awaitingOperator.push(sk);
     state.storyQueue.shift();
@@ -531,17 +624,19 @@ If the key is missing, return { "status": "missing" }.`,
   }
 
   // already done: skip re-execution (defensive — covers races with external status writes)
-  if (currentStatus && currentStatus.status === 'done') {
+  if (currentStatus === 'done') {
     log(`Story ${sk} already done per sprint-status; marking completed`)
     state.completed.push(sk);
     state.storyQueue.shift();
     continue;
   }
 
-  // Dep check: if any depends_on entry in inferred graph is not in state.completed
-  const inferredEdge = planResult.inferred.find(e => e.story === sk);
-  const deps = inferredEdge ? inferredEdge.depends_on : [];
-  const unmetDeps = deps.filter(d => !state.completed.includes(d));
+  // Dep check: a dep is "met" when sprint-status reports it 'done'. Local
+  // state.completed only tracks THIS run's completions — cross-run deps
+  // (story completed in a previous orchestrate session) would falsely fail
+  // if checked against state.completed alone. Sprint-status is the ground
+  // truth for the entire PRD across all runs.
+  const unmetDeps = deps.filter(d => depStatusCheck.statuses[d] !== 'done');
   if (unmetDeps.length > 0) {
     log(`Story ${sk} has unmet deps: ${unmetDeps.join(', ')}; skipping`)
     state.skipped.push({ story: sk, reason: 'unmet_deps', deps: unmetDeps });

@@ -160,20 +160,55 @@ async function dispatchViaClaudeP(opts) {
   const { label, phase, prompt, schema, cwd, allowedTools, maxBudgetUsd } = opts;
   dispatchSeq++;
   const marker = `BMADBC_${storyKey.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dispatchSeq}`;
-  const cwdPrefix = cwd ? `cd '${cwd}'; ` : '';
   const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
   const modelArg = '';
   const promptB64 = base64Encode(prompt);
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
   const stdoutFile = `/tmp/bmad-bc-${marker}.stdout`;
   const stderrFile = `/tmp/bmad-bc-${marker}.stderr`;
-  const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}{ cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} 2> '${stderrFile}'; } > '${stdoutFile}'; echo "EXIT_CODE=$?"; echo '<<<STDOUT>>>'; cat '${stdoutFile}'; echo '<<<STDERR>>>'; cat '${stderrFile}')`;
+  // Single Bash call: launches claude -p detached via nohup + waits up to 9 min
+  // by polling the SPECIFIC PID via kill -0 (no pgrep pattern = no self-match —
+  // the previous bug). If 9 min elapsed without PID exit, prints POLLING_REQUIRED
+  // and the wrapper falls back to Read-polling the stdout file (Read tool has
+  // no Bash timeout limit). claude -p with nohup survives even when Bash tool
+  // kills the outer bash at its 10-min cap.
+  //
+  // This worked for story 5-11 (completed via this exact pattern, with the
+  // wrapper recovering by manually reading the output file after a self-matching
+  // pgrep loop hung). The fix: pass the EXACT PID to watch, no pattern matching.
+  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowed-tools ${allowedTools}${jsonSchemaArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; break; fi; sleep 5; done`;
   const wrapperResult = await agent(
-    `Run this bash command. It runs claude -p which may take 10-30 minutes.
+    `PROHIBITIONS:
 
-Use Bash with timeout: 1800000 (30 minutes) so the command returns inline. If the command backgrounds anyway, wait for it and read its output using your normal Bash-tool flow.
+- DO NOT write polling loops using ps/pgrep/sleep. Use the EXACT PID given in the bash output.
+- DO NOT re-invoke claude -p manually.
+- DO NOT modify the COMMAND.
 
-Return JSON: { stdout: <verbatim raw bash stdout>, exitCode: <integer, 0 on success> }. Do NOT synthesize, summarize, diagnose, or modify the bash output. Empty stdout is allowed.
+TASK:
+
+Run the COMMAND below. It launches claude -p detached and polls its specific
+PID for up to 9 minutes. If 9 min elapses, it returns POLLING_REQUIRED — you
+then fall back to Read-polling the stdout file.
+
+STEPS:
+
+1. Call Bash with:
+   - command: the COMMAND below (full text)
+   - timeout: 600000  (10 min max — bash polls for 9 min internally)
+   - description: launch + wait claude -p
+   Do not pass any other parameters.
+
+2. Parse the Bash output:
+   - If it ends with EXIT_CODE=<n>: stdout = everything BEFORE that line,
+     exitCode = integer after EXIT_CODE=
+   - If it starts with "POLLING_REQUIRED STDOUT=<path>": extract the path.
+     Poll that file via Read tool every ~60s (use Bash "sleep 60" between
+     Reads). Loop until the file ends with EXIT_CODE=<n>. Max ~10 Reads.
+     When found, parse as above.
+   - If empty or unrecognized: return { stdout: "", exitCode: 1 } immediately.
+     DO NOT retry, DO NOT poll, DO NOT investigate.
+
+3. Return JSON: { stdout: <verbatim content>, exitCode: <integer> }.
 
 COMMAND:
 ${cmd}`,
@@ -190,20 +225,13 @@ ${cmd}`,
   if (!wrapperResult) return { error: 'wrapper returned no result' };
   if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}: ${wrapperResult.stdout || ''}` };
 
-  // Extract the <<<STDOUT>>> section only — stderr noise (e.g. MCP warning lines)
-  // is captured separately and CANNOT corrupt the JSON parse.
-  const raw = wrapperResult.stdout || '';
-  const stdoutMatch = raw.match(/<<<STDOUT>>>\s*([\s\S]*?)\s*<<<STDERR>>>/);
-  const stdoutText = stdoutMatch ? stdoutMatch[1].trim() : raw.trim();
+  const stdoutText = (wrapperResult.stdout || '').trim();
   let parsed;
   try {
     parsed = JSON.parse(stdoutText);
   } catch (e) {
     return { error: `claude -p stdout not JSON: ${e.message}; stdout: ${stdoutText}` };
   }
-  // Schema contract: --output-format json --json-schema envelope wraps the
-  // schema-conformant payload in `.structured_output`. Missing key = fundamental
-  // failure (process killed, output truncated). Defense-in-depth guard.
   if (!parsed || typeof parsed !== 'object' || !('structured_output' in parsed)) {
     return { error: `claude -p envelope missing structured_output (got: ${JSON.stringify(parsed)})` };
   }

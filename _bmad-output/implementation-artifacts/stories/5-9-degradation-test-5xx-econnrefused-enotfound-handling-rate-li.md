@@ -2,10 +2,10 @@
 key: 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li
 title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit persistence"
 epic: epic-5
-status: in-progress
+status: done
 baseline_revision: 6dd4f5fabc87124b09352e6d0b62e339197722b1
 followup_review_recommended: true
-review_loop_iteration: 2
+review_loop_iteration: 3
 effort: 0.25
 depends_on: [5.3]
 files: components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (new)
@@ -142,3 +142,40 @@ Patches applied to `components/gov-chat-backend/__tests__/services/logs-vl-degra
 - Items deferred (out of scope for this story; surfaced incidentally): (1) route-level 500 assertion via `supertest` — established suite pattern uses service-layer re-throw; covered by composition with `routes/admin.test.js:270-276`. (2) 5s SLO load-bearing test with a delayed VL mock — implementation does not bypass slow requests, only hard errors; such a test would hang regardless of the flag. (3) Happy-path `getLogsInRange` test asserting no `degraded` flag on successful VL response — out of scope for this degradation-only story. (4) `writeFile` rejection handling (ENOSPC/EACCES on `/tmp`) — defensive contract, not the load-bearing persistence path. (5) Partial-degradation cases (VL responds with one field missing) — covered indirectly by `_isVlUnavailable(err)` shape, not by the rate-limit/cooldown contract.
 - Items rejected: 6 — truthy-VL_FAIL_OPEN variants (`1`/`'True'`/etc.), `degraded: 'yes'` truthy-type stability, `mockFs` unused method mocks, `VL_QUERY_TIMEOUT_MS` env-var unused assertion, concurrent `_logVlUnavailableOnce` race, exact-path `/tmp/vl-fail-open-ts` assertion (current `endsWith` is sufficient). Each is either defensive over-specification or a code path identical to one already pinned.
 - Followup review recommended: **true** (1 × high patch — the AD-11 wiring gap was a real verification hole that the prior review pass missed because no review-layer caught the catch-branch → `_logVlUnavailableOnce` integration; a future reviewer should re-verify the integration assertion remains in place and that the `_withVlFailOpen` catch branch in `services/logs-service.js` still calls `_logVlUnavailableOnce`).
+
+### 2026-09-09 — Follow-up pass 2 (third review dispatch)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1: (high 1, medium 0, low 0)
+- defer: 0
+- reject: 33
+- addressed_findings:
+  - `[high]` `[patch]` **Property 3 comment SLO attribution is inaccurate** — the comment claimed "the load-bearing CAP-5 budget is the 5s SLO measured at the HTTP boundary by `routes/admin.test.js`", but `routes/admin.test.js:43-46` mocks `../../services/logs-service` as `{ getLogsSummary: jest.fn() }` and a repo-wide symbol search for `getLogsInRange`, `degraded`, or `VL_FAIL_OPEN` across `__tests__/routes/` returns zero hits. The 5s SLO is therefore not pinned at the HTTP boundary in this repo — only the service-layer `< 200ms` defensive guard exists. Rewrote the comment to drop the inaccurate attribution, explicitly note the CAP-5 5s SLO stated in the AC is not separately asserted at the HTTP boundary, clarify the `< 200ms` guard is the only numeric budget pinned here, and preserve the load-bearing AD-11 wiring rationale (the `_withVlFailOpen` catch branch MUST invoke `_logVlUnavailableOnce`).
+- Items rejected: 33 — (verification-gap: no formal verification-gap finding beyond the comment attribution, which was addressed); (intent-alignment: descriptive report only, no prescriptive findings); (blind-hunter, ~25 findings: cooldown-write assertion missing, no error/info negative assertion, reason-string downstream-consumers, BOM engine-sensitivity, mountService contract test, AD-11 link, iteration-history narration, test-count enumeration, deferred-work cross-link, etc. — each is either out-of-scope for this story or defensive over-specification of test quality already covered by the existing 11/11 PASS contract); (edge-case-hunter, 7 findings: extend corrupt-ts to scientific/hex/mixed-alphanumeric/NBSP/tab/BOM-prefixed-valid-number, guard warnArgs before indexing, assert `err.message` directly instead of `String(warnArgs[0])`, relax `toHaveBeenCalledTimes(1)` to `toHaveBeenCalledWith` — each is either a defensive expansion of corruption modes not present in production paths, or a refactor that would re-shape the AD-11 wiring assertion contract for marginal gain).
+- Followup review recommended: **true** (1 × high patch — the SLO attribution was a real verification hole, but the `< 200ms`-only contract is now correctly stated; future review should re-verify if `routes/admin.test.js` ever grows VL-outage coverage that re-establishes the HTTP-boundary 5s SLO pin, and that the `_withVlFailOpen` catch branch in `services/logs-service.js` still calls `_logVlUnavailableOnce` per AD-11).
+
+### Follow-up pass 2 (2026-09-09) — third review dispatch
+
+#### Implemented change
+One comment-only patch to `components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` based on parallel review-layer findings (blind-hunter, edge-case-hunter, verification-gap, intent-alignment). No assertion-logic changes — the patched lines are exclusively the inline comment inside the Property 3 test:
+
+1. **Property 3 comment SLO attribution correction (high)**: the comment claimed "the load-bearing CAP-5 budget is the 5s SLO measured at the HTTP boundary by `routes/admin.test.js`". Verified false: `routes/admin.test.js:43-46` mocks `../../services/logs-service` as `{ getLogsSummary: jest.fn() }` and a repo-wide symbol search for `getLogsInRange`, `degraded`, or `VL_FAIL_OPEN` across `__tests__/routes/` returns zero hits. The 5s SLO is therefore NOT pinned at the HTTP boundary in this repo — only the service-layer `< 200ms` defensive guard exists. Rewrote the comment to: (a) drop the inaccurate `routes/admin.test.js` attribution; (b) explicitly note the CAP-5 5s SLO stated in the AC is not separately asserted at the HTTP boundary; (c) clarify the `< 200ms` guard is the only numeric budget pinned here; (d) preserve the load-bearing AD-11 wiring rationale (the `_withVlFailOpen` catch branch MUST invoke `_logVlUnavailableOnce`).
+
+#### Files changed
+- `components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (comment-only patch in Property 3 test, ~7 lines reworded)
+
+#### Verification performed
+- `node_modules/.bin/jest __tests__/services/logs-vl-degradation.test.js --no-coverage`: **11/11 PASS** (unchanged)
+- `node_modules/.bin/jest __tests__/services/logs-service-vl.test.js __tests__/services/logs-vl-degradation.test.js --no-coverage` (co-run): **90/90 PASS** (unchanged)
+
+#### Review findings breakdown (this pass)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1 (high 1, medium 0, low 0)
+- defer: 0
+- reject: ~33 (most from blind-hunter / edge-case-hunter: scope-creep, defensive over-specification, naming cosmetics, narrative completeness — none are caused by this story's diff; documented below)
+- Followup review recommended: **true** (1 × high patch — the SLO attribution was a real verification hole, but the `< 200ms`-only contract is now correctly stated; future review should re-verify if `routes/admin.test.js` ever grows VL-outage coverage that re-establishes the HTTP-boundary 5s SLO pin).
+
+#### Residual risks (this pass)
+- The CAP-5 5s SLO remains asserted in code by only the `< 200ms` service-layer guard, not by a separate HTTP-boundary test. If a future change makes `_withVlFailOpen` await slow VL responses (rather than bypass them), the unit guard still passes (synchronous reject path) but the 5s SLO would regress without a test catching it. A separate `routes/admin.test.js` VL-outage scenario would close this gap (deferred — out of scope for this story).
+- `routes/admin.test.js` mocks `../../services/logs-service` wholesale, so the CAP-5 AC's HTTP-boundary assertion language ("returns ... within 5 s") has no implementation-level guard rail in the route tests today.

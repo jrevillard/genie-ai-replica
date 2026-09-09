@@ -264,15 +264,19 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
       // The VL client rejects synchronously-as-Promise — no delay, no hang.
       // CAP-5: VL_FAIL_OPEN bypasses waiting for VL; on outage the
       // envelope must be returned promptly. The < 200ms wall-clock
-      // assertion is a defensive guard against an accidental `await`
-      // on the success path (which would push the rejection into the
-      // microtask queue); the load-bearing CAP-5 budget is the 5s SLO
-      // measured at the HTTP boundary by `routes/admin.test.js`. This
-      // service-layer test pins the integration: the catch-branch in
-      // `_withVlFailOpen` MUST invoke `_logVlUnavailableOnce` so the
-      // AD-11 operator-facing warn fires on every outage — without
-      // that wiring, the rate-limit cooldown file is never written and
-      // the warn-once-per-minute contract is silently broken.
+      // assertion is a defensive regression-catcher for an accidental
+      // `await` on the success path (which would push the rejection
+      // into the microtask queue — still fast, but not the synchronous-
+      // bail behavior CAP-5 expects). The CAP-5 5s SLO stated in the AC
+      // is not separately asserted at the HTTP boundary in this repo
+      // (routes/admin.test.js mocks the logs-service layer and does not
+      // exercise the VL outage path), so the < 200ms guard is the only
+      // numeric budget pinned here. The service-layer test also pins
+      // the integration: the catch-branch in `_withVlFailOpen` MUST
+      // invoke `_logVlUnavailableOnce` so the AD-11 operator-facing
+      // warn fires on every outage — without that wiring, the
+      // rate-limit cooldown file is never written and the
+      // warn-once-per-minute contract is silently broken.
       const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9428'), { code: 'ECONNREFUSED' });
       mockVlClient.query.mockRejectedValueOnce(err);
 

@@ -343,6 +343,9 @@ log(`Running bmad-build convergence loop (${maxIterations} review + ${ciMaxItera
 
 let iteration = 0;
 let ciIter = 0;
+let ciWait = 0;  // INFO counter for non-terminal CI state re-polls (no budget — just for logging)
+let ciWaitStartedAt = Date.now();
+const CI_WAIT_MAX_MS = 30 * 60 * 1000;  // safety wall-clock cap (30 min) — GitLab should time out pipelines well before this
 let followup = true;
 let currentSha = setup.baselineSha;
 let convergedSha = null;
@@ -519,8 +522,14 @@ STEPS:
   // ciWait is an INFO counter only — GitLab manages pipeline timeouts.
   const NON_TERMINAL = new Set(['created', 'pending', 'running'])
   if (NON_TERMINAL.has(ciCheck.status)) {
-    ciIter--  // non-terminal is a wait — does NOT consume ciMaxIterations
-    ciWait++  // info counter only
+    ciIter--  // non-terminal is a WAIT (info only) — does NOT consume ciMaxIterations
+    ciWait++  // info counter only — no budget, just for logging
+    if (Date.now() - ciWaitStartedAt > CI_WAIT_MAX_MS) {
+      // safety: avoid infinite loop if pipeline never reaches terminal state
+      log(`CI ${ciCheck.status} — wait safety cap hit (${ciWait} waits, ${Math.round((Date.now() - ciWaitStartedAt) / 60000)}min elapsed) — escalating`)
+      ciFailure = { error: 'ci_wait_timeout', status: ciCheck.status, waitCount: ciWait }
+      break
+    }
     log(`CI ${ciCheck.status} — waiting (ciWait=${ciWait}, ciIter=${ciIter}/${ciMaxIterations})`)
     continue
   }

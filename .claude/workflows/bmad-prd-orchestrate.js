@@ -247,6 +247,7 @@ const buildPlanState = () => ({
   runId: timestamp,
   ts: timestamp,
   prdKey: setup.prdKey,
+  section: 'plan',  // differentiates Phase 2 (plan) vs Phase 3 (loop) writeState labels
   storyQueue: planResult.storyQueue,
   completed: planResult.completed,
   blocked: planResult.blocked,
@@ -355,7 +356,7 @@ DEPS_EOF
 
 COMMAND:
 ${bashCmd}`,
-    { label: `state-write-${stateObj.iterationCount || 0}`, phase: 'Execute', schema: WRITE_STATE_SCHEMA, agentType: 'general-purpose' }
+    { label: `state-write-${stateObj.section || 'loop'}-${stateObj.iterationCount || 0}`, phase: 'Execute', schema: WRITE_STATE_SCHEMA, agentType: 'general-purpose' }
   );
 }
 

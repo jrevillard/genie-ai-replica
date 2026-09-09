@@ -232,18 +232,22 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
       expect(Number(writeCall2[1])).toBe(t0 + 120_000);
     });
 
-    it('tolerates a corrupt /tmp/vl-fail-open-ts (non-numeric) and treats it as 0', async () => {
+    it.each([
+      ['non-numeric word', 'not-a-number'],
+      ['empty string', ''],
+      ['whitespace-only', '   '],
+      ['BOM-only', '﻿']
+    ])('tolerates a corrupt /tmp/vl-fail-open-ts (%s) and treats it as 0', async (_label, corruptValue) => {
       const { service, sharedLogger } = mountService();
 
-      // Service reads "garbage" from the file — lastTs = 0 after parseInt.
-      mockFs.readFile.mockResolvedValueOnce('not-a-number');
+      // Service reads garbage from the file — parseInt yields NaN,
+      // then `lastTs = NaN || 0` → 0 → now - 0 > 60_000 → logs + writes.
+      mockFs.readFile.mockResolvedValueOnce(corruptValue);
       mockFs.writeFile.mockResolvedValueOnce(undefined);
       await service._logVlUnavailableOnce(
-        'corrupt-ts',
+        `corrupt-ts-${_label}`,
         Object.assign(new Error('EHOSTUNREACH'), { code: 'EHOSTUNREACH' })
       );
-      // parseInt('not-a-number', 10) → NaN → `lastTs = NaN || 0` → 0.
-      // now - 0 = now, which is > 60_000 → logs.
       expect(sharedLogger.warn).toHaveBeenCalledTimes(1);
       expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
     });
@@ -253,13 +257,22 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
   // CAP-5 Property 3: 5s latency with VL_FAIL_OPEN=true
   // ====================================================================
   describe('Property 3 — VL_FAIL_OPEN=true returns the degraded envelope within 5s', () => {
-    it('getLogsInRange resolves the degraded envelope within the 5s CAP-5 budget when VL is unreachable', async () => {
+    it('getLogsInRange resolves the degraded envelope on VL outage AND fires the operator-facing warn (AD-11 wiring)', async () => {
       process.env.VL_FAIL_OPEN = 'true';
-      const { service } = mountService();
+      const { service, sharedLogger } = mountService();
 
       // The VL client rejects synchronously-as-Promise — no delay, no hang.
       // CAP-5: VL_FAIL_OPEN bypasses waiting for VL; on outage the
-      // envelope must be returned promptly (< 5s SLO).
+      // envelope must be returned promptly. The < 200ms wall-clock
+      // assertion is a defensive guard against an accidental `await`
+      // on the success path (which would push the rejection into the
+      // microtask queue); the load-bearing CAP-5 budget is the 5s SLO
+      // measured at the HTTP boundary by `routes/admin.test.js`. This
+      // service-layer test pins the integration: the catch-branch in
+      // `_withVlFailOpen` MUST invoke `_logVlUnavailableOnce` so the
+      // AD-11 operator-facing warn fires on every outage — without
+      // that wiring, the rate-limit cooldown file is never written and
+      // the warn-once-per-minute contract is silently broken.
       const err = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9428'), { code: 'ECONNREFUSED' });
       mockVlClient.query.mockRejectedValueOnce(err);
 
@@ -272,12 +285,6 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
       });
       const elapsedMs = Date.now() - startedAt;
 
-      // Wall clock: the VL_FAIL_OPEN path resolves immediately on
-      // outage — well under the 5s SLO. The tight < 200ms guard
-      // catches the regression where `_withVlFailOpen` accidentally
-      // awaits the underlying call before checking the flag (would
-      // push the rejection into the microtask queue — still fast, but
-      // not the synchronous-bail behavior CAP-5 expects).
       expect(elapsedMs).toBeLessThan(200);
       expect(result).toEqual(
         expect.objectContaining({
@@ -288,6 +295,16 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
           degraded: true
         })
       );
+
+      // AD-11 wiring: the fail-open catch branch must invoke
+      // `_logVlUnavailableOnce`, which fires the operator-facing warn
+      // and writes the cooldown timestamp. A regression that drops
+      // that call (silently eats the signal) would still pass every
+      // other assertion in this file.
+      expect(sharedLogger.warn).toHaveBeenCalledTimes(1);
+      const warnArgs = sharedLogger.warn.mock.calls[0];
+      expect(String(warnArgs[0])).toMatch(/getLogsInRange.*VictoriaLogs unreachable/);
+      expect(warnArgs[1]).toEqual(expect.objectContaining({ code: 'ECONNREFUSED' }));
     });
   });
 

@@ -4,7 +4,7 @@ title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit p
 epic: epic-5
 status: done
 baseline_revision: 671305d732a9366474e394c7fc34439d18f8ec3b
-followup_review_recommended: false
+followup_review_recommended: true
 review_loop_iteration: 1
 effort: 0.25
 depends_on: [5.3]
@@ -68,6 +68,35 @@ New degradation test file covering all 4 CAP-5 / AD-11 properties in `components
 - The 5s SLO is asserted via `< 200ms` baseline, not via a slow-VL-client + fake-timers scenario — the spec mentioned `jest.useFakeTimers() + axios mock that delays`, but the implementation (`_withVlFailOpen`) does NOT bypass slow VL requests, only handles hard errors. A test that delays the VL client would hang waiting for the underlying call regardless of the flag. The current test catches the realistic regression (accidental `await` on the success path) without overpromising on slow-bypass semantics.
 - The persistence test uses `jest.isolateModules` to simulate a process restart, not an actual `child_process.spawn`. A child-process variant was offered in the spec; the isolateModules variant exercises the same load-bearing contract (file is written as Unix ms; next instance reads it; suppression window respected) without the cost of spawning node. Both variants are functionally equivalent for the rate-limit state.
 
+### Follow-up pass (2026-09-09) — fresh review dispatch
+
+#### Implemented change
+Patches applied to `components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` based on parallel review-layer findings (blind-hunter, edge-case-hunter, verification-gap, intent-alignment). No source-code changes — all three patches are within the test file:
+
+1. **Property 3 AD-11 wiring assertion (high)**: added `expect(sharedLogger.warn).toHaveBeenCalledTimes(1)` + a structural assertion (`code:'ECONNREFUSED'` payload) inside the existing Property 3 test. Mounts `sharedLogger` from `mountService()` and pins the integration contract: `_withVlFailOpen`'s catch branch MUST invoke `_logVlUnavailableOnce` on every outage, otherwise the rate-limit cooldown file is never written and the AD-11 warn-once-per-minute contract is silently broken. The inline comment is expanded to document why the integration call is the load-bearing assertion (defense against a refactor that drops the wiring).
+2. **Property 3 description + comment (low)**: renamed `it()` from "returns the degraded envelope within the 5s CAP-5 budget" to "returns the degraded envelope on VL outage AND fires the operator-facing warn (AD-11 wiring)" and rewrote the inline comment to clarify that the `< 200ms` wall-clock guard is a defensive regression-catcher (accidental `await` on the success path) — the load-bearing 5s SLO is asserted at the HTTP boundary by `routes/admin.test.js`. Stops future readers from being misled by the test name.
+3. **Corrupt-ts parameterized subtest (low)**: converted the single `'tolerates a corrupt /tmp/vl-fail-open-ts'` `it()` into `it.each([...])` with 4 cases (non-numeric word, empty string, whitespace-only, BOM-only). A truncated timestamp file is the realistic corruption mode that `parseInt → NaN || 0` must still tolerate; the original test covered only the NaN case.
+
+#### Files changed
+- `components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (modified: Property 3 expanded with warn assertion + comment rewrite; Property 2 corrupt-ts `it` → `it.each` with 3 extra cases)
+
+#### Verification performed
+- `node_modules/.bin/jest __tests__/services/logs-vl-degradation.test.js --no-coverage`: **11/11 PASS** (was 8/8; +3 from the `it.each` expansion; no regressions on the existing 8)
+- `node_modules/.bin/jest __tests__/services/logs-service-vl.test.js __tests__/services/logs-vl-degradation.test.js --no-coverage` (co-run, ensures no shared-mock interference with the existing 5.3 tests): **90/90 PASS** (was 87/87; +3 from the expansion)
+- `node_modules/.bin/eslint __tests__/services/logs-vl-degradation.test.js`: **No issues found**
+
+#### Review findings breakdown (this pass)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 3 (high 1, medium 0, low 2)
+- defer: 5 (route-level 500 via supertest, 5s SLO load-bearing test with delayed VL mock, happy-path `getLogsInRange` no-degraded test, writeFile rejection handling, partial-degradation cases)
+- reject: 6 (truthy-VL_FAIL_OPEN variants, `degraded: 'yes'` type stability, `mockFs` unused method mocks, `VL_QUERY_TIMEOUT_MS` unused assertion, concurrent `_logVlUnavailableOnce` race, exact-path `/tmp/vl-fail-open-ts` `===` assertion)
+- Followup review recommended: **true** (1 high patch — the AD-11 wiring gap was a real verification hole missed by the prior review pass; future review should re-verify the integration assertion remains and that the `_withVlFailOpen` catch branch in `services/logs-service.js` still calls `_logVlUnavailableOnce`)
+
+#### Residual risks (this pass)
+- The 5s SLO still asserts via `< 200ms` baseline guard, not via a delayed-VL scenario — covered by `routes/admin.test.js` at the HTTP boundary; the service-layer test now pins the AD-11 wiring instead (higher-value gap).
+- `jest.isolateModules` continues to simulate process restart (not `child_process.spawn`) — same load-bearing contract verification, lower cost.
+
 ## Review Triage Log
 
 ### 2026-09-08 — Review pass
@@ -99,3 +128,17 @@ New degradation test file covering all 4 CAP-5 / AD-11 properties in `components
 - reject: 0
 - addressed_findings: none
 - Notes: A fresh `bmad-build-auto 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li` invocation routed via folder+id dispatch to this existing spec. Status frontmatter is `blocked` from the previous follow-up review pass; per step-01 routing, a `blocked` story found by id HALTs with blocking condition `story already blocked`. No new planning, implementation, or review work performed. The 2026-09-08 review pass (3 low patches applied, 6 rejects) remains the final outcome; the orchestrator must resolve the previous `no subagents` halt (assign a subagent-capable session or accept the existing review as terminal) before the next dispatch.
+
+### 2026-09-09 — Follow-up review pass (post-orchestrator-unblock)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 3: (high 1, medium 0, low 2)
+- defer: 5
+- reject: 6
+- addressed_findings:
+  - `[high]` `[patch]` **Property 3 missing AD-11 wiring assertion** — `getLogsInRange` under `VL_FAIL_OPEN=true` resolves the degraded envelope but did not assert the operator-facing `logger.warn` fires. A regression that drops the `await this._logVlUnavailableOnce(opName, err)` call inside `_withVlFailOpen`'s catch branch would ship undetected: the rate-limit cooldown file would never be written and the warn-once-per-minute contract would be silently broken. Added `expect(sharedLogger.warn).toHaveBeenCalledTimes(1)` + a structural assertion (`code:'ECONNREFUSED'` payload) inside the existing Property 3 test, plus expanded the inline comment to document why the integration call is the load-bearing assertion (defense against a refactor that drops the wiring).
+  - `[low]` `[patch]` **Property 3 description oversells the assertion scope** — the test name and inline comment claimed "returns the degraded envelope within the 5s CAP-5 budget", but the `< 200ms` wall-clock guard only catches accidental-await regressions, not a slow-VL bypass failure. Renamed the `it()` and rewrote the inline comment to clarify the 200ms is a defensive guard, while the load-bearing 5s SLO is asserted at the HTTP boundary by `routes/admin.test.js`. This stops future readers from being misled by the test name.
+  - `[low]` `[patch]` **Corrupt-ts subtest only covered NaN, not empty/whitespace/BOM** — a truncated `/tmp/vl-fail-open-ts` (empty string, whitespace-only, or BOM-only) could expose the same `parseInt → NaN || 0` fallback. Converted the single-`it` into `it.each` with 4 cases (non-numeric word, empty string, whitespace-only, BOM-only) so the corruption-tolerance contract is pinned against the realistic failure modes.
+- Items deferred (out of scope for this story; surfaced incidentally): (1) route-level 500 assertion via `supertest` — established suite pattern uses service-layer re-throw; covered by composition with `routes/admin.test.js:270-276`. (2) 5s SLO load-bearing test with a delayed VL mock — implementation does not bypass slow requests, only hard errors; such a test would hang regardless of the flag. (3) Happy-path `getLogsInRange` test asserting no `degraded` flag on successful VL response — out of scope for this degradation-only story. (4) `writeFile` rejection handling (ENOSPC/EACCES on `/tmp`) — defensive contract, not the load-bearing persistence path. (5) Partial-degradation cases (VL responds with one field missing) — covered indirectly by `_isVlUnavailable(err)` shape, not by the rate-limit/cooldown contract.
+- Items rejected: 6 — truthy-VL_FAIL_OPEN variants (`1`/`'True'`/etc.), `degraded: 'yes'` truthy-type stability, `mockFs` unused method mocks, `VL_QUERY_TIMEOUT_MS` env-var unused assertion, concurrent `_logVlUnavailableOnce` race, exact-path `/tmp/vl-fail-open-ts` assertion (current `endsWith` is sufficient). Each is either defensive over-specification or a code path identical to one already pinned.
+- Followup review recommended: **true** (1 × high patch — the AD-11 wiring gap was a real verification hole that the prior review pass missed because no review-layer caught the catch-branch → `_logVlUnavailableOnce` integration; a future reviewer should re-verify the integration assertion remains in place and that the `_withVlFailOpen` catch branch in `services/logs-service.js` still calls `_logVlUnavailableOnce`).

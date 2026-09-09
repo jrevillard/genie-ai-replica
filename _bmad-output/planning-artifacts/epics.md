@@ -318,13 +318,17 @@
 
 **Stories:**
 
-### Story 6.1: security-scan-service: drop `worker_threads` import + `processFile` + worker block
+### Story 6.1: security-scan-service: drop `worker_threads` import + `processFile` + worker block + fix stale `processFile` spy in test (lines 74-81, 686)
 
 | Field | Value |
 | --- | --- |
-| Effort | 0.25 SP |
-| Files | `components/gov-chat-backend/services/security-scan-service.js:9, 418, 1015-1125` |
+| Effort | 0.75 SP |
+| Files | `components/gov-chat-backend/services/security-scan-service.js:9, 418, 1015-1125`; `components/gov-chat-backend/__tests__/services/security-scan-service.test.js:74-81, 686` |
 | Depends on | [Epic 4] |
+
+Acceptance:
+- Drop `worker_threads` import (line 9), `processFile` method (line 418), worker block (lines 1015-1125).
+- New (folded from 6.3): `__tests__/services/security-scan-service.test.js:686` — `jest.spyOn(securityScanService, 'processFile')` throws "Property `processFile` does not exist" because 6.1 deletes the method. Replace with assignment-based mock, or delete the now-meaningless test case. Same fix for the `Worker: jest.fn()` mock at lines 74-81 (now-dead `worker_threads` reference).
 
 ### Story 6.2: security-scan-service: rewrite `processLogsInParallel` using `VictoriaLogsClient.query` with sha1 bucket key + truncation guard + retention check + cache schema validation via AJV 8.17+
 
@@ -333,14 +337,6 @@
 | Effort | 1.0 SP |
 | Files | `components/gov-chat-backend/services/security-scan-service.js:105-313` |
 | Depends on | [6.1] |
-
-### Story 6.3: replace `Worker: jest.fn()` mock at lines 74-81 with `VictoriaLogsClient` mock; delete dead gzip/Worker test cases (683-740); new `security-scan-vl-bulk.test.js` + `security-scan-vl-degradation.test.js`
-
-| Field | Value |
-| --- | --- |
-| Effort | 0.5 SP |
-| Files | `components/gov-chat-backend/__tests__/services/security-scan-service.test.js` + new files` |
-| Depends on | [6.2] |
 
 ### Story 6.4: verify `SECURITY_SCAN_BACKEND=file` fallback works (no VL, no scan window check)
 

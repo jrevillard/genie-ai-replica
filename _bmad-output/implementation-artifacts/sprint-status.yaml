@@ -81,7 +81,6 @@ epics:
   stories:
   - 6.1
   - 6.2
-  - 6.3
   - 6.4
 - id: epic-7
   title: Cleanup (deprecate rollover, remove file transports)
@@ -143,7 +142,6 @@ development_status:
   epic-6: backlog
   6-1-security-scan-service-drop-worker_threads-import-processfile: ready-for-dev
   6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: ready-for-dev
-  6-3-replace-worker-jest-fn-mock-at-lines-74-81-with-victorialogs: ready-for-dev
   6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: ready-for-dev
   epic-6-retrospective: optional
   epic-7: backlog

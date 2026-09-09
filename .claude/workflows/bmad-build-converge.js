@@ -160,7 +160,12 @@ async function dispatchViaClaudeP(opts) {
   const { label, phase, prompt, schema, cwd, allowedTools, maxBudgetUsd } = opts;
   dispatchSeq++;
   const marker = `BMADBC_${storyKey.replace(/[^a-zA-Z0-9_-]/g, '_')}_${dispatchSeq}`;
-  const jsonSchemaArg = schema ? ` --json-schema '${JSON.stringify(schema)}'` : '';
+  // JSON schema can't be inlined as '...' inside the bash -c '...' command —
+  // the single quotes would clash. Pass via SCHEMA env var (set BEFORE nohup,
+  // inherited by the inner bash). The inner bash -c references $SCHEMA.
+  // (Caught by another agent: nested single quotes broke the command.)
+  const schemaEnvArg = schema ? ' --json-schema "$SCHEMA"' : '';
+  const schemaEnvPrefix = schema ? `SCHEMA='${JSON.stringify(schema)}' ` : '';
   const modelArg = '';
   const promptB64 = base64Encode(prompt);
   const promptFile = `/tmp/bmad-bc-${marker}.txt`;
@@ -176,7 +181,7 @@ async function dispatchViaClaudeP(opts) {
   // This worked for story 5-11 (completed via this exact pattern, with the
   // wrapper recovering by manually reading the output file after a self-matching
   // pgrep loop hung). The fix: pass the EXACT PID to watch, no pattern matching.
-  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowed-tools ${allowedTools}${jsonSchemaArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; break; fi; sleep 5; done`;
+  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && ${schemaEnvPrefix}nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowed-tools ${allowedTools}${schemaEnvArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; break; fi; sleep 5; done`;
   const wrapperResult = await agent(
     `PROHIBITIONS:
 

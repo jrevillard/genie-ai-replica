@@ -6,7 +6,6 @@ const axios = require('axios');
 const config = require('../config');
 const { exec } = require('child_process');
 const util = require('util');
-const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const execPromise = util.promisify(exec);
 const TIMEOUT_PERIOD = 200000;
 const DAYS_TO_PROCESS = 10;
@@ -434,19 +433,6 @@ const securityScanService = {
         `[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`
       );
     return null;
-  },
-
-  async processFile(file, startTime, patterns) {
-    return new Promise((resolve, reject) => {
-      const worker = new Worker(__filename, {
-        workerData: { file, startTime, patterns }
-      });
-      worker.on('message', resolve);
-      worker.on('error', reject);
-      worker.on('exit', (code) => {
-        if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
-      });
-    });
   },
 
   async getLastScanDetails() {
@@ -1032,117 +1018,5 @@ const securityScanService = {
     }
   }
 };
-
-// --- WORKER THREAD LOGIC ---
-if (!isMainThread) {
-  const { file, startTime, patterns } = workerData;
-  const fs = require('fs');
-  const readline = require('readline');
-  const zlib = require('zlib');
-
-  const parseLogLine = securityScanService.parseLogLine;
-
-  const results = {
-    vulnerabilities: { critical: [], medium: [], low: [] },
-    failedLogins: [],
-    suspiciousActivities: [],
-    linesProcessed: 0,
-    linesSkipped: 0
-  };
-  const issueMap = new Map();
-  const invalidLogStream = null;
-
-  try {
-    // This stream is for debugging parsing issues, and can be created if needed
-  } catch (err) {
-    console.error(`Error creating invalid log stream for ${file}: ${err.message}`);
-  }
-
-  const processLine = (line, lineNumber) => {
-    if (Date.now() - startTime > TIMEOUT_PERIOD) return false;
-    results.linesProcessed++;
-    const parsedLog = parseLogLine(line, file, lineNumber, invalidLogStream);
-    if (!parsedLog) {
-      results.linesSkipped++;
-      return true;
-    }
-
-    const { timestamp, message, url, level } = parsedLog;
-
-    if (
-      /Initiating security scan|Starting comprehensive security scan|Parsed \d+ total log entries|Security scan completed/i.test(
-        message
-      )
-    ) {
-      results.linesSkipped++;
-      return true;
-    }
-
-    patterns.vulnerabilityPatterns.forEach((pattern) => {
-      const match = message.match(pattern.regex);
-      if (match) {
-        const matchedTerm = match[1] || match[0];
-        const aggregationKey = `${pattern.type}_${pattern.service}_${matchedTerm}`;
-
-        if (!issueMap.has(aggregationKey)) {
-          const newVuln = {
-            type: pattern.type,
-            severity: pattern.severity,
-            description: pattern.description,
-            recommendation: pattern.recommendation,
-            matchedTerm,
-            timestamp,
-            service: pattern.service,
-            url,
-            firstSeen: timestamp,
-            lastSeen: timestamp,
-            instanceCount: 1
-          };
-          issueMap.set(aggregationKey, newVuln);
-          results.vulnerabilities[pattern.severity].push(newVuln);
-        } else {
-          const issue = issueMap.get(aggregationKey);
-          issue.instanceCount++;
-          issue.lastSeen = timestamp;
-        }
-      }
-    });
-
-    if (/Invalid credentials|failed login/i.test(message)) {
-      results.failedLogins.push({ timestamp, level, message });
-    }
-
-    if (patterns.suspiciousPatterns.some((pattern) => pattern.test(message))) {
-      results.suspiciousActivities.push({ timestamp, level, message });
-    }
-
-    return true;
-  };
-
-  const stream = fs.createReadStream(file);
-  const rl = readline.createInterface({
-    input: file.endsWith('.gz') ? stream.pipe(zlib.createGunzip()) : stream,
-    crlfDelay: Infinity
-  });
-
-  let lineNumber = 0;
-  rl.on('line', (line) => {
-    lineNumber++;
-    if (!processLine(line, lineNumber)) {
-      rl.close();
-    }
-  });
-
-  rl.on('close', () => {
-    parentPort.postMessage(results);
-    if (invalidLogStream) invalidLogStream.end();
-  });
-
-  rl.on('error', (err) => {
-    console.error(`Error reading ${file} in worker: ${err.message}`);
-    parentPort.postMessage(results);
-    if (invalidLogStream) invalidLogStream.end();
-  });
-}
 
 module.exports = securityScanService;

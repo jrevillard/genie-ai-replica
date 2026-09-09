@@ -232,11 +232,12 @@ STEPS:
    b. Read sprintStatusPath. Find development_status[<storyKey>]. Status MUST be 'ready-for-dev' or 'review'. If not, HALT with sprintStatusUpdated:false.
 5. Find or create storyBranch = feat/<prd_key>/<story_key>:
    a. \`git -C repoRoot ls-remote origin <storyBranch>\` — if exists remotely, use it. resumedFromBranch=true.
-   b. \`git -C repoRoot branch --list <storyBranch>\` — if exists locally, use it. resumedFromBranch=true.
-   c. Else: create from origin/<baseBranch>. \`git -C repoRoot push origin origin/<baseBranch>:refs/heads/<storyBranch>\`. resumedFromBranch=false.
-   d. baselineSha:
-      - If resumed: \`git -C repoRoot rev-parse origin/<storyBranch>\` (or local tip if no remote).
-      - If new: \`git -C repoRoot rev-parse origin/<baseBranch>\`.
+   b. ALWAYS: fast-forward story branch to origin/<baseBranch> (sync skill files, etc.):
+      \`git -C repoRoot push --force-with-lease origin origin/<baseBranch>:refs/heads/<storyBranch>\`
+      This is required because Skill tool discovery happens at session start; if story branch was created BEFORE skill files were committed to prd branch, the worktree lacks them.
+   c. If the push above fails (no remote story branch yet), create it:
+      \`git -C repoRoot push origin origin/<baseBranch>:refs/heads/<storyBranch>\`. resumedFromBranch=false.
+   d. baselineSha: \`git -C repoRoot rev-parse origin/<storyBranch>\` (always current tip after fast-forward).
 6. Create worktree:
    worktreePath = repoRoot + '/' + worktree_base + '/' + storyBranch-with-slashes-replaced-by-dashes.
    Example: <repoRoot>/<worktree_base>/<storyBranch-slashes-to-dashes>

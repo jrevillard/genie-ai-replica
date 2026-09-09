@@ -84,18 +84,34 @@ How many build-review iterations before escalation?
 - **Fresh run** — provide a unique `timestamp` (default: current ISO timestamp with random suffix)
 - **Resume** — provide `resume: <token from prior halt>` + `userChoice: <see below>`
 
-If resuming, ask:
+## Resume Flow (precise)
 
-#### 8a. Resume userChoice
-Which action to take on the halted run?
-- `continue` — proceed with current state
-- `retry_blocked` — re-queue blocked stories at front of queue
-- `skip_blocked` — leave blocked as-is
-- `abort_prd` — terminate run
-- `fix_then_resume` — operator pushed fix externally; workflow resets status to ready-for-dev
-- `confirm_deps` — accept the inferred dep graph (requires `confirmedDeps`)
-- `proceed_without_inference` — clear inferred graph, start fresh
-- `proceed_retro` / `skip_retro` — epic retro decisions
+Resuming requires **two values** from the previous halt:
+1. **`resume` token** — the `timestamp` string used when the run was launched (e.g. `2026-09-09-epic-6`)
+2. **`userChoice`** — the action to take (see halt-specific options below)
+
+If you don't have the token: it was logged to stdout when the workflow halted, written to the run dir's `journal.jsonl`, and returned in the halt JSON. Look in the run dir: `_bmad-output/implementation-artifacts/orchestrate-runs/<timestamp>/journal.jsonl`.
+
+The skill walks the user through:
+
+### 8a. Resume token
+Ask: "What's your resume token?" (the `<timestamp>` from the halted run)
+
+If the user doesn't know: scan `prdWorktreePath/_bmad-output/implementation-artifacts/orchestrate-runs/` for recent run dirs, list the ones whose `journal.jsonl` ends with a halt event, and let the user pick.
+
+### 8b. Resume userChoice (halt-specific)
+Read the halted run's `state.json` from `<runDir>/state.json` to discover:
+- The `haltReason` (last entry in `halts` array)
+- The `context` (inferred deps, blocked stories, etc.)
+- The valid `userOptions` (per the halt type)
+
+Present ONLY the valid options for that halt (don't show the full list). The user picks one.
+
+If the chosen option needs extra args (e.g. `confirm_deps` needs `confirmedDeps`), the skill asks for them next.
+
+### 8c. Resume extra args (conditional)
+- `confirm_deps` → ask for the dep graph (canonical key → depends_on list). Show the inferred graph from `state.json` as a starting point.
+- `fix_then_resume` → ask if the user pushed the fix to the story branch externally (required for this option to work).
 
 ## Halts the Workflow Returns
 

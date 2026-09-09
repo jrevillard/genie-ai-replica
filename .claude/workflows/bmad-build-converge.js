@@ -513,17 +513,13 @@ STEPS:
     break
   }
 
-  // Non-terminal CI states (created/pending/running): wait, do NOT consume ciIter.
-  // Only 'failed' / 'canceled' are actionable failures that should trigger re-build.
+  // Non-terminal CI states (created/pending/running): wait. Count toward ciMaxIterations
+  // (each ciCheck is a fresh agent call). GitLab manages pipeline timeouts; if a pipeline
+  // is stuck in pending, eventually it will time out and become 'failed' or 'canceled'.
   const NON_TERMINAL = new Set(['created', 'pending', 'running'])
   if (NON_TERMINAL.has(ciCheck.status)) {
-    log(`CI ${ciCheck.status} — waiting (not consuming ciIter)`)
-    if (ciIter > ciMaxIterations * 20) {  // safety: don't wait forever (240 polls)
-      log(`CI wait safety cap reached (${ciIter * 20} polls) — escalating`)
-      ciFailure = { error: 'ci_wait_timeout', status: ciCheck.status }
-      break
-    }
-    continue  // re-poll without consuming ciIter
+    log(`CI ${ciCheck.status} — waiting (ciIter=${ciIter}/${ciMaxIterations})`)
+    continue  // re-poll; ciIter++ will count this against budget
   }
 
   // Terminal failure → record + re-build (if budget remains)

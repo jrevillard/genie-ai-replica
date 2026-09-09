@@ -24,6 +24,7 @@ if (!storyKey) throw new Error('args.storyKey required');
 // ciMaxIterations: CI-FIX budget (separate counter; only consumed after build converges).
 const maxIterations = args.maxIterations || 5;
 const ciMaxIterations = args.ciMaxIterations || 3;
+const maxBuildRetries = args.maxBuildRetries || 3;
 const timestamp = args.timestamp || 'unknown';
 // On resume (e.g., after CI failure halted the workflow), the orchestrator re-invokes
 // the sub-workflow with args.ciFailure describing the previous CI failure. The build
@@ -365,7 +366,7 @@ while (followup && iteration < maxIterations) {
     cwd: setup.worktreePath,
     prompt: `/bmad-build-auto ${setup.storyKey}
 
-DO NOT load the bmad-build-converge skill (would create recursion — the converge workflow would re-enter claude -p and loop).
+DO NOT load the bmad-build-converge skill (would cause recursion).
 
 ${ciFailure ? `CI FAILED LAST ITER — fix it: ${JSON.stringify(ciFailure).substring(0, 1500)}` : ''}
 
@@ -385,10 +386,18 @@ If Skill HALTs (terminal status != done), return { skillCompleted: false, error:
 
   if (!buildResult || !buildResult.skillCompleted || buildResult.error) {
     log(`Build agent (Skill) failed: ${buildResult?.error || 'skill did not complete'}`)
-    iterationsLog.push({ iter: iteration, error: `build: ${buildResult?.error || 'skill did not complete'}` })
-    followup = false
-    break
+    iterationsLog.push({ iter: iteration, buildRetry, error: `build: ${buildResult?.error || 'skill did not complete'}` })
+    buildRetry++
+    if (buildRetry >= maxBuildRetries) {
+      log(`Build retries exhausted (${buildRetry}/${maxBuildRetries}) — escalating`)
+      followup = false
+      break
+    }
+    log(`Build retry ${buildRetry}/${maxBuildRetries} — re-invoking Skill`)
+    iteration--  // don't consume review iteration; just retry the build
+    continue
   }
+  buildRetry = 0  // reset on successful build
 
   const postBuildResult = await agent(
     `Post-build for story ${setup.storyKey}, iter ${iteration}. Build agent already invoked Skill: bmad-build-auto and committed locally. Your job: verify deliverables + push + return BUILD_SCHEMA.

@@ -4,7 +4,7 @@ title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit p
 epic: epic-5
 status: done
 baseline_revision: 426a77d2fa984ea2022ee417663d3fc96942233a
-followup_review_recommended: true
+followup_review_recommended: false
 review_loop_iteration: 6
 effort: 0.25
 depends_on: [5.3]
@@ -277,3 +277,22 @@ Patches applied to `components/gov-chat-backend/__tests__/services/logs-vl-degra
 - The AD-11 wiring (file side) is now pinned at the integration boundary. A future regression that drops `await this._logVlUnavailableOnce(opName, err)` inside `_withVlFailOpen`'s catch branch will fail Property 3 — the `mockFs.writeFile.mock.calls.find(...)` lookup will return `undefined`, the `expect(cooldownWrite).toBeDefined()` will fail, and the regression will be caught before merge.
 - The CAP-5 5s SLO remains asserted in code by only the `< 200ms` service-layer guard (per pass-2 documentation); the HTTP-boundary 5s assertion remains deferred (out of scope for this story).
 - The intent-alignment surface divergence (AC text vs impl surface for #2/#3/#4) remains documented as a known concession; AC text was deliberately not amended.
+
+### 2026-09-09 — Review pass 5
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0
+- defer: 1: (high 0, medium 1, low 0)
+- reject: ~20
+- addressed_findings:
+  - none
+- Deferred finding: acceptance text names child-process, HTTP-boundary, fake-timer, and delayed-axios surfaces for properties #2–#4, while implementation exercises equivalent service-layer and isolateModules contracts. Pre-existing surface divergence was documented in earlier passes and was not caused by current review diff.
+- Rejected findings: review-layer bookkeeping/count inconsistencies, duplicate narrative, stricter defensive assertions, and cosmetic or over-specified suggestions; no actionable defect caused by current diff.
+- Followup review recommended: false (0 patches; score = 0)
+
+#### Review pass 5 verification
+- `node_modules/.bin/jest __tests__/services/logs-vl-degradation.test.js --no-coverage`: **11/11 PASS** (previously verified; review diff contains no test-file changes requiring rerun)
+- `node_modules/.bin/jest __tests__/services/logs-service-vl.test.js __tests__/services/logs-vl-degradation.test.js --no-coverage`: **90/90 PASS** (previously verified)
+- `node_modules/.bin/eslint __tests__/services/logs-vl-degradation.test.js`: **No issues found** (previously verified)
+- Manual review: Property 3 file-side assertion remains present; Property 4 ECONNREFUSED strict identity remains uniform with sibling outage tests; frontmatter `files` value is valid YAML text.
+- Residual risk: HTTP-boundary 5s SLO and actual child-process restart remain documented concessions from prior passes.

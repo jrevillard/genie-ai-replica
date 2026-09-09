@@ -1212,6 +1212,14 @@ async function initializeServices() {
         logger.debug('AdminDashboardService.setSecurityScanService completed');
       }
       if (
+        services.securityScanService &&
+        services.logsService &&
+        typeof services.securityScanService.setVictoriaLogsClient === 'function'
+      ) {
+        services.securityScanService.setVictoriaLogsClient(services.logsService._getVlClient());
+        logger.debug('SecurityScanService.setVictoriaLogsClient completed');
+      }
+      if (
         services.weatherService &&
         services.analyticsService &&
         typeof services.weatherService.setAnalyticsService === 'function'

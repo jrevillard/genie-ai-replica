@@ -36,7 +36,8 @@ jest.mock('luxon', () => ({
       toISO: jest.fn().mockReturnValue('2026-05-26T10:00:00.000Z'),
       toFormat: jest.fn().mockReturnValue('2026-05-26'),
       minus: jest.fn().mockReturnValue({
-        toFormat: jest.fn().mockReturnValue('2026-05-16')
+        toFormat: jest.fn().mockReturnValue('2026-05-16'),
+        toISO: jest.fn().mockReturnValue('2026-05-16T10:00:00.000Z')
       }),
       diff: jest.fn().mockReturnValue({ hours: 0.5 })
     }),
@@ -71,16 +72,6 @@ jest.mock('child_process', () => ({
   exec: jest.fn()
 }));
 
-jest.mock('worker_threads', () => ({
-  Worker: jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
-    postMessage: jest.fn()
-  })),
-  isMainThread: true,
-  parentPort: null,
-  workerData: null
-}));
-
 jest.mock('os', () => ({
   cpus: jest.fn().mockReturnValue([{ model: 'Test CPU' }])
 }));
@@ -103,11 +94,19 @@ describe('SecurityScanService', () => {
 
     it('should return cached results when file is recent', async () => {
       const cachedData = {
+        scanTime: new Date().toISOString(),
+        vulnerabilities: { critical: 1, medium: 0, low: 0, details: [{ type: 'breach' }] },
         vulnerabilityDetails: {
           critical: [{ type: 'breach' }],
           medium: [],
           low: []
-        }
+        },
+        failedLoginDetails: [],
+        suspiciousDetails: [],
+        status: 'completed',
+        message: 'Security scan completed',
+        skipped: false,
+        reason: null
       };
       mockFs.stat.mockResolvedValueOnce({ mtime: new Date() });
       mockFs.readFile.mockResolvedValueOnce(JSON.stringify(cachedData));
@@ -616,11 +615,19 @@ describe('SecurityScanService', () => {
   describe('checkLogsForIssues', () => {
     it('should return cached results when available', async () => {
       const cachedData = {
+        scanTime: new Date().toISOString(),
+        vulnerabilities: { critical: 1, medium: 0, low: 0, details: [{ type: 'cached' }] },
         vulnerabilityDetails: {
           critical: [{ type: 'cached' }],
           medium: [],
           low: []
-        }
+        },
+        failedLoginDetails: [],
+        suspiciousDetails: [],
+        status: 'completed',
+        message: 'cached',
+        skipped: false,
+        reason: null
       };
       mockFs.stat.mockResolvedValueOnce({ mtime: new Date() });
       mockFs.readFile.mockResolvedValueOnce(JSON.stringify(cachedData));
@@ -636,160 +643,228 @@ describe('SecurityScanService', () => {
     });
 
     it('should run full scan and return results', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue([])
-      };
-      const result = await securityScanService.runSecurityScan(mockLogsService);
+      securityScanService.setVictoriaLogsClient({ query: jest.fn().mockResolvedValue([]) });
+      mockFs.mkdir.mockResolvedValueOnce(undefined);
+      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      const result = await securityScanService.runSecurityScan({});
       expect(result.status).toBe('completed');
       expect(result.scanTime).toBeDefined();
       expect(result.vulnerabilities).toBeDefined();
       expect(result.failedLoginDetails).toEqual([]);
       expect(result.suspiciousDetails).toEqual([]);
-      expect(mockLogsService.getLogFilesInRange).toHaveBeenCalled();
     });
 
     it('should save scan results after completion', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue([])
-      };
-      await securityScanService.runSecurityScan(mockLogsService);
+      securityScanService.setVictoriaLogsClient({ query: jest.fn().mockResolvedValue([]) });
+      mockFs.mkdir.mockResolvedValueOnce(undefined);
+      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      await securityScanService.runSecurityScan({});
       expect(mockFs.mkdir).toHaveBeenCalled();
       expect(mockFs.writeFile).toHaveBeenCalled();
     });
 
     it('should propagate errors from processLogsInParallel', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockRejectedValue(new Error('Log service down'))
-      };
-      await expect(securityScanService.runSecurityScan(mockLogsService)).rejects.toThrow('Log service down');
+      const err = Object.assign(new Error('Log service down'), { code: 'EUNREACHABLE' });
+      securityScanService.setVictoriaLogsClient({ query: jest.fn().mockRejectedValue(err) });
+      const prevFailOpen = process.env.VL_FAIL_OPEN;
+      delete process.env.VL_FAIL_OPEN;
+      try {
+        await expect(securityScanService.runSecurityScan({})).rejects.toThrow('Log service down');
+      } finally {
+        if (prevFailOpen !== undefined) process.env.VL_FAIL_OPEN = prevFailOpen;
+      }
     });
   });
 
-  describe('processLogsInParallel', () => {
-    it('should return empty results when no log files found', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue([])
-      };
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(result.vulnerabilities.critical).toEqual([]);
-      expect(result.vulnerabilities.medium).toEqual([]);
-      expect(result.vulnerabilities.low).toEqual([]);
-      expect(result.failedLogins).toEqual([]);
-      expect(result.suspiciousActivities).toEqual([]);
+  describe('setVictoriaLogsClient', () => {
+    it('should set the VictoriaLogs client', () => {
+      const mockClient = { query: jest.fn() };
+      securityScanService.setVictoriaLogsClient(mockClient);
+      expect(securityScanService._vlClient).toBe(mockClient);
     });
 
-    it('should process valid log files and return results', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
-      };
-      // Substitute processFile so the aggregation pipeline is exercised without
-      // touching the (intentionally-preserved) call site at line 283. A
-      // `jest.spyOn` would throw under Jest 30 because `processFile` is no
-      // longer an own property of the service.
-      securityScanService.processFile = jest.fn().mockResolvedValue({
-        vulnerabilities: {
-          critical: [
-            {
-              type: 'attack_attempt',
-              severity: 'critical',
-              service: 'http',
-              matchedTerm: 'SQL injection',
-              instanceCount: 1
-            }
-          ],
-          medium: [],
-          low: []
-        },
-        failedLogins: [{ timestamp: '2026-05-26T10:00:00Z', message: 'Invalid credentials', level: 'ERROR' }],
-        suspiciousActivities: [],
-        linesProcessed: 100,
-        linesSkipped: 5
-      });
+    it('should make subsequent _getVlClient return the injected client', () => {
+      const mockClient = { query: jest.fn() };
+      securityScanService.setVictoriaLogsClient(mockClient);
+      expect(securityScanService._getVlClient()).toBe(mockClient);
+    });
 
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
+    it('should be idempotent (replace on subsequent calls)', () => {
+      const c1 = { query: jest.fn() };
+      const c2 = { query: jest.fn() };
+      securityScanService.setVictoriaLogsClient(c1);
+      securityScanService.setVictoriaLogsClient(c2);
+      expect(securityScanService._vlClient).toBe(c2);
+    });
+  });
+
+  describe('_parseRetentionToMs', () => {
+    const parse = (s) => securityScanService._parseRetentionToMs(s);
+
+    it('parses days (d) to ms', () => {
+      expect(parse('30d')).toBe(30 * 86400000);
+    });
+
+    it('parses hours (h) to ms', () => {
+      expect(parse('24h')).toBe(24 * 3600000);
+    });
+
+    it('parses minutes (m) to ms', () => {
+      expect(parse('60m')).toBe(60 * 60000);
+    });
+
+    it('parses seconds (s) to ms', () => {
+      expect(parse('90s')).toBe(90000);
+    });
+
+    it('returns null for unparseable strings', () => {
+      expect(parse('30days')).toBeNull();
+      expect(parse('forever')).toBeNull();
+      expect(parse('')).toBeNull();
+    });
+
+    it('returns null for null/undefined', () => {
+      expect(parse(null)).toBeNull();
+      expect(parse(undefined)).toBeNull();
+    });
+  });
+
+  describe('processLogsInParallel (VictoriaLogs bulk query)', () => {
+    it('returns empty vulnerabilities when VL returns no rows', async () => {
+      securityScanService.setVictoriaLogsClient({ query: jest.fn().mockResolvedValue([]) });
+      const result = await securityScanService.processLogsInParallel({});
+      expect(result.vulnerabilities).toEqual({ critical: [], medium: [], low: [] });
+      expect(result.degraded).toBe(false);
+    });
+
+    it('classifies rows into critical via SHA1 bucketing (duplicates collapse)', async () => {
+      const row = {
+        _time: '2026-05-26T10:00:00Z',
+        _msg: 'SQL injection attempt from 1.2.3.4',
+        _stream: { service: 'http' }
+      };
+      securityScanService.setVictoriaLogsClient({
+        query: jest.fn().mockResolvedValue([row, row, row])
+      });
+      const result = await securityScanService.processLogsInParallel({});
       expect(result.vulnerabilities.critical).toHaveLength(1);
-      expect(result.failedLogins).toHaveLength(1);
-      expect(securityScanService.processFile).toHaveBeenCalledTimes(1);
+      const v = result.vulnerabilities.critical[0];
+      expect(v.type).toBe('attack_attempt');
+      expect(v.instanceCount).toBe(3);
+      expect(v.service).toBe('http');
     });
 
-    it('should filter invalid gzip files', async () => {
-      securityScanService.isGzipValid = jest.fn().mockResolvedValue(false);
-
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log.gz'])
-      };
-
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(securityScanService.isGzipValid).toHaveBeenCalledWith('/var/log/combined-2026-05-26.log.gz');
-      // File should be filtered out since gzip is invalid
-      expect(result.vulnerabilities.critical).toEqual([]);
-    });
-
-    it('returns explicit skipped signal when descriptors are synthetic (VL mode)', async () => {
-      const descriptors = [
-        { date: '2026-05-26', service: 'victorialogs', source: 'victorialogs', query: 'q=*' },
-        { date: '2026-05-25', service: 'victorialogs', source: 'victorialogs', query: 'q=*' }
+    it('classifies rows into the correct severity per pattern', async () => {
+      const rows = [
+        { _time: '2026-05-26T10:00:00Z', _msg: 'SQL injection', _stream: { service: 'http' } },
+        { _time: '2026-05-26T10:01:00Z', _msg: 'IP Blocked 5.6.7.8', _stream: { service: 'system' } },
+        { _time: '2026-05-26T10:02:00Z', _msg: 'Invalid credentials for foo', _stream: { service: 'auth' } },
+        { _time: '2026-05-26T10:03:00Z', _msg: 'GZIPVALIDMARKER nocando', _stream: { service: 'http' } }
       ];
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(descriptors)
-      };
-
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(result.skipped).toBe(true);
-      expect(result.reason).toBe('vl_mode_no_file_scan');
-      expect(result.vulnerabilities.critical).toEqual([]);
-      expect(result.vulnerabilities.medium).toEqual([]);
-      expect(result.vulnerabilities.low).toEqual([]);
-      expect(result.failedLogins).toEqual([]);
-      expect(result.suspiciousActivities).toEqual([]);
-
-      const scanResult = await securityScanService.runSecurityScan(mockLogsService);
-      expect(scanResult.skipped).toBe(true);
-      expect(scanResult.reason).toBe('vl_mode_no_file_scan');
-      expect(scanResult.status).toBe('skipped');
-      expect(scanResult.message).toMatch(/vl_mode_no_file_scan/);
-    });
-
-    it('should handle processFile errors gracefully', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
-      };
-      securityScanService.processFile = jest.fn().mockRejectedValue(new Error('File read error'));
-
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      // Error should be caught, returning empty results for that file
-      expect(result.vulnerabilities.critical).toEqual([]);
-    });
-
-    it('should deduplicate failedLogins and suspiciousActivities', async () => {
-      const mockLogsService = {
-        getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
-      };
-      securityScanService.processFile = jest.fn().mockResolvedValue({
-        vulnerabilities: { critical: [], medium: [], low: [] },
-        failedLogins: [
-          { timestamp: '2026-05-26T10:00:00Z', message: 'Failed login', level: 'ERROR' },
-          { timestamp: '2026-05-26T10:00:00Z', message: 'Failed login', level: 'ERROR' }
-        ],
-        suspiciousActivities: [
-          { timestamp: '2026-05-26T10:00:00Z', message: 'SQL injection', level: 'ERROR' },
-          { timestamp: '2026-05-26T10:00:00Z', message: 'SQL injection', level: 'ERROR' }
-        ],
-        linesProcessed: 50,
-        linesSkipped: 0
+      securityScanService.setVictoriaLogsClient({
+        query: jest.fn().mockResolvedValue(rows)
       });
+      const result = await securityScanService.processLogsInParallel({});
+      expect(result.vulnerabilities.critical).toHaveLength(1);
+      expect(result.vulnerabilities.medium).toHaveLength(1);
+      expect(result.vulnerabilities.low).toHaveLength(1);
+    });
 
-      const result = await securityScanService.processLogsInParallel(mockLogsService);
-      expect(result.failedLogins).toHaveLength(1); // deduplicated
-      expect(result.suspiciousActivities).toHaveLength(1); // deduplicated
+    it('sets degraded:true when rows.length === 100000 (truncation guard)', async () => {
+      const rows = Array.from({ length: 100000 }, () => ({
+        _time: '2026-05-26T10:00:00Z',
+        _msg: 'SQL injection',
+        _stream: { service: 'http' }
+      }));
+      securityScanService.setVictoriaLogsClient({
+        query: jest.fn().mockResolvedValue(rows)
+      });
+      const result = await securityScanService.processLogsInParallel({});
+      expect(result.degraded).toBe(true);
+    });
+
+    it('passes single LogSQL query with all needles and service:* filter', async () => {
+      const queryMock = jest.fn().mockResolvedValue([]);
+      securityScanService.setVictoriaLogsClient({ query: queryMock });
+      await securityScanService.processLogsInParallel({});
+      expect(queryMock).toHaveBeenCalledTimes(1);
+      const args = queryMock.mock.calls[0][0];
+      expect(args.limit).toBe(100000);
+      expect(args.q).toContain('service:*');
+      expect(args.q).toContain(' OR ');
+      expect(args.q).toContain('SQL injection');
+    });
+
+    it('fails-open on VL outage when VL_FAIL_OPEN=true (returns degraded empty result)', async () => {
+      const prevFailOpen = process.env.VL_FAIL_OPEN;
+      process.env.VL_FAIL_OPEN = '1';
+      const err = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+      securityScanService.setVictoriaLogsClient({
+        query: jest.fn().mockRejectedValue(err)
+      });
+      try {
+        const result = await securityScanService.processLogsInParallel({});
+        expect(result.degraded).toBe(true);
+        expect(result.error).toBe('vl_unreachable');
+        expect(result.vulnerabilities).toEqual({ critical: [], medium: [], low: [] });
+      } finally {
+        if (prevFailOpen === undefined) delete process.env.VL_FAIL_OPEN;
+        else process.env.VL_FAIL_OPEN = prevFailOpen;
+      }
+    });
+
+    it('throws when VL outage and VL_FAIL_OPEN is not set', async () => {
+      const prevFailOpen = process.env.VL_FAIL_OPEN;
+      delete process.env.VL_FAIL_OPEN;
+      const err = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+      securityScanService.setVictoriaLogsClient({
+        query: jest.fn().mockRejectedValue(err)
+      });
+      try {
+        await expect(securityScanService.processLogsInParallel({})).rejects.toThrow('ECONNREFUSED');
+      } finally {
+        if (prevFailOpen !== undefined) process.env.VL_FAIL_OPEN = prevFailOpen;
+      }
+    });
+
+    it('rejects when logsService is missing', async () => {
+      await expect(securityScanService.processLogsInParallel(null)).rejects.toThrow('LogsService is required');
+    });
+
+    it('caps start to VICTORIALOGS_RETENTION when shorter than 10-day window and degraded=true', async () => {
+      const queryMock = jest.fn().mockResolvedValue([]);
+      securityScanService.setVictoriaLogsClient({ query: queryMock });
+      const prevRetention = process.env.VICTORIALOGS_RETENTION;
+      process.env.VICTORIALOGS_RETENTION = '5d';
+      try {
+        const result = await securityScanService.processLogsInParallel({});
+        expect(result.degraded).toBe(true);
+        expect(queryMock).toHaveBeenCalledTimes(1);
+        const args = queryMock.mock.calls[0][0];
+        const startMs = new Date(args.start).getTime();
+        const nowMs = Date.now();
+        const expectedDelta = 5 * 86400000;
+        expect(nowMs - startMs).toBeLessThanOrEqual(expectedDelta + 5000);
+        expect(nowMs - startMs).toBeGreaterThan(expectedDelta - 5000);
+      } finally {
+        if (prevRetention === undefined) delete process.env.VICTORIALOGS_RETENTION;
+        else process.env.VICTORIALOGS_RETENTION = prevRetention;
+      }
     });
   });
 
   describe('checkFailedLogins', () => {
     it('should return cached failed logins when available', async () => {
       const cachedData = {
+        scanTime: new Date().toISOString(),
+        vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
         failedLoginDetails: [{ timestamp: '2026-05-26', message: 'Failed login' }],
-        vulnerabilityDetails: { critical: [], medium: [], low: [] }
+        suspiciousDetails: [],
+        status: 'completed',
+        message: 'cached',
+        skipped: false,
+        reason: null
       };
       mockFs.stat.mockResolvedValueOnce({ mtime: new Date() });
       mockFs.readFile.mockResolvedValueOnce(JSON.stringify(cachedData));
@@ -802,8 +877,15 @@ describe('SecurityScanService', () => {
   describe('checkSuspiciousActivities', () => {
     it('should return cached suspicious activities when available', async () => {
       const cachedData = {
+        scanTime: new Date().toISOString(),
+        vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        failedLoginDetails: [],
         suspiciousDetails: [{ timestamp: '2026-05-26', message: 'Suspicious activity' }],
-        vulnerabilityDetails: { critical: [], medium: [], low: [] }
+        status: 'completed',
+        message: 'cached',
+        skipped: false,
+        reason: null
       };
       mockFs.stat.mockResolvedValueOnce({ mtime: new Date() });
       mockFs.readFile.mockResolvedValueOnce(JSON.stringify(cachedData));

@@ -1,5 +1,7 @@
 const fsPromises = require('fs').promises;
 const path = require('path');
+const nodeCrypto = require('crypto');
+const Ajv = require('ajv');
 const { logger } = require('../shared-lib');
 const { DateTime } = require('luxon');
 const axios = require('axios');
@@ -7,10 +9,482 @@ const config = require('../config');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
-const TIMEOUT_PERIOD = 200000;
 const DAYS_TO_PROCESS = 10;
+const SHA1_SLICE_LEN = 16;
+const VL_QUERY_LIMIT = 100000;
+const MAX_NEEDLE_LEN = 80;
 
-const securityScanService = {
+/**
+ * Strict JSON Schema covering the full `vulnerabilities.{critical,medium,low}[]`
+ * shape written by `saveScanResults()` (AD-12 — no hand-rolled `typeof`
+ * checks; AJV 8.17+ is the canonical validator). Any deviation (missing
+ * keys, wrong severity values, malformed `details[]`) classifies the
+ * cache as a miss and triggers a fresh scan.
+ */
+const SCAN_CACHE_SCHEMA = {
+  type: 'object',
+  required: [
+    'scanTime',
+    'vulnerabilities',
+    'vulnerabilityDetails',
+    'failedLoginDetails',
+    'suspiciousDetails',
+    'status',
+    'message',
+    'skipped',
+    'reason'
+  ],
+  additionalProperties: true,
+  properties: {
+    scanTime: { type: 'string' },
+    vulnerabilities: {
+      type: 'object',
+      required: ['critical', 'medium', 'low', 'details'],
+      properties: {
+        critical: { type: 'integer', minimum: 0 },
+        medium: { type: 'integer', minimum: 0 },
+        low: { type: 'integer', minimum: 0 },
+        details: { type: 'array' }
+      }
+    },
+    vulnerabilityDetails: {
+      type: 'object',
+      required: ['critical', 'medium', 'low'],
+      properties: {
+        critical: { type: 'array' },
+        medium: { type: 'array' },
+        low: { type: 'array' }
+      }
+    },
+    failedLoginDetails: { type: 'array' },
+    suspiciousDetails: { type: 'array' },
+    status: { type: 'string', enum: ['completed', 'skipped'] },
+    message: { type: 'string' },
+    skipped: { type: 'boolean' },
+    reason: { type: ['string', 'null'] },
+    degraded: { type: 'boolean' },
+    error: { type: ['string', 'null'] }
+  }
+};
+
+/**
+ * Vulnerability patterns.
+ * Each entry pairs a canonical `regex` (used to bucket matched VL rows)
+ * with one or more LogSQL `_msg:"needle"` strings used to narrow the
+ * candidate set at the VL query layer. The 14 entries match the
+ * historical file-based scanner contract.
+ */
+const VULNERABILITY_PATTERNS = [
+  {
+    type: 'token_issue',
+    severity: 'critical',
+    needles: ['invalid token'],
+    regex: /invalid token/i,
+    description: 'Invalid or expired token usage detected',
+    recommendation: 'Review token expiration policies.',
+    service: 'auth'
+  },
+  {
+    type: 'attack_attempt',
+    severity: 'critical',
+    needles: ['SQL injection', 'XSS', 'CSRF'],
+    regex: /SQL injection|XSS|CSRF/i,
+    description: 'Potential attack attempt detected',
+    recommendation: 'Implement WAF and input sanitization.',
+    service: 'http'
+  },
+  {
+    type: 'command_injection',
+    severity: 'critical',
+    needles: ['sleep', '__import__', 'execSync'],
+    regex:
+      /(sleep\s+\d+|__import__\(\s*['"]subprocess['"]\)|execSync\(\s*['"]sleep\s+\d+['"]\)|%x\(\s*sleep\s+\d+\s*\))/i,
+    description: 'Command injection attempt detected in token or request',
+    recommendation: 'Sanitize all inputs and implement strict validation.',
+    service: 'auth'
+  },
+  {
+    type: 'sensitive_file_access',
+    severity: 'medium',
+    needles: ['Blocked access to sensitive path'],
+    regex:
+      /Blocked access to sensitive path:\s*((?:\/api\/)?(?:\.env|\.git\/config|\.gitignore|\.npmrc|node_modules\/\.package-lock\.json|\.well-known\/security\.txt))/i,
+    description: 'Attempt to access sensitive file detected',
+    recommendation: 'Ensure sensitive files are not exposed and access is blocked.',
+    service: 'http'
+  },
+  {
+    type: 'ip_blocked',
+    severity: 'medium',
+    needles: ['IP Blocked'],
+    regex: /IP Blocked/i,
+    description: 'IP blocked due to suspicious activity',
+    recommendation: 'Review blocked IPs for false positives and enhance rate limiting.',
+    service: 'system'
+  },
+  {
+    type: 'auth_failure_401',
+    severity: 'medium',
+    needles: ['Authentication Failure - 401'],
+    regex: /Authentication Failure - 401/i,
+    description: 'HTTP 401 unauthorized access attempt detected',
+    recommendation: 'Monitor for brute force and review access controls.',
+    service: 'system'
+  },
+  {
+    type: 'db_error',
+    severity: 'medium',
+    needles: ['collection.save failed'],
+    regex: /collection\.save failed.*expecting both `_from` and `_to` attributes/i,
+    description: 'Database operation failed due to misconfiguration',
+    recommendation: 'Review ArangoDB edge document configuration.',
+    service: 'database'
+  },
+  {
+    type: 'non_critical_file_access',
+    severity: 'low',
+    needles: ['com.chrome.devtools.json'],
+    regex: /Blocked access to sensitive path:\s*(\/\.well-known\/appspecific\/com\.chrome\.devtools\.json)/i,
+    description: 'Attempt to access non-critical configuration file detected',
+    recommendation: 'Verify if access to such files should be blocked.',
+    service: 'http'
+  },
+  {
+    type: 'unauthorized_access',
+    severity: 'medium',
+    needles: ['not authorized'],
+    regex: /not authorized/i,
+    description: 'Unauthorized access attempt detected',
+    recommendation: 'Check access control policies.',
+    service: 'auth'
+  },
+  {
+    type: 'brute_force',
+    severity: 'medium',
+    needles: ['brute force'],
+    regex: /brute force/i,
+    description: 'Brute force attempt detected',
+    recommendation: 'Implement rate limiting.',
+    service: 'auth'
+  },
+  {
+    type: 'failed_login',
+    severity: 'low',
+    needles: ['Invalid credentials', 'failed login'],
+    regex: /Invalid credentials|failed login/i,
+    description: 'Failed login attempt detected',
+    recommendation: 'Monitor for suspicious activity.',
+    service: 'auth'
+  },
+  {
+    type: 'not_found_404',
+    severity: 'low',
+    needles: ['404 Not Found'],
+    regex: /404 Not Found: (GET|POST|PUT|DELETE)\s+\/api\/api\//i,
+    description: 'Invalid API endpoint access attempt detected',
+    recommendation: 'Review for probing attempts and ensure proper routing.',
+    service: 'http'
+  },
+  {
+    type: 'registration_failure',
+    severity: 'low',
+    needles: ['already exists', 'Registration failed'],
+    regex: /(Email|Username) already exists|Registration failed/i,
+    description: 'Registration attempt failed due to existing credentials',
+    recommendation: 'Monitor for automated registration attempts.',
+    service: 'system'
+  },
+  {
+    type: 'log_limit_exceeded',
+    severity: 'low',
+    needles: ['Too many log lines'],
+    regex: /Too many log lines.*limiting to/i,
+    description: 'Log file exceeds processing limit',
+    recommendation: 'Optimize log rotation or increase scan limits.',
+    service: 'system'
+  }
+];
+
+/**
+ * Security-scan service built on the MELT port (AD-3, AD-12, AD-19, AD-6).
+ *
+ * The pipeline runs a single VictoriaLogs LogSQL query that OR-joins
+ * the 14 vulnerability needles and classifies every returned row in
+ * process via each pattern's canonical `regex`. Each row is bucketed
+ * by sha1(timestamp + '|' + service + '|' + message) per AD-19 so a
+ * single record contributes to at most one vulnerability bucket.
+ *
+ * Cache read (`/app/data/security/last-scan-results.json`) is
+ * schema-validated by AJV 8.17+ (AD-12) — invalid shape is treated as
+ * cache miss.
+ */
+class SecurityScanService {
+  constructor() {
+    this._vlClient = null;
+    this._ajv = null;
+    this._validateCache = null;
+    logger.info('SecurityScanService constructor called');
+  }
+
+  /**
+   * Dependency-injection seam for the MELT client. Idempotent — every
+   * call replaces the reference (mirrors the LogsService setter, the
+   * AdminDashboardService setter pattern, and the other 6 setter
+   * injection blocks in `index.js:1167-1215`).
+   *
+   * @param {import('../shared-lib/melt').VictoriaLogsClient|null} client
+   */
+  setVictoriaLogsClient(client) {
+    this._vlClient = client;
+    logger.debug('SecurityScanService.setVictoriaLogsClient completed');
+  }
+
+  /**
+   * Lazy constructor for the MELT adapter. Production callers skip the
+   * startup health probe (AD-16); test fixtures inject a mock via
+   * `setVictoriaLogsClient()` (test isolation is required by Jest).
+   */
+  _getVlClient() {
+    if (this._vlClient) return this._vlClient;
+    const melt = require('../shared-lib/melt');
+    if (!melt || !melt.VictoriaLogsClient) {
+      throw new Error('VictoriaLogsClient is not available on the MELT seam');
+    }
+    this._vlClient = new melt.VictoriaLogsClient({
+      skipHealthProbe: process.env.NODE_ENV === 'test'
+    });
+    return this._vlClient;
+  }
+
+  /**
+   * Lazy AJV 8.17+ validator (AD-12). Compiles the `SCAN_CACHE_SCHEMA`
+   * strict schema on first access and reuses it on subsequent calls.
+   * Returning `null` from `checkCachedResults` on validation failure is
+   * the canonical "treat as cache miss" path.
+   *
+   * @returns {Object} an object exposing `.validateCache(data)` (AJV
+   *   `validate` bound to the compiled schema — returns `true`/`false`,
+   *   with `.errors` populated when `false`).
+   */
+  _getAjv() {
+    if (!this._ajv) {
+      this._ajv = new Ajv({ allErrors: true, strict: false });
+    }
+    if (!this._validateCache) {
+      this._validateCache = this._ajv.compile(SCAN_CACHE_SCHEMA);
+    }
+    return {
+      validateCache: (data) => this._validateCache(data),
+      errors: () => this._validateCache.errors
+    };
+  }
+
+  /**
+   * Parse a VL/OTLP retention string (`"30d"`, `"24h"`, `"60m"`,
+   * `"90s"`) to milliseconds. Returns `null` for unparseable input
+   * (AD-19 keeps the original `30d` format and forbids the legacy
+   * `_DAYS` suffix).
+   *
+   * @param {string|undefined|null} retentionStr
+   * @returns {number|null} milliseconds, or `null` if unparseable.
+   */
+  _parseRetentionToMs(retentionStr) {
+    if (!retentionStr || typeof retentionStr !== 'string') return null;
+    const match = /^(\d+)\s*([dhms])$/i.exec(retentionStr.trim());
+    if (!match) return null;
+    const n = parseInt(match[1], 10);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const unit = match[2].toLowerCase();
+    const factor = { d: 86400000, h: 3600000, m: 60000, s: 1000 }[unit];
+    return Number.isFinite(factor) ? n * factor : null;
+  }
+
+  /**
+   * AD-6: a single env `true|1|TRUE|yes` check, used for VL escape
+   * hatches (mirrors `components/shared/lib/boolean-env.js` future
+   * shared helper — local fallback to avoid coupling until the helper
+   * lands in this worktree).
+   *
+   * @param {string|undefined} value
+   * @returns {boolean}
+   */
+  _isTruthyEnv(value) {
+    if (value === undefined || value === null) return false;
+    const v = String(value).trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes';
+  }
+
+  /**
+   * Classify a thrown error as a VL outage: matches AD-16's full list
+   * (`ECONNREFUSED` / `ENOTFOUND` / `ETIMEDOUT` / `ECONNABORTED` /
+   * `ECONNRESET` / 5xx). Used to gate `VL_FAIL_OPEN`.
+   *
+   * @param {Error & {code?: string, response?: {status?: number}}} err
+   * @returns {boolean}
+   */
+  _isVlUnavailable(err) {
+    if (!err) return false;
+    const code = err.code;
+    if (
+      code === 'ECONNREFUSED' ||
+      code === 'ENOTFOUND' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ECONNABORTED' ||
+      code === 'ECONNRESET' ||
+      code === 'EPIPE' ||
+      code === 'EAI_AGAIN' ||
+      code === 'EHOSTUNREACH'
+    ) {
+      return true;
+    }
+    const status = err.response && err.response.status;
+    if (status !== undefined && status >= 500 && status < 600) return true;
+    return false;
+  }
+
+  /**
+   * Build the LogSQL `q` parameter for the bulk scan: one
+   * `_msg:"needle"` per pattern, OR-joined, with a leading `service:*`
+   * filter (AD-19). Needles longer than `MAX_NEEDLE_LEN` are skipped to
+   * avoid surprising LogSQL tokenisation; backslashes and double-quotes
+   * inside needles are escaped.
+   *
+   * @returns {string} LogSQL `_msg:( ... ) AND service:*` query.
+   */
+  _buildVlScanQuery() {
+    const clauses = [];
+    for (const pattern of VULNERABILITY_PATTERNS) {
+      for (const rawNeedle of pattern.needles) {
+        const needle = String(rawNeedle || '')
+          .slice(0, MAX_NEEDLE_LEN)
+          .replace(/\\/g, '\\\\')
+          .replace(/"/g, '\\"');
+        if (needle.length === 0) continue;
+        clauses.push(`_msg:"${needle}"`);
+      }
+    }
+    if (clauses.length === 0) return '_msg:*';
+    return `(${clauses.join(' OR ')}) AND service:*`;
+  }
+
+  /**
+   * Read the message string from a VL row, accepting both the wire shape
+   * (`{_msg: "..."}`) and the adapter-normalized shape (`{message: "..."}`,
+   * `VictoriaLogsRow` per AD-3). Returns `''` when no message is present.
+   *
+   * @param {object} row
+   * @returns {string}
+   */
+  _rowMessage(row) {
+    if (!row || typeof row !== 'object') return '';
+    if (typeof row.message === 'string') return row.message;
+    if (typeof row._msg === 'string') return row._msg;
+    return '';
+  }
+
+  /**
+   * Read the ISO timestamp from a VL row, accepting both wire (`_time`)
+   * and normalized (`timestamp`) shapes.
+   *
+   * @param {object} row
+   * @returns {string} ISO 8601 timestamp or `''`.
+   */
+  _rowTimestamp(row) {
+    if (!row || typeof row !== 'object') return '';
+    if (typeof row.timestamp === 'string' && row.timestamp.length > 0) return row.timestamp;
+    if (typeof row._time === 'string' && row._time.length > 0) return row._time;
+    return '';
+  }
+
+  /**
+   * Read the service name from a VL row, accepting both wire
+   * (`_stream.service`) and normalized (`stream.service` / `service`)
+   * shapes. Falls back to `'unknown'`.
+   *
+   * @param {object} row
+   * @returns {string}
+   */
+  _rowService(row) {
+    if (!row || typeof row !== 'object') return 'unknown';
+    if (row.stream && typeof row.stream === 'object' && typeof row.stream.service === 'string') {
+      return row.stream.service;
+    }
+    if (row._stream && typeof row._stream === 'object' && typeof row._stream.service === 'string') {
+      return row._stream.service;
+    }
+    if (typeof row.service === 'string') return row.service;
+    return 'unknown';
+  }
+
+  /**
+   * Read the log level from a VL row, accepting both wire
+   * (`fields.level` / `_stream.level`) and normalized (`level`) shapes.
+   * Returns `'INFO'` when no level is present (mirrors `VictoriaLogsAdapter`).
+   *
+   * @param {object} row
+   * @returns {string} uppercase level.
+   */
+  _rowLevel(row) {
+    if (!row || typeof row !== 'object') return 'INFO';
+    if (typeof row.level === 'string' && row.level.length > 0) return row.level.toUpperCase();
+    if (row.fields && typeof row.fields.level === 'string') return row.fields.level.toUpperCase();
+    if (row._stream && typeof row._stream === 'object' && typeof row._stream.level === 'string') {
+      return row._stream.level.toUpperCase();
+    }
+    return 'INFO';
+  }
+
+  /**
+   * Extract a URL fragment from a log message. First looks for an explicit
+   * `http(s)://` URL; falls back to a `(METHOD) /path` pair. Returns
+   * `'N/A'` when no URL-shaped substring is found.
+   *
+   * @param {string} message
+   * @returns {string}
+   */
+  _extractUrl(message) {
+    if (typeof message !== 'string' || message.length === 0) return 'N/A';
+    const urlMatch = message.match(/https?:\/\/[^\s]+|(GET|POST|PUT|DELETE)\s+([^\s]+)/i);
+    if (!urlMatch) return 'N/A';
+    return urlMatch[2] || urlMatch[0];
+  }
+
+  /**
+   * AD-19 dedupe key: 16 hex chars of sha1(timestamp + '|' + service +
+   * '|' + message). Accepts both wire (`_time` / `_stream.service` /
+   * `_msg`) and normalized (`timestamp` / `stream.service` /
+   * `message`) row shapes via the row-helper getters. The `|`
+   * separator ensures needle content containing any single character
+   * never collides with itself.
+   *
+   * @param {object} row VL row (wire or normalized).
+   * @returns {string} 16-char hex digest prefix.
+   */
+  _rowBucketKey(row) {
+    const time = this._rowTimestamp(row);
+    const svc = this._rowService(row);
+    const msg = this._rowMessage(row);
+    return nodeCrypto.createHash('sha1').update(`${time}|${svc}|${msg}`).digest('hex').slice(0, SHA1_SLICE_LEN);
+  }
+
+  /**
+   * Map a VL row to the first matching vulnerability pattern
+   * (deterministic: patterns are listed in `VULNERABILITY_PATTERNS`
+   * in author order). A `null` return means the row matched a needle
+   * but no full-regex.
+   *
+   * @param {object} row VL row (wire or normalized).
+   * @returns {object|null} matched pattern or `null`.
+   */
+  _matchPattern(row) {
+    const msg = this._rowMessage(row);
+    if (msg.length === 0) return null;
+    for (const pattern of VULNERABILITY_PATTERNS) {
+      if (pattern.regex.test(msg)) return pattern;
+    }
+    return null;
+  }
+
   async isGzipValid(file) {
     try {
       await execPromise(`gunzip -t "${file}"`);
@@ -19,7 +493,7 @@ const securityScanService = {
       logger.warn(`Gzip validation failed for ${file}: ${err.message}`);
       return false;
     }
-  },
+  }
 
   async getDescriptorCount() {
     try {
@@ -29,7 +503,7 @@ const securityScanService = {
       logger.warn(`Error getting descriptor count: ${err.message}`);
       return 0;
     }
-  },
+  }
 
   async closeWinstonTransports() {
     try {
@@ -41,7 +515,7 @@ const securityScanService = {
     } catch (err) {
       logger.warn(`Error closing Winston transports: ${err.message}`);
     }
-  },
+  }
 
   async reopenWinstonTransports() {
     try {
@@ -49,7 +523,7 @@ const securityScanService = {
     } catch (err) {
       logger.warn(`Error reopening Winston transports: ${err.message}`);
     }
-  },
+  }
 
   async checkCachedResults() {
     try {
@@ -59,14 +533,23 @@ const securityScanService = {
       const fileTime = DateTime.fromJSDate(stats.mtime);
       if (now.diff(fileTime, 'hours').hours < 1) {
         const data = await fsPromises.readFile(scanResultsFile, 'utf8');
+        const parsed = JSON.parse(data);
+        const ajv = this._getAjv();
+        const ok = ajv.validateCache(parsed);
+        if (!ok) {
+          logger.warn('Security-scan cache failed AJV schema validation (AD-12); treating as cache miss', {
+            errors: ajv.errors()
+          });
+          return null;
+        }
         logger.info('Returning cached security scan results');
-        return JSON.parse(data);
+        return parsed;
       }
     } catch {
       console.debug('No valid cached results found');
     }
     return null;
-  },
+  }
 
   async runSecurityScan(logsService) {
     const startTime = Date.now();
@@ -74,8 +557,11 @@ const securityScanService = {
       logger.info('Running security scan');
       if (!logsService) throw new Error('LogsService is required for security scan');
 
-      const { vulnerabilities, failedLogins, suspiciousActivities, skipped, reason } =
-        await this.processLogsInParallel(logsService);
+      const result = await this.processLogsInParallel(logsService);
+
+      const vulnerabilities = result.vulnerabilities || { critical: [], medium: [], low: [] };
+      const degraded = result.degraded === true;
+      const error = result.error || null;
 
       const scanResult = {
         scanTime: new Date().toISOString(),
@@ -86,12 +572,14 @@ const securityScanService = {
           details: [...vulnerabilities.critical, ...vulnerabilities.medium, ...vulnerabilities.low]
         },
         vulnerabilityDetails: vulnerabilities,
-        failedLoginDetails: failedLogins,
-        suspiciousDetails: suspiciousActivities,
-        status: skipped ? 'skipped' : 'completed',
-        message: skipped ? `Security scan skipped: ${reason}` : 'Security scan completed successfully',
-        skipped: skipped === true,
-        reason: reason || null
+        failedLoginDetails: result.failedLogins || [],
+        suspiciousDetails: result.suspiciousActivities || [],
+        status: result.skipped ? 'skipped' : 'completed',
+        message: result.skipped ? `Security scan skipped: ${result.reason}` : 'Security scan completed successfully',
+        skipped: result.skipped === true,
+        reason: result.reason || null,
+        degraded,
+        error
       };
 
       await this.saveScanResults(scanResult);
@@ -101,262 +589,185 @@ const securityScanService = {
       logger.error(`Error in runSecurityScan: ${error.message}`, { stack: error.stack });
       throw error;
     }
-  },
+  }
 
-  // OPTIMIZED: Centralized log processing function reads each file only ONCE.
+  // VL bulk query, sha1 bucketing, truncation guard, retention check
+  // (AD-19). The 14 patterns' needles are OR-joined into a single
+  // LogSQL `_msg:(needle1 OR needle2 OR ...) AND service:*` query; VL
+  // returns at most `VL_QUERY_LIMIT` (100 000) rows; truncated response
+  // sets `degraded:true`. The 10-day window is capped to
+  // `VICTORIALOGS_RETENTION` when retention is shorter (sets
+  // `degraded:true`). Each row is bucketed by sha1 of its timestamp +
+  // service + message triple so the same record contributes to at
+  // most one vulnerability bucket. The same row stream feeds the
+  // failed-login and suspicious-activity arrays — duplicates collapsed
+  // by `removeDuplicateLogEntries` so each (timestamp, message) pair
+  // appears at most once.
   async processLogsInParallel(logsService) {
+    if (!logsService) {
+      throw new Error('LogsService is required for security scan');
+    }
     const startTime = Date.now();
     const today = DateTime.now();
-    const startDate = today.minus({ days: DAYS_TO_PROCESS }).toFormat('yyyy-MM-dd');
-    const endDate = today.toFormat('yyyy-MM-dd');
+    const scanEnd = today.toISO();
+    let scanStart = today.minus({ days: DAYS_TO_PROCESS }).toISO();
 
-    const vulnerabilityPatterns = [
-      {
-        type: 'token_issue',
-        severity: 'critical',
-        regex: /invalid token/i,
-        description: 'Invalid or expired token usage detected',
-        recommendation: 'Review token expiration policies.',
-        service: 'auth'
-      },
-      {
-        type: 'attack_attempt',
-        severity: 'critical',
-        regex: /SQL injection|XSS|CSRF/i,
-        description: 'Potential attack attempt detected',
-        recommendation: 'Implement WAF and input sanitization.',
-        service: 'http'
-      },
-      {
-        type: 'command_injection',
-        severity: 'critical',
-        regex:
-          /(sleep\s+\d+|__import__\(\s*['"]subprocess['"]\)|execSync\(\s*['"]sleep\s+\d+['"]\)|%x\(\s*sleep\s+\d+\s*\))/i,
-        description: 'Command injection attempt detected in token or request',
-        recommendation: 'Sanitize all inputs and implement strict validation.',
-        service: 'auth'
-      },
-      {
-        type: 'sensitive_file_access',
-        severity: 'medium',
-        regex:
-          /Blocked access to sensitive path:\s*((?:\/api\/)?(?:\.env|\.git\/config|\.gitignore|\.npmrc|node_modules\/\.package-lock\.json|\.well-known\/security\.txt))/i,
-        description: 'Attempt to access sensitive file detected',
-        recommendation: 'Ensure sensitive files are not exposed and access is blocked.',
-        service: 'http'
-      },
-      {
-        type: 'ip_blocked',
-        severity: 'medium',
-        regex: /IP Blocked/i,
-        description: 'IP blocked due to suspicious activity',
-        recommendation: 'Review blocked IPs for false positives and enhance rate limiting.',
-        service: 'system'
-      },
-      {
-        type: 'auth_failure_401',
-        severity: 'medium',
-        regex: /Authentication Failure - 401/i,
-        description: 'HTTP 401 unauthorized access attempt detected',
-        recommendation: 'Monitor for brute force and review access controls.',
-        service: 'system'
-      },
-      {
-        type: 'db_error',
-        severity: 'medium',
-        regex: /collection\.save failed.*expecting both `_from` and `_to` attributes/i,
-        description: 'Database operation failed due to misconfiguration',
-        recommendation: 'Review ArangoDB edge document configuration.',
-        service: 'database'
-      },
-      {
-        type: 'non_critical_file_access',
-        severity: 'low',
-        regex: /Blocked access to sensitive path:\s*(\/\.well-known\/appspecific\/com\.chrome\.devtools\.json)/i,
-        description: 'Attempt to access non-critical configuration file detected',
-        recommendation: 'Verify if access to such files should be blocked.',
-        service: 'http'
-      },
-      {
-        type: 'unauthorized_access',
-        severity: 'medium',
-        regex: /not authorized/i,
-        description: 'Unauthorized access attempt detected',
-        recommendation: 'Check access control policies.',
-        service: 'auth'
-      },
-      {
-        type: 'brute_force',
-        severity: 'medium',
-        regex: /brute force/i,
-        description: 'Brute force attempt detected',
-        recommendation: 'Implement rate limiting.',
-        service: 'auth'
-      },
-      {
-        type: 'failed_login',
-        severity: 'low',
-        regex: /Invalid credentials|failed login/i,
-        description: 'Failed login attempt detected',
-        recommendation: 'Monitor for suspicious activity.',
-        service: 'auth'
-      },
-      {
-        type: 'not_found_404',
-        severity: 'low',
-        regex: /404 Not Found: (GET|POST|PUT|DELETE)\s+\/api\/api\//i,
-        description: 'Invalid API endpoint access attempt detected',
-        recommendation: 'Review for probing attempts and ensure proper routing.',
-        service: 'http'
-      },
-      {
-        type: 'registration_failure',
-        severity: 'low',
-        regex: /(Email|Username) already exists|Registration failed/i,
-        description: 'Registration attempt failed due to existing credentials',
-        recommendation: 'Monitor for automated registration attempts.',
-        service: 'system'
-      },
-      {
-        type: 'log_limit_exceeded',
-        severity: 'low',
-        regex: /Too many log lines.*limiting to/i,
-        description: 'Log file exceeds processing limit',
-        recommendation: 'Optimize log rotation or increase scan limits.',
-        service: 'system'
-      }
-    ];
-    const suspiciousPatterns = [/SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i];
+    const retentionStr = process.env.VICTORIALOGS_RETENTION;
+    const retentionMs = this._parseRetentionToMs(retentionStr);
+    const windowMs = DAYS_TO_PROCESS * 86400000;
+    let degraded = false;
+    if (retentionMs !== null && retentionMs > 0 && retentionMs < windowMs) {
+      const cappedStart = new Date(Date.now() - retentionMs).toISOString();
+      logger.warn(
+        `VICTORIALOGS_RETENTION=${retentionStr} (${retentionMs}ms) is shorter than the ${DAYS_TO_PROCESS}-day scan window; capping scan start to ${cappedStart} and setting degraded:true`
+      );
+      scanStart = cappedStart;
+      degraded = true;
+    }
 
+    const q = this._buildVlScanQuery();
+    logger.info(
+      `Starting VL bulk security scan from ${scanStart} to ${scanEnd}; window=${(
+        (Date.now() - startTime) /
+        1000
+      ).toFixed(1)}s`
+    );
+
+    let rows = [];
+    let vlError = null;
     try {
-      console.log(`Starting unified log scan for period ${startDate} to ${endDate}`);
-      const allLogFiles = await logsService.getLogFilesInRange(startDate, endDate, true);
-      // VL mode returns synthetic `{date, service, source, query}`
-      // descriptors, not real fs paths. The downstream regex / gzip /
-      // scan pipeline only handles strings; feeding it objects throws
-      // a TypeError and the route surfaces a 500 — silent zero output
-      // in default deployments. Return an explicit skipped signal so
-      // the UI can tell the operator the file path is unavailable.
-      if (allLogFiles.length > 0 && allLogFiles.some((entry) => typeof entry !== 'string')) {
-        logger.info(
-          'Security scan requested in VL mode (synthetic descriptors): file-path scan disabled, review via VL LogSQL instead.'
+      const vlClient = this._getVlClient();
+      rows = await vlClient.query({ q, start: scanStart, end: scanEnd, limit: VL_QUERY_LIMIT });
+    } catch (err) {
+      vlError = err;
+    }
+
+    if (vlError) {
+      const failOpen = this._isTruthyEnv(process.env.VL_FAIL_OPEN);
+      if (failOpen && this._isVlUnavailable(vlError)) {
+        logger.warn(
+          `VictoriaLogs unreachable in security scan; VL_FAIL_OPEN=true, returning degraded result: ${vlError.message}`
         );
         return {
           vulnerabilities: { critical: [], medium: [], low: [] },
           failedLogins: [],
           suspiciousActivities: [],
-          skipped: true,
-          reason: 'vl_mode_no_file_scan'
+          degraded: true,
+          error: 'vl_unreachable'
         };
       }
-      const validLogFiles = (
-        await Promise.all(
-          allLogFiles.map(async (file) => {
-            if (file.endsWith('.gz') && !(await this.isGzipValid(file))) return null;
-            if (!file.match(/(combined|error)-\d{4}-\d{2}-\d{2}\.log(\.gz|\.\d+\.gz)?$/)) return null;
-            return file;
-          })
-        )
-      )
-        .filter(Boolean)
-        .sort((a, b) => {
-          const aDate = a.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          const bDate = b.match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '0000-00-00';
-          return bDate.localeCompare(aDate);
-        });
-
-      console.log(`Found ${validLogFiles.length} valid log files to scan.`);
-      const concurrencyLimit = require('os').cpus().length;
-      let totalLinesProcessed = 0;
-      let totalLinesSkipped = 0;
-      const finalIssueMap = new Map();
-      let failedLogins = [];
-      let suspiciousActivities = [];
-
-      for (let i = 0; i < validLogFiles.length; i += concurrencyLimit) {
-        if (Date.now() - startTime > TIMEOUT_PERIOD) {
-          logger.warn('Approaching timeout limit, stopping scan');
-          break;
-        }
-        const batch = validLogFiles.slice(i, i + concurrencyLimit);
-        const batchPromises = batch.map((file) =>
-          this.processFile(file, startTime, { vulnerabilityPatterns, suspiciousPatterns }).catch((err) => {
-            logger.error(`Error processing file ${file} in worker: ${err.message}`);
-            return {
-              vulnerabilities: { critical: [], medium: [], low: [] },
-              failedLogins: [],
-              suspiciousActivities: [],
-              linesProcessed: 0,
-              linesSkipped: 0
-            };
-          })
-        );
-
-        const results = await Promise.all(batchPromises);
-
-        for (const result of results) {
-          totalLinesProcessed += result.linesProcessed;
-          totalLinesSkipped += result.linesSkipped;
-          failedLogins.push(...result.failedLogins);
-          suspiciousActivities.push(...result.suspiciousActivities);
-          for (const severity of ['critical', 'medium', 'low']) {
-            for (const vuln of result.vulnerabilities[severity]) {
-              const aggregationKey = `${vuln.type}_${vuln.service}_${vuln.matchedTerm}`;
-              if (finalIssueMap.has(aggregationKey)) {
-                const existingIssue = finalIssueMap.get(aggregationKey);
-                existingIssue.instanceCount += vuln.instanceCount;
-                if (vuln.lastSeen > existingIssue.lastSeen) existingIssue.lastSeen = vuln.lastSeen;
-              } else {
-                finalIssueMap.set(aggregationKey, { ...vuln });
-              }
-            }
-          }
-        }
-        console.debug(`Batch processed. Total lines so far: ${totalLinesProcessed}`);
-      }
-
-      console.log(
-        `Total lines processed: ${totalLinesProcessed}, Total lines skipped: ${totalLinesSkipped}, time elapsed: ${(Date.now() - startTime) / 1000}s`
-      );
-      const vulnerabilities = { critical: [], medium: [], low: [] };
-      for (const issue of finalIssueMap.values()) {
-        if (vulnerabilities[issue.severity]) {
-          vulnerabilities[issue.severity].push(issue);
-        }
-      }
-
-      failedLogins = this.removeDuplicateLogEntries(failedLogins);
-      suspiciousActivities = this.removeDuplicateLogEntries(suspiciousActivities);
-
-      return { vulnerabilities, failedLogins, suspiciousActivities };
-    } catch (error) {
-      logger.error(`Error in processLogsInParallel: ${error.message}`, { stack: error.stack });
-      throw error;
+      logger.error(`Error in processLogsInParallel (VL bulk query): ${vlError.message}`, {
+        stack: vlError.stack
+      });
+      throw vlError;
     }
-  },
 
-  // CORRECTED: Restored original functions for backward compatibility, now implemented efficiently.
+    if (Array.isArray(rows) && rows.length === VL_QUERY_LIMIT) {
+      degraded = true;
+      logger.warn(
+        `VictoriaLogs returned ${VL_QUERY_LIMIT} rows (the query limit); setting degraded:true — possible under-count`
+      );
+    }
+
+    const FAILED_LOGIN_REGEX = /Invalid credentials|failed login/i;
+    const SUSPICIOUS_REGEX = /SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i;
+
+    const finalIssueMap = new Map();
+    const failedLoginsRaw = [];
+    const suspiciousRaw = [];
+    for (const row of rows || []) {
+      const pattern = this._matchPattern(row);
+      const message = this._rowMessage(row);
+      const service = this._rowService(row);
+      const timestamp = this._rowTimestamp(row) || scanEnd;
+      const level = this._rowLevel(row);
+
+      if (pattern) {
+        const key = this._rowBucketKey(row);
+        if (!key) continue;
+        const bucketKey = `${key}_${pattern.type}`;
+        if (finalIssueMap.has(bucketKey)) {
+          const existing = finalIssueMap.get(bucketKey);
+          existing.instanceCount += 1;
+          if (timestamp > existing.lastSeen) existing.lastSeen = timestamp;
+        } else {
+          finalIssueMap.set(bucketKey, {
+            type: pattern.type,
+            severity: pattern.severity,
+            description: pattern.description,
+            recommendation: pattern.recommendation,
+            matchedTerm: pattern.regex.source,
+            timestamp,
+            service,
+            url: this._extractUrl(message),
+            firstSeen: timestamp,
+            lastSeen: timestamp,
+            instanceCount: 1
+          });
+        }
+      }
+
+      if (message.length > 0) {
+        if (FAILED_LOGIN_REGEX.test(message)) {
+          failedLoginsRaw.push({ timestamp, level, message, service });
+        }
+        if (SUSPICIOUS_REGEX.test(message)) {
+          suspiciousRaw.push({ timestamp, level, message, service });
+        }
+      }
+    }
+
+    const vulnerabilities = { critical: [], medium: [], low: [] };
+    for (const issue of finalIssueMap.values()) {
+      if (vulnerabilities[issue.severity]) {
+        vulnerabilities[issue.severity].push(issue);
+      }
+    }
+
+    const failedLogins = this.removeDuplicateLogEntries(failedLoginsRaw);
+    const suspiciousActivities = this.removeDuplicateLogEntries(suspiciousRaw);
+
+    const result = {
+      vulnerabilities,
+      failedLogins,
+      suspiciousActivities,
+      degraded,
+      error: null
+    };
+
+    logger.debug(
+      `VL bulk scan completed; rows=${(rows || []).length} vulnerabilities=${finalIssueMap.size} failedLogins=${failedLogins.length} suspiciousActivities=${suspiciousActivities.length} degraded=${degraded} time=${(
+        (Date.now() - startTime) /
+        1000
+      ).toFixed(1)}s`
+    );
+
+    return result;
+  }
+
   async checkLogsForIssues(logsService) {
     logger.info('Legacy checkLogsForIssues called. Checking cache or running full scan.');
     const cached = await this.checkCachedResults();
     if (cached) return cached.vulnerabilityDetails;
     const results = await this.runSecurityScan(logsService);
     return results.vulnerabilityDetails;
-  },
+  }
+
   async checkFailedLogins(logsService) {
     logger.info('Legacy checkFailedLogins called. Checking cache or running full scan.');
     const cached = await this.checkCachedResults();
     if (cached) return cached.failedLoginDetails;
     const results = await this.runSecurityScan(logsService);
     return results.failedLoginDetails;
-  },
+  }
+
   async checkSuspiciousActivities(logsService) {
     logger.info('Legacy checkSuspiciousActivities called. Checking cache or running full scan.');
     const cached = await this.checkCachedResults();
     if (cached) return cached.suspiciousDetails;
     const results = await this.runSecurityScan(logsService);
     return results.suspiciousDetails;
-  },
+  }
 
   deduplicateVulnerabilities(vulnerabilities) {
     const deduplicated = { critical: [], medium: [], low: [] };
@@ -371,7 +782,7 @@ const securityScanService = {
       }
     }
     return deduplicated;
-  },
+  }
 
   parseLogLine(line, file, lineNumber, invalidLogStream) {
     function extractUrl(message) {
@@ -433,7 +844,7 @@ const securityScanService = {
         `[${DateTime.now().toISO()}] Unrecognized log format in ${file} at line ${lineNumber}: ${line}\n`
       );
     return null;
-  },
+  }
 
   async getLastScanDetails() {
     try {
@@ -459,7 +870,7 @@ const securityScanService = {
       logger.error(`Error in getLastScanDetails: ${error.message}`, { stack: error.stack });
       throw error;
     }
-  },
+  }
 
   async scanForVulnerabilities() {
     const vulnerabilities = { critical: [], medium: [], low: [] };
@@ -520,7 +931,7 @@ const securityScanService = {
       logger.error(`Error in scanForVulnerabilities: ${error.message}`, { stack: error.stack });
       return vulnerabilities;
     }
-  },
+  }
 
   async checkSecurityHeaders() {
     try {
@@ -577,7 +988,7 @@ const securityScanService = {
       logger.error(`Error checking security headers: ${error.message}`);
       return [];
     }
-  },
+  }
 
   async checkServerLeakage() {
     try {
@@ -610,7 +1021,7 @@ const securityScanService = {
       logger.error(`Error checking server information leakage: ${error.message}`);
       return [];
     }
-  },
+  }
 
   async checkTimestampDisclosure() {
     try {
@@ -645,7 +1056,7 @@ const securityScanService = {
       logger.error(`Error checking timestamp disclosure: ${error.message}`);
       return [];
     }
-  },
+  }
 
   async checkCorsConfiguration() {
     try {
@@ -679,7 +1090,7 @@ const securityScanService = {
       logger.error(`Error checking CORS configuration: ${error.message}`);
       return [];
     }
-  },
+  }
 
   async checkHiddenFiles() {
     try {
@@ -724,7 +1135,7 @@ const securityScanService = {
       logger.error(`Error checking hidden files: ${error.message}`);
       return [];
     }
-  },
+  }
 
   removeDuplicateLogEntries(logEntries) {
     const seen = new Set();
@@ -735,7 +1146,7 @@ const securityScanService = {
       seen.add(key);
       return true;
     });
-  },
+  }
 
   async loginIssues(logsService) {
     if (!logsService) throw new Error('LogsService is required for loginIssues');
@@ -830,7 +1241,7 @@ const securityScanService = {
         suspiciousActivities: { count: 0, details: [] }
       };
     }
-  },
+  }
 
   generateRecommendations(loginIssues, suspiciousActivities, vulnerabilities) {
     const recommendations = [];
@@ -1001,7 +1412,7 @@ const securityScanService = {
 
     console.debug(`Generated recommendations: ${recommendations.length}`);
     return recommendations;
-  },
+  }
 
   async saveScanResults(results) {
     logger.info('*** SAVE_SCAN_RESULTS_START ***');
@@ -1017,6 +1428,8 @@ const securityScanService = {
       throw error;
     }
   }
-};
+}
 
+const securityScanService = new SecurityScanService();
 module.exports = securityScanService;
+module.exports.SecurityScanService = SecurityScanService;

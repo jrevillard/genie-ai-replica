@@ -18,10 +18,10 @@ A Claude Code Workflow-tool meta-orchestrator. Runs the **entire PRD** (every st
 On activation, this skill:
 
 1. **Detect invocation mode**:
-   - User invoked with no args (or just `/bmad-prd-orchestrate`): treat as fresh-run, start Q&A from question 1
-   - User invoked with `resume <token>` or `<token>` alone: treat as resume, jump to Resume Flow
-   - User invoked with `epic-N` or canonical story key: scope Q&A question 1 is auto-answered
-2. **Configuration Q&A** (see below) — collects remaining args from the user, skipping what's already inferred from invocation
+   - User invoked with no args (or just `/bmad-prd-orchestrate`): fresh-run, **ask ALL Q&A questions** in order
+   - User invoked with `resume <token>` or `<token>` alone: resume, jump to Resume Flow (skip Q&A 1-7)
+   - User invoked with `epic-N` or canonical story key: scope Q&A question 1 is auto-answered, ask 2-7
+2. **Configuration Q&A** (see below) — collects args from the user. NEVER skip questions unless the invocation mode provides the answer.
 3. Invokes the Workflow tool with `scriptPath: <repo>/.claude/workflows/bmad-prd-orchestrate.js` and the collected args
 4. Handles the result:
    - On halt (resume token returned): asks the user which `userChoice` to apply, then re-invokes with `resume` + `userChoice`
@@ -31,18 +31,9 @@ The user never touches the Workflow tool directly — the skill wraps it.
 
 ### Empty invocation
 
-`/bmad-prd-orchestrate` with nothing else:
-- Mode = fresh-run
-- Skips Q&A questions 1-2 (scope = "all remaining stories", prdKey = auto-discover)
-- Asks question 3 (HITL cadence), default = never
-- Asks question 4 (dep inference), default = confirm at start
-- Asks question 5 (retro), default = no
-- Asks question 6 (retry policy), default = once
-- Asks question 7 (max iterations), default = 5
-- Generates `timestamp` automatically (ISO timestamp + short random suffix)
-- Proceeds
+`/bmad-prd-orchestrate` with nothing else → **ask ALL Q&A questions 1-7 in order**. Do not assume defaults. The user must answer each one.
 
-If the user wants zero questions: skip Q&A entirely, use all defaults, launch immediately with auto-timestamp. The skill SHOULD offer this as a "Just go" option in the welcome.
+(Only `timestamp` is auto-generated since it's an internal identifier, not a user choice.)
 
 ## Invocation Shape
 

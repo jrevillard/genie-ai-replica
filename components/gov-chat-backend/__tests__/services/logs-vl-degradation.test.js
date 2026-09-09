@@ -236,7 +236,7 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
       ['non-numeric word', 'not-a-number'],
       ['empty string', ''],
       ['whitespace-only', '   '],
-      ['BOM-only', '﻿']
+      ['BOM-only', '\uFEFF']
     ])('tolerates a corrupt /tmp/vl-fail-open-ts (%s) and treats it as 0', async (_label, corruptValue) => {
       const { service, sharedLogger } = mountService();
 

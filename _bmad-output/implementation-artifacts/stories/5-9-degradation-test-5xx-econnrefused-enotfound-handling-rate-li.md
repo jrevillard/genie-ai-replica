@@ -4,8 +4,8 @@ title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit p
 epic: epic-5
 status: done
 baseline_revision: 6dd4f5fabc87124b09352e6d0b62e339197722b1
-followup_review_recommended: true
-review_loop_iteration: 3
+followup_review_recommended: false
+review_loop_iteration: 4
 effort: 0.25
 depends_on: [5.3]
 files: components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (new)
@@ -179,3 +179,65 @@ One comment-only patch to `components/gov-chat-backend/__tests__/services/logs-v
 #### Residual risks (this pass)
 - The CAP-5 5s SLO remains asserted in code by only the `< 200ms` service-layer guard, not by a separate HTTP-boundary test. If a future change makes `_withVlFailOpen` await slow VL responses (rather than bypass them), the unit guard still passes (synchronous reject path) but the 5s SLO would regress without a test catching it. A separate `routes/admin.test.js` VL-outage scenario would close this gap (deferred — out of scope for this story).
 - `routes/admin.test.js` mocks `../../services/logs-service` wholesale, so the CAP-5 AC's HTTP-boundary assertion language ("returns ... within 5 s") has no implementation-level guard rail in the route tests today.
+
+### Follow-up pass 3 (2026-09-09) — fourth review dispatch
+
+#### Implemented change
+One source-byte patch to `components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` based on parallel review-layer findings (blind-hunter, edge-case-hunter, verification-gap, intent-alignment). No assertion-logic changes — the patched line is the `'BOM-only'` row of the corrupt-ts `it.each` table:
+
+1. **BOM literal source-byte hardening (medium)**: the `'BOM-only'` row embedded the U+FEFF byte (`0xEF 0xBB 0xBF`) directly in the test source as a string literal. Invisible to editors, can be silently stripped by lint/format/byte-level hooks (`git`, `prettier`, some editor save actions on `.trim()` / BOM-aware paste), silently turning the BOM row into an empty-string duplicate. Replaced the literal with the Unicode escape `'﻿'`, which yields the same runtime value but is byte-stable across all tooling. The test still asserts the corruption-tolerance contract; only the source representation changed.
+
+#### Files changed
+- `components/gov-chat-backend/__tests__/services/logs-vl-degradation.test.js` (one source byte replaced with a Unicode escape on line 239; runtime behavior identical)
+
+#### Verification performed
+- `node_modules/.bin/jest __tests__/services/logs-vl-degradation.test.js --no-coverage`: **11/11 PASS** (unchanged)
+- `node_modules/.bin/jest __tests__/services/logs-service-vl.test.js __tests__/services/logs-vl-degradation.test.js --no-coverage` (co-run, ensures no shared-mock interference with the existing 5.3 tests): **90/90 PASS** (unchanged)
+- `node_modules/.bin/eslint __tests__/services/logs-vl-degradation.test.js`: **No issues found**
+- `od -An -c` on line 239 confirms the byte sequence is now `'﻿'` (8 ASCII bytes) rather than the 3-byte U+FEFF literal.
+
+#### Review findings breakdown (this pass)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1 (high 0, medium 1, low 0)
+- defer: 0
+- reject: ~37 (blind-hunter, edge-case-hunter, intent-alignment overlap)
+  - Corrupt-ts parameterization does not distinguish `Number(...)` vs `parseInt(...)` semantics (e.g. `'1.5'`, `'  123  '`) — the corruption contract is "treats any non-numeric as 0"; the parameterization was already expanded to cover the realistic NaN modes (non-numeric, empty, whitespace, BOM). Defensive over-specification, rejected.
+  - Corrupt-ts parameterization should add `'-1'`, `'0'`, recent-valid-ts rows — same as above; the existing four cases exhaust the NaN surface for the corruption branch.
+  - Error code parameterization (ENOTFOUND, 5xx, ETIMEDOUT) — the implementation's `_isVlUnavailable(err)` gates all VL-unavailable error codes through one branch; code path identical to tested codes, parallel tests add no value (rejected in earlier passes).
+  - Plain `new Error('boom')` without `.code` reaching `_logVlUnavailableOnce` — defensive expansion; the test fixture already exercises the `Object.assign(new Error(...), { code: 'X' })` shape used in production.
+  - `mockFs.readFile` rejection case (EACCES) — defensive; ENOENT (the realistic cold-start path) is the default mock in `beforeEach` and is implicitly exercised by the rate-limit cooldown test on first incident.
+  - `mockFs.writeFile` rejection case (ENOSPC) — rejected in earlier passes; defensive contract, not the load-bearing persistence path.
+  - `toHaveBeenCalledTimes(1)` too tight — same as earlier; the service-layer code path does not emit any other `logger.warn` between the catch branch and the assertion.
+  - `sharedLogger.warn.mock.calls[0]` assumes first warn is AD-11 — same; the test mounts a fresh `sharedLogger` in `mountService()` and `beforeEach` calls `jest.clearAllMocks()`, so the spy is per-test.
+  - Mock state across `it.each` rows — false positive: `beforeEach` (lines 90-111) calls `jest.clearAllMocks()` + `jest.resetModules()` + recreates `mockVlClient` + sets default `mockFs` mocks. Per-test isolation is in place.
+  - Missing `afterEach` to reset `process.env.VL_FAIL_OPEN` — false positive: `beforeEach` (line 95) deletes `process.env.VL_FAIL_OPEN` before every test.
+  - 22-line mid-test comment block — narrative quality; not caused by this story's diff; rejected as naming cosmetics.
+  - Test name lost "CAP-5 5s budget" phrasing — rejected in the prior pass; the comment now documents why.
+  - No test pins `/tmp/vl-fail-open-ts` path — rejected in earlier passes; `endsWith` assertion is sufficient for the load-bearing contract.
+  - No test for `ENOENT` cold-start case — covered by `beforeEach` default (`mockFs.readFile.mockRejectedValue(enoent)`) and the rate-limit Property 1 test which expects a fresh log on the first incident.
+  - No concurrent-write race test — rejected in earlier passes; the 1/min contract is single-writer by spec.
+  - `_label` parameter unused for anything other than test-id — reviewer's point is the parameterization is descriptive, not prescriptive. The label IS the test-id (Jest pattern); no behavior change.
+  - `corrupt-ts-${_label}` is a free-form string passed as a code/context identifier — the test exercises `_logVlUnavailableOnce` which uses this string in the warn payload; not the load-bearing contract.
+  - Service-layer test mixes degraded-envelope and AD-11 concerns — rejected in earlier passes; intentional, because the wiring assertion is the regression-catcher.
+  - 5s SLO load-bearing test with delayed VL mock — would hang (the implementation does not bypass slow requests, only errors); the service-layer test catches the realistic regression.
+  - Route-level 500 via supertest — established suite pattern uses service-layer re-throw.
+  - Happy-path `getLogsInRange` no-degraded test — out of scope for this degradation-only story.
+  - Partial-degradation cases (VL responds with one field missing) — covered indirectly by `_isVlUnavailable(err)` shape.
+  - Truthy-VL_FAIL_OPEN variants, `degraded: 'yes'` type stability, `mockFs` unused method mocks, `VL_QUERY_TIMEOUT_MS` unused assertion — all defensive over-specification; same code path.
+  - Intent-alignment auditor: descriptive report only, no prescriptive findings. Documents that the diff is consistent with the file's chosen reading (service-layer, in-process, mock-driven) and the wider AC surfaces (HTTP boundary, child-process, fake-timer/axios-delay) remain a documented, named concession. Not a regression of the diff.
+  - Verification-gap reviewer: "No verification gaps found."
+- Followup review recommended: **false** (1 × medium patch, score = 3·0 + 1·1 = 1 < 5)
+
+#### Residual risks (this pass)
+- The CAP-5 5s SLO remains asserted in code by only the `< 200ms` service-layer guard, not by a separate HTTP-boundary test. If a future change makes `_withVlFailOpen` await slow VL responses, the unit guard still passes but the 5s SLO would regress without a test catching it. (Same residual as prior pass; deferred — out of scope for this story.)
+- The `it.each` corrupt-ts parameterization is closed under NaN/empty/whitespace/BOM but does not pin whether the corruption branch uses `parseInt(x, 10) || 0` vs `Number(x) || 0` vs `+x || 0`. A refactor that swaps the mechanism would still pass the existing four cases; this is acceptable because the load-bearing contract is "any non-numeric input is treated as lastTs=0", and all four cases satisfy it.
+
+### 2026-09-09 — Follow-up pass 3 (fourth review dispatch)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1: (medium 1, low 0, high 0)
+- defer: 0
+- reject: ~37
+- addressed_findings:
+  - `[medium]` `[patch]` **BOM literal source-byte hardening** — the `'BOM-only'` row of the corrupt-ts `it.each` table embedded the U+FEFF byte (`0xEF 0xBB 0xBF`) directly in the test source. Invisible to editors, susceptible to silent stripping by lint/format/byte-level hooks (`git`, `prettier`, editor save actions), the BOM row would silently become an empty-string duplicate and lose its naming meaning. Replaced with the Unicode escape `'﻿'`, byte-stable across all tooling. Runtime value identical; the corruption-tolerance contract still passes (BOM-only → `parseInt` → NaN → `|| 0` → 0 → fresh log).

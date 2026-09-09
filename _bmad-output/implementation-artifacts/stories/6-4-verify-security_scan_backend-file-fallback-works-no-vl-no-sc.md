@@ -6,7 +6,7 @@ status: in-progress
 effort: 0.1
 depends_on: [6.2]
 files: manual smoke
-baseline_revision: 5fe1984ba555db0dc19097248e6ef88b73067934
+baseline_revision: 31caabf114ad1c749cb77b828c5db6020c3b4e3a
 ---
 
 # Story 6.4 — verify `SECURITY_SCAN_BACKEND=file` fallback works (no VL, no scan window check)

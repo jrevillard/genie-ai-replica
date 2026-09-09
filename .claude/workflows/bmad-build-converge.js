@@ -169,14 +169,11 @@ async function dispatchViaClaudeP(opts) {
   const stderrFile = `/tmp/bmad-bc-${marker}.stderr`;
   const cmd = `(echo '${promptB64}' | base64 -d > '${promptFile}' && ${cwdPrefix}{ cat '${promptFile}' | claude -p -${modelArg} --output-format json --permission-mode bypassPermissions --allowedTools '${allowedTools}'${jsonSchemaArg} 2> '${stderrFile}'; } > '${stdoutFile}'; echo "EXIT_CODE=$?"; echo '<<<STDOUT>>>'; cat '${stdoutFile}'; echo '<<<STDERR>>>'; cat '${stderrFile}')`;
   const wrapperResult = await agent(
-    `Run this bash command. It runs claude -p which may take 10-30 minutes (Skill loads MCP servers, dispatches subagents).
+    `Run this bash command. It runs claude -p which may take 10-30 minutes.
 
-STEPS:
-1. Call Bash tool with the command. If Bash returns a background task ID (likely after ~600s), call TaskOutput with that ID — TaskOutput blocks until terminal status. Do NOT poll manually.
-2. When the bash command completes, read its captured stdout.
-3. Return the raw stdout verbatim (no synthesis). If bash wrote nothing, stdout is empty string.
+Use Bash with timeout: 1800000 (30 minutes) so the command returns inline. If the command backgrounds anyway, wait for it and read its output using your normal Bash-tool flow.
 
-Return JSON: { stdout: <verbatim bash stdout>, exitCode: <integer, 0 on success> }
+Return JSON: { stdout: <verbatim raw bash stdout>, exitCode: <integer, 0 on success> }. Do NOT synthesize, summarize, diagnose, or modify the bash output. Empty stdout is allowed.
 
 COMMAND:
 ${cmd}`,

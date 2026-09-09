@@ -237,7 +237,6 @@ ${cmd}`,
   let stdoutText = (wrapperResult.stdout || '').trim();
   stdoutText = stdoutText.replace(/\nEXIT_CODE=\d+\s*$/, '');
   let parsed;
-  let parsed;
   try {
     parsed = JSON.parse(stdoutText);
   } catch (e) {

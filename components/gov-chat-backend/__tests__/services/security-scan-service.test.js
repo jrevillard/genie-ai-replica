@@ -682,8 +682,11 @@ describe('SecurityScanService', () => {
       const mockLogsService = {
         getLogFilesInRange: jest.fn().mockResolvedValue(['/var/log/combined-2026-05-26.log'])
       };
-      // Spy on processFile to avoid the Worker path
-      const processFileSpy = jest.spyOn(securityScanService, 'processFile').mockResolvedValue({
+      // Substitute processFile so the aggregation pipeline is exercised without
+      // touching the (intentionally-preserved) call site at line 283. A
+      // `jest.spyOn` would throw under Jest 30 because `processFile` is no
+      // longer an own property of the service.
+      securityScanService.processFile = jest.fn().mockResolvedValue({
         vulnerabilities: {
           critical: [
             {
@@ -706,8 +709,7 @@ describe('SecurityScanService', () => {
       const result = await securityScanService.processLogsInParallel(mockLogsService);
       expect(result.vulnerabilities.critical).toHaveLength(1);
       expect(result.failedLogins).toHaveLength(1);
-      expect(processFileSpy).toHaveBeenCalledTimes(1);
-      processFileSpy.mockRestore();
+      expect(securityScanService.processFile).toHaveBeenCalledTimes(1);
     });
 
     it('should filter invalid gzip files', async () => {

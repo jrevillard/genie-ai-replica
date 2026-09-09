@@ -3,7 +3,7 @@ key: 5-9-degradation-test-5xx-econnrefused-enotfound-handling-rate-li
 title: "degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling + rate-limit persistence"
 epic: epic-5
 status: in-progress
-baseline_revision: c346aa3fd620d7d5c90e4db91b2dcba63080d200
+baseline_revision: 426a77d2fa984ea2022ee417663d3fc96942233a
 followup_review_recommended: false
 review_loop_iteration: 6
 effort: 0.25

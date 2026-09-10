@@ -144,3 +144,19 @@ components/gov-chat-backend/logs/
 
 # Core dumps from test runs (pytest, bench, etc.)
 core.*
+
+# Local Python virtualenvs (genie-ai-overlay dev)
+genie-ai-overlay/.venv/
+genie-ai-overlay/.venv-linux/
+
+# BMAD per-story worktrees (local checkouts)
+_bmad-worktrees/
+
+# Claude session temp state
+.claude/tmp/
+
+# Bash crash dumps
+bash.exe.stackdump
+
+# OKF smoke tokens (host-side mint output — never commit)
+okf-smoke-tokens.json

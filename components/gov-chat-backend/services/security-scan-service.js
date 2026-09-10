@@ -607,6 +607,42 @@ class SecurityScanService {
     if (!logsService) {
       throw new Error('LogsService is required for security scan');
     }
+    // AD-6 escape hatch: SECURITY_SCAN_BACKEND=file returns a result that
+    // does NOT touch VictoriaLogs (no scan-window, retention, or VL query).
+    // Read per-call (not at module load) so the rollback matrix works
+    // without a restart.
+    if (process.env.SECURITY_SCAN_BACKEND === 'file') {
+      const cached = await this.checkCachedResults();
+      if (cached) {
+        logger.info('SECURITY_SCAN_BACKEND=file; returning cached scan results (no VL query)');
+        const vd = cached.vulnerabilityDetails || {};
+        const arr = (v) => (Array.isArray(v) ? v : []);
+        return {
+          vulnerabilities: {
+            critical: arr(vd.critical),
+            medium: arr(vd.medium),
+            low: arr(vd.low)
+          },
+          failedLogins: Array.isArray(cached.failedLoginDetails) ? cached.failedLoginDetails : [],
+          suspiciousActivities: Array.isArray(cached.suspiciousDetails) ? cached.suspiciousDetails : [],
+          skipped: false,
+          reason: 'file_backend_cache_hit',
+          degraded: false,
+          error: null
+        };
+      }
+      logger.warn('SECURITY_SCAN_BACKEND=file; no valid cache available, returning skipped result');
+      return {
+        vulnerabilities: { critical: [], medium: [], low: [] },
+        failedLogins: [],
+        suspiciousActivities: [],
+        skipped: true,
+        reason: 'file_backend_no_cache',
+        degraded: false,
+        error: null
+      };
+    }
+
     const startTime = Date.now();
     const today = DateTime.now();
     const scanEnd = today.toISO();

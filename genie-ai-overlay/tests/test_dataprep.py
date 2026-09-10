@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 import dataprep.genieai_dataprep_arangodb as dp_module
 from dataprep.genieai_dataprep_arangodb import GenieArangoDataprep
@@ -34,6 +35,11 @@ def create_dataprep(db_mock=None, embeddings_mock=None, graph_mock=None):
     dp.graph = graph_mock or MagicMock()
     dp.llm_transformer = MagicMock()
     dp._log_semaphore = asyncio.Semaphore(100)
+    # Story 4.8-amend follow-up (David's 4th-time directive, 2026-08-21):
+    # the bundle mirror helper looks up the concept file name from a cache.
+    # __new__ skips __init__, so initialize the cache here too.
+    dp._concept_file_name_cache = {}
+    dp._bundle_file_id_cache = {}
     dp._initialize_llm = MagicMock()
     dp._initialize_embeddings = MagicMock()
     return dp
@@ -988,6 +994,48 @@ class TestIngestFileWithGuardrail:
         assert doc.metadata["file_id"] == "test-file-123"
         assert doc.metadata["chunk_index"] == 0
         assert doc.metadata["chunk_labels"] == ["Healthcare"]
+        # Story 2.9.7 (ADR-031) "threaded everywhere": a request WITHOUT a minted
+        # version gets NO bundle_version stamp (the MagicMock default would be a
+        # truthy mock — this asserts the strict None guard).
+        assert doc.metadata.get("bundle_version") is None
+
+    @pytest.mark.asyncio
+    async def test_document_metadata_bundle_version_stamped(self):
+        """Story 2.9.7: a request carrying bundle_version stamps EVERY chunk doc
+        with it (version-pinned citation), and the value rides the metadata."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        inp.bundle_version = 3  # the minted version (absent on the base mock)
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["A"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1", "chunk2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=[
+                    {"text": "chunk1", "labels": ["Healthcare"]},
+                    {"text": "chunk2", "labels": ["Healthcare"]},
+                ],
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 2
+        for doc in captured_docs:
+            assert doc.metadata["bundle_version"] == 3
 
     @pytest.mark.asyncio
     async def test_document_metadata_sequential_indices(self):
@@ -2051,6 +2099,408 @@ class TestContextualRetrieval:
         mock_client.chat.completions.create.assert_not_called()  # no batch call for single
 
 
+# ---------------------------------------------------------------------------
+# Story 2.6a — ACL-label preserve (OKF gap G4)
+# _finalize_chunk_labels previously used file_labels ONLY as a scope filter and
+# never unioned ACL-prefixed (t:/r:/d:) file_labels into the output, so they
+# never reached chunk_labels. _apply_labels now short-circuits the LLM call when
+# file_labels carries ACL prefixes. These tests pin the fix + the no-regression
+# contract for the free-form GRAPH corpus.
+# ---------------------------------------------------------------------------
+
+
+class TestAclPredicate:
+    """The _is_acl_label predicate (module-level, single-sourced)."""
+
+    def test_acl_predicate_membership(self):
+        assert dp_module._is_acl_label("t:x") is True
+        assert dp_module._is_acl_label("r:y") is True
+        assert dp_module._is_acl_label("d:z") is True
+        assert dp_module._is_acl_label("Healthcare") is False
+        # Case-sensitive by design (pins the L4 canonicalization boundary).
+        assert dp_module._is_acl_label("T:x") is False
+        assert dp_module._is_acl_label("R:y") is False
+        assert dp_module._is_acl_label("D:z") is False
+        # Empty-value degenerate token still detected (value sanitization is
+        # owned by the orchestrator 2.9.1 / L3, not 2.6a).
+        assert dp_module._is_acl_label("t:") is True
+        # Non-str guard (None / int must not raise AttributeError).
+        assert dp_module._is_acl_label(None) is False
+        assert dp_module._is_acl_label(123) is False
+
+
+class TestFinalizeChunkLabelsAcl:
+    """Direct unit tests for _finalize_chunk_labels — the G4 bug site."""
+
+    @pytest.mark.asyncio
+    async def test_acl_prefixed_file_labels_preserved(self):
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(
+                0,
+                ["Cucumber"],
+                ["Cucumber"],
+                "file1",
+                ["Cucumber", "t:t1", "r:r1", "d:dom"],
+            )
+        # Cucumber survives scope (in file_labels); ACL labels unioned verbatim.
+        assert "Cucumber" in result
+        assert "t:t1" in result
+        assert "r:r1" in result
+        assert "d:dom" in result
+
+    @pytest.mark.asyncio
+    async def test_acl_only_file_labels_preserved_when_no_taxonomy_match(self):
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(0, [], ["Healthcare"], "file1", ["t:t1"])
+        assert result == ["t:t1"]
+
+    @pytest.mark.asyncio
+    async def test_no_acl_no_behavior_change(self):
+        """Free-form GRAPH corpus docs (no ACL prefixes) are a true no-op."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(0, ["Healthcare"], ["Healthcare"], "file1", ["Healthcare"])
+        assert result == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_finalize_excludes_acl_from_new_labels(self):
+        """ACL labels must never trigger the 'add to Knowledge Hierarchy' WARN."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log:
+            result = await dp._finalize_chunk_labels(0, ["t:t1"], [], "file1", ["t:t1"])
+        # No WARN emitted (new_labels excludes the ACL label) + label preserved.
+        levels = [call.args[1] for call in log.await_args_list]
+        assert "WARN" not in levels
+        assert "t:t1" in result
+
+
+class TestApplyLabelsAclPoolSemantics:
+    """REVISED (David's directive, 2026-08-23 - the skip is REMOVED): bundle
+    labels are a CANDIDATE POOL, never forced attachments. The strategy RUNS
+    for ACL-carrying file_labels; per-chunk applicability is decided by
+    content. The llm path scopes via _finalize_chunk_labels (pool intersect
+    taxonomy + ACL verbatim); embedding/bm25 union ONLY the ACL tokens."""
+
+    @pytest.mark.asyncio
+    async def test_llm_runs_when_acl_present(self):
+        """The strategy must NOT be skipped for ACL-carrying labels - the old
+        blanket stamp made every chunk match every scoped query."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            llm.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "r:r1", "d:dom", "Healthcare"], "file1")
+        llm.assert_called_once()
+        assert result[0]["labels"] == ["Healthcare"]
+
+    @pytest.mark.asyncio
+    async def test_llm_still_called_when_no_acl(self):
+        """Pins the predicate: file_labels WITHOUT ACL prefixes must still run
+        the LLM (else every legacy Gov-Chat doc skips labeling)."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            llm.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+        llm.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_embedding_strategy_runs_and_preserves_acl(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
+            patch.object(dp, "_label_with_embedding") as emb,
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            emb.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "Healthcare"], "file1")
+        emb.assert_called_once()
+        llm.assert_not_called()
+        labels = result[0]["labels"]
+        assert "Healthcare" in labels  # per-chunk applicability kept
+        assert "t:t1" in labels  # ACL token unioned verbatim
+        assert labels.count("t:t1") == 1  # dedup
+
+    @pytest.mark.asyncio
+    async def test_bm25_strategy_runs_and_preserves_acl(self):
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "bm25"),
+            patch.object(dp, "_label_with_bm25") as bm25,
+            patch.object(dp, "_label_with_llm", new_callable=AsyncMock) as llm,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            bm25.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["t:t1", "d:dom"], "file1")
+        bm25.assert_called_once()
+        llm.assert_not_called()
+        labels = result[0]["labels"]
+        assert "Healthcare" in labels
+        assert "t:t1" in labels and "d:dom" in labels
+
+    @pytest.mark.asyncio
+    async def test_no_acl_embedding_labels_unchanged(self):
+        """Without ACL tokens the embedding path returns selections untouched
+        (legacy behavior)."""
+        dp = create_dataprep()
+        with (
+            patch.object(dp_module, "LABELING_STRATEGY", "embedding"),
+            patch.object(dp, "_label_with_embedding") as emb,
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            emb.return_value = [{"text": "chunk", "labels": ["Healthcare"]}]
+            result = await dp._apply_labels(["chunk"], ["Healthcare"], ["Healthcare"], "file1")
+        assert result[0]["labels"] == ["Healthcare"]
+
+
+class TestPerChunkFallbackAclPreserve:
+    """The per-chunk fallback (_llm_call_single returns file_labels as suggested
+    after exhausting retries) also preserves ACL labels via the
+    _finalize_chunk_labels union (critic gap #1). Tested by calling
+    _label_with_llm directly (Part 2 makes the fallback unreachable for ACL
+    docs via _apply_labels in production)."""
+
+    @pytest.mark.asyncio
+    async def test_acl_survives_per_chunk_fallback(self, monkeypatch):
+        dp = create_dataprep()
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+
+        # Force the real _llm_call_single to exhaust its 3 retries and return
+        # file_labels as suggested (the line-976 fallback).
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("LLM error"))
+
+        with (
+            patch.object(dp_module, "AsyncOpenAI", return_value=mock_client),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+        ):
+            result = await dp._label_with_llm(
+                ["chunk"],
+                ["Healthcare"],
+                ["t:t1", "r:r1", "d:dom", "Healthcare"],
+                "file1",
+            )
+        labels = result[0]["labels"]
+        for acl in ("t:t1", "r:r1", "d:dom"):
+            assert acl in labels
+        assert "Healthcare" in labels
+        assert mock_client.chat.completions.create.call_count == 3  # exhausted retries
+
+
+class TestAclLabelPreserveE2E:
+    """End-to-end: ACL labels survive ingest_file_with_guardrail into the
+    persisted chunk's metadata.chunk_labels. REVISED (2026-08-23): _apply_labels
+    is still NOT mocked, but since the skip removal the REAL labeling strategy
+    runs for ACL-bearing file_labels — the inner LLM call is mocked at
+    _label_with_llm level (per-chunk applicability returns Healthcare), and the
+    real _finalize_chunk_labels must preserve the ACL tokens verbatim."""
+
+    @pytest.mark.asyncio
+    async def test_acl_file_labels_reach_chunk_labels_metadata(self):
+        dp = create_dataprep()
+        inp = create_mock_ingest_input(file_labels=["t:tenant1", "r:repoA", "d:health", "Healthcare"])
+
+        captured_docs = []
+
+        async def capture_batch(batch, *args, **kwargs):
+            captured_docs.extend(batch)
+
+        with (
+            patch.object(dp, "_update_doc_status", new_callable=AsyncMock),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["Healthcare"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["chunk1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            # Pass-through: contextualization returns chunks unchanged so the
+            # labeling input is the raw chunk (CONTEXTUAL_LABEL_RAW default).
+            patch.object(dp, "_apply_contextualization", new_callable=AsyncMock, return_value=["chunk1"]),
+            # The real _apply_labels dispatches to the (mocked) LLM strategy;
+            # the REAL _finalize_chunk_labels then scopes to the pool and
+            # preserves the ACL tokens verbatim.
+            patch.object(
+                dp,
+                "_label_with_llm",
+                new_callable=AsyncMock,
+                return_value=[{"text": "chunk1", "labels": ["Healthcare", "t:tenant1", "r:repoA", "d:health"]}],
+            ),
+            patch.object(dp, "_process_batch", new_callable=AsyncMock, side_effect=capture_batch),
+            patch.object(dp_module, "ArangoGraph"),
+            patch.object(dp_module, "Document", side_effect=lambda **kw: type("Doc", (), kw)),
+        ):
+            await dp.ingest_file_with_guardrail(inp, lock_file=None)
+
+        assert len(captured_docs) == 1
+        chunk_labels = captured_docs[0].metadata["chunk_labels"]
+        # The 3 ACL prefixes + the taxonomy label all reach chunk_labels.
+        assert "t:tenant1" in chunk_labels
+        assert "r:repoA" in chunk_labels
+        assert "d:health" in chunk_labels
+        assert "Healthcare" in chunk_labels
+
+    @pytest.mark.asyncio
+    async def test_all_batches_failed_never_reports_ingested(self):
+        """P0 (David, 2026-09-09, Kenya v8): batch/model failures (remote LLM
+        502s) were swallowed per batch while the pipeline still reported
+        'Ingested' — meta rows went 'indexed' with chunk_counts over a
+        ZERO-write graph and an empty graph SERVED. The gather site must
+        refuse success when every batch failed and nothing landed; the raise
+        routes into the designed 'Ingestion Error' path."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        statuses = []
+
+        async def fake_status(file_id, status, chunk_count=None, concept_id=None, error=None):
+            statuses.append(status)
+
+        async def failing_batch(batch_docs, *a, **k):
+            return {"inserted": 0, "failed": True}
+
+        with (
+            patch.object(dp, "_update_doc_status", new=AsyncMock(side_effect=fake_status)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=[{"text": "c1", "labels": ["L"]}, {"text": "c2", "labels": ["L"]}]),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=failing_batch)),
+            patch.object(dp, "retract_file", new_callable=AsyncMock),
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            with pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp)
+
+        assert "Ingested" not in statuses
+        assert "Ingestion Error" in statuses
+
+    @pytest.mark.asyncio
+    async def test_honest_empty_extraction_stays_ingested(self):
+        """A batch that completes WITHOUT exception and extracts no entities is
+        an honest empty — not a failure. Zero inserts with zero failed batches
+        keeps the 'Ingested' verdict (unchanged behavior, pinned so the P0
+        refusal never over-fires on entity-free content)."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        statuses = []
+
+        async def fake_status(file_id, status, chunk_count=None, concept_id=None, error=None):
+            statuses.append(status)
+
+        async def empty_batch(batch_docs, *a, **k):
+            return {"inserted": 0, "failed": False}
+
+        with (
+            patch.object(dp, "_update_doc_status", new=AsyncMock(side_effect=fake_status)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=[{"text": "c1", "labels": ["L"]}]),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=empty_batch)),
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            await dp.ingest_file_with_guardrail(inp)
+
+        assert statuses[-1] == "Ingested"
+
+    @pytest.mark.asyncio
+    async def test_partial_batch_success_still_ingests(self):
+        """Some batches landed, some failed -> 'Ingested' (per-batch warnings
+        stay in the ingestion log); the P0 refusal fires only when NOTHING
+        was written."""
+        dp = create_dataprep()
+        inp = create_mock_ingest_input()
+        statuses = []
+
+        async def fake_status(file_id, status, chunk_count=None, concept_id=None, error=None):
+            statuses.append(status)
+
+        async def mixed_batch(batch_docs, current_batch_num, *a, **k):
+            if current_batch_num == 1:
+                return {"inserted": 3, "failed": False}
+            return {"inserted": 0, "failed": True}
+
+        with (
+            patch.object(dp, "_update_doc_status", new=AsyncMock(side_effect=fake_status)),
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
+            patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2", "c3", "c4"]),
+            patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
+            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=[{"text": c, "labels": ["L"]} for c in ["c1", "c2", "c3", "c4"]]),
+            patch.object(dp, "_process_batch", new=AsyncMock(side_effect=mixed_batch)),
+            patch.object(dp_module, "ArangoGraph"),
+        ):
+            await dp.ingest_file_with_guardrail(inp)
+
+        assert statuses[-1] == "Ingested"
+
+# ── Remote-LLM resilience (David, 2026-09-09) ──
+class TestLlmResilience:
+    def _patch_clock(self, monkeypatch):
+        # No real waiting: delays collapse to zero, sleeps are recorded.
+        # Module storm state resets per test (it is shared global state).
+        dp_module._LLM_STORM_UNTIL = 0.0
+        dp_module._LLM_STORM_STRIKES = 0
+        calls = {'sleeps': [], 'delays': []}
+        monkeypatch.setattr(dp_module, '_llm_retry_delay_s', lambda attempt: calls['delays'].append(attempt) or 0.0)
+        async def fake_sleep(s):
+            calls['sleeps'].append(s)
+        monkeypatch.setattr(dp_module.asyncio, 'sleep', fake_sleep)
+        return calls
+
+    def test_transient_502_burst_recovers(self, monkeypatch):
+        calls = self._patch_clock(monkeypatch)
+        attempts = {'n': 0}
+        async def flaky():
+            attempts['n'] += 1
+            if attempts['n'] < 3:
+                raise RuntimeError('InternalServerError: 502 Bad Gateway')
+            return 'ok'
+        import asyncio
+        result = asyncio.run(dp_module._call_llm_resilient(flaky, what='test'))
+        assert result == 'ok'
+        assert attempts['n'] == 3
+
+    def test_permanent_502_exhausts_ladder_and_raises_last(self, monkeypatch):
+        self._patch_clock(monkeypatch)
+        attempts = {'n': 0}
+        async def always_502():
+            attempts['n'] += 1
+            raise RuntimeError('InternalServerError: 502 Bad Gateway')
+        import asyncio
+        with pytest.raises(RuntimeError):
+            asyncio.run(dp_module._call_llm_resilient(always_502, what='test'))
+        assert attempts['n'] == dp_module._LLM_RETRY_ATTEMPTS
+
+    def test_4xx_fails_fast(self, monkeypatch):
+        calls = self._patch_clock(monkeypatch)
+        attempts = {'n': 0}
+        async def bad_request():
+            attempts['n'] += 1
+            raise RuntimeError('BadRequestError: 400')
+        import asyncio
+        with pytest.raises(RuntimeError):
+            asyncio.run(dp_module._call_llm_resilient(bad_request, what='test'))
+        assert attempts['n'] == 1
+        assert calls['sleeps'] == []
+
+    def test_storm_cooldown_advances_after_transient_failure(self, monkeypatch):
+        self._patch_clock(monkeypatch)
+        import asyncio
+        async def once_502():
+            raise RuntimeError('502 Bad Gateway')
+        with pytest.raises(RuntimeError):
+            asyncio.run(dp_module._call_llm_resilient(once_502, what='test'))
+        assert dp_module._LLM_STORM_STRIKES >= 1
+        assert dp_module._LLM_STORM_UNTIL > 0
 class TestInitializeClient:
     """Tests for GenieArangoDataprep._initialize_client().
 

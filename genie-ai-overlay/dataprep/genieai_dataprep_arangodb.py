@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import contextvars
 import fcntl  # Added for file locking
 import json
 import os
@@ -51,6 +52,10 @@ logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 DOCUMENT_REPOSITORY_URL = os.getenv("DOCUMENT_REPOSITORY_URL", "http://document-repository:3001")
 # 2. Backend Service: Source of Truth for Label Hierarchy
 BACKEND_SERVICE_URL = os.getenv("BACKEND_SERVICE_URL", "http://backend:3000")
+# 3. OKF Server: the control plane that owns per-concept index status (Story
+#    4.8-amend — content-only chunking routes the concept completion callback
+#    here instead of the doc-repo, which holds no files doc for a concept).
+OKF_SERVER_URL = os.getenv("OKF_SERVER_URL", "http://okf-server:3002")
 
 # 3. Keycloak Service Account for OIDC authentication
 from keycloak_service_account import get_service_account_token
@@ -64,6 +69,25 @@ EMBEDDING_LABEL_THRESHOLD = float(os.getenv("EMBEDDING_LABEL_THRESHOLD", "0.75")
 BM25_LABEL_THRESHOLD = float(os.getenv("BM25_LABEL_THRESHOLD", "2.00"))
 CONTENT_EXTRACTION_METHOD = os.getenv("CONTENT_EXTRACTION_METHOD", "opea")
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# PARALLEL INGEST (David, 2026-09-03: "repositories are independent units of
+# work ... MUST run in parallel and utilize the machine resources"). Number of
+# concurrently accepted ingest requests per dataprep container. Each slot is
+# one flock file (the microservice 429s only when ALL slots are busy); the
+# default 1 reproduces the historical single-flight exactly. The heavy stages
+# are HTTP waits (vLLM labeling / TEI embedding — both natively concurrent),
+# so in-process slots scale near-linearly until CPU-bound chunking dominates;
+# scale further with container replicas on many-core nodes.
+DATAPREP_INGEST_CONCURRENCY = max(1, int(os.getenv("DATAPREP_INGEST_CONCURRENCY", "1")))
+
+# Request-local ingest context (parallel-ingest companion): each
+# ingest_file_with_guardrail task binds its own {input, repo_id, caches} so
+# concurrent requests no longer share the per-run state that used to live on
+# `self` (under >1 slot, two ingests would clobber each other's bundle-log
+# mirror and callback repo_id). ContextVars are asyncio-task-local: every
+# request runs in its own task, so isolation is automatic. Helpers read the
+# context first and FALL BACK to the legacy self attributes so the pytest
+# fixtures (which set self._current_* directly) stay green.
+_INGEST_CTX: contextvars.ContextVar = contextvars.ContextVar("ingest_ctx", default=None)
 # Concurrency control for LLM labeling. Default raised 5 → 20 so vLLM's
 # continuous batching is utilized — LLM labeling was the #1 ingestion
 # bottleneck (~70% of wall time; see perf analysis on release/el-salvador).
@@ -79,6 +103,26 @@ LABEL_LLM_BATCH_SIZE = max(1, int(os.getenv("DATAPREP_LLM_LABEL_BATCH_SIZE", "4"
 # format adherence (clean JSON) for a classification task; correct default for
 # every instruction model. Tunable per model if ever needed.
 LLM_LABEL_TEMPERATURE = float(os.getenv("DATAPREP_LLM_TEMPERATURE", "0.0"))
+
+# OKF ACL label prefixes — access-control tokens (t:<tenant>, r:<repo_id>,
+# d:<domain>) that ride on file_labels and must be preserved verbatim into
+# chunk_labels so the retriever can enforce per-tenant/repo/domain isolation
+# (OKF gap G4, Story 2.6a). A tuple (not frozenset) so str.startswith accepts
+# it. Case-sensitive by design — pins the canonicalization boundary: the
+# orchestrator (Story 2.9.1) must emit lowercase prefixes, and the retriever
+# matches by exact membership (no normalization on either side).
+_ACL_LABEL_PREFIXES = ("t:", "r:", "d:")
+
+
+def _is_acl_label(label: Any) -> bool:
+    """True iff ``label`` is an ACL-prefixed access-control token (t:/r:/d:).
+
+    ACL tokens are enforcement labels, NOT taxonomy entries: they are never
+    taxonomy-resolved, scoped, or proposed for the Knowledge Hierarchy — only
+    propagated verbatim into chunk_labels.
+    """
+    return isinstance(label, str) and label.startswith(_ACL_LABEL_PREFIXES)
+
 
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
 # context prepended to each chunk before embedding + labeling, so chunks carry
@@ -421,6 +465,108 @@ async def _safe_log(write_ingestion_log, file_id, level, component, message):
         )
 
 
+# ── Remote-LLM resilience (David, 2026-09-09: "build the resilience now") ──
+# The remote vLLM gateway throws transient 502/503/504 storms lasting seconds
+# to minutes while staying healthy between bursts. Absorb them: per-call
+# exponential backoff with jitter, a shared storm cool-down so concurrent
+# batches stop hammering a struggling gateway, and a second per-concept round
+# for failed batches. Only TRANSIENT classes retry (5xx + connection errors);
+# 4xx (auth/model errors) fail fast. Honest accounting is untouched: when
+# retries exhaust, the row fails loudly through the 'Ingestion Error' path —
+# resilience must NEVER reintroduce silent success (the P0 lesson).
+_LLM_RETRY_ATTEMPTS = max(1, int(os.getenv("OKF_LLM_RETRY_ATTEMPTS", "5") or 5))
+_LLM_RETRY_BASE_MS = max(250, int(os.getenv("OKF_LLM_RETRY_BASE_MS", "2000") or 2000))
+_LLM_RETRY_MAX_MS = max(_LLM_RETRY_BASE_MS, int(os.getenv("OKF_LLM_RETRY_MAX_MS", "90000") or 90000))
+_LLM_STORM_COOLDOWN_S = max(0, int(os.getenv("OKF_LLM_STORM_COOLDOWN_S", "20") or 20))
+_LLM_STORM_COOLDOWN_MAX_S = max(
+    _LLM_STORM_COOLDOWN_S, int(os.getenv("OKF_LLM_STORM_COOLDOWN_MAX_S", "120") or 120)
+)
+_LLM_ROUND2_DELAY_S = max(0, int(os.getenv("OKF_LLM_ROUND2_DELAY_S", "45") or 45))
+
+_LLM_STORM_UNTIL = 0.0  # module-level monotonic timestamp — the SHARED cool-down
+_LLM_STORM_STRIKES = 0
+
+_TRANSIENT_LLM_MARKERS = (
+    "502",
+    "503",
+    "504",
+    "Bad Gateway",
+    "Service Unavailable",
+    "Gateway Timeout",
+    "InternalServerError",
+)
+_TRANSIENT_CONN_MARKERS = (
+    "connection",
+    "Connection",
+    "timeout",
+    "Timeout",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "RemoteProtocol",
+    "IncompleteRead",
+    "socket hang up",
+)
+
+
+def _is_transient_llm_error(err) -> bool:
+    text = f"{type(err).__name__}: {err}"
+    return any(m in text for m in _TRANSIENT_LLM_MARKERS) or any(m in text for m in _TRANSIENT_CONN_MARKERS)
+
+
+def _llm_retry_delay_s(attempt: int) -> float:
+    """Jittered exponential backoff: ~2s/5s/15s/40s/90s at the defaults."""
+    import random
+
+    base_ms = min(_LLM_RETRY_MAX_MS, _LLM_RETRY_BASE_MS * (2.5**attempt))
+    return base_ms * (0.85 + 0.3 * random.random()) / 1000.0
+
+
+async def _llm_storm_wait():
+    """Shared adaptive cool-down: after consecutive transient failures,
+    concurrent callers pause before hitting the gateway again."""
+    global _LLM_STORM_UNTIL
+    import time
+
+    now = time.monotonic()
+    if now < _LLM_STORM_UNTIL:
+        await asyncio.sleep(_LLM_STORM_UNTIL - now)
+
+
+async def _call_llm_resilient(afn, *, what: str):
+    """Run one LLM call (``afn`` is a zero-arg factory returning an awaitable)
+    with the transient-failure retry ladder + storm cool-down. Returns the
+    result; raises the LAST error when the ladder exhausts. 4xx classes raise
+    immediately (retrying an auth/model error can never succeed)."""
+    global _LLM_STORM_UNTIL, _LLM_STORM_STRIKES
+    import time
+
+    last = None
+    for attempt in range(_LLM_RETRY_ATTEMPTS):
+        await _llm_storm_wait()
+        try:
+            result = await afn()
+            _LLM_STORM_STRIKES = 0  # a success ends the storm
+            return result
+        except Exception as e:  # noqa: BLE001 — classified below
+            last = e
+            if not _is_transient_llm_error(e):
+                raise
+            _LLM_STORM_STRIKES += 1
+            _LLM_STORM_UNTIL = time.monotonic() + min(
+                _LLM_STORM_COOLDOWN_MAX_S,
+                float(_LLM_STORM_COOLDOWN_S) * (2 ** min(_LLM_STORM_STRIKES, 6)),
+            )
+            delay = _llm_retry_delay_s(attempt)
+            logger.warning(
+                f"[ llm-resilience ] {what}: transient failure "
+                f"(attempt {attempt + 1}/{_LLM_RETRY_ATTEMPTS}): {type(e).__name__}: "
+                f"{str(e)[:160]} — retrying in {delay:.1f}s"
+            )
+            await asyncio.sleep(delay)
+    raise last
+
+
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
     """
@@ -433,10 +579,115 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.
         self._log_semaphore = asyncio.Semaphore(100)
+        # Story 4.8-amend (David's 4th-time directive, 2026-08-20): per-instance
+        # caches that map (concept_id → bundle_file_id) and (concept_id →
+        # concept_file_name) so every per-stage log POST can mirror into the
+        # bundle zip's ingestion_log (file-centric UI) without re-querying
+        # doc-repo for every chunk. The cache is populated lazily on the first
+        # log write that targets a concept id; the resolution is best-effort
+        # (any failure → no mirror, primary log still succeeds).
+        self._bundle_file_id_cache: dict[str, str] = {}
+        self._concept_file_name_cache: dict[str, str] = {}
 
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
 
+    def _concept_file_name(self, file_id: str) -> str | None:
+        """Return the concept's original filename for use as a log prefix so
+        the bundle's UI Ingestion Log tab is traceable. Pulled from the
+        ``input.file_name`` (Story 4.8-amend follow-up) on first use; cached."""
+        # Parallel-ingest: the request-local context is authoritative when the
+        # task bound one; the legacy self-cache stays as the fallback.
+        ctx = _INGEST_CTX.get()
+        if ctx is not None:
+            cache = ctx["name_cache"]
+            if file_id in cache:
+                return cache[file_id] or None
+            file_name = getattr(ctx["input"], "file_name", None)
+            cache[file_id] = file_name or ""
+            return file_name or None
+        cached = self._concept_file_name_cache.get(file_id)
+        if cached is not None:
+            return cached or None
+        # The file_id IS the concept_id; the request body carries the original
+        # filename under input.file_name. The microservice populates this from
+        # the worker's POST (which sets fileName: <concept>.md). For non-OKF
+        # single-file paths, input.file_name mirrors the upload's filename.
+        # We lazily capture it on the first label_log call.
+        try:
+            file_name = getattr(self._current_input, "file_name", None)
+        except AttributeError:
+            file_name = None
+        if file_name:
+            self._concept_file_name_cache[file_id] = file_name
+        else:
+            self._concept_file_name_cache[file_id] = ""
+        return file_name or None
+
+    async def _bundle_log_url(self, session, file_id: str, headers: dict) -> str | None:
+        """Resolve the doc-repo URL that mirrors an ingestion log into the
+        bundle zip's ingestion_log (file-centric UI). Returns None when no
+        bundle exists for the current repo or the doc-repo query fails."""
+        # Cache hit — POSITIVE results only are cached. Review P1a (live-caught
+        # v13b): the old code permanently cached "" on ANY failure (transient
+        # doc-repo hiccup, bundle row not yet queryable) with no retry — the
+        # first concept dispatched could lose its ENTIRE mirrored log history
+        # for the run while its siblings logged every stage. Failures are now
+        # retried on the next log write (the lookup is one cheap GET).
+        cached = self._bundle_file_id_cache.get(file_id)
+        if cached:
+            return f"{DOCUMENT_REPOSITORY_URL}/api/files/{cached}/ingestion-log"
+        # Parallel-ingest: request-local cache/repo when the task bound a
+        # context (falls through to the legacy self-state otherwise).
+        ctx = _INGEST_CTX.get()
+        if ctx is not None:
+            if file_id in ctx["bundle_cache"]:
+                return f"{DOCUMENT_REPOSITORY_URL}/api/files/{ctx['bundle_cache'][file_id]}/ingestion-log"
+            if not (file_id and self._is_concept_id(file_id)):
+                return None
+            repo_id = ctx["repo_id"]
+        else:
+            if not (file_id and self._is_concept_id(file_id)):
+                return None
+            repo_id = getattr(self, "_current_repo_id", None)
+        if not repo_id:
+            return None
+        # Look up the bundle zip via doc-repo's getFiles (Story 4.8-amend +
+        # ce9d825 supports repo_id + is_bundle=true filters).
+        try:
+            url = f"{DOCUMENT_REPOSITORY_URL}/api/files?repo_id={repo_id}&is_bundle=true&limit=1"
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                if r.status != 200:
+                    return None  # transient — retried on the next write
+                data = await r.json()
+                items = (
+                    data.get("data")
+                    if isinstance(data, dict) and "data" in data
+                    else (data if isinstance(data, list) else [])
+                )
+                if not items:
+                    return None  # bundle not yet queryable — retried (P1a race)
+                bundle_file_id = items[0].get("file_id")
+                if not bundle_file_id:
+                    return None
+                if ctx is not None:
+                    ctx["bundle_cache"][file_id] = bundle_file_id
+                else:
+                    self._bundle_file_id_cache[file_id] = bundle_file_id
+                return f"{DOCUMENT_REPOSITORY_URL}/api/files/{bundle_file_id}/ingestion-log"
+        except Exception as e:
+            if logflag:
+                logger.warning(f"Bundle-log URL resolve failed for concept {file_id}: {e}")
+            return None  # transient — NOT cached (P1a)
+
+    def _is_concept_id(self, value: str) -> bool:
+        """Heuristic: an OKF concept id is a non-UUID bare id (e.g.
+        'ecitizen_digital_payments', 'index'); a doc-repo file_id is a long
+        numeric timestamp. Anything matching the timestamp shape is treated as
+        a file_id (no mirror); bare ids are concept ids (mirror)."""
+        if not value:
+            return False
+        return not value[0].isdigit()
     def _initialize_client(self):
         """Override the OPEA parent's DB selection with the GENIE convention.
 
@@ -528,20 +779,49 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             logger.error(f"Failed to obtain service account token: {e}")
             return None
 
-    async def _update_doc_status(self, file_id: str, status: str, chunk_count: int = None):
-        """Updates file status in Document Repository (Spec 4.1/6.1)."""
+    async def _update_doc_status(
+        self, file_id: str, status: str, chunk_count: int = None, concept_id: str = None, error: str = None
+    ):
+        """Updates file status. For an OKF CONCEPT (concept_id set — content-only
+        chunking, no doc-repo files doc), the completion callback routes to the OKF
+        Server, which owns the concept's index_status. Otherwise (legacy single-file
+        ingest), it routes to the Document Repository as before (Spec 4.1/6.1).
+        ``error``: the failure reason, carried on 'Ingestion Error' callbacks so the
+        row's last_error names the CAUSE (failure-clarity, David 2026-09-09 — a
+        generic wrapper left the user blind to what went wrong)."""
         headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping status update for {file_id} due to missing auth token.")
             return
 
-        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
-
-        # FIX: chunk_count must be at the ROOT level, not inside dataprep object
-        payload = {"dataprep": {"status": status}}
-        if chunk_count is not None:
-            payload["chunk_count"] = chunk_count
+        if concept_id:
+            # Story 4.8-amend: OKF concept completion → okf-server concept-status
+            # endpoint (the control plane that owns index_status + edges).
+            url = f"{OKF_SERVER_URL}/api/okf/internal/concepts/{concept_id}/status"
+            payload = {"file_id": file_id, "status": status}
+            if chunk_count is not None:
+                payload["chunk_count"] = chunk_count
+            if error:
+                payload["error"] = str(error)[:500]
+            # Exact-lookup key: the same concept_id can exist in multiple repos
+            # (clones, smoke scratch repos); the okf-server resolves repo from
+            # this when present instead of an ambiguous repo-wide search.
+            ctx = _INGEST_CTX.get()
+            current_repo = (ctx or {}).get("repo_id") or getattr(self, "_current_repo_id", None)
+            if current_repo:
+                payload["repo_id"] = current_repo
+            # Internal cross-service auth: the shared secret (fail-closed — an
+            # unconfigured okf-server refuses every callback). From the env so
+            # it is never hardcoded.
+            headers = dict(headers or {})
+            headers["X-OKF-Internal-Secret"] = os.getenv("OKF_INTERNAL_SECRET", "")
+        else:
+            url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/status"
+            # FIX: chunk_count must be at the ROOT level, not inside dataprep object
+            payload = {"dataprep": {"status": status}}
+            if chunk_count is not None:
+                payload["chunk_count"] = chunk_count
 
         try:
             propagate.inject(headers)
@@ -554,37 +834,57 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 if response.status != 200:
                     logger.error(f"Failed to update status {status} for {file_id}: {await response.text()}")
         except Exception as e:
-            logger.error(f"Error calling Doc Repo Status API: {e}")
+            logger.error(f"Error calling status API: {e}")
 
     async def _write_ingestion_log(self, file_id: str, level: str, stage: str, message: str):
-        """Writes human-readable logs to Document Repository (Spec 5.2/6.2)."""
+        """Writes human-readable logs to the Document Repository (Spec 5.2/6.2).
+
+        Story 4.8-amend (David's directive): for content-only chunking there is
+        no per-concept files doc — the primary write keys on the concept_id
+        (file_id), and EVERY entry is ALSO mirrored to the bundle zip's
+        ingestion_log (resolved from the ingest repo) with a
+        ``[<concept_file_name>]`` prefix so the bundle's UI Ingestion Log tab
+        shows the complete per-stage lifecycle (System/Chunking/
+        Contextualization/Labeling/Graph) exactly like a single-file ingest.
+        The mirror is best-effort and never fails the primary write.
+        """
         headers = await self._service_headers()
         if not headers:
             if logflag:
                 logger.warning(f"Skipping log write for {file_id} due to missing auth token.")
             return
 
-        url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
-        payload = {
-            "level": level,  # Sent exactly as passed (INFO, WARN, ERROR)
-            "stage": stage,
-            "message": message,
-        }
+        payload = {"level": level, "stage": stage, "message": message}
+        propagate.inject(headers)
+        primary_url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
         try:
-            propagate.inject(headers)
-            # FIX: Limit concurrency of log writes to prevent 429 flooding
             async with (
                 self._log_semaphore,
                 aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session,
-                session.post(url, json=payload, headers=headers) as response,
             ):
-                # Ignore 429s in logs specifically to prevent recursion or spam
-                if response.status == 429:
-                    if logflag:
-                        logger.warning("Log write rate-limited (429). Dropping log message.")
-                    return
-                if response.status != 201:
-                    logger.error(f"Failed to write log for {file_id}: {await response.text()}")
+                # --- primary write (concept_id-keyed) ---
+                try:
+                    async with session.post(primary_url, json=payload, headers=headers) as response:
+                        if response.status == 429:
+                            if logflag:
+                                logger.warning("Log write rate-limited (429). Dropping log message.")
+                        elif response.status != 201:
+                            logger.warning(f"Log write for {file_id} failed: HTTP {response.status}")
+                except Exception as e:
+                    logger.warning(f"Log write for {file_id} failed: {e}")
+
+                # --- bundle mirror (every stage; prefixed with the concept file name) ---
+                try:
+                    mirror_url = await self._bundle_log_url(session, file_id, headers)
+                    if mirror_url:
+                        name = self._concept_file_name(file_id)
+                        mirror_payload = dict(payload)
+                        mirror_payload["message"] = f"[{name or file_id}] {message}"
+                        async with session.post(mirror_url, json=mirror_payload, headers=headers) as mr:
+                            if mr.status != 201 and logflag:
+                                logger.warning(f"Bundle-log mirror for {file_id} failed: HTTP {mr.status}")
+                except Exception as e:
+                    logger.warning(f"Bundle-log mirror for {file_id} failed: {e}")
         except Exception as e:
             logger.error(f"Error calling Doc Repo Log API: {e}")
 
@@ -1315,7 +1615,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 match = next((x for x in all_labels if x.lower() == label.lower() + "s"), None)
             if match:
                 final_labels.add(match)
-            else:
+            elif not _is_acl_label(label):
+                # ACL tokens (t:/r:/d:) are enforcement labels, not taxonomy
+                # candidates — never WARN "consider adding to the Knowledge
+                # Hierarchy" for them (OKF gap G4, Story 2.6a critic gap #2).
+                # They are unioned verbatim from file_labels below.
                 new_labels.append(label)
 
         labels_list = list(final_labels)
@@ -1329,10 +1633,34 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             dropped = [l for l in labels_list if l not in scope]
             labels_list = [l for l in labels_list if l in scope]
 
+        # Preserve ACL labels (t:<tenant>, r:<repo_id>, d:<domain>) carried in
+        # file_labels. These are access-control tokens, NOT taxonomy entries:
+        # never taxonomy-resolved or scoped — propagated verbatim so the
+        # retriever can enforce per-tenant/repo/domain isolation (OKF gap G4,
+        # Story 2.6a). Unioned AFTER the scope filter (ACL labels are
+        # authoritative, not subject to taxonomy scoping) and de-duplicated.
+        _acl_preserved: list[str] = []
+        if file_labels:
+            _existing = set(labels_list)
+            for _l in file_labels:
+                if _is_acl_label(_l) and _l not in _existing:
+                    labels_list.append(_l)
+                    _existing.add(_l)
+                    _acl_preserved.append(_l)
+
         level = "INFO"
-        msg = f"Chunk {index}: Final labels ({len(labels_list)}): {labels_list}."
+        # The LLM's RAW recommendations lead the entry (David's directive,
+        # 2026-08-23: the ingestion log must include the label recommendations)
+        # so each chunk reads recommendation → decision: what the LLM suggested,
+        # what survived taxonomy+scope, what was dropped, what is proposed for
+        # the Knowledge Hierarchy.
+        raw_suggested = [l for l in (suggested or []) if isinstance(l, str)]
+        msg = f"Chunk {index}: LLM label recommendations ({len(raw_suggested)}): {raw_suggested}."
+        msg += f" Final labels ({len(labels_list)}): {labels_list}."
+        if _acl_preserved:
+            msg += f" (incl. {len(_acl_preserved)} ACL)"
         if dropped:
-            msg += f" Dropped (out of document scope): {dropped}."
+            msg += f" Dropped (out of bundle/document scope): {dropped}."
         if new_labels:
             level = "WARN"
             msg += f" New (non-taxonomy) labels suggested: {new_labels} — consider adding to the Knowledge Hierarchy."
@@ -1369,6 +1697,35 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         return results
 
     async def _apply_labels(self, plain_chunks: list[str], all_labels: list[str], file_labels: list[str], file_id: str):
+        # Short-circuit (OKF gap G4, Story 2.6a): when file_labels carries ACL
+        # prefixes (t:/r:/d:), it is the authoritative, orchestrator/author-
+        # declared label set (OKF concept frontmatter). The LLM/embedding/bm25
+        # call is redundant cost and would only re-derive a subset. Preserve
+        # file_labels verbatim (ACL + concept labels), de-duplicated. No-op for
+        # free-form docs (no ACL prefixes -> predicate False -> falls through to
+        # the normal strategy dispatch). This is also the ONLY ACL-preserve
+        # mechanism for the embedding/bm25 strategies.
+        #
+        # REVISED (David's directive, 2026-08-23): the OKF skip is REMOVED.
+        # Bundle-level labels are a CANDIDATE POOL, not forced attachments —
+        # "just because the labels are applied to a bundle does not mean every
+        # chunk must be labelled with those labels". The strategy runs for OKF
+        # concepts too; per-chunk applicability is decided by content:
+        #   chunk_labels = (LLM selections ∩ taxonomy) ∩ file_labels + ACL verbatim
+        # (_finalize_chunk_labels). Retrieval matches query labels against
+        # chunk labels — blanket labels would make every chunk match every
+        # scoped query; per-chunk selections are what discriminate. ACL
+        # tokens (t:/r:/d:) and the okf:v tag remain verbatim on every chunk
+        # (access scoping + version pinning, not content labels).
+        if any(_is_acl_label(_l) for _l in (file_labels or [])) and file_labels:
+            await self._write_ingestion_log(
+                file_id,
+                "INFO",
+                "Labeling",
+                f"OKF labeling: bundle labels ({len(file_labels)}) are the candidate pool; "
+                f"strategy={LABELING_STRATEGY} assigns per-chunk by applicability; ACL tokens verbatim.",
+            )
+
         if not all_labels:
             await self._write_ingestion_log(
                 file_id, "WARN", "Labeling", "No labels found in Taxonomy. Using only file labels."
@@ -1377,20 +1734,51 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         logger.info(f"Labeling using strategy: {LABELING_STRATEGY}")
 
+        # ACL preserve for the non-LLM strategies (the removed skip used to be
+        # their only mechanism — live-flagged 2026-08-23): the embedding/bm25
+        # per-chunk selections get ONLY the verbatim-union tokens — ACL prefixes
+        # (t:/r:/d:) AND the minted version tags (okf:v{N} — review P7,
+        # live-flagged: the tag is NOT in _ACL_LABEL_PREFIXES, so version-pinned
+        # retrieval returned zero OKF chunks under these strategies).
+        # The non-ACL bundle labels are NOT forced (candidate-pool semantics);
+        # for those strategies the whole taxonomy is the pool.
+        _acl_tokens = [
+            l for l in (file_labels or []) if _is_acl_label(l) or (isinstance(l, str) and re.match(r"^okf:v\d+$", l))
+        ]
+
+        def _with_acl(results: list[dict]) -> list[dict]:
+            if not _acl_tokens:
+                return results
+            return [
+                {"text": r["text"], "labels": list(dict.fromkeys(list(r.get("labels", [])) + list(_acl_tokens)))}
+                for r in results
+            ]
+
         if LABELING_STRATEGY == "embedding":
             # Offload CPU-bound embedding calculations to a thread
-            return await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels)
+            return _with_acl(await asyncio.to_thread(self._label_with_embedding, plain_chunks, all_labels))
         elif LABELING_STRATEGY == "bm25":
             # Offload CPU-bound BM25 calculations to a thread
-            return await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels)
+            return _with_acl(await asyncio.to_thread(self._label_with_bm25, plain_chunks, all_labels))
         else:
-            # Default to LLM (with retry fix and advisory logic)
+            # Default to LLM (with retry fix and advisory logic). _finalize_chunk_labels
+            # already scopes to the bundle pool + preserves ACL verbatim.
             return await self._label_with_llm(plain_chunks, all_labels, file_labels, file_id)
 
     # --- Main Ingestion Logic (Async + Batched) ---
 
     async def _process_batch(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore):
-        """Helper to process a single batch with concurrency control."""
+        """Helper to process a single batch with concurrency control.
+
+        Returns ``{"inserted": int, "failed": bool}`` — the count of graph
+        documents that actually landed and whether an infrastructure/model
+        failure was hit in this batch. P0 (David, 2026-09-09): batch failures
+        were swallowed (warn + skip) and the ingest still reported
+        'Ingested' — rows went 'indexed' with chunk_counts over a ZERO-write
+        graph and an empty graph SERVED. The caller now sums these outcomes
+        and refuses the success verdict when everything failed and nothing
+        landed. An honest empty extraction (no exception, no entities) is NOT
+        a failure and stays 'Ingested'."""
         async with semaphore:
             try:
                 await self._write_ingestion_log(
@@ -1399,8 +1787,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                 # We need to wrap the synchronous graph transformer calls in asyncio.to_thread
                 # to avoid blocking the event loop if they are heavy CPU tasks.
+                # Remote-LLM resilience: the retry ladder absorbs transient
+                # gateway storms (502/503/504 + connection errors) per request.
                 try:
-                    graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
+                    graph_docs = await _call_llm_resilient(
+                        lambda: asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs),
+                        what=f"Graph extraction batch {current_batch_num}/{total_batches}",
+                    )
                 except Exception as ge:
                     logger.error(f"Batch {current_batch_num} graph conversion failed: {type(ge).__name__}: {ge}")
                     raise
@@ -1427,6 +1820,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"Batch {current_batch_num} graph insertion failed: {type(embed_err).__name__}: {embed_err}"
                         )
                         raise
+                    return {"inserted": len(graph_docs), "failed": False}
+                # Extraction succeeded but found no entities in this batch — an
+                # honest empty, not a failure.
+                return {"inserted": 0, "failed": False}
             except (ValidationError, Exception) as ve:
                 logger.warning(f"Batch {current_batch_num} failed graph extraction: {ve}")
                 await self._write_ingestion_log(
@@ -1436,28 +1833,95 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     f"Batch {current_batch_num} skipped due to extraction error: {str(ve)}",
                 )
 
-                # Retry logic for individual docs in case of failure
-                for retry_doc in batch_docs:
-                    try:
-                        retry_graph_docs = await asyncio.to_thread(
-                            self.llm_transformer.convert_to_graph_documents, [retry_doc]
-                        )
-                        if retry_graph_docs:
-                            await asyncio.to_thread(
-                                self.graph.add_graph_documents,
-                                graph_documents=retry_graph_docs,
-                                include_source=getattr(input, "include_chunks", True),
-                                graph_name=graph_name,
-                                use_one_entity_collection=True,
-                                embeddings=self.embeddings,
-                                embedding_field="embedding",
-                                embed_source=getattr(input, "embed_chunks", True),
-                                embed_nodes=getattr(input, "embed_nodes", True),
-                                embed_relationships=getattr(input, "embed_edges", True),
-                                capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
+                async def _retry_round(round_label):
+                    """Per-doc retry of a failed batch. Returns (inserted, last_error)."""
+                    inserted = 0
+                    last_err = None
+                    for retry_doc in batch_docs:
+                        try:
+                            retry_graph_docs = await _call_llm_resilient(
+                                lambda d=retry_doc: asyncio.to_thread(
+                                    self.llm_transformer.convert_to_graph_documents, [d]
+                                ),
+                                what=f"Graph extraction retry ({round_label})",
                             )
-                    except Exception as inner_e:
-                        logger.error(f"Skipping individual bad document: {inner_e}")
+                            if retry_graph_docs:
+                                await asyncio.to_thread(
+                                    self.graph.add_graph_documents,
+                                    graph_documents=retry_graph_docs,
+                                    include_source=getattr(input, "include_chunks", True),
+                                    graph_name=graph_name,
+                                    use_one_entity_collection=True,
+                                    embeddings=self.embeddings,
+                                    embedding_field="embedding",
+                                    embed_source=getattr(input, "embed_chunks", True),
+                                    embed_nodes=getattr(input, "embed_nodes", True),
+                                    embed_relationships=getattr(input, "embed_edges", True),
+                                    capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
+                                )
+                                inserted += len(retry_graph_docs)
+                        except Exception as inner_e:
+                            last_err = f"{type(inner_e).__name__}: {str(inner_e)[:200]}"
+                            logger.error(f"Skipping individual bad document: {inner_e}")
+                    return inserted, last_err
+
+                # ROUND 1: per-doc retry.
+                inserted, last_err = await _retry_round("r1")
+                # ROUND 2 (David's resilience contract): if the whole batch still
+                # produced nothing, give the gateway one more chance after a
+                # settle delay before the batch is accounted failed.
+                if inserted == 0 and _LLM_ROUND2_DELAY_S > 0:
+                    await self._write_ingestion_log(
+                        input.file_id,
+                        "INFO",
+                        "Graph",
+                        f"Batch {current_batch_num}: retrying the failed batch in {_LLM_ROUND2_DELAY_S}s "
+                        "(transient gateway storm tolerance).",
+                    )
+                    await asyncio.sleep(_LLM_ROUND2_DELAY_S)
+                    inserted, last_err = await _retry_round("r2")
+                return {"inserted": inserted, "failed": True, "last_error": last_err or str(ve)[:300]}
+
+    def _ensure_graph_collections(self, graph_name: str):
+        """Register the per-repo NAMED graph (gharial) — its creation
+        auto-creates the four member collections (David, 2026-09-09: manual
+        collection pre-creation was redundant — "the underlying collections
+        can be created automatically during the graph creation process").
+
+        Self-heal for crash debris: if the graph definition exists but a
+        member collection is missing (a partial teardown), drop the
+        DEFINITION (collections untouched) and re-register — auto-creation
+        fills exactly the gaps. A healthy graph is a no-op return.
+        """
+        suffixes = ("_SOURCE", "_ENTITY", "_HAS_SOURCE", "_LINKS_TO")
+        try:
+            missing = [s for s in suffixes if not self.db.has_collection(f"{graph_name}{s}")]
+            if self.db.has_graph(graph_name):
+                if not missing:
+                    return  # healthy — nothing to do
+                logger.warning(
+                    f"[ ensure-graph ] Graph {graph_name} exists but {len(missing)} member collection(s) "
+                    f"missing {missing} — re-registering the definition (auto-creation fills the gaps)."
+                )
+                self.db.delete_graph(graph_name, ignore_missing=True)  # definition only; collections untouched
+            self.db.create_graph(
+                graph_name,
+                edge_definitions=[
+                    {
+                        "edge_collection": f"{graph_name}_HAS_SOURCE",
+                        "from_vertex_collections": [f"{graph_name}_ENTITY"],
+                        "to_vertex_collections": [f"{graph_name}_SOURCE"],
+                    },
+                    {
+                        "edge_collection": f"{graph_name}_LINKS_TO",
+                        "from_vertex_collections": [f"{graph_name}_ENTITY"],
+                        "to_vertex_collections": [f"{graph_name}_ENTITY"],
+                    },
+                ],
+            )
+            logger.info(f"[ ensure-graph ] Registered named graph {graph_name}")
+        except Exception as e:  # pragma: no cover - already-exists / transient
+            logger.warning(f"[ ensure-graph ] Could not register named graph {graph_name}: {e}")
 
     async def ingest_file_with_guardrail(self, input: ArangoDBDataprepRequestFromDocRepo, lock_file=None):
         """
@@ -1466,10 +1930,52 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         # NOTE: lock_file is passed from the microservice and is already LOCKED.
         # We are responsible for releasing and closing it in the finally block.
+        # Story 4.8-amend (David's 4th-time directive, 2026-08-20): stash
+        # the input + repo_id on the instance so the per-stage log POST
+        # helper can mirror into the bundle zip's ingestion_log (file-centric UI).
+        self._current_input = input
+        # The caller's EXPLICIT repo_id is the identity channel (David,
+        # 2026-08-31): born-right graph names encode repo NAME+VERSION, not the
+        # repo_id — a graph name is a name, not an identity field. The old
+        # graph-name parse survives ONLY as the fallback for legacy in-flight
+        # jobs sent before the explicit field existed.
+        self._current_repo_id = getattr(input, "repo_id", None)
+        if not self._current_repo_id:
+            try:
+                graph_name = input.graph_name or ""
+            except AttributeError:
+                graph_name = ""
+            if graph_name.startswith("OKF_") and len(graph_name) > 4:
+                self._current_repo_id = graph_name[4:]
+        # The bundle-id cache is keyed by concept_id, but concept ids RECUR
+        # across runs/repos ('index', 'service_directory', ...). A cache hit
+        # from a previous ingest would mirror this run's logs into the
+        # PREVIOUS (possibly deleted) bundle. Invalidate on every ingest —
+        # the lookup is one cheap GET per concept (live-caught 2026-08-21:
+        # a whole run's 25 stage logs landed on the prior run's bundle id).
+        self._bundle_file_id_cache = {}
+        # Cache the concept's filename eagerly so the per-stage log prefix
+        # is populated without an extra lookup.
+        concept_id = getattr(input, "concept_id", None)
+        if concept_id:
+            file_name = getattr(input, "file_name", None)
+            if file_name:
+                self._concept_file_name_cache[concept_id] = file_name
+        # PARALLEL-INGEST: bind the request-local context (task-scoped) so
+        # concurrent ingests never share bundle-log caches or callback
+        # repo_id. The self-stash above remains for legacy readers.
+        _INGEST_CTX.set(
+            {
+                "input": input,
+                "repo_id": self._current_repo_id,
+                "bundle_cache": {},
+                "name_cache": {},
+            }
+        )
 
         try:
             # --- START PROTECTED EXECUTION (Spec 5.1) ---
-            await self._update_doc_status(input.file_id, "Ingesting")
+            await self._update_doc_status(input.file_id, "Ingesting", concept_id=getattr(input, "concept_id", None))
             await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
 
             try:
@@ -1524,6 +2030,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
                 # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
                 graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
+                # OKF per-repo graph (Story 2.9.6, G5): ensure the graph's
+                # collections exist before writing (no-op for the default graph).
+                self._ensure_graph_collections(graph_name)
 
                 documents_to_process = []
                 for i, doc in enumerate(labelled_docs):
@@ -1538,6 +2047,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         "chunk_index": i,
                         "chunk_labels": doc["labels"],
                     }
+                    # Story 2.9.7 (ADR-031): the minted repo version is stamped
+                    # onto every chunk doc (version-pinned citation). Absent on
+                    # the request → no stamp (legacy behavior unchanged). Strict
+                    # int check: a non-int (e.g. a mock / corrupt payload) is
+                    # treated as absent, never stamped truthy-garbage.
+                    bv = getattr(input, "bundle_version", None)
+                    if isinstance(bv, int):
+                        metadata["bundle_version"] = bv
+                    # Story 4.8-amend (2026-08-19): the OKF concept id is stamped
+                    # onto every chunk doc (citation provenance — a retrieved chunk
+                    # resolves to its concept without a files-doc join). Absent on
+                    # the request → no stamp (legacy single-file behavior).
+                    cid = getattr(input, "concept_id", None)
+                    if isinstance(cid, str) and cid:
+                        metadata["concept_id"] = cid
                     if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
                         metadata["chunk_text"] = original_chunks[i]
                     # Embed the contextualized text (subject propagation); falls back
@@ -1562,9 +2086,33 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     )
                     tasks.append(task)
 
-                # Wait for all batches to complete
-                if tasks:
-                    await asyncio.gather(*tasks)
+                # Wait for all batches to complete, then REFUSE the success
+                # verdict over an empty graph (P0, David 2026-09-09): a
+                # batch/model failure (e.g. the remote LLM 502ing) used to be
+                # swallowed per batch while the pipeline still reported
+                # 'Ingested' — the meta row went 'indexed' with chunk_counts
+                # and an EMPTY graph served. Zero documents inserted across
+                # failed batches = the ingestion FAILED: the raise routes into
+                # the designed error path below ('Ingestion Error' callback +
+                # auto-retract), the row never reaches 'indexed', and the
+                # drain-level D4-b self-heal/re-ingest recovers it.
+                results = await asyncio.gather(*tasks) if tasks else []
+                inserted_total = sum(r["inserted"] for r in results if r)
+                failed_batches = sum(1 for r in results if r and r.get("failed"))
+                last_err = next((r.get("last_error") for r in results if r and r.get("last_error")), None)
+                await self._write_ingestion_log(
+                    input.file_id,
+                    "INFO" if inserted_total or not failed_batches else "WARN",
+                    "Graph",
+                    f"Graph insertion totals: {inserted_total} document(s) written, "
+                    f"{failed_batches}/{total_batches} batch(es) hit failures.",
+                )
+                if documents_to_process and inserted_total == 0 and failed_batches > 0:
+                    raise Exception(
+                        f"Graph insertion failed for all {total_batches} batch(es): "
+                        "0 graph documents were written after retries — refusing to report "
+                        f"ingested over an empty graph. Last error: {last_err or 'unknown'}"
+                    )
 
                 # Defensive vector index ensure (post-ingest, idempotent, dim-aware).
                 # Closes the gap where langchain-arangodb would lazy-create an
@@ -1581,9 +2129,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     write_ingestion_log=self._write_ingestion_log,
                 )
 
-                # 6. Final Status Update
-                await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                # 6. Final log BEFORE the terminal status callback (review P1b,
+                # live-caught v13b): the 'Ingested' callback transitions the meta
+                # row and can SETTLE the bundle (status PATCH to Ingested) — a
+                # consumer polling the bundle status then reading the logs would
+                # see the settle before this final stage row landed. Log first,
+                # then announce completion.
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
+                await self._update_doc_status(
+                    input.file_id, "Ingested", chunk_count=len(chunks), concept_id=getattr(input, "concept_id", None)
+                )
 
                 return {
                     "status": 200,
@@ -1606,7 +2161,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
 
                 # Set final status to "Killed" as per state machine specification
-                await self._update_doc_status(input.file_id, "Killed")
+                await self._update_doc_status(input.file_id, "Killed", concept_id=getattr(input, "concept_id", None))
 
                 await self._write_ingestion_log(
                     input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
@@ -1619,7 +2174,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 logger.error(error_msg)
 
                 await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
-                await self._update_doc_status(input.file_id, "Ingestion Error")
+                # Failure clarity (David, 2026-09-09): the callback CARRIES the
+                # cause — the row's last_error names what actually went wrong
+                # instead of the generic 'Ingestion Error (chunks=0)' wrapper.
+                await self._update_doc_status(
+                    input.file_id,
+                    "Ingestion Error",
+                    concept_id=getattr(input, "concept_id", None),
+                    error=str(e)[:500],
+                )
 
                 # Auto-retract created data
                 await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))

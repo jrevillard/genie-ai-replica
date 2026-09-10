@@ -234,6 +234,9 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         edge_properties: list[str] | None = None,
         text_capitalization_strategy: str | None = None,
         include_chunks: bool | None = None,
+        bundle_version: int | None = None,
+        concept_id: str | None = None,
+        repo_id: str | None = None,
     ):
         super().__init__(
             files=files,
@@ -263,3 +266,19 @@ class ArangoDBDataprepRequestFromDocRepo(ArangoDBDataprepRequest):
         self.file_type = file_type
         self.upload_date = upload_date
         self.file_labels = file_labels
+        # OKF minted repo version (Story 2.9.7, ADR-031) — stamped onto every
+        # chunk doc (version-pinned citation); None = unminted legacy.
+        self.bundle_version = bundle_version
+        # OKF concept id (Story 4.8-amend): content-only chunking citation + the
+        # completion-callback routing key; None = legacy single-file ingest.
+        self.concept_id = concept_id
+        # OKF repo id (David, 2026-08-31): the EXPLICIT completion-callback
+        # identity. Graph names encode repo NAME+VERSION now (born-right
+        # naming) — they are a name, not an identity field; parsing the
+        # repo_id out of them was always fragile.
+        self.repo_id = repo_id
+        # Story 4.8-amend follow-up (David's 4th-time directive, 2026-08-20):
+        # the concept's original filename is mirrored into the bundle zip's
+        # ingestion log entry so the bundle's UI Ingestion Log tab can trace
+        # each log line to its source concept file.
+        self.file_name = file_name

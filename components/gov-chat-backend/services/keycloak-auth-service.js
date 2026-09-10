@@ -136,6 +136,21 @@ async function init(idpUrl) {
 
   const jwks = createJwksCache(doc.jwks_uri);
   issuerMap.set(doc.issuer, jwks);
+
+  // Alias a public-facing issuer for split internal/public OIDC URLs (e.g. local
+  // build behind Docker Desktop): the browser token iss (https://localhost) can
+  // differ from the discovery issuer fetched internally (http://kong:8000). Map
+  // the public issuer to the same JWKS so token lookup succeeds. No-op if unset.
+  // Mirrors shared/lib keycloak-auth-service (used by okf-server).
+  const publicUrl = process.env.KEYCLOAK_PUBLIC_URL;
+  if (publicUrl) {
+    const publicIssuer = `${publicUrl.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
+    if (publicIssuer !== doc.issuer) {
+      issuerMap.set(publicIssuer, jwks);
+      logger.info(`[KeycloakAuth] Aliased public issuer ${publicIssuer} -> same JWKS`);
+    }
+  }
+
   initialized = true;
   initFailedAt = 0;
 
@@ -212,7 +227,7 @@ const keycloakAuthService = {
    * @returns {Promise<Object>} Decoded JWT payload with iss_sub composite key
    * @throws {TokenVerificationError} On verification failure
    */
-  async verifyToken(token) {
+  async verifyToken(token, opts = {}) {
     if (!token || typeof token !== 'string') {
       throw new TokenVerificationError('TOKEN_INVALID', 'Token is empty or not a string');
     }
@@ -247,10 +262,18 @@ const keycloakAuthService = {
 
     // Helper function to verify token with JWT
     const verifyWithJwt = async () => {
-      const { payload: verifiedPayload } = await jwtVerify(token, jwks, {
+      // Opt-in audience binding (RFC 8707, Story 6.1): when the caller supplies
+      // an `audience`, jose additionally validates the token's `aud` claim.
+      // Omitted → no audience check (the historical resource-server behavior;
+      // pinned by keycloak-auth-service.audience.test.js). Mirrors shared/lib.
+      const jwtVerifyOptions = {
         issuer: unverifiedIss,
         requiredClaims: ['iss', 'exp']
-      });
+      };
+      if (opts && opts.audience) {
+        jwtVerifyOptions.audience = opts.audience;
+      }
+      const { payload: verifiedPayload } = await jwtVerify(token, jwks, jwtVerifyOptions);
 
       // Note: we do NOT validate azp (authorized party). Any client within
       // the trusted realm that obtains a valid token should be accepted by

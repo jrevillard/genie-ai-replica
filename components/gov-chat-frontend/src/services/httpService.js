@@ -220,17 +220,19 @@ class HttpService {
       // Emit user-facing error notification for all non-401 errors
       // (401 errors redirect to Keycloak login — the redirect IS the user feedback).
       // Callers may opt out with { silent: true } for probe-style lookups where a
-      // non-success response is an expected, handled outcome (e.g. crawl-job 404).
+      // non-success response is an expected, handled outcome (e.g. crawl-job 404,
+      // the OKF bundle manifest before the worker has settled it). Silent skips
+      // BOTH the toast and the console.error — the caller owns the outcome.
       if (!error.config?.silent) {
         notificationService.error(parsedError.message);
-      }
 
-      // Log only safe information (status, statusText, message) — NOT raw data or details
-      console.error('API response error:', {
-        status,
-        statusText,
-        message: parsedError.message
-      });
+        // Log only safe information (status, statusText, message) — NOT raw data or details
+        console.error('API response error:', {
+          status,
+          statusText,
+          message: parsedError.message
+        });
+      }
 
       return Promise.reject(errorData);
     } else if (error.request) {

@@ -49,6 +49,14 @@
           </template>
 
           <div v-if="activeTab === 'details'" class="tab-content tab-content-details">
+            <p class="tab-hint">
+              {{
+                translate(
+                  'details.tabs.detailsHint',
+                  'Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.'
+                )
+              }}
+            </p>
             <div class="form-section">
               <div class="form-group">
                 <label for="file-name">{{ translate('details.fileName', 'File Name') }}</label>
@@ -165,6 +173,40 @@
           </div>
 
           <div v-if="activeTab === 'dashboard'" class="tab-content dashboard-tab">
+            <p class="tab-hint">
+              {{
+                translate(
+                  'details.tabs.dashboardHint',
+                  "Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository."
+                )
+              }}
+            </p>
+            <!-- Repositories created from THIS crawl (David, 2026-09-02:
+                 per-repo status bars, non-blocking, traceable). -->
+            <div v-if="fileConversions.length > 0" class="conversion-list">
+              <div class="conversion-title">
+                {{ translate('okf.crawl.conversionsTitle', 'Repositories created from this crawl') }}
+              </div>
+              <div
+                v-for="conv in fileConversions"
+                :key="conv.repo_id"
+                class="conversion-item"
+                data-test-id="okf-conversion-item"
+              >
+                <div class="conversion-row">
+                  <span class="conversion-name">{{ conv.name }}</span>
+                  <span :class="['conversion-status', `conversion-status--${conv.conversion.status}`]">
+                    {{ conversionStatusText(conv.conversion) }}
+                  </span>
+                </div>
+                <div class="conversion-bar">
+                  <div class="conversion-bar-fill" :style="{ width: conversionPercent(conv) + '%' }"></div>
+                </div>
+                <div v-if="conv.conversion.status === 'failed'" class="conversion-error">
+                  {{ conv.conversion.error || translate('okf.crawl.convFailed', 'Failed') }}
+                </div>
+              </div>
+            </div>
             <div class="dashboard-controls">
               <div class="auto-refresh">
                 <div class="toggle-wrapper">
@@ -248,6 +290,14 @@
           </div>
 
           <div v-if="activeTab === 'crawlLog'" class="tab-content crawl-log-tab">
+            <p class="tab-hint">
+              {{
+                translate(
+                  'details.tabs.crawlLogHint',
+                  'Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.'
+                )
+              }}
+            </p>
             <div class="log-actions">
               <DsButton variant="secondary" :disabled="isCrawlLogLoading" @click="fetchCrawlLogs">
                 <DsSpinner v-if="isCrawlLogLoading" size="sm" />
@@ -300,6 +350,14 @@
           </div>
 
           <div v-if="activeTab === 'ingestionLog'" class="tab-content ingestion-log-tab">
+            <p class="tab-hint">
+              {{
+                translate(
+                  'details.tabs.ingestionLogHint',
+                  'Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.'
+                )
+              }}
+            </p>
             <div class="log-actions">
               <DsButton variant="secondary" :disabled="isLogLoading" @click="fetchIngestionLogs">
                 <DsSpinner v-if="isLogLoading" size="sm" />
@@ -356,6 +414,125 @@
         </DsTabs>
 
         <div class="dialog-footer">
+          <div
+            v-if="activeTab === 'dashboard' && crawlJob && crawlJob.status === 'Succeeded' && !file?.okf_repo_id"
+            class="okf-split-footer"
+          >
+            <div
+              class="okf-split-group"
+              role="radiogroup"
+              :aria-label="translate('okf.crawl.splitLabel', 'Concept split')"
+            >
+              <span class="okf-split-title">{{ translate('okf.crawl.splitLabel', 'Concept split') }}</span>
+              <label
+                class="okf-split-option"
+                :title="
+                  translate(
+                    'okf.crawl.splitBHint',
+                    'Each crawled page becomes its own concept — the AI can cite individual pages.'
+                  )
+                "
+              >
+                <input v-model="okfSplitMode" type="radio" value="B" />
+                {{ translate('okf.crawl.splitB', 'One concept per page (recommended)') }}
+              </label>
+              <label
+                class="okf-split-option"
+                :title="
+                  translate(
+                    'okf.crawl.splitAHint',
+                    'The entire crawl becomes one large concept — best for small sites.'
+                  )
+                "
+              >
+                <input v-model="okfSplitMode" type="radio" value="A" />
+                {{ translate('okf.crawl.splitA', 'One concept for the whole crawl') }}
+              </label>
+              <label
+                class="okf-split-option okf-split-option--disabled"
+                :title="translate('okf.crawl.splitCHint', 'Story 10.6 — coming soon')"
+              >
+                <input v-model="okfSplitMode" type="radio" value="C" disabled />
+                {{ translate('okf.crawl.splitC', 'Use LLM topic extraction') }}
+              </label>
+            </div>
+            <div class="okf-split-group">
+              <span class="okf-split-title">
+                {{ translate('okf.crawl.domainLabel', 'Subject area') }}
+                <DsInfoTip
+                  :text="
+                    translate(
+                      'okf.glossary.subjectArea',
+                      'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.'
+                    )
+                  "
+                />
+              </span>
+              <!-- EXPLICIT CHOICE REQUIRED (David, 2026-09-05): domain is
+                   immutable post-create — the create button stays disabled
+                   until a KH category is picked. -->
+              <DsSelect v-model="okfDomain" size="sm" class="okf-domain-select">
+                <option value="">{{ translate('okf.crawl.domainPlaceholder', 'Select a subject area…') }}</option>
+                <option v-for="opt in okfDomainOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </DsSelect>
+            </div>
+            <div
+              class="okf-split-group"
+              role="radiogroup"
+              :aria-label="translate('okf.crawl.classLabel', 'Concept classification')"
+            >
+              <span class="okf-split-title">
+                {{ translate('okf.crawl.classLabel', 'Concept classification') }}
+                <DsInfoTip
+                  :text="
+                    translate(
+                      'okf.glossary.classification',
+                      'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.'
+                    )
+                  "
+                />
+              </span>
+              <label
+                class="okf-split-option"
+                :title="
+                  translate(
+                    'okf.crawl.classHeuristicsHint',
+                    'Fast rule-based classification — no LLM cost, good for well-structured crawls.'
+                  )
+                "
+              >
+                <input v-model="okfClassification" type="radio" value="heuristics" />
+                {{ translate('okf.crawl.classHeuristics', 'Heuristics (default)') }}
+              </label>
+              <label
+                class="okf-split-option"
+                :title="
+                  translate(
+                    'okf.crawl.classLlmHint',
+                    'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.'
+                  )
+                "
+              >
+                <input v-model="okfClassification" type="radio" value="llm" />
+                {{ translate('okf.crawl.classLlm', 'LLM-assisted') }}
+              </label>
+              <label
+                class="okf-split-option"
+                :title="
+                  translate(
+                    'okf.crawl.classHybridHint',
+                    'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.'
+                  )
+                "
+              >
+                <input v-model="okfClassification" type="radio" value="hybrid" />
+                {{ translate('okf.crawl.classHybrid', 'Hybrid') }}
+              </label>
+            </div>
+            <DsButton variant="primary" :disabled="!crawlJob || !okfDomain" @click="onCreateOkfFromCrawl">
+              {{ translate('okf.crawl.createOkfFromCrawl', 'Create OKF repository from this crawl') }}
+            </DsButton>
+          </div>
           <DsButton variant="danger" :disabled="isFileLocked" @click="handleDelete">
             {{ translate('common.delete', 'Delete') }}
           </DsButton>
@@ -411,6 +588,9 @@ import DsStatusTag from './ds/StatusTag.vue';
 import DsSpinner from './ds/Spinner.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsInput from './ds/Input.vue';
+import DsSelect from './ds/Select.vue';
+import DsInfoTip from './ds/InfoTip.vue';
+import okfRepoOps from '../services/okfRepoOps';
 import { formatFileSize } from '../utils/fileUtils.js';
 
 export default {
@@ -421,7 +601,9 @@ export default {
     DsStatusTag,
     DsSpinner,
     DsTabs,
-    DsInput
+    DsInput,
+    DsSelect,
+    DsInfoTip
   },
   props: {
     fileId: {
@@ -475,6 +657,19 @@ export default {
       currentLocale: this.$i18n?.locale || 'en',
       // Removed 'areAllLabelsSelected' from data as it's now computed
       activeTab: 'details',
+      // Story #978 — split mode for "Create OKF repository from this crawl"
+      // (B per-page default | A mega | C LLM deferred, disabled).
+      okfSplitMode: 'B',
+      // Concept-classification strategy for the new repo (David, 2026-09-05):
+      // all three selectable per import; Heuristics is the default.
+      okfClassification: 'heuristics',
+      // SUBJECT AREA (David, 2026-09-05): the crawl-born repo MUST carry its
+      // KH category — domain is immutable post-create, so the pick happens
+      // HERE, at the only place the value is born. '' = not chosen yet.
+      okfDomain: '',
+      okfDomainOptions: [],
+      // fileId whose dialog already auto-switched to the Dashboard tab once.
+      crawlTabAppliedFor: null,
       ingestionLogs: [],
       isLogLoading: false,
       confirmDialog: {
@@ -492,9 +687,15 @@ export default {
   },
   computed: {
     visibleTabs() {
-      const tabs = [{ value: 'details', label: this.translate('details.tabs.details', 'Details') }];
+      // A crawl-created file leads with the Dashboard (crawl overview +
+      // "Create OKF repository" action); Details follows. Non-crawl files
+      // keep the previous Details-first order.
+      const tabs = [];
       if (this.crawlJob) {
         tabs.push({ value: 'dashboard', label: 'Dashboard' });
+      }
+      tabs.push({ value: 'details', label: this.translate('details.tabs.details', 'Details') });
+      if (this.crawlJob) {
         tabs.push({ value: 'crawlLog', label: this.translate('details.tabs.crawlLog', 'Crawling Log') });
       }
       if (this.file.dataprep.status?.toLowerCase() !== 'pending') {
@@ -607,6 +808,14 @@ export default {
       );
     },
     // URL for the internal file endpoint
+    /** Server-side crawl→OKF conversions for THIS file (plus any still
+     * in-flight — the user may have navigated between files). */
+    fileConversions() {
+      const all = (this.$store.state && this.$store.state.okf && this.$store.state.okf.crawlConversions) || {};
+      return Object.values(all)
+        .filter((c) => c.file_id === this.fileId || !['done', 'failed'].includes(c.conversion.status))
+        .sort((a, b) => (a.repo_id < b.repo_id ? -1 : 1));
+    },
     fileViewUrl() {
       if (!this.file) return null;
       if (this.file.file_id) {
@@ -659,11 +868,95 @@ export default {
       }
     }
   },
+  mounted() {
+    // SUBJECT AREA options from the Knowledge Hierarchy (same shared loader
+    // as the wizard/dashboard/create-dialog pickers). A new crawl-born repo
+    // has no legacy domains — the tree alone drives the list.
+    this.loadDomainOptions();
+  },
   beforeUnmount() {
     this.stopDashboardTimer();
   },
   methods: {
     formatFileSize,
+    /**
+     * Story 3-7 (fixed in #977): create a draft OKF repository from this
+     * crawl, ingest the crawled content as a concept, and switch to the
+     * Studio tab. The wizard opens at Step 5 (Curate) with the new repo
+     * already loaded (mirrors the Clone amendment's UX).
+     *
+     * Additive: the existing freeform/document path (this dialog's other
+     * actions) is untouched.
+     */
+    async loadDomainOptions() {
+      try {
+        this.okfDomainOptions = await okfRepoOps.loadSubjectAreaOptions([]);
+      } catch {
+        this.okfDomainOptions = []; // loader already falls back internally
+      }
+    },
+    async onCreateOkfFromCrawl() {
+      if (!this.crawlJob || this.crawlJob.status !== 'Succeeded' || this.file?.okf_repo_id) return;
+      // file_id FIRST — doc-repo's download endpoint resolves the file_id
+      // field, not the ArangoDB _key (live-caught 2026-09-01: crawl files
+      // carry a numeric _key ≠ file_id, so _key-first 404'd the download and
+      // silently produced an EMPTY repo).
+      const fileId = this.file && (this.file.file_id || this.file._key);
+      const filename = this.file && this.file.file_name;
+      const url = this.crawlJob && this.crawlJob.config && this.crawlJob.config.url;
+      const crawlJobId = this.crawlJob && (this.crawlJob._key || this.crawlJob.crawl_job_id);
+      if (!fileId) {
+        // No file to ingest from — fall back to the legacy seed behaviour so
+        // the steward can at least land in the Studio with the seed URL.
+        const seed = filename || url || '';
+        await this.$store.dispatch('okf/setSelection', { crawlSeeds: [seed] });
+        window.dispatchEvent(
+          new CustomEvent('okf:create-from-crawl', {
+            detail: { file_id: null, crawl_job_id: crawlJobId, seed }
+          })
+        );
+        this.$emit('close');
+        return;
+      }
+      // NON-BLOCKING (David, 2026-09-02): the conversion is a server-side
+      // job — the trigger returns in ~200ms and the user keeps using the
+      // dialog (or closes it). Live progress renders in the Dashboard's
+      // "Repositories from this crawl" status list (store-driven, polled).
+      // The same file can be converted MULTIPLE times — every click creates
+      // a NEW, uniquely-named repo, each with its own status bar.
+      try {
+        const result = await this.$store.dispatch('okf/createFromCrawl', {
+          fileId,
+          url,
+          crawlJobId,
+          filename,
+          splitMode: this.okfSplitMode,
+          classification: this.okfClassification,
+          domain: this.okfDomain,
+          actor: { sub: 'crawler-to-okf' }
+        });
+        if (!result || !result.ok) {
+          this.showNotification(
+            this.translate('okf.crawl.createFailed', 'Could not create the OKF repository from this crawl.'),
+            'error'
+          );
+        } else {
+          const repo = result && result.repo;
+          this.showNotification(
+            this.translate('okf.crawl.createStarted', 'Creating "[name]" — track progress below.').replace(
+              '[name]',
+              (repo && repo.name) || ''
+            ),
+            'success'
+          );
+        }
+      } catch {
+        this.showNotification(
+          this.translate('okf.crawl.createFailed', 'Could not create the OKF repository from this crawl.'),
+          'error'
+        );
+      }
+    },
     translate(key, fallback) {
       if (this.$i18n && this.$i18n.t) {
         const translation = this.$i18n.t(key, this.currentLocale);
@@ -766,6 +1059,14 @@ export default {
           }
         } else {
           this.crawlJob = null;
+        }
+
+        // A crawl created this file — open on the Dashboard tab (crawl
+        // overview). Applied once per fileId so the locale-change refetch
+        // never overrides the tab the user has since switched to.
+        if (this.crawlJob && this.crawlTabAppliedFor !== id) {
+          this.crawlTabAppliedFor = id;
+          this.activeTab = 'dashboard';
         }
 
         const initialLabelsInCurrentLocale = this.mapEnglishToLocale(
@@ -1348,6 +1649,34 @@ export default {
 
     showNotification(message, type = 'success') {
       eventBus.$emit('notification:show', { message, type });
+    },
+    /** Human text for a conversion record's status. */
+    conversionStatusText(conversion) {
+      const s = conversion && conversion.status;
+      if (s === 'done') {
+        return this.translate('okf.crawl.convDone', 'Created ([p] pages)').replace('[p]', conversion.pages_done || 0);
+      }
+      if (s === 'failed') return this.translate('okf.crawl.convFailed', 'Failed');
+      if (s === 'downloading') return this.translate('okf.crawl.convDownloading', 'Downloading crawled file...');
+      if (s === 'splitting') return this.translate('okf.crawl.convSplitting', 'Splitting pages...');
+      if (s === 'adding') {
+        return this.translate('okf.crawl.convAdding', 'Adding concepts ([p] pages so far)').replace(
+          '[p]',
+          conversion.pages_done || 0
+        );
+      }
+      return this.translate('okf.crawl.convQueued', 'Queued...');
+    },
+    /** Bar percent: bytes when the total is known, else an indeterminate crawl. */
+    conversionPercent(conv) {
+      const c = conv && conv.conversion;
+      if (!c) return 0;
+      if (c.status === 'done') return 100;
+      if (c.status === 'failed') return 100;
+      if (Number.isFinite(c.bytes_total) && c.bytes_total > 0 && Number.isFinite(c.bytes_done)) {
+        return Math.min(100, Math.round((c.bytes_done / c.bytes_total) * 100));
+      }
+      return 25;
     }
   }
 };
@@ -1384,6 +1713,15 @@ export default {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: var(--space-xl);
+}
+/* The hint was inserted as a THIRD child by the Dashboard-tab rework
+ * (b549190b1); without spanning, CSS auto-placement pushed the form into the
+ * 1fr column and the info card onto a second row — the broken Details tab
+ * (David, 2026-09-04). Full-width hint restores the original two-column
+ * arrangement: form left (2fr), info card right (1fr). */
+.tab-content-details .tab-hint {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 /* --- DASHBOARD STYLES --- */
@@ -1656,6 +1994,14 @@ export default {
     grid-template-columns: 1fr; /* Stack columns on smaller screens */
     gap: var(--space-lg);
   }
+  .okf-split-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .okf-split-group {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .log-actions {
     flex-direction: column;
     align-items: stretch;
@@ -1672,9 +2018,124 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+}
+/* OKF concept-split block (Story 3-7/#978) — shown on the Dashboard tab
+   after a succeeded crawl. Takes the full footer width so the standard
+   Delete/Close row stays on its own line below it. */
+.okf-split-footer {
+  flex: 1 1 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-light);
+}
+.okf-split-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+.okf-domain-select {
+  min-width: 220px;
+}
+.okf-split-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+.okf-split-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.okf-split-option input[type='radio'] {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.okf-split-option--disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+  opacity: 0.65;
+}
+.okf-split-option--disabled input[type='radio'] {
+  cursor: not-allowed;
+}
+/* Per-tab one-line help (David, 2026-09-01: document each tab in place). */
+.tab-hint {
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--muted-soft);
+}
+/* Server-side crawl→OKF conversion status bars (David, 2026-09-02). */
+.conversion-list {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.conversion-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+  color: var(--fg);
+}
+.conversion-item {
+  padding: var(--space-xs) 0;
+}
+.conversion-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: 4px;
+}
+.conversion-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.conversion-status {
+  font-size: var(--text-xs);
+  color: var(--muted-soft);
+}
+.conversion-status--done {
+  color: var(--success);
+}
+.conversion-status--failed {
+  color: var(--danger);
+}
+.conversion-status--adding,
+.conversion-status--splitting,
+.conversion-status--downloading,
+.conversion-status--queued {
+  color: var(--info);
+}
+.conversion-bar {
+  height: 6px;
+  background-color: var(--border-light);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.conversion-bar-fill {
+  height: 100%;
+  background-color: var(--accent);
+  transition: width 0.4s ease;
+}
+.conversion-error {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--danger);
+  word-break: break-word;
 }
 .footer-actions {
   display: flex;

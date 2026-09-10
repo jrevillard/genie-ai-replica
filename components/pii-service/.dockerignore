@@ -1,0 +1,11 @@
+# Build context hygiene (code-review #22) — never ship local venvs/caches into
+# the image or the CI build context.
+.venv/
+.venv-linux/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+reports/
+*.md
+.git/

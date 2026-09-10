@@ -1,4 +1,34 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(echo \"---EXIT $?---\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(npx jest *)",
+      "Bash(cp /d/ITU-Gitlab/components/okf-server/services/repository-service.js /d/ITU-Gitlab/components/okf-server/services/audit-service.js /c/Dev/builds/main/components/okf-server/services/)",
+      "Bash(cp /d/ITU-Gitlab/components/okf-server/db/collections.js /c/Dev/builds/main/components/okf-server/db/)",
+      "Bash(cp /d/ITU-Gitlab/components/okf-server/validators/repository-validator.js /c/Dev/builds/main/components/okf-server/validators/)",
+      "Bash(cp /d/ITU-Gitlab/components/okf-server/__tests__/mocks/arango-mock.js /c/Dev/builds/main/components/okf-server/__tests__/mocks/)",
+      "Bash(cp /d/ITU-Gitlab/components/okf-server/__tests__/repository-service.test.js /c/Dev/builds/main/components/okf-server/__tests__/)",
+      "Bash(docker compose *)",
+      "Read(//c/Users/David Forden/Documents/**)",
+      "Bash(mv \"/c/Users/David Forden/Documents/OKF-AI-Driven-Bundle-Producer-Assessment_2026-08-12.md\" \"/d/ITU-Gitlab/_bmad-output/planning-artifacts/okf-ai-producer-analysis-2026-08-12.md\")",
+      "Bash(export GITLAB_HOST=opensource.unicc.org)",
+      "Bash(glab api *)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\);process.stdin.on\\('end',\\(\\)=>{try{const a=JSON.parse\\(s\\);const syft=a.find\\(v=>v.key==='SYFT_VERSION'\\);console.log\\(syft?'SYFT_VERSION='+syft.value:'SYFT_VERSION NOT found in project variables'\\);console.log\\('all vars:',a.map\\(v=>v.key\\).join\\(', '\\)\\)}catch\\(e\\){console.log\\('parse error:',s.slice\\(0,200\\)\\)}}\\)\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\);process.stdin.on\\('end',\\(\\)=>{const p=JSON.parse\\(s\\)[0];console.log\\('latest:',p.id,p.status,'sha:',p.sha&&p.sha.slice\\(0,9\\)\\)}\\)\")",
+      "Bash(wsl -d Ubuntu bash -lc 'cd /mnt/d/ITU-Gitlab/genie-ai-overlay && echo \"=== FULL test_dataprep.py \\(regression\\) ===\" && .venv-linux/bin/pytest tests/test_dataprep.py -q 2>&1 | tail -8')",
+      "Bash(git -C /d/ITU-Gitlab diff a00c6a01f..6a5703a0d -- genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py)",
+      "Bash(git -C /d/ITU-Gitlab log --oneline -1)",
+      "Bash(git -C /d/ITU-Gitlab branch --show-current)",
+      "Bash(git -C /d/ITU-Gitlab show 6a5703a0d:genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py)",
+      "Bash(git -C /d/ITU-Gitlab diff a00c6a01f..6a5703a0d -- genie-ai-overlay/tests/test_dataprep.py)",
+      "Bash(git -C /d/ITU-Gitlab show 6a5703a0d:genie-ai-overlay/tests/test_dataprep.py)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

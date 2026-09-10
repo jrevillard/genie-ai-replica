@@ -120,6 +120,23 @@ You can read the ingestion log in three places:
 See the [Ingestion log reference]({{< relref "ingestion-log" >}}) for the
 schema and canonical message strings.
 
+## Parallel indexing
+
+Documents from different sources — and concepts within different knowledge
+repositories — are independent units of work and are indexed **in parallel**,
+capped by configuration so a deployment can match the capacity of its machine:
+
+- `OKF_INGEST_CONCURRENCY` — how many concepts the okf-server worker drives
+  through the pipeline at once (drain lanes).
+- `DATAPREP_INGEST_CONCURRENCY` — how many documents the dataprep service
+  accepts concurrently (a request is rejected with `429` only when all slots
+  are busy; the worker backs off and retries).
+
+Both default to `1` (the historical strictly-sequential behavior). Raising them
+together scales indexing throughput with the machine — see
+[OKF Configuration Variables]({{< relref "/docs/configuration/okf-variables" >}})
+for sizing guidance.
+
 ## What gets stored
 
 For each chunk, ArangoDB stores:

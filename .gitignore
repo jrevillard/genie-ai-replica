@@ -71,7 +71,6 @@ coverage/
 reports/
 **/reports/
 
-# bmad-loop story-track control-plane (per-machine state)
 ci-status.json
 
 # Dependency directories
@@ -130,9 +129,6 @@ docker-compose.override.yml
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/
 .tokensave/
-.bmad-loop/runs/
-.bmad-loop/cache/
-.bmad-loop/policy.toml
 _bmad/render/
 
 # bmad-prd-orchestrate per-run state + orchestrator logs (per-machine ephemeral)

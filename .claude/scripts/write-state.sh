@@ -12,6 +12,6 @@ DEPS_SRC="$3"
 mkdir -p "$RUN"
 cp "$STATE_SRC" "$RUN/state.json.tmp" && mv "$RUN/state.json.tmp" "$RUN/state.json"
 cp "$DEPS_SRC" "$RUN/deps.json.tmp" && mv "$RUN/deps.json.tmp" "$RUN/deps.json"
-python3 -c "import json; json.load(open('$RUN/state.json')); json.load(open('$RUN/deps.json'))" \
+uv run python -c "import json; json.load(open('$RUN/state.json')); json.load(open('$RUN/deps.json'))" \
   || { echo '{"error":"post-write JSON validation failed"}' >&2; exit 3; }
 echo "{\"written\":true,\"paths\":[\"$RUN/state.json\",\"$RUN/deps.json\"]}"

@@ -25,7 +25,7 @@ case "$cmd" in
     [ $# -eq 4 ] || { echo "usage: all-read <sprintStatusPath> <storyKey> <comma-deps>" >&2; exit 1; }
     SP="$2"; SK="$3"; DEPS_CSV="$4"
     [ -f "$SP" ] || { echo "{\"error\":\"sprintStatus not found: $SP\"}" >&2; exit 2; }
-    python3 - "$SP" "$SK" "$DEPS_CSV" <<'PYEOF'
+    uv run python - "$SP" "$SK" "$DEPS_CSV" <<'PYEOF'
 import sys, json, re
 sp, sk, deps_csv = sys.argv[1], sys.argv[2], sys.argv[3]
 deps = [d for d in deps_csv.split(',') if d]

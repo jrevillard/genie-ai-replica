@@ -19,7 +19,7 @@ fi
 
 TOKEN="${GITLAB_TOKEN:-}"
 if [[ -z "$TOKEN" && -f "$HOME/.config/glab-cli/config.yml" ]]; then
-  TOKEN=$(python3 -c "
+  TOKEN=$(uv run python -c "
 import sys, yaml
 try:
     d = yaml.safe_load(open('$HOME/.config/glab-cli/config.yml'))
@@ -59,7 +59,7 @@ while true; do
     continue
   fi
 
-  STATUS=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo "?")
+  STATUS=$(echo "$BODY" | uv run python -c "import sys,json; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo "?")
   echo "$(date +%H:%M:%S) status=$STATUS"
 
   case "$STATUS" in

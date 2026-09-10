@@ -130,14 +130,15 @@ describe('repoOkfService — Story #978 editor methods', () => {
       expect(mockPatch).toHaveBeenCalledWith(
         '/okf/repos/r-1/concepts/c-1',
         { markdown: '---\ntype: topic\n---\n# body' },
-        { headers: { 'x-actor-sub': 'steward-1' } }
+        // 2026-09-09 lockup fix: the PATCH re-scans server-side — 180s client timeout
+        { headers: { 'x-actor-sub': 'steward-1' }, timeout: 180000 }
       );
     });
 
     it('omits the actor header when no actor is given', async () => {
       mockPatch.mockResolvedValue({ data: { ok: true } });
       await repoOkfService.patchConcept('r-1', 'c-1', '# body');
-      expect(mockPatch.mock.calls[0][2]).toEqual({ headers: {} });
+      expect(mockPatch.mock.calls[0][2]).toEqual({ headers: {}, timeout: 180000 });
     });
   });
 

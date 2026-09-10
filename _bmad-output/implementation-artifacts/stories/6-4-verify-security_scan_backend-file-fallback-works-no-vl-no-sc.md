@@ -2,12 +2,12 @@
 key: 6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc
 title: verify `SECURITY_SCAN_BACKEND=file` fallback works (no VL, no scan window check)
 epic: epic-6
-status: done
+status: in-progress
 followup_review_recommended: false
 effort: 0.1
 depends_on: [6.2]
 files: manual smoke
-baseline_revision: 31caabf114ad1c749cb77b828c5db6020c3b4e3a
+baseline_revision: 6bef08952e290ed84809fe468382ab5749939e60
 ---
 
 # Story 6.4 — verify `SECURITY_SCAN_BACKEND=file` fallback works (no VL, no scan window check)

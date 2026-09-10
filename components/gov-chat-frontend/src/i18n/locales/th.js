@@ -1,5 +1,5 @@
-// src/i18n/locales/th.js
-
+// Auto-generated: OKF Studio i18n keys merged into th.js locale.
+// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'อัฟกานิสถาน',
@@ -219,17 +219,15 @@ export default {
     monthlyActiveUsers: 'ผู้ใช้ที่ใช้งานรายเดือน (MAU)',
     fromLastMonth: 'จากเดือนที่แล้ว',
     today: 'วันนี้',
-    // --- UPDATED TABS ---
     tabs: {
       overview: 'สุขภาพระบบ',
-      hierarchy: 'ลำดับชั้นความรู้', // NEW
-      documents: 'การจัดการเอกสาร', // NEW
+      hierarchy: 'ลำดับชั้นความรู้',
+      documents: 'การจัดการเอกสาร',
       database: 'ฐานข้อมูล',
       logs: 'บันทึก',
       security: 'ความปลอดภัย',
       users: 'ผู้ใช้'
     },
-    // --- NEW KEYS ---
     contentManagement: 'การจัดการเนื้อหา',
     knowledgeHierarchy: 'ลำดับชั้นความรู้',
     documentManagement: 'การจัดการเอกสาร',
@@ -246,7 +244,6 @@ export default {
       defaultTitle: 'ยืนยัน',
       defaultMessage: 'คุณแน่ใจหรือไม่?'
     },
-    // --- END NEW KEYS ---
     systemHealthStatus: 'สถานะสุขภาพระบบ',
     runDiagnostics: 'รันการวินิจฉัย',
     resourceUsage: 'การใช้งานทรัพยากร',
@@ -443,10 +440,8 @@ export default {
       lineNumbers: 'หมายเลขบรรทัด',
       showLess: 'แสดงน้อยลง',
       showMore: 'แสดงปัญหาทั้งหมด',
-      // --- NEW KEY ---
       lastScanJustNow: 'เมื่อสักครู่'
     },
-    // --- NEW OBJECT ---
     hierarchy: {
       title: 'การจัดการลำดับชั้นความรู้ (หมายเหตุ: ภาษาอังกฤษเสมอ - เพิ่มการแปล)',
       addCategory: 'เพิ่มหมวดหมู่ใหม่',
@@ -484,7 +479,6 @@ export default {
       deleteErrorService: 'ล้มเหลวในการลบบริการ',
       duplicateLangError: 'พบภาษาซ้ำในการแปล โปรดลบออก'
     },
-    // --- NEW OBJECT ---
     documents: {
       title: 'การจัดการเอกสาร',
       addLink: 'เพิ่มจากลิงก์',
@@ -494,11 +488,9 @@ export default {
       statusPending: 'รอดำเนินการ',
       statusIngested: 'นำเข้าข้อมูลแล้ว',
       statusRetracted: 'ดึงกลับแล้ว',
-      // --- NEW STATUSES ADDED ---
       statusIngesting: 'กำลังนำเข้าข้อมูล',
       statusError: 'การนำเข้าข้อมูลล้มเหลว',
       statusWarning: 'นำเข้าข้อมูลแล้วพร้อมคำเตือน',
-      // ---
       ingestSelected: 'นำเข้าข้อมูลที่เลือก',
       colFileName: 'ชื่อไฟล์',
       colStatus: 'สถานะ',
@@ -1090,6 +1082,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'บันทึกโปรไฟล์สำเร็จ',
+      saved: 'Frontmatter saved',
       saveFailed: 'ล้มเหลวในการบันทึกโปรไฟล์',
       loadSuccess: 'โหลดโปรไฟล์สำเร็จ',
       loadFailed: 'ล้มเหลวในการโหลดโปรไฟล์',
@@ -1369,7 +1362,6 @@ export default {
     clearContext: 'ล้างบริบทและเริ่มการสนทนาใหม่',
     unsavedChanges: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการเริ่มแชทใหม่หรือไม่?',
     whatCanIHelp: 'ฉันสามารถช่วยอะไรคุณได้วันนี้?',
-
     queryContext: 'บริบทคำถาม',
     contextAdded: 'เพิ่มบริบทในคำถามของคุณ',
     contextRemoved: 'ลบบริบทจากคำถามของคุณ',
@@ -1398,35 +1390,22 @@ export default {
     removeItem: 'ลบ'
   },
   quickhelp: {
-    // Labels (Short for UI)
-
-    // User Prompts (Visible Text - First Person - what user sees in chat)
-
-    // System Prompts (Hidden from User - detailed prompts sent to LLM)
     applyForIDPrompt:
       "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
-
     payTaxesPrompt:
       "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-
     startBusinessPrompt:
       "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-
     findHealthcarePrompt:
       "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-
     educationServicesPrompt:
       "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
-
     transportLicensesPrompt:
       "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-
     housingProgramsPrompt:
       "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-
     findJobsPrompt:
       "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
-
     justChatPrompt:
       "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
   },
@@ -1436,7 +1415,6 @@ export default {
     save: 'บันทึก',
     move: 'ย้าย',
     delete: 'ลบ',
-    // --- NEW KEYS ADDED ---
     ok: 'ตกลง',
     ingest: 'นำเข้าข้อมูล',
     retract: 'ดึงกลับ',
@@ -1493,12 +1471,18 @@ export default {
     fileSize: 'ขนาดไฟล์',
     uploadDate: 'วันที่อัปโหลด',
     hash: 'SHA256 แฮช',
-    // --- NEW: TABS ---
     tabs: {
       details: 'รายละเอียด',
-      ingestionLog: 'บันทึกการนำเข้าข้อมูล'
+      ingestionLog: 'บันทึกการนำเข้าข้อมูล',
+      detailsHint:
+        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+      dashboardHint:
+        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+      crawlLogHint:
+        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+      ingestionLogHint:
+        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
     },
-    // --- NEW: LOG TAB ---
     log: {
       killActions: 'การดำเนินการหยุด:',
       killDocument: 'หยุดเอกสารนี้',
@@ -1528,7 +1512,6 @@ export default {
       retractError: 'ไม่สามารถดึงกลับไฟล์ได้',
       deleteSuccess: 'ลบไฟล์เรียบร้อยแล้ว',
       deleteError: 'ไม่สามารถลบไฟล์ได้',
-      // --- NEW NOTIFICATIONS ---
       ingestLabelRequired: 'โปรดเลือกอย่างน้อยหนึ่งป้ายกำกับก่อนนำเข้าข้อมูล',
       ingestSaving: 'กำลังบันทึกข้อมูลเมตาก่อนนำเข้าข้อมูล...',
       ingestSaveFailed: 'ไม่สามารถบันทึกข้อมูลเมตาได้ ยกเลิกการนำเข้าข้อมูล',
@@ -1540,7 +1523,6 @@ export default {
       ingest: 'คุณแน่ใจหรือไม่ว่าต้องการนำเข้าไฟล์นี้? นี่จะเป็นการเริ่มกระบวนการประมวลผลข้อมูล',
       retract: 'คุณแน่ใจหรือไม่ว่าต้องการดึงกลับไฟล์นี้?',
       delete: 'คุณแน่ใจหรือไม่ว่าต้องการลบไฟล์นี้อย่างถาวร? การกระทำนี้ไม่สามารถยกเลิกได้',
-      // --- NEW CONFIRMATIONS ---
       ingestTitle: 'ยืนยันการนำเข้าข้อมูล',
       retractTitle: 'ยืนยันการดึงกลับ',
       deleteTitle: 'ยืนยันการลบ',
@@ -1555,7 +1537,7 @@ export default {
     title: 'อัปโหลดไฟล์',
     dropzone: 'ลากและวางไฟล์ที่นี่ หรือคลิกเพื่อเลือก',
     allowedTypesLabel: 'ประเภทที่อนุญาต:',
-    buttonUpload: 'อัปโหลด {count} ไฟล์', // Pluralization might need adjustment
+    buttonUpload: 'อัปโหลด {count} ไฟล์',
     remove: 'ลบ',
     uploading: 'กำลังอัปโหลด...',
     notifications: {
@@ -1565,6 +1547,711 @@ export default {
       duplicate: 'ไฟล์ "{fileName}" ถูกเพิ่มแล้ว',
       uploadSuccess: 'อัปโหลด {fileName} สำเร็จ',
       uploadFailed: 'ล้มเหลวในการอัปโหลด {fileName}'
+    }
+  },
+  okf: {
+    versions: {
+      bundle: 'Bundle',
+      col: {
+        concepts: 'Concepts',
+        curator: 'Curator',
+        minted: 'Minted',
+        tag: 'Tag',
+        trigger: 'Trigger',
+        version: 'Version'
+      },
+      current: 'current',
+      loadFailed: 'Failed to load versions',
+      none: 'No versions minted yet — publishing creates v1.',
+      notServing: 'Not serving',
+      publish: 'Create new version',
+      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
+      serving: 'Ingested (serving)',
+      title: 'Versions'
+    },
+    shell: {
+      back: 'Studio dashboard',
+      building: 'Building…',
+      buildingHint: 'The source file is still being processed',
+      delete: {
+        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        confirm: 'Delete',
+        title: 'Delete repository'
+      },
+      export: 'Export .zip',
+      logs: 'Logs',
+      pii: {
+        ack: 'Acknowledge flagged entities & publish',
+        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+      },
+      publish: {
+        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        confirm: 'Publish',
+        title: 'Publish'
+      },
+      readonly: 'READ ONLY',
+      serving: 'Serving',
+      state: {
+        ingested: 'Ingested'
+      },
+      tab: {
+        editor: 'Editor',
+        wizard: 'Wizard'
+      },
+      version: "v{'{'}n{'}'}",
+      versions: 'Versions',
+      deleteLabel: 'Delete'
+    },
+    logs: {
+      labeled: "labeled: {'{'}n{'}'}",
+      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
+      concepts: "concepts: {'{'}n{'}'}",
+      col: {
+        action: 'Action',
+        description: 'Description',
+        user: 'User',
+        when: 'Date & time'
+      },
+      count: "{'{'}n{'}'} entries",
+      loadFailed: 'Failed to load the activity log.',
+      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      title: 'Activity log'
+    },
+    graph: {
+      aria: 'Concept graph',
+      concepts: 'concepts',
+      empty: 'No concepts yet - nothing to graph.',
+      fit: 'Fit graph',
+      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      layouting: 'Layouting…',
+      legend: 'index',
+      links: 'links',
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out'
+    },
+    editor: {
+      addConcept: {
+        bodyLabel: 'Markdown (paste or leave empty)',
+        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        create: 'Create file',
+        failed: 'Could not create the file.',
+        title: 'Add concept file',
+        titleLabel: 'Title',
+        titlePh: 'e.g. Wildlife in the Mara',
+        updateIndex: 'Append to the index Contents list'
+      },
+      autocorrect: {
+        blankBefore: '(blank)',
+        blankBadge: 'no frontmatter — full proposal',
+        applyField: 'Apply',
+        apply: 'Apply fixes',
+        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        button: 'Autocorrect',
+        clean: 'Nothing to fix — all frontmatter already conforms.',
+        col: {
+          field: 'Field',
+          after: 'After',
+          before: 'Before',
+          concept: 'Concept'
+        },
+        failed: 'Scan failed.',
+        scanning: 'Scanning…',
+        title: 'Autocorrect (frontmatter only)'
+      },
+      concepts: {
+        originTip: 'How this concept was curated',
+        add: 'Add concept',
+        addLabel: 'Set label',
+        delete: 'Delete file',
+        empty: 'No files yet - add a concept or re-split from source.',
+        filter: 'Filter files',
+        indexBadge: 'index',
+        label: 'Concepts',
+        loading: 'Loading…',
+        resplit: 'Re-split'
+      },
+      delete: {
+        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        confirm: 'Delete',
+        title: 'Delete file'
+      },
+      label: 'Repository editor',
+      loadFailed: 'Could not load this concept.',
+      loadingConcept: 'Loading concept…',
+      meta: {
+        label: 'Concept metadata',
+        labelLabel: 'Label (Knowledge Hierarchy)',
+        noLabel: 'No label',
+        none: 'No concept selected',
+        saveFailed: 'Metadata save failed',
+        saved: 'Metadata saved',
+        status: 'Index status',
+        title: 'Title',
+        trust: 'Trust tier',
+        type: 'Type',
+        typePlaceholder: 'Select type…'
+      },
+      pane: {
+        files: 'Files',
+        graph: 'Graph'
+      },
+      pickConcept: 'Select a concept from the list to start editing.',
+      resplit: {
+        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        confirm: 'Re-split',
+        failed: 'Re-split failed — check the source file link.',
+        modeA: 'One concept for the whole crawl',
+        modeAHint: 'Mega-concept — the entire content in a single concept',
+        modeB: 'One concept per page',
+        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
+        modeC: 'Use LLM topic extraction',
+        modeCHint: 'Story 10.6 — coming soon',
+        title: 'Re-split from source'
+      },
+      save: 'Save',
+      saved: 'Saved',
+      saving: 'Saving…',
+      unsaved: 'Unsaved changes',
+      view: {
+        rendered: 'Rendered',
+        source: 'Source'
+      },
+      viewToggle: 'Editor view',
+      paneLabel: 'View pane'
+    },
+    dashboard: {
+      bulk: {
+        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
+        pending: 'Confirm to publish the selected repositories.',
+        publishConfirm: "Publish {'{'}n{'}'}",
+        title: 'Publish selected repositories'
+      },
+      card: {
+        actions: "Actions for {'{'}name{'}'}",
+        building: 'Building…',
+        buildingAria: 'Building — the source file is still being processed',
+        delete: 'Delete',
+        export: 'Export',
+        ingesting: 'Ingesting…',
+        logs: 'Logs',
+        rename: 'Rename',
+        versions: 'Versions'
+      },
+      delete: {
+        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        confirm: 'Delete',
+        title: 'Delete repository'
+      },
+      filter: {
+        domain: 'Filter by subject area'
+      },
+      new: '+ New repository',
+      pii: {
+        ack: 'Acknowledge flagged entities & publish',
+        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+      },
+      publish: {
+        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        confirm: 'Publish',
+        title: 'Publish'
+      },
+      search: 'Search...',
+      select: "Select {'{'}name{'}'} for bulk publish",
+      stage: {
+        drainFailed: 'Ingest failed',
+        redraining: 'Re-draining…',
+        building: 'Building…',
+        draft: 'Draft',
+        inReview: 'In review',
+        ingested: "Ingested v{'{'}n{'}'}",
+        published: "Published v{'{'}n{'}'}",
+        retracted: 'Retracted',
+        stepOf: 'Step '
+      },
+      title: 'Repositories',
+      topics: 'topics'
+    },
+    build: {
+      drainFailed: {
+        more: "+ {'{'}n{'}'} more",
+        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+      },
+      curation: {
+        fallbacks: 'LLM fallbacks',
+        curated: 'Curated',
+        typed: 'Typed',
+        labeled: 'Labeled',
+        described: 'Described'
+      },
+      batches: 'Batches stored',
+      bytes: 'Source read',
+      conceptsIndexed: 'concepts indexed',
+      elapsed: {
+        hr: "Started {'{'}n{'}'} h ago",
+        lt1: 'Started less than a minute ago',
+        min: "Started {'{'}n{'}'} min ago"
+      },
+      hint: {
+        import: 'The repository stays in Import until the file conversion completes.',
+        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
+        serving: 'This version is serving RAG traffic — retract it to make changes.'
+      },
+      pages: 'Pages processed',
+      serving: {
+        graph: 'Serving graph',
+        version: 'Serving version'
+      },
+      stage: {
+        indexing: 'Indexing',
+        serving: 'Serving'
+      },
+      title: {
+        import: 'Import progress',
+        rag: 'Ingestion progress',
+        serving: 'Serving status'
+      }
+    },
+    create: {
+      zipOnly: 'Pick a .zip bundle file.',
+      stagedFile: "Staged: {'{'}name{'}'}",
+      staged: 'Bundle staged — click Create Repository to start the import.',
+      openExisting: 'Open existing repository',
+      name: 'Repository name',
+      importing: 'Importing bundle…',
+      importHint: 'Or import an existing zip bundle as a new repository.',
+      importDefaultName: 'Imported repository',
+      failed: 'Repository creation failed',
+      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
+      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      domain: 'Subject area',
+      create: 'Create repository',
+      title: 'New OKF repository',
+      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
+      domainPlaceholder: 'Select a subject area…',
+      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
+      classLabel: 'Concept classification',
+      classHeuristics: 'Heuristics (default)',
+      classLlm: 'LLM-assisted',
+      classHybrid: 'Hybrid'
+    },
+    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
+    fm: {
+      errKeyCurated: 'Reserved field name.',
+      errKeyDuplicate: 'Field name is used twice.',
+      errJson: 'Invalid JSON',
+      errNumber: 'Must be a number',
+      kind: {
+        json: 'JSON',
+        array: 'List',
+        boolean: 'True/false',
+        number: 'Number',
+        string: 'Text'
+      },
+      removeKey: 'Remove field',
+      kindLabel: 'Value type',
+      keyPh: 'field name',
+      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
+      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
+      errKeyRequired: 'Every field needs a name.',
+      arrayPh: 'comma-separated values',
+      addKey: 'Add field',
+      saved: 'Frontmatter saved',
+      label: 'Frontmatter',
+      tipLabel: 'What is Frontmatter?',
+      edit: 'Edit',
+      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      type: 'Type',
+      noType: 'No type',
+      titleLabel: 'Title',
+      labelsLabel: 'Label (Knowledge Hierarchy)',
+      noLabel: 'No label',
+      descriptionLabel: 'Description',
+      save: 'Save frontmatter',
+      saveFailed: 'Frontmatter save failed'
+    },
+    glossary: {
+      concept:
+        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+      repository:
+        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+      subjectArea:
+        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
+      selectSubjectArea: 'Select a subject area…',
+      subjectAreaMissing:
+        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+      label:
+        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+      bundle:
+        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+      version:
+        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
+      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+      ingestion:
+        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+      classification:
+        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+      resplit:
+        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+      saveFailed: 'Save failed',
+      importFailedTitle: 'The import failed — the source file could not be converted.',
+      importFailedHint: 'Delete this repository and import the source file again.',
+      frontmatter:
+        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+    },
+    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
+    md: {
+      toolbar: 'Formatting',
+      bold: 'Bold',
+      italic: 'Italic',
+      h1: 'Heading 1',
+      h2: 'Heading 2',
+      h3: 'Heading 3',
+      bullet: 'Bullet list',
+      numbered: 'Numbered list',
+      link: 'Insert link',
+      code: 'Inline code',
+      table: 'Insert table',
+      split: 'Split'
+    },
+    narrative: {
+      intro:
+        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+      step0:
+        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+      step1:
+        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+      step2:
+        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+      step3:
+        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+      step4:
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+      step5:
+        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+      step6:
+        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+      step7:
+        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+      step8:
+        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+      step9:
+        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+      docMgmtEntry:
+        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+      crawlSegment:
+        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+      emptyDashboard:
+        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
+      labels:
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+      hide: '__TODO_TRANSLATE__ (en: Hide)',
+      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+    },
+    common: {
+      close: '__TODO_TRANSLATE__ (en: Close)',
+      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
+      save: '__TODO_TRANSLATE__ (en: Save)',
+      clear: '__TODO_TRANSLATE__ (en: Clear)',
+      delete: '__TODO_TRANSLATE__ (en: Delete)'
+    },
+    studio: {
+      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
+      help: '__TODO_TRANSLATE__ (en: Help)',
+      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      helpBody:
+        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+      view: {
+        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
+        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+      },
+      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      context: {
+        title: '__TODO_TRANSLATE__ (en: Repository)',
+        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
+        trust: '__TODO_TRANSLATE__ (en: Trust)',
+        sources: '__TODO_TRANSLATE__ (en: Sources)',
+        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
+        stale: '__TODO_TRANSLATE__ (en: stale)'
+      },
+      status: {
+        draft: '__TODO_TRANSLATE__ (en: in progress)',
+        inReview: '__TODO_TRANSLATE__ (en: in review)',
+        published: '__TODO_TRANSLATE__ (en: published)'
+      },
+      stage: {
+        inReview: '__TODO_TRANSLATE__ (en: In review)',
+        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
+        draft: '__TODO_TRANSLATE__ (en: Draft)'
+      },
+      dashboard: {
+        title: '__TODO_TRANSLATE__ (en: Repositories)',
+        new: '__TODO_TRANSLATE__ (en: + New repository)',
+        search: '__TODO_TRANSLATE__ (en: Search...)',
+        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
+        topics: '__TODO_TRANSLATE__ (en: topics)',
+        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
+        stale: '__TODO_TRANSLATE__ (en: stale)',
+        stage: {
+          inReview: '__TODO_TRANSLATE__ (en: In review)',
+          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
+          draft: '__TODO_TRANSLATE__ (en: Draft)'
+        },
+        bulk: {
+          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
+          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
+          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
+          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
+          results: '__TODO_TRANSLATE__ (en: Results)',
+          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          col: {
+            name: '__TODO_TRANSLATE__ (en: Name)',
+            status: '__TODO_TRANSLATE__ (en: Status)',
+            topics: '__TODO_TRANSLATE__ (en: Topics)'
+          },
+          status: {
+            ready: '__TODO_TRANSLATE__ (en: Ready)'
+          }
+        }
+      },
+      draft: {
+        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+      }
+    },
+    wizard: {
+      status: {
+        published: 'published',
+        inReview: 'in review',
+        draft: 'in progress'
+      },
+      exit: 'Back to dashboard',
+      context: {
+        untitled: 'Untitled repository',
+        trust: 'Trust',
+        title: 'Repository',
+        stale: 'stale',
+        sources: 'Sources',
+        concepts: 'Concepts so far'
+      },
+      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
+      back: '__TODO_TRANSLATE__ (en: Back)',
+      continue: '__TODO_TRANSLATE__ (en: Continue)',
+      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+    },
+    steps: {
+      entry: {
+        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
+        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
+        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
+        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
+        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+      },
+      choose: {
+        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
+        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        source: {
+          documents: {
+            title: '__TODO_TRANSLATE__ (en: Documents)',
+            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+          },
+          crawl: {
+            title: '__TODO_TRANSLATE__ (en: Website crawl)',
+            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+          },
+          manual: {
+            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
+            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+          },
+          clone: {
+            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
+            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+          }
+        }
+      },
+      input: {
+        title: '__TODO_TRANSLATE__ (en: Inputs)',
+        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
+        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
+        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
+        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
+        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+      },
+      produce: {
+        title: '__TODO_TRANSLATE__ (en: Generate topics)',
+        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
+        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
+        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+      },
+      label: {
+        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
+        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
+        add: '__TODO_TRANSLATE__ (en: + Add label)',
+        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
+        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+      },
+      curate: {
+        title: '__TODO_TRANSLATE__ (en: Review the topics)',
+        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
+        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+      },
+      validate: {
+        title: '__TODO_TRANSLATE__ (en: Check for issues)',
+        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
+        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+      },
+      autocorrect: {
+        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
+        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
+        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+      },
+      review: {
+        title: '__TODO_TRANSLATE__ (en: Review)',
+        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
+        repo: '__TODO_TRANSLATE__ (en: Repository)',
+        topics: '__TODO_TRANSLATE__ (en: Topics)',
+        labels: '__TODO_TRANSLATE__ (en: Labels)',
+        sources: '__TODO_TRANSLATE__ (en: Sources)'
+      },
+      publish: {
+        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
+        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
+        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
+        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
+        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+      }
+    },
+    trust: {
+      tier: {
+        unverified: '__TODO_TRANSLATE__ (en: unverified)',
+        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
+        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+      }
+    },
+    repos: {
+      retract: {
+        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+      },
+      manifest: {
+        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+      }
+    },
+    docs: {
+      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      gate: {
+        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
+        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
+        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+      },
+      produce: {
+        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+      }
+    },
+    crawl: {
+      domainLabel: 'Subject area',
+      domainPlaceholder: 'Select a subject area…',
+      classLabel: 'Concept classification',
+      classHeuristics: 'Heuristics (default)',
+      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      classLlm: 'LLM-assisted',
+      classLlmHint:
+        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+      classHybrid: 'Hybrid',
+      classHybridHint:
+        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
+      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+      target: {
+        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
+        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+      },
+      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
+      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
+      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
+      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
+      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
+      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
+      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
+      splitBHint:
+        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
+      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
+      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
+      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
+      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
+      postCrawlHint:
+        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
+      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
+      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+      conversionsTitle: 'ที่เก็บที่สร้างจากการรวบรวมนี้',
+      convQueued: 'อยู่ในคิว...',
+      convDownloading: 'กำลังดาวน์โหลดการรวบรวม...',
+      convSplitting: 'กำลังแบ่งเป็นหัวข้อแนวคิด...',
+      convAdding: 'กำลังเพิ่มหัวข้อแนวคิด ([p] หน้าแล้ว)...',
+      convDone: 'สร้างแล้ว ([p] หน้า)',
+      convFailed: 'ล้มเหลว',
+      createStarted: 'กำลังสร้าง "[name]" — ติดตามความคืบหน้าด้านล่าง',
+
+      modelTier: {
+        label: '__TODO_TRANSLATE__ (en: Model)',
+        options: {
+          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
+          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
+          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+        }
+      },
+      gate: {
+        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
+        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+      }
+    },
+    curator: {
+      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
+      search: '__TODO_TRANSLATE__ (en: Search topics)',
+      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      labels: {
+        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
+        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
+        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
+        add: '__TODO_TRANSLATE__ (en: Add)',
+        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
+        remove: '__TODO_TRANSLATE__ (en: Remove)',
+        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
+        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+      },
+      frontmatter: {
+        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
+        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
+        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
+        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
+        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
+        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
+        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
+        attestation: '__TODO_TRANSLATE__ (en: attestation)',
+        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+      },
+      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      issue: {
+        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
+        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+      },
+      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+    },
+    validation: {
+      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
+      none: '__TODO_TRANSLATE__ (en: None)',
+      expertHint:
+        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+      headline: {
+        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
+        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
+        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+      },
+      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      formatter: {
+        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+      },
+      run: {
+        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
     }
   }
 };

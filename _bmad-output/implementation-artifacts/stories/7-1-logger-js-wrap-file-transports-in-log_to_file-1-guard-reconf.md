@@ -2,10 +2,11 @@
 key: 7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf
 title: "logger.js: wrap file transports in `booleanEnv('LOG_TO_FILE')` guard (AD-14); reconfigure honors it"
 epic: epic-7
-status: ready-for-dev
+status: in-progress
 effort: 0.25
 depends_on: [Epic 2]
 files: "components/shared/lib/logger.js:48-69 (initial config) AND 77-122 (reconfigureLogger)"
+baseline_revision: dae90239333909bce26eba47d021ef01a485768b
 ---
 
 # Story 7.1 — logger.js: wrap file transports in `LOG_TO_FILE === '1'` guard; reconfigure honors it

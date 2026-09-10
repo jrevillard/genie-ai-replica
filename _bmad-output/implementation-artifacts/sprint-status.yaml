@@ -146,7 +146,7 @@ development_status:
   5-12-grep-fix-other-printf-regex-assertions-admindashboard-parsel: done
   epic-5-retrospective: optional
 
-  epic-6: in-progress
+  epic-6: done
   6-1-security-scan-service-drop-worker_threads-import-processfile: done
   6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: done
   6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: done
@@ -181,7 +181,7 @@ audit:
   closures: Story 7-6 AC3 (preserve printf format) closed by P1a JSON switch; 
     closure note appended to archived file
 generated: '2026-08-31'
-last_updated: "2026-09-10-epic-6-r14-6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc"
+last_updated: "2026-09-10-epic-6-r14"
 project: admin-logs-victorialogs
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts/stories

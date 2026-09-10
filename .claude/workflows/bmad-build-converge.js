@@ -181,7 +181,7 @@ async function dispatchViaClaudeP(opts) {
   // This worked for story 5-11 (completed via this exact pattern, with the
   // wrapper recovering by manually reading the output file after a self-matching
   // pgrep loop hung). The fix: pass the EXACT PID to watch, no pattern matching.
-  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && ${schemaEnvPrefix}nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format json --verbose --permission-mode bypassPermissions --allowed-tools ${allowedTools}${schemaEnvArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); trap 'echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=$?"' EXIT; while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=pid_dead"; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=polling_timeout"; break; fi; sleep 5; done`;
+  const cmd = `cd '${cwd || '.'}' && printf '%s' '${promptB64}' | base64 -d > '${promptFile}' && ${schemaEnvPrefix}nohup bash -c 'cat ${promptFile} | claude -p -${modelArg} --output-format stream-json --verbose --permission-mode bypassPermissions --allowed-tools ${allowedTools}${schemaEnvArg} > ${stdoutFile} 2> ${stderrFile}; echo EXIT_CODE=$? >> ${stdoutFile}' > /dev/null 2>&1 & PID=$!; echo PID=$PID; START=$(date +%s); trap 'echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=$?"' EXIT; while true; do if ! kill -0 $PID 2>/dev/null; then cat '${stdoutFile}'; echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=pid_dead"; break; fi; ELAPSED=$(($(date +%s) - START)); if [ $ELAPSED -gt 540 ]; then echo 'POLLING_REQUIRED STDOUT=${stdoutFile}'; echo "WRAPPER_BASH_EXIT_AT=$(date +%s) reason=polling_timeout"; break; fi; sleep 5; done`;
   const wrapperResult = await agent(
     `PROHIBITIONS:
 
@@ -229,17 +229,33 @@ STEPS:
        30 minutes (= 1800 sec), claude -p is likely hung → fast-fail
        with { stdout: "", exitCode: 1 }. DO NOT kill any process — just
        report hung and return.
-     - Each loop iteration:
-         a. stat stdout mtime + stderr mtime + date +s
-         b. If BOTH mtimes > 1800 sec old: fast-fail (no kill)
-         c. Read stdout. If ends with EXIT_CODE=<n>: parse, return.
-         d. Read stdout tail (last 500 chars), report progress event types.
-         e. sleep 60
-     - Pure activity-based polling: keeps waiting while EITHER file
-       grew in last 30 min, fast-fails only when BOTH are silent for 30+ min.
-       DO NOT kill processes.
+     - Each loop iteration, run this single Bash check (concise, token-efficient):
+         Bash command="STDOUT='<stdoutFile>'; STDERR='<stderrFile>';
+         NOW=\$(date +%s); ST_M=\$(stat -c '%Y' \"\$STDOUT\" 2>/dev/null || echo 0);
+         ER_M=\$(stat -c '%Y' \"\$STDERR\" 2>/dev/null || echo 0);
+         STALE=\$(( NOW - (ST_M > ER_M ? ST_M : ER_M) ));
+         echo \"stale_sec=\$STALE\";
+         grep -q '^EXIT_CODE=' \"\$STDOUT\" 2>/dev/null && echo 'EXIT_CODE_FOUND'"
+         timeout=15000
+         description="poll claude -p stdout/stderr activity"
+       If `stale_sec > 1800` (both files silent 30+ min): fast-fail (no kill).
+       If 'EXIT_CODE_FOUND' in output: Read the FULL stdout file via Read tool,
+       parse the last NDJSON 'result' event, extract structured_output,
+       return { stdout: JSON.stringify(envelope), exitCode: 0 }.
+       Else: sleep 60, repeat. (NO tail during poll — only Read file once EXIT_CODE found.)
 
-3. Return JSON: { stdout: <verbatim content>, exitCode: <integer> }.
+     - DO NOT kill processes. Fast-fail returns empty stdout only.
+
+3. CRITICAL: Return ONLY EXTRACTED FIELDS, not the full stdout file.
+   The StructuredOutput input limit is ~12KB. The stdout file can be
+   100KB+. If you return the raw stdout, you'll be truncated and the
+   orchestrator will fail to parse. Return:
+     { stdout: <parsed envelope as JSON STRING, not raw stdout>,
+       exitCode: <integer> }
+   Parse the stdout file, find the last 'result' event (or single envelope
+   object), extract its structured_output + is_error + terminal_reason +
+   num_turns fields. JSON.stringify those fields as the stdout value.
+   The orchestrator's parser extracts structured_output from your stdout.
 
 COMMAND:
 ${cmd}`,
@@ -257,31 +273,36 @@ ${cmd}`,
   if (wrapperResult.exitCode !== 0) return { error: `claude -p exit ${wrapperResult.exitCode}: ${wrapperResult.stdout || ''}` };
 
   // Defensively strip the EXIT_CODE=<n> line that the bash command appends
-  // to the stdout file. The wrapper prompt instructs it to strip, but
-  // wrapper LLMs sometimes don't — and a trailing "EXIT_CODE=0" breaks
-  // JSON.parse below.
+  // to the stdout file.
   let stdoutText = (wrapperResult.stdout || '').trim();
   stdoutText = stdoutText.replace(/\nEXIT_CODE=\d+\s*$/, '');
-  let parsed;
-  try {
-    parsed = JSON.parse(stdoutText);
-  } catch (e) {
-    return { error: `claude -p stdout not JSON: ${e.message}; stdout: ${stdoutText}` };
-  }
-  // Two accepted shapes:
-  // A. Single envelope object: { structured_output: {...}, ... }
-  // B. NDJSON-wrapped array of events: [{type:"system",...}, ..., {type:"result",structured_output:{...}}]
-  //    (with --verbose, claude -p emits events as NDJSON wrapped in an array)
+  // claude -p with --output-format stream-json emits NDJSON events (one
+  // JSON object per line). Find the last 'result' event by splitting on
+  // newlines and parsing each line. Falls back to single-object or
+  // array-of-events shape for backward compat with --output-format json.
   let envelope = null;
-  if (Array.isArray(parsed)) {
-    // Find the last result event (claude -p's --output-format json + --verbose emits an array)
-    const lastResult = [...parsed].reverse().find(e => e && e.type === 'result');
-    envelope = lastResult || parsed[parsed.length - 1] || null;
-  } else if (parsed && typeof parsed === 'object' && 'structured_output' in parsed) {
-    envelope = parsed;
+  const lines = stdoutText.split('\n').map(l => l.trim()).filter(l => l);
+  for (let i = lines.length - 1; i >= 0 && !envelope; i--) {
+    try {
+      const ev = JSON.parse(lines[i]);
+      if (ev && ev.type === 'result') { envelope = ev; break; }
+      if (ev && 'structured_output' in ev) { envelope = ev; break; }
+    } catch {}
+  }
+  if (!envelope) {
+    // Backward compat: try parsing the whole stdout as single JSON
+    let parsed = null;
+    try { parsed = JSON.parse(stdoutText); } catch {}
+    if (parsed) {
+      if (Array.isArray(parsed)) {
+        envelope = [...parsed].reverse().find(e => e && e.type === 'result') || parsed[parsed.length - 1] || null;
+      } else if (parsed && typeof parsed === 'object' && 'structured_output' in parsed) {
+        envelope = parsed;
+      }
+    }
   }
   if (!envelope || typeof envelope !== 'object' || !('structured_output' in envelope)) {
-    return { error: `claude -p envelope missing structured_output (got: ${JSON.stringify(parsed).substring(0, 500)})` };
+    return { error: `claude -p envelope missing structured_output (got: ${stdoutText.substring(0, 500)})` };
   }
   return envelope.structured_output;
 }
@@ -372,6 +393,16 @@ log(`Story branch: ${setup.storyBranch} | Worktree: ${setup.worktreePath} | Base
 // sprint-status + spec commits to remote, so MR creation now has a diff.
 phase('Create MR')
 log(`Creating MR for ${setup.storyBranch}...`)
+// Compute spec path relative to repo root for the MR description (portable
+// for reviewers, not a local laptop path). The spec file is committed to
+// the branch at _bmad-output/... — strip the worktree prefix.
+let relSpecPath = setup.specPath;
+const wtPrefix = setup.worktreePath + '/';
+if (relSpecPath.startsWith(wtPrefix)) {
+  relSpecPath = relSpecPath.slice(wtPrefix.length);
+} else if (relSpecPath.startsWith(setup.repoRoot + '/')) {
+  relSpecPath = relSpecPath.slice(setup.repoRoot.length + 1);
+}
 const mrResult = await agent(
   `Create MR for branch ${setup.storyBranch} → ${setup.baseBranch}, story ${setup.storyKey}.
 
@@ -389,7 +420,7 @@ OPERATE FROM: ${setup.worktreePath}
 STEPS:
 1. Check existing MR: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests?source_branch=${setup.storyBranch}&state=opened"\` — if found, use existing mrIid.
 2. If no MR: create via:
-   \`GITLAB_HOST=${setup.gitlabHost} glab mr create --yes --repo <config-project> --source-branch "${setup.storyBranch}" --target-branch "${setup.baseBranch}" --title "Story ${setup.storyKey} — bmad-build-converge" --description "Auto-generated by bmad-build-converge. See spec file at ${setup.specPath} for review order." --remove-source-branch\`
+   \`GITLAB_HOST=${setup.gitlabHost} glab mr create --yes --repo <config-project> --source-branch "${setup.storyBranch}" --target-branch "${setup.baseBranch}" --title "Story ${setup.storyKey} — bmad-build-converge" --description "Auto-generated by bmad-build-converge. See spec file at ${relSpecPath} for review order." --remove-source-branch\`
    (config-project is read from _bmad/custom/issue-tracking.yaml: project field.)
 3. Parse mrIid from URL pattern /merge_requests/<NID>.
 4. Fetch first pipeline id: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/<NID>/pipelines?per_page=1"\` → first id.

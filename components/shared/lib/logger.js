@@ -83,30 +83,39 @@ const buildTransports = (config = {}) => {
       json: false,
       colorize: true, // Colorize output for readability
       stderrLevels: ['error'] // Write error logs to stderr
-    }),
-    new DailyRotateFile({
-      filename: 'logs/error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxSize: config.errorMaxSize || '10m',
-      maxFiles: config.errorMaxFiles || '30d',
-      zippedArchive: config.zippedArchive !== undefined ? config.zippedArchive : true
-    }),
-    new DailyRotateFile({
-      filename: 'logs/combined-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      maxSize: config.combinedMaxSize || '10m',
-      maxFiles: config.combinedMaxFiles || '30d',
-      zippedArchive: config.zippedArchive !== undefined ? config.zippedArchive : true
-    }),
-    new transports.File({
-      filename: 'logs/combined.log',
-      maxsize: config.combinedLogMaxSize || 5242880, // 5MB
-      maxFiles: config.combinedLogMaxFiles || 1,
-      tailable: true, // Recreate log file when max size is reached
-      handleExceptions: true
     })
   ];
+  // Audit-retention gate: file transports are added only when
+  // booleanEnv('LOG_TO_FILE') is truthy (1|true|TRUE|yes). The guard lives
+  // inside buildTransports so both the initial loggerConfig and the
+  // reconfigureLogger rebuild honour it — without this wrap a reconfigure
+  // could re-add file transports even when LOG_TO_FILE=0.
+  if (booleanEnv('LOG_TO_FILE')) {
+    list.push(
+      new DailyRotateFile({
+        filename: 'logs/error-%DATE%.log',
+        datePattern: 'YYYY-MM-DD',
+        level: 'error',
+        maxSize: config.errorMaxSize || '10m',
+        maxFiles: config.errorMaxFiles || '30d',
+        zippedArchive: config.zippedArchive !== undefined ? config.zippedArchive : true
+      }),
+      new DailyRotateFile({
+        filename: 'logs/combined-%DATE%.log',
+        datePattern: 'YYYY-MM-DD',
+        maxSize: config.combinedMaxSize || '10m',
+        maxFiles: config.combinedMaxFiles || '30d',
+        zippedArchive: config.zippedArchive !== undefined ? config.zippedArchive : true
+      }),
+      new transports.File({
+        filename: 'logs/combined.log',
+        maxsize: config.combinedLogMaxSize || 5242880, // 5MB
+        maxFiles: config.combinedLogMaxFiles || 1,
+        tailable: true, // Recreate log file when max size is reached
+        handleExceptions: true
+      })
+    );
+  }
   if (victoriaLogsEnabled()) {
     list.push(new VictoriaLogsTransport({ service: process.env.SERVICE_NAME || 'genie-backend' }));
   }

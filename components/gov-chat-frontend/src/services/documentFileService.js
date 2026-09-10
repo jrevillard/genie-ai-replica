@@ -43,6 +43,28 @@ const documentFileService = {
   },
 
   /**
+   * Download the raw file content as text. Used by the crawler→OKF flow to
+   * read the crawled markdown for concept extraction (single-page crawl).
+   *
+   * The doc-repo backend sets Content-Type = file.file_type (e.g. text/markdown)
+   * and Content-Disposition: attachment. We use `responseType: 'text'` so axios
+   * hands us the raw string instead of trying to JSON.parse it.
+   *
+   * @param {string} fileId - The file_id to download
+   * @returns {Promise<string>} The raw file content (utf-8 text)
+   */
+  async downloadFile(fileId) {
+    try {
+      const response = await httpService.get(`/files/${fileId}/download`, {}, { responseType: 'text' });
+      // axios with responseType:text returns the body in response.data as a string
+      return typeof response.data === 'string' ? response.data : '';
+    } catch (error) {
+      console.error(`Error downloading file ${fileId}:`, error);
+      throw error;
+    }
+  },
+
+  /**
    * Uploads a single file using FormData.
    * @param {FormData} formData - The FormData object containing the file and any metadata.
    * @returns {Promise<Object>} The response from the server.

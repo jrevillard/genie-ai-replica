@@ -5,7 +5,7 @@
 </template>
 
 <script>
-const VARIANTS = ['accent', 'success', 'warning', 'danger', 'info'];
+const VARIANTS = ['accent', 'success', 'warning', 'danger', 'info', 'neutral'];
 
 export default {
   name: 'DsPill',
@@ -57,5 +57,13 @@ export default {
 .ds-pill--info {
   background: var(--info-bg);
   color: var(--info);
+}
+
+/* NEUTRAL (2026-09-09): unemphasized status — used by the PII resolved list
+   for Redacted items (black per David's action-color spec). Token-based. */
+.ds-pill--neutral {
+  background: var(--surface-variant, var(--surface));
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 </style>

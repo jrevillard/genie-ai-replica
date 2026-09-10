@@ -235,7 +235,7 @@ STEPS:
          ER_M=\$(stat -c '%Y' \"\$STDERR\" 2>/dev/null || echo 0);
          STALE=\$(( NOW - (ST_M > ER_M ? ST_M : ER_M) ));
          echo \"stale_sec=\$STALE\";
-         grep -q '^EXIT_CODE=' \"\$STDOUT\" 2>/dev/null && echo 'EXIT_CODE_FOUND'"
+         if grep -q '^EXIT_CODE=' \"\$STDOUT\" 2>/dev/null; then echo 'EXIT_CODE_FOUND'; fi"
          timeout=15000
          description="poll claude -p stdout/stderr activity"
        If \`stale_sec > 1800\` (both files silent 30+ min): fast-fail (no kill).

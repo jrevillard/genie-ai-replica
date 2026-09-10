@@ -19,6 +19,12 @@ variables:
   GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
+  # --- OKF content-only chunking (Story 4.8-amend) ---
+  # The okf-server internal concept-status callback is fail-closed: any test
+  # that exercises the live dataprep → okf-server path needs this same value on
+  # both ends. Unit tests mock it; the CI default is a non-prod sentinel.
+  OKF_INTERNAL_SECRET: "ci-okf-internal-secret-not-for-production"
+  DATAPREP_URL: "http://dataprep-arango-service:5000"
   # --- SAST exclusions: dev/test-only paths and known-not-relevant targets ---
   # Variable consumed by both semgrep-sast and kics-iac-sast (both honor
   # SAST_EXCLUDED_PATHS). Do NOT use SEARCH_IGNORED — it is not honored by
@@ -695,6 +701,12 @@ container_scanning:
   image: docker:28
   tags: [docker]
   interruptible: true
+  # Builds consume only the checkout (docker buildx) — no upstream artifacts.
+  # Without this, GitLab's default makes every build job download ALL
+  # test-stage artifacts (scan reports, JUnit XML) — pure waste, and the
+  # 2026-09-02/03 instance flake (intermittent 403 on artifact downloads,
+  # uploads fine) killed builds before their script ran.
+  dependencies: []
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi
@@ -1069,7 +1081,7 @@ promote:frontend:
   <<: *promote_template
   needs:
     - job: scan:frontend
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
@@ -1144,7 +1156,7 @@ promote:backend:
   <<: *promote_template
   needs:
     - job: scan:backend
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
@@ -1164,6 +1176,185 @@ promote:backend:
     - if: $CI_COMMIT_BRANCH =~ /^release\//
       changes:
         paths: ["components/gov-chat-backend/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-okf-server
+build:okf-server:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+    CONTEXT: "components/"
+    DOCKERFILE: "components/okf-server/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+scan:okf-server:
+  <<: *scan_template
+  # ADR-0001 / NFR-S5: container scan is a BLOCKING gate for the OKF Server image
+  # (overrides .scan_template's advisory allow_failure: true).
+  allow_failure: false
+  needs:
+    - job: build:okf-server
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+promote:okf-server:
+  <<: *promote_template
+  needs:
+    - job: scan:okf-server
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-okf-server"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/okf-server/**/*", "components/shared/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-pii-service (OKF PII sidecar — ADR-okf-004 rev; model baked in)
+build:pii-service:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+    CONTEXT: "components/pii-service/"
+    DOCKERFILE: "components/pii-service/Dockerfile"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# The spaCy model baked into the image trips AS advisories — advisory (default)
+# until the accepted-findings baseline is documented. TODO(code-review #23):
+# record the accepted-findings baseline (model-license/known-CVEs) in
+# docs/security/pii-service-accepted-findings.md before promoting to blocking.
+scan:pii-service:
+  <<: *scan_template
+  needs:
+    - job: build:pii-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+promote:pii-service:
+  <<: *promote_template
+  needs:
+    - job: scan:pii-service
+      artifacts: false
+  variables:
+    IMAGE_NAME: "genie-ai-pii-service"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-pii-service — test lane (code-review #5): the real-presidio
+# integration test (test_real_engine_detects_person) must RUN in CI, not skip.
+test:pii-service:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir -r components/pii-service/requirements.txt ruff pytest
+    - python -m spacy download en_core_web_md
+  script:
+    - cd components/pii-service
+    - ruff check app.py tests/
+    - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: components/pii-service/reports/pytest-report.xml
+    paths:
+      - components/pii-service/reports/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
 
 # genie-ai-db-migrations
 build:db-migrations:
@@ -1219,7 +1410,7 @@ promote:db-migrations:
   <<: *promote_template
   needs:
     - job: scan:db-migrations
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
@@ -1294,7 +1485,7 @@ promote:document-repository:
   <<: *promote_template
   needs:
     - job: scan:document-repository
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
@@ -1369,7 +1560,7 @@ promote:nginx:
   <<: *promote_template
   needs:
     - job: scan:nginx
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
@@ -1444,7 +1635,7 @@ promote:kong-config:
   <<: *promote_template
   needs:
     - job: scan:kong-config
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
@@ -1519,7 +1710,7 @@ promote:chatqna-server:
   <<: *promote_template
   needs:
     - job: scan:chatqna-server
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
@@ -1638,7 +1829,7 @@ promote:dataprep-arango:
   <<: *promote_template
   needs:
     - job: scan:dataprep-arango
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
@@ -1713,7 +1904,7 @@ promote:retriever-arango:
   <<: *promote_template
   needs:
     - job: scan:retriever-arango
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
@@ -1788,7 +1979,7 @@ promote:reranker:
   <<: *promote_template
   needs:
     - job: scan:reranker
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
@@ -1863,7 +2054,7 @@ promote:embedding:
   <<: *promote_template
   needs:
     - job: scan:embedding
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
@@ -1938,7 +2129,7 @@ promote:textgen:
   <<: *promote_template
   needs:
     - job: scan:textgen
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
@@ -2013,7 +2204,7 @@ promote:postgres-init:
   <<: *promote_template
   needs:
     - job: scan:postgres-init
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
@@ -2088,7 +2279,7 @@ promote:keycloak:
   <<: *promote_template
   needs:
     - job: scan:keycloak
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
@@ -2163,7 +2354,7 @@ promote:keycloak-config:
   <<: *promote_template
   needs:
     - job: scan:keycloak-config
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
@@ -2238,7 +2429,7 @@ promote:tempo-proxy:
   <<: *promote_template
   needs:
     - job: scan:tempo-proxy
-      artifacts: true
+      artifacts: false
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:
@@ -2517,7 +2708,11 @@ test:frontend:
   before_script:
     - cd components/gov-chat-frontend && npm ci
   script:
-    - npm test -- --coverage --coverageReporters=text-summary --coverageReporters=cobertura
+    # --maxWorkers=2 caps concurrent jest workers: the runner's cgroup OOM
+    # reaper SIGKILLed workers on the heaviest suite 3 pipelines running
+    # (default workers = cores → peak RSS = workers × heap). Heap-limit
+    # bumps would make cgroup OOM MORE likely, not less.
+    - npm test -- --maxWorkers=2 --coverage --coverageReporters=text-summary --coverageReporters=cobertura
   coverage: '/^Statements\s*:\s*(\d+\.?\d*)%/'
   cache:
     - key:
@@ -2738,6 +2933,13 @@ e2e:playwright:
   stage: config
   image: python:3.11-slim
   interruptible: true
+  # The lock check is self-contained (uv sync --dry-run + grep against the
+  # checked-out files) — it must not pull upstream artifacts. Without this,
+  # GitLab's default makes the job download EVERY test-stage artifact (scan
+  # reports, JUnit XML), so an unrelated artifact-download failure kills the
+  # lock check before its script even runs (2026-09-02: instance artifact
+  # downloads 403'd pipeline-wide while uploads succeeded).
+  dependencies: []
   variables:
     UV_VERSION: "0.10.6"
   before_script:
@@ -2829,6 +3031,11 @@ verify:overlay-locks:reranker:
 config:validate:
   extends: .node_base
   stage: config
+  # Self-contained env-coverage checks (npm test on the checkout) — no
+  # upstream artifacts needed. Same rationale as verify:dataprep-lock:
+  # the default artifact coupling made this job 403-flake with the
+  # 2026-09-02/03 instance artifact-download problem.
+  dependencies: []
   before_script:
     - cd tests/config-validator && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci

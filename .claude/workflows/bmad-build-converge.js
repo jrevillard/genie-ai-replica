@@ -238,9 +238,9 @@ STEPS:
          grep -q '^EXIT_CODE=' \"\$STDOUT\" 2>/dev/null && echo 'EXIT_CODE_FOUND'"
          timeout=15000
          description="poll claude -p stdout/stderr activity"
-       If `stale_sec > 1800` (both files silent 30+ min): fast-fail (no kill).
-       If 'EXIT_CODE_FOUND' in output: Read the FULL stdout file via Read tool,
-       parse the last NDJSON 'result' event, extract structured_output,
+       If \`stale_sec > 1800\` (both files silent 30+ min): fast-fail (no kill).
+       If \`EXIT_CODE_FOUND\` in output: Read the FULL stdout file via Read tool,
+       parse the last NDJSON \`result\` event, extract structured_output,
        return { stdout: JSON.stringify(envelope), exitCode: 0 }.
        Else: sleep 60, repeat. (NO tail during poll — only Read file once EXIT_CODE found.)
 
@@ -630,7 +630,7 @@ MR was created in Phase 2 — guaranteed to exist. Use MR pipeline only.
 
 STEPS:
 1. Get latest MR pipeline: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/merge_requests/${mrResult.mrIid}/pipelines?per_page=1"\` → first entry.
-2. Poll status: \`Bash(command="/tmp/ci-monitor.sh <pipelineId> 30", run_in_background=true)\` + \`TaskOutput(block=true, timeout=1800000)\`. Read the "TERMINAL:<status>" line.
+2. Poll status: \`Bash(command="${setup.prdWorktreePath}/.claude/scripts/ci-monitor.sh <pipelineId> 30", run_in_background=true)\` + \`TaskOutput(block=true, timeout=1800000)\`. Read the "TERMINAL:<status>" line.
 3. If status='success': return { pipelineId, status: 'success' }.
 4. If status != 'success': classify failure.
    - Get failed jobs: \`GITLAB_HOST=${setup.gitlabHost} glab api "projects/${setup.gitlabProjectId}/pipelines/<pipelineId>/jobs?per_page=50"\`

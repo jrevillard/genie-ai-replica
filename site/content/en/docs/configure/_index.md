@@ -21,6 +21,7 @@ GENIE.AI delegates **all** identity management to Keycloak: users, roles, sessio
 6. [CORS, CSP & Public Domain](/docs/configure/cors-csp/) — wire the browser-facing CORS allow-list, the nginx Content-Security-Policy, and the public-domain variable that drives every redirect URL.
 7. [Restrict active locales on a deployment](/docs/configure/locale-whitelist/) — restrict which languages the web UI, Keycloak login, and Flutter mobile app expose. Covers `VUE_APP_AVAILABLE_LOCALES`, `KEYCLOAK_SUPPORTED_LOCALES`, and `KeycloakConfig.supportedLocaleCodes`.
 8. [Deployment flavors](/docs/configure/deployment-flavors/) — what makes a deployment look like a particular institution (the `flavors/<name>/` directory, splash image, branding overrides, locale whitelist, mobile OIDC client).
+9. [OKF Configuration Variables](/docs/configure/okf-variables/) — the environment variables behind the OKF Studio: repository lifecycle, curation, bundle export, and ingest knobs.
 
 ## Where to go next
 

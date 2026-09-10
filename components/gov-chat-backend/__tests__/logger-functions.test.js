@@ -102,9 +102,11 @@ describe('logger.js utility functions', () => {
 
       reconfigureLogger({ level: 'warn' });
 
-      // Transport count stays the same (4 transports: console + 2 rotate + file).
-      // With LOG_TO_VICTORIALOGS=1 + ENABLE_OBSERVABILITY=1 the count is 5
-      // (the VictoriaLogsTransport is added by buildTransports in that env).
+      // Transport count stays the same. With LOG_TO_FILE unset (default) the
+      // list is just Console (the VictoriaLogsTransport is appended when
+      // LOG_TO_VICTORIALOGS=1 + ENABLE_OBSERVABILITY=1); when LOG_TO_FILE=1
+      // the audit-retention escape hatch adds the two DailyRotateFile
+      // streams + the tailable File transport.
       expect(logger.transports.length).toBe(originalTransportCount);
     });
   });
@@ -349,6 +351,71 @@ describe('logger.js utility functions', () => {
       const mod = require('../../shared/lib/logger');
       expect(mod.logger.level).toBe('debug');
       delete process.env.LOG_LEVEL;
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // LOG_TO_FILE gate (AD-14) — wraps file transports via booleanEnv so
+  // the post-cutover default produces no DailyRotateFile/File transports
+  // on disk. Both the initial loggerConfig and the reconfigureLogger
+  // rebuild path must honour the gate; booleanEnv accepts 1|true|TRUE|yes.
+  // -------------------------------------------------------------------
+  describe('LOG_TO_FILE gate', () => {
+    const hasRotate = (logger) => logger.transports.some((t) => t.constructor.name === 'DailyRotateFile');
+    const hasTailableFile = (logger) =>
+      logger.transports.some((t) => t.constructor.name === 'File' && t.tailable === true);
+
+    const withLogToFile = (value) => {
+      delete process.env.LOG_TO_FILE;
+      if (value !== undefined) process.env.LOG_TO_FILE = value;
+      jest.resetModules();
+      return require('../../shared/lib/logger');
+    };
+
+    afterEach(() => {
+      delete process.env.LOG_TO_FILE;
+    });
+
+    it('omits file transports when LOG_TO_FILE is unset (default)', () => {
+      const { logger } = withLogToFile(undefined);
+      expect(hasRotate(logger)).toBe(false);
+      expect(hasTailableFile(logger)).toBe(false);
+    });
+
+    it('omits file transports when LOG_TO_FILE=0', () => {
+      const { logger } = withLogToFile('0');
+      expect(hasRotate(logger)).toBe(false);
+      expect(hasTailableFile(logger)).toBe(false);
+    });
+
+    it('adds DailyRotateFile + tailable File transports when LOG_TO_FILE=1', () => {
+      const { logger } = withLogToFile('1');
+      expect(hasRotate(logger)).toBe(true);
+      expect(hasTailableFile(logger)).toBe(true);
+    });
+
+    it('honours booleanEnv truthy variants (true / TRUE / yes) — AD-14 forbids strict ===', () => {
+      for (const v of ['true', 'TRUE', 'yes']) {
+        const { logger } = withLogToFile(v);
+        expect(hasRotate(logger)).toBe(true);
+        expect(hasTailableFile(logger)).toBe(true);
+      }
+    });
+
+    it('reconfigureLogger rebuild honours the gate when LOG_TO_FILE=1', () => {
+      const { logger, reconfigureLogger } = withLogToFile('1');
+      expect(hasRotate(logger)).toBe(true);
+      reconfigureLogger({ level: 'warn' });
+      expect(hasRotate(logger)).toBe(true);
+    });
+
+    it('reconfigureLogger rebuild honours the gate when LOG_TO_FILE is unset', () => {
+      // Regression: without the wrap on both call sites, a reconfigure could
+      // re-add file transports even when the env stays unset.
+      const { logger, reconfigureLogger } = withLogToFile(undefined);
+      expect(hasRotate(logger)).toBe(false);
+      reconfigureLogger({ level: 'warn' });
+      expect(hasRotate(logger)).toBe(false);
     });
   });
 });

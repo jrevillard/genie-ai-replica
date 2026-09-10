@@ -149,8 +149,7 @@ development_status:
   epic-6: in-progress
   6-1-security-scan-service-drop-worker_threads-import-processfile: done
   6-2-security-scan-service-rewrite-processlogsinparallel-using-vi: done
-  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc:
-    in-progress
+  6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc: done
   epic-6-retrospective: optional
 
   epic-7: backlog

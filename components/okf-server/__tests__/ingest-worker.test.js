@@ -1,0 +1,407 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+// Story 2.9.4 T1 — the OKF ingestion worker (crawlWorker pattern reused:
+// poll loop, one job at a time, explicit status transitions). Unit tests use
+// the _processOneJob/_sweepOnce hooks with millisecond poll intervals.
+
+jest.mock('../shared-lib/logger', () => ({
+  logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }
+}));
+jest.mock('../shared-lib/tracing', () => ({
+  withSpan: jest.fn(async (name, fn) => fn({ setAttribute: jest.fn() }))
+}));
+jest.mock('../shared-lib/metrics', () => ({
+  getMeter: () => ({ createCounter: () => ({ add: jest.fn() }) })
+}));
+jest.mock('../shared-lib/db-connection-service', () => {
+  const mockDb = require('./mocks/arango-mock').createMockDb();
+  return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
+});
+jest.mock('../services/concept-meta-service', () => ({
+  upsertConceptMeta: jest.fn(async (repo_id, parsed, opts) => ({
+    action: 'updated',
+    doc: { repo_id, ...parsed, ...opts }
+  }))
+}));
+jest.mock('../services/audit-service', () => ({
+  writeAudit: jest.fn().mockResolvedValue(null)
+}));
+jest.mock('../services/service-token', () => ({
+  authedAxios: { get: jest.fn(), post: jest.fn(async () => ({ status: 200 })) }
+}));
+jest.mock('../config', () => ({
+  documentRepository: { url: 'http://document-repository:3001' },
+  dataprep: { url: 'http://dataprep-arango-service:5000', ingestPath: '/v1/dataprep/ingest_file' },
+  internal: { secret: '' }
+}));
+jest.mock('../services/edge-service', () => ({
+  writeRepoConceptEdges: jest.fn(async () => ({ written: 0, dropped: [] }))
+}));
+
+const mockDb = require('../shared-lib/db-connection-service').__mockDb;
+const worker = require('../workers/ingestWorker');
+const conceptMeta = require('../services/concept-meta-service');
+const { authedAxios } = require('../services/service-token');
+const edgeService = require('../services/edge-service');
+
+const REPO = '99999999-9999-4999-8999-999999999999';
+
+/** Program the mock db.query sequence (the worker queries by position:
+ * 1st = claim read, then terminal polls; sweep = orphan query + per-orphan removes).
+ * The CLAIM STAMP query is detected by shape (UPDATE + worker_claimed_at) and
+ * skipped positionally — it consumes no programmed result. */
+function programQueries(...results) {
+  let i = 0;
+  mockDb.query.mockImplementation(async (q) => {
+    const text = q && q.query ? String(q.query) : '';
+    if (text.includes('UPDATE m WITH') && text.includes('worker_claimed_at')) {
+      return { all: async () => [] }; // claim stamp — unpositioned side-write
+    }
+    const r = results[Math.min(i, results.length - 1)];
+    i += 1;
+    return { all: async () => (Array.isArray(r) ? r : [r]) };
+  });
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  // mockReset drops persisted mockRejectedValue implementations (leak from
+  // earlier tests) — then re-pin the default happy kick.
+  authedAxios.post.mockReset();
+  authedAxios.post.mockResolvedValue({ status: 200 });
+  mockDb._reset();
+  process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+  process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '5000';
+});
+
+afterEach(() => {
+  delete process.env.OKF_INGEST_WORKER_JOB_POLL_MS;
+  delete process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS;
+});
+
+describe('ingestWorker._processOneJob (content-only — claim a parsed meta row → POST to dataprep → wait for the callback)', () => {
+  test('idle when no parsed concepts exist', async () => {
+    programQueries([]); // claim finds nothing
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'idle' });
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
+  test('claim stamps worker_claimed_at + ingest_attempts on the claimed row', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'stamp-me', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# s' }],
+      [{ index_status: 'indexed', chunk_count: 1 }] // terminal poll → done, no timeout wait
+    );
+    await worker._processOneJob();
+    // The stamp query is the UPDATE + worker_claimed_at shape.
+    const stampCall = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .find((q) => {
+        const t = String((q && q.query) || '');
+        return t.includes('UPDATE m WITH') && t.includes('worker_claimed_at');
+      });
+    expect(stampCall).toBeDefined();
+    // aql binds are positional (value0, value1, ...) — assert on the values.
+    const binds = Object.values(stampCall.bindVars || {});
+    expect(binds).toContain(REPO);
+    expect(binds).toContain('stamp-me');
+    expect(stampCall.query).toContain('ingest_attempts');
+  });
+
+  test('parsed concept → POSTs its markdown DIRECTLY to dataprep, waits for indexed', async () => {
+    programQueries(
+      [
+        {
+          repo_id: REPO,
+          concept_id: 'bad_concept',
+          graph_name: `OKF_${REPO}`,
+          frontmatter: { title: 'Bad', type: 'service' },
+          body: '# Bad\nBody.',
+          ingest_labels: [`t:smoke`, `r:${REPO}`, 'Service Directory'],
+          bundle_version: 3
+        }
+      ],
+      [{ index_status: 'parsed' }], // poll 1: still working (callback not yet applied)
+      [{ index_status: 'indexed', chunk_count: 2 }] // poll 2: the callback transitioned it
+    );
+    authedAxios.post.mockResolvedValue({ status: 200 });
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('ingested');
+    expect(res.chunks).toBe(2);
+    // The POST targets DATAPREP directly (content-only — no doc-repo files doc).
+    const [url, body] = authedAxios.post.mock.calls[0];
+    expect(url).toBe('http://dataprep-arango-service:5000/v1/dataprep/ingest_file');
+    expect(body).toMatchObject({
+      fileId: 'bad_concept',
+      fileName: 'bad_concept.md',
+      fileType: 'text/markdown',
+      graphName: `OKF_${REPO}`,
+      bundleVersion: 3,
+      conceptId: 'bad_concept'
+    });
+    expect(Buffer.from(body.fileBase64, 'base64').toString()).toContain('# Bad');
+    // The callback (okf-server concept-status) owns the transition + edges — the
+    // worker does NOT write them (no transitionMeta / edge call here).
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    expect(edgeService.writeRepoConceptEdges).not.toHaveBeenCalled();
+  });
+
+  test('callback reports failure → meta failed outcome (dead-letter; recovery = re-ingest)', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'x', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# x' }],
+      [{ index_status: 'failed', chunk_count: 0 }]
+    );
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('failed');
+  });
+
+  test('429 busy → back off, NO meta transition, NO crash (dataprep single-flight)', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    const busy = Object.assign(new Error('429'), { response: { status: 429 } });
+    authedAxios.post.mockRejectedValue(busy);
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+  });
+
+  test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockRejectedValue(new Error('dataprep down'));
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('error');
+    // 2-9-5 atomicity pass: the error touch stamps updated_at (the patch also
+    // records last_worker_error) so claimNextJob's SORT updated_at ASC claims
+    // the NEXT concept next cycle — a poison concept never starves the queue.
+    // Crucially NO index_status transition: the row stays 'parsed' (retried).
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      REPO,
+      { concept_id: 'a', repo_id: REPO },
+      {
+        patch: {
+          last_worker_error: 'dataprep POST failed: dataprep down',
+          worker_claimed_at: null // claim cleared — the retry must not wait behind the reaper
+        }
+      }
+    );
+    const patches = conceptMeta.upsertConceptMeta.mock.calls.map((c) => c[2] && c[2].patch).filter(Boolean);
+    expect(patches.every((p) => p.index_status === undefined)).toBe(true);
+  });
+
+  test('claim-stale reaper vs errored row: the claim CLEAR (not the age) lets it retry (live regression 2026-09-03)', async () => {
+    // Live failure: dataprep briefly not-ready at worker start → POST error →
+    // the row kept its claim stamp but moved to the FIFO back; the reaper's
+    // 1h claim-grace killed it before any lane could legitimately retry.
+    // The error path must CLEAR worker_claimed_at so the row is re-claimable.
+    programQueries([{ repo_id: REPO, concept_id: 'err-row', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# e' }]);
+    authedAxios.post.mockRejectedValue(new Error('ECONNREFUSED'));
+    await worker._processOneJob();
+    const patch = conceptMeta.upsertConceptMeta.mock.calls
+      .map((c) => c[2] && c[2].patch)
+      .find((p) => p && p.last_worker_error);
+    expect(patch.worker_claimed_at).toBeNull();
+  });
+
+  test('non-200 dataprep kick → outcome error with status', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'a', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# a' }]);
+    authedAxios.post.mockResolvedValue({ status: 404 });
+    const res = await worker._processOneJob();
+    expect(res).toMatchObject({ outcome: 'error', error: 'dataprep status 404' });
+  });
+
+  test('concept vanished mid-drain → outcome vanished', async () => {
+    programQueries(
+      [{ repo_id: REPO, concept_id: 'v', graph_name: `OKF_${REPO}`, frontmatter: {}, body: '# v' }],
+      [] // meta row gone (bundle retract removed it)
+    );
+    const res = await worker._processOneJob();
+    expect(res).toEqual({ outcome: 'vanished', concept_id: 'v' });
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
+  test('retracts + removes OKF files docs whose meta row is gone (victims logged)', async () => {
+    programQueries([{ file_id: 'orf1', file_name: 'z.md', repo_id: REPO }], []);
+    const res = await worker._sweepOnce();
+    expect(res).toEqual({ cleaned: 1, victims: ['z.md'] });
+    expect(authedAxios.post).toHaveBeenCalledWith(
+      `http://document-repository:3001/api/files/orf1/retract`,
+      {},
+      { timeout: 30000 }
+    );
+  });
+
+  test('no orphans → no-op', async () => {
+    programQueries([]);
+    const res = await worker._sweepOnce();
+    expect(res).toEqual({ cleaned: 0, victims: [] });
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
+  test('retract failure (non-404/500) → orphan kept for the next sweep', async () => {
+    programQueries([{ file_id: 'orf2', file_name: 'z.md', repo_id: REPO }], []);
+    authedAxios.post.mockRejectedValue(Object.assign(new Error('503'), { response: { status: 503 } }));
+    const res = await worker._sweepOnce();
+    expect(res).toEqual({ cleaned: 0, victims: [] });
+  });
+});
+
+describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping, 2026-09-03)', () => {
+  test('dead-letters a CLAIM-STALE parsed row (died mid-drain)', async () => {
+    programQueries([{ repo_id: REPO, concept_id: 'stuck', worker_claimed_at: '2026-09-01T00:00:00.000Z' }], []);
+    const res = await worker._reapStuckParsed();
+    expect(res).toEqual({ reaped: 1, victims: [`${REPO}/stuck`] });
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      REPO,
+      { concept_id: 'stuck', repo_id: REPO },
+      {
+        patch: {
+          index_status: 'failed',
+          last_error:
+            'ingest drain stuck — no terminal callback within the grace window (reaper dead-letter; recovery = re-ingest)'
+        }
+      }
+    );
+  });
+
+  test('no stuck rows → no-op', async () => {
+    programQueries([]);
+    const res = await worker._reapStuckParsed();
+    expect(res).toEqual({ reaped: 0, victims: [] });
+    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+  });
+
+  test('a dead-letter failure is isolated (other victims still processed)', async () => {
+    programQueries(
+      [
+        { repo_id: REPO, concept_id: 'a' },
+        { repo_id: REPO, concept_id: 'b' }
+      ],
+      []
+    );
+    conceptMeta.upsertConceptMeta
+      .mockRejectedValueOnce(new Error('write failed'))
+      .mockResolvedValue({ action: 'updated', doc: {} });
+    const res = await worker._reapStuckParsed();
+    expect(res.reaped).toBe(1); // 'b' dead-lettered; 'a' failed isolation-logged
+    expect(res.victims).toEqual([`${REPO}/b`]);
+  });
+
+  test('reaps by CLAIM STATE, never by row age (2026-09-02/03 regression guard)', async () => {
+    // Two false-positive rules already shipped from this file (age-only, then
+    // head-by-age): both mass-killed healthy crawl backlogs. The query must
+    // signal ONLY on claim state — worker_claimed_at staleness or claim count
+    // — and must NOT filter on updated_at age.
+    programQueries([], []);
+    await worker._reapStuckParsed();
+    // The aql tag produces {query, bindVars} — inspect the template text.
+    const aqlText = String(mockDb.query.mock.calls[0][0].query);
+    expect(aqlText).toContain("FILTER m.index_status == 'parsed'");
+    expect(aqlText).toContain('worker_claimed_at');
+    expect(aqlText).toContain('ingest_attempts');
+    expect(aqlText).not.toContain('DATE_TIMESTAMP(m.updated_at)');
+  });
+});
+
+describe('ingestWorker.start (bootstrap guard)', () => {
+  afterEach(() => worker.stop());
+
+  test('starts timers when enabled (default) and stops cleanly', async () => {
+    process.env.OKF_INGEST_WORKER_JOB_POLL_MS = '1';
+    await worker.start();
+    // a started worker schedules its first cycle immediately; stop clears it
+    worker.stop();
+    delete process.env.OKF_INGEST_WORKER_JOB_POLL_MS;
+    expect(true).toBe(true); // no throw, no hang (timers cleared)
+  });
+
+  test('OKF_INGEST_WORKER_ENABLED=false → no timers', async () => {
+    process.env.OKF_INGEST_WORKER_ENABLED = 'false';
+    await worker.start();
+    worker.stop();
+    delete process.env.OKF_INGEST_WORKER_ENABLED;
+  });
+});
+describe('directive (David, 2026-09-04): failures reach the ingestion log; orphans never linger', () => {
+  test('(b) parsed rows of a deleted repo are dead-lettered terminally (never linger as claimable)', async () => {
+    programQueries([{ repo_id: 'ghost', concept_id: 'r1' }]);
+    const res = await worker._deadLetterOrphanedRows();
+    expect(res.dead).toBe(1);
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      'ghost',
+      { concept_id: 'r1', repo_id: 'ghost' },
+      expect.objectContaining({ patch: expect.objectContaining({ index_status: 'failed' }) })
+    );
+  });
+
+  test('(b) the orphan dead-letter is IDEMPOTENT (re-run dead-letters nothing)', async () => {
+    programQueries([]);
+    const res = await worker._deadLetterOrphanedRows();
+    expect(res.dead).toBe(0);
+  });
+
+  test('(a) a dataprep POST failure mirrors to the ingestion log (never silent)', async () => {
+    programQueries([
+      {
+        repo_id: 'armed',
+        concept_id: 'c1',
+        graph_name: 'OKF_armed',
+        frontmatter: {},
+        body: '# x',
+        last_good_index_at: null,
+        reindex_retry: null,
+        bundle_version: null
+      }
+    ]);
+    authedAxios.post.mockReset();
+    authedAxios.post.mockRejectedValueOnce(new Error('ECONNREFUSED')); // the dataprep kick
+    authedAxios.post.mockResolvedValue({ status: 200 }); // the mirror POSTs
+    authedAxios.get.mockReset();
+    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-1' }] } });
+    const res = await worker._processOneJob();
+    expect(res.outcome).toBe('error');
+    const mirror = authedAxios.post.mock.calls.find((c) => String(c[0]).includes('/ingestion-log'));
+    expect(mirror).toBeTruthy();
+    expect(String(mirror[1].message)).toContain('dataprep kick failed');
+  });
+});
+// ── P0 wedge (David, 2026-09-09): partial failure must settle, never stall ──
+jest.mock('../services/lifecycle-service', () => ({
+  _settleIngest: jest.fn(async () => ({}))
+}));
+
+describe('ingestWorker._refreshRagIngestion — the wedge contract', () => {
+  const RW = '99999999-9999-4999-8999-999999999991';
+
+  beforeEach(() => jest.clearAllMocks());
+
+  test('partial failure (0 parsed, failed > 0) settles UNCONDITIONALLY', async () => {
+    conceptMeta.countByIndexStatus = jest
+      .fn()
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(3)
+      .mockResolvedValueOnce(2);
+    mockDb.query.mockImplementation(async (q) => {
+      const text = q && q.query ? String(q.query) : '';
+      if (text.includes("index_status == 'failed'")) {
+        return { all: async () => [{ concept_id: 'alpha', last_error: 'LLM 502' }] };
+      }
+      return { all: async () => [] };
+    });
+    mockDb.collection('okf_repositories').save({ _key: RW, repo_id: RW, name: 'K', rag_drain_active: true });
+    await worker._refreshRagIngestion(mockDb, RW);
+    const { _settleIngest } = require('../services/lifecycle-service');
+    expect(_settleIngest).toHaveBeenCalledTimes(1);
+    // Failure clarity (David, 2026-09-09): the record names the concept, the
+    // human reason, and the recovery — plus the machine-readable list for the UI.
+    expect(mockDb.collection('okf_repositories').update).toHaveBeenCalledWith(
+      RW,
+      expect.objectContaining({
+        'rag_ingestion.error': expect.stringContaining('1 concept failed to index: alpha'),
+        'rag_ingestion.failed_concepts': [
+          { concept_id: 'alpha', error: 'the AI model was unreachable during content preparation' }
+        ]
+      })
+    );
+  });
+});

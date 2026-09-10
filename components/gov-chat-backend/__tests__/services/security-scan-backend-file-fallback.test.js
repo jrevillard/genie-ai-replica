@@ -187,5 +187,64 @@ describe('SecurityScanService SECURITY_SCAN_BACKEND=file fallback (Story 6.4)', 
       expect(written.status).toBe('skipped');
       expect(written.reason).toBe('file_backend_no_cache');
     });
+
+    it('maps the file-backend cache-hit result to a completed scanResult and persists the cached payload', async () => {
+      process.env.SECURITY_SCAN_BACKEND = 'file';
+
+      const cachedVuln = {
+        type: 'attack_attempt',
+        severity: 'critical',
+        description: 'cached hit',
+        recommendation: 'noop',
+        matchedTerm: 'SQL injection',
+        timestamp: '2026-05-26T09:00:00.000Z',
+        service: 'http',
+        url: null,
+        firstSeen: '2026-05-26T09:00:00.000Z',
+        lastSeen: '2026-05-26T09:00:00.000Z',
+        instanceCount: 1
+      };
+      const cachedPayload = {
+        scanTime: '2026-05-26T09:30:00.000Z',
+        vulnerabilities: { critical: 1, medium: 0, low: 0, details: [cachedVuln] },
+        vulnerabilityDetails: { critical: [cachedVuln], medium: [], low: [] },
+        failedLoginDetails: [{ timestamp: '2026-05-26T09:00:00.000Z', message: 'failed login' }],
+        suspiciousDetails: [{ timestamp: '2026-05-26T09:01:00.000Z', message: 'suspicious' }],
+        status: 'completed',
+        message: 'ok',
+        skipped: false,
+        reason: null
+      };
+      mockFs.stat.mockResolvedValueOnce({ mtime: new Date() });
+      mockFs.readFile.mockResolvedValueOnce(JSON.stringify(cachedPayload));
+      mockFs.mkdir.mockResolvedValueOnce();
+      mockFs.writeFile.mockResolvedValueOnce();
+
+      const queryMock = jest.fn();
+      securityScanService.setVictoriaLogsClient({ query: queryMock });
+
+      const scanResult = await securityScanService.runSecurityScan({});
+
+      expect(queryMock).not.toHaveBeenCalled();
+      expect(scanResult.status).toBe('completed');
+      expect(scanResult.skipped).toBe(false);
+      expect(scanResult.reason).toBe('file_backend_cache_hit');
+      expect(scanResult.message).toBe('Security scan completed successfully');
+      expect(scanResult.vulnerabilityDetails).toEqual({
+        critical: [cachedVuln],
+        medium: [],
+        low: []
+      });
+      expect(scanResult.failedLoginDetails).toEqual(cachedPayload.failedLoginDetails);
+      expect(scanResult.suspiciousDetails).toEqual(cachedPayload.suspiciousDetails);
+      expect(scanResult.degraded).toBe(false);
+      expect(scanResult.error).toBeNull();
+      // Persistence: scanResult was written and matches the cache-hit shape.
+      expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+      expect(mockFs.writeFile.mock.calls[0][0]).toBe('/app/data/security/last-scan-results.json');
+      const written = JSON.parse(mockFs.writeFile.mock.calls[0][1]);
+      expect(written.status).toBe('completed');
+      expect(written.reason).toBe('file_backend_cache_hit');
+    });
   });
 });

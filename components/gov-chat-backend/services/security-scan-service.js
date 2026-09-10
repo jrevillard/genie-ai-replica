@@ -615,10 +615,16 @@ class SecurityScanService {
       const cached = await this.checkCachedResults();
       if (cached) {
         logger.info('SECURITY_SCAN_BACKEND=file; returning cached scan results (no VL query)');
+        const vd = cached.vulnerabilityDetails || {};
+        const arr = (v) => (Array.isArray(v) ? v : []);
         return {
-          vulnerabilities: cached.vulnerabilityDetails || { critical: [], medium: [], low: [] },
-          failedLogins: cached.failedLoginDetails || [],
-          suspiciousActivities: cached.suspiciousDetails || [],
+          vulnerabilities: {
+            critical: arr(vd.critical),
+            medium: arr(vd.medium),
+            low: arr(vd.low)
+          },
+          failedLogins: Array.isArray(cached.failedLoginDetails) ? cached.failedLoginDetails : [],
+          suspiciousActivities: Array.isArray(cached.suspiciousDetails) ? cached.suspiciousDetails : [],
           skipped: false,
           reason: 'file_backend_cache_hit',
           degraded: false,

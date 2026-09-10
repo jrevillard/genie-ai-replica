@@ -2,7 +2,7 @@
 key: 6-4-verify-security_scan_backend-file-fallback-works-no-vl-no-sc
 title: verify `SECURITY_SCAN_BACKEND=file` fallback works (no VL, no scan window check)
 epic: epic-6
-status: in-progress
+status: done
 followup_review_recommended: false
 effort: 0.1
 depends_on: [6.2]
@@ -26,6 +26,16 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 - `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md`
 
 ## Review Triage Log
+
+### 2026-09-10 — Review pass (bmad-build-auto r14)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 2 (medium 1, low 1)
+- defer: 0
+- reject: ~12 (intent-alignment manual-smoke surface divergence is operator-owned per the story's own manual-smoke section; AD-14 strict-equality claim is contradicted by the spec's residual-risks note — `SECURITY_SCAN_BACKEND` is a value, not a boolean; stale-mtime / concurrent-cache-race / null-logsService concerns are handled by existing `checkCachedResults` / pre-existing code or are out of scope; operations doc + env-file comment updates are epic-7 cleanup territory; missing `logger.warn` / `logger.info` assertions on the inner branch are covered transitively by the existing `runSecurityScan` happy-path log assertions; AJV-rejection-path test and `saveScanResults` write-failure test are deferred to a future hardening story)
+- addressed_findings:
+  - `[medium]` `[patch]` `__tests__/services/security-scan-backend-file-fallback.test.js` — second wrapper-level test that calls `runSecurityScan({})` under `SECURITY_SCAN_BACKEND=file` with a valid cache, asserting `scanResult.status === 'completed'`, `scanResult.skipped === false`, `scanResult.reason === 'file_backend_cache_hit'`, `scanResult.message === 'Security scan completed successfully'`, `scanResult.vulnerabilityDetails` / `failedLoginDetails` / `suspiciousDetails` deep-equal the cached payload, `scanResult.degraded === false`, `scanResult.error === null`, and `saveScanResults` writes the cache-hit JSON to `/app/data/security/last-scan-results.json`. Closes the verification-gap finding that the original wrapper test only covered the no-cache sub-case, leaving the `skipped:false → status:'completed'` translation unguarded — a regression there would silently ship `status:'skipped'` with populated `failedLoginDetails` to the admin UI.
+  - `[low]` `[patch]` `services/security-scan-service.js` — defensive `Array.isArray()` guards on `cached.failedLoginDetails` / `cached.suspiciousDetails` (default to `[]`) and inner-array normalization for `cached.vulnerabilityDetails.{critical,medium,low}` (default to `[]` via helper `arr = (v) => Array.isArray(v) ? v : []`). AJV currently enforces array shapes, so this is hardening against future schema relaxation rather than a fix for an observable bug.
 
 ### 2026-09-09 — Review pass
 - intent_gap: 0
@@ -64,18 +74,30 @@ three tests; nothing else in the file is touched.
 Files changed:
 - `components/gov-chat-backend/services/security-scan-service.js` — added
   the `SECURITY_SCAN_BACKEND=file` branch at the top of
-  `processLogsInParallel` (lines 610-638). 29 lines including comment.
+  `processLogsInParallel` (lines 614-645, expanded in the r14 review pass
+  with `Array.isArray()` defensive guards for the cached
+  `vulnerabilityDetails` / `failedLoginDetails` / `suspiciousDetails`
+  fields).
 - `components/gov-chat-backend/__tests__/services/security-scan-backend-file-fallback.test.js` — new
-  test file, 4 test cases (3 in-process `processLogsInParallel` + 1 wrapper
-  `runSecurityScan` test added in the review pass to close the
-  verification-gap finding).
+  test file, 5 test cases (3 in-process `processLogsInParallel`
+  [no-cache / cache-hit / default VL path] + 2 wrapper `runSecurityScan`
+  tests [no-cache → skipped, cache-hit → completed with persistence]).
+
+Review findings (bmad-build-auto r14):
+- intent_gap: 0
+- bad_spec: 0
+- patch: 2 (medium 1, low 1) — both fixed in this pass
+- defer: 0
+- reject: ~12 (manual-smoke surface = operator-owned; AD-14 strict-equality
+  claim contradicted by spec residual-risks note; stale-mtime / concurrent
+  cache race / null logsService handled by existing code or out of scope;
+  operations doc + env-file comments = epic-7 cleanup)
+- followup_review_recommended: false (score = 3 × 1 medium + 1 × 1 low = 4 < 5)
 
 Verification:
-- `npx jest __tests__/services/security-scan-backend-file-fallback.test.js --runInBand` — 4/4 passed.
-- `npx jest __tests__/services/security-scan --runInBand` — 97/97 passed (93 pre-existing + 4 new).
-- `npx eslint services/security-scan-service.js __tests__/services/security-scan-backend-file-fallback.test.js` — no issues.
-- `npx prettier --check services/security-scan-service.js __tests__/services/security-scan-backend-file-fallback.test.js` — formatted correctly.
-- `npx eslint services/security-scan-service.js __tests__/services/security-scan-backend-file-fallback.test.js` — no issues.
+- `npx jest __tests__/services/security-scan-backend-file-fallback.test.js --runInBand` — 5/5 passed.
+- `npx jest __tests__/services/security-scan --runInBand` — 98/98 passed (93 pre-existing + 5 new).
+- `npx eslint --no-warn-ignored services/security-scan-service.js __tests__/services/security-scan-backend-file-fallback.test.js` — no issues (eslint's `JSON parse failed: EOF` message on the un-flagged run is the project's known `feedback_rtk_lint_false_positives` phantom error; exit code 0 with the flag confirms lint clean).
 - `npx prettier --check services/security-scan-service.js __tests__/services/security-scan-backend-file-fallback.test.js` — formatted correctly.
 - Manual review: the `SECURITY_SCAN_BACKEND=file` branch is reached BEFORE the
   `startTime` / `scanEnd` / retention / `vlClient.query` lines, so the VL

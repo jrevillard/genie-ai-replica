@@ -677,6 +677,26 @@ describe('File Routes Integration', () => {
       );
     });
 
+    it('forwards the minted bundle_version to datapretreat (Story 2.9.7)', async () => {
+      const mockVersionedFile = {
+        ...mockFileRecord,
+        bundle_version: 3,
+        dataprep: { status: 'Pending', ingest_date: '', retract_date: '' }
+      };
+      metadataService.getMetadataById.mockResolvedValue(mockVersionedFile);
+      readFile.mockResolvedValue(Buffer.from('test file content'));
+      access.mockResolvedValue();
+      axios.post.mockResolvedValue({ data: { success: true, chunk_count: 2 } });
+
+      const res = await request(app).post('/api/files/file-abc123/ingest');
+
+      expect(res.status).toBe(200);
+      expect(axios.post).toHaveBeenCalledWith(
+        'http://dataprep:5000/v1/dataprep',
+        expect.objectContaining({ fileId: 'file-abc123', bundleVersion: 3 })
+      );
+    });
+
     it('should return 429 when dataprep service is busy', async () => {
       metadataService.getMetadataById.mockResolvedValue(mockFileRecord);
       readFile.mockResolvedValue(Buffer.from('test file content'));
@@ -691,6 +711,13 @@ describe('File Routes Integration', () => {
       expect(res.status).toBe(429);
       expect(res.body.success).toBe(false);
       expect(res.body.error).toBe('Too Many Requests');
+      // 429 = TRANSIENT busy, not a file failure: the file must NOT be marked
+      // 'Ingestion Error' (Story 2.9.4 — a poisoned file is never re-claimed
+      // by the ingestion worker; live-caught run 9). It stays Pending.
+      expect(metadataService.updateMetadata).not.toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
     });
 
     it('should return 500 when dataprep service fails', async () => {
@@ -703,6 +730,12 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
+      // A REAL dataprep failure DOES transition the file to 'Ingestion Error'
+      // (contrast with the transient 429 above).
+      expect(metadataService.updateMetadata).toHaveBeenCalledWith(
+        'file-abc123',
+        expect.objectContaining({ dataprep: expect.objectContaining({ status: 'Ingestion Error' }) })
+      );
     });
 
     it('should skip already ingested files', async () => {
@@ -784,7 +817,12 @@ describe('File Routes Integration', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(axios.post).toHaveBeenCalledWith('http://dataprep:5000/v1/dataprep/retract', { fileId: 'file-abc123' });
+      // graphName: null when the file has no graph (dataprep falls back to its
+      // unified default — Story 2.9.6 G5 fix).
+      expect(axios.post).toHaveBeenCalledWith('http://dataprep:5000/v1/dataprep/retract', {
+        fileId: 'file-abc123',
+        graphName: null
+      });
       expect(metadataService.updateMetadata).toHaveBeenCalledWith(
         'file-abc123',
         expect.objectContaining({
@@ -792,6 +830,31 @@ describe('File Routes Integration', () => {
           chunk_count: 0
         })
       );
+    });
+
+    it('should retract into the file OWN graph (OKF per-repo graph_name — Story 2.9.6 G5)', async () => {
+      const repoId = '99999999-9999-4999-8999-999999999999';
+      const mockIngestedFile = {
+        ...mockFileRecord,
+        graph_name: `OKF_${repoId}`,
+        dataprep: { status: 'Ingested', ingest_date: '2025-06-01T11:00:00.000Z', retract_date: '' }
+      };
+
+      metadataService.getMetadataById.mockResolvedValue(mockIngestedFile);
+      axios.post.mockResolvedValue({ data: { success: true } });
+      metadataService.updateMetadata.mockResolvedValue({
+        ...mockIngestedFile,
+        dataprep: { status: 'retracted', ingest_date: '', retract_date: new Date().toISOString() },
+        chunk_count: 0
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/retract');
+
+      expect(res.status).toBe(200);
+      expect(axios.post).toHaveBeenCalledWith('http://dataprep:5000/v1/dataprep/retract', {
+        fileId: 'file-abc123',
+        graphName: `OKF_${repoId}`
+      });
     });
 
     it('should return 404 when file not found', async () => {

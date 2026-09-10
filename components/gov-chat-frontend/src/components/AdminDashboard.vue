@@ -448,6 +448,14 @@
                         {{ translate('admin.documents.ingestSelected', 'Ingest Selected') }}
                         ({{ selectedDocuments.length }})
                       </DsButton>
+                      <DsButton
+                        variant="secondary"
+                        :disabled="!okfRepoGate.visible"
+                        :title="okfRepoGate.reasonKey ? translate(okfRepoGate.reasonKey, '') : ''"
+                        @click="onCreateOkfRepoFromSelection"
+                      >
+                        {{ translate('okf.docs.createRepo', 'Create OKF repository') }}
+                      </DsButton>
                     </div>
                   </div>
 
@@ -570,6 +578,9 @@
                   </div>
                 </div>
 
+                <div v-if="activeTab === 'studio'" class="dashboard-card" style="grid-column: span 2">
+                  <OkfStudioTab />
+                </div>
                 <div v-if="activeTab === 'database'" class="dashboard-card" style="grid-column: span 2">
                   <div class="card-header">
                     <div class="card-title">
@@ -1563,6 +1574,7 @@ import DsSpinner from './ds/Spinner.vue';
 import DsStateDisplay from './ds/StateDisplay.vue';
 import DsTabs from './ds/Tabs.vue';
 import DsSelect from './ds/Select.vue';
+import OkfStudioTab from './okf/StudioTab.vue';
 import { Loader2 } from '@lucide/vue';
 import { eventBus } from '../eventBus.js';
 import { getAvailableLanguages } from '../config/languageConfig.js';
@@ -1588,6 +1600,7 @@ export default {
     DsStateDisplay,
     DsTabs,
     DsSelect,
+    OkfStudioTab,
     Loader2
   },
   emits: [],
@@ -1624,6 +1637,7 @@ export default {
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
         { id: 'documents', label: 'Document Management' },
+        { id: 'studio', label: 'OKF Studio' },
         { id: 'database', label: 'Database' },
         { id: 'logs', label: 'Logs' },
         { id: 'queryInspector', label: 'Query Inspector' },
@@ -1860,6 +1874,32 @@ export default {
 
       // 5. Only show the button if there are selected files AND none of them are ingested
       return !hasIngestedFile;
+    },
+
+    // Gate for the "Create OKF repository" button (Story 3-6). Mirrors
+    // showIngestButton's logic: needs ≥1 selected, none already in an OKF
+    // repo, none already ingested. Returns the reason key so the disabled
+    // button can show a translated tooltip.
+    okfRepoGate() {
+      if (this.selectedDocuments.length === 0) {
+        return { visible: false, reasonKey: 'okf.docs.gate.emptySelection' };
+      }
+      const selectedKeys = new Set(this.selectedDocuments);
+      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
+      const alreadyOkf = selectedDocObjects.filter((doc) => doc.okf_repo_id);
+      if (alreadyOkf.length > 0) {
+        return {
+          visible: false,
+          reasonKey: 'okf.docs.gate.alreadyInOkf'
+        };
+      }
+      const ingested = selectedDocObjects.filter(
+        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === 'ingested'
+      );
+      if (ingested.length > 0) {
+        return { visible: false, reasonKey: 'okf.docs.gate.alreadyIngested' };
+      }
+      return { visible: true, reasonKey: null };
     }
   },
   watch: {
@@ -2020,6 +2060,13 @@ export default {
 
     // Apply theme
     applyTheme(theme) {
+      // ECHO GUARD (stack-overflow fix, 2026-09-09): themeManager.setTheme
+      // dispatches 'themeChange', which re-enters this handler — an
+      // unguarded applyTheme re-calls setTheme and recurses until
+      // "Maximum call stack size exceeded". A theme already applied is a
+      // no-op, which breaks the cycle after exactly one echo.
+      if (this.currentTheme === theme) return;
+
       // Update local state
       this.currentTheme = theme;
 
@@ -3007,6 +3054,21 @@ export default {
         });
       }
       // You can add 'else if' blocks for other actions like 'retract' or 'delete' here
+    },
+
+    /**
+     * Story 3-6: "Create OKF repository" entry button (sibling to Ingest Selected).
+     * Pre-loads the selected documents into the okf Vuex store, switches to
+     * the OKF Studio tab, and opens the wizard. The wizard's Step 2 Input
+     * (variant) reads the preloaded selection from okf/selection.documents.
+     */
+    async onCreateOkfRepoFromSelection() {
+      if (!this.okfRepoGate.visible) return;
+      const ids = (this.selectedDocuments || []).slice();
+      await this.$store.dispatch('okf/setSelection', { documents: ids });
+      this.activeTab = 'studio';
+      const evt = new CustomEvent('okf:create-from-documents', { detail: { repo_id: null, documents: ids } });
+      window.dispatchEvent(evt);
     },
     // --- END: DOCUMENT METHODS ---
 

@@ -583,7 +583,10 @@ router.post('/downloads', fileController.downloadMultipleFiles);
  *       '404':
  *         description: File not found
  */
-router.delete('/:fileId', authorizeRole(['Admin']), fileController.deleteFile);
+// Story #978 lifecycle: the okf-server service account deletes SUPERSEDED
+// bundle zips at publish (one live bundle per repo) — same trust as the
+// ingest-bundle route above.
+router.delete('/:fileId', authorizeRole(['Admin', 'okf-service']), fileController.deleteFile);
 
 /**
  * @swagger
@@ -677,7 +680,10 @@ router.patch('/:fileId', authorizeRole(['Admin']), fileController.updateFile);
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFile);
+// okf-service allowed (Story 2.9.6/2.9.4): the OKF orchestrator's worker owns
+// draining per-concept Pending files — it authenticates as the okf-server
+// service client (okf-service role), same as the enqueue route below.
+router.post('/:fileId/ingest', authorizeRole(['Admin', 'okf-service']), fileController.ingestFile);
 
 /**
  * @swagger
@@ -704,7 +710,9 @@ router.post('/:fileId/ingest', authorizeRole(['Admin']), fileController.ingestFi
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retractFile);
+// okf-service allowed: the 2.9.4 orphan sweeper retracts chunks via the service
+// client; retracts carry the file's graph_name (G5 — never the wrong graph).
+router.post('/:fileId/retract', authorizeRole(['Admin', 'okf-service']), fileController.retractFile);
 
 /**
  * @swagger
@@ -723,6 +731,53 @@ router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retract
  *         description: Forbidden - Admin role required
  */
 router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFiles);
+
+/**
+ * @swagger
+ * /api/files/ingest-bundle:
+ *   post:
+ *     summary: Ingest an OKF bundle (bypasses upload allowlist; ClamAV scanned; threads graph_name)
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - bundle
+ *               - graph_name
+ *               - repo_id
+ *             properties:
+ *               bundle:
+ *                 type: string
+ *                 format: byte
+ *                 description: Base64-encoded bundle content
+ *               graph_name:
+ *                 type: string
+ *                 description: The OKF graph name (OKF_{repo_id})
+ *               repo_id:
+ *                 type: string
+ *                 description: The OKF repository ID
+ *               originalFileName:
+ *                 type: string
+ *                 description: Original file name for the stored file
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Selected knowledge-hierarchy labels (persisted on the files doc; scopes chunk labeling)
+ *     responses:
+ *       '202':
+ *         description: Bundle accepted for async ingestion
+ *       '400':
+ *         description: Invalid input or malware detected
+ *       '403':
+ *         description: Forbidden - Admin role required
+ */
+router.post('/ingest-bundle', authorizeRole(['Admin', 'okf-service']), fileController.bundleIngest);
 
 /**
  * @swagger
@@ -787,7 +842,16 @@ router.post('/retract', authorizeRole(['Admin']), fileController.retractMultiple
  *       '404':
  *         description: File not found
  */
-router.post('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']), fileController.addIngestionLog);
+// Story 4.8-amend: the OKF ingest worker mirrors per-concept ingestion
+// progress to the bundle zip's ingestion log (David's 3rd-time directive
+// 2026-08-20). The okf-server service-account client holds the bootstrap
+// `tools-admin` super-role (see genie-realm.yaml client role mapping) so
+// the worker's mirror POSTs succeed.
+router.post(
+  '/:fileId/ingestion-log',
+  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  fileController.addIngestionLog
+);
 
 /**
  * @swagger
@@ -848,6 +912,12 @@ router.get('/:fileId/ingestion-log', authorizeRole(['Admin', 'dataprep-service']
  *       '401':
  *         description: Unauthorized
  */
-router.patch('/:fileId/status', authorizeRole(['Admin', 'dataprep-service']), fileController.updateFileStatus);
+router.patch(
+  '/:fileId/status',
+  // Story 4.8-amend: the okf-server service client drives the BUNDLE state
+  // machine (Pending → Ingesting → Ingested|Error) through this route.
+  authorizeRole(['Admin', 'dataprep-service', 'okf-service', 'tools-admin']),
+  fileController.updateFileStatus
+);
 
 module.exports = router;

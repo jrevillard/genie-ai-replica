@@ -85,17 +85,11 @@ const buildTransports = (config = {}) => {
       stderrLevels: ['error'] // Write error logs to stderr
     })
   ];
-  // AD-14: gate file transports on `booleanEnv('LOG_TO_FILE')` — boolean
-  // coercion (1|true|TRUE|yes) via boolean-env.js, NOT strict `=== '1'`.
-  // When unset (post-cutover default), the Winston pipeline is Console +
-  // VictoriaLogsTransport only; the two DailyRotateFile streams + the
-  // tailable `combined.log` File transport are skipped, so no
-  // `logs/{error,combined}-*.log` files appear on disk. The guard is applied
-  // INSIDE buildTransports so both the initial `loggerConfig` and
-  // `reconfigureLogger` (the rebuild call) honour it — without this wrap a
-  // `POST /api/logger/configure` would re-add the file transports even
-  // when `LOG_TO_FILE=0`. When `LOG_TO_FILE=1` the audit-retention escape
-  // hatch is fully active.
+  // Audit-retention gate: file transports are added only when
+  // booleanEnv('LOG_TO_FILE') is truthy (1|true|TRUE|yes). The guard lives
+  // inside buildTransports so both the initial loggerConfig and the
+  // reconfigureLogger rebuild honour it — without this wrap a reconfigure
+  // could re-add file transports even when LOG_TO_FILE=0.
   if (booleanEnv('LOG_TO_FILE')) {
     list.push(
       new DailyRotateFile({

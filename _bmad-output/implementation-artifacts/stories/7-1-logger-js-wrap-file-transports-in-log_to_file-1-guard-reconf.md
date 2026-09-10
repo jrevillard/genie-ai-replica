@@ -7,8 +7,8 @@ effort: 0.25
 depends_on: [Epic 2]
 files: "components/shared/lib/logger.js:99-124 (buildTransports gate; called by initial config at line 140 AND reconfigureLogger at line 153)"
 baseline_revision: 5f8a4083b35ba2dd0fd35dbcd69bbe3602f58fc7
-review_loop_iteration: 1
-followup_review_recommended: true
+review_loop_iteration: 0
+followup_review_recommended: false
 deferred:
   - summary: >-
       LOG_TO_FILE is not declared in the backend service's `environment:` block
@@ -151,6 +151,19 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
   - `[low]` `[patch]` Test: added symmetric cross-state transition case (load unset, flip to `LOG_TO_FILE=1`, `reconfigureLogger` — file transports must appear).
   - `[low]` `[patch]` Test: verified the existing pass-1 cases still pass after the refactor (28/28 green in `logger-functions.test.js`).
 
+### 2026-09-10 — Review pass 3
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 4 (high 0, medium 0, low 4)
+- defer: 0 new (deferred list unchanged: 7 items)
+- reject: rest (12+ items across all four reviewers — AD-18 narrative refs, OBSERVABILITY_DISABLED module-load latch, triggerLogRollover two-warning UX, logs/ directory assertion, flushLogs async ordering, npm_package_version vs package version, on-module-load gate state log, boolean-env trim/regex variants pinning, cleanupCombinedLog cwd fs pollution, redundant outer-afterEach, asymmetric combo gaps, hasVictoriaLogs inlining, typeof redundant check, thrashing-client cycles, spec MR-link / branch / owner / coverage / endpoint curl / handleExceptions residual — all pre-existing/observational/spec-hygiene, out of this story's scope per the scope-authority rule)
+- addressed_findings:
+  - `[low]` `[patch]` Replaced the 11-line AD-14 narrative comment block at `components/shared/lib/logger.js:88-98` with a 4-line technical note (removed the `AD-14` identification per the project rule `feedback_no_story_refs_in_comments.md` against architectural-decision / story / FR / AC / D ids in code comments — pass 1 had scrubbed the `Story 7.1` reference but left the AD-14 framing behind). New comment: `// Audit-retention gate: file transports are added only when booleanEnv('LOG_TO_FILE') is truthy (1|true|TRUE|yes). The guard lives inside buildTransports so both the initial loggerConfig and the reconfigureLogger rebuild honour it — without this wrap a reconfigure could re-add file transports even when LOG_TO_FILE=0.`
+  - `[low]` `[patch]` Test: added the missing `isCombinedRotate` assertion to the `LOG_TO_FILE=''` empty-string case in `components/gov-chat-backend/__tests__/logger-functions.test.js` so it matches the symmetric three-axis coverage of its siblings (`isErrorRotate` + `isCombinedRotate` + `hasTailableFile`).
+  - `[low]` `[patch]` Test: added the missing `isCombinedRotate` assertion to the `'rejects non-coerced booleanEnv case variants'` case (inside the for-loop) so the case-sensitive falsy regression check matches the same three-axis coverage.
+  - `[low]` `[patch]` Test: hardened the `triggerLogRollover` describe block (`logger-functions.test.js:117`) by adding a `beforeEach` setting `process.env.LOG_TO_FILE = '1'` (with a matching `afterEach` cleanup). Closes the verification gap surfaced by the verification-gap reviewer: pre-change, the rotate-failure and warns-when-rotate-missing tests' bodies executed against real `DailyRotateFile` transports because the file transports existed by default; post-change (LOG_TO_FILE=unset default), both tests' `if (errorTransport)` guards fail and the bodies skip — the assertions pass vacuously. With the beforeEach in place the tests now exercise the actual rotate-failure path under the LOG_TO_FILE=1 state where the contracts in question are meaningful.
+
 ## Auto Run Result
 
 **Summary.** Wrapped the three file-transport constructors (two DailyRotateFile streams + the tailable `transports.File`) inside `buildTransports()` with `if (booleanEnv('LOG_TO_FILE'))`. Because both `loggerConfig.transports` (initial load) and `reconfigureLogger`'s rebuild call `buildTransports()`, a single in-helper gate satisfies the "wrap BOTH" acceptance. AD-14 honoured via the `booleanEnv` helper (accepts `1|true|TRUE|yes`) — no strict `=== '1'` anywhere in the code. Added 11 dedicated test cases asserting the gate in both states, across both call paths, against the production-target VL combo, and against both cross-state transition paths.
@@ -182,3 +195,23 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 **Residual risks.**
 - The Compose/Swarm env-propagation gap (deferred) means the LOG_TO_FILE=1 escape hatch is reachable only via direct `.env` override today, not via the documented rollback-matrix flow. Operationally, the LOG_TO_FILE=0 default is unaffected.
 - `triggerLogRollover`/`cleanupCombinedLog` now log a warning and silently no-op when `LOG_TO_FILE=0`. If an operator hits `POST /api/logger/rollover` without first enabling the escape hatch, they get a 200 with a warning in logs instead of an explicit error — consider a future UX improvement (out of scope here).
+
+### 2026-09-10 — Pass 3 (follow-up review pass)
+
+**Files changed this pass.**
+- `components/shared/lib/logger.js` — 11-line AD-14 narrative comment (lines 88-98) compressed to a 4-line technical note without architectural-decision identifiers.
+- `components/gov-chat-backend/__tests__/logger-functions.test.js` — added missing `isCombinedRotate` assertion to `LOG_TO_FILE=''` case and to the `'rejects non-coerced booleanEnv case variants'` case; added `beforeEach`/`afterEach` to the `triggerLogRollover` describe block forcing `LOG_TO_FILE=1` so the rotate-failure and warns-when-missing tests stop passing vacuously under the new default.
+- `_bmad-output/implementation-artifacts/stories/7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf.md` — pass-3 triage-log entry above; pass-3 follow-up review recommendation below.
+
+**Review findings breakdown (pass 3).**
+- Patch count: 4 (high 0, medium 0, low 4). Score: `0 × 3 + 4 × 1 = 4` (below 5 threshold); no high. **Follow-up review recommendation (pass 3): `false`.**
+- Deferred: 0 new (deferred list unchanged — 7 items from pass 2).
+- Rejected: 12+ items spanning all four reviewers. Highlights: scope-out-of-this-story pre-existing items (OBSERVABILITY_DISABLED module-load latch, `flushLogs` async ordering, `triggerLogRollover` two-warning UX, `cleanupCombinedLog` cwd-based fs read, `npm_package_version` version drift, `handleExceptions` fall-through, missing startup gate-state log line, redundant outer `afterEach`, redundant `typeof` guard, asymmetric-combo coverage gaps, `hasVictoriaLogs` helper inlining candidate, thrashing-client multi-cycle coverage); spec-hygiene items that the workflow classifies as observational/owner/coverage/endpoint-curl/MR-link rather than diff defects; `intentional narrowing` items where reviewer suggestions would over-engineer (jest.isolateModules wrapper, padded-value permutations, non-canonical truthy enumeration, explicit-falsy enumeration, extras-collision pre-flight). The intent-alignment auditor's surface-mismatch observation (tests at `buildTransports()` return vs full pipeline / `POST /api/logger/configure` end-to-end) is recorded but not actionable here — the unit-level gate-test surface is the project's established convention; promoting it to a per-endpoint integration test is out of scope for this single-gate story.
+
+**Verification performed (pass 3).**
+- `npx eslint --format=unix shared/lib/logger.js __tests__/logger-functions.test.js` — exit 0 (ESLint v10 formatter prints an unrelated JSON-parse error to stdout but exits successfully; the rc is the source of truth).
+- `npx prettier --check shared/lib/logger.js __tests__/logger-functions.test.js` — "All files formatted correctly".
+- `LOG_TO_FILE=1 npx jest --testPathPatterns='logger-functions' --colors=false` — `PASS (28) FAIL (0)` (23 baseline + 11 LOG_TO_FILE gate cases minus the 6 LOG_TO_FILE gate cases that consolidate into the broader LOG_TO_FILE gate block remain unchanged at 28 — the two new `isCombinedRotate` assertions edit existing cases rather than add new ones; the new triggerLogRollover beforeEach/afterEach also adds no new it()-cases).
+
+**Residual risks (pass 3, additions only).**
+- The `triggerLogRollover` describe-level `beforeEach` setting `LOG_TO_FILE=1` was scoped narrowly to that describe block; other describes (`reconfigureLogger`, `cleanupCombinedLog`, `flushLogs`, `traceFormat → winston.format.json pipeline`, `default log level`) still run under the LOG_TO_FILE=unset default. If a future test fixture in one of those describes adds a rotate-failure observation, the same vacuous-pass trap will resurface. (Reminder in the file header or a shared-test-helper hook would harden against this — out of scope for this pass.)

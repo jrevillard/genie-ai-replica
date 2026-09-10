@@ -115,6 +115,17 @@ describe('logger.js utility functions', () => {
   // triggerLogRollover
   // -------------------------------------------------------------------
   describe('triggerLogRollover', () => {
+    // Force LOG_TO_FILE=1 so the DailyRotateFile transports the existing
+    // cases look up actually exist; under the post-cutover default
+    // (LOG_TO_FILE unset) triggerLogRollover silently no-ops and the
+    // assertions below would pass vacuously.
+    beforeEach(() => {
+      process.env.LOG_TO_FILE = '1';
+    });
+    afterEach(() => {
+      delete process.env.LOG_TO_FILE;
+    });
+
     it('does not throw when DailyRotateFile transports have rotate method', () => {
       const { triggerLogRollover } = loggerModule;
 
@@ -401,6 +412,7 @@ describe('logger.js utility functions', () => {
     it('omits file transports when LOG_TO_FILE is the empty string', () => {
       const { logger } = withLogToFile('');
       expect(logger.transports.some(isErrorRotate)).toBe(false);
+      expect(logger.transports.some(isCombinedRotate)).toBe(false);
       expect(hasTailableFile(logger)).toBe(false);
     });
 
@@ -412,6 +424,7 @@ describe('logger.js utility functions', () => {
       for (const v of ['True', 'YES', 'Yes', 'tRue', 'YeS']) {
         const { logger } = withLogToFile(v);
         expect(logger.transports.some(isErrorRotate)).toBe(false);
+        expect(logger.transports.some(isCombinedRotate)).toBe(false);
         expect(hasTailableFile(logger)).toBe(false);
       }
     });

@@ -7,7 +7,7 @@ followup_review_recommended: false
 effort: 0.1
 depends_on: [6.2]
 files: manual smoke
-baseline_revision: 6bef08952e290ed84809fe468382ab5749939e60
+baseline_revision: ff99385d5911c5517dae47288ca2456712b83308
 ---
 
 # Story 6.4 — verify `SECURITY_SCAN_BACKEND=file` fallback works (no VL, no scan window check)

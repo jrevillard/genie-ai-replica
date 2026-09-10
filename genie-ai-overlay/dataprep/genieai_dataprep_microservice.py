@@ -63,6 +63,32 @@ setup_trace_logging("genie_dataprep_microservice")
 logflag = os.getenv("LOGFLAG", False)
 upload_folder = "./uploaded_files/"
 LOCK_FILE_PATH = "/tmp/genie_dataprep.lock"
+# PARALLEL INGEST (David, 2026-09-03): number of concurrently accepted ingest
+# requests. Each slot is its own flock file; a request takes any FREE slot and
+# 429s only when ALL are busy. Default 1 = the historical single-flight
+# (one lock file, same 429 behavior).
+DATAPREP_INGEST_CONCURRENCY = max(1, int(os.getenv("DATAPREP_INGEST_CONCURRENCY", "1")))
+
+
+def acquire_ingest_slot():
+    """Try to claim one of the N ingest slots (non-blocking). Returns the
+    open lock file (held by the caller until the ingest's finally-block
+    releases it) or None when every slot is busy.
+
+    All slot files derive from LOCK_FILE_PATH (slot 0 keeps the legacy name;
+    slot i lives at `LOCK_FILE_PATH.i`) — tests redirect that single base to a
+    per-test tmp dir, so slot files inherit the isolation instead of leaking
+    across tests/workers through a hardcoded global path."""
+    for i in range(DATAPREP_INGEST_CONCURRENCY):
+        path = LOCK_FILE_PATH if i == 0 else f"{LOCK_FILE_PATH}.{i}"
+        lock_file = open(path, "w")  # noqa: SIM115 — held across the request task
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_file
+        except OSError:
+            lock_file.close()
+    return None
+
 
 dataprep_component_name = "GENIE_DATAPREP_ARANGODB"
 # Initialize OpeaComponentLoader
@@ -114,10 +140,30 @@ class DocRepoIngestPayload(BaseModel):
     fileType: str
     fileLabels: list[str] | None = None
     storagePath: str | None = None
+    # OKF per-repo graph (Story 2.9.6): OKF_{repo_id}. Absent/None → the env
+    # default (ARANGO_GRAPH_NAME) — the legacy single-graph behavior is unchanged.
+    graphName: str | None = None
+    # OKF minted repo version (Story 2.9.7, ADR-031): stamped onto every chunk
+    # doc so citations can pin (repo_id, bundle_version, concept_id).
+    # Absent/None → chunks carry no version (legacy behavior unchanged).
+    bundleVersion: int | None = None
+    # OKF concept id (Story 4.8-amend, 2026-08-19): content-only chunking — when
+    # set, chunks are stamped with this citation field AND the completion status
+    # callback routes to the OKF Server (no doc-repo files doc exists for a
+    # concept). Absent/None → legacy single-file behavior (doc-repo callback).
+    conceptId: str | None = None
+    # OKF repo id (David, 2026-08-31): the EXPLICIT completion-callback
+    # identity. Born-right graph names carry repo NAME+VERSION — a graph name
+    # is not an identity field, so it must never be parsed for one. Absent →
+    # legacy graph-name-parse fallback.
+    repoId: str | None = None
 
 
 class DocRepoRetractPayload(BaseModel):
     fileId: str
+    # Target graph for the retract (OKF_{repo_id}); None → env default. Retract
+    # MUST hit the graph the file was ingested into (G5: wrong-graph retract).
+    graphName: str | None = None
 
 
 # ------------------------------------------------------------------------------
@@ -143,19 +189,23 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
         span.set_attribute("dataprep.file_size_bytes", len(payload.fileBase64))
         span.set_attribute("dataprep.file_id", payload.fileId)
 
-        # --- SYNCHRONOUS LOCK CHECK ---
-        # We acquire the lock HERE to ensure we can return 429 immediately if busy.
-        lock_file = open(LOCK_FILE_PATH, "w")  # noqa: SIM115
-        try:
-            # LOCK_EX: Exclusive, LOCK_NB: Non-blocking (throws error immediately if busy)
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            lock_file.close()
-            logger.warning(f"[ ingest ] Rejected file_id {payload.fileId}: System busy.")
+        # --- SYNCHRONOUS SLOT CHECK ---
+        # We acquire an ingest slot HERE to return 429 immediately when all
+        # slots are busy (PARALLEL INGEST: DATAPREP_INGEST_CONCURRENCY slots,
+        # default 1 = the historical single-flight).
+        lock_file = acquire_ingest_slot()
+        if lock_file is None:
+            logger.warning(
+                f"[ ingest ] Rejected file_id {payload.fileId}: System busy "
+                f"({DATAPREP_INGEST_CONCURRENCY} slot(s) all in use)."
+            )
             raise HTTPException(
                 status_code=429,
-                detail="System is currently processing another document. Only one ingestion can run at a time.",
-            ) from None
+                detail=(
+                    "System is currently processing other documents. "
+                    f"All {DATAPREP_INGEST_CONCURRENCY} ingestion slot(s) are in use."
+                ),
+            )
 
         # --- Environment-specific Arango config ---
         ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
@@ -177,6 +227,14 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             # Decode and temporarily save file
             file_bytes = base64.b64decode(payload.fileBase64)
             save_path = os.path.join(upload_folder, payload.fileName)
+            # OKF concept file names can carry folder structure (a zip import
+            # preserves the bundle's internal directories, e.g.
+            # "kenya-okf/concepts/ecitizen-digital-payments.md"). The save path
+            # must be guaranteed to exist — open() does NOT create intermediate
+            # directories and a missing one crashed the ingest with
+            # FileNotFoundError, leaving the concept stuck in the okf-server's
+            # 'parsed' queue forever (live-caught 2026-08-30).
+            os.makedirs(os.path.dirname(save_path) or upload_folder, exist_ok=True)
             with open(save_path, "wb") as f:
                 f.write(file_bytes)
             logger.info(f"[ ingest ] File saved to: {save_path}")
@@ -188,7 +246,25 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 file_path=save_path,
                 file_type=payload.fileType,
                 file_labels=payload.fileLabels,
-                graph_name=ARANGO_GRAPH_NAME,
+                # Story 2.9.6 (G5): honor the per-repo graph from the request;
+                # fall back to the env default when absent (legacy behavior).
+                graph_name=payload.graphName or ARANGO_GRAPH_NAME,
+                # Story 2.9.7: the minted version rides through to chunk docs.
+                bundle_version=payload.bundleVersion,
+                # Story 4.8-amend: the OKF concept id rides through to chunk docs
+                # (citation provenance) + routes the completion callback.
+                concept_id=payload.conceptId,
+                # David (2026-08-31): the EXPLICIT repo id for the completion
+                # callback — born-right graph names carry name+version, so
+                # identity must not be parsed out of them.
+                repo_id=getattr(payload, "repoId", None),
+                # Story 4.8-amend follow-up: concept's source filename mirrors
+                # into the bundle zip's ingestion log so the bundle's UI
+                # Ingestion Log tab can trace each entry to its concept file.
+                # (file_name is already in the parent payload — the docs
+                # repo's addIngestionLog file_id-keyed POST keys on it.)
+                # The ArangoDBDataprepRequest class sets it on the instance
+                # via the super().__init__() chain.
                 insert_async=ARANGO_INSERT_ASYNC,
                 insert_batch_size=ARANGO_BATCH_SIZE,
                 embed_nodes=True,
@@ -289,6 +365,10 @@ async def retract_file(payload: DocRepoRetractPayload):
     """Deletes a file and its entities/relations from the graph."""
     start = time.time()
     file_id = payload.fileId
+    # Unified fallback (G5 fix): the ingest default is GRAPH — retract used a
+    # divergent 'genie_graph' default, silently retracting NOTHING for files in
+    # the default graph. Payload graphName (the file's actual graph) wins.
+    graph_name = payload.graphName or os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
     graph_name = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
     logger.info(f"[ retract ] Start to delete ingested file {file_id}")

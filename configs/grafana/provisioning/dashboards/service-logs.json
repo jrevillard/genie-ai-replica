@@ -104,7 +104,7 @@
           "query": "*"
         },
         "refresh": 2,
-        "regex": "/.+_(.+)\\.\\d+\\./",
+        "regex": "/(?:_|^\\/[^\\/\\-]+-)(.+?)(?:\\.\\d+\\.|-\\d+$)/",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"

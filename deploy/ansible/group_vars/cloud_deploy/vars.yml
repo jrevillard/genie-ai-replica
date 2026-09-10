@@ -32,6 +32,11 @@ self_signed_certs: true
 # =============================================================================
 vue_app_api_url: "https://10.0.0.101/api"
 vue_app_csp_connect_src: "'self' https://10.0.0.101 wss://10.0.0.101 http://localhost"
+# Crawl→OKF conversion: max crawled-source file size (MB) okf-server converts
+# into an OKF repository (server-side streaming job). Default when unset:
+# 10240 (10 GB). Set OKF_CONVERSION_DEBUG=1 for per-page/per-batch debug logs.
+# okf_max_crawl_source_mb: 10240
+# okf_conversion_debug: ""
 
 # =============================================================================
 # BACKEND

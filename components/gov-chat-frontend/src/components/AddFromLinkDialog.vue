@@ -51,6 +51,14 @@
               )
             }}
           </p>
+          <p class="form-hint">
+            {{
+              translate(
+                'okf.crawl.postCrawlHint',
+                "After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab."
+              )
+            }}
+          </p>
         </div>
 
         <div class="form-group">
@@ -457,6 +465,21 @@ export default {
               ).replace('{fileName}', fileName);
 
         this.showNotification(successMsg, 'success');
+        // UX simplification (David, 2026-09-01): the crawl dialog no longer
+        // offers an OKF target or split mode — EVERY crawl is saved as the
+        // same combined markdown, and the conversion happens on the file's
+        // Dashboard tab ("Create OKF repository from this crawl"), where all
+        // split options live in one place, after the file exists. The legacy
+        // seed event is kept only for the async path so an already-open
+        // Studio wizard can pre-fill the URL (harmless no-op otherwise).
+        if (this.crawlMode !== 'single_page') {
+          await this.$store.dispatch('okf/setSelection', { crawlSeeds: [this.url.trim()] });
+          window.dispatchEvent(
+            new CustomEvent('okf:create-from-crawl', {
+              detail: { url: this.url.trim(), crawlMode: this.crawlMode, crawlDepth: this.crawlDepth }
+            })
+          );
+        }
         this.$emit('link-submitted', response.data);
         this.$emit('close');
       } catch (error) {

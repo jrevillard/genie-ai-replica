@@ -96,6 +96,7 @@ const { createValidToken } = require('../fixtures/tokens');
 
 const sharedLib = require('../../shared-lib');
 const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middleware');
+const { logger } = require('../../shared-lib');
 
 const validToken = createValidToken();
 
@@ -106,7 +107,14 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => next());
+  keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
+    req.user = {
+      iss_sub: 'user-123',
+      email: 'test@example.com',
+      realm_access: { roles: ['admin'] }
+    };
+    next();
+  });
   keycloakAuthMiddleware.requireAdmin.mockImplementation((req, res, next) => next());
 });
 
@@ -115,7 +123,7 @@ function authPost(path, body) {
 }
 
 // ============================================================
-// AC5.1: Auth guard — both endpoints require authentication + admin
+// Auth guard — both endpoints require authentication + admin (still enforced)
 // ============================================================
 describe('Auth guard', () => {
   it('should return 401 on POST /api/logger/configure without token', async () => {
@@ -156,127 +164,50 @@ describe('Auth guard', () => {
 });
 
 // ============================================================
-// AC5.2: POST /api/logger/configure
+// Deprecated POST /api/logger/configure
 // ============================================================
-describe('POST /api/logger/configure', () => {
-  it('should return 200 with valid level', async () => {
+describe('POST /api/logger/configure (deprecated)', () => {
+  it('should return 200 with deprecation body for admin caller and not call reconfigureLogger', async () => {
     const response = await authPost('/api/logger/configure', { level: 'debug' });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true, message: 'Logger configuration updated successfully' });
-    expect(sharedLib.reconfigureLogger).toHaveBeenCalledWith({
-      level: 'debug',
-      errorMaxSize: undefined,
-      combinedMaxSize: undefined,
-      errorMaxFiles: undefined,
-      combinedMaxFiles: undefined,
-      zippedArchive: undefined
+    expect(response.body).toEqual({
+      deprecated: true,
+      message:
+        'Logger configuration is deprecated; log level and file transports are managed via LOG_LEVEL / LOG_TO_FILE environment variables.'
     });
+    expect(sharedLib.reconfigureLogger).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('/api/logger/configure is deprecated'),
+      expect.objectContaining({ user: 'user-123' })
+    );
   });
 
-  it('should return 200 with all valid parameters', async () => {
-    const response = await authPost('/api/logger/configure', {
-      level: 'info',
-      errorMaxSize: '10m',
-      combinedMaxSize: '20m',
-      errorMaxFiles: '14d',
-      combinedMaxFiles: '7d',
-      zippedArchive: true
-    });
+  it('should return 200 with deprecation body even with invalid legacy payload (no validation, no error)', async () => {
+    const response = await authPost('/api/logger/configure', { level: 'trace', errorMaxSize: '10x' });
 
     expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-    expect(sharedLib.reconfigureLogger).toHaveBeenCalledWith({
-      level: 'info',
-      errorMaxSize: '10m',
-      combinedMaxSize: '20m',
-      errorMaxFiles: '14d',
-      combinedMaxFiles: '7d',
-      zippedArchive: true
-    });
-  });
-
-  it('should return 400 when no parameters provided', async () => {
-    const response = await authPost('/api/logger/configure', {});
-
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('At least one');
-  });
-
-  it('should return 400 for invalid level', async () => {
-    const response = await authPost('/api/logger/configure', { level: 'trace' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('Invalid log level');
-  });
-
-  it('should return 400 for invalid errorMaxSize format', async () => {
-    const response = await authPost('/api/logger/configure', { errorMaxSize: '10x' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('errorMaxSize');
-  });
-
-  it('should return 400 for invalid combinedMaxSize format', async () => {
-    const response = await authPost('/api/logger/configure', { combinedMaxSize: 'abc' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('combinedMaxSize');
-  });
-
-  it('should return 400 for invalid errorMaxFiles format', async () => {
-    const response = await authPost('/api/logger/configure', { errorMaxFiles: '14m' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('errorMaxFiles');
-  });
-
-  it('should return 400 for invalid combinedMaxFiles format', async () => {
-    const response = await authPost('/api/logger/configure', { combinedMaxFiles: '7m' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('combinedMaxFiles');
-  });
-
-  it('should return 500 when reconfigureLogger throws', async () => {
-    sharedLib.reconfigureLogger.mockImplementation(() => {
-      throw new Error('Config failed');
-    });
-
-    const response = await authPost('/api/logger/configure', { level: 'debug' });
-
-    expect(response.status).toBe(500);
-    expect(response.body.success).toBe(false);
+    expect(response.body.deprecated).toBe(true);
+    expect(sharedLib.reconfigureLogger).not.toHaveBeenCalled();
   });
 });
 
 // ============================================================
-// AC5.3: POST /api/logger/rollover
+// Deprecated POST /api/logger/rollover
 // ============================================================
-describe('POST /api/logger/rollover', () => {
-  it('should return 200 on successful rollover', async () => {
+describe('POST /api/logger/rollover (deprecated)', () => {
+  it('should return 200 with deprecation body for admin caller and not call triggerLogRollover', async () => {
     const response = await authPost('/api/logger/rollover', {});
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true, message: 'Log rollover triggered successfully' });
-    expect(sharedLib.triggerLogRollover).toHaveBeenCalled();
-  });
-
-  it('should return 500 when triggerLogRollover throws', async () => {
-    sharedLib.triggerLogRollover.mockImplementation(() => {
-      throw new Error('Rollover failed');
+    expect(response.body).toEqual({
+      deprecated: true,
+      message: 'Log rollover is deprecated; logs are written directly to VictoriaLogs.'
     });
-
-    const response = await authPost('/api/logger/rollover', {});
-
-    expect(response.status).toBe(500);
-    expect(response.body.success).toBe(false);
-    expect(response.body.message).toContain('Failed');
+    expect(sharedLib.triggerLogRollover).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('/api/logger/rollover is deprecated'),
+      expect.objectContaining({ user: 'user-123' })
+    );
   });
 });

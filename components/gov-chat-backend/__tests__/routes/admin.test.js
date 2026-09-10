@@ -107,6 +107,7 @@ const { keycloakAuthMiddleware } = require('../../middleware/keycloak-auth-middl
 const adminService = require('../../services/admin-dashboard-service');
 const logsService = require('../../services/logs-service');
 const securityScanService = require('../../services/security-scan-service');
+const { logger } = require('../../shared-lib');
 
 const validToken = createValidToken();
 
@@ -277,23 +278,149 @@ describe('AC3: Log management endpoints', () => {
   });
 
   describe('POST /api/admin/logs/rollover', () => {
-    it('should return 200 after rollover', async () => {
-      const result = { success: true, message: 'Logs rolled over' };
-      adminService.rolloverLogs.mockResolvedValue(result);
-
-      const response = await authPost('/api/admin/logs/rollover', {});
+    it('should return 200 with deprecation body for non-cron callers (Mozilla UA)', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
+        .send({});
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(result);
-      expect(adminService.rolloverLogs).toHaveBeenCalled();
+      expect(response.body).toEqual({
+        deprecated: true,
+        message: 'Log rollover is deprecated; logs are written directly to VictoriaLogs.'
+      });
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('deprecated_rollover_cron_caller'),
+        expect.any(Object)
+      );
     });
 
-    it('should call next(error) on service failure', async () => {
-      adminService.rolloverLogs.mockRejectedValue(new Error('Rollover failed'));
+    it('should return 410 for curl User-Agent and log deprecated_rollover_cron_caller', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('User-Agent', 'curl/8.5.0')
+        .send({});
+
+      expect(response.status).toBe(410);
+      expect(response.body.deprecated).toBe(true);
+      expect(response.body.message).toContain('cron callers');
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[ADMIN-ROUTES] Deprecated rollover endpoint hit by cron caller',
+        expect.objectContaining({
+          event: 'deprecated_rollover_cron_caller',
+          userAgent: 'curl/8.5.0',
+          user: expect.any(String)
+        })
+      );
+    });
+
+    it('should return 410 for Wget User-Agent (word-boundary regex)', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('User-Agent', 'Wget/1.21.4')
+        .send({});
+
+      expect(response.status).toBe(410);
+      expect(response.body.deprecated).toBe(true);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          event: 'deprecated_rollover_cron_caller',
+          userAgent: 'Wget/1.21.4',
+          user: expect.any(String)
+        })
+      );
+    });
+
+    it('should return 410 for generic cron User-Agent', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('User-Agent', 'some-cron/1.0')
+        .send({});
+
+      expect(response.status).toBe(410);
+      expect(response.body.deprecated).toBe(true);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          event: 'deprecated_rollover_cron_caller',
+          userAgent: 'some-cron/1.0',
+          user: expect.any(String)
+        })
+      );
+    });
+
+    it('should return 200 (non-cron path) when User-Agent contains a cron-like substring that does not match the word-boundary regex (e.g. AcronisSync/1.0)', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('User-Agent', 'AcronisSync/1.0 (false-positive guard)')
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body.deprecated).toBe(true);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('deprecated_rollover_cron_caller'),
+        expect.any(Object)
+      );
+    });
+
+    it('should not crash on missing User-Agent header (default to non-cron path)', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body.deprecated).toBe(true);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+    });
+
+    it('should not crash on array-valued User-Agent header (multi-value proxy setup)', async () => {
+      const response = await request(app)
+        .post('/api/admin/logs/rollover')
+        .set('Authorization', `Bearer ${validToken}`)
+        .set('User-Agent', ['curl/8.5.0', 'internal-proxy/1.0'])
+        .send({});
+
+      expect(response.status).toBe(410);
+      expect(response.body.deprecated).toBe(true);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ event: 'deprecated_rollover_cron_caller' })
+      );
+    });
+
+    it('should return 401 without token (admin gate still active on deprecated endpoint)', async () => {
+      keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
+        res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
+      });
+
+      const response = await request(app).post('/api/admin/logs/rollover').send({});
+
+      expect(response.status).toBe(401);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
+    });
+
+    it('should return 403 for non-admin token (admin gate still active on deprecated endpoint)', async () => {
+      keycloakAuthMiddleware.requireAdmin.mockImplementation((req, res) => {
+        res.status(403).json({ error: 'FORBIDDEN', message: 'Admin access required' });
+      });
 
       const response = await authPost('/api/admin/logs/rollover', {});
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(403);
+      expect(adminService.rolloverLogs).not.toHaveBeenCalled();
     });
   });
 

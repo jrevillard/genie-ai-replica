@@ -153,8 +153,7 @@ development_status:
   epic-6-retrospective: optional
 
   epic-7: in-progress
-  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf:
-    in-progress
+  7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf: done
   7-2-routes-post-api-admin-logs-rollover-post-api-logger-configur: 
     ready-for-dev
   7-3-shared-lib-index-js-add-re-exports-for-reconfigurelogger-tri: done

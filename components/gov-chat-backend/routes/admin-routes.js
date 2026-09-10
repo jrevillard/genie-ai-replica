@@ -153,27 +153,76 @@ module.exports = (adminService, logsService) => {
    * @swagger
    * /api/admin/logs/rollover:
    *   post:
-   *     summary: Trigger log rollover
+   *     summary: Deprecated: trigger log rollover
+   *     description: |
+   *       Deprecated. Logs are written directly to VictoriaLogs and no longer
+   *       require manual rollover. External cron callers receive 410 Gone so
+   *       their stale schedules can be retired; legitimate admin clients
+   *       receive 200 with a deprecation notice.
    *     tags: [Admin]
    *     security:
    *       - KeycloakOAuth2: ['openid']
    *     responses:
    *       200:
-   *         description: Logs rolled over successfully
+   *         description: Deprecation notice (admin client)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 deprecated:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: Log rollover is deprecated; logs are written directly to VictoriaLogs.
+   *       410:
+   *         description: Gone (external cron caller detected by User-Agent)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 deprecated:
+   *                   type: boolean
+   *                   example: true
+   *                 message:
+   *                   type: string
+   *                   example: Log rollover is deprecated and removed for cron callers. Logs are written directly to VictoriaLogs.
+   *                 status:
+   *                   type: integer
+   *                   example: 410
    *       401:
    *         description: Unauthorized - authentication required
    *       403:
    *         description: Forbidden - admin access required
-   *       500:
-   *         description: Server error
    */
-  router.post('/logs/rollover', async (req, res, next) => {
+  router.post('/logs/rollover', (req, res) => {
     try {
-      const result = await adminService.rolloverLogs();
-      res.json(result);
-    } catch (error) {
-      logger.error(`[ADMIN-ROUTES] Error rolling over logs: ${error.message}`, { stack: error.stack });
-      next(error);
+      const rawUa = req.headers['user-agent'];
+      const userAgent = (Array.isArray(rawUa) ? rawUa.join(' ') : rawUa || '').toLowerCase();
+      const isCronCaller = /\b(?:cron|curl|wget|httpie|python-requests|python-urllib|go-http-client)\b/.test(userAgent);
+
+      if (isCronCaller) {
+        logger.warn('[ADMIN-ROUTES] Deprecated rollover endpoint hit by cron caller', {
+          event: 'deprecated_rollover_cron_caller',
+          userAgent: rawUa,
+          ip: req.ip ?? req.socket?.remoteAddress ?? null,
+          user: req.user?.iss_sub ?? 'unknown'
+        });
+        return res.status(410).json({
+          deprecated: true,
+          message: 'Log rollover is deprecated and removed for cron callers. Logs are written directly to VictoriaLogs.'
+        });
+      }
+
+      res.json({
+        deprecated: true,
+        message: 'Log rollover is deprecated; logs are written directly to VictoriaLogs.'
+      });
+    } catch (err) {
+      logger.error(`[ADMIN-ROUTES] Deprecated rollover handler error: ${err.message}`, { stack: err.stack });
+      res.status(500).json({ deprecated: true, error: 'internal_error' });
     }
   });
 

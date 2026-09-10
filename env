@@ -200,6 +200,12 @@ HUGGING_FACE_HUB_TOKEN=
 # produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
 # lower label quality). Validated on ibm-granite/granite-4.1-8b.
 # DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_INGEST_CONCURRENCY=1       # parallel ingest slots per dataprep container
+#                                     #   (David, 2026-09-03). Each slot is a flock file;
+#                                     #   429 only when ALL are busy. 1 = historical
+#                                     #   single-flight. Pair with okf-server's
+#                                     #   OKF_INGEST_CONCURRENCY drain lanes to use the
+#                                     #   machine's cores (vLLM/TEI batch natively).
 # DATAPREP_LLM_LABEL_BATCH_SIZE=4     # chunks per LLM labeling call (default 4).
 #                                     #   >1 batches chunks to cut network round-trips
 #                                     #   to a remote vLLM. Raise to 8 on capable models
@@ -441,6 +447,24 @@ HUGGING_FACE_HUB_TOKEN=
 # REQUIRED — app will not start without this value
 KEYCLOAK_URL=https://localhost/auth
 
+# Split-URL OIDC (optional — deployments where the public KEYCLOAK_URL is NOT
+# reachable from inside the container network, e.g. Docker Desktop WSL2):
+#   KEYCLOAK_PUBLIC_URL   — browser-facing issuer alias for token validation
+#                           (backend, document-repository, okf-server). Unset = disabled.
+#   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
+#                           chatqna (JWKS fetch) and dataprep (service-account token
+#                           mint). Unset = disabled (services use KEYCLOAK_URL).
+# Cloud/Swarm deployments where the public URL resolves internally: leave both unset.
+# KEYCLOAK_PUBLIC_URL=https://localhost/auth
+# KEYCLOAK_INTERNAL_URL=http://keycloak:8080
+
+# OKF audience binding (Story 6.1, RFC 8707 — optional): set to okf-server to make
+# the okf-server reject tokens whose aud does not include it (requires the realm
+# audience mapper — shipped in genie-realm.yaml). Unset = no audience check.
+# KC_OKF_SERVER_CLIENT_SECRET is the confidential-client secret for the
+# okf-server Keycloak client (service-to-service).
+# OKF_AUDIENCE=okf-server
+
 # Keycloak redirect URIs and web origins are auto-derived from NGINX_PUBLIC_DOMAIN + NGINX_HTTPS_PORT:
 #   KC_PUBLIC_ORIGIN=https://<NGINX_PUBLIC_DOMAIN>[:<NGINX_HTTPS_PORT>]
 # This is set internally in docker-compose.yaml (keycloak-config service).
@@ -528,6 +552,62 @@ KEYCLOAK_PROXY_CLIENT_SECRET=
 # Used by: Dataprep → Document Repository and Backend API calls
 # Generate: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 KC_DATAPREP_CLIENT_ID=dataprep-service-client
+# OKF server confidential-client secret (REQUIRED for the okf-server Keycloak
+# client; empty ships a secretless confidential client). Generate: openssl rand -hex 24.
+# UPGRADE NOTE (Story 6.1): okf-server enforces okf-scope authorization after this
+# upgrade. Existing tools-admin holders are AUTO-GRANTED the wildcard scope by the
+# keycloak-config entrypoint (non-breaking). New stewards: set the user attribute
+# okf_scopes (e.g. ["okf:tenant:repo-id:admin"]) via the Keycloak admin API.
+KC_OKF_SERVER_CLIENT_SECRET=
+
+# --- OKF ingestion worker (Story 2.9.4; crawlWorker pattern) ---
+# Drains parsed concepts to dataprep. OKF_INGEST_WORKER_ENABLED=false disables
+# the worker entirely.
+# OKF_INGEST_WORKER_ENABLED=true
+# OKF_INGEST_WORKER_INTERVAL_MS=15000
+# OKF_INGEST_WORKER_SWEEP_INTERVAL_MS=3600000
+# PARALLEL DRAIN (David, 2026-09-03): number of independent worker lanes. Each
+# lane claims a different parsed concept and drains it concurrently (requires
+# dataprep to accept parallel ingests — set DATAPREP_INGEST_CONCURRENCY to
+# match). 1 = the historical sequential behavior. Repos are independent units
+# of work: raise both values to scale with machine capacity (e.g. 6 on a
+# 24-vCPU workstation; watch dataprep/vLLM headroom).
+# OKF_INGEST_CONCURRENCY=1
+# IMPORT LANES (perf 2026-09-05): per-concept import pipeline parallelism in
+# okf-server (creation-side import, NOT the post-publish drain). 1 = the
+# historical single-flight; clamp 1..16. Raise together with
+# PII_WEB_CONCURRENCY — the PII sidecar scans dominate lane time (measured
+# ~100% of a 4.3 min/batch wikipedia import before the bump).
+# OKF_IMPORT_CONCURRENCY=1
+# Stuck-drain reaper: a concept claimed but not terminal after this many ms is
+# dead-lettered (dead lane / lost callback), and a concept claimed more than
+# OKF_INGEST_WORKER_MAX_CLAIMS times is treated as poison. WAITING concepts
+# are never reaped, whatever the queue depth.
+# OKF_INGEST_WORKER_REAP_GRACE_MS=3600000
+# OKF_INGEST_WORKER_MAX_CLAIMS=8
+
+# --- OKF content-only chunking (Story 4.8-amend) ---
+# Concepts never become doc-repo files docs — the worker POSTs the concept's
+# markdown DIRECTLY to dataprep (DATAPREP_URL below). Dataprep's completion
+# callback then hits the OKF_SERVER_URL (set in compose, defaults to
+# http://okf-server:3002) and authenticates with OKF_INTERNAL_SECRET. The
+# okf-server controller is FAIL-CLOSED — empty secret ⇒ every callback 401s.
+# MUST be the SAME value on both services.
+# OKF_INTERNAL_SECRET=<set this — same value on okf-server + dataprep-arango-service>
+# DATAPREP_URL=http://dataprep-arango-service:5000
+
+# Maximum size (MB) of a crawled source file okf-server will convert into an
+# OKF repository (server-side streaming conversion job — authoritative check
+# against the doc-repo Content-Length before any processing). Default:
+# 10240 (10 GB). Mode B (per-page) scales to the cap via batched in-process
+# ingests; mode A (single mega-concept) is additionally limited to ~45 MB
+# (one request body).
+# OKF_MAX_CRAWL_SOURCE_MB=10240
+# Debug logging for the crawl→OKF conversion job (1 = per-page/per-batch logs
+# from okf-server). Leave empty to disable.
+# OKF_CONVERSION_DEBUG=
+
+# Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 
 # Mobile OIDC client for institutional deployments (Flutter app)

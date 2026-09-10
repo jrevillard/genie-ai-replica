@@ -9,6 +9,7 @@ files: "components/shared/lib/logger.js:99-124 (buildTransports gate; called by 
 baseline_revision: 5f8a4083b35ba2dd0fd35dbcd69bbe3602f58fc7
 review_loop_iteration: 0
 followup_review_recommended: false
+followup_review_recommended: false
 deferred:
   - summary: >-
       LOG_TO_FILE is not declared in the backend service's `environment:` block
@@ -215,3 +216,24 @@ See `_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md` and `_bm
 
 **Residual risks (pass 3, additions only).**
 - The `triggerLogRollover` describe-level `beforeEach` setting `LOG_TO_FILE=1` was scoped narrowly to that describe block; other describes (`reconfigureLogger`, `cleanupCombinedLog`, `flushLogs`, `traceFormat → winston.format.json pipeline`, `default log level`) still run under the LOG_TO_FILE=unset default. If a future test fixture in one of those describes adds a rotate-failure observation, the same vacuous-pass trap will resurface. (Reminder in the file header or a shared-test-helper hook would harden against this — out of scope for this pass.)
+
+### 2026-09-10 — Pass 4 (follow-up review pass — post CI retry)
+
+**Files changed this pass.**
+- `_bmad-output/implementation-artifacts/stories/7-1-logger-js-wrap-file-transports-in-log_to_file-1-guard-reconf.md` — pass-4 triage-log entry; status restored to `done`.
+
+**Review findings breakdown (pass 4).**
+- Patch count: 0 (high 0, medium 0, low 0). Score: `0 × 3 + 0 × 1 = 0` (below 5 threshold); no high. **Follow-up review recommendation (pass 4): `false`.**
+- Deferred: 0 new (deferred list unchanged — 7 items from pass 3).
+- Rejected: ~70 items spanning all four reviewers — all duplicates of the already-deferred entries, pre-existing observations not caused by the change, or scope-creep beyond the single-gate story. The verification-gap reviewer reported 0 findings (no verification gaps); the intent-alignment auditor confirmed the diff implements Reading A (single-helper gate, explicitly endorsed by the intent's parenthetical) and re-classified the unit-vs-endpoint surface-mismatch as out-of-scope under the scope-authority rule.
+- CI note (from invocation): pipeline 7510 failed with HTTP 429 `toomanyrequests` from `registry.opensource.unicc.org` during `docker login` at the very first step of `build:backend` (job 91859, 10s) and `build:document-repository` (job 91858, 9s); all upstream stages (lint, test, config) had succeeded. This is a transient registry-side rate-limit, not a code or test regression — fix is to retry the pipeline.
+
+### 2026-09-10 — Review pass 4
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 0 (high 0, medium 0, low 0)
+- defer: 0 new (deferred list unchanged — 7 items from pass 3)
+- reject: rest (~70 items across blind-hunter, edge-case-hunter, intent-alignment reviewers — all duplicates of already-deferred entries, pre-existing observations not caused by the change, or scope-creep beyond the single-gate story; intent-alignment auditor's surface-mismatch observation re-confirmed and re-classified as out-of-scope per the scope-authority rule since the intent's parenthetical explicitly endorses Reading A — single-helper gate inside buildTransports, no endpoint-level integration test required)
+- addressed_findings:
+  - none

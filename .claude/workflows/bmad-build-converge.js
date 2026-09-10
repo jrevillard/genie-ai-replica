@@ -216,18 +216,28 @@ STEPS:
      file via the Read tool until EXIT_CODE appears:
      - The file path is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stdout (the
        marker is in the COMMAND below — extract it from the command string).
-     - The stderr file is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stderr. Use it
-       to detect activity: Bash "stat -c '%Y' $stderrFile" to get mtime.
-       If mtime hasn't changed in 30 minutes (= 1800 sec), claude -p is
-       likely hung → fast-fail with { stdout: "", exitCode: 1 }.
+     - claude -p with --verbose emits progress events. Whether they go
+       to stdout, stderr, or both is env-dependent — don't assume. Check
+       BOTH stdout and stderr mtimes; claude -p is alive if EITHER file
+       grew within the last 30 minutes.
+     - The stdout file path is /tmp/bmad-bc-BMADBC_<storyKey>_<N>.stdout
+       (extract from the COMMAND below — look for "stdoutFile=" or the
+       redirect target). The stderr file is the same basename with
+       ".stderr" extension. Use Bash "stat -c '%Y' $stdoutFile" and
+       "stat -c '%Y' $stderrFile" to get both mtimes. Compare each to
+       current time: Bash "date +%s". If BOTH mtimes haven't changed in
+       30 minutes (= 1800 sec), claude -p is likely hung → fast-fail
+       with { stdout: "", exitCode: 1 }. DO NOT kill any process — just
+       report hung and return.
      - Each loop iteration:
-         a. stat the stderr file's mtime
-         b. If mtime changed within last 5 min → continue (claude -p is alive)
+         a. stat stdout mtime + stderr mtime + date +s
+         b. If BOTH mtimes > 1800 sec old: fast-fail (no kill)
          c. Read stdout. If ends with EXIT_CODE=<n>: parse, return.
-         d. Read stderr tail (last 500 chars), report progress event types.
+         d. Read stdout tail (last 500 chars), report progress event types.
          e. sleep 60
-     - Pure activity-based polling: keeps waiting while claude -p writes
-       to stderr, fast-fails when stderr goes silent for 30+ min. No hard cap.
+     - Pure activity-based polling: keeps waiting while EITHER file
+       grew in last 30 min, fast-fails only when BOTH are silent for 30+ min.
+       DO NOT kill processes.
 
 3. Return JSON: { stdout: <verbatim content>, exitCode: <integer> }.
 

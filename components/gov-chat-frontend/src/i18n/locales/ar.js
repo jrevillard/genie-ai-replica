@@ -362,7 +362,7 @@ export default {
         role: 'الدور'
       },
       userSearch: {
-        resultsFound: 'تم العثور على {total} مستخدمين مطابقين لـ \"{term}\"',
+        resultsFound: 'تم العثور على {total} مستخدمين مطابقين لـ "{term}"',
         error: 'خطأ في البحث عن المستخدمين'
       }
     },
@@ -449,11 +449,11 @@ export default {
       deleteCategory: 'حذف الفئة',
       editService: 'تعديل الخدمة',
       deleteService: 'حذف الخدمة',
-      empty: 'لم يتم العثور على فئات. انقر فوق \"إضافة فئة جديدة\" للبدء.',
+      empty: 'لم يتم العثور على فئات. انقر فوق "إضافة فئة جديدة" للبدء.',
       formTitleCreateCategory: 'إنشاء فئة جديدة',
-      formTitleAddService: 'إضافة خدمة إلى \"{categoryName}\"',
-      formTitleEditCategory: 'تعديل الفئة: \"{itemName}\"',
-      formTitleEditService: 'تعديل الخدمة: \"{itemName}\"',
+      formTitleAddService: 'إضافة خدمة إلى "{categoryName}"',
+      formTitleEditCategory: 'تعديل الفئة: "{itemName}"',
+      formTitleEditService: 'تعديل الخدمة: "{itemName}"',
       nameEnLabel: 'الاسم (الإنجليزية)',
       translationsTitle: 'ترجمات للعرض',
       loadingTranslations: 'جاري تحميل الترجمات...',
@@ -469,8 +469,8 @@ export default {
       confirmCancelEdit: 'لديك تغييرات غير محفوظة سيتم فقدانها. هل أنت متأكد أنك تريد التبديل؟',
       confirmDeleteTitleCategory: 'حذف الفئة؟',
       confirmDeleteTitleService: 'حذف الخدمة؟',
-      confirmDeleteCategory: 'هل أنت متأكد أنك تريد حذف الفئة \"{itemName}\"؟ لا يمكن التراجع عن هذا الإجراء.',
-      confirmDeleteService: 'هل أنت متأكد أنك تريد حذف الخدمة \"{itemName}\"؟ لا يمكن التراجع عن هذا الإجراء.',
+      confirmDeleteCategory: 'هل أنت متأكد أنك تريد حذف الفئة "{itemName}"؟ لا يمكن التراجع عن هذا الإجراء.',
+      confirmDeleteService: 'هل أنت متأكد أنك تريد حذف الخدمة "{itemName}"؟ لا يمكن التراجع عن هذا الإجراء.',
       deleteSuccessCategory: 'تم حذف الفئة بنجاح.',
       deleteSuccessService: 'تم حذف الخدمة بنجاح.',
       deleteErrorCategory: 'فشل حذف الفئة.',
@@ -504,8 +504,8 @@ export default {
       ingestQueuedSuccess: 'تم وضع {count} ملف(ات) في قائمة الانتظار للاستيعاب.',
       ingestQueuedError: 'حدث خطأ أثناء عملية الاستيعاب الدفعي.',
       uploadSuccessMultiple: 'تم تحميل {count} ملف(ات) بنجاح.',
-      linkSubmitSuccess: 'تم الزحف وحفظ \"{fileName}\" بنجاح.',
-      actionSuccess: 'الإجراء \"{action}\" على الملف {fileId} كان ناجحًا.',
+      linkSubmitSuccess: 'تم الزحف وحفظ "{fileName}" بنجاح.',
+      actionSuccess: 'الإجراء "{action}" على الملف {fileId} كان ناجحًا.',
       metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.'
     }
   },
@@ -716,7 +716,7 @@ export default {
     archivedChats: 'المحادثات المحفوظة',
     noStarredChats: 'لا توجد محادثات مميزة بعد. قم بتمييز محادثة لإضافتها هنا.',
     noArchivedChats: 'لا توجد محادثات محفوظة بعد.',
-    noSearchResults: 'لم يتم العثور على محادثات لـ \"{term}\"',
+    noSearchResults: 'لم يتم العثور على محادثات لـ "{term}"',
     loadingChats: 'جاري تحميل المحادثات...',
     errorLoadingConversations: 'فشل تحميل المحادثات. يرجى المحاولة مرة أخرى.',
     errorLoadingUser: 'بيانات المستخدم غير مكتملة. يرجى إعادة تحميل الصفحة.',
@@ -1335,8 +1335,8 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'عدم تطابق في التكوين: {warnings}. يرجى التحقق من تكوين المساعدة السريعة والتسلسل الهرمي للمعرفة.',
-    categoryNotFound: 'الفئة \"{label}\" غير موجودة في التسلسل الهرمي للمعرفة',
-    serviceLabelMismatch: 'الخدمة \"{label}\" تستخدم تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
+    categoryNotFound: 'الفئة "{label}" غير موجودة في التسلسل الهرمي للمعرفة',
+    serviceLabelMismatch: 'الخدمة "{label}" تستخدم تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
     noFilterWarning: 'لا يوجد عامل تصفية سياق نشط — سيكون الاستعلام غير مُصفى.',
     placeholder: 'اكتب استفسارك هنا...',
     sendButton: 'إرسال',
@@ -1534,9 +1534,9 @@ export default {
     uploading: 'جاري الرفع...',
     notifications: {
       dropError: 'يمكن إفلات الملفات فقط. يرجى التحقق من أنك تسحب ملفًا صالحًا من جهاز الكمبيوتر الخاص بك.',
-      typeNotAllowed: 'نوع الملف \"{extension}\" غير مسموح به.',
+      typeNotAllowed: 'نوع الملف "{extension}" غير مسموح به.',
       shortcutUnsupported: 'ملفات الاختصار (.url) غير مدعومة. يرجى سحب الملف الفعلي.',
-      duplicate: 'تمت إضافة الملف \"{fileName}\" بالفعل.',
+      duplicate: 'تمت إضافة الملف "{fileName}" بالفعل.',
       uploadSuccess: 'تم تحميل {fileName} بنجاح',
       uploadFailed: 'فشل تحميل {fileName}.'
     }
@@ -1661,12 +1661,12 @@ export default {
         label: 'Concepts',
         loading: 'Loading…',
         resplit: 'Re-split',
-        flagged: 'flagged',
+        flagged: 'مميز',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          'تتضمن الـ concept كيانات مميزة — افتح كل منها، قم بإزالة الكيان أو تغييره، واحفظ (يُعاد المسح تلقائيًا)؛ أو أقر بها عند النشر.',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTip: 'الكيانات المميزة: {k}. افتحها، قم بإزالتها أو تغييرها، ثم احفظ — يُعاد المسح تلقائيًا.',
+        piiTipBare: 'كيانات مميزة — افتحها وراجعها ثم احفظ لإعادة المسح.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1716,7 +1716,7 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry'
+      saveFailed: 'فشل الحفظ — أعد المحاولة'
     },
     dashboard: {
       bulk: {
@@ -1940,7 +1940,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2176,7 +2176,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'المستودعات المنشأة من هذه الزحفة',
       convQueued: 'في قائمة الانتظار...',
@@ -2185,7 +2185,7 @@ export default {
       convAdding: 'جارٍ إضافة المفاهيم ([p] صفحة حتى الآن)...',
       convDone: 'تم الإنشاء ([p] صفحة)',
       convFailed: 'فشل',
-      createStarted: 'جارٍ إنشاء \"[name]\" — تابع التقدّم أدناه.',
+      createStarted: 'جارٍ إنشاء "[name]" — تابع التقدّم أدناه.',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2250,65 +2250,66 @@ export default {
       }
     },
     pii: {
-      panel: 'Flagged entities',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
-      scanning: 'Scanning…',
-      clean: 'No flagged entities — this concept is clear.',
-      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
-      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      panel: 'الكيانات المميزة',
+      nFlagged: 'تم العثور على {n}',
+      rescan: 'إعادة المسح',
+      scanning: 'جارٍ المسح…',
+      clean: 'لا توجد كيانات مميزة — هذا الـ concept سليم.',
+      how: 'الإصلاح: قم بإزالته أو إعادة صياغته (مثلًا للإشارة إلى الدور بدلًا من الاسم)، ثم احفظ — إعادة المسح تحدّث هذه القائمة.',
+      descFallback:
+        'تم اكتشاف بيانات شخصية هنا (اللائحة العامة لحماية البيانات المادة 4(1) — تتعلق بشخص يمكن التعرف عليه).',
+      scanError: 'المسح غير متاح',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
-        EMAIL_ADDRESS: 'Email address',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        PERSON: 'اسم الشخص',
+        LOCATION: 'الموقع',
+        DATE_TIME: 'التاريخ أو الوقت',
+        EMAIL_ADDRESS: 'عنوان البريد الإلكتروني',
+        PHONE_NUMBER: 'رقم الهاتف',
+        IP_ADDRESS: 'عنوان IP',
+        NRP: 'رقم التسجيل الوطني',
+        BD_NATIONAL_ID: 'رقم الهوية الوطنية'
       },
       desc: {
-        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
-        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
-        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
-        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
-        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
-        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
-        NRP: 'A national registration number was detected. It strongly identifies a person.',
-        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+        PERSON: 'تم اكتشاف اسم شخص. الأسماء يمكن أن تحدد هوية شخص طبيعي بشكل مباشر.',
+        LOCATION: 'تم اكتشاف اسم مكان. مع بيانات أخرى، يمكن أن يحدد هوية شخص.',
+        DATE_TIME: 'تم اكتشاف تاريخ أو وقت. التواريخ قد تساهم في تحديد هوية شخص.',
+        EMAIL_ADDRESS: 'تم اكتشاف عنوان بريد إلكتروني. إنه يحدد مباشرة هوية شخص يمكن التواصل معه.',
+        PHONE_NUMBER: 'تم اكتشاف رقم هاتف. إنه يحدد مباشرة هوية شخص يمكن التواصل معه.',
+        IP_ADDRESS: 'تم اكتشاف عنوان IP. يمكنه تحديد جهاز أو أسرة.',
+        NRP: 'تم اكتشاف رقم تسجيل وطني. إنه يحدد هوية شخص بشكل قوي.',
+        BD_NATIONAL_ID: 'تم اكتشاف رقم هوية وطنية. إنه يحدد هوية شخص بشكل قوي.'
       },
-      allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      allClear: 'سليم',
+      redactFile: 'تنقيح الملف بالكامل',
+      confirmRedactFile: 'تأكيد: تنقيح الملف بالكامل؟',
+      locateTip: 'عرض هذا النص في المحرر',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        label: 'الملف بأكمله:',
+        redact: 'تنقيح الملف',
+        remove: 'إزالة المحتوى',
+        accept: 'قبول الكل',
+        confirmRedact: 'تأكيد: تنقيح الملف بالكامل؟',
+        confirmRemove: 'تأكيد: إزالة المحتوى بالكامل؟'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
-        replacement: 'Replacement text',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        redact: 'تنقيح',
+        replace: 'استبدال',
+        remove: 'إزالة',
+        accept: 'قبول',
+        replacement: 'نص الاستبدال',
+        apply: 'تطبيق',
+        cancel: 'إلغاء'
       },
       resolved: {
-        title: 'Processed in this file',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
-        removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        title: 'تمت معالجته في هذا الملف',
+        redacted: 'تم التنقيح',
+        replaced: 'تم الاستبدال',
+        removed: 'تمت الإزالة',
+        accepted: 'تم القبول',
+        fileRedacted: 'تم تنقيح الملف',
+        kept: 'تم الاحتفاظ به في النص',
+        removedWord: 'تمت إزالته',
+        wholeFile: 'تم تنقيح محتوى الملف بالكامل'
       }
     }
   }

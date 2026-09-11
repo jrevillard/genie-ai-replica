@@ -35,7 +35,11 @@ variables:
   #   parse, generating "Parsing errors" UI noise in the security dashboard.
   # - _bmad/**: BMAD/WDS agent framework modules (build tooling for AI agents,
   #   never shipped or executed in production).
+  # - _bmad-output/**: generated BMAD planning/implementation/spec artifacts.
   # - update_quickhelp.js: repo-root dev script (hardcoded locale paths), never shipped.
+  # NOTE: gemnasium (dependency scanning) does NOT honor this var — see DS_EXCLUDED_PATHS
+  # below. Secret Detection is intentionally NOT excluded (SECRET_DETECTION_EXCLUDED_PATHS
+  # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
   SAST_EXCLUDED_PATHS: >-
     mobile/**/windows/**,
     genie-ai-overlay/contracts/**,
@@ -49,7 +53,18 @@ variables:
     **/coverage/**,
     .claude/**,
     _bmad/**,
+    _bmad-output/**,
     update_quickhelp.js
+  # --- Dependency Scanning exclusions (gemnasium + gemnasium-python) ---
+  # Semicolon-separated, honored by both analyzers. Without these excludes,
+  # gemnasium-python entered _bmad/scripts/setup.py on job 93669 (pipeline 7575,
+  # MR 343) and exited 1 with no report written — gemnasium-python analyzes one
+  # dep-dir per run, so picking up a BMAD script blocks the whole pipeline.
+  # Scope kept narrow on purpose: do NOT add tests/** — gemnasium reads manifests
+  # (pyproject.toml, setup.py, requirements*.txt, package.json), and a test
+  # fixture declaring its own deps is a real dep signal we want surfaced.
+  # Secret Detection is intentionally NOT excluded (see SAST comment above).
+  DS_EXCLUDED_PATHS: "_bmad/**;_bmad-output/**;.claude/**"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:

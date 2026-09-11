@@ -1111,8 +1111,8 @@ void (async () => {
        BMAD_ISSUE_SYNC_POPULATE_DESC=true \\
          Skill: bmad-issue-tracking-sync
   5. After the Skill returns: rm -f "${retroCommentFile}" (best-effort).
-  6. Return JSON: { attempted: bool, created: int, updated: int, comments_posted: int,
-                    descriptions_updated: int, error?: string }
+  6. Return JSON: { attempted: bool, created: int, updated: int, skipped: int,
+                    comments_posted: int, descriptions_updated: int, error?: string }
   
   CONSTRAINTS:
   - NEVER halt on sync failure.
@@ -1178,7 +1178,7 @@ void (async () => {
   3. Invoke (wrap in try/catch — soft-fail):
        Skill: bmad-issue-tracking-sync
      (NO env vars — this is the full pass that catches any drift.)
-  4. Return JSON: { attempted: bool, created: int, updated: int, skipped: int, filtered: int,
+  4. Return JSON: { attempted: bool, created: int, updated: int, skipped: int,
                     comments_posted: int, descriptions_updated: int, error?: string }
   
   CONSTRAINTS:

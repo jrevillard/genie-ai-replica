@@ -13,11 +13,13 @@ export const meta = {
 
 // Helper for issue-sync invocations from JS orchestrator agents. The JS runtime
 // may not have direct fs access, so this only GENERATES a unique tmp-file path.
-// The actual file write is done by the sync agent via shell `cat <<EOF`, and
-// cleanup is `rm -f`. PID + nonce ensures parallel calls don't clobber.
-const { randomBytes } = require('node:crypto');
+// The actual file write is done by the sync agent via shell `printf '%s' ...`,
+// and cleanup is `rm -f`. PID + nonce ensures parallel calls don't clobber.
+// Uses Math.random (16 hex chars from 8 bytes worth) instead of node:crypto to
+// stay compatible with strict ESM runtimes that may not provide `require`.
 function commentPath() {
-  const nonce = randomBytes(8).toString('hex');
+  let nonce = '';
+  for (let i = 0; i < 16; i++) nonce += Math.floor(Math.random() * 16).toString(16);
   return `/tmp/bmad-sync-comment-${process.pid}-${nonce}.md`;
 }
 
@@ -923,6 +925,7 @@ if (sprintStatusSync.advanced > 0) {
   log(`Issue sync: Phase 4 batch (${advancedKeysCsv})`)
   try {
     const phase4Comment = `Phase 4 batch sync: ${sprintStatusSync.advanced} stories + ${sprintStatusSync.advancedEpics.length} epics → done. See _bmad-output/implementation-artifacts/sprint-status.yaml.`
+    const phase4CommentEscaped = phase4Comment.replace(/'/g, "'\\''")
     const phase4CommentFile = commentPath()
     const phase4Sync = await agent(
       `Phase 4 batch issue sync for ${sprintStatusSync.advanced} stories + ${sprintStatusSync.advancedEpics.length} epics.
@@ -937,10 +940,9 @@ ${phase4Comment}
 STEPS:
 1. cd ${setup.prdWorktreePath}
 2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
-3. Write the comment body to COMMENT_FILE via:
-     cat > "${phase4CommentFile}" <<'COMMENT_EOF'
-${phase4Comment}
-COMMENT_EOF
+3. Write the comment body to COMMENT_FILE via single-quoted printf (no shell
+   expansion; embedded single-quotes already JS-escaped):
+     printf '%s' '${phase4CommentEscaped}' > "${phase4CommentFile}"
 4. Invoke (wrap in try/catch — soft-fail, NEVER halt):
      BMAD_ISSUE_SYNC_SCOPE="${advancedKeysCsv}" \\
      BMAD_ISSUE_SYNC_COMMENT_FILE="${phase4CommentFile}" \\
@@ -948,7 +950,7 @@ COMMENT_EOF
        Skill: bmad-issue-tracking-sync
 5. After the Skill returns: rm -f "${phase4CommentFile}" (best-effort).
 6. Return JSON: { attempted: bool, created: int, updated: int, skipped: int,
-                  comments_posted: int, descriptions_updated: int, filtered: int, error?: string }
+                  comments_posted: int, descriptions_updated: int, error?: string }
 
 CONSTRAINTS:
 - NEVER halt on sync failure.
@@ -1077,6 +1079,7 @@ CONSTRAINTS:
       const retroKey = `epic-${epicNum}-retrospective`
       try {
         const retroComment = `Retro: ${retroResult.actionItemsCount || 0} action item(s) captured. See _bmad-output/implementation-artifacts/epic-${epicNum}-retro.md`
+        const retroCommentEscaped = retroComment.replace(/'/g, "'\\''")
         const retroCommentFile = commentPath()
         const retroSync = await agent(
           `Retro issue sync for ${retroKey} (epic ${epicNum}).
@@ -1090,10 +1093,9 @@ ${retroComment}
 STEPS:
 1. cd ${setup.prdWorktreePath}
 2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
-3. Write the comment body to COMMENT_FILE via:
-     cat > "${retroCommentFile}" <<'COMMENT_EOF'
-${retroComment}
-COMMENT_EOF
+3. Write the comment body to COMMENT_FILE via single-quoted printf (no shell
+   expansion; embedded single-quotes already JS-escaped):
+     printf '%s' '${retroCommentEscaped}' > "${retroCommentFile}"
 4. Invoke (wrap in try/catch — soft-fail):
      BMAD_ISSUE_SYNC_SCOPE="${retroKey}" \\
      BMAD_ISSUE_SYNC_COMMENT_FILE="${retroCommentFile}" \\

@@ -41,11 +41,13 @@ let lastCIStatus = null;
 
 // Helper for issue-sync invocations from JS orchestrator agents. The JS runtime
 // may not have direct fs access, so this only GENERATES a unique tmp-file path.
-// The actual file write is done by the sync agent via shell `cat <<EOF`, and
-// cleanup is `rm -f`. PID + nonce ensures parallel calls don't clobber.
-const { randomBytes } = require('node:crypto');
+// The actual file write is done by the sync agent via shell `printf '%s' ...`,
+// and cleanup is `rm -f`. PID + nonce ensures parallel calls don't clobber.
+// Uses Math.random (16 hex chars from 8 bytes worth) instead of node:crypto to
+// stay compatible with strict ESM runtimes that may not provide `require`.
 function commentPath() {
-  const nonce = randomBytes(8).toString('hex');
+  let nonce = '';
+  for (let i = 0; i < 16; i++) nonce += Math.floor(Math.random() * 16).toString(16);
   return `/tmp/bmad-sync-comment-${process.pid}-${nonce}.md`;
 }
 
@@ -74,7 +76,6 @@ const SETUP_SCHEMA = {
         created: { type: 'integer' },
         updated: { type: 'integer' },
         skipped: { type: 'integer' },
-        filtered: { type: 'integer' },
         comments_posted: { type: 'integer' },
         descriptions_updated: { type: 'integer' },
         error: { type: 'string' },
@@ -106,7 +107,6 @@ const BUILD_SCHEMA = {
         created: { type: 'integer' },
         updated: { type: 'integer' },
         skipped: { type: 'integer' },
-        filtered: { type: 'integer' },
         comments_posted: { type: 'integer' },
         descriptions_updated: { type: 'integer' },
         error: { type: 'string' },
@@ -131,7 +131,6 @@ const MERGE_SCHEMA = {
         created: { type: 'integer' },
         updated: { type: 'integer' },
         skipped: { type: 'integer' },
-        filtered: { type: 'integer' },
         comments_posted: { type: 'integer' },
         descriptions_updated: { type: 'integer' },
         error: { type: 'string' },
@@ -432,8 +431,10 @@ STEPS:
       owned by bmad-prd-orchestrate, not here.
    d. Wrap in try/catch — on any error (rate limit, transient GitLab 5xx, missing scope
       file), log to journal and continue. NEVER halt.
-   e. Capture {attempted: bool, created: int, updated: int, skipped: int, filtered: int,
-      descriptions_updated: int, error?: string} as issueSync in SETUP_SCHEMA return.
+   e. Capture {attempted: bool, created: int, updated: int, skipped: int,
+      comments_posted: int, descriptions_updated: int, error?: string} as issueSync in SETUP_SCHEMA return.
+   f. If the sync Skill itself crashes or returns no result, do NOT throw — return
+      the rest of SETUP_SCHEMA with issueSync: {attempted: false, error: '<reason>'}.
 10. Return SETUP_SCHEMA JSON with ALL fields filled. The other phases depend on these — incomplete context = broken workflow.
 
 CONSTRAINTS:
@@ -661,11 +662,21 @@ CONSTRAINTS:
   lastSpecStatus = postBuildResult.specStatus
   currentSha = postBuildResult.newSha
   followup = postBuildResult.followupReviewRecommended
+  // Always track the current spec status so a regression (e.g. in-review →
+  // in-progress → in-review across iterations) re-fires the sync — not just
+  // when the sync itself succeeded.
+  lastSyncedSpecStatus = postBuildResult.specStatus
 
   // Issue tracking sync on spec-status transitions (soft-fail — never block the build).
-  // Fires when spec lands on 'in-review' (post-build) or 'done' (final iter before CI gate),
-  // AND when the status differs from the previously synced value to avoid per-iter spam.
-  if ((postBuildResult.specStatus === 'in-review' || postBuildResult.specStatus === 'done') &&
+  // Fires only when the spec lands on a TERMINAL HALT status. Per bmad-build-auto
+  // HALT protocol (workflow.md:7), terminal statuses are: done, blocked, awaiting-operator,
+  // unresolved, ambiguous. Of these, only 'done' is a state-change worth surfacing to
+  // the issue tracker (the others are halt conditions, not transitions). 'in-review' is
+  // an INTERMEDIATE spec status set by step-04-review.md:10 during the build-auto run,
+  // but it is NOT a HALT status — bmad-build-auto always HALT with one of the terminal
+  // set above. Track lastSyncedSpecStatus unconditionally per iteration so a regression
+  // (in-progress → done → in-progress across iters) re-fires the sync on the next done.
+  if (postBuildResult.specStatus === 'done' &&
       postBuildResult.specStatus !== lastSyncedSpecStatus) {
     log(`Issue sync: spec → ${postBuildResult.specStatus} (iter ${iteration})`)
     try {
@@ -685,11 +696,10 @@ ${reviewComment}
 STEPS:
 1. cd ${setup.prdWorktreePath}
 2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
-3. Write the comment body to COMMENT_FILE via:
-     cat > "${reviewCommentFile}" <<'COMMENT_EOF'
-${reviewComment}
-COMMENT_EOF
-   (The single-quoted heredoc delimiter prevents shell expansion of the body.)
+3. Write the comment body to COMMENT_FILE via single-quoted printf (no shell
+   expansion of the body, safe for user-supplied prose; the replace escapes any
+   embedded single-quotes so the body stays inside one single-quoted arg):
+     printf '%s' '${reviewComment.replace(/'/g, "'\\''")}' > "${reviewCommentFile}"
 4. Invoke (wrap in try/catch — soft-fail, NEVER halt):
      BMAD_ISSUE_SYNC_SCOPE="${setup.storyKey}" \\
      BMAD_ISSUE_SYNC_COMMENT_FILE="${reviewCommentFile}" \\
@@ -706,7 +716,6 @@ CONSTRAINTS:
 - DO NOT invoke bmad-build or bmad-build-auto.`,
         { label: `issue-sync-iter-${iteration}-${setup.storyKey}`, phase: 'Build with convergence', agentType: 'general-purpose' }
       )
-      lastSyncedSpecStatus = postBuildResult.specStatus
       log(`Issue sync (spec=${postBuildResult.specStatus}): created=${reviewSync?.created ?? 'n/a'} updated=${reviewSync?.updated ?? 'n/a'}`)
     } catch (e) {
       log(`Issue sync error (soft-fail): ${e}`)
@@ -935,6 +944,17 @@ const canAutoMerge = lastCIStatus === 'success'
   && !SPEC_STATUSES_BLOCKING_MERGE.has(lastSpecStatus);
 if (canAutoMerge) {
   log(`Auto-merging MR !${mrResult.mrIid} (CI green, spec status: ${lastSpecStatus})...`)
+  // Pre-compute merge-comment body + spec path. JS-side, single-quote-escape for
+  // safe embedding in the agent's bash prompt (no shell interpolation in bash).
+  const _sha7 = (convergedSha || 'unknown').substring(0, 7)
+  let _relSpecPath = setup.specPath || ''
+  if (setup.worktreePath && _relSpecPath.startsWith(setup.worktreePath + '/')) {
+    _relSpecPath = _relSpecPath.slice(setup.worktreePath.length + 1)
+  } else if (_relSpecPath.startsWith(setup.repoRoot + '/')) {
+    _relSpecPath = _relSpecPath.slice(setup.repoRoot.length + 1)
+  }
+  const _mergeCommentBody = `Story ${setup.storyKey} merged via MR !${mrResult.mrIid} (${mrResult.mrUrl}) — final SHA ${_sha7}.\n\nSee spec: ${_relSpecPath}`
+  const _mergeCommentBodyEscaped = _mergeCommentBody.replace(/'/g, "'\\''")
   try {
     mergeResult = await agent(
     `Merge MR !${mrResult.mrIid} for story ${setup.storyKey}, then sync sprint-status to done.
@@ -949,7 +969,9 @@ CONTEXT:
 - mrIid: ${mrResult.mrIid}
 - mrUrl: ${mrResult.mrUrl}
 - convergedSha: ${convergedSha || 'unknown'}
-- relSpecPath: <spec path relative to repo root, derived from ${setup.specPath}>
+- relSpecPath: ${_relSpecPath}
+- PRE_COMPUTED_MERGE_COMMENT (write verbatim to file via single-quoted printf):
+  ${_mergeCommentBody}
 
 STEPS:
 1. Merge: \`GITLAB_HOST=${setup.gitlabHost} glab mr merge --yes --repo <project> ${mrResult.mrIid}\`
@@ -969,12 +991,9 @@ STEPS:
       - List all story keys with that epic_N prefix from development_status.
       - If ALL such stories have status 'done', add 'epic-<N>' to the sync scope. Otherwise scope is just '<storyKey>'.
    c. Compute COMMENT_FILE = /tmp/bmad-sync-comment-<pid>-<nonce>.md (unique, deterministic for this run).
-   d. Write the merge comment body via heredoc:
-        cat > "$COMMENT_FILE" <<'COMMENT_EOF'
-        Story ${setup.storyKey} merged via MR !${mrResult.mrIid} (<mrUrl>) — final SHA <sha7>.
-        See spec: <relSpecPath>
-        COMMENT_EOF
-      (The single-quoted heredoc delimiter prevents shell expansion of $ inside the body.)
+   d. Write the pre-computed merge comment body to COMMENT_FILE via single-quoted
+      printf (no shell expansion; embedded single-quotes already JS-escaped):
+        printf '%s' '${_mergeCommentBodyEscaped}' > "$COMMENT_FILE"
    e. Invoke (wrap in try/catch):
         BMAD_ISSUE_SYNC_SCOPE="<csv>" \\
         BMAD_ISSUE_SYNC_COMMENT_FILE="$COMMENT_FILE" \\

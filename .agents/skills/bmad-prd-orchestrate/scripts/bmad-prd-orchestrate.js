@@ -380,7 +380,12 @@ LINE TO APPEND (single line, no trailing newline added):
 ${JSON.stringify(entry)}
 
 STEPS:
-1. Use bash: \`echo '${JSON.stringify(entry)}' >> ${runDir}/journal.jsonl\`
+1. Use bash: \`printf '%s\\n' '${JSON.stringify(entry).replace(/'/g, "'\\''")}' >> ${runDir}/journal.jsonl\`
+   (Single-quoted printf arg with JS-side single-quote escape prevents shell
+    expansion of any apostrophes in the JSON body — same pattern as the
+    issue-sync comment delivery. Without this, an error message containing
+    a literal apostrophe (e.g. "couldn't find user") would terminate the
+    single-quoted arg early and inject a second shell command.)
    (single-quoted echo is safe because the JSON string itself does not contain single quotes — agent must verify).
 2. Return JSON: { "appended": true }`,
     { label: `journal-${event.event || 'unknown'}`, phase: 'Execute', schema: {

@@ -280,9 +280,7 @@ _LLM_RETRY_ATTEMPTS = max(1, int(os.getenv("OKF_LLM_RETRY_ATTEMPTS", "5") or 5))
 _LLM_RETRY_BASE_MS = max(250, int(os.getenv("OKF_LLM_RETRY_BASE_MS", "2000") or 2000))
 _LLM_RETRY_MAX_MS = max(_LLM_RETRY_BASE_MS, int(os.getenv("OKF_LLM_RETRY_MAX_MS", "90000") or 90000))
 _LLM_STORM_COOLDOWN_S = max(0, int(os.getenv("OKF_LLM_STORM_COOLDOWN_S", "20") or 20))
-_LLM_STORM_COOLDOWN_MAX_S = max(
-    _LLM_STORM_COOLDOWN_S, int(os.getenv("OKF_LLM_STORM_COOLDOWN_MAX_S", "120") or 120)
-)
+_LLM_STORM_COOLDOWN_MAX_S = max(_LLM_STORM_COOLDOWN_S, int(os.getenv("OKF_LLM_STORM_COOLDOWN_MAX_S", "120") or 120))
 _LLM_ROUND2_DELAY_S = max(0, int(os.getenv("OKF_LLM_ROUND2_DELAY_S", "45") or 45))
 
 _LLM_STORM_UNTIL = 0.0  # module-level monotonic timestamp — the SHARED cool-down
@@ -490,6 +488,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not value:
             return False
         return not value[0].isdigit()
+
     def _initialize_client(self):
         """Override the OPEA parent's DB selection with the GENIE convention.
 

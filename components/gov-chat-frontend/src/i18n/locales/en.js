@@ -1576,6 +1576,7 @@ export default {
   cropAlert: {
     potato: 'Potato',
     drought: 'Drought',
+    flood: 'Flood',
     dismiss: 'Dismiss',
     viewDroughtReport: 'View drought report',
     allAreas: 'All areas',

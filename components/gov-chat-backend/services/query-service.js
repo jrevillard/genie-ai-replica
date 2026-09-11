@@ -100,7 +100,20 @@ const WEATHER_HARD = [
   'inundation map',
   'detect flood',
   'map flood',
-  'prithvi'
+  'prithvi',
+  // official BMD warnings (CAP feed): served by weather-mcp-service
+  'weather warning',
+  'bmd',
+  'cyclone signal',
+  'signal no',
+  'maritime',
+  'heat wave',
+  'heatwave',
+  'landslide',
+  'lightning warning',
+  'fog warning',
+  'any warnings',
+  'any alerts'
 ];
 const AGRO_TERMS = [
   'soil',

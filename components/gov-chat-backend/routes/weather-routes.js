@@ -74,6 +74,7 @@ module.exports = (weatherService) => {
   };
   router.get('/potato-risk', proxyLatestRisk('/potato/risk/latest'));
   router.get('/drought-risk', proxyLatestRisk('/drought/risk/latest'));
+  router.get('/flood-risk', proxyLatestRisk('/flood/risk/latest'));
 
   /**
    * Browser geolocation -> district whose alerts the web banner should show.

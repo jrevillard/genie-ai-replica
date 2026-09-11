@@ -6,12 +6,12 @@
         <div class="crop-alert-icon" aria-hidden="true">{{ '\u{1F4E2}' }}</div>
         <div class="crop-alert-body">
           <div class="crop-alert-title">
-            {{ n.title }}
+            {{ noticeText(n, 'title') }}
             <span class="crop-alert-scope">
               · {{ n.districts.length ? n.districts.join(', ') : $t('cropAlert.allAreas') }}
             </span>
           </div>
-          <div class="crop-alert-message">{{ n.body }}</div>
+          <div class="crop-alert-message">{{ noticeText(n, 'body') }}</div>
         </div>
         <button
           class="crop-alert-close"
@@ -92,6 +92,9 @@ const DISTRICT_CACHE_KEY = 'mewa_alert_district';
 const DISTRICT_CACHE_MS = 24 * 60 * 60 * 1000; // re-resolve location once a day
 const NOTICE_DISMISSED_KEY = 'mewa_notices_dismissed';
 const NOTICE_WINDOW_HOURS = 48;
+// Engine alert broadcasts (weather / potato / drought / flood) already appear as the
+// risk card; general, admin and official BMD notices become notice cards.
+const ENGINE_ALERT_TYPES = /^(weather_warning|[a-z]+_ews)$/;
 
 function dismissKey(type) {
   return `${type}_alert_dismissed_until`;
@@ -144,13 +147,15 @@ export default {
       return translated && translated !== `cropAlert.tier.${key}` ? translated : this.alert.tier_label || 'Alert';
     },
     alertTypeLabel() {
-      return this.$t(this.alertType === 'drought' ? 'cropAlert.drought' : 'cropAlert.potato');
+      const key = { drought: 'cropAlert.drought', flood: 'cropAlert.flood' }[this.alertType] || 'cropAlert.potato';
+      return this.$t(key);
     },
     visibleNotices() {
       return this.notices.filter((n) => !this.dismissedNotices.includes(n.id));
     },
     // Plain glyphs: the app does not ship an icon font.
     tierGlyph() {
+      if (this.alertType === 'flood') return '\u{1F30A}'; // water wave
       if (this.alert.tier >= 3) return '\u26A0'; // warning sign
       if (this.alertType === 'drought') return '\u2600'; // sun
       return '\u2757'; // exclamation
@@ -222,11 +227,13 @@ export default {
       const lang = this.uiLocale;
 
       try {
-        const [potatoResult, droughtResult, noticesResult] = await Promise.allSettled([
+        const [potatoResult, droughtResult, noticesResult, floodResult] = await Promise.allSettled([
           httpService.get('weather/potato-risk', { location, lang }),
           httpService.get('weather/drought-risk', { location, lang }),
-          httpService.get('notifications/latest', { district: location, hours: NOTICE_WINDOW_HOURS, limit: 3 })
+          httpService.get('notifications/latest', { district: location, hours: NOTICE_WINDOW_HOURS, limit: 3 }),
+          httpService.get('weather/flood-risk', { location, lang })
         ]);
+        const flood = floodResult.status === 'fulfilled' ? floodResult.value.data : null;
 
         const potato = potatoResult.status === 'fulfilled' ? potatoResult.value.data : null;
         const drought = droughtResult.status === 'fulfilled' ? droughtResult.value.data : null;
@@ -234,13 +241,18 @@ export default {
           const list = noticesResult.value?.data?.notices;
           // Engine weather warnings are already shown as the risk alert below;
           // the notice cards are for everything else (general / admin messages).
-          this.notices = (Array.isArray(list) ? list : []).filter((n) => n.type !== 'weather_warning');
+          this.notices = (Array.isArray(list) ? list : []).filter(
+            (n) => !ENGINE_ALERT_TYPES.test(String(n.type || ''))
+          );
         }
 
         // Collect active alerts (tier >= 2) that are not dismissed
         const candidates = [
           potato && potato.tier >= 2 && !this.isDismissedRecently('potato') ? { ...potato, _type: 'potato' } : null,
-          drought && drought.tier >= 2 && !this.isDismissedRecently('drought') ? { ...drought, _type: 'drought' } : null
+          drought && drought.tier >= 2 && !this.isDismissedRecently('drought')
+            ? { ...drought, _type: 'drought' }
+            : null,
+          flood && flood.tier >= 2 && !this.isDismissedRecently('flood') ? { ...flood, _type: 'flood' } : null
         ].filter(Boolean);
 
         if (candidates.length === 0) {
@@ -265,6 +277,12 @@ export default {
       this.visible = false;
       const until = Date.now() + 12 * 60 * 60 * 1000;
       localStorage.setItem(dismissKey(this.alertType), String(until));
+    },
+
+    /** Bengali text of a notice when the UI is Bengali and the broadcast carries it (BMD CAP alerts do). */
+    noticeText(notice, field) {
+      if (this.uiLocale === 'bn' && notice[`${field}_bn`]) return notice[`${field}_bn`];
+      return notice[field];
     },
 
     dismissNotice(notice) {
@@ -295,6 +313,21 @@ export default {
 .crop-alert-scope {
   font-weight: 500;
   opacity: 0.8;
+}
+
+.crop-alert-banner.type-flood.tier-2 {
+  background: #e3f0fb;
+  border-left-color: #1976d2;
+  color: #0d3c61;
+}
+.crop-alert-banner.type-flood.tier-3,
+.crop-alert-banner.type-flood.tier-4 {
+  background: #dbe9f8;
+  border-left-color: #0d47a1;
+  color: #082a4a;
+}
+.type-flood .crop-alert-icon {
+  color: #1565c0;
 }
 
 .crop-alert-banner.type-notice {

@@ -1549,6 +1549,7 @@ export default {
   cropAlert: {
     potato: 'আলু',
     drought: 'খরা',
+    flood: 'বন্যা',
     dismiss: 'বন্ধ করুন',
     viewDroughtReport: 'খরা প্রতিবেদন দেখুন',
     allAreas: 'সব এলাকা',

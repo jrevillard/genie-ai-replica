@@ -250,6 +250,10 @@ _FALLBACK_TEXT: dict[str, dict[str, str]] = {
             "I could not produce a drought assessment for {district} right now. "
             "Please try again in a little while, or ask for this week's weather forecast."
         ),
+        "flood_unavailable": (
+            "## Flood Outlook — {district}\n\n"
+            "No flood assessment is available for {district} yet. Please ask again later."
+        ),
         "delineation_disabled": (
             "Field boundary mapping is not available right now. Please try again later."
         ),
@@ -274,6 +278,10 @@ _FALLBACK_TEXT: dict[str, dict[str, str]] = {
             "এই মুহূর্তে {district}-এর জন্য খরার মূল্যায়ন তৈরি করা সম্ভব হয়নি। "
             "অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন, অথবা এই সপ্তাহের আবহাওয়ার পূর্বাভাস জানতে চান।"
         ),
+        "flood_unavailable": (
+            "## বন্যার পূর্বাভাস — {district}\n\n"
+            "{district}-এর জন্য এখনও কোনো বন্যা মূল্যায়ন পাওয়া যায়নি। অনুগ্রহ করে পরে আবার জিজ্ঞাসা করুন।"
+        ),
         "delineation_disabled": (
             "জমির সীমানা মানচিত্র সেবা এই মুহূর্তে পাওয়া যাচ্ছে না। অনুগ্রহ করে পরে আবার চেষ্টা করুন।"
         ),
@@ -283,6 +291,123 @@ _FALLBACK_TEXT: dict[str, dict[str, str]] = {
         ),
     },
 }
+
+
+_FLOOD_TIER_BN = {0: "স্বাভাবিক", 1: "পরামর্শ", 2: "সতর্কতা", 3: "তীব্র", 4: "জরুরি"}
+_FLOOD_EMOJI = {0: "🟢", 1: "🟡", 2: "🟠", 3: "🔴", 4: "🟣"}
+
+
+def _build_bmd_alerts_answer(
+    district: str | None, alerts: list[dict], lang: str
+) -> str:
+    """Markdown list of active BMD warnings, in the CAP's own English or Bengali text."""
+    bn = lang == "bn"
+    scope = (
+        (_localized_district_name(district, "bn") if bn else district)
+        if district
+        else ("সারা দেশ" if bn else "Bangladesh")
+    )
+    if not alerts:
+        return (
+            f"## আবহাওয়া সতর্কবার্তা — {scope}\n\nএই মুহূর্তে বাংলাদেশ আবহাওয়া অধিদপ্তরের কোনো সক্রিয় সতর্কবার্তা নেই।"
+            if bn
+            else f"## Weather Warnings — {scope}\n\nNo active warnings from the Bangladesh Meteorological Department right now."
+        )
+    lines = [
+        f"## আবহাওয়া সতর্কবার্তা — {scope}" if bn else f"## Weather Warnings — {scope}",
+        "",
+    ]
+    for a in alerts:
+        info = (
+            (a.get("info") or {}).get("bn" if bn else "en")
+            or (a.get("info") or {}).get("en")
+            or {}
+        )
+        head = info.get("headline") or a.get("rss_title") or a.get("event", "")
+        desc = (info.get("description") or "").strip()
+        instr = (info.get("instruction") or "").strip()
+        exp = (a.get("expires") or "")[:16].replace("T", " ")
+        lines.append(f"### {head}")
+        lines.append(
+            f"**{'তীব্রতা' if bn else 'Severity'}:** {a.get('severity', '')} · **{'মেয়াদ' if bn else 'Valid until'}:** {exp} UTC"
+        )
+        if desc:
+            lines.append(desc)
+        if instr:
+            lines.append(("**করণীয়:** " if bn else "**Advice:** ") + instr)
+        lines.append("")
+    lines.append(
+        "*উৎস: বাংলাদেশ আবহাওয়া অধিদপ্তর (BMD CAP)*"
+        if bn
+        else "*Source: Bangladesh Meteorological Department (BMD CAP feed)*"
+    )
+    return "\n".join(lines)
+
+
+def _build_flood_risk_answer(district: str, a: dict, lang: str) -> str:
+    """Markdown flood outlook from a stored FloodEWS assessment (en / bn)."""
+    tier = int(a.get("tier", 0) or 0)
+    comps = a.get("components") or {}
+    rain, river = comps.get("rain") or {}, comps.get("river") or {}
+    if lang == "bn":
+        bn = lambda t: str(t).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
+        lines = [
+            f"## বন্যার পূর্বাভাস — {_localized_district_name(district, 'bn')} (আগামী ১০ দিন)",
+            "",
+            f"**অবস্থা:** {_FLOOD_EMOJI.get(tier, '')} **{_FLOOD_TIER_BN.get(tier, 'স্বাভাবিক')}**",
+        ]
+        if rain:
+            lines.append(
+                f"- বৃষ্টিপাত: ২৪ ঘণ্টায় সর্বোচ্চ {bn(round(rain.get('rain_24_mm', 0)))} মিমি, ৭২ ঘণ্টায় {bn(round(rain.get('rain_72_mm', 0)))} মিমি"
+                + (
+                    " (মাটি ইতিমধ্যে সম্পৃক্ত)"
+                    if rain.get("soil_note") == "saturated"
+                    else ""
+                )
+            )
+        if river:
+            point = river.get("point", "")
+            if point.endswith("(local rivers)"):
+                point = f"{_localized_district_name(district, 'bn')} (স্থানীয় নদী)"
+            lines.append(
+                f"- নদীর প্রবাহ ({point}): {bn(round(river.get('peak_m3s', 0)))} ঘনমিটার/সেকেন্ড, "
+                f"গত ৩০ দিনের মধ্যমার {bn(river.get('ratio', 0))} গুণ, {bn(river.get('peak_date', ''))}"
+            )
+        action = {
+            0: "আগামী ১০ দিনে বন্যার ঝুঁকি দেখা যাচ্ছে না।",
+            1: "নালা-নর্দমা পরিষ্কার রাখুন এবং হালনাগাদ তথ্যে নজর রাখুন।",
+            2: "পানি নিষ্কাশনের ব্যবস্থা নিন; সংরক্ষিত ফসল ও উপকরণ উঁচু স্থানে সরান।",
+            3: "যা কাটা সম্ভব তা কেটে ফেলুন, বীজ ও গবাদিপশু রক্ষা করুন, স্থানীয় নির্দেশনা মেনে চলুন।",
+            4: "জরুরি অবস্থা: স্থানীয় কর্তৃপক্ষের সরিয়ে নেওয়ার নির্দেশনা অনুসরণ করুন।",
+        }[max(0, min(4, tier))]
+        lines += ["", action, "", "*উৎস: বৃষ্টিপাতের পূর্বাভাস ও GloFAS নদী প্রবাহ (কোপার্নিকাস)*"]
+        return "\n".join(lines)
+    lines = [
+        f"## Flood Outlook — {district} (next 10 days)",
+        "",
+        f"**Status:** {_FLOOD_EMOJI.get(tier, '')} **{a.get('tier_label', 'Normal').upper()}**",
+    ]
+    if rain:
+        lines.append(
+            f"- Rainfall: up to {rain.get('rain_24_mm', 0):.0f} mm in 24 h, {rain.get('rain_72_mm', 0):.0f} mm over 72 h"
+            + (
+                " (soil already saturated)"
+                if rain.get("soil_note") == "saturated"
+                else ""
+            )
+        )
+    if river:
+        lines.append(
+            f"- River discharge ({river.get('point', '')}): {river.get('peak_m3s', 0):.0f} m³/s, "
+            f"{river.get('ratio', 0):.1f}× the 30-day median, peaking {river.get('peak_date', '')}"
+        )
+    lines += [
+        "",
+        a.get("message", ""),
+        "",
+        "*Source: rainfall forecast and GloFAS river discharge (Copernicus)*",
+    ]
+    return "\n".join(lines)
 
 
 def _fallback(lang: str, key: str, **fmt) -> tuple[str, str]:
@@ -310,6 +435,22 @@ def _localized_district_name(english_name: str, language: str) -> str:
             pass
     return english_name
 
+
+_BMD_WARNING_KEYWORDS = re.compile(
+    r"\b(weather\s+warnings?|bmd|met\s+office|official\s+warning|warning\s+(?:signal|message|bulletin)|"
+    r"cyclone|storm\s+(?:warning|signal)|signal\s*(?:no\.?|number)?\s*\d|maritime|sea\s+port|"
+    r"heat\s*wave|landslide|lightning\s+warning|fog\s+warning|any\s+(?:active\s+)?(?:warnings?|alerts?))\b|"
+    r"সতর্ক\s*সংকেত|সতর্কবার্তা|ঘূর্ণিঝড়|আবহাওয়া\s*সতর্কতা",
+    re.IGNORECASE,
+)
+
+_FLOOD_RISK_KEYWORDS = re.compile(
+    r"\b(flood(?:ing|s)?\s+(?:risk|forecast|outlook|warning|alert|chance|likely|expected|coming|danger)|"
+    r"(?:risk|chance|danger|possibility)\s+of\s+flood(?:ing|s)?|"
+    r"will\s+(?:it|there\s+be)\s+(?:a\s+)?flood|"
+    r"river\s+(?:level|discharge|rising|rise)|water\s+level)\b",
+    re.IGNORECASE,
+)
 
 _DROUGHT_KEYWORDS = re.compile(
     r"\b(drought|soil[\s\-]?moisture|dry[\s\-]?season|water[\s\-]?stress|"
@@ -415,6 +556,37 @@ _DROUGHT_DISTRICT_COORDS: dict[str, tuple[float, float]] = {
     "Chandpur": (23.2333, 90.6500),
     "Narsingdi": (23.9174, 90.7150),
 }
+
+
+def _find_district_64(query: str) -> tuple[str, float, float] | None:
+    """
+    First of the 64 districts mentioned in the query (English canonical name,
+    common variants, or Bengali name), with its centroid. Longer names are
+    tested first so "Cox's Bazar" wins over shorter fragments.
+    """
+    try:
+        from data_ingestor import DISTRICT_COORDS as _ALL
+        from mcp_weather.tools.weather_forecast import BENGALI_TO_ENGLISH as _BN
+    except Exception:  # pragma: no cover
+        return None
+    q = query.lower()
+    candidates: list[tuple[str, str]] = [(n.lower(), n) for n in _ALL]
+    candidates += [(bn, en) for bn, en in _BN.items() if en in _ALL]
+    for alias, canon in (
+        ("chattogram", "Chittagong"),
+        ("cumilla", "Comilla"),
+        ("barishal", "Barisal"),
+        ("bogra", "Bogura"),
+        ("jessore", "Jashore"),
+        ("coxs bazar", "Cox's Bazar"),
+    ):
+        if canon in _ALL:
+            candidates.append((alias, canon))
+    for needle, canon in sorted(candidates, key=lambda kv: -len(kv[0])):
+        if needle and needle in q:
+            lat, lon = _ALL[canon]
+            return canon, lat, lon
+    return None
 
 
 def _find_drought_district(query: str) -> tuple[str, float, float] | None:
@@ -1005,6 +1177,76 @@ async def query(request: QueryRequest):
             },
         }
 
+    # ── Official BMD warnings (CAP feed stored by warning_system_engine) ─────
+    if (
+        _BMD_WARNING_KEYWORDS.search(request.query)
+        and storage_layer
+        and not _FLOOD_DETECTION_KEYWORDS.search(request.query)
+    ):
+        district_info = _find_district_64(request.query) or _find_drought_district(
+            request.query
+        )
+        district = district_info[0] if district_info else None
+        lang = (request.language or "en").lower()
+        alerts = storage_layer.get_active_bmd_alerts(district, 10)
+        answer = _build_bmd_alerts_answer(district, alerts, lang)
+        top = max((int(a.get("tier", 0) or 0) for a in alerts), default=0)
+        return {
+            "answer": answer,
+            "language": "bn" if lang == "bn" else "en",
+            "risk_tier": top,
+            "risk_label": {
+                0: "Normal",
+                1: "Advisory",
+                2: "Warning",
+                3: "Severe",
+                4: "Emergency",
+            }[min(4, top)],
+            "advisory": "",
+            "triggers": [a.get("event", "") for a in alerts],
+            "buffer": None,
+            "location": district or "",
+            "forecast": {},
+        }
+
+    # ── Flood risk outlook (warning_system_engine FloodEWS: rain + GloFAS) ────
+    if (
+        _FLOOD_RISK_KEYWORDS.search(request.query)
+        and not _FLOOD_DETECTION_KEYWORDS.search(request.query)
+        and storage_layer
+    ):
+        district_info = _find_district_64(request.query) or _find_drought_district(
+            request.query
+        )
+        district = district_info[0] if district_info else "Dhaka"
+        stored = storage_layer.get_latest_crop_risk(district, "flood")
+        lang = (request.language or "en").lower()
+        if stored:
+            answer = _build_flood_risk_answer(district, stored, lang)
+            return {
+                "answer": answer,
+                "language": "bn" if lang == "bn" else "en",
+                "risk_tier": stored.get("tier", 0),
+                "risk_label": stored.get("tier_label", "Normal"),
+                "advisory": stored.get("message", ""),
+                "triggers": stored.get("triggers", []),
+                "buffer": None,
+                "location": district,
+                "forecast": {},
+            }
+        text, used = _fallback(lang, "flood_unavailable", district=district)
+        return {
+            "answer": text,
+            "language": used,
+            "risk_tier": 0,
+            "risk_label": "Normal",
+            "advisory": "",
+            "triggers": [],
+            "buffer": None,
+            "location": district,
+            "forecast": {},
+        }
+
     # ── Satellite flood detection (geo-inference-worker + Prithvi-EO-2.0) ────
     if _FLOOD_DETECTION_KEYWORDS.search(request.query):
         if not _GEO_INFERENCE_URL:
@@ -1021,7 +1263,9 @@ async def query(request: QueryRequest):
                 "location": "",
                 "forecast": {},
             }
-        district_info = _find_drought_district(request.query)
+        district_info = _find_district_64(request.query) or _find_drought_district(
+            request.query
+        )
         if district_info:
             district, lat, lon = district_info
         else:
@@ -1117,7 +1361,9 @@ async def query(request: QueryRequest):
         and storage_layer
         and not _DROUGHT_KEYWORDS.search(request.query)
     ):
-        district_info = _find_drought_district(request.query)
+        district_info = _find_district_64(request.query) or _find_drought_district(
+            request.query
+        )
         district = district_info[0] if district_info else "Dhaka"
         requested_months = _parse_seasonal_months(request.query)
         doc = storage_layer.get_seasonal_forecast(district)
@@ -1188,7 +1434,9 @@ async def query(request: QueryRequest):
     if _DROUGHT_KEYWORDS.search(request.query) and (
         storage_layer or _DROUGHT_MONITORING_URL
     ):
-        district_info = _find_drought_district(request.query)
+        district_info = _find_district_64(request.query) or _find_drought_district(
+            request.query
+        )
         district, lat, lon = (
             district_info if district_info else ("Dhaka", 23.8103, 90.4125)
         )
@@ -1315,6 +1563,45 @@ async def get_latest_risk(
         status_code=404,
         detail=f"No risk data for '{location}' and live fallback unavailable",
     )
+
+
+@app.get("/bmd/alerts/active")
+async def get_bmd_alerts(
+    location: str | None = Query(
+        None, description="District name; omit for all active warnings"
+    ),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Active official BMD warnings (CAP feed) for a district, or nationwide ones."""
+    if storage_layer is None:
+        return JSONResponse(status_code=503, content={"error": "Storage unavailable"})
+    return {
+        "location": location,
+        "alerts": storage_layer.get_active_bmd_alerts(location, limit),
+    }
+
+
+@app.get("/flood/risk/latest")
+async def get_flood_risk(
+    location: str = Query(..., description="Bangladesh district name (e.g. 'Sylhet')"),
+):
+    """Latest flood EWS assessment (rain index + GloFAS river discharge) for a district."""
+    if storage_layer is None:
+        return JSONResponse(status_code=503, content={"error": "Storage unavailable"})
+    assessment = storage_layer.get_latest_crop_risk(location, "flood")
+    if assessment is None:
+        return {
+            "location": location,
+            "crop": "flood",
+            "tier": 0,
+            "tier_label": "Normal",
+            "triggers": [],
+            "message": "",
+        }
+    assessment.pop("_id", None)
+    assessment.pop("_key", None)
+    assessment.pop("_rev", None)
+    return assessment
 
 
 @app.get("/potato/risk/latest")

@@ -801,6 +801,16 @@ services:
       # Push alerts: the notifier POSTs to {BACKEND_API_URL}/notifications/broadcast
       # with x-notification-secret. Without both, engine alerts never reach FCM.
       - BACKEND_API_URL=${BACKEND_API_URL:-http://backend:3000/api}
+      # Flood EWS: rain index + GloFAS river discharge via Open-Meteo Flood API (no key)
+      - FLOOD_EWS_ENABLED=${FLOOD_EWS_ENABLED:-true}
+      # Official BMD warnings via the CAP feed (cap.bmd.gov.bd), polled every 15 min
+      - BMD_CAP_ENABLED=${BMD_CAP_ENABLED:-true}
+      - BMD_CAP_RSS_URL=${BMD_CAP_RSS_URL:-https://cap.bmd.gov.bd/api/cap/rss.xml}
+      - BMD_CAP_POLL_MINUTES=${BMD_CAP_POLL_MINUTES:-15}
+      # Copernicus Climate Data Store (seasonal SEAS5 outlook; later GloFAS thresholds).
+      # Key from https://cds.climate.copernicus.eu (profile page), licences accepted there.
+      - CDSAPI_URL=${CDSAPI_URL:-https://cds.climate.copernicus.eu/api}
+      - CDSAPI_KEY=${CDSAPI_KEY:-}
       - NOTIFICATION_BROADCAST_SECRET=${NOTIFICATION_BROADCAST_SECRET:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:

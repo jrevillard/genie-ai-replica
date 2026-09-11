@@ -942,6 +942,21 @@ NOTIFICATION_BROADCAST_SECRET=
 # service-account key at ./secrets/credentials.json; it is mounted read-only at
 # /app/secrets/credentials.json. GEE_PROJECT is the GEE cloud project id.
 GEE_PROJECT=
+# Flood early warning (warning_system_engine): rainfall index + GloFAS river
+# discharge from the Open-Meteo Flood API. No credentials needed. Daily 05:30 UTC.
+# FLOOD_EWS_ENABLED=true
+# Official BMD weather warnings (heavy rain, cyclone/maritime signals, heat wave,
+# landslide, lightning, fog) from the CAP feed, polled every 15 min, broadcast on
+# severity Moderate or above. No credentials needed.
+# BMD_CAP_ENABLED=true
+# BMD_CAP_POLL_MINUTES=15
+
+# Copernicus Climate Data Store API key (warning_system_engine): enables the
+# seasonal SEAS5 outlook (weekly fetch, Monday 06:00 UTC) and, later, GloFAS
+# return-period thresholds. Create the key on your CDS profile page and accept
+# the dataset licences there. Format: the personal access token string.
+# CDSAPI_URL=https://cds.climate.copernicus.eu/api
+CDSAPI_KEY=
 # weather-mcp-service -> geo-inference-worker (field delineation, flood maps).
 # Leave empty to disable; the chat answers with an honest "not enabled" message.
 # GEO_INFERENCE_URL=http://geo-inference-worker:8001

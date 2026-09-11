@@ -211,6 +211,8 @@ class BroadcastRepository {
           broadcastId: b.broadcastId,
           title: b.payload.title,
           body: b.payload.body,
+          title_bn: b.payload.title_bn,
+          body_bn: b.payload.body_bn,
           type: b.payload.type,
           tier: b.payload.tier,
           districts: b.audience.districts || [],

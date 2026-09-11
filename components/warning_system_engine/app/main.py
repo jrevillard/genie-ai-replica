@@ -14,6 +14,7 @@ Long-term requires CDSAPI_URL + CDSAPI_KEY env vars (or ~/.cdsapirc).
 If not configured the long-term pipeline is silently skipped; short-term
 continues unaffected.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,47 +34,85 @@ logger = logging.getLogger("warning_system_engine")
 
 
 async def run() -> None:
-    from app.core.storage import StorageLayer
-    from app.core.risk_engine import RiskEngine
-    from app.core.notifier import Notifier
-    from app.workflows.short_term.potato_ews import PotatoShortTermEWS
     from app.core.crop_profile_loader import CropProfileLoader
+    from app.core.notifier import Notifier
+    from app.core.risk_engine import RiskEngine
     from app.core.scheduler import create_scheduler
+    from app.core.storage import StorageLayer
+    from app.workflows.short_term.potato_ews import PotatoShortTermEWS
 
     logger.info("[MAIN] Warning System Engine starting up")
 
-    storage     = StorageLayer()
+    storage = StorageLayer()
     risk_engine = RiskEngine()
-    notifier    = Notifier(storage)
-    potato_ews  = PotatoShortTermEWS(storage)
+    notifier = Notifier(storage)
+    potato_ews = PotatoShortTermEWS(storage)
     bamis_special_bulletin_ews = None
 
-    if os.getenv("BAMIS_SPECIAL_BULLETIN_ENABLED", "true").lower() in {"1", "true", "yes", "on"}:
+    if os.getenv("BAMIS_SPECIAL_BULLETIN_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         try:
             from app.integrations.bamis.special_bulletin import BamisSpecialBulletinEWS
+
             bamis_special_bulletin_ews = BamisSpecialBulletinEWS(storage)
             logger.info("[MAIN] BAMIS special bulletin watcher enabled")
         except ImportError as exc:
-            logger.warning("[MAIN] BAMIS special bulletin watcher import failed (%s) — disabled", exc)
+            logger.warning(
+                "[MAIN] BAMIS special bulletin watcher import failed (%s) — disabled",
+                exc,
+            )
     else:
         logger.info("[MAIN] BAMIS_SPECIAL_BULLETIN_ENABLED=false — watcher disabled")
 
     # ── Drought monitoring (optional — requires DROUGHT_MONITORING_URL) ──
-    drought_ews            = None
+    bmd_cap = None
+    if os.getenv("BMD_CAP_ENABLED", "true").lower() in ("1", "true", "yes"):
+        try:
+            from app.integrations.bmd.cap_alerts import BmdCapWatcher
+
+            bmd_cap = BmdCapWatcher(storage)
+            logger.info(
+                "[MAIN] BMD CAP watcher ready — official warnings via cap.bmd.gov.bd"
+            )
+        except Exception as exc:
+            logger.warning("[MAIN] BMD CAP watcher init failed (%s) — disabled", exc)
+
+    flood_ews = None
+    if os.getenv("FLOOD_EWS_ENABLED", "true").lower() in ("1", "true", "yes"):
+        try:
+            from app.workflows.short_term.flood_ews import FloodEWS
+
+            flood_ews = FloodEWS(storage)
+            logger.info(
+                "[MAIN] FloodEWS ready — rain index + GloFAS river discharge (Open-Meteo)"
+            )
+        except Exception as exc:
+            logger.warning(
+                "[MAIN] FloodEWS init failed (%s) — flood pipeline disabled", exc
+            )
+
+    drought_ews = None
     drought_monitoring_url = os.getenv("DROUGHT_MONITORING_URL", "")
 
     if drought_monitoring_url:
         try:
             from app.workflows.long_term.drought_ews import DroughtEWS
+
             drought_ews = DroughtEWS(storage)
             logger.info("[MAIN] DroughtEWS ready — url=%s", drought_monitoring_url)
         except ImportError as exc:
-            logger.warning("[MAIN] DroughtEWS import failed (%s) — drought pipeline disabled", exc)
+            logger.warning(
+                "[MAIN] DroughtEWS import failed (%s) — drought pipeline disabled", exc
+            )
     else:
         logger.info("[MAIN] DROUGHT_MONITORING_URL not set — drought pipeline disabled")
 
     # ── Long-term components (optional — requires CDS credentials) ────────
-    copernicus    = None
+    copernicus = None
     long_term_ews = None
 
     try:
@@ -81,18 +120,19 @@ async def run() -> None:
         from app.workflows.long_term.potato_ews import LongTermPotatoEWS
 
         profile_loader = CropProfileLoader()
-        copernicus     = CopernicusFetcher()
-        long_term_ews  = LongTermPotatoEWS(storage, profile_loader)
+        copernicus = CopernicusFetcher()
+        long_term_ews = LongTermPotatoEWS(storage, profile_loader)
         logger.info("[MAIN] Long-term EWS ready — Copernicus pipeline enabled")
     except ImportError as exc:
         logger.warning(
             "[MAIN] Long-term dependencies missing (%s) — "
-            "install cdsapi xarray netCDF4 to enable Copernicus pipeline", exc
+            "install cdsapi xarray netCDF4 to enable Copernicus pipeline",
+            exc,
         )
 
     scheduler = create_scheduler(
         storage=storage,
-        ingestor=None,            # ingestor lives in weather-mcp-service
+        ingestor=None,  # ingestor lives in weather-mcp-service
         risk_engine=risk_engine,
         notifier=notifier,
         potato_ews=potato_ews,
@@ -101,6 +141,8 @@ async def run() -> None:
         drought_ews=drought_ews,
         drought_monitoring_url=drought_monitoring_url,
         bamis_special_bulletin_ews=bamis_special_bulletin_ews,
+        flood_ews=flood_ews,
+        bmd_cap=bmd_cap,
     )
     scheduler.start()
     logger.info(

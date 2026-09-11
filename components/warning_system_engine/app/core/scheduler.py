@@ -15,6 +15,7 @@ Startup:
   Long-term seed fires shortly after start and downloads Copernicus only when
   seasonal data is missing, so fresh deployments do not wait for Monday cron.
 """
+
 import logging
 import os
 from typing import TYPE_CHECKING
@@ -24,24 +25,40 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 if TYPE_CHECKING:
+    from app.core.notifier import Notifier
+    from app.core.risk_engine import RiskEngine
+    from app.core.storage import StorageLayer
     from app.integrations.bamis.special_bulletin import BamisSpecialBulletinEWS
     from app.integrations.copernicus.fetcher import CopernicusFetcher
     from app.workflows.long_term.drought_ews import DroughtEWS
     from app.workflows.long_term.potato_ews import LongTermPotatoEWS
-    from app.core.notifier import Notifier
-    from app.core.risk_engine import RiskEngine
     from app.workflows.short_term.potato_ews import PotatoShortTermEWS
-    from app.core.storage import StorageLayer
 
 logger = logging.getLogger(__name__)
 
 # All Bangladesh districts — used when iterating stored forecasts in
 # standalone mode (no ingestor). Keep in sync with weather-mcp-service.
 DISTRICT_LIST = [
-    "Dhaka", "Chittagong", "Sylhet", "Rajshahi", "Khulna",
-    "Barisal", "Rangpur", "Mymensingh", "Comilla", "Jessore",
-    "Bogra", "Dinajpur", "Pabna", "Tangail", "Faridpur",
-    "Noakhali", "Brahmanbaria", "Cox's Bazar", "Chandpur", "Narsingdi",
+    "Dhaka",
+    "Chittagong",
+    "Sylhet",
+    "Rajshahi",
+    "Khulna",
+    "Barisal",
+    "Rangpur",
+    "Mymensingh",
+    "Comilla",
+    "Jessore",
+    "Bogra",
+    "Dinajpur",
+    "Pabna",
+    "Tangail",
+    "Faridpur",
+    "Noakhali",
+    "Brahmanbaria",
+    "Cox's Bazar",
+    "Chandpur",
+    "Narsingdi",
 ]
 
 
@@ -61,7 +78,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 async def run_potato_ews_pipeline(
-    storage:    "StorageLayer",
+    storage: "StorageLayer",
     potato_ews: "PotatoShortTermEWS",
 ) -> dict:
     """
@@ -96,12 +113,71 @@ async def run_potato_ews_pipeline(
     return result
 
 
+async def run_bmd_cap_pipeline(
+    storage: "StorageLayer", bmd_cap, notifier: "Notifier"
+) -> dict:
+    """Poll the BMD CAP feed; store new alerts; broadcast tier >= 2 once."""
+    import asyncio
+
+    return await asyncio.get_running_loop().run_in_executor(
+        None, lambda: bmd_cap.check_and_dispatch(notifier)
+    )
+
+
+async def run_flood_pipeline(
+    storage: "StorageLayer", flood_ews, notifier: "Notifier"
+) -> dict:
+    """
+    Flood EWS for every district with coordinates: fetch GloFAS discharge once
+    (batched), then rain + river assessment per district; alerts for tier >= 2
+    with the 12 h dedup used by the other crop pipelines.
+    """
+    import asyncio
+
+    from app.workflows.short_term.flood_ews import DISTRICT_COORDS
+
+    loop = asyncio.get_running_loop()
+    logger.info("[FLOOD_PIPELINE] started")
+    await loop.run_in_executor(None, flood_ews.prefetch_river)
+    assessed = alerts = errors = 0
+    tiers: dict[int, int] = {}
+    for location in DISTRICT_COORDS:
+        try:
+            assessment = await loop.run_in_executor(
+                None, lambda loc=location: flood_ews.evaluate(loc)
+            )
+            if not assessment:
+                continue
+            assessed += 1
+            tiers[assessment["tier"]] = tiers.get(assessment["tier"], 0) + 1
+            if flood_ews.should_alert(assessment):
+                pushed = await loop.run_in_executor(
+                    None, lambda a=assessment: notifier.dispatch_flood_alert(a)
+                )
+                await loop.run_in_executor(
+                    None, lambda a=assessment: flood_ews.record_alert(a)
+                )
+                alerts += 1 if pushed else 0
+        except Exception as exc:
+            logger.error("[FLOOD_PIPELINE] Failed for %s: %s", location, exc)
+            errors += 1
+    result = {
+        "status": "ok" if errors == 0 else "partial",
+        "assessed": assessed,
+        "tiers": tiers,
+        "alerts": alerts,
+        "errors": errors,
+    }
+    logger.info("[FLOOD_PIPELINE] complete: %s", result)
+    return result
+
+
 async def run_daily_pipeline(
-    storage:     "StorageLayer",
-    ingestor,                    # DataIngestor | None
+    storage: "StorageLayer",
+    ingestor,  # DataIngestor | None
     risk_engine: "RiskEngine",
-    notifier:    "Notifier",
-    potato_ews:  "PotatoShortTermEWS | None" = None,
+    notifier: "Notifier",
+    potato_ews: "PotatoShortTermEWS | None" = None,
 ) -> dict:
     """
     Daily pipeline:
@@ -113,9 +189,13 @@ async def run_daily_pipeline(
       6. Run potato EWS
     """
     import asyncio
+
     from app.core.models import UnifiedForecast
 
-    logger.info("[PIPELINE] Daily pipeline started (ingestor=%s)", "yes" if ingestor else "standalone")
+    logger.info(
+        "[PIPELINE] Daily pipeline started (ingestor=%s)",
+        "yes" if ingestor else "standalone",
+    )
 
     forecasts: list[UnifiedForecast] = []
 
@@ -125,26 +205,37 @@ async def run_daily_pipeline(
             forecasts = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: ingestor.ingest_short_term(forecast_days=7)
             )
-            fallback_count     = sum(1 for f in forecasts if f.fallback_used)
-            sense_check_failed = sum(1 for f in forecasts if f.sense_check_passed is False)
-            sense_check_passed = sum(1 for f in forecasts if f.sense_check_passed is True)
+            fallback_count = sum(1 for f in forecasts if f.fallback_used)
+            sense_check_failed = sum(
+                1 for f in forecasts if f.sense_check_passed is False
+            )
+            sense_check_passed = sum(
+                1 for f in forecasts if f.sense_check_passed is True
+            )
             logger.info(
                 "[PIPELINE] Ingested %d forecasts — sense_check(pass=%d fail=%d) fallback=%d",
-                len(forecasts), sense_check_passed, sense_check_failed, fallback_count,
+                len(forecasts),
+                sense_check_passed,
+                sense_check_failed,
+                fallback_count,
             )
         except Exception as exc:
             logger.error("[PIPELINE] Ingestion failed: %s", exc)
             return {"status": "error", "stage": "ingestion", "error": str(exc)}
     else:
         # Standalone mode: read stored forecasts from ArangoDB
-        logger.info("[PIPELINE] Standalone mode — reading stored forecasts from ArangoDB")
+        logger.info(
+            "[PIPELINE] Standalone mode — reading stored forecasts from ArangoDB"
+        )
         for location in DISTRICT_LIST:
             fc = await asyncio.get_running_loop().run_in_executor(
                 None, lambda loc=location: storage.get_latest_forecast(loc)
             )
             if fc is not None:
                 forecasts.append(fc)
-        logger.info("[PIPELINE] Loaded %d stored forecasts from ArangoDB", len(forecasts))
+        logger.info(
+            "[PIPELINE] Loaded %d stored forecasts from ArangoDB", len(forecasts)
+        )
         sense_check_passed = sense_check_failed = fallback_count = 0
 
     errors = 0
@@ -174,13 +265,13 @@ async def run_daily_pipeline(
             errors += 1
 
     result = {
-        "status":              "ok" if errors == 0 else "partial",
+        "status": "ok" if errors == 0 else "partial",
         "districts_processed": len(forecasts),
-        "sense_check_passed":  sense_check_passed,
-        "sense_check_failed":  sense_check_failed,
-        "fallback_used":       fallback_count,
-        "errors":              errors,
-        "alerts_dispatched":   notified,
+        "sense_check_passed": sense_check_passed,
+        "sense_check_failed": sense_check_failed,
+        "fallback_used": fallback_count,
+        "errors": errors,
+        "alerts_dispatched": notified,
     }
     logger.info("[PIPELINE] Daily pipeline complete: %s", result)
 
@@ -197,11 +288,12 @@ async def run_daily_pipeline(
 # Long-term pipeline  (weekly Copernicus fetch + seasonal EWS)
 # ---------------------------------------------------------------------------
 
+
 async def run_long_term_pipeline(
-    storage:       "StorageLayer",
-    copernicus:    "CopernicusFetcher",
+    storage: "StorageLayer",
+    copernicus: "CopernicusFetcher",
     long_term_ews: "LongTermPotatoEWS",
-    notifier:      "Notifier | None" = None,
+    notifier: "Notifier | None" = None,
 ) -> dict:
     """
     Weekly pipeline:
@@ -237,21 +329,21 @@ async def run_long_term_pipeline(
         notified = await _dispatch_seasonal_alerts(storage, notifier)
 
     result = {
-        "status":            "ok" if fetch_result.get("error") is None else "partial",
+        "status": "ok" if fetch_result.get("error") is None else "partial",
         "copernicus_stored": fetch_result.get("stored", 0),
         "assessments_stored": ews_result.get("evaluated", 0),
         "alerts_dispatched": notified,
-        "errors":            ews_result.get("errors", 0),
+        "errors": ews_result.get("errors", 0),
     }
     logger.info("[LT_PIPELINE] Long-term pipeline complete: %s", result)
     return result
 
 
 async def run_long_term_startup_seed(
-    storage:       "StorageLayer",
-    copernicus:    "CopernicusFetcher",
+    storage: "StorageLayer",
+    copernicus: "CopernicusFetcher",
     long_term_ews: "LongTermPotatoEWS",
-    notifier:      "Notifier | None" = None,
+    notifier: "Notifier | None" = None,
 ) -> dict:
     """
     Startup seed for seasonal forecasts.
@@ -271,15 +363,21 @@ async def run_long_term_startup_seed(
 
     missing: list[str] = []
     if not force:
+
         def _missing_locations() -> list[str]:
             return [
-                location for location in DISTRICT_LIST
+                location
+                for location in DISTRICT_LIST
                 if storage.get_seasonal_forecast(location) is None
             ]
 
-        missing = await asyncio.get_running_loop().run_in_executor(None, _missing_locations)
+        missing = await asyncio.get_running_loop().run_in_executor(
+            None, _missing_locations
+        )
         if not missing:
-            logger.info("[LT_STARTUP] Seasonal forecasts already present — startup seed skipped")
+            logger.info(
+                "[LT_STARTUP] Seasonal forecasts already present — startup seed skipped"
+            )
             return {"status": "skipped", "reason": "seasonal forecasts already present"}
 
     if force:
@@ -287,14 +385,15 @@ async def run_long_term_startup_seed(
     else:
         logger.info(
             "[LT_STARTUP] Missing seasonal forecasts for %d/%d districts — running Copernicus seed",
-            len(missing), len(DISTRICT_LIST),
+            len(missing),
+            len(DISTRICT_LIST),
         )
 
     return await run_long_term_pipeline(storage, copernicus, long_term_ews, notifier)
 
 
 async def _dispatch_seasonal_alerts(
-    storage:  "StorageLayer",
+    storage: "StorageLayer",
     notifier: "Notifier",
 ) -> int:
     """
@@ -302,7 +401,6 @@ async def _dispatch_seasonal_alerts(
     with tier ≥ 2.  Uses a simple log-based channel (not FCM push) since
     seasonal outlooks are planning advisories, not emergencies.
     """
-    import asyncio
 
     notified = 0
     try:
@@ -314,15 +412,20 @@ async def _dispatch_seasonal_alerts(
         """
         cursor = storage._db.aql.execute(aql)
         for doc in cursor:
-            tier  = doc.get("tier", 0)
+            tier = doc.get("tier", 0)
             label = doc.get("tier_label", "Advisory")
-            loc   = doc.get("location", "")
+            loc = doc.get("location", "")
             month = doc.get("target_month", "")
             stages = ", ".join(doc.get("stages", []))
             triggers = "; ".join(doc.get("triggers", [])[:2])
             logger.warning(
                 "[SEASONAL_ALERT] Tier %d (%s) — %s %s (stages: %s) — %s",
-                tier, label, loc, month, stages, triggers,
+                tier,
+                label,
+                loc,
+                month,
+                stages,
+                triggers,
             )
             notified += 1
     except Exception as exc:
@@ -334,10 +437,11 @@ async def _dispatch_seasonal_alerts(
 # Drought pipeline  (daily 07:00 UTC — after short-term 05:00 and long-term 06:00)
 # ---------------------------------------------------------------------------
 
+
 async def run_drought_pipeline(
-    storage:               "StorageLayer",
-    drought_ews:           "DroughtEWS",
-    notifier:              "Notifier",
+    storage: "StorageLayer",
+    drought_ews: "DroughtEWS",
+    notifier: "Notifier",
     drought_monitoring_url: str,
 ) -> dict:
     """
@@ -347,9 +451,12 @@ async def run_drought_pipeline(
       3. Dispatch notifications for tier >= 2 (deduplicated)
     """
     import asyncio
+
     import requests as _req
 
-    logger.info("[DROUGHT_PIPELINE] Starting drought pipeline (url=%s)", drought_monitoring_url)
+    logger.info(
+        "[DROUGHT_PIPELINE] Starting drought pipeline (url=%s)", drought_monitoring_url
+    )
 
     # Step 1: trigger drought_monitoring (run in executor — blocks for GEE calls)
     fetch_result: dict = {}
@@ -367,7 +474,9 @@ async def run_drought_pipeline(
         fetch_result = {"error": str(exc), "stored": 0}
 
     if fetch_result.get("error") == "gee_not_configured":
-        logger.warning("[DROUGHT_PIPELINE] GEE not configured in drought_monitoring — skipping alerts")
+        logger.warning(
+            "[DROUGHT_PIPELINE] GEE not configured in drought_monitoring — skipping alerts"
+        )
         return {"status": "skipped", "reason": "gee_not_configured", **fetch_result}
 
     # Step 2: dispatch alerts from stored assessments
@@ -376,9 +485,9 @@ async def run_drought_pipeline(
     )
 
     result = {
-        "status":   "ok" if fetch_result.get("error") is None else "partial",
-        "stored":   fetch_result.get("stored", 0),
-        "errors":   fetch_result.get("errors", 0),
+        "status": "ok" if fetch_result.get("error") is None else "partial",
+        "stored": fetch_result.get("stored", 0),
+        "errors": fetch_result.get("errors", 0),
         **alert_result,
     }
     logger.info("[DROUGHT_PIPELINE] Done: %s", result)
@@ -389,9 +498,10 @@ async def run_drought_pipeline(
 # BAMIS special bulletin watcher  (hourly)
 # ---------------------------------------------------------------------------
 
+
 async def run_bamis_special_bulletin_pipeline(
     bamis_special_bulletin_ews: "BamisSpecialBulletinEWS",
-    notifier:                  "Notifier",
+    notifier: "Notifier",
 ) -> dict:
     """
     Hourly watcher:
@@ -413,17 +523,20 @@ async def run_bamis_special_bulletin_pipeline(
 # Scheduler factory
 # ---------------------------------------------------------------------------
 
+
 def create_scheduler(
-    storage:               "StorageLayer",
+    storage: "StorageLayer",
     ingestor,
-    risk_engine:           "RiskEngine",
-    notifier:              "Notifier",
-    potato_ews:            "PotatoShortTermEWS | None" = None,
-    copernicus:            "CopernicusFetcher | None"   = None,
-    long_term_ews:         "LongTermPotatoEWS | None"   = None,
-    drought_ews:           "DroughtEWS | None"          = None,
-    drought_monitoring_url: str                          = "",
+    risk_engine: "RiskEngine",
+    notifier: "Notifier",
+    potato_ews: "PotatoShortTermEWS | None" = None,
+    copernicus: "CopernicusFetcher | None" = None,
+    long_term_ews: "LongTermPotatoEWS | None" = None,
+    drought_ews: "DroughtEWS | None" = None,
+    drought_monitoring_url: str = "",
     bamis_special_bulletin_ews: "BamisSpecialBulletinEWS | None" = None,
+    flood_ews: "FloodEWS | None" = None,
+    bmd_cap: "BmdCapWatcher | None" = None,
 ) -> AsyncIOScheduler:
     """
     Build and return a configured APScheduler instance.
@@ -438,7 +551,7 @@ def create_scheduler(
 
     Call scheduler.start() after creation (done in main.py).
     """
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     scheduler = AsyncIOScheduler()
 
@@ -482,7 +595,9 @@ def create_scheduler(
             max_instances=1,
         )
 
-        startup_seed_delay = max(0, _env_int("COPERNICUS_STARTUP_SEED_DELAY_SECONDS", 5))
+        startup_seed_delay = max(
+            0, _env_int("COPERNICUS_STARTUP_SEED_DELAY_SECONDS", 5)
+        )
 
         scheduler.add_job(
             run_long_term_startup_seed,
@@ -541,6 +656,49 @@ def create_scheduler(
         )
 
     # ── BAMIS special bulletin watcher ───────────────────────────────────
+    # ── BMD official warnings (CAP feed) ─────────────────────────────────
+    if bmd_cap is not None:
+        cap_args = [storage, bmd_cap, notifier]
+        scheduler.add_job(
+            run_bmd_cap_pipeline,
+            trigger="interval",
+            minutes=_env_int("BMD_CAP_POLL_MINUTES", 15),
+            args=cap_args,
+            id="bmd_cap_pipeline",
+            name="BMD CAP warnings — poll",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            run_bmd_cap_pipeline,
+            trigger="date",
+            run_date=datetime.now(timezone.utc) + timedelta(seconds=45),
+            args=cap_args,
+            id="startup_bmd_cap",
+            name="BMD CAP warnings — startup check",
+            replace_existing=True,
+        )
+
+    # ── Flood EWS (rain + GloFAS river discharge) ─────────────────────────
+    if flood_ews is not None:
+        fl_args = [storage, flood_ews, notifier]
+        scheduler.add_job(
+            run_flood_pipeline,
+            trigger=CronTrigger(hour=5, minute=30, timezone="UTC"),
+            args=fl_args,
+            id="flood_pipeline",
+            name="Flood EWS (rain + river) — daily 05:30 UTC",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            run_flood_pipeline,
+            trigger="date",
+            run_date=datetime.now(timezone.utc) + timedelta(seconds=90),
+            args=fl_args,
+            id="startup_flood",
+            name="Flood EWS — startup run",
+            replace_existing=True,
+        )
+
     if bamis_special_bulletin_ews is not None:
         bamis_args = [bamis_special_bulletin_ews, notifier]
 
@@ -566,7 +724,9 @@ def create_scheduler(
             max_instances=1,
         )
 
-        logger.info("[SCHEDULER] BAMIS special bulletin watcher registered (hourly + startup)")
+        logger.info(
+            "[SCHEDULER] BAMIS special bulletin watcher registered (hourly + startup)"
+        )
     else:
         logger.info("[SCHEDULER] BAMIS special bulletin watcher disabled")
 

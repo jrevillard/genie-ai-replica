@@ -4,7 +4,7 @@ Branch `climate_polisense_2-1`, server `e2e-64-29.ssdcloudindia.net` (NVIDIA A40
 Scope: bring the PolisenseAI / MEWA product (mid-May commit set, ancestors of `fb1fcf888`) onto the
 GENIE.AI 2.1 Keycloak-era codebase, then make every user-facing flow work on this server.
 
-Last updated: 2026-09-11.
+Last updated: 2026-09-11 (flood EWS added).
 
 ---
 
@@ -36,6 +36,24 @@ Last updated: 2026-09-11.
 - Drought questions with a long horizon go to the on-demand Earth Engine assessment (7–30 days) instead of the seasonal branch. Seasonal branch (Copernicus SEAS5, not seeded) falls back to a friendly note plus the 7-day forecast.
 - All operator-facing fallback texts replaced by short user-facing sentences in English or Bengali.
 
+### Flood early warning (new, 2026-09-11)
+- `warning_system_engine` FloodEWS: per-district flood tier (0-4) from two signals, daily 05:30 UTC plus a startup run.
+  - Rain index: 24 h max and 72 h rolling rainfall from the stored forecast, +1 tier when soil moisture ≥ 0.40 m³/m³, -1 for dry soil at advisory level. Thresholds follow BMD heavy-rain categories.
+  - River discharge: GloFAS (Copernicus CEMS) via the Open-Meteo Flood API, no key. Sampled at the district centroid and at 31 key FFWC river stations mapped to the districts they affect; 10-day forecast peak vs. the 30-day median. Small channels ignored (< 150 m³/s centroid, < 300 m³/s station).
+  - Both signals ≥ Warning → one tier higher. Stored in `risk_assessments` (crop="flood"), 12 h alert dedup, `flood_ews` broadcast on tier ≥ 2.
+- Weather service: `GET /flood/risk/latest`, chat branch for "flood risk / chance of flooding / river level" questions (Bengali output with Bengali numerals), 64-district name finder (English, common variants, Bengali) now used by the flood and drought branches.
+- Backend proxy `/api/weather/flood-risk`; banner shows flood alerts (wave glyph, blue tiers) and no longer duplicates engine alerts as notice cards.
+- FFWC (ffwc.gov.bd) is unreachable from anywhere at the moment (connection refused); its station levels can be added as a third river source when the site is back.
+- Copernicus CDS: `CDSAPI_URL` / `CDSAPI_KEY` are now passed to the engine (they were never wired before). The key enables the SEAS5 seasonal outlook and, later, GloFAS return-period thresholds instead of the ratio rule.
+
+### Official BMD warnings (new, 2026-09-11)
+- `warning_system_engine` BMD CAP watcher: polls the Bangladesh Meteorological Department's Common Alerting Protocol feed (`cap.bmd.gov.bd/api/cap/rss.xml`) every 15 min and at startup. Each alert is stored once (`bmd_cap_alerts`, keyed by CAP identifier) with both the English and Bengali `<info>` blocks, severity / urgency / certainty, expiry, area names and polygons.
+- Areas → districts: exact names and common variants (Chattogram, Cumilla, Barishal, Cox'S Bazar…), division names expanded to their districts, ports (Mongla → Bagerhat, Payra → Patuakhali), coastal/maritime wording → coastal districts, and point-in-polygon on district centroids as the fallback. "Bangladesh" → nationwide.
+- Severity → tier (Extreme 4, Severe 3, Moderate 2, Minor 1). Active (not expired, status Actual, not Cancel) alerts at tier ≥ 2 are broadcast once through the backend as `bmd_warning` with `title_bn` / `body_bn`, reaching Android push and the web banner (notice cards show the Bengali text when the UI is Bengali).
+- Weather service: `GET /bmd/alerts/active?location=`; chat branch for "weather warnings / cyclone signal / heat wave / landslide …" answers with the CAP's own English or Bengali headline, description, advice and validity. Router terms added in the backend so these questions reach the weather service.
+- Verified with a real maritime Signal 3 alert (expiry temporarily extended for the test, then restored): stored → broadcast → visible as a Chittagong notice, absent for Dhaka.
+- Note: BAMIS special-bulletin archive only holds 2020 bulletins (watcher runs but finds nothing new); a mixed Bengali/ASCII digit date fails its parser — harmless until a current bulletin appears.
+
 ### Satellite geo-inference
 - `geo-inference-worker` added to compose (profile `climate`, GPU): field delineation (Sentinel-2 via GEE + SAM ViT-H) and flood extent (Prithvi-EO-2.0). Model weights cached in the `geo_inference_models` volume.
 - SAM released after every run and GPU jobs serialised (second request used to hit CUDA OOM); Prithvi runs in a child process so memory is returned; flood inference on GPU (42 s → 27 s).
@@ -66,7 +84,7 @@ Last updated: 2026-09-11.
 ### Needs something from you
 1. **Firebase service account** → `secrets/firebase-service-account.json` (path already git-ignored; `GOOGLE_APPLICATION_CREDENTIALS` in `.env`). Until then Android push is skipped and only the web banner shows notices.
 2. **SMS provider**: name the gateway trialled earlier and its API; a provider seam in `warning_system_engine/app/core/notifier.py` replaces the hard-wired Twilio calls (tier 3 SMS, tier 4 voice). Also decide where per-district emergency contact numbers live.
-3. **Copernicus CDS key** (`CDSAPI_KEY`) for the seasonal outlook; without it the seasonal branch keeps falling back to the 7-day forecast.
+3. **Copernicus CDS key** → `CDSAPI_KEY` in `.env` (now wired through compose). Enables the SEAS5 seasonal outlook; a follow-up can swap the flood river rule to GloFAS return-period thresholds (`cems-glofas-forecast`). Earth Engine does not carry these CDS forecast products.
 4. **Real TLS certificate** (Let's Encrypt via certbot, `CERTBOT_EMAIL`) — currently self-signed.
 5. **Visual sign-off and commit cadence**: two global stylesheets were reverted from the IDE once and silently undid a fix; commit after each verified change.
 

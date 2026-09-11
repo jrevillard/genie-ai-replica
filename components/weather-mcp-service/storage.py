@@ -11,18 +11,19 @@ Upsert keys:
   risk_assessments  : "{location}__{horizon}"             (normalised)
   alerts_sent       : auto-generated (_key omitted on insert)
 """
+
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 
 from arango import ArangoClient
 from arango.exceptions import DocumentInsertError, DocumentReplaceError
-
 from models import RiskAssessment, UnifiedForecast
 
 logger = logging.getLogger(__name__)
 
 _COLLECTIONS = (
+    "bmd_cap_alerts",
     "weather_forecasts",
     "risk_assessments",
     "alerts_sent",
@@ -34,11 +35,7 @@ _COLLECTIONS = (
 def _norm_key(s: str) -> str:
     """Produce a valid ArangoDB _key from an arbitrary string."""
     return (
-        s.lower()
-        .replace(" ", "_")
-        .replace("'", "")
-        .replace("-", "_")
-        .replace("'", "")
+        s.lower().replace(" ", "_").replace("'", "").replace("-", "_").replace("'", "")
     )
 
 
@@ -52,9 +49,9 @@ class StorageLayer:
     """
 
     def __init__(self) -> None:
-        arango_url  = os.getenv("ARANGO_URL",      "http://arango-vector-db:8529")
-        arango_db   = os.getenv("ARANGO_DB_NAME",  "genie-ai")
-        arango_user = os.getenv("ARANGO_USER",     "root")
+        arango_url = os.getenv("ARANGO_URL", "http://arango-vector-db:8529")
+        arango_db = os.getenv("ARANGO_DB_NAME", "genie-ai")
+        arango_user = os.getenv("ARANGO_USER", "root")
         arango_pass = os.getenv("ARANGO_PASSWORD", "test")
 
         client = ArangoClient(hosts=arango_url)
@@ -231,12 +228,14 @@ class StorageLayer:
 
     def record_alert_sent(self, location: str, tier: int, channel: str) -> None:
         col = self._db.collection("alerts_sent")
-        col.insert({
-            "location": location,
-            "tier": tier,
-            "channel": channel,
-            "sent_at": datetime.now(timezone.utc).isoformat(),
-        })
+        col.insert(
+            {
+                "location": location,
+                "tier": tier,
+                "channel": channel,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     # ------------------------------------------------------------------
     # Forecast pair (for crop-specific EWS)
@@ -373,7 +372,9 @@ class StorageLayer:
         try:
             return dict(col.get(key))
         except Exception as exc:
-            logger.warning("[STORAGE] get_seasonal_forecast failed for %s: %s", location, exc)
+            logger.warning(
+                "[STORAGE] get_seasonal_forecast failed for %s: %s", location, exc
+            )
             return None
 
     # ------------------------------------------------------------------
@@ -389,7 +390,9 @@ class StorageLayer:
         try:
             return dict(col.get(key))
         except Exception as exc:
-            logger.warning("[STORAGE] get_drought_assessment failed for %s: %s", location, exc)
+            logger.warning(
+                "[STORAGE] get_drought_assessment failed for %s: %s", location, exc
+            )
             return None
 
     def record_crop_alert_sent(
@@ -401,11 +404,69 @@ class StorageLayer:
         forecast_date: str = "",
     ) -> None:
         col = self._db.collection("alerts_sent")
-        col.insert({
-            "location": location,
-            "crop": crop,
-            "tier": tier,
-            "channel": channel,
-            "forecast_date": forecast_date,
-            "sent_at": datetime.now(timezone.utc).isoformat(),
-        })
+        col.insert(
+            {
+                "location": location,
+                "crop": crop,
+                "tier": tier,
+                "channel": channel,
+                "forecast_date": forecast_date,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    # ------------------------------------------------------------------
+    # BMD CAP alerts (app/integrations/bmd/cap_alerts.py)
+    # ------------------------------------------------------------------
+    def upsert_bmd_alert(self, doc: dict) -> str:
+        col = self._db.collection("bmd_cap_alerts")
+        body = {**doc, "_key": doc["identifier"]}
+        try:
+            col.insert(body, overwrite=True, overwrite_mode="update")
+        except Exception as exc:
+            logger.error(
+                "[STORAGE] upsert_bmd_alert failed for %s: %s",
+                doc.get("identifier"),
+                exc,
+            )
+        return doc["identifier"]
+
+    def get_bmd_alert(self, identifier: str) -> dict | None:
+        col = self._db.collection("bmd_cap_alerts")
+        try:
+            return dict(col.get(identifier)) if col.has(identifier) else None
+        except Exception as exc:
+            logger.warning("[STORAGE] get_bmd_alert failed for %s: %s", identifier, exc)
+            return None
+
+    def mark_bmd_alert_notified(self, identifier: str) -> None:
+        try:
+            self._db.collection("bmd_cap_alerts").update(
+                {
+                    "_key": identifier,
+                    "notified_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        except Exception as exc:
+            logger.warning(
+                "[STORAGE] mark_bmd_alert_notified failed for %s: %s", identifier, exc
+            )
+
+    def get_active_bmd_alerts(
+        self, location: str | None = None, limit: int = 10
+    ) -> list[dict]:
+        """Unexpired 'Actual' alerts, newest first; for a district: those naming it or nationwide."""
+        now = datetime.now(timezone.utc).isoformat()
+        cursor = self._db.aql.execute(
+            """
+            FOR a IN bmd_cap_alerts
+              FILTER a.status == "Actual" AND a.msgType != "Cancel"
+              FILTER a.expires == "" OR a.expires == null OR a.expires > @now
+              FILTER @location == null OR a.nationwide == true OR @location IN a.districts
+              SORT a.sent DESC
+              LIMIT @limit
+              RETURN UNSET(a, "_id", "_rev")
+            """,
+            bind_vars={"now": now, "location": location, "limit": limit},
+        )
+        return list(cursor)

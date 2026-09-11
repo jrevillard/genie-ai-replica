@@ -14,6 +14,7 @@ to activate each channel; missing keys are logged and skipped gracefully.
 Deduplication: Notifier checks StorageLayer.was_alert_sent() before dispatching
 and records each send via StorageLayer.record_alert_sent().
 """
+
 import hashlib
 import json
 import logging
@@ -21,11 +22,10 @@ import os
 from datetime import date
 
 import requests as _requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
 from app.core.models import RiskAssessment
 from app.core.storage import StorageLayer
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,10 @@ logger = logging.getLogger(__name__)
 class Notifier:
     def __init__(self, storage: StorageLayer) -> None:
         self._storage = storage
-        self._twilio_sid      = os.getenv("TWILIO_ACCOUNT_SID", "")
-        self._twilio_token    = os.getenv("TWILIO_AUTH_TOKEN", "")
-        self._twilio_from     = os.getenv("TWILIO_PHONE_FROM", "")
-        self._broadcast_url   = os.getenv("BROADCAST_WEBHOOK_URL", "")
+        self._twilio_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
+        self._twilio_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+        self._twilio_from = os.getenv("TWILIO_PHONE_FROM", "")
+        self._broadcast_url = os.getenv("BROADCAST_WEBHOOK_URL", "")
         self._notification_url = self._resolve_notification_broadcast_url()
         self._notification_secret = os.getenv("NOTIFICATION_BROADCAST_SECRET", "")
         # Retrying session for the backend broadcast endpoint. Retrying POST is
@@ -73,7 +73,8 @@ class Notifier:
         if self._storage.was_alert_sent(assessment.location, tier, within_hours=12):
             logger.info(
                 "[NOTIFY] Suppressed duplicate tier-%d alert for %s",
-                tier, assessment.location,
+                tier,
+                assessment.location,
             )
             return
 
@@ -94,7 +95,9 @@ class Notifier:
         self._storage.record_alert_sent(assessment.location, tier, channel)
         logger.info(
             "[NOTIFY] Alert dispatched — tier=%d location=%s channel=%s",
-            tier, assessment.location, channel,
+            tier,
+            assessment.location,
+            channel,
         )
 
     # ------------------------------------------------------------------
@@ -106,7 +109,10 @@ class Notifier:
         logger.log(
             level,
             "[RISK] %s (Tier %d) — %s | %s",
-            a.tier_label.upper(), a.tier, a.location, "; ".join(a.triggers),
+            a.tier_label.upper(),
+            a.tier,
+            a.location,
+            "; ".join(a.triggers),
         )
 
     def _push(self, a: RiskAssessment) -> None:
@@ -134,7 +140,9 @@ class Notifier:
                 "assessed_at": a.assessed_at,
             },
         }
-        bucket = str(getattr(a, "assessed_at", "") or "")[:10] or date.today().isoformat()
+        bucket = (
+            str(getattr(a, "assessed_at", "") or "")[:10] or date.today().isoformat()
+        )
         broadcast_id = self._post_notification_broadcast(
             backend_payload,
             f"weather alert for {a.location}",
@@ -153,7 +161,9 @@ class Notifier:
             return False
 
         location = assessment.get("location", "")
-        tier_label = assessment.get("tier_label") or assessment.get("tierLabel") or "Warning"
+        tier_label = (
+            assessment.get("tier_label") or assessment.get("tierLabel") or "Warning"
+        )
         body = self._potato_message(assessment)
         payload = {
             "type": "potato_ews",
@@ -190,35 +200,124 @@ class Notifier:
         )
         return False
 
+    def dispatch_bmd_alert(self, alert: dict) -> bool:
+        """Broadcast an official BMD CAP warning (both languages in the payload)."""
+        tier = int(alert.get("tier", 0) or 0)
+        info = alert.get("info") or {}
+        en, bn = info.get("en") or {}, info.get("bn") or {}
+        districts = list(alert.get("districts") or [])
+        payload = {
+            "type": "bmd_warning",
+            "title": (
+                en.get("headline")
+                or alert.get("rss_title")
+                or f"BMD {alert.get('event', 'weather')} warning"
+            )[:120],
+            "body": (en.get("description") or "")[:240],
+            "title_bn": (bn.get("headline") or "")[:160],
+            "body_bn": (bn.get("description") or "")[:300],
+            "districts": [] if alert.get("nationwide") else districts,
+            "crops": [],
+            "alertTypes": ["bmd_warning", "weather_warning"],
+            "tier": tier,
+            "tierLabel": alert.get("tier_label", ""),
+            "data": {
+                "type": "bmd_warning",
+                "identifier": alert.get("identifier", ""),
+                "event": alert.get("event", ""),
+                "severity": alert.get("severity", ""),
+                "urgency": alert.get("urgency", ""),
+                "expires": alert.get("expires", ""),
+                "source_url": alert.get("source_url", ""),
+                "areas": json.dumps(alert.get("area_names", [])),
+            },
+        }
+        if not payload["body"]:
+            payload["body"] = payload["title"]
+        if self._post_notification_broadcast(
+            payload,
+            f"BMD warning {alert.get('identifier', '')}",
+            self._idempotency_key(
+                "bmd_warning",
+                alert.get("identifier", ""),
+                tier,
+                str(alert.get("sent", ""))[:10],
+            ),
+        ):
+            return True
+        logger.warning(
+            "[NOTIFY] Backend notification URL not configured or failed — BMD warning not pushed"
+        )
+        return False
+
+    def dispatch_flood_alert(self, assessment: dict) -> bool:
+        """Broadcast a flood EWS alert (rain + GloFAS river signal) through the backend."""
+        tier = int(assessment.get("tier", 0) or 0)
+        if tier < 2:
+            return False
+        location = assessment.get("location", "")
+        tier_label = assessment.get("tier_label") or "Warning"
+        payload = {
+            "type": "flood_ews",
+            "title": f"Flood {tier_label} — {location}",
+            "body": str(assessment.get("message", ""))[:240],
+            "location": location,
+            "districts": [location] if location else [],
+            "crops": [],
+            "alertTypes": ["flood_ews", "weather_warning"],
+            "tier": tier,
+            "tierLabel": tier_label,
+            "data": {
+                "type": "flood_ews",
+                "tier": str(tier),
+                "tier_label": tier_label,
+                "location": location,
+                "peak_date": assessment.get("peak_date", ""),
+                "triggers": json.dumps(assessment.get("triggers", [])),
+            },
+        }
+        bucket = assessment.get("forecast_date") or date.today().isoformat()
+        if self._post_notification_broadcast(
+            payload,
+            f"flood alert for {location}",
+            self._idempotency_key("flood_ews", location, tier, bucket),
+        ):
+            return True
+        logger.warning(
+            "[NOTIFY] Backend notification URL not configured or failed — flood alert for %s not pushed",
+            location,
+        )
+        return False
+
     def dispatch_drought_alert(self, assessment: dict) -> bool:
         """Broadcast a drought EWS alert through the backend token registry."""
         tier = int(assessment.get("tier", 0) or 0)
         if tier < 2:
             return False
 
-        location     = assessment.get("location", "")
-        tier_label   = assessment.get("tier_label", "Warning")
+        location = assessment.get("location", "")
+        tier_label = assessment.get("tier_label", "Warning")
         drought_level = assessment.get("drought_level", "MODERATE")
-        message      = assessment.get("message", "Drought conditions detected")
+        message = assessment.get("message", "Drought conditions detected")
         report_filename = assessment.get("report_filename", "")
 
         payload = {
-            "type":       "drought_alert",
-            "title":      f"Drought {tier_label} — {location}",
-            "body":       message[:240],
-            "location":   location,
-            "districts":  [location] if location else [],
-            "crops":      [],
+            "type": "drought_alert",
+            "title": f"Drought {tier_label} — {location}",
+            "body": message[:240],
+            "location": location,
+            "districts": [location] if location else [],
+            "crops": [],
             "alertTypes": ["drought_alert", "weather_warning"],
-            "tier":       tier,
-            "tierLabel":  tier_label,
+            "tier": tier,
+            "tierLabel": tier_label,
             "data": {
-                "type":            "drought_alert",
-                "tier":            str(tier),
-                "tier_label":      tier_label,
-                "location":        location,
-                "drought_level":   drought_level,
-                "triggers":        json.dumps(assessment.get("triggers", [])),
+                "type": "drought_alert",
+                "tier": str(tier),
+                "tier_label": tier_label,
+                "location": location,
+                "drought_level": drought_level,
+                "triggers": json.dumps(assessment.get("triggers", [])),
                 "report_filename": report_filename,
             },
         }
@@ -246,27 +345,27 @@ class Notifier:
         danger_terms = bulletin.get("danger_terms", [])
 
         payload = {
-            "type":       "special_bulletin",
-            "title":      f"BAMIS {tier_label} — Special Bulletin",
-            "body":       message[:240],
-            "location":   bulletin.get("location", ""),
-            "districts":  bulletin.get("districts", []),
-            "crops":      bulletin.get("crops", []),
+            "type": "special_bulletin",
+            "title": f"BAMIS {tier_label} — Special Bulletin",
+            "body": message[:240],
+            "location": bulletin.get("location", ""),
+            "districts": bulletin.get("districts", []),
+            "crops": bulletin.get("crops", []),
             "alertTypes": ["special_bulletin", "weather_warning", *hazards],
-            "tier":       tier,
-            "tierLabel":  tier_label,
+            "tier": tier,
+            "tierLabel": tier_label,
             "data": {
-                "type":           "special_bulletin",
-                "source":         "bamis",
-                "tier":           str(tier),
-                "tier_label":     tier_label,
-                "title":          title,
-                "url":            bulletin.get("url", ""),
-                "detail_url":     bulletin.get("detail_url", ""),
+                "type": "special_bulletin",
+                "source": "bamis",
+                "tier": str(tier),
+                "tier_label": tier_label,
+                "title": title,
+                "url": bulletin.get("url", ""),
+                "detail_url": bulletin.get("detail_url", ""),
                 "attachment_url": bulletin.get("attachment_url", ""),
                 "published_date": bulletin.get("published_date", ""),
-                "hazard_types":   json.dumps(hazards),
-                "danger_terms":   json.dumps(danger_terms),
+                "hazard_types": json.dumps(hazards),
+                "danger_terms": json.dumps(danger_terms),
             },
         }
         bulletin_ref = (
@@ -277,18 +376,27 @@ class Notifier:
         if self._post_notification_broadcast(
             payload,
             f"BAMIS special bulletin {bulletin.get('source_id', '')}",
-            self._idempotency_key("special_bulletin", str(bulletin_ref), tier, bulletin.get("published_date") or date.today().isoformat()),
+            self._idempotency_key(
+                "special_bulletin",
+                str(bulletin_ref),
+                tier,
+                bulletin.get("published_date") or date.today().isoformat(),
+            ),
         ):
             return True
 
-        logger.warning("[NOTIFY] Backend notification URL not configured — BAMIS special bulletin not pushed")
+        logger.warning(
+            "[NOTIFY] Backend notification URL not configured — BAMIS special bulletin not pushed"
+        )
         return False
 
     def dispatch_potato_sms(self, assessment: dict, message: str | None = None) -> bool:
         """Send the potato EWS display message as an SMS via Twilio."""
         tier = int(assessment.get("tier", 0) or 0)
         if tier < 2:
-            logger.info("[NOTIFY] Potato SMS skipped — tier %d is below warning threshold", tier)
+            logger.info(
+                "[NOTIFY] Potato SMS skipped — tier %d is below warning threshold", tier
+            )
             return False
 
         location = assessment.get("location", "potato alert")
@@ -313,7 +421,9 @@ class Notifier:
         Reads a pre-recorded TwiML message URL from env.
         """
         if not self._twilio_sid:
-            logger.warning("[NOTIFY] Twilio not configured — voice call skipped for %s", a.location)
+            logger.warning(
+                "[NOTIFY] Twilio not configured — voice call skipped for %s", a.location
+            )
             return
 
         twiml_url = os.getenv(
@@ -322,6 +432,7 @@ class Notifier:
         )
         try:
             from twilio.rest import Client as TwilioClient  # type: ignore
+
             client = TwilioClient(self._twilio_sid, self._twilio_token)
             demo_numbers = os.getenv("EMERGENCY_CONTACT_NUMBERS", "").split(",")
             for number in filter(None, demo_numbers):
@@ -349,12 +460,12 @@ class Notifier:
             return
 
         payload = {
-            "alert_type":  "WEATHER_EMERGENCY",
-            "location":    a.location,
-            "tier":        a.tier,
-            "tier_label":  a.tier_label,
-            "reasoning":   a.reasoning,
-            "triggers":    a.triggers,
+            "alert_type": "WEATHER_EMERGENCY",
+            "location": a.location,
+            "tier": a.tier,
+            "tier_label": a.tier_label,
+            "reasoning": a.reasoning,
+            "triggers": a.triggers,
             "assessed_at": a.assessed_at,
         }
         try:
@@ -373,14 +484,22 @@ class Notifier:
             logger.info("[NOTIFY] Twilio not configured — SMS skipped for %s", context)
             return False
 
-        numbers = [n.strip() for n in os.getenv("EMERGENCY_CONTACT_NUMBERS", "").split(",") if n.strip()]
+        numbers = [
+            n.strip()
+            for n in os.getenv("EMERGENCY_CONTACT_NUMBERS", "").split(",")
+            if n.strip()
+        ]
         if not numbers:
-            logger.info("[NOTIFY] EMERGENCY_CONTACT_NUMBERS not set — SMS skipped for %s", context)
+            logger.info(
+                "[NOTIFY] EMERGENCY_CONTACT_NUMBERS not set — SMS skipped for %s",
+                context,
+            )
             return False
 
         try:
             # Lazy import so Twilio is optional at startup.
             from twilio.rest import Client as TwilioClient  # type: ignore
+
             client = TwilioClient(self._twilio_sid, self._twilio_token)
 
             sent = 0
@@ -401,9 +520,15 @@ class Notifier:
 
     @staticmethod
     def _potato_message(assessment: dict) -> str:
-        return assessment.get("message") or "; ".join(
-            (assessment.get("triggers") or assessment.get("disease_risks") or [])[:2]
-        ) or "New potato early warning alert"
+        return (
+            assessment.get("message")
+            or "; ".join(
+                (assessment.get("triggers") or assessment.get("disease_risks") or [])[
+                    :2
+                ]
+            )
+            or "New potato early warning alert"
+        )
 
     @staticmethod
     def _idempotency_key(kind: str, location: str, tier, bucket: str) -> str:
@@ -425,7 +550,10 @@ class Notifier:
         if not self._notification_url:
             return None
 
-        headers = {"Content-Type": "application/json", "x-notification-source": "warning_system_engine"}
+        headers = {
+            "Content-Type": "application/json",
+            "x-notification-source": "warning_system_engine",
+        }
         if self._notification_secret:
             headers["x-notification-secret"] = self._notification_secret
         if idempotency_key:
@@ -445,12 +573,15 @@ class Notifier:
             if body.get("duplicate"):
                 logger.info(
                     "[NOTIFY] Backend broadcast duplicate-suppressed for %s (broadcastId=%s)",
-                    context, broadcast_id,
+                    context,
+                    broadcast_id,
                 )
             else:
                 logger.info(
                     "[NOTIFY] Backend broadcast queued for %s (broadcastId=%s, status=%s)",
-                    context, broadcast_id, body.get("status", "unknown"),
+                    context,
+                    broadcast_id,
+                    body.get("status", "unknown"),
                 )
             return broadcast_id or "queued"
         except Exception as exc:

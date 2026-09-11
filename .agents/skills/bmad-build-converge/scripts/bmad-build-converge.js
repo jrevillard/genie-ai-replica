@@ -662,9 +662,11 @@ CONSTRAINTS:
   lastSpecStatus = postBuildResult.specStatus
   currentSha = postBuildResult.newSha
   followup = postBuildResult.followupReviewRecommended
-  // Always track the current spec status so a regression (e.g. in-review →
-  // in-progress → in-review across iterations) re-fires the sync — not just
-  // when the sync itself succeeded.
+  // Track spec-status transitions for issue sync. The dedup check BELOW reads
+  // lastSyncedSpecStatus, so we must capture the previous value BEFORE the
+  // unconditional update — otherwise the != check below is always false and the
+  // sync never fires after the first iteration.
+  const prevSyncedSpecStatus = lastSyncedSpecStatus
   lastSyncedSpecStatus = postBuildResult.specStatus
 
   // Issue tracking sync on spec-status transitions (soft-fail — never block the build).
@@ -674,10 +676,10 @@ CONSTRAINTS:
   // the issue tracker (the others are halt conditions, not transitions). 'in-review' is
   // an INTERMEDIATE spec status set by step-04-review.md:10 during the build-auto run,
   // but it is NOT a HALT status — bmad-build-auto always HALT with one of the terminal
-  // set above. Track lastSyncedSpecStatus unconditionally per iteration so a regression
+  // set above. Gate on dedup using the prev value so a regression
   // (in-progress → done → in-progress across iters) re-fires the sync on the next done.
   if (postBuildResult.specStatus === 'done' &&
-      postBuildResult.specStatus !== lastSyncedSpecStatus) {
+      postBuildResult.specStatus !== prevSyncedSpecStatus) {
     log(`Issue sync: spec → ${postBuildResult.specStatus} (iter ${iteration})`)
     try {
       const reviewComment = `Story ${setup.storyKey} build converged — spec status: ${postBuildResult.specStatus}.\n\n` +

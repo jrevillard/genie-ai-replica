@@ -2370,13 +2370,18 @@ class TestAclLabelPreserveE2E:
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
             patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2"]),
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
-            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=[{"text": "c1", "labels": ["L"]}, {"text": "c2", "labels": ["L"]}]),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=[{"text": "c1", "labels": ["L"]}, {"text": "c2", "labels": ["L"]}],
+            ),
             patch.object(dp, "_process_batch", new=AsyncMock(side_effect=failing_batch)),
             patch.object(dp, "retract_file", new_callable=AsyncMock),
             patch.object(dp_module, "ArangoGraph"),
+            pytest.raises(HTTPException),
         ):
-            with pytest.raises(HTTPException):
-                await dp.ingest_file_with_guardrail(inp)
+            await dp.ingest_file_with_guardrail(inp)
 
         assert "Ingested" not in statuses
         assert "Ingestion Error" in statuses
@@ -2434,13 +2439,19 @@ class TestAclLabelPreserveE2E:
             patch.object(dp, "_fetch_all_labels", new_callable=AsyncMock, return_value=["L"]),
             patch.object(dp, "_load_and_chunk", new_callable=AsyncMock, return_value=["c1", "c2", "c3", "c4"]),
             patch.object(dp, "_run_guardrail", new_callable=AsyncMock, return_value={"success": True}),
-            patch.object(dp, "_apply_labels", new_callable=AsyncMock, return_value=[{"text": c, "labels": ["L"]} for c in ["c1", "c2", "c3", "c4"]]),
+            patch.object(
+                dp,
+                "_apply_labels",
+                new_callable=AsyncMock,
+                return_value=[{"text": c, "labels": ["L"]} for c in ["c1", "c2", "c3", "c4"]],
+            ),
             patch.object(dp, "_process_batch", new=AsyncMock(side_effect=mixed_batch)),
             patch.object(dp_module, "ArangoGraph"),
         ):
             await dp.ingest_file_with_guardrail(inp)
 
         assert statuses[-1] == "Ingested"
+
 
 # ── Remote-LLM resilience (David, 2026-09-09) ──
 class TestLlmResilience:
@@ -2449,58 +2460,73 @@ class TestLlmResilience:
         # Module storm state resets per test (it is shared global state).
         dp_module._LLM_STORM_UNTIL = 0.0
         dp_module._LLM_STORM_STRIKES = 0
-        calls = {'sleeps': [], 'delays': []}
-        monkeypatch.setattr(dp_module, '_llm_retry_delay_s', lambda attempt: calls['delays'].append(attempt) or 0.0)
+        calls = {"sleeps": [], "delays": []}
+        monkeypatch.setattr(dp_module, "_llm_retry_delay_s", lambda attempt: calls["delays"].append(attempt) or 0.0)
+
         async def fake_sleep(s):
-            calls['sleeps'].append(s)
-        monkeypatch.setattr(dp_module.asyncio, 'sleep', fake_sleep)
+            calls["sleeps"].append(s)
+
+        monkeypatch.setattr(dp_module.asyncio, "sleep", fake_sleep)
         return calls
 
     def test_transient_502_burst_recovers(self, monkeypatch):
-        calls = self._patch_clock(monkeypatch)
-        attempts = {'n': 0}
+        self._patch_clock(monkeypatch)
+        attempts = {"n": 0}
+
         async def flaky():
-            attempts['n'] += 1
-            if attempts['n'] < 3:
-                raise RuntimeError('InternalServerError: 502 Bad Gateway')
-            return 'ok'
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                raise RuntimeError("InternalServerError: 502 Bad Gateway")
+            return "ok"
+
         import asyncio
-        result = asyncio.run(dp_module._call_llm_resilient(flaky, what='test'))
-        assert result == 'ok'
-        assert attempts['n'] == 3
+
+        result = asyncio.run(dp_module._call_llm_resilient(flaky, what="test"))
+        assert result == "ok"
+        assert attempts["n"] == 3
 
     def test_permanent_502_exhausts_ladder_and_raises_last(self, monkeypatch):
         self._patch_clock(monkeypatch)
-        attempts = {'n': 0}
+        attempts = {"n": 0}
+
         async def always_502():
-            attempts['n'] += 1
-            raise RuntimeError('InternalServerError: 502 Bad Gateway')
+            attempts["n"] += 1
+            raise RuntimeError("InternalServerError: 502 Bad Gateway")
+
         import asyncio
+
         with pytest.raises(RuntimeError):
-            asyncio.run(dp_module._call_llm_resilient(always_502, what='test'))
-        assert attempts['n'] == dp_module._LLM_RETRY_ATTEMPTS
+            asyncio.run(dp_module._call_llm_resilient(always_502, what="test"))
+        assert attempts["n"] == dp_module._LLM_RETRY_ATTEMPTS
 
     def test_4xx_fails_fast(self, monkeypatch):
         calls = self._patch_clock(monkeypatch)
-        attempts = {'n': 0}
+        attempts = {"n": 0}
+
         async def bad_request():
-            attempts['n'] += 1
-            raise RuntimeError('BadRequestError: 400')
+            attempts["n"] += 1
+            raise RuntimeError("BadRequestError: 400")
+
         import asyncio
+
         with pytest.raises(RuntimeError):
-            asyncio.run(dp_module._call_llm_resilient(bad_request, what='test'))
-        assert attempts['n'] == 1
-        assert calls['sleeps'] == []
+            asyncio.run(dp_module._call_llm_resilient(bad_request, what="test"))
+        assert attempts["n"] == 1
+        assert calls["sleeps"] == []
 
     def test_storm_cooldown_advances_after_transient_failure(self, monkeypatch):
         self._patch_clock(monkeypatch)
         import asyncio
+
         async def once_502():
-            raise RuntimeError('502 Bad Gateway')
+            raise RuntimeError("502 Bad Gateway")
+
         with pytest.raises(RuntimeError):
-            asyncio.run(dp_module._call_llm_resilient(once_502, what='test'))
+            asyncio.run(dp_module._call_llm_resilient(once_502, what="test"))
         assert dp_module._LLM_STORM_STRIKES >= 1
         assert dp_module._LLM_STORM_UNTIL > 0
+
+
 class TestInitializeClient:
     """Tests for GenieArangoDataprep._initialize_client().
 

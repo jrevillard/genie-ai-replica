@@ -369,7 +369,6 @@ async def retract_file(payload: DocRepoRetractPayload):
     # divergent 'genie_graph' default, silently retracting NOTHING for files in
     # the default graph. Payload graphName (the file's actual graph) wins.
     graph_name = payload.graphName or os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
-    graph_name = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
 
     logger.info(f"[ retract ] Start to delete ingested file {file_id}")
 

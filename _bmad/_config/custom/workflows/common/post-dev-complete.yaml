@@ -9,7 +9,8 @@
 # Input variables:
 #   - phase: "create-story" | "dev-finish" | "review-finish" (set by dispatcher or caller)
 #   - ci_status: set by common/wait-for-green-ci (dev-finish, review-finish) — maps to ci-status.json
-#   - pipeline_info: set by common/wait-for-green-ci on failure — carried into ci-status.json diagnostic
+#   - pipeline_id: set by common/wait-for-green-ci on failure — carried into ci-status.json diagnostic
+#   - jobs: set by common/get-failed-jobs (via wait-for-green-ci) on failure — carried into ci-status.json diagnostic
 # Output variables:
 #   - issue_id: the issue IID (GitLab) or number (GitHub)
 # Side effects: pushes branch, writes {worktree}/ci-status.json (dev-finish), creates/updates issues on tracker, creates/merges MR
@@ -80,8 +81,21 @@ print(pattern.replace('{prd_key}', pk).replace('{story_key}', key))
     
     - RUN: git commit --allow-empty -m "create story {story_key}" 2>/dev/null || true
     - RUN: git push -u origin {story_branch}
+    # Translate caller scope into the new INPUT contract (the atomic no longer reads
+    # story_key / story_title / story_num / epic_num / issue_id — caller must supply).
+    - SET: { variable: source_branch, value: "{story_branch}" }
+    - SET: { variable: target_branch, value: "{prd_branch}" }
+    - SET: { variable: mr_repo, value: "{host}/{project}" }
+    - SET: { variable: mr_title, value: "Story {epic_num}.{story_num}: {story_key}" }
+    - WRITE:
+        file: /tmp/ensure-mr-desc.md
+        content: "Sprint key: {story_key}\n\nRelated to #{issue_id}"
+        mode: overwrite
+    - SET: { variable: mr_description_file, value: "/tmp/ensure-mr-desc.md" }
+    - SET: { variable: mr_draft, value: "false" }
     # Ensure trace MR exists (create if missing, with issue reference)
     - INCLUDE: common/ensure-mr
+    - RUN: rm -f /tmp/ensure-mr-desc.md
     - OUTPUT:
         message: "Story {story_key} issue created and MR ready."
 # =============================================================================
@@ -107,8 +121,21 @@ print(pattern.replace('{prd_key}', pk).replace('{story_key}', key))
     - INCLUDE: common/write-ci-status
     # Ensure issue exists (find or create)
     - INCLUDE: common/ensure-issue
+    # Translate caller scope into the new INPUT contract (the atomic no longer reads
+    # story_key / story_title / story_num / epic_num / issue_id — caller must supply).
+    - SET: { variable: source_branch, value: "{story_branch}" }
+    - SET: { variable: target_branch, value: "{prd_branch}" }
+    - SET: { variable: mr_repo, value: "{host}/{project}" }
+    - SET: { variable: mr_title, value: "Story {epic_num}.{story_num}: {story_key}" }
+    - WRITE:
+        file: /tmp/ensure-mr-desc.md
+        content: "Sprint key: {story_key}\n\nRelated to #{issue_id}"
+        mode: overwrite
+    - SET: { variable: mr_description_file, value: "/tmp/ensure-mr-desc.md" }
+    - SET: { variable: mr_draft, value: "false" }
     # Ensure trace MR exists (create if missing)
     - INCLUDE: common/ensure-mr
+    - RUN: rm -f /tmp/ensure-mr-desc.md
     # Update issue status based on sprint-status
     - CHECK: story_status eq "review"
       TRUE:
@@ -202,65 +229,29 @@ else:
             store: do_merge
         - CHECK: do_merge eq "yes"
           TRUE:
-            - CHECK: git_platform eq "gitlab"
-              TRUE:
-                - CHECK: git_platform eq platform
-                  TRUE:
-                    - RUN: glab mr merge --source-branch {current_branch} --target-branch {prd_branch} --remove-source-branch -R "{host}/{project}"
-                      EXPECT_EXIT: 0
-                  FALSE:
-                    - READ: _bmad/custom/issue-tracking.yaml
-                      EXTRACT:
-                        git_host: issue_tracking.git_host
-                        git_project: issue_tracking.git_project
-                    - RUN: glab mr merge --source-branch {current_branch} --target-branch {prd_branch} --remove-source-branch -R "{git_host}/{git_project}"
-                      EXPECT_EXIT: 0
-              FALSE:
-                - CHECK: git_platform eq platform
-                  TRUE:
-                    - RUN: gh pr list --head {current_branch} --base {prd_branch} --json number -R "{host}/{project}"
-                      STORE: pr_list
-                    - CHECK: empty pr_list
-                      FALSE:
-                        - FILTER:
-                            source: pr_list
-                            select: number
-                            store: pr_number
-                        - RUN: gh pr merge {pr_number} --delete-branch -R "{host}/{project}"
-                          EXPECT_EXIT: 0
-                      TRUE:
-                        - OUTPUT:
-                            message: "No PR found for this story branch. Cannot merge."
-                  FALSE:
-                    - READ: _bmad/custom/issue-tracking.yaml
-                      EXTRACT:
-                        git_host: issue_tracking.git_host
-                        git_project: issue_tracking.git_project
-                    - RUN: uv run --no-project python -c "
+            # Resolve mr_iid via the existing source_branch (atomic sets mr_iid in scope).
+            # mr_repo + source_branch are set by common/check-mr-ci inside wait-for-green-ci
+            # (called above when review_status eq "done").
+            - INCLUDE: common/find-mr
+            # Seed cross-platform vars (atomic references {git_host}/{git_project}/{git_owner}/{git_repo};
+            # check-config doesn't produce them — mirror existing post-dev-complete.yaml L212-217, L235-250).
+            - READ: _bmad/custom/issue-tracking.yaml
+              EXTRACT:
+                git_host: issue_tracking.git_host
+                git_project: issue_tracking.git_project
+            - RUN: uv run --no-project python -c "
 import sys
 parts = sys.argv[1].split('/')
 print(parts[0])
 " {git_project}
-                      STORE: git_owner
-                    - RUN: uv run --no-project python -c "
+              STORE: git_owner
+            - RUN: uv run --no-project python -c "
 import sys
 parts = sys.argv[1].split('/')
 print(parts[1])
 " {git_project}
-                      STORE: git_repo
-                    - RUN: gh pr list --head {current_branch} --base {prd_branch} --json number -R "{git_host}/{git_owner}/{git_repo}"
-                      STORE: pr_list
-                    - CHECK: empty pr_list
-                      FALSE:
-                        - FILTER:
-                            source: pr_list
-                            select: number
-                            store: pr_number
-                        - RUN: gh pr merge {pr_number} --delete-branch -R "{git_host}/{git_owner}/{git_repo}"
-                          EXPECT_EXIT: 0
-                      TRUE:
-                        - OUTPUT:
-                            message: "No PR found for this story branch. Cannot merge."
+              STORE: git_repo
+            - INCLUDE: common/merge-mr
             - RUN: git worktree remove .
     - OUTPUT:
         message: "Story {story_key} review-finish complete."

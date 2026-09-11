@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into th.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'อัฟกานิสถาน',
@@ -364,7 +362,7 @@ export default {
         role: 'บทบาท'
       },
       userSearch: {
-        resultsFound: 'พบ {total} ผู้ใช้ที่ตรงกับ "{term}"',
+        resultsFound: 'พบ {total} ผู้ใช้ที่ตรงกับ \"{term}\"',
         error: 'ข้อผิดพลาดในการค้นหาผู้ใช้'
       }
     },
@@ -451,11 +449,11 @@ export default {
       deleteCategory: 'ลบหมวดหมู่',
       editService: 'แก้ไขบริการ',
       deleteService: 'ลบบริการ',
-      empty: 'ไม่พบหมวดหมู่ คลิก "เพิ่มหมวดหมู่ใหม่" เพื่อเริ่มต้น',
+      empty: 'ไม่พบหมวดหมู่ คลิก \"เพิ่มหมวดหมู่ใหม่\" เพื่อเริ่มต้น',
       formTitleCreateCategory: 'สร้างหมวดหมู่ใหม่',
-      formTitleAddService: 'เพิ่มบริการใน "{categoryName}"',
-      formTitleEditCategory: 'แก้ไขหมวดหมู่: "{itemName}"',
-      formTitleEditService: 'แก้ไขบริการ: "{itemName}"',
+      formTitleAddService: 'เพิ่มบริการใน \"{categoryName}\"',
+      formTitleEditCategory: 'แก้ไขหมวดหมู่: \"{itemName}\"',
+      formTitleEditService: 'แก้ไขบริการ: \"{itemName}\"',
       nameEnLabel: 'ชื่อ (ภาษาอังกฤษ)',
       translationsTitle: 'การแปลสำหรับแสดงผล',
       loadingTranslations: 'กำลังโหลดการแปล...',
@@ -471,8 +469,8 @@ export default {
       confirmCancelEdit: 'คุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณแน่ใจว่าต้องการยกเลิกหรือไม่?',
       confirmDeleteTitleCategory: 'ลบหมวดหมู่?',
       confirmDeleteTitleService: 'ลบบริการ?',
-      confirmDeleteCategory: 'คุณแน่ใจว่าต้องการลบหมวดหมู่ "{itemName}" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
-      confirmDeleteService: 'คุณแน่ใจว่าต้องการลบบริการ "{itemName}" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
+      confirmDeleteCategory: 'คุณแน่ใจว่าต้องการลบหมวดหมู่ \"{itemName}\" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
+      confirmDeleteService: 'คุณแน่ใจว่าต้องการลบบริการ \"{itemName}\" หรือไม่? การกระทำนี้ไม่สามารถยกเลิกได้',
       deleteSuccessCategory: 'ลบหมวดหมู่สำเร็จ',
       deleteSuccessService: 'ลบบริการสำเร็จ',
       deleteErrorCategory: 'ล้มเหลวในการลบหมวดหมู่',
@@ -506,8 +504,8 @@ export default {
       ingestQueuedSuccess: 'ไฟล์ {count} ไฟล์ถูกจัดคิวเพื่อนำเข้าข้อมูลแล้ว',
       ingestQueuedError: 'เกิดข้อผิดพลาดระหว่างกระบวนการนำเข้าข้อมูลเป็นชุด',
       uploadSuccessMultiple: 'อัปโหลดไฟล์ {count} ไฟล์สำเร็จ',
-      linkSubmitSuccess: 'รวบรวมข้อมูลและบันทึก "{fileName}" สำเร็จ',
-      actionSuccess: 'การดำเนินการ "{action}" กับไฟล์ {fileId} สำเร็จ',
+      linkSubmitSuccess: 'รวบรวมข้อมูลและบันทึก \"{fileName}\" สำเร็จ',
+      actionSuccess: 'การดำเนินการ \"{action}\" กับไฟล์ {fileId} สำเร็จ',
       metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว'
     }
   },
@@ -718,7 +716,7 @@ export default {
     archivedChats: 'แชทที่เก็บถาวร',
     noStarredChats: 'ยังไม่มีการสนทนาที่ติดดาว ติดดาวการสนทนาเพื่อเพิ่มที่นี่',
     noArchivedChats: 'ยังไม่มีการสนทนาที่เก็บถาวร',
-    noSearchResults: 'ไม่พบการสนทนาสำหรับ "{term}"',
+    noSearchResults: 'ไม่พบการสนทนาสำหรับ \"{term}\"',
     loadingChats: 'กำลังโหลดการสนทนา...',
     errorLoadingConversations: 'ล้มเหลวในการโหลดการสนทนา โปรดลองอีกครั้ง',
     errorLoadingUser: 'ข้อมูลผู้ใช้ไม่สมบูรณ์ โปรดรีโหลดหน้า',
@@ -1343,8 +1341,8 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'การกำหนดค่าไม่ตรงกัน: {warnings}. กรุณาตรวจสอบการกำหนดค่าความช่วยเหลือด่วนและลำดับชั้นความรู้',
-    categoryNotFound: 'ไม่พบหมวดหมู่ "{label}" ในลำดับชั้นความรู้',
-    serviceLabelMismatch: 'บริการ "{label}" ใช้ป้าย UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
+    categoryNotFound: 'ไม่พบหมวดหมู่ \"{label}\" ในลำดับชั้นความรู้',
+    serviceLabelMismatch: 'บริการ \"{label}\" ใช้ป้าย UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
     noFilterWarning: 'ไม่มีตัวกรองบริบทที่ใช้งานอยู่ — คำค้นจะไม่ถูกกรอง',
     placeholder: 'พิมพ์คำถามของคุณที่นี่...',
     sendButton: 'ส่ง',
@@ -1542,9 +1540,9 @@ export default {
     uploading: 'กำลังอัปโหลด...',
     notifications: {
       dropError: 'สามารถวางไฟล์ได้เท่านั้น โปรดตรวจสอบว่าคุณกำลังลากไฟล์ที่ถูกต้องจากคอมพิวเตอร์ของคุณ',
-      typeNotAllowed: 'ประเภทไฟล์ "{extension}" ไม่ได้รับอนุญาต',
+      typeNotAllowed: 'ประเภทไฟล์ \"{extension}\" ไม่ได้รับอนุญาต',
       shortcutUnsupported: 'ไฟล์ทางลัด (.url) ไม่รองรับ โปรดลากไฟล์จริง',
-      duplicate: 'ไฟล์ "{fileName}" ถูกเพิ่มแล้ว',
+      duplicate: 'ไฟล์ \"{fileName}\" ถูกเพิ่มแล้ว',
       uploadSuccess: 'อัปโหลด {fileName} สำเร็จ',
       uploadFailed: 'ล้มเหลวในการอัปโหลด {fileName}'
     }
@@ -1668,7 +1666,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1717,7 +1721,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1834,7 +1839,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1898,7 +1902,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1943,7 +1946,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2179,7 +2182,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'ที่เก็บที่สร้างจากการรวบรวมนี้',
       convQueued: 'อยู่ในคิว...',
@@ -2188,8 +2191,7 @@ export default {
       convAdding: 'กำลังเพิ่มหัวข้อแนวคิด ([p] หน้าแล้ว)...',
       convDone: 'สร้างแล้ว ([p] หน้า)',
       convFailed: 'ล้มเหลว',
-      createStarted: 'กำลังสร้าง "[name]" — ติดตามความคืบหน้าด้านล่าง',
-
+      createStarted: 'กำลังสร้าง \"[name]\" — ติดตามความคืบหน้าด้านล่าง',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2251,6 +2253,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

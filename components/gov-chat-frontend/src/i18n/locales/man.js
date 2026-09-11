@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into man.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'Afiganistan',
@@ -364,7 +362,7 @@ export default {
         role: 'Moo-jukuto'
       },
       userSearch: {
-        resultsFound: 'Moolu {total} jeta min benta ning "{term}"',
+        resultsFound: 'Moolu {total} jeta min benta ning \"{term}\"',
         error: 'Filiyata moo ñiningo to'
       }
     },
@@ -449,11 +447,11 @@ export default {
       deleteCategory: 'Katifo Fiti',
       editService: 'Baara Dada',
       deleteService: 'Baara Fiti',
-      empty: 'Katifo mang je. Piti "Katifo Kura Kafu" ka a damina.',
+      empty: 'Katifo mang je. Piti \"Katifo Kura Kafu\" ka a damina.',
       formTitleCreateCategory: 'Katifo Kura Dada',
-      formTitleAddService: 'Baara Kafu "{categoryName}" to',
-      formTitleEditCategory: 'Katifo Dada: "{itemName}"',
-      formTitleEditService: 'Baara Dada: "{itemName}"',
+      formTitleAddService: 'Baara Kafu \"{categoryName}\" to',
+      formTitleEditCategory: 'Katifo Dada: \"{itemName}\"',
+      formTitleEditService: 'Baara Dada: \"{itemName}\"',
       nameEnLabel: 'Toh (Angalee)',
       translationsTitle: 'Farikung/Tradiksion yitandili',
       loadingTranslations: 'Tradiksion ka looti...',
@@ -469,8 +467,8 @@ export default {
       confirmCancelEdit: 'I la yailamawol ti mara folo. I lafiya la a bula le ti?',
       confirmDeleteTitleCategory: 'Katifo Fiti?',
       confirmDeleteTitleService: 'Baara Fiti?',
-      confirmDeleteCategory: 'I lafiya la ka Katifo "{itemName}" fiti le ti? Nying kwoo mang si murung.',
-      confirmDeleteService: 'I lafiya la ka Baara "{itemName}" fiti le ti? Nying kwoo mang si murung.',
+      confirmDeleteCategory: 'I lafiya la ka Katifo \"{itemName}\" fiti le ti? Nying kwoo mang si murung.',
+      confirmDeleteService: 'I lafiya la ka Baara \"{itemName}\" fiti le ti? Nying kwoo mang si murung.',
       deleteSuccessCategory: 'Katifo fitita benta.',
       deleteSuccessService: 'Baara fitita benta.',
       deleteErrorCategory: 'Katifo fitita mang ben.',
@@ -504,8 +502,8 @@ export default {
       ingestQueuedSuccess: 'Fayil {count} laata ka dung.',
       ingestQueuedError: 'Filiyata kafung-dung to.',
       uploadSuccessMultiple: 'Fayil {count} yeleta benta.',
-      linkSubmitSuccess: '"{fileName}" ñiningta ani a marata benta.',
-      actionSuccess: 'Baara "{action}" fayil {fileId} to benta.',
+      linkSubmitSuccess: '\"{fileName}\" ñiningta ani a marata benta.',
+      actionSuccess: 'Baara \"{action}\" fayil {fileId} to benta.',
       metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.'
     }
   },
@@ -716,7 +714,7 @@ export default {
     archivedChats: 'Kumal Lotorota',
     noStarredChats: 'Kumal lotoota mang je. Kuma lotoo ka a kafu jang.',
     noArchivedChats: 'Kumal lotorota mang je.',
-    noSearchResults: 'Kuma mang je "{term}" ye',
+    noSearchResults: 'Kuma mang je \"{term}\" ye',
     loadingChats: 'Kumal ka looti...',
     errorLoadingConversations: 'Filiyata kumal looti to. I si a ñining tugung.',
     errorLoadingUser: 'Moo kibaro ti faa. Browser murung.',
@@ -1307,8 +1305,8 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
-    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
-    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
+    categoryNotFound: 'Category \"{label}\" not found in knowledge hierarchy',
+    serviceLabelMismatch: 'Service \"{label}\" uses a UI label that may not match the knowledge hierarchy',
     noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'I la ñiningo nyining jang...',
     sendButton: 'Kii',
@@ -1505,9 +1503,9 @@ export default {
     uploading: 'A ka yele...',
     notifications: {
       dropError: 'Fayilolu dorong si sika jang. Ibay dii kumpabo ko fayiloo beteyata le.',
-      typeNotAllowed: 'Fayil suko "{extension}" mang sota.',
+      typeNotAllowed: 'Fayil suko \"{extension}\" mang sota.',
       shortcutUnsupported: 'Sootkot fayilolu (.url) mang sota. Ibay dii fayil kiling sika.',
-      duplicate: 'Fayil "{fileName}" kafuta le folo.',
+      duplicate: 'Fayil \"{fileName}\" kafuta le folo.',
       uploadSuccess: '{fileName} yeleta benta',
       uploadFailed: 'Filiyata {fileName} yele to.'
     }
@@ -1631,7 +1629,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1680,7 +1684,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1797,7 +1802,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1861,7 +1865,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1906,7 +1909,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2142,7 +2145,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
       convQueued: '__TODO_TRANSLATE__ (en: Queued...)',
@@ -2151,8 +2154,7 @@ export default {
       convAdding: '__TODO_TRANSLATE__ (en: Adding concepts ([p] pages so far)...)',
       convDone: '__TODO_TRANSLATE__ (en: Created ([p] pages))',
       convFailed: '__TODO_TRANSLATE__ (en: Failed)',
-      createStarted: '__TODO_TRANSLATE__ (en: Creating "[name]" — track progress below.)',
-
+      createStarted: '__TODO_TRANSLATE__ (en: Creating \"[name]\" — track progress below.)',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2214,6 +2216,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

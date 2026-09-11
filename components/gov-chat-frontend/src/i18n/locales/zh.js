@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into zh.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: '阿富汗',
@@ -364,7 +362,7 @@ export default {
         role: '角色'
       },
       userSearch: {
-        resultsFound: '找到 {total} 个匹配 "{term}" 的用户',
+        resultsFound: '找到 {total} 个匹配 \"{term}\" 的用户',
         error: '搜索用户出错'
       }
     },
@@ -448,11 +446,11 @@ export default {
       deleteCategory: '删除类别',
       editService: '编辑服务',
       deleteService: '删除服务',
-      empty: '未找到类别。点击 "添加新类别" 开始。',
+      empty: '未找到类别。点击 \"添加新类别\" 开始。',
       formTitleCreateCategory: '创建新类别',
-      formTitleAddService: '向 "{categoryName}" 添加服务',
-      formTitleEditCategory: '编辑类别: "{itemName}"',
-      formTitleEditService: '编辑服务: "{itemName}"',
+      formTitleAddService: '向 \"{categoryName}\" 添加服务',
+      formTitleEditCategory: '编辑类别: \"{itemName}\"',
+      formTitleEditService: '编辑服务: \"{itemName}\"',
       nameEnLabel: '名称 (英文)',
       translationsTitle: '用于显示的翻译',
       loadingTranslations: '正在加载翻译...',
@@ -468,8 +466,8 @@ export default {
       confirmCancelEdit: '您有未保存的更改。确定要取消吗？',
       confirmDeleteTitleCategory: '删除类别？',
       confirmDeleteTitleService: '删除服务？',
-      confirmDeleteCategory: '您确定要删除类别 "{itemName}" 吗？此操作无法撤销。',
-      confirmDeleteService: '您确定要删除服务 "{itemName}" 吗？此操作无法撤销。',
+      confirmDeleteCategory: '您确定要删除类别 \"{itemName}\" 吗？此操作无法撤销。',
+      confirmDeleteService: '您确定要删除服务 \"{itemName}\" 吗？此操作无法撤销。',
       deleteSuccessCategory: '类别删除成功。',
       deleteSuccessService: '服务删除成功。',
       deleteErrorCategory: '删除类别失败。',
@@ -503,8 +501,8 @@ export default {
       ingestQueuedSuccess: '{count} 个文件已加入提取队列。',
       ingestQueuedError: '批量提取过程中发生错误。',
       uploadSuccessMultiple: '{count} 个文件上传成功。',
-      linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
-      actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
+      linkSubmitSuccess: '成功爬取并保存 \"{fileName}\"。',
+      actionSuccess: '对文件 {fileId} 的操作 \"{action}\" 成功。',
       metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。'
     }
   },
@@ -715,7 +713,7 @@ export default {
     archivedChats: '归档聊天',
     noStarredChats: '尚未有星标对话。星标一个对话以添加到这里。',
     noArchivedChats: '尚未有归档对话。',
-    noSearchResults: '未找到 "{term}" 的对话',
+    noSearchResults: '未找到 \"{term}\" 的对话',
     loadingChats: '正在加载对话...',
     errorLoadingConversations: '加载对话失败。请重试。',
     errorLoadingUser: '用户数据不完整。请重新加载页面。',
@@ -1286,8 +1284,8 @@ export default {
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
-    categoryNotFound: '在知识层次结构中未找到类别"{label}"',
-    serviceLabelMismatch: '服务"{label}"使用的UI标签可能与知识层次结构不匹配',
+    categoryNotFound: '在知识层次结构中未找到类别\"{label}\"',
+    serviceLabelMismatch: '服务\"{label}\"使用的UI标签可能与知识层次结构不匹配',
     noFilterWarning: '没有活动的上下文筛选器 — 查询将不被筛选。',
     placeholder: '在此输入您的查询...',
     sendButton: '发送',
@@ -1483,9 +1481,9 @@ export default {
     uploading: '上传中...',
     notifications: {
       dropError: '只能拖放文件。请检查您是否从计算机拖动了有效文件。',
-      typeNotAllowed: '不允许的文件类型 "{extension}"。',
+      typeNotAllowed: '不允许的文件类型 \"{extension}\"。',
       shortcutUnsupported: '不支持快捷方式文件 (.url)。请拖动实际文件。',
-      duplicate: '文件 "{fileName}" 已添加。',
+      duplicate: '文件 \"{fileName}\" 已添加。',
       uploadSuccess: '成功上传 {fileName}',
       uploadFailed: '上传 {fileName} 失败。'
     }
@@ -1609,7 +1607,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1658,7 +1662,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1775,7 +1780,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1839,7 +1843,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1884,7 +1887,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2120,7 +2123,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: '从此爬取创建的仓库',
       convQueued: '排队中...',
@@ -2130,7 +2133,6 @@ export default {
       convDone: '已创建（[p] 页）',
       convFailed: '失败',
       createStarted: '正在创建「[name]」— 请在下方查看进度。',
-
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2192,6 +2194,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

@@ -4,6 +4,7 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger } = require('../shared-lib');
 const axios = require('axios');
 const translationService = require('../services/translation-service');
+const { nearestDistrict } = require('../data/bd-districts');
 
 // Weather MCP service (PolisenseAI). Serves /geocode for the chat map command;
 // resolves Bangladesh district names locally, falls back to Mapbox Geocoding.
@@ -73,6 +74,20 @@ module.exports = (weatherService) => {
   };
   router.get('/potato-risk', proxyLatestRisk('/potato/risk/latest'));
   router.get('/drought-risk', proxyLatestRisk('/drought/risk/latest'));
+
+  /**
+   * Browser geolocation -> district whose alerts the web banner should show.
+   * Falls back to null (client defaults to Dhaka) when the point is outside
+   * Bangladesh.
+   */
+  router.get('/nearest-district', (req, res) => {
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      return res.status(400).json({ message: 'lat and lon query parameters are required' });
+    }
+    return res.json(nearestDistrict(lat, lon) || { district: null, distanceKm: null });
+  });
 
   router.get('/geocode', async (req, res) => {
     const { location } = req.query;

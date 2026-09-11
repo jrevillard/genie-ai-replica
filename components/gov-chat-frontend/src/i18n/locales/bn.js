@@ -1551,6 +1551,7 @@ export default {
     drought: 'খরা',
     dismiss: 'বন্ধ করুন',
     viewDroughtReport: 'খরা প্রতিবেদন দেখুন',
+    allAreas: 'সব এলাকা',
     tier: {
       normal: 'স্বাভাবিক',
       advisory: 'পরামর্শ',

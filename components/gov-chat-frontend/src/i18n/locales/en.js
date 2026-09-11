@@ -1578,6 +1578,7 @@ export default {
     drought: 'Drought',
     dismiss: 'Dismiss',
     viewDroughtReport: 'View drought report',
+    allAreas: 'All areas',
     tier: {
       normal: 'Normal',
       advisory: 'Advisory',

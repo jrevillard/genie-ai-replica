@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MEWA Bangladesh climate deployment: weather/geo chat routing with Bengali support, satellite field delineation and flood maps (geo-inference-worker), district-aware alert banner with web notices, FCM broadcast service, drought PDF reports. Full list and open items: `docs/MEWA-CHANGELOG.md`.
+
 ## [2.1.0] - 2026-08-31
 
 ### Changed

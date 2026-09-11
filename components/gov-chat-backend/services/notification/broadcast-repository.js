@@ -91,6 +91,11 @@ class BroadcastRepository {
     }
   }
 
+  /** Terminal state for a broadcast kept for the web banner only (no push sent). */
+  async markStored(key, reason) {
+    await this._patch(key, { status: 'stored', pushSkippedReason: reason, finishedAt: new Date().toISOString() });
+  }
+
   async markResolving(key) {
     await this._patch(key, { status: 'resolving', startedAt: new Date().toISOString() });
   }
@@ -183,6 +188,36 @@ class BroadcastRepository {
             LIMIT ${capped}
             RETURN UNSET(b, '_id', '_rev')
         `);
+    return cursor.all();
+  }
+
+  /**
+   * Recent broadcasts relevant to one district for the web banner: general
+   * broadcasts (no district filter) plus those targeted at the district. FCM
+   * delivery status is irrelevant here (the web reads the record directly), so
+   * only 'failed' records are excluded. Returns the display fields only.
+   */
+  async listForDistrict({ district = null, since, limit = 5 } = {}) {
+    const capped = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 20);
+    const cursor = await this.db.query(aql`
+      FOR b IN notificationBroadcasts
+        FILTER b.createdAt >= ${since} AND b.status != 'failed'
+        FILTER LENGTH(b.audience.districts || []) == 0
+            OR (${district} != null AND ${district} IN b.audience.districts)
+        SORT b.createdAt DESC
+        LIMIT ${capped}
+        RETURN {
+          id: b._key,
+          broadcastId: b.broadcastId,
+          title: b.payload.title,
+          body: b.payload.body,
+          type: b.payload.type,
+          tier: b.payload.tier,
+          districts: b.audience.districts || [],
+          source: b.source,
+          createdAt: b.createdAt
+        }
+    `);
     return cursor.all();
   }
 

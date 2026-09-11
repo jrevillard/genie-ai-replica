@@ -949,16 +949,24 @@ async def query(request: QueryRequest):
                 "[QUERY] Field delineation - resolved %r -> %s", place, geo["name"]
             )
         logger.info("[QUERY] Field delineation — lat=%.4f  lon=%.4f", lat, lon)
+        import asyncio as _asyncio
+
         import requests as _req
 
-        try:
-            resp = _req.post(
+        # The worker call takes 30-60 s. It runs in the thread pool so this
+        # single-worker service keeps answering forecasts and the banner's risk
+        # polls meanwhile (a blocking call here stalled every other request).
+        def _call_worker():
+            r = _req.post(
                 f"{_GEO_INFERENCE_URL}/delineate",
                 json={"latitude": lat, "longitude": lon},
                 timeout=600,
             )
-            resp.raise_for_status()
-            result = resp.json()
+            r.raise_for_status()
+            return r.json()
+
+        try:
+            result = await _asyncio.get_event_loop().run_in_executor(None, _call_worker)
         except Exception as exc:
             logger.error("[QUERY] Delineation worker error: %s", exc)
             raise HTTPException(
@@ -1041,16 +1049,24 @@ async def query(request: QueryRequest):
             lat,
             lon,
         )
+        import asyncio as _asyncio
+
         import requests as _req
 
-        try:
-            resp = _req.post(
+        # The worker call takes 30-60 s. It runs in the thread pool so this
+        # single-worker service keeps answering forecasts and the banner's risk
+        # polls meanwhile (a blocking call here stalled every other request).
+        def _call_worker():
+            r = _req.post(
                 f"{_GEO_INFERENCE_URL}/flood-segment",
                 json={"latitude": lat, "longitude": lon},
                 timeout=600,
             )
-            resp.raise_for_status()
-            result = resp.json()
+            r.raise_for_status()
+            return r.json()
+
+        try:
+            result = await _asyncio.get_event_loop().run_in_executor(None, _call_worker)
         except Exception as exc:
             logger.error("[QUERY] Flood worker error: %s", exc)
             raise HTTPException(

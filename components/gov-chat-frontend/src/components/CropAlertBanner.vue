@@ -1,54 +1,109 @@
 <template>
-  <transition name="crop-alert-slide">
-    <div v-if="visible" class="crop-alert-banner" :class="[`tier-${alert.tier}`, `type-${alertType}`]" role="alert">
-      <div class="crop-alert-icon" aria-hidden="true">{{ tierGlyph }}</div>
-      <div class="crop-alert-body">
-        <div class="crop-alert-title">{{ alertTypeLabel }} — {{ tierLabel }}</div>
-        <div class="crop-alert-message">{{ alert.message }}</div>
-        <div v-if="alert.triggers && alert.triggers.length" class="crop-alert-triggers">
-          <span v-for="(t, i) in alert.triggers" :key="i" class="crop-alert-trigger-tag">{{ t }}</span>
+  <div class="crop-alert-stack">
+    <!-- General / district notices from admin or engine broadcasts (same message the Android app gets via FCM) -->
+    <transition-group name="crop-alert-slide" tag="div">
+      <div v-for="n in visibleNotices" :key="n.id" class="crop-alert-banner type-notice" role="status">
+        <div class="crop-alert-icon" aria-hidden="true">{{ '\u{1F4E2}' }}</div>
+        <div class="crop-alert-body">
+          <div class="crop-alert-title">
+            {{ n.title }}
+            <span class="crop-alert-scope">
+              · {{ n.districts.length ? n.districts.join(', ') : $t('cropAlert.allAreas') }}
+            </span>
+          </div>
+          <div class="crop-alert-message">{{ n.body }}</div>
         </div>
-        <a
-          v-if="alertType === 'drought' && alert.report_filename"
-          :href="`/api/weather/drought-report/${alert.report_filename}`"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="crop-alert-report-link"
+        <button
+          class="crop-alert-close"
+          type="button"
+          :title="$t('cropAlert.dismiss')"
+          :aria-label="$t('cropAlert.dismiss')"
+          @click="dismissNotice(n)"
         >
-          {{ $t('cropAlert.viewDroughtReport') }}
-        </a>
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M3 3l10 10M13 3L3 13" />
+          </svg>
+        </button>
       </div>
-      <button
-        class="crop-alert-close"
-        type="button"
-        :title="$t('cropAlert.dismiss')"
-        :aria-label="$t('cropAlert.dismiss')"
-        @click="dismiss"
-      >
-        <svg
-          viewBox="0 0 16 16"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          aria-hidden="true"
+    </transition-group>
+
+    <transition name="crop-alert-slide">
+      <div v-if="visible" class="crop-alert-banner" :class="[`tier-${alert.tier}`, `type-${alertType}`]" role="alert">
+        <div class="crop-alert-icon" aria-hidden="true">{{ tierGlyph }}</div>
+        <div class="crop-alert-body">
+          <div class="crop-alert-title">
+            {{ alertTypeLabel }} — {{ tierLabel }}
+            <span class="crop-alert-scope">· {{ alert.location || district }}</span>
+          </div>
+          <div class="crop-alert-message">{{ alert.message }}</div>
+          <div v-if="alert.triggers && alert.triggers.length" class="crop-alert-triggers">
+            <span v-for="(t, i) in alert.triggers" :key="i" class="crop-alert-trigger-tag">{{ t }}</span>
+          </div>
+          <a
+            v-if="alertType === 'drought' && alert.report_filename"
+            :href="`/api/weather/drought-report/${alert.report_filename}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="crop-alert-report-link"
+          >
+            {{ $t('cropAlert.viewDroughtReport') }}
+          </a>
+        </div>
+        <button
+          class="crop-alert-close"
+          type="button"
+          :title="$t('cropAlert.dismiss')"
+          :aria-label="$t('cropAlert.dismiss')"
+          @click="dismiss"
         >
-          <path d="M3 3l10 10M13 3L3 13" />
-        </svg>
-      </button>
-    </div>
-  </transition>
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M3 3l10 10M13 3L3 13" />
+          </svg>
+        </button>
+      </div>
+    </transition>
+  </div>
 </template>
 
 <script>
 import httpService from '@/services/httpService';
 
 const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
+const DEFAULT_DISTRICT = 'Dhaka';
+const DISTRICT_CACHE_KEY = 'mewa_alert_district';
+const DISTRICT_CACHE_MS = 24 * 60 * 60 * 1000; // re-resolve location once a day
+const NOTICE_DISMISSED_KEY = 'mewa_notices_dismissed';
+const NOTICE_WINDOW_HOURS = 48;
 
 function dismissKey(type) {
   return `${type}_alert_dismissed_until`;
+}
+
+function readDismissedNotices() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NOTICE_DISMISSED_KEY) || '[]');
+    return Array.isArray(raw) ? raw.slice(-200) : [];
+  } catch {
+    return [];
+  }
 }
 
 // Risk tiers from warning_system_engine (models.TIER_LABELS) -> i18n keys.
@@ -69,7 +124,12 @@ export default {
         report_filename: ''
       },
       alertType: 'potato', // 'potato' | 'drought'
-      pollTimer: null
+      pollTimer: null,
+      // District whose alerts this browser shows: nearest to the geolocation,
+      // cached for a day; Dhaka until the location is known or when refused.
+      district: DEFAULT_DISTRICT,
+      notices: [],
+      dismissedNotices: readDismissedNotices()
     };
   },
 
@@ -86,6 +146,9 @@ export default {
     alertTypeLabel() {
       return this.$t(this.alertType === 'drought' ? 'cropAlert.drought' : 'cropAlert.potato');
     },
+    visibleNotices() {
+      return this.notices.filter((n) => !this.dismissedNotices.includes(n.id));
+    },
     // Plain glyphs: the app does not ship an icon font.
     tierGlyph() {
       if (this.alert.tier >= 3) return '\u26A0'; // warning sign
@@ -101,7 +164,8 @@ export default {
     }
   },
 
-  mounted() {
+  async mounted() {
+    await this.resolveDistrict();
     this.poll();
     this.pollTimer = setInterval(this.poll, POLL_INTERVAL_MS);
     window.addEventListener('focus', this.poll);
@@ -121,18 +185,57 @@ export default {
       }
     },
 
+    /**
+     * Map the browser location to the nearest district (backend lookup) and
+     * cache it. Any failure - no geolocation API, permission refused, offline,
+     * outside Bangladesh - keeps the default so the banner still works.
+     */
+    async resolveDistrict() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(DISTRICT_CACHE_KEY) || 'null');
+        if (cached?.district && Date.now() - (cached.at || 0) < DISTRICT_CACHE_MS) {
+          this.district = cached.district;
+          return;
+        }
+      } catch {
+        // ignore a corrupt cache entry
+      }
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+      try {
+        const pos = await new Promise((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, maximumAge: 600000 })
+        );
+        const { latitude: lat, longitude: lon } = pos.coords;
+        const resp = await httpService.get('weather/nearest-district', { lat, lon });
+        const district = resp?.data?.district;
+        if (district) {
+          this.district = district;
+          localStorage.setItem(DISTRICT_CACHE_KEY, JSON.stringify({ district, at: Date.now() }));
+        }
+      } catch (err) {
+        console.debug('[CropAlertBanner] district resolution skipped:', err?.message || err);
+      }
+    },
+
     async poll() {
-      const location = 'Dhaka';
+      const location = this.district || DEFAULT_DISTRICT;
       const lang = this.uiLocale;
 
       try {
-        const [potatoResult, droughtResult] = await Promise.allSettled([
+        const [potatoResult, droughtResult, noticesResult] = await Promise.allSettled([
           httpService.get('weather/potato-risk', { location, lang }),
-          httpService.get('weather/drought-risk', { location, lang })
+          httpService.get('weather/drought-risk', { location, lang }),
+          httpService.get('notifications/latest', { district: location, hours: NOTICE_WINDOW_HOURS, limit: 3 })
         ]);
 
         const potato = potatoResult.status === 'fulfilled' ? potatoResult.value.data : null;
         const drought = droughtResult.status === 'fulfilled' ? droughtResult.value.data : null;
+        if (noticesResult.status === 'fulfilled') {
+          const list = noticesResult.value?.data?.notices;
+          // Engine weather warnings are already shown as the risk alert below;
+          // the notice cards are for everything else (general / admin messages).
+          this.notices = (Array.isArray(list) ? list : []).filter((n) => n.type !== 'weather_warning');
+        }
 
         // Collect active alerts (tier >= 2) that are not dismissed
         const candidates = [
@@ -164,6 +267,11 @@ export default {
       localStorage.setItem(dismissKey(this.alertType), String(until));
     },
 
+    dismissNotice(notice) {
+      this.dismissedNotices = [...this.dismissedNotices, notice.id].slice(-200);
+      localStorage.setItem(NOTICE_DISMISSED_KEY, JSON.stringify(this.dismissedNotices));
+    },
+
     isDismissedRecently(type) {
       const until = parseInt(localStorage.getItem(dismissKey(type)) || '0', 10);
       return Date.now() < until;
@@ -173,11 +281,33 @@ export default {
 </script>
 
 <style scoped>
-.crop-alert-banner {
+.crop-alert-stack {
   position: fixed;
   bottom: 24px;
   right: 24px;
   z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.crop-alert-scope {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.crop-alert-banner.type-notice {
+  background: #e8f1f7;
+  border-left-color: #1f4a5e;
+  color: #143544;
+}
+.type-notice .crop-alert-icon {
+  color: #1f4a5e;
+}
+
+.crop-alert-banner {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 14px;

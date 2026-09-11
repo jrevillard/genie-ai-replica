@@ -139,6 +139,26 @@ module.exports = (notificationService) => {
     }
   });
 
+  /**
+   * Notices for the web banner: general broadcasts plus those targeted at the
+   * user's district, newest first. Logged-in users only (Keycloak), no secret:
+   * the same message already goes to every Android device in that audience.
+   */
+  router.get('/latest', keycloakAuthMiddleware.authenticate, async (req, res) => {
+    try {
+      const district = req.query.district ? String(req.query.district).slice(0, 64) : null;
+      const notices = await notificationService.listNoticesForDistrict({
+        district,
+        hours: req.query.hours,
+        limit: req.query.limit
+      });
+      res.status(200).json({ success: true, district, notices });
+    } catch (error) {
+      logger.error('notification-routes.latest_failed', { error: error.message });
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
   router.get('/health', requireBroadcastAuth, async (req, res) => {
     try {
       const health = await notificationService.getHealth();

@@ -122,16 +122,14 @@ class NotificationService {
     if (!body) {
       throw new Error('body is required');
     }
-    if (!this.queueEnabled) {
-      const err = new Error('Notification queue is unavailable');
-      err.statusCode = 503;
-      throw err;
-    }
-    if (!this.firebaseEnabled) {
-      const err = new Error('Firebase Admin credentials are not configured');
-      err.statusCode = 503;
-      throw err;
-    }
+    // The web banner reads broadcast records directly, so a broadcast is always
+    // stored. Push (FCM to Android) additionally needs the queue and Firebase;
+    // without them the record is kept with status 'stored' and push is skipped.
+    const pushSkippedReason = !this.queueEnabled
+      ? 'Notification queue is unavailable'
+      : !this.firebaseEnabled
+        ? 'Firebase Admin credentials are not configured'
+        : null;
 
     const audience = {
       districts: this._stringArray(payload.districts || (payload.location ? [payload.location] : [])),
@@ -154,6 +152,23 @@ class NotificationService {
         status: doc.status
       });
       return { duplicate: true, broadcastId: doc.broadcastId, status: doc.status };
+    }
+
+    if (pushSkippedReason) {
+      await this.broadcastRepository.markStored(doc._key, pushSkippedReason);
+      logger.warn('NotificationService.broadcast_stored_without_push', {
+        broadcastId: doc.broadcastId,
+        audience,
+        source,
+        reason: pushSkippedReason
+      });
+      return {
+        duplicate: false,
+        broadcastId: doc.broadcastId,
+        status: 'stored',
+        push: 'skipped',
+        reason: pushSkippedReason
+      };
     }
 
     await this.queue.broadcastQueue.add(
@@ -211,6 +226,13 @@ class NotificationService {
   async listBroadcasts({ status = null, limit = 25 } = {}) {
     this._assertInitialized();
     return this.broadcastRepository.list({ status, limit });
+  }
+
+  /** Recent general + district broadcasts for the web banner (see repository). */
+  async listNoticesForDistrict({ district = null, hours = 48, limit = 5 } = {}) {
+    const h = Math.min(Math.max(parseInt(hours, 10) || 48, 1), 24 * 14);
+    const since = new Date(Date.now() - h * 3600 * 1000).toISOString();
+    return this.broadcastRepository.listForDistrict({ district, since, limit });
   }
 
   async getHealth() {

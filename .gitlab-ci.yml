@@ -914,7 +914,6 @@ contract:retriever-arango:
   <<: *contract_template
   needs:
     - job: build:retriever-arango
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
     # Retriever in-image suite — ONLY tests that run against the retriever
@@ -944,7 +943,6 @@ contract:reranker:
   <<: *contract_template
   needs:
     - job: build:reranker
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-reranker"
     # Reranker in-image suite — verifies the v1.5 coupling surface:
@@ -971,7 +969,6 @@ contract:dataprep-arango:
   <<: *contract_template
   needs:
     - job: build:dataprep-arango
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
     # Dataprep-capable suite: ingest smoke + ingest budget (chunker-dependent).
@@ -1062,7 +1059,6 @@ scan:frontend:
   <<: *scan_template
   needs:
     - job: build:frontend
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
@@ -1137,7 +1133,6 @@ scan:backend:
   <<: *scan_template
   needs:
     - job: build:backend
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
@@ -1212,7 +1207,6 @@ scan:db-migrations:
   <<: *scan_template
   needs:
     - job: build:db-migrations
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
@@ -1287,7 +1281,6 @@ scan:document-repository:
   <<: *scan_template
   needs:
     - job: build:document-repository
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
@@ -1362,7 +1355,6 @@ scan:nginx:
   <<: *scan_template
   needs:
     - job: build:nginx
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
@@ -1437,7 +1429,6 @@ scan:kong-config:
   <<: *scan_template
   needs:
     - job: build:kong-config
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
@@ -1512,7 +1503,6 @@ scan:chatqna-server:
   <<: *scan_template
   needs:
     - job: build:chatqna-server
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
@@ -1594,7 +1584,6 @@ smoke:dataprep-arango:
   interruptible: true
   needs:
     - job: build:dataprep-arango
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   before_script:
@@ -1631,7 +1620,6 @@ scan:dataprep-arango:
   <<: *scan_template
   needs:
     - job: build:dataprep-arango
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
@@ -1706,7 +1694,6 @@ scan:retriever-arango:
   <<: *scan_template
   needs:
     - job: build:retriever-arango
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
@@ -1781,7 +1768,6 @@ scan:reranker:
   <<: *scan_template
   needs:
     - job: build:reranker
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
@@ -1856,7 +1842,6 @@ scan:embedding:
   <<: *scan_template
   needs:
     - job: build:embedding
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
@@ -1931,7 +1916,6 @@ scan:textgen:
   <<: *scan_template
   needs:
     - job: build:textgen
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
@@ -2006,7 +1990,6 @@ scan:postgres-init:
   <<: *scan_template
   needs:
     - job: build:postgres-init
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
@@ -2081,7 +2064,6 @@ scan:keycloak:
   <<: *scan_template
   needs:
     - job: build:keycloak
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
@@ -2156,7 +2138,6 @@ scan:keycloak-config:
   <<: *scan_template
   needs:
     - job: build:keycloak-config
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
@@ -2231,7 +2212,6 @@ scan:tempo-proxy:
   <<: *scan_template
   needs:
     - job: build:tempo-proxy
-      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:

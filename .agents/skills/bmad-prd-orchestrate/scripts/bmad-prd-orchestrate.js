@@ -11,6 +11,16 @@ export const meta = {
   ],
 };
 
+// Helper for issue-sync invocations from JS orchestrator agents. The JS runtime
+// may not have direct fs access, so this only GENERATES a unique tmp-file path.
+// The actual file write is done by the sync agent via shell `cat <<EOF`, and
+// cleanup is `rm -f`. PID + nonce ensures parallel calls don't clobber.
+const { randomBytes } = require('node:crypto');
+function commentPath() {
+  const nonce = randomBytes(8).toString('hex');
+  return `/tmp/bmad-sync-comment-${process.pid}-${nonce}.md`;
+}
+
 const args_ = args || {};
 const storyKey = args_.storyKey || null;
 const epicKey = args_.epicKey || null;
@@ -647,6 +657,53 @@ ${bashReadCmd}`,
     continue;
   }
 
+  // Epic-level sync (orchestrator owns epic transitions — soft-fail, NEVER halt).
+  // First story of an epic flips epic-N from backlog → in-progress; subsequent stories
+  // are idempotent (counted as sync_skipped). Populates epic issue description with the
+  // epic body from epics.md.
+  const epicNumMatch = sk.match(/^(\d+)-/);
+  const epicKey = epicNumMatch ? `epic-${epicNumMatch[1]}` : null;
+  if (epicKey) {
+    log(`Epic sync: ${epicKey} (pre-dispatch for ${sk})`)
+    try {
+      const epicSync = await agent(
+        `Pre-dispatch epic sync for ${epicKey} (story ${sk}).
+
+OPERATE FROM: ${setup.prdWorktreePath}
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently (return attempted=false).
+3. Invoke (wrap in try/catch — soft-fail, NEVER halt):
+     BMAD_ISSUE_SYNC_SCOPE="${epicKey}" \\
+     BMAD_ISSUE_SYNC_POPULATE_DESC=true \\
+       Skill: bmad-issue-tracking-sync
+4. Return JSON: { attempted: bool, created: int, updated: int, skipped: int,
+                  descriptions_updated: int, error?: string }
+
+CONSTRAINTS:
+- NEVER halt on sync failure.
+- DO NOT touch sprint-status.yaml — that's bmad-build-converge's job (it will flip epic-N
+  to in-progress in the same commit as the story flip).
+- DO NOT invoke bmad-build or bmad-build-auto.`,
+        { label: `issue-sync-epic-${epicKey}-${sk}`, phase: 'Execute', agentType: 'general-purpose' }
+      )
+      await appendJournal({
+        event: 'issue_sync_epic_in_progress',
+        epicKey,
+        storyKey: sk,
+        created: epicSync?.created,
+        updated: epicSync?.updated,
+        skipped: epicSync?.skipped,
+        descriptions_updated: epicSync?.descriptions_updated,
+        error: epicSync?.error,
+      })
+    } catch (e) {
+      log(`Epic sync error (soft-fail): ${e}`)
+      await appendJournal({ event: 'issue_sync_epic_failed', epicKey, storyKey: sk, error: String(e) })
+    }
+  }
+
   // Dispatch bmad-build-converge sub-workflow (1 level nesting)
   log(`Dispatching bmad-build-converge for ${sk}...`)
   await appendJournal({ event: 'dispatch', storyKey: sk, iteration: state.iterationCount });
@@ -853,6 +910,68 @@ await appendJournal({
   pushed: sprintStatusSync.pushed,
 });
 
+// Phase 4 issue sync (soft-fail — NEVER halt). After the sprint-status commit, sync
+// every advanced key (stories + epics) so their GitLab issues reflect the new state
+// and descriptions get refreshed. Epic-level done transitions for the issues that
+// flipped in this batch are handled here; per-story done transitions were already
+// handled by bmad-build-converge's merge agent.
+if (sprintStatusSync.advanced > 0) {
+  const advancedKeysCsv = [
+    ...(sprintStatusSync.advancedEpics || []),
+    ...(state.completed || []),
+  ].join(',')
+  log(`Issue sync: Phase 4 batch (${advancedKeysCsv})`)
+  try {
+    const phase4Comment = `Phase 4 batch sync: ${sprintStatusSync.advanced} stories + ${sprintStatusSync.advancedEpics.length} epics → done. See _bmad-output/implementation-artifacts/sprint-status.yaml.`
+    const phase4CommentFile = commentPath()
+    const phase4Sync = await agent(
+      `Phase 4 batch issue sync for ${sprintStatusSync.advanced} stories + ${sprintStatusSync.advancedEpics.length} epics.
+
+OPERATE FROM: ${setup.prdWorktreePath}
+
+SCOPE_KEYS: ${advancedKeysCsv}
+COMMENT_FILE: ${phase4CommentFile}
+COMMENT_BODY (write verbatim to the file):
+${phase4Comment}
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
+3. Write the comment body to COMMENT_FILE via:
+     cat > "${phase4CommentFile}" <<'COMMENT_EOF'
+${phase4Comment}
+COMMENT_EOF
+4. Invoke (wrap in try/catch — soft-fail, NEVER halt):
+     BMAD_ISSUE_SYNC_SCOPE="${advancedKeysCsv}" \\
+     BMAD_ISSUE_SYNC_COMMENT_FILE="${phase4CommentFile}" \\
+     BMAD_ISSUE_SYNC_POPULATE_DESC=true \\
+       Skill: bmad-issue-tracking-sync
+5. After the Skill returns: rm -f "${phase4CommentFile}" (best-effort).
+6. Return JSON: { attempted: bool, created: int, updated: int, skipped: int,
+                  comments_posted: int, descriptions_updated: int, filtered: int, error?: string }
+
+CONSTRAINTS:
+- NEVER halt on sync failure.
+- DO NOT modify any tracked file.`,
+      { label: `issue-sync-phase4-${timestamp}`, phase: 'Epic boundary', agentType: 'general-purpose' }
+    )
+    await appendJournal({
+      event: 'issue_sync_epic_boundary',
+      advanced: sprintStatusSync.advanced,
+      advancedEpics: sprintStatusSync.advancedEpics,
+      created: phase4Sync?.created,
+      updated: phase4Sync?.updated,
+      skipped: phase4Sync?.skipped,
+      descriptions_updated: phase4Sync?.descriptions_updated,
+      comments_posted: phase4Sync?.comments_posted,
+      error: phase4Sync?.error,
+    })
+  } catch (e) {
+    log(`Phase 4 issue sync error (soft-fail): ${e}`)
+    await appendJournal({ event: 'issue_sync_phase4_failed', error: String(e) })
+  }
+}
+
 // 4.2 Optional retrospective at epic boundaries (--retro flag).
 // Only fires when (a) --retro=true AND (b) at least one epic advanced to done.
 if (retro && sprintStatusSync.advancedEpics.length > 0) {
@@ -952,6 +1071,56 @@ CONSTRAINTS:
       if (retroResult.retroDone) {
         retrosCompleted.push(epicKey);
       }
+
+      // Per-epic retrospective issue sync (soft-fail — NEVER halt). Flips the
+      // retrospective issue to done + refreshes its description from the retro doc.
+      const retroKey = `epic-${epicNum}-retrospective`
+      try {
+        const retroComment = `Retro: ${retroResult.actionItemsCount || 0} action item(s) captured. See _bmad-output/implementation-artifacts/epic-${epicNum}-retro.md`
+        const retroCommentFile = commentPath()
+        const retroSync = await agent(
+          `Retro issue sync for ${retroKey} (epic ${epicNum}).
+
+OPERATE FROM: ${setup.prdWorktreePath}
+
+COMMENT_FILE: ${retroCommentFile}
+COMMENT_BODY (write verbatim to the file):
+${retroComment}
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
+3. Write the comment body to COMMENT_FILE via:
+     cat > "${retroCommentFile}" <<'COMMENT_EOF'
+${retroComment}
+COMMENT_EOF
+4. Invoke (wrap in try/catch — soft-fail):
+     BMAD_ISSUE_SYNC_SCOPE="${retroKey}" \\
+     BMAD_ISSUE_SYNC_COMMENT_FILE="${retroCommentFile}" \\
+     BMAD_ISSUE_SYNC_POPULATE_DESC=true \\
+       Skill: bmad-issue-tracking-sync
+5. After the Skill returns: rm -f "${retroCommentFile}" (best-effort).
+6. Return JSON: { attempted: bool, created: int, updated: int, comments_posted: int,
+                  descriptions_updated: int, error?: string }
+
+CONSTRAINTS:
+- NEVER halt on sync failure.
+- DO NOT invoke bmad-retrospective (already done above).`,
+          { label: `issue-sync-retro-${retroKey}-${timestamp}`, phase: 'Epic boundary', agentType: 'general-purpose' }
+        )
+        await appendJournal({
+          event: 'issue_sync_retro',
+          retroKey,
+          created: retroSync?.created,
+          updated: retroSync?.updated,
+          comments_posted: retroSync?.comments_posted,
+          descriptions_updated: retroSync?.descriptions_updated,
+          error: retroSync?.error,
+        })
+      } catch (e) {
+        log(`Retro issue sync error (soft-fail): ${e}`)
+        await appendJournal({ event: 'issue_sync_retro_failed', retroKey, error: String(e) })
+      }
     }
     await appendJournal({
       event: 'phase4_retro_complete',
@@ -983,6 +1152,42 @@ const finalReport = {
   haltReason: 'final_complete',
 }
 await writeState(state);
+
+// Phase 5 final drift-catch sync (soft-fail — full pass, no scope). Catches any drift
+// from operator edits between phases or missed transitions. NEVER halts.
+try {
+  const finalSync = await agent(
+    `Final drift-catch issue sync (full pass) for PRD ${setup.prdKey}.
+
+OPERATE FROM: ${setup.prdWorktreePath}
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
+3. Invoke (wrap in try/catch — soft-fail):
+     Skill: bmad-issue-tracking-sync
+   (NO env vars — this is the full pass that catches any drift.)
+4. Return JSON: { attempted: bool, created: int, updated: int, skipped: int, filtered: int,
+                  comments_posted: int, descriptions_updated: int, error?: string }
+
+CONSTRAINTS:
+- NEVER halt on sync failure.
+- This is a safety net — every prior phase has already issued scoped syncs.`,
+    { label: `issue-sync-final-${timestamp}`, phase: 'Final report', agentType: 'general-purpose' }
+  )
+  await appendJournal({
+    event: 'issue_sync_final',
+    created: finalSync?.created,
+    updated: finalSync?.updated,
+    skipped: finalSync?.skipped,
+    descriptions_updated: finalSync?.descriptions_updated,
+    error: finalSync?.error,
+  })
+} catch (e) {
+  log(`Final issue sync error (soft-fail): ${e}`)
+  await appendJournal({ event: 'issue_sync_final_failed', error: String(e) })
+}
+
 await appendJournal({
   event: 'final_complete',
   completed: state.completed.length,

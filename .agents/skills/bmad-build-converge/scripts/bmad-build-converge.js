@@ -39,6 +39,16 @@ let ciFailure = args.ciFailure || null;
 // at the same scope as the loop (not inside it) so it survives loop exit.
 let lastCIStatus = null;
 
+// Helper for issue-sync invocations from JS orchestrator agents. The JS runtime
+// may not have direct fs access, so this only GENERATES a unique tmp-file path.
+// The actual file write is done by the sync agent via shell `cat <<EOF`, and
+// cleanup is `rm -f`. PID + nonce ensures parallel calls don't clobber.
+const { randomBytes } = require('node:crypto');
+function commentPath() {
+  const nonce = randomBytes(8).toString('hex');
+  return `/tmp/bmad-sync-comment-${process.pid}-${nonce}.md`;
+}
+
 const SETUP_SCHEMA = {
   type: 'object',
   properties: {
@@ -57,6 +67,19 @@ const SETUP_SCHEMA = {
     gitlabHost: { type: 'string' },
     gitlabProjectId: { type: 'integer' },
     prdBranch: { type: 'string' },
+    issueSync: {
+      type: 'object',
+      properties: {
+        attempted: { type: 'boolean' },
+        created: { type: 'integer' },
+        updated: { type: 'integer' },
+        skipped: { type: 'integer' },
+        filtered: { type: 'integer' },
+        comments_posted: { type: 'integer' },
+        descriptions_updated: { type: 'integer' },
+        error: { type: 'string' },
+      },
+    },
   },
   required: ['storyKey', 'repoRoot', 'prdWorktreePath', 'prdKey', 'baseBranch', 'storyBranch',
              'worktreePath', 'baselineSha', 'resumedFromBranch', 'sprintStatusUpdated',
@@ -76,6 +99,19 @@ const BUILD_SCHEMA = {
     specStatus: { type: 'string' },
     pushed: { type: 'boolean' },
     error: { type: 'string' },
+    issueSync: {
+      type: 'object',
+      properties: {
+        attempted: { type: 'boolean' },
+        created: { type: 'integer' },
+        updated: { type: 'integer' },
+        skipped: { type: 'integer' },
+        filtered: { type: 'integer' },
+        comments_posted: { type: 'integer' },
+        descriptions_updated: { type: 'integer' },
+        error: { type: 'string' },
+      },
+    },
   },
   required: ['storyKey', 'iteration', 'newSha', 'followupReviewRecommended', 'specStatus', 'pushed'],
 };
@@ -88,6 +124,19 @@ const MERGE_SCHEMA = {
     merged: { type: 'boolean' },
     sprintStatusDone: { type: 'boolean' },
     error: { type: 'string' },
+    issueSync: {
+      type: 'object',
+      properties: {
+        attempted: { type: 'boolean' },
+        created: { type: 'integer' },
+        updated: { type: 'integer' },
+        skipped: { type: 'integer' },
+        filtered: { type: 'integer' },
+        comments_posted: { type: 'integer' },
+        descriptions_updated: { type: 'integer' },
+        error: { type: 'string' },
+      },
+    },
   },
   required: ['storyKey', 'mrIid', 'merged', 'sprintStatusDone'],
 };
@@ -312,7 +361,9 @@ ${cmd}`,
 // ============================================================================
 phase('Setup')
 log(`Setup for story ${storyKey} (discovering repo context)...`)
-const setup = await agent(
+let setup
+try {
+  setup = await agent(
   `You are the setup agent for story ${storyKey}.
 
 GENERIC DISCOVERY (works for any BMAD PRD — admin-logs-victorialogs, keycloak-idp, mobile-oidc, etc.):
@@ -369,7 +420,21 @@ STEPS:
    - status: in-progress
    - baseline_revision: <baselineSha>  # bmad-build-auto reads THIS field (NOT baseline_commit)
    git add + commit (push too — same branch).
-9. Return SETUP_SCHEMA JSON with ALL fields filled. The other phases depend on these — incomplete context = broken workflow.
+9. Issue tracking sync (soft-fail — NEVER block the build on GitLab errors):
+   a. cd ${prdWorktreePath} (issue tracker config + sprint-status.yaml live here).
+   b. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently (return issueSync.attempted=false).
+   c. Invoke:
+        BMAD_ISSUE_SYNC_SCOPE="${storyKey}" \
+        BMAD_ISSUE_SYNC_POPULATE_DESC=true \
+          Skill: bmad-issue-tracking-sync
+      This creates the story issue (if missing) with the spec body as description,
+      and flips its label to in-progress. Note: epic-N's in-progress transition is
+      owned by bmad-prd-orchestrate, not here.
+   d. Wrap in try/catch — on any error (rate limit, transient GitLab 5xx, missing scope
+      file), log to journal and continue. NEVER halt.
+   e. Capture {attempted: bool, created: int, updated: int, skipped: int, filtered: int,
+      descriptions_updated: int, error?: string} as issueSync in SETUP_SCHEMA return.
+10. Return SETUP_SCHEMA JSON with ALL fields filled. The other phases depend on these — incomplete context = broken workflow.
 
 CONSTRAINTS:
 - DO NOT modify prdWorktreePath (the PRD worktree). Only create the story worktree.
@@ -381,6 +446,13 @@ CONSTRAINTS:
 
 if (!setup || !setup.worktreePath) {
   return { aborted: true, stage: 'setup', storyKey, error: 'setup agent failed or discovery incomplete' }
+}
+} catch (e) {
+  // Orchestrator-level safety net: any setup crash (discovery, GitLab auth,
+  // sync agent itself) aborts the build with a clear error rather than
+  // surfacing an uncaught exception.
+  log(`Setup agent threw (caught): ${e}`)
+  return { aborted: true, stage: 'setup', storyKey, error: `setup_agent_threw: ${String(e)}` }
 }
 log(`Repo: ${setup.repoRoot} | PRD worktree: ${setup.prdWorktreePath} | prdKey: ${setup.prdKey}`)
 log(`Story branch: ${setup.storyBranch} | Worktree: ${setup.worktreePath} | Baseline: ${setup.baselineSha}`)
@@ -479,6 +551,9 @@ let iterationsLog = [];
 // blocked). Skill may finalize spec status to one of these if human
 // action is required or an unresolved issue blocked completion.
 let lastSpecStatus = null;
+// Tracks the last specStatus we issued an issue-sync for. Avoids per-iter spam
+// when bmad-build-auto flips the status back-and-forth across iterations.
+let lastSyncedSpecStatus = null;
 
 // PHASE A: REVIEW CONVERGENCE LOOP
 // Build + postBuild + push. NO CI WAIT. If build wants followup, loop immediately
@@ -586,6 +661,57 @@ CONSTRAINTS:
   lastSpecStatus = postBuildResult.specStatus
   currentSha = postBuildResult.newSha
   followup = postBuildResult.followupReviewRecommended
+
+  // Issue tracking sync on spec-status transitions (soft-fail — never block the build).
+  // Fires when spec lands on 'in-review' (post-build) or 'done' (final iter before CI gate),
+  // AND when the status differs from the previously synced value to avoid per-iter spam.
+  if ((postBuildResult.specStatus === 'in-review' || postBuildResult.specStatus === 'done') &&
+      postBuildResult.specStatus !== lastSyncedSpecStatus) {
+    log(`Issue sync: spec → ${postBuildResult.specStatus} (iter ${iteration})`)
+    try {
+      const reviewComment = `Story ${setup.storyKey} build converged — spec status: ${postBuildResult.specStatus}.\n\n` +
+        `Iteration: ${iteration}\nFinal SHA: ${postBuildResult.newSha.substring(0, 7)}\n` +
+        `MR: !${mrResult.mrIid} (${mrResult.mrUrl})`
+      const reviewCommentFile = commentPath()
+      const reviewSync = await agent(
+        `Issue sync for story ${setup.storyKey} on spec status ${postBuildResult.specStatus}.
+
+OPERATE FROM: ${setup.prdWorktreePath}
+
+COMMENT_FILE: ${reviewCommentFile}
+COMMENT_BODY (write this verbatim to the file):
+${reviewComment}
+
+STEPS:
+1. cd ${setup.prdWorktreePath}
+2. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently.
+3. Write the comment body to COMMENT_FILE via:
+     cat > "${reviewCommentFile}" <<'COMMENT_EOF'
+${reviewComment}
+COMMENT_EOF
+   (The single-quoted heredoc delimiter prevents shell expansion of the body.)
+4. Invoke (wrap in try/catch — soft-fail, NEVER halt):
+     BMAD_ISSUE_SYNC_SCOPE="${setup.storyKey}" \\
+     BMAD_ISSUE_SYNC_COMMENT_FILE="${reviewCommentFile}" \\
+     BMAD_ISSUE_SYNC_POPULATE_DESC=true \\
+       Skill: bmad-issue-tracking-sync
+   (Comment body delivered via file path, not shell interpolation.)
+5. After the Skill returns: rm -f "${reviewCommentFile}" (best-effort).
+6. Return JSON: { attempted: bool, created: int, updated: int, skipped: int,
+                  comments_posted: int, descriptions_updated: int, error?: string }
+
+CONSTRAINTS:
+- NEVER halt on sync failure — log + continue.
+- DO NOT modify any tracked file.
+- DO NOT invoke bmad-build or bmad-build-auto.`,
+        { label: `issue-sync-iter-${iteration}-${setup.storyKey}`, phase: 'Build with convergence', agentType: 'general-purpose' }
+      )
+      lastSyncedSpecStatus = postBuildResult.specStatus
+      log(`Issue sync (spec=${postBuildResult.specStatus}): created=${reviewSync?.created ?? 'n/a'} updated=${reviewSync?.updated ?? 'n/a'}`)
+    } catch (e) {
+      log(`Issue sync error (soft-fail): ${e}`)
+    }
+  }
 
   if (!followup) {
     convergedSha = postBuildResult.newSha
@@ -809,7 +935,8 @@ const canAutoMerge = lastCIStatus === 'success'
   && !SPEC_STATUSES_BLOCKING_MERGE.has(lastSpecStatus);
 if (canAutoMerge) {
   log(`Auto-merging MR !${mrResult.mrIid} (CI green, spec status: ${lastSpecStatus})...`)
-  mergeResult = await agent(
+  try {
+    mergeResult = await agent(
     `Merge MR !${mrResult.mrIid} for story ${setup.storyKey}, then sync sprint-status to done.
 
 CONTEXT:
@@ -819,6 +946,10 @@ CONTEXT:
 - gitlabHost: ${setup.gitlabHost}
 - project: <from _bmad/custom/issue-tracking.yaml>
 - storyKey: ${setup.storyKey}
+- mrIid: ${mrResult.mrIid}
+- mrUrl: ${mrResult.mrUrl}
+- convergedSha: ${convergedSha || 'unknown'}
+- relSpecPath: <spec path relative to repo root, derived from ${setup.specPath}>
 
 STEPS:
 1. Merge: \`GITLAB_HOST=${setup.gitlabHost} glab mr merge --yes --repo <project> ${mrResult.mrIid}\`
@@ -830,12 +961,41 @@ STEPS:
    - Update last_updated to "${timestamp}".
    - \`git add ${setup.sprintStatusPath} && git commit -m "chore(sprint-status): story ${setup.storyKey} → done (MR !${mrResult.mrIid} merged)" && git push origin ${setup.baseBranch}\`
    - sprintStatusDone = true only if push succeeded.
+3. Issue tracking sync (soft-fail — NEVER halt on GitLab errors). Operate from PRD worktree.
+   a. Verify _bmad/custom/issue-tracking.yaml exists. If not, skip silently (issueSync.attempted=false).
+   b. Determine epic completion:
+      - epic_N = first numeric segment of ${setup.storyKey}.
+      - Parse ${setup.sprintStatusPath} (now updated to done for this story).
+      - List all story keys with that epic_N prefix from development_status.
+      - If ALL such stories have status 'done', add 'epic-<N>' to the sync scope. Otherwise scope is just '<storyKey>'.
+   c. Compute COMMENT_FILE = /tmp/bmad-sync-comment-<pid>-<nonce>.md (unique, deterministic for this run).
+   d. Write the merge comment body via heredoc:
+        cat > "$COMMENT_FILE" <<'COMMENT_EOF'
+        Story ${setup.storyKey} merged via MR !${mrResult.mrIid} (<mrUrl>) — final SHA <sha7>.
+        See spec: <relSpecPath>
+        COMMENT_EOF
+      (The single-quoted heredoc delimiter prevents shell expansion of $ inside the body.)
+   e. Invoke (wrap in try/catch):
+        BMAD_ISSUE_SYNC_SCOPE="<csv>" \\
+        BMAD_ISSUE_SYNC_COMMENT_FILE="$COMMENT_FILE" \\
+        BMAD_ISSUE_SYNC_POPULATE_DESC=true \\
+          Skill: bmad-issue-tracking-sync
+   f. After the Skill returns: rm -f "$COMMENT_FILE" (best-effort).
+   g. Capture {attempted: bool, created: int, updated: int, skipped: int,
+      comments_posted: int, descriptions_updated: int, error?: string} as issueSync in MERGE_SCHEMA return.
 
 Note: when invoked from bmad-prd-orchestrate, the orchestrator may re-apply the done transition in Phase 4. sprint_plan.py advance is idempotent (never-regress), so a redundant write is a no-op. The merge agent here is the SOLE WRITER for standalone (non-orchestrator) invocations.
 
-RETURN MERGE_SCHEMA (storyKey, mrIid, merged, sprintStatusDone, error?).`,
+RETURN MERGE_SCHEMA (storyKey, mrIid, merged, sprintStatusDone, error?, issueSync?).`,
     { label: `merge-${setup.storyKey}`, phase: 'Auto-merge', schema: MERGE_SCHEMA, agentType: 'general-purpose' }
   )
+  } catch (e) {
+    // Orchestrator-level safety net: any merge crash (glab blip, sync agent
+    // uncaught error) converts to a structured skip rather than surfacing as
+    // an uncaught exception that aborts the entire build-converge run.
+    log(`Merge agent threw (caught): ${e}`)
+    mergeResult = { storyKey: setup.storyKey, mrIid: mrResult.mrIid, merged: false, sprintStatusDone: false, error: `merge_agent_threw: ${String(e)}` }
+  }
 } else {
   const reason = !lastSpecStatus || !SPEC_STATUSES_BLOCKING_MERGE.has(lastSpecStatus)
     ? `CI ${lastCIStatus || 'NOT CHECKED'}`

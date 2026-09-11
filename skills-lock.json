@@ -41,11 +41,6 @@
       "sourceType": "local",
       "computedHash": "e1234b539e4f6f89c48a88441f2d88587d69ed01b0347523e5a5b05e46f17611"
     },
-    "bmad-bmm-issue-sync": {
-      "source": "../../../../../bmad-issue-tracking",
-      "sourceType": "local",
-      "computedHash": "2f598ffeab2cd0623b6096d60f2901ae71724da3c4dc5194fc30036744ce8377"
-    },
     "bmad-brainstorming": {
       "source": "../../../../../BMAD-METHOD",
       "sourceType": "local",
@@ -65,7 +60,7 @@
       "source": "jrevillard/bmad-orchestration",
       "sourceType": "github",
       "skillPath": "skills/bmad-build-converge/SKILL.md",
-      "computedHash": "eb9fddfc0eeae5cee05dddac29191dce1f8ffe4aa5e223f951eadfc22a6f21f0"
+      "computedHash": "779a41583dacabc892a9621a8461bf0bda0428630fff8c20755e65f7a7a8b209"
     },
     "bmad-code-review": {
       "source": "../../../../../BMAD-METHOD",
@@ -102,14 +97,14 @@
       "ref": "skills-as-modules",
       "sourceType": "github",
       "skillPath": "skills/bmad-issue-tracking-setup/SKILL.md",
-      "computedHash": "df6626aa633062934eccecc3456b17cf244196c095cbd8da77ab45b928a2bd26"
+      "computedHash": "b892c91ce5e308a85f3cc7ee96917cf4a32863750694b74e593beb0bbcbf0338"
     },
     "bmad-issue-tracking-sync": {
       "source": "jrevillard/bmad-issue-tracking",
       "ref": "skills-as-modules",
       "sourceType": "github",
       "skillPath": "skills/bmad-issue-tracking-sync/SKILL.md",
-      "computedHash": "12973e82d35df140eb2eae3409057d7901976dd6d374e97d1969ccad21a2978b"
+      "computedHash": "8003694c321bf9afb0ae4f8be4ca0e538878b80af445ac472d640655e658ba05"
     },
     "bmad-party-mode": {
       "source": "../../../../../BMAD-METHOD",
@@ -125,7 +120,7 @@
       "source": "jrevillard/bmad-orchestration",
       "sourceType": "github",
       "skillPath": "skills/bmad-prd-orchestrate/SKILL.md",
-      "computedHash": "2f3693f5dc5b1f1dbf85fe6b789173e696f8005fe45f5428cc58a8a4ee861d84"
+      "computedHash": "87af4eb354aaace088633d5de596ef5d3033e1aa7546f37139265d65fc1a3484"
     },
     "bmad-prfaq": {
       "source": "../../../../../BMAD-METHOD",

@@ -674,23 +674,18 @@ container_scanning:
   # The artifact paths override remains so `promote:IMAGE` can still
   # fetch the report and SBOM as paths via
   # `needs: [scan:IMAGE, artifacts: true]`.
-  artifacts:
-    paths:
-      - gl-container-scanning-report.json
-      - "**/gl-sbom-*.cdx.json"
-  # Override the natif template's artifact upload. The natif
-  # `container_scanning` job uploads `gl-container-scanning-report.json`
-  # and `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) automatically. We
-  # disable BOTH uploads here:
-  #  - The vulnerability report stays as a job artifact path so that
-  #    `promote:IMAGE` can fetch it via `artifacts: true` and rewrite the
-  #    image name (`tmp/IMAGE:cand` → `IMAGE:primary_tag`) before doing
-  #    the single GitLab-schema-compliant upload.
-  #  - The CycloneDX SBOM goes through the same path — promote fetches,
-  #    rewrites the image reference inside the SBOM JSON, then re-uploads
-  #    so the SBOM tab tracks the released image, not the tmp/ scratch
-  #    ref. Without this, users would see a SBOM whose `metadata.component`
-  #    references `tmp/genie-ai-frontend:mr-123-abc` — a deleted image.
+  #
+  # This overrides the natif template's artifact upload: the natif
+  # `container_scanning` job uploads the vulnerability report and
+  # `**/gl-sbom-*.cdx.json` (CycloneDX SBOM) as GitLab REPORT artifacts
+  # automatically. We re-declare them as PATHS artifacts here so that
+  # `promote:IMAGE` can fetch them (`artifacts: true` on the needs entry),
+  # rewrite the image reference inside both JSONs
+  # (`tmp/IMAGE:cand` → `IMAGE:primary_tag`) and re-upload — so the
+  # SBOM/vulnerability tabs track the released image, not the tmp/
+  # scratch ref. Without this, users would see a SBOM whose
+  # `metadata.component` references `tmp/genie-ai-frontend:mr-123-abc` —
+  # a deleted image.
   artifacts:
     paths:
       - gl-container-scanning-report.json
@@ -1081,7 +1076,7 @@ promote:frontend:
   <<: *promote_template
   needs:
     - job: scan:frontend
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-frontend"
   rules:
@@ -1156,7 +1151,7 @@ promote:backend:
   <<: *promote_template
   needs:
     - job: scan:backend
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-backend"
   rules:
@@ -1230,7 +1225,7 @@ promote:okf-server:
   <<: *promote_template
   needs:
     - job: scan:okf-server
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-okf-server"
   rules:
@@ -1303,7 +1298,7 @@ promote:pii-service:
   <<: *promote_template
   needs:
     - job: scan:pii-service
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-pii-service"
   rules:
@@ -1410,7 +1405,7 @@ promote:db-migrations:
   <<: *promote_template
   needs:
     - job: scan:db-migrations
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-db-migrations"
   rules:
@@ -1485,7 +1480,7 @@ promote:document-repository:
   <<: *promote_template
   needs:
     - job: scan:document-repository
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-document-repository"
   rules:
@@ -1560,7 +1555,7 @@ promote:nginx:
   <<: *promote_template
   needs:
     - job: scan:nginx
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-nginx"
   rules:
@@ -1635,7 +1630,7 @@ promote:kong-config:
   <<: *promote_template
   needs:
     - job: scan:kong-config
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-kong-config"
   rules:
@@ -1710,7 +1705,7 @@ promote:chatqna-server:
   <<: *promote_template
   needs:
     - job: scan:chatqna-server
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-chatqna-server"
   rules:
@@ -1829,7 +1824,7 @@ promote:dataprep-arango:
   <<: *promote_template
   needs:
     - job: scan:dataprep-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
   rules:
@@ -1904,7 +1899,7 @@ promote:retriever-arango:
   <<: *promote_template
   needs:
     - job: scan:retriever-arango
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
   rules:
@@ -1979,7 +1974,7 @@ promote:reranker:
   <<: *promote_template
   needs:
     - job: scan:reranker
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-reranker"
   rules:
@@ -2054,7 +2049,7 @@ promote:embedding:
   <<: *promote_template
   needs:
     - job: scan:embedding
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-embedding"
   rules:
@@ -2129,7 +2124,7 @@ promote:textgen:
   <<: *promote_template
   needs:
     - job: scan:textgen
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-textgen"
   rules:
@@ -2204,7 +2199,7 @@ promote:postgres-init:
   <<: *promote_template
   needs:
     - job: scan:postgres-init
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-postgres-init"
   rules:
@@ -2279,7 +2274,7 @@ promote:keycloak:
   <<: *promote_template
   needs:
     - job: scan:keycloak
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak"
   rules:
@@ -2354,7 +2349,7 @@ promote:keycloak-config:
   <<: *promote_template
   needs:
     - job: scan:keycloak-config
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-keycloak-config"
   rules:
@@ -2429,7 +2424,7 @@ promote:tempo-proxy:
   <<: *promote_template
   needs:
     - job: scan:tempo-proxy
-      artifacts: false
+      artifacts: true
   variables:
     IMAGE_NAME: "genie-ai-tempo-proxy"
   rules:

@@ -16,7 +16,7 @@
 //                'retracted' IS the edit state for out-of-service content —
 //                David, 2026-09-04: Retract (edit/validate/correct) -> Edit)
 //   approve  review -> approve                       (reviewer signs off)
-//   publish  approve|publish|retracted -> publish   GUARDS: NOT serving (a
+//   publish  approve|publish -> publish             GUARDS: NOT serving (a
 //                serving repo is READ ONLY — retract first, 409
 //                REPO_READ_ONLY), >=1 concept + mint CONTENT gates
 //                (PII-complete, conformance-clean; NOT indexing — nothing is
@@ -24,7 +24,7 @@
 //                EFFECTS: version N+1 current; zip <name>-v(N+1).zip stored in
 //                doc-repo supersedes the old zip; serving CLEARED (the new
 //                version is not serving until INGEST).
-//   ingest   publish|retracted(non-serving) -> publish+serving  GUARD: bundle artifact
+//   ingest   publish -> publish+serving             GUARD: bundle artifact
 //                exists. EFFECTS: ingested_at + ingested_version = N AND the
 //                per-repo graph is PROMOTED to the versioned serving name
 //                `OKF_<name-slug>_v<N>` (graph-lifecycle-service) — the
@@ -71,12 +71,18 @@ const TRANSITIONS = {
   // validate/correct) -> Publish -> Ingest -> Retract (edit/validate/correct)
   // -> Edit ... — a RETRACTED repo is the EDIT state for out-of-service
   // content: it stays visible in its own lane, is editable (retract demoted
-  // the graph), and re-enters the loop via submit. publish-from-retracted is
-  // kept for API compatibility but the canonical loop re-runs review.
+  // the graph), and re-enters the loop via submit.
+  // David, 2026-09-11: a RETRACTED repo's ONLY exit is submit -> review.
+  // publish-from-retracted and ingest-from-retracted are INVALID — the
+  // pre-2026-09-11 escape hatches let a re-ingest skip review AND reuse the
+  // retired version (Kenya live incident: retract -> PII edits -> Ingest
+  // re-promoted the SAME v11 graph name, mutating retired content under
+  // citations pinned to it). Post-retract changes now always re-enter the
+  // loop: submit -> review -> approve -> publish (mints v{N+1}) -> ingest.
   submit: { from: ['draft', 'register', 'validate', 'retracted'], to: 'review' },
   approve: { from: ['review'], to: 'approve' },
-  publish: { from: ['approve', 'publish', 'retracted'], to: 'publish' },
-  ingest: { from: ['publish', 'retracted'], to: 'publish' },
+  publish: { from: ['approve', 'publish'], to: 'publish' },
+  ingest: { from: ['publish'], to: 'publish' },
   retract: { from: ['publish'], to: 'retracted' }
 };
 

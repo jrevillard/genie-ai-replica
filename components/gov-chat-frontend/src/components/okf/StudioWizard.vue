@@ -306,11 +306,14 @@ export default {
       // WIZARD IDEMPOTENCY R-C (David, 2026-09-04): the final step offers
       // only transitions VALID for the current state — never a doomed
       // publish on a serving repo (409 REPO_READ_ONLY). Serving = view-only
-      // no-op; published-not-serving advances with 'ingest'; everything
-      // else publishes (approve/retracted are legal publish sources).
+      // no-op; published-not-serving advances with 'ingest'; a RETRACTED
+      // repo re-enters the loop via 'submit' (its only legal exit — David,
+      // 2026-09-11); everything else publishes.
       const repo = this.$store.getters['okf/repoById'](this.draft.repo_id);
       if (repo && repo.ingested_at) return; // serving — nothing to mutate
-      const action = repo && repo.lifecycle_state === 'publish' && !repo.ingested_at ? 'ingest' : 'publish';
+      const s = repo && repo.lifecycle_state;
+      const action =
+        s === 'publish' ? 'ingest' : s === 'retracted' ? 'submit' : 'publish';
       this.$store
         .dispatch('okf/lifecycleTransition', {
           repoId: this.draft.repo_id,

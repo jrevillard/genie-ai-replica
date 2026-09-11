@@ -246,10 +246,31 @@ describe('publish — mint + bundle export + serving cleared', () => {
     await expect(lifecycleService.transition(REPO, 'publish', {})).resolves.toMatchObject({ ok: true });
   });
 
-  test('publish from retracted is legal (re-publish a pulled repo)', async () => {
+  test('publish from retracted is INVALID — a pulled repo re-enters via submit (David, 2026-09-11)', async () => {
     seedRepo({ lifecycle_state: 'retracted', version: 2 });
-    mockDb.query.mockResolvedValueOnce({ all: async () => [3] });
-    await expect(lifecycleService.transition(REPO, 'publish', {})).resolves.toMatchObject({ ok: true });
+    await expect(lifecycleService.transition(REPO, 'publish', {})).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+      status: 409,
+      details: { current_state: 'retracted', allowed: ['approve', 'publish'] }
+    });
+    expect(mintVersion).not.toHaveBeenCalled();
+  });
+
+  test('ingest from retracted is INVALID — reuse of the retired version is forbidden (Kenya v11 incident)', async () => {
+    seedRepo({ lifecycle_state: 'retracted', version: 2 });
+    await expect(lifecycleService.transition(REPO, 'ingest', {})).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+      status: 409,
+      details: { current_state: 'retracted', allowed: ['publish'] }
+    });
+  });
+
+  test('submit from retracted is the ONLY exit (Retract → Review → Approve → Publish → Ingest)', async () => {
+    seedRepo({ lifecycle_state: 'retracted', version: 2 });
+    await expect(lifecycleService.transition(REPO, 'submit', {})).resolves.toMatchObject({
+      ok: true,
+      lifecycle_state: 'review'
+    });
   });
 
   test('EMPTY repo refuses to publish (PUBLISH_EMPTY)', async () => {

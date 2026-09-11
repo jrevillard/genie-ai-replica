@@ -97,14 +97,14 @@
       "ref": "skills-as-modules",
       "sourceType": "github",
       "skillPath": "skills/bmad-issue-tracking-setup/SKILL.md",
-      "computedHash": "b892c91ce5e308a85f3cc7ee96917cf4a32863750694b74e593beb0bbcbf0338"
+      "computedHash": "18ab86366106edcf4b95d339d8bbc6d568d2b3086823b33bf33ee379b2b83006"
     },
     "bmad-issue-tracking-sync": {
       "source": "jrevillard/bmad-issue-tracking",
       "ref": "skills-as-modules",
       "sourceType": "github",
       "skillPath": "skills/bmad-issue-tracking-sync/SKILL.md",
-      "computedHash": "8003694c321bf9afb0ae4f8be4ca0e538878b80af445ac472d640655e658ba05"
+      "computedHash": "8c060055ab68f69b36953808d92743bdb901c939e23e19ffda14358a7fb263c7"
     },
     "bmad-party-mode": {
       "source": "../../../../../BMAD-METHOD",

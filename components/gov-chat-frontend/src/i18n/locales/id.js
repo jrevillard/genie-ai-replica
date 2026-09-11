@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into id.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'Afganistan',
@@ -364,7 +362,7 @@ export default {
         role: 'Peran'
       },
       userSearch: {
-        resultsFound: 'Ditemukan {total} pengguna yang cocok dengan "{term}"',
+        resultsFound: 'Ditemukan {total} pengguna yang cocok dengan \"{term}\"',
         error: 'Kesalahan mencari pengguna'
       }
     },
@@ -451,11 +449,11 @@ export default {
       deleteCategory: 'Hapus Kategori',
       editService: 'Ubah Layanan',
       deleteService: 'Hapus Layanan',
-      empty: 'Tidak ada kategori ditemukan. Klik "Tambah Kategori Baru" untuk memulai.',
+      empty: 'Tidak ada kategori ditemukan. Klik \"Tambah Kategori Baru\" untuk memulai.',
       formTitleCreateCategory: 'Buat Kategori Baru',
-      formTitleAddService: 'Tambah Layanan ke "{categoryName}"',
-      formTitleEditCategory: 'Ubah Kategori: "{itemName}"',
-      formTitleEditService: 'Ubah Layanan: "{itemName}"',
+      formTitleAddService: 'Tambah Layanan ke \"{categoryName}\"',
+      formTitleEditCategory: 'Ubah Kategori: \"{itemName}\"',
+      formTitleEditService: 'Ubah Layanan: \"{itemName}\"',
       nameEnLabel: 'Nama (Inggris)',
       translationsTitle: 'Terjemahan untuk Tampilan',
       loadingTranslations: 'Memuat terjemahan...',
@@ -473,9 +471,9 @@ export default {
       confirmDeleteTitleCategory: 'Hapus Kategori?',
       confirmDeleteTitleService: 'Hapus Layanan?',
       confirmDeleteCategory:
-        'Apakah Anda yakin ingin menghapus Kategori "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+        'Apakah Anda yakin ingin menghapus Kategori \"{itemName}\"? Tindakan ini tidak dapat dibatalkan.',
       confirmDeleteService:
-        'Apakah Anda yakin ingin menghapus Layanan "{itemName}"? Tindakan ini tidak dapat dibatalkan.',
+        'Apakah Anda yakin ingin menghapus Layanan \"{itemName}\"? Tindakan ini tidak dapat dibatalkan.',
       deleteSuccessCategory: 'Kategori berhasil dihapus.',
       deleteSuccessService: 'Layanan berhasil dihapus.',
       deleteErrorCategory: 'Gagal menghapus Kategori.',
@@ -509,8 +507,8 @@ export default {
       ingestQueuedSuccess: '{count} file telah dimasukkan ke antrian untuk diproses.',
       ingestQueuedError: 'Terjadi kesalahan selama proses pemrosesan batch.',
       uploadSuccessMultiple: '{count} file berhasil diunggah.',
-      linkSubmitSuccess: 'Berhasil merayapi dan menyimpan "{fileName}".',
-      actionSuccess: 'Tindakan "{action}" pada file {fileId} berhasil.',
+      linkSubmitSuccess: 'Berhasil merayapi dan menyimpan \"{fileName}\".',
+      actionSuccess: 'Tindakan \"{action}\" pada file {fileId} berhasil.',
       metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.'
     }
   },
@@ -721,7 +719,7 @@ export default {
     emptyFolder: 'Folder ini kosong. Pindahkan percakapan ke sini dari menu obrolan.',
     noStarredChats: 'Belum ada percakapan berbintang. Bintangi percakapan untuk menambahkannya di sini.',
     noArchivedChats: 'Belum ada percakapan yang diarsipkan.',
-    noSearchResults: 'Tidak ada percakapan yang ditemukan untuk "{term}"',
+    noSearchResults: 'Tidak ada percakapan yang ditemukan untuk \"{term}\"',
     loadingChats: 'Memuat obrolan...',
     errorLoadingConversations: 'Gagal memuat percakapan. Silakan coba lagi.',
     errorLoadingUser: 'Data pengguna tidak lengkap. Silakan muat ulang halaman.',
@@ -1347,8 +1345,9 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',
-    categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
-    serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
+    categoryNotFound: 'Kategori \"{label}\" tidak ditemukan dalam hierarki pengetahuan',
+    serviceLabelMismatch:
+      'Layanan \"{label}\" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
     noFilterWarning: 'Tidak ada filter konteks aktif — kueri akan tidak difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
@@ -1548,9 +1547,9 @@ export default {
     notifications: {
       dropError:
         'Hanya file yang bisa dilepaskan. Harap periksa apakah Anda menyeret file yang valid dari komputer Anda.',
-      typeNotAllowed: 'Tipe file "{extension}" tidak diizinkan.',
+      typeNotAllowed: 'Tipe file \"{extension}\" tidak diizinkan.',
       shortcutUnsupported: 'File pintasan (.url) tidak didukung. Harap seret file yang sebenarnya.',
-      duplicate: 'File "{fileName}" sudah ditambahkan.',
+      duplicate: 'File \"{fileName}\" sudah ditambahkan.',
       uploadSuccess: 'Berhasil mengunggah {fileName}',
       uploadFailed: 'Gagal mengunggah {fileName}.'
     }
@@ -1674,7 +1673,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1723,7 +1728,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1840,7 +1846,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1904,7 +1909,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1949,7 +1953,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2185,7 +2189,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'Repositori yang dibuat dari crawl ini',
       convQueued: 'Dalam antrean...',
@@ -2194,8 +2198,7 @@ export default {
       convAdding: 'Menambahkan konsep ([p] halaman sejauh ini)...',
       convDone: 'Dibuat ([p] halaman)',
       convFailed: 'Gagal',
-      createStarted: 'Membuat "[name]" — pantau kemajuan di bawah.',
-
+      createStarted: 'Membuat \"[name]\" — pantau kemajuan di bawah.',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2257,6 +2260,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

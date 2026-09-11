@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into sw.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'Afghanistani',
@@ -364,7 +362,7 @@ export default {
         role: 'Wajibu'
       },
       userSearch: {
-        resultsFound: 'Imepatikana {total} watumiaji wanaofanana na "{term}"',
+        resultsFound: 'Imepatikana {total} watumiaji wanaofanana na \"{term}\"',
         error: 'Hitilafu katika kutafuta watumiaji'
       }
     },
@@ -451,11 +449,11 @@ export default {
       deleteCategory: 'Futa Kitengo',
       editService: 'Hariri Huduma',
       deleteService: 'Futa Huduma',
-      empty: 'Hakuna vitengo vilivyopatikana. Bofya "Ongeza Kitengo Kipya" ili kuanza.',
+      empty: 'Hakuna vitengo vilivyopatikana. Bofya \"Ongeza Kitengo Kipya\" ili kuanza.',
       formTitleCreateCategory: 'Unda Kitengo Kipya',
-      formTitleAddService: 'Ongeza Huduma kwa "{categoryName}"',
-      formTitleEditCategory: 'Hariri Kitengo: "{itemName}"',
-      formTitleEditService: 'Hariri Huduma: "{itemName}"',
+      formTitleAddService: 'Ongeza Huduma kwa \"{categoryName}\"',
+      formTitleEditCategory: 'Hariri Kitengo: \"{itemName}\"',
+      formTitleEditService: 'Hariri Huduma: \"{itemName}\"',
       nameEnLabel: 'Jina (Kiingereza)',
       translationsTitle: 'Tafsiri za Kuonyesha',
       loadingTranslations: 'Inapakia tafsiri...',
@@ -471,8 +469,8 @@ export default {
       confirmCancelEdit: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kughairi?',
       confirmDeleteTitleCategory: 'Futa Kitengo?',
       confirmDeleteTitleService: 'Futa Huduma?',
-      confirmDeleteCategory: 'Una uhakika unataka kufuta Kitengo "{itemName}"? Kitendo hiki hakiwezi kutenduliwa.',
-      confirmDeleteService: 'Una uhakika unataka kufuta Huduma "{itemName}"? Kitendo hiki hakiwezi kutenduliwa.',
+      confirmDeleteCategory: 'Una uhakika unataka kufuta Kitengo \"{itemName}\"? Kitendo hiki hakiwezi kutenduliwa.',
+      confirmDeleteService: 'Una uhakika unataka kufuta Huduma \"{itemName}\"? Kitendo hiki hakiwezi kutenduliwa.',
       deleteSuccessCategory: 'Kitengo kimefutwa kwa mafanikio.',
       deleteSuccessService: 'Huduma imefutwa kwa mafanikio.',
       deleteErrorCategory: 'Imeshindwa kufuta Kitengo.',
@@ -506,8 +504,8 @@ export default {
       ingestQueuedSuccess: 'Faili {count} zimewekwa kwenye foleni ya kuingizwa.',
       ingestQueuedError: 'Hitilafu imetokea wakati wa mchakato wa uingizaji wa kundi.',
       uploadSuccessMultiple: 'Faili {count} zimepakiwa kwa mafanikio.',
-      linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi "{fileName}".',
-      actionSuccess: 'Kitendo "{action}" kwenye faili {fileId} kimefanikiwa.',
+      linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi \"{fileName}\".',
+      actionSuccess: 'Kitendo \"{action}\" kwenye faili {fileId} kimefanikiwa.',
       metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.'
     }
   },
@@ -718,7 +716,7 @@ export default {
     emptyFolder: 'Folda hii ni tupu. Hamisha mazungumzo hapa kutoka kwa menyu ya mazungumzo.',
     noStarredChats: 'Bado hakuna mazungumzo yaliyowekwa nyota. Weka nyota kwenye mazungumzo ili kuyaongeza hapa.',
     noArchivedChats: 'Bado hakuna mazungumzo yaliyohifadhiwa.',
-    noSearchResults: 'Hakuna mazungumzo yaliyopatikana kwa "{term}"',
+    noSearchResults: 'Hakuna mazungumzo yaliyopatikana kwa \"{term}\"',
     loadingChats: 'Inapakia mazungumzo...',
     errorLoadingConversations: 'Imeshindwa kupakia mazungumzo. Tafadhali jaribu tena.',
     errorLoadingUser: 'Data ya mtumiaji haijajaa. Tafadhali pakia upya ukurasa.',
@@ -1348,8 +1346,8 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',
-    categoryNotFound: 'Kategoria "{label}" haipatikani katika mpangilio wa maarifa',
-    serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
+    categoryNotFound: 'Kategoria \"{label}\" haipatikani katika mpangilio wa maarifa',
+    serviceLabelMismatch: 'Huduma \"{label}\" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
     noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja itakuwa bila kichujio.',
     placeholder: 'Andika swali lako hapa...',
     sendButton: 'Tuma',
@@ -1549,9 +1547,9 @@ export default {
     notifications: {
       dropError:
         'Faili pekee ndizo zinaweza kudondoshwa. Tafadhali hakikisha unaburuta faili halali kutoka kwa kompyuta yako.',
-      typeNotAllowed: 'Aina ya faili "{extension}" hairuhusiwi.',
+      typeNotAllowed: 'Aina ya faili \"{extension}\" hairuhusiwi.',
       shortcutUnsupported: 'Faili za njia za mkato (.url) hazitumiki. Tafadhali buruta faili halisi.',
-      duplicate: 'Faili "{fileName}" tayari imeongezwa.',
+      duplicate: 'Faili \"{fileName}\" tayari imeongezwa.',
       uploadSuccess: 'Imefanikiwa kupakia {fileName}',
       uploadFailed: 'Imeshindwa kupakia {fileName}.'
     }
@@ -1675,7 +1673,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1724,7 +1728,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1841,7 +1846,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1905,7 +1909,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1950,7 +1953,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2186,7 +2189,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'Hifadhi zilizoundwa kutoka kwenye crawl hii',
       convQueued: 'Inasubiri...',
@@ -2195,8 +2198,7 @@ export default {
       convAdding: 'Inaongeza dhana ([p] kurasa hadi sasa)...',
       convDone: 'Imeundwa ([p] kurasa)',
       convFailed: 'Imeshindikana',
-      createStarted: 'Inaunda "[name]" — fuata maendeleo hapa chini.',
-
+      createStarted: 'Inaunda \"[name]\" — fuata maendeleo hapa chini.',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2258,6 +2260,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

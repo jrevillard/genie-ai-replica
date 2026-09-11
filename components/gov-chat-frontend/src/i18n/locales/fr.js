@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into fr.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'Afghanistan',
@@ -364,7 +362,7 @@ export default {
         role: 'Rôle'
       },
       userSearch: {
-        resultsFound: '{total} utilisateurs trouvés correspondant à "{term}"',
+        resultsFound: '{total} utilisateurs trouvés correspondant à \"{term}\"',
         error: "Erreur lors de la recherche d'utilisateurs"
       }
     },
@@ -452,11 +450,11 @@ export default {
       deleteCategory: 'Supprimer la catégorie',
       editService: 'Modifier le service',
       deleteService: 'Supprimer le service',
-      empty: 'Aucune catégorie trouvée. Cliquez sur "Ajouter une nouvelle catégorie" pour commencer.',
+      empty: 'Aucune catégorie trouvée. Cliquez sur \"Ajouter une nouvelle catégorie\" pour commencer.',
       formTitleCreateCategory: 'Créer une nouvelle catégorie',
-      formTitleAddService: 'Ajouter un service à "{categoryName}"',
-      formTitleEditCategory: 'Modifier la catégorie : "{itemName}"',
-      formTitleEditService: 'Modifier le service : "{itemName}"',
+      formTitleAddService: 'Ajouter un service à \"{categoryName}\"',
+      formTitleEditCategory: 'Modifier la catégorie : \"{itemName}\"',
+      formTitleEditService: 'Modifier le service : \"{itemName}\"',
       nameEnLabel: 'Nom (Anglais)',
       translationsTitle: "Traductions pour l'affichage",
       loadingTranslations: 'Chargement des traductions...',
@@ -474,9 +472,9 @@ export default {
       confirmDeleteTitleCategory: 'Supprimer la catégorie ?',
       confirmDeleteTitleService: 'Supprimer le service ?',
       confirmDeleteCategory:
-        'Êtes-vous sûr de vouloir supprimer la catégorie "{itemName}" ? Cette action est irréversible.',
+        'Êtes-vous sûr de vouloir supprimer la catégorie \"{itemName}\" ? Cette action est irréversible.',
       confirmDeleteService:
-        'Êtes-vous sûr de vouloir supprimer le service "{itemName}" ? Cette action est irréversible.',
+        'Êtes-vous sûr de vouloir supprimer le service \"{itemName}\" ? Cette action est irréversible.',
       deleteSuccessCategory: 'Catégorie supprimée avec succès.',
       deleteSuccessService: 'Service supprimé avec succès.',
       deleteErrorCategory: 'Échec de la suppression de la catégorie.',
@@ -510,8 +508,8 @@ export default {
       ingestQueuedSuccess: "{count} fichier(s) ont été mis en file d'attente pour ingestion.",
       ingestQueuedError: "Une erreur s'est produite lors du processus d'ingestion par lot.",
       uploadSuccessMultiple: '{count} fichier(s) téléchargé(s) avec succès.',
-      linkSubmitSuccess: '"{fileName}" a été exploré et enregistré avec succès.',
-      actionSuccess: 'L\'action "{action}" sur le fichier {fileId} a réussi.',
+      linkSubmitSuccess: '\"{fileName}\" a été exploré et enregistré avec succès.',
+      actionSuccess: 'L\'action \"{action}\" sur le fichier {fileId} a réussi.',
       metadataUpdateSuccess: 'Les métadonnées du fichier {fileId} ont été mises à jour.'
     }
   },
@@ -723,7 +721,7 @@ export default {
     emptyFolder: 'Ce dossier est vide. Déplacez des conversations ici depuis le menu de la discussion.',
     noStarredChats: "Aucune discussion en favori pour le moment. Mettez une discussion en favori pour l'ajouter ici.",
     noArchivedChats: 'Aucune discussion archivée pour le moment.',
-    noSearchResults: 'Aucune discussion trouvée pour "{term}"',
+    noSearchResults: 'Aucune discussion trouvée pour \"{term}\"',
     loadingChats: 'Chargement des discussions...',
     errorLoadingConversations: 'Échec du chargement des discussions. Veuillez réessayer.',
     errorLoadingUser: "Les données de l'utilisateur sont incomplètes. Veuillez recharger la page.",
@@ -1565,10 +1563,10 @@ export default {
     notifications: {
       dropError:
         'Seuls les fichiers peuvent être déposés. Veuillez vérifier que vous faites glisser un fichier valide depuis votre ordinateur.',
-      typeNotAllowed: 'Le type de fichier "{extension}" n\'est pas autorisé.',
+      typeNotAllowed: 'Le type de fichier \"{extension}\" n\'est pas autorisé.',
       shortcutUnsupported:
         'Les fichiers raccourcis (.url) ne sont pas pris en charge. Veuillez faire glisser le fichier réel.',
-      duplicate: 'Le fichier "{fileName}" a déjà été ajouté.',
+      duplicate: 'Le fichier \"{fileName}\" a déjà été ajouté.',
       uploadSuccess: '{fileName} téléchargé avec succès',
       uploadFailed: 'Échec du téléchargement de {fileName}.'
     }
@@ -1692,7 +1690,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1741,7 +1745,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1858,7 +1863,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1922,7 +1926,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1967,7 +1970,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2203,7 +2206,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'Dépôts créés à partir de cette exploration',
       convQueued: "En file d'attente...",
@@ -2213,7 +2216,6 @@ export default {
       convDone: 'Créé ([p] pages)',
       convFailed: 'Échec',
       createStarted: 'Création de « [name] » — suivez la progression ci-dessous.',
-
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2275,6 +2277,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

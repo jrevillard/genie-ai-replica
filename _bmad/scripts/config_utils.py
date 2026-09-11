@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
-import tomllib
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+
+import tomllib
 
 
 class ConfigError(ValueError):
@@ -44,8 +46,7 @@ def _detect_keyed_merge_field(items: list[Any]) -> str | None:
                 value = item[candidate]
                 if not isinstance(value, str):
                     raise ConfigError(
-                        f"keyed array identifier `{candidate}` must be a string, "
-                        f"got {type(value).__name__}"
+                        f"keyed array identifier `{candidate}` must be a string, got {type(value).__name__}"
                     )
                 if not value:
                     raise ConfigError(
@@ -82,7 +83,9 @@ def structural_merge(base: Any, override: Any) -> Any:
     if isinstance(base, dict) and isinstance(override, dict):
         result = dict(base)
         for key, value in override.items():
-            result[key] = structural_merge(result[key], value) if key in result else value
+            result[key] = (
+                structural_merge(result[key], value) if key in result else value
+            )
         return result
     if isinstance(base, list) and isinstance(override, list):
         return _merge_arrays(base, override)
@@ -109,11 +112,11 @@ def global_user_config_dir() -> Path:
 
 def load_central_config(project_root: Path) -> dict[str, Any]:
     bmad_dir = project_root / "_bmad"
+    global_dir = global_user_config_dir()
     return merge_layers(
         (
             load_toml(bmad_dir / "config.toml", required=True),
-            load_toml(bmad_dir / "config.user.toml"),
-            load_toml(global_user_config_dir() / "config.user.toml"),
+            load_toml(global_dir / "config.user.toml"),
             load_toml(bmad_dir / "custom" / "config.toml"),
             load_toml(bmad_dir / "custom" / "config.user.toml"),
         )
@@ -123,10 +126,11 @@ def load_central_config(project_root: Path) -> dict[str, Any]:
 def load_customization(project_root: Path | None, skill_dir: Path) -> dict[str, Any]:
     skill_name = skill_dir.name
     custom_dir = project_root / "_bmad" / "custom" if project_root else None
+    global_dir = global_user_config_dir()
     return merge_layers(
         (
             load_toml(skill_dir / "customize.toml", required=True),
-            load_toml(global_user_config_dir() / f"{skill_name}.user.toml"),
+            load_toml(global_dir / f"{skill_name}.user.toml"),
             load_toml(custom_dir / f"{skill_name}.toml") if custom_dir else {},
             load_toml(custom_dir / f"{skill_name}.user.toml") if custom_dir else {},
         )

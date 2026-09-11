@@ -41,6 +41,11 @@
       "sourceType": "local",
       "computedHash": "e1234b539e4f6f89c48a88441f2d88587d69ed01b0347523e5a5b05e46f17611"
     },
+    "bmad-bmm-issue-sync": {
+      "source": "../../../../../bmad-issue-tracking",
+      "sourceType": "local",
+      "computedHash": "2f598ffeab2cd0623b6096d60f2901ae71724da3c4dc5194fc30036744ce8377"
+    },
     "bmad-brainstorming": {
       "source": "../../../../../BMAD-METHOD",
       "sourceType": "local",
@@ -55,6 +60,12 @@
       "source": "../../../../../BMAD-METHOD",
       "sourceType": "local",
       "computedHash": "8439c7659881b6649a7d6de9c3ff0c0def91b5c394633e65f780a82f5930c7d9"
+    },
+    "bmad-build-converge": {
+      "source": "jrevillard/bmad-orchestration",
+      "sourceType": "github",
+      "skillPath": "skills/bmad-build-converge/SKILL.md",
+      "computedHash": "eb9fddfc0eeae5cee05dddac29191dce1f8ffe4aa5e223f951eadfc22a6f21f0"
     },
     "bmad-code-review": {
       "source": "../../../../../BMAD-METHOD",
@@ -86,6 +97,20 @@
       "sourceType": "local",
       "computedHash": "282fd3434f6f271a377a431332c28ebd60ada04a98ffd4d469706a5a183de862"
     },
+    "bmad-issue-tracking-setup": {
+      "source": "jrevillard/bmad-issue-tracking",
+      "ref": "skills-as-modules",
+      "sourceType": "github",
+      "skillPath": "skills/bmad-issue-tracking-setup/SKILL.md",
+      "computedHash": "df6626aa633062934eccecc3456b17cf244196c095cbd8da77ab45b928a2bd26"
+    },
+    "bmad-issue-tracking-sync": {
+      "source": "jrevillard/bmad-issue-tracking",
+      "ref": "skills-as-modules",
+      "sourceType": "github",
+      "skillPath": "skills/bmad-issue-tracking-sync/SKILL.md",
+      "computedHash": "12973e82d35df140eb2eae3409057d7901976dd6d374e97d1969ccad21a2978b"
+    },
     "bmad-party-mode": {
       "source": "../../../../../BMAD-METHOD",
       "sourceType": "local",
@@ -95,6 +120,12 @@
       "source": "../../../../../BMAD-METHOD",
       "sourceType": "local",
       "computedHash": "f8863970172cf7e1320d8d73e5128627412e5dd687a1fc20f937878c1494a574"
+    },
+    "bmad-prd-orchestrate": {
+      "source": "jrevillard/bmad-orchestration",
+      "sourceType": "github",
+      "skillPath": "skills/bmad-prd-orchestrate/SKILL.md",
+      "computedHash": "2f3693f5dc5b1f1dbf85fe6b789173e696f8005fe45f5428cc58a8a4ee861d84"
     },
     "bmad-prfaq": {
       "source": "../../../../../BMAD-METHOD",

@@ -362,7 +362,7 @@ export default {
         role: '角色'
       },
       userSearch: {
-        resultsFound: '找到 {total} 个匹配 \"{term}\" 的用户',
+        resultsFound: '找到 {total} 个匹配 "{term}" 的用户',
         error: '搜索用户出错'
       }
     },
@@ -446,11 +446,11 @@ export default {
       deleteCategory: '删除类别',
       editService: '编辑服务',
       deleteService: '删除服务',
-      empty: '未找到类别。点击 \"添加新类别\" 开始。',
+      empty: '未找到类别。点击 "添加新类别" 开始。',
       formTitleCreateCategory: '创建新类别',
-      formTitleAddService: '向 \"{categoryName}\" 添加服务',
-      formTitleEditCategory: '编辑类别: \"{itemName}\"',
-      formTitleEditService: '编辑服务: \"{itemName}\"',
+      formTitleAddService: '向 "{categoryName}" 添加服务',
+      formTitleEditCategory: '编辑类别: "{itemName}"',
+      formTitleEditService: '编辑服务: "{itemName}"',
       nameEnLabel: '名称 (英文)',
       translationsTitle: '用于显示的翻译',
       loadingTranslations: '正在加载翻译...',
@@ -466,8 +466,8 @@ export default {
       confirmCancelEdit: '您有未保存的更改。确定要取消吗？',
       confirmDeleteTitleCategory: '删除类别？',
       confirmDeleteTitleService: '删除服务？',
-      confirmDeleteCategory: '您确定要删除类别 \"{itemName}\" 吗？此操作无法撤销。',
-      confirmDeleteService: '您确定要删除服务 \"{itemName}\" 吗？此操作无法撤销。',
+      confirmDeleteCategory: '您确定要删除类别 "{itemName}" 吗？此操作无法撤销。',
+      confirmDeleteService: '您确定要删除服务 "{itemName}" 吗？此操作无法撤销。',
       deleteSuccessCategory: '类别删除成功。',
       deleteSuccessService: '服务删除成功。',
       deleteErrorCategory: '删除类别失败。',
@@ -501,8 +501,8 @@ export default {
       ingestQueuedSuccess: '{count} 个文件已加入提取队列。',
       ingestQueuedError: '批量提取过程中发生错误。',
       uploadSuccessMultiple: '{count} 个文件上传成功。',
-      linkSubmitSuccess: '成功爬取并保存 \"{fileName}\"。',
-      actionSuccess: '对文件 {fileId} 的操作 \"{action}\" 成功。',
+      linkSubmitSuccess: '成功爬取并保存 "{fileName}"。',
+      actionSuccess: '对文件 {fileId} 的操作 "{action}" 成功。',
       metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。'
     }
   },
@@ -713,7 +713,7 @@ export default {
     archivedChats: '归档聊天',
     noStarredChats: '尚未有星标对话。星标一个对话以添加到这里。',
     noArchivedChats: '尚未有归档对话。',
-    noSearchResults: '未找到 \"{term}\" 的对话',
+    noSearchResults: '未找到 "{term}" 的对话',
     loadingChats: '正在加载对话...',
     errorLoadingConversations: '加载对话失败。请重试。',
     errorLoadingUser: '用户数据不完整。请重新加载页面。',
@@ -1284,8 +1284,8 @@ export default {
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
-    categoryNotFound: '在知识层次结构中未找到类别\"{label}\"',
-    serviceLabelMismatch: '服务\"{label}\"使用的UI标签可能与知识层次结构不匹配',
+    categoryNotFound: '在知识层次结构中未找到类别"{label}"',
+    serviceLabelMismatch: '服务"{label}"使用的UI标签可能与知识层次结构不匹配',
     noFilterWarning: '没有活动的上下文筛选器 — 查询将不被筛选。',
     placeholder: '在此输入您的查询...',
     sendButton: '发送',
@@ -1481,9 +1481,9 @@ export default {
     uploading: '上传中...',
     notifications: {
       dropError: '只能拖放文件。请检查您是否从计算机拖动了有效文件。',
-      typeNotAllowed: '不允许的文件类型 \"{extension}\"。',
+      typeNotAllowed: '不允许的文件类型 "{extension}"。',
       shortcutUnsupported: '不支持快捷方式文件 (.url)。请拖动实际文件。',
-      duplicate: '文件 \"{fileName}\" 已添加。',
+      duplicate: '文件 "{fileName}" 已添加。',
       uploadSuccess: '成功上传 {fileName}',
       uploadFailed: '上传 {fileName} 失败。'
     }
@@ -1608,12 +1608,12 @@ export default {
         label: 'Concepts',
         loading: 'Loading…',
         resplit: 'Re-split',
-        flagged: 'flagged',
+        flagged: '已标记',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          '包含已标记实体的 concept — 打开每个实体，移除或更改它，保存（将自动重新扫描）；或在发布时确认它们。',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTip: '已标记实体：{k}。打开、移除或更改它们，然后保存 — 将自动重新扫描。',
+        piiTipBare: '已标记实体 — 打开、检查，然后保存以重新扫描。'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1663,7 +1663,7 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry'
+      saveFailed: '保存失败 — 重试'
     },
     dashboard: {
       bulk: {
@@ -1887,7 +1887,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2123,7 +2123,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: '从此爬取创建的仓库',
       convQueued: '排队中...',
@@ -2197,65 +2197,65 @@ export default {
       }
     },
     pii: {
-      panel: 'Flagged entities',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
-      scanning: 'Scanning…',
-      clean: 'No flagged entities — this concept is clear.',
-      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
-      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      panel: '标记的实体',
+      nFlagged: '找到 {n} 个',
+      rescan: '重新扫描',
+      scanning: '扫描中…',
+      clean: '没有标记的实体 — 此 concept 正常。',
+      how: '修复：移除或重新表述（例如将名字改为职位），然后保存 — 重新扫描会更新此列表。',
+      descFallback: '此处检测到个人数据（GDPR第4(1)条 — 涉及可识别的个人）。',
+      scanError: '扫描不可用',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
-        EMAIL_ADDRESS: 'Email address',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        PERSON: '人名',
+        LOCATION: '位置',
+        DATE_TIME: '日期或时间',
+        EMAIL_ADDRESS: '电子邮件地址',
+        PHONE_NUMBER: '电话号码',
+        IP_ADDRESS: 'IP 地址',
+        NRP: '国家注册号码',
+        BD_NATIONAL_ID: '国民身份证号码'
       },
       desc: {
-        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
-        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
-        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
-        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
-        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
-        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
-        NRP: 'A national registration number was detected. It strongly identifies a person.',
-        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+        PERSON: '检测到人名。名字可以直接识别自然人。',
+        LOCATION: '检测到地名。与其他数据结合可能识别个人。',
+        DATE_TIME: '检测到日期或时间。日期可能有助于识别个人。',
+        EMAIL_ADDRESS: '检测到电子邮件地址。它能直接识别可联系的个人。',
+        PHONE_NUMBER: '检测到电话号码。它能直接识别可联系的个人。',
+        IP_ADDRESS: '检测到 IP 地址。它能识别设备或家庭。',
+        NRP: '检测到国家注册号码。它能强烈识别个人。',
+        BD_NATIONAL_ID: '检测到国民身份证号码。它能强烈识别个人。'
       },
-      allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      allClear: '正常',
+      redactFile: '遮盖整个文件',
+      confirmRedactFile: '确认：遮盖整个文件？',
+      locateTip: '在编辑器中显示此文本',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        label: '整个文件：',
+        redact: '遮盖文件',
+        remove: '移除正文',
+        accept: '全部接受',
+        confirmRedact: '确认：遮盖整个文件？',
+        confirmRemove: '确认：移除整个正文？'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
-        replacement: 'Replacement text',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        redact: '遮盖',
+        replace: '替换',
+        remove: '移除',
+        accept: '接受',
+        replacement: '替换文本',
+        apply: '应用',
+        cancel: '取消'
       },
       resolved: {
-        title: 'Processed in this file',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
-        removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        title: '已在此文件中处理',
+        redacted: '已遮盖',
+        replaced: '已替换',
+        removed: '已移除',
+        accepted: '已接受',
+        fileRedacted: '文件已遮盖',
+        kept: '保留在文本中',
+        removedWord: '已移除',
+        wholeFile: '整个文件正文已被遮盖'
       }
     }
   }

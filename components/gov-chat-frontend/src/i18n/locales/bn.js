@@ -362,7 +362,7 @@ export default {
         role: 'ভূমিকা'
       },
       userSearch: {
-        resultsFound: '\"{term}\" এর সাথে মেলে এমন {total} জন ব্যবহারকারী পাওয়া গেছে',
+        resultsFound: '"{term}" এর সাথে মেলে এমন {total} জন ব্যবহারকারী পাওয়া গেছে',
         error: 'ব্যবহারকারী অনুসন্ধানে ত্রুটি'
       }
     },
@@ -448,11 +448,11 @@ export default {
       deleteCategory: 'বিভাগ মুছুন',
       editService: 'পরিষেবা সম্পাদনা করুন',
       deleteService: 'পরিষেবা মুছুন',
-      empty: 'কোনো বিভাগ পাওয়া যায়নি। শুরু করতে \"নতুন বিভাগ যোগ করুন\" এ ক্লিক করুন।',
+      empty: 'কোনো বিভাগ পাওয়া যায়নি। শুরু করতে "নতুন বিভাগ যোগ করুন" এ ক্লিক করুন।',
       formTitleCreateCategory: 'নতুন বিভাগ তৈরি করুন',
-      formTitleAddService: '\"{categoryName}\" এ পরিষেবা যোগ করুন',
-      formTitleEditCategory: 'বিভাগ সম্পাদনা করুন: \"{itemName}\"',
-      formTitleEditService: 'পরিষেবা সম্পাদনা করুন: \"{itemName}\"',
+      formTitleAddService: '"{categoryName}" এ পরিষেবা যোগ করুন',
+      formTitleEditCategory: 'বিভাগ সম্পাদনা করুন: "{itemName}"',
+      formTitleEditService: 'পরিষেবা সম্পাদনা করুন: "{itemName}"',
       nameEnLabel: 'নাম (ইংরেজি)',
       translationsTitle: 'প্রদর্শনের জন্য অনুবাদ',
       loadingTranslations: 'অনুবাদ লোড হচ্ছে...',
@@ -468,8 +468,8 @@ export default {
       confirmCancelEdit: 'আপনার কিছু অসংরক্ষিত পরিবর্তন আছে। আপনি কি নিশ্চিত যে আপনি বাতিল করতে চান?',
       confirmDeleteTitleCategory: 'বিভাগ মুছবেন?',
       confirmDeleteTitleService: 'পরিষেবা মুছবেন?',
-      confirmDeleteCategory: 'আপনি কি নিশ্চিত যে আপনি \"{itemName}\" বিভাগটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।',
-      confirmDeleteService: 'আপনি কি নিশ্চিত যে আপনি \"{itemName}\" পরিষেবাটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।',
+      confirmDeleteCategory: 'আপনি কি নিশ্চিত যে আপনি "{itemName}" বিভাগটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।',
+      confirmDeleteService: 'আপনি কি নিশ্চিত যে আপনি "{itemName}" পরিষেবাটি মুছতে চান? এই কাজটি আর ফেরানো যাবে না।',
       deleteSuccessCategory: 'বিভাগ সফলভাবে মুছে ফেলা হয়েছে।',
       deleteSuccessService: 'পরিষেবা সফলভাবে মুছে ফেলা হয়েছে।',
       deleteErrorCategory: 'বিভাগ মুছতে ব্যর্থ হয়েছে।',
@@ -503,8 +503,8 @@ export default {
       ingestQueuedSuccess: '{count} টি ফাইল ইনজেশনের জন্য সারিবদ্ধ করা হয়েছে।',
       ingestQueuedError: 'ব্যাচ ইনজেশন প্রক্রিয়া চলাকালীন একটি ত্রুটি ঘটেছে।',
       uploadSuccessMultiple: '{count} টি ফাইল সফলভাবে আপলোড হয়েছে।',
-      linkSubmitSuccess: '\"{fileName}\" সফলভাবে ক্রল এবং সেভ করা হয়েছে।',
-      actionSuccess: '{fileId} ফাইলের উপর \"{action}\" অ্যাকশন সফল হয়েছে।',
+      linkSubmitSuccess: '"{fileName}" সফলভাবে ক্রল এবং সেভ করা হয়েছে।',
+      actionSuccess: '{fileId} ফাইলের উপর "{action}" অ্যাকশন সফল হয়েছে।',
       metadataUpdateSuccess: '{fileId} ফাইলের মেটাডেটা আপডেট করা হয়েছে।'
     }
   },
@@ -715,7 +715,7 @@ export default {
     archivedChats: 'আর্কাইভ করা চ্যাট',
     noStarredChats: 'এখনো কোনো তারকা চিহ্নিত কথোপকথন নেই। কথোপকথন তারকা চিহ্নিত করে এখানে যোগ করুন।',
     noArchivedChats: 'এখনো কোনো আর্কাইভ করা কথোপকথন নেই।',
-    noSearchResults: '\"{term}\" এর জন্য কোনো কথোপকথন পাওয়া যায়নি',
+    noSearchResults: '"{term}" এর জন্য কোনো কথোপকথন পাওয়া যায়নি',
     loadingChats: 'কথোপকথন লোড হচ্ছে...',
     errorLoadingConversations: 'কথোপকথন লোড করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।',
     errorLoadingUser: 'ব্যবহারকারীর ডেটা অসম্পূর্ণ। অনুগ্রহ করে পৃষ্ঠাটি পুনরায় লোড করুন।',
@@ -1331,8 +1331,8 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',
-    categoryNotFound: 'ক্যাটাগরি \"{label}\" জ্ঞান শ্রেণিবিন্যাসে পাওয়া যায়নি',
-    serviceLabelMismatch: 'সার্ভিস \"{label}\" একটি UI লেবেল ব্যবহার করে যা জ্ঞান শ্রেণিবিন্যাসের সাথে মেলে না',
+    categoryNotFound: 'ক্যাটাগরি "{label}" জ্ঞান শ্রেণিবিন্যাসে পাওয়া যায়নি',
+    serviceLabelMismatch: 'সার্ভিস "{label}" একটি UI লেবেল ব্যবহার করে যা জ্ঞান শ্রেণিবিন্যাসের সাথে মেলে না',
     noFilterWarning: 'কোনো কনটেক্সট ফিল্টার সক্রিয় নেই — ক্যোয়ারী আনফিল্টারড থাকবে।',
     placeholder: 'আপনার জিজ্ঞাসা এখানে লিখুন...',
     sendButton: 'পাঠান',
@@ -1532,9 +1532,9 @@ export default {
     notifications: {
       dropError:
         'শুধুমাত্র ফাইল ড্রপ করা যেতে পারে। অনুগ্রহ করে চেক করুন আপনি আপনার কম্পিউটার থেকে একটি বৈধ ফাইল টেনে আনছেন কিনা।',
-      typeNotAllowed: 'ফাইলের প্রকার \"{extension}\" অনুমোদিত নয়।',
+      typeNotAllowed: 'ফাইলের প্রকার "{extension}" অনুমোদিত নয়।',
       shortcutUnsupported: 'শর্টকাট ফাইল (.url) সমর্থিত নয়। অনুগ্রহ করে আসল ফাইলটি টেনে আনুন।',
-      duplicate: 'ফাইল \"{fileName}\" ইতিমধ্যে যোগ করা হয়েছে।',
+      duplicate: 'ফাইল "{fileName}" ইতিমধ্যে যোগ করা হয়েছে।',
       uploadSuccess: 'সফলভাবে আপলোড হয়েছে {fileName}',
       uploadFailed: '{fileName} আপলোড করতে ব্যর্থ।'
     }
@@ -1659,12 +1659,13 @@ export default {
         label: 'Concepts',
         loading: 'Loading…',
         resplit: 'Re-split',
-        flagged: 'flagged',
+        flagged: 'চিহ্নিত',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          'চিহ্নিত সত্তা সহ concept — প্রতিটি খুলুন, সত্তাটি মুছে ফেলুন বা পরিবর্তন করুন, সেভ করুন (এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে); অথবা প্রকাশের সময় সেগুলি অনুমোদন করুন।',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTip:
+          'চিহ্নিত সত্তা: {k}। খুলুন, মুছে ফেলুন বা পরিবর্তন করুন, তারপর সেভ করুন — এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে।',
+        piiTipBare: 'চিহ্নিত সত্তা — খুলুন, পর্যালোচনা করুন, তারপর পুনরায় স্ক্যান করতে সেভ করুন।'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1714,7 +1715,7 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry'
+      saveFailed: 'সেভ করা যায়নি — আবার চেষ্টা করুন'
     },
     dashboard: {
       bulk: {
@@ -1938,7 +1939,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2174,7 +2175,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'এই ক্রল থেকে তৈরি রিপোজিটরি',
       convQueued: 'সারিবদ্ধ...',
@@ -2183,7 +2184,7 @@ export default {
       convAdding: 'ধারণা যোগ করা হচ্ছে ([p] পৃষ্ঠা এখন পর্যন্ত)...',
       convDone: 'তৈরি হয়েছে ([p] পৃষ্ঠা)',
       convFailed: 'ব্যর্থ হয়েছে',
-      createStarted: '\"[name]\" তৈরি হচ্ছে — নিচে অগ্রগতি দেখুন।',
+      createStarted: '"[name]" তৈরি হচ্ছে — নিচে অগ্রগতি দেখুন।',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2248,65 +2249,66 @@ export default {
       }
     },
     pii: {
-      panel: 'Flagged entities',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
-      scanning: 'Scanning…',
-      clean: 'No flagged entities — this concept is clear.',
-      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
-      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      panel: 'চিহ্নিত সত্তা',
+      nFlagged: '{n} টি পাওয়া গেছে',
+      rescan: 'পুনরায় স্ক্যান করুন',
+      scanning: 'স্ক্যান করা হচ্ছে…',
+      clean: 'কোনো চিহ্নিত সত্তা নেই — এই concept পরিষ্কার।',
+      how: 'সমাধান: মুছে ফেলুন বা পরিবর্তন করুন (যেমন নামের পরিবর্তে ভূমিকা লিখুন), তারপর সেভ করুন — পুনরায় স্ক্যান এই তালিকা আপডেট করবে।',
+      descFallback: 'এখানে ব্যক্তিগত তথ্য শনাক্ত করা হয়েছে (GDPR Art. 4(1) — শনাক্তযোগ্য ব্যক্তির সাথে সম্পর্কিত)।',
+      scanError: 'স্ক্যান উপলব্ধ নয়',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
-        EMAIL_ADDRESS: 'Email address',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        PERSON: 'ব্যক্তির নাম',
+        LOCATION: 'অবস্থান',
+        DATE_TIME: 'তারিখ বা সময়',
+        EMAIL_ADDRESS: 'ইমেল ঠিকানা',
+        PHONE_NUMBER: 'ফোন নম্বর',
+        IP_ADDRESS: 'আইপি (IP) ঠিকানা',
+        NRP: 'জাতীয় নিবন্ধন নম্বর',
+        BD_NATIONAL_ID: 'জাতীয় পরিচয়পত্র নম্বর'
       },
       desc: {
-        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
-        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
-        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
-        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
-        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
-        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
-        NRP: 'A national registration number was detected. It strongly identifies a person.',
-        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+        PERSON: 'একজন ব্যক্তির নাম শনাক্ত করা হয়েছে। নাম সরাসরি কোনো ব্যক্তিকে শনাক্ত করতে পারে।',
+        LOCATION:
+          'একটি স্থানের নাম শনাক্ত করা হয়েছে। অন্যান্য তথ্যের সাথে যুক্ত হয়ে এটি কোনো ব্যক্তিকে শনাক্ত করতে পারে।',
+        DATE_TIME: 'একটি তারিখ বা সময় শনাক্ত করা হয়েছে। তারিখ কোনো ব্যক্তিকে শনাক্ত করতে সাহায্য করতে পারে।',
+        EMAIL_ADDRESS: 'একটি ইমেল ঠিকানা শনাক্ত করা হয়েছে। এটি সরাসরি এমন কাউকে শনাক্ত করে যার সাথে যোগাযোগ করা সম্ভব।',
+        PHONE_NUMBER: 'একটি ফোন নম্বর শনাক্ত করা হয়েছে। এটি সরাসরি এমন কাউকে শনাক্ত করে যার সাথে যোগাযোগ করা সম্ভব।',
+        IP_ADDRESS: 'একটি আইপি (IP) ঠিকানা শনাক্ত করা হয়েছে। এটি একটি ডিভাইস বা পরিবারকে শনাক্ত করতে পারে।',
+        NRP: 'একটি জাতীয় নিবন্ধন নম্বর শনাক্ত করা হয়েছে। এটি দৃঢ়ভাবে কোনো ব্যক্তিকে শনাক্ত করে।',
+        BD_NATIONAL_ID: 'একটি জাতীয় পরিচয়পত্র নম্বর শনাক্ত করা হয়েছে। এটি দৃঢ়ভাবে কোনো ব্যক্তিকে শনাক্ত করে।'
       },
-      allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      allClear: 'পরিষ্কার',
+      redactFile: 'সম্পূর্ণ ফাইল সেন্সর করুন',
+      confirmRedactFile: 'নিশ্চিত করুন: সম্পূর্ণ ফাইল সেন্সর করবেন?',
+      locateTip: 'এডিটরে এই টেক্সট দেখান',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        label: 'সম্পূর্ণ ফাইল:',
+        redact: 'ফাইল সেন্সর করুন',
+        remove: 'বডি মুছে ফেলুন',
+        accept: 'সব গ্রহণ করুন',
+        confirmRedact: 'নিশ্চিত করুন: সম্পূর্ণ ফাইল সেন্সর করবেন?',
+        confirmRemove: 'নিশ্চিত করুন: সম্পূর্ণ বডি মুছে ফেলবেন?'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
-        replacement: 'Replacement text',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        redact: 'সেন্সর করুন',
+        replace: 'প্রতিস্থাপন করুন',
+        remove: 'মুছে ফেলুন',
+        accept: 'গ্রহণ করুন',
+        replacement: 'প্রতিস্থাপনের টেক্সট',
+        apply: 'প্রয়োগ করুন',
+        cancel: 'বাতিল করুন'
       },
       resolved: {
-        title: 'Processed in this file',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
-        removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        title: 'এই ফাইলে প্রক্রিয়াজাত করা হয়েছে',
+        redacted: 'সেন্সর করা হয়েছে',
+        replaced: 'প্রতিস্থাপন করা হয়েছে',
+        removed: 'মুছে ফেলা হয়েছে',
+        accepted: 'গৃহীত',
+        fileRedacted: 'ফাইল সেন্সর করা হয়েছে',
+        kept: 'টেক্সটে রাখা হয়েছে',
+        removedWord: 'মুছে ফেলা হয়েছে',
+        wholeFile: 'সম্পূর্ণ ফাইলের বডি সেন্সর করা হয়েছে'
       }
     }
   }

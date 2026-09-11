@@ -1,5 +1,3 @@
-// Auto-generated: OKF Studio i18n keys merged into pt.js locale.
-// Translation placeholders use __TODO_TRANSLATE__ until translators fill them in.
 export default {
   countries: {
     AF: 'Afeganistão',
@@ -364,7 +362,7 @@ export default {
         role: 'Função'
       },
       userSearch: {
-        resultsFound: 'Encontrados {total} usuários correspondentes a "{term}"',
+        resultsFound: 'Encontrados {total} usuários correspondentes a \"{term}\"',
         error: 'Erro ao buscar usuários'
       }
     },
@@ -452,11 +450,11 @@ export default {
       deleteCategory: 'Excluir Categoria',
       editService: 'Editar Serviço',
       deleteService: 'Excluir Serviço',
-      empty: 'Nenhuma categoria encontrada. Clique em "Adicionar Nova Categoria" para começar.',
+      empty: 'Nenhuma categoria encontrada. Clique em \"Adicionar Nova Categoria\" para começar.',
       formTitleCreateCategory: 'Criar Nova Categoria',
-      formTitleAddService: 'Adicionar Serviço a "{categoryName}"',
-      formTitleEditCategory: 'Editar Categoria: "{itemName}"',
-      formTitleEditService: 'Editar Serviço: "{itemName}"',
+      formTitleAddService: 'Adicionar Serviço a \"{categoryName}\"',
+      formTitleEditCategory: 'Editar Categoria: \"{itemName}\"',
+      formTitleEditService: 'Editar Serviço: \"{itemName}\"',
       nameEnLabel: 'Nome (Inglês)',
       translationsTitle: 'Traduções para Exibição',
       loadingTranslations: 'Carregando traduções...',
@@ -473,9 +471,9 @@ export default {
       confirmDeleteTitleCategory: 'Excluir Categoria?',
       confirmDeleteTitleService: 'Excluir Serviço?',
       confirmDeleteCategory:
-        'Tem certeza de que deseja excluir a Categoria "{itemName}"? Esta ação não pode ser desfeita.',
+        'Tem certeza de que deseja excluir a Categoria \"{itemName}\"? Esta ação não pode ser desfeita.',
       confirmDeleteService:
-        'Tem certeza de que deseja excluir o Serviço "{itemName}"? Esta ação não pode ser desfeita.',
+        'Tem certeza de que deseja excluir o Serviço \"{itemName}\"? Esta ação não pode ser desfeita.',
       deleteSuccessCategory: 'Categoria excluída com sucesso.',
       deleteSuccessService: 'Serviço excluído com sucesso.',
       deleteErrorCategory: 'Falha ao excluir a Categoria.',
@@ -509,8 +507,8 @@ export default {
       ingestQueuedSuccess: '{count} arquivo(s) foram enfileirados para ingestão.',
       ingestQueuedError: 'Ocorreu um erro durante o processo de ingestão em lote.',
       uploadSuccessMultiple: '{count} arquivo(s) carregados com sucesso.',
-      linkSubmitSuccess: 'Rastreado e salvo "{fileName}" com sucesso.',
-      actionSuccess: 'Ação "{action}" no arquivo {fileId} foi bem-sucedida.',
+      linkSubmitSuccess: 'Rastreado e salvo \"{fileName}\" com sucesso.',
+      actionSuccess: 'Ação \"{action}\" no arquivo {fileId} foi bem-sucedida.',
       metadataUpdateSuccess: 'Metadados do arquivo {fileId} foram atualizados.'
     }
   },
@@ -722,7 +720,7 @@ export default {
     emptyFolder: 'Esta pasta está vazia. Mova conversas para cá do menu de chat.',
     noStarredChats: 'Ainda não há conversas favoritas. Favorite uma conversa para adicioná-la aqui.',
     noArchivedChats: 'Ainda não há conversas arquivadas.',
-    noSearchResults: 'Nenhuma conversa encontrada para "{term}"',
+    noSearchResults: 'Nenhuma conversa encontrada para \"{term}\"',
     loadingChats: 'Carregando conversas...',
     errorLoadingConversations: 'Falha ao carregar conversas. Por favor, tente novamente.',
     errorLoadingUser: 'Dados do usuário incompletos. Por favor, recarregue a página.',
@@ -1359,9 +1357,9 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Incompatibilidade de configuração: {warnings}. Verifique a configuração de Ajuda Rápida e hierarquia de conhecimento.',
-    categoryNotFound: 'Categoria "{label}" não encontrada na hierarquia de conhecimento',
+    categoryNotFound: 'Categoria \"{label}\" não encontrada na hierarquia de conhecimento',
     serviceLabelMismatch:
-      'Serviço "{label}" usa um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
+      'Serviço \"{label}\" usa um rótulo de UI que pode não corresponder à hierarquia de conhecimento',
     noFilterWarning: 'Sem filtro de contexto ativo — a consulta não será filtrada.',
     placeholder: 'Digite sua consulta aqui...',
     sendButton: 'Enviar',
@@ -1561,9 +1559,9 @@ export default {
     notifications: {
       dropError:
         'Apenas ficheiros podem ser largados. Verifique se está a arrastar um ficheiro válido do seu computador.',
-      typeNotAllowed: 'O tipo de ficheiro "{extension}" não é permitido.',
+      typeNotAllowed: 'O tipo de ficheiro \"{extension}\" não é permitido.',
       shortcutUnsupported: 'Ficheiros de atalho (.url) não são suportados. Por favor, arraste o ficheiro real.',
-      duplicate: 'O ficheiro "{fileName}" já foi adicionado.',
+      duplicate: 'O ficheiro \"{fileName}\" já foi adicionado.',
       uploadSuccess: '{fileName} carregado com sucesso',
       uploadFailed: 'Falha ao carregar {fileName}.'
     }
@@ -1687,7 +1685,13 @@ export default {
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Loading…',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        flagged: 'flagged',
+        flaggedTip:
+          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        piiBadge: 'PII',
+        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1736,7 +1740,8 @@ export default {
         source: 'Source'
       },
       viewToggle: 'Editor view',
-      paneLabel: 'View pane'
+      paneLabel: 'View pane',
+      saveFailed: 'Save failed — retry'
     },
     dashboard: {
       bulk: {
@@ -1853,7 +1858,6 @@ export default {
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
-    // FRONTMATTER BAR + GLOSSARY (David, 2026-09-06; copy from the UX proposal §A)
     fm: {
       errKeyCurated: 'Reserved field name.',
       errKeyDuplicate: 'Field name is used twice.',
@@ -1917,7 +1921,6 @@ export default {
       frontmatter:
         'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
     },
-    // MARKDOWN EDITOR STRINGS (formatting toolbar + view modes; David, 2026-09-06)
     md: {
       toolbar: 'Formatting',
       bold: 'Bold',
@@ -1962,7 +1965,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2198,7 +2201,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'Repositórios criados a partir deste rastreamento',
       convQueued: 'Na fila...',
@@ -2207,8 +2210,7 @@ export default {
       convAdding: 'Adicionando conceitos ([p] páginas até agora)...',
       convDone: 'Criado ([p] páginas)',
       convFailed: 'Falha',
-      createStarted: 'A criar "[name]" — acompanhe o progresso abaixo.',
-
+      createStarted: 'A criar \"[name]\" — acompanhe o progresso abaixo.',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2270,6 +2272,68 @@ export default {
       },
       run: {
         notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+      }
+    },
+    pii: {
+      panel: 'Flagged entities',
+      nFlagged: '{n} found',
+      rescan: 'Re-scan',
+      scanning: 'Scanning…',
+      clean: 'No flagged entities — this concept is clear.',
+      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
+      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      scanError: 'Scan unavailable',
+      type: {
+        PERSON: 'Person name',
+        LOCATION: 'Location',
+        DATE_TIME: 'Date or time',
+        EMAIL_ADDRESS: 'Email address',
+        PHONE_NUMBER: 'Phone number',
+        IP_ADDRESS: 'IP address',
+        NRP: 'National registration number',
+        BD_NATIONAL_ID: 'National ID number'
+      },
+      desc: {
+        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
+        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
+        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
+        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
+        NRP: 'A national registration number was detected. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+      },
+      allClear: 'Clear',
+      redactFile: 'Redact whole file',
+      confirmRedactFile: 'Confirm: redact entire file?',
+      locateTip: 'Show this text in the editor',
+      file: {
+        label: 'Whole file:',
+        redact: 'Redact file',
+        remove: 'Remove body',
+        accept: 'Accept all',
+        confirmRedact: 'Confirm: redact whole file?',
+        confirmRemove: 'Confirm: remove whole body?'
+      },
+      action: {
+        redact: 'Redact',
+        replace: 'Replace',
+        remove: 'Remove',
+        accept: 'Accept',
+        replacement: 'Replacement text',
+        apply: 'Apply',
+        cancel: 'Cancel'
+      },
+      resolved: {
+        title: 'Processed in this file',
+        redacted: 'Redacted',
+        replaced: 'Replaced',
+        removed: 'Removed',
+        accepted: 'Accepted',
+        fileRedacted: 'File redacted',
+        kept: 'kept in the text',
+        removedWord: 'removed',
+        wholeFile: 'Entire file body redacted'
       }
     }
   }

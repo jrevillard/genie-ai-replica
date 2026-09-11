@@ -463,7 +463,7 @@ export default {
       if (s === 'approve') return 'publish';
       if (s === 'publish' && r.ingested_at) return 'retract';
       if (s === 'publish') return 'ingest';
-      if (s === 'retracted') return 'ingest';
+      if (s === 'retracted') return 'submit';
       return 'submit';
     },
     contextualLabel(r) {
@@ -497,7 +497,7 @@ export default {
     },
     canBulk(r) {
       if (this.isBuilding(r)) return false; // building repos never bulk-publish
-      return ['approve', 'publish', 'retracted'].includes(r.lifecycle_state);
+      return ['approve', 'publish'].includes(r.lifecycle_state);
     },
     selectAria(r) {
       return this.translate('okf.dashboard.select', 'Select {name} for bulk publish').replace(

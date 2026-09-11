@@ -28,6 +28,38 @@ function setPath(obj, p, val) {
   }
   cur[parts[parts.length - 1]] = val;
 }
+// Proper single-quoted JS string literal: escape ONLY backslash and quote,
+// plus control chars. Never emits \" (which ESLint flags as no-useless-escape).
+function jsStr(s) {
+  let out = '';
+  for (const ch of String(s)) {
+    if (ch === '\\') out += '\\\\';
+    else if (ch === "'") out += "\\'";
+    else if (ch === '\n') out += '\\n';
+    else if (ch === '\r') out += '\\r';
+    else if (ch === '\t') out += '\\t';
+    else out += ch;
+  }
+  return "'" + out + "'";
+}
+function serialize(obj, indent) {
+  const pad = '  '.repeat(indent);
+  const padIn = '  '.repeat(indent + 1);
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '[]';
+    const items = obj.map((v) => (v && typeof v === 'object' ? padIn + serialize(v, indent + 1) : padIn + jsStr(v)));
+    return '[\n' + items.join(',\n') + '\n' + pad + ']';
+  }
+  const keys = Object.keys(obj);
+  if (keys.length === 0) return '{}';
+  const lines = keys.map((k) => {
+    const v = obj[k];
+    const key = /^[A-Za-z0-9_$]+$/.test(k) ? k : jsStr(k);
+    if (v && typeof v === 'object') return padIn + key + ': ' + serialize(v, indent + 1);
+    return padIn + key + ': ' + jsStr(v);
+  });
+  return '{\n' + lines.join(',\n') + '\n' + pad + '}';
+}
 
 const en = loadLocale('en.js');
 const enKeys = new Set(deepKeys(en));
@@ -37,16 +69,17 @@ for (const file of files) {
   const loc = loadLocale(file);
   const have = new Set(deepKeys(loc));
   const missing = [...enKeys].filter((k) => !have.has(k));
-  if (missing.length === 0) { console.log(file + ': complete'); continue; }
-  for (const k of missing) setPath(loc, k, k.split('.').reduce((o, part) => o && o[part], en));
-  const body = JSON.stringify(loc, null, 2)
-    .replace(/"([A-Za-z0-9_.-]+)":/g, "'$1':")
-    .replace(/'/g, "\\'")
-    .replace(/\\'/g, "'")
-    .replace(/"([^"]*)":/g, "'$1':");
-  // JSON.stringify left double-quoted VALUES; convert those too, preserving escapes
-  const out = 'export default ' + JSON.stringify(loc, null, 2).replace(/"((?:[^"\\]|\\.)*)":/g, (m, key) => "'" + key.replace(/'/g, "\\'") + "':").replace(/: "((?:[^"\\]|\\.)*)"/g, (m, val) => ": '" + val.replace(/'/g, "\\'") + "'") + ';\n';
-  fs.writeFileSync(path.join(DIR, file), out);
+  if (missing.length === 0) {
+    console.log(file + ': complete');
+    continue;
+  }
+  for (const k of missing)
+    setPath(
+      loc,
+      k,
+      k.split('.').reduce((o, part) => o && o[part], en)
+    );
+  fs.writeFileSync(path.join(DIR, file), 'export default ' + serialize(loc, 0) + ';\n', 'utf8');
   console.log(file + ': +' + missing.length + ' keys');
 }
 console.log('DONE');

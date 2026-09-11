@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-09-10T17:4x:xx (pre-rebase baseline; reconstructed from session-verified printed values after the raw file was lost to read-tree pruning — see rebase memory)",
+  "query": "digital government services payment",
+  "counts": { "GRAPH_SOURCE": 55, "GRAPH_ENTITY": 196, "GRAPH_LINKS_TO": 332, "GRAPH_HAS_SOURCE": 595 },
+  "chunk_key_sets_note": "5 samples, identical schema: _id,_key,_rev,chunk_index,chunk_labels,chunk_text,embedding,file_id,file_path,text,type (sorted)",
+  "chunk_key_sets": [
+    ["_id", "_key", "_rev", "chunk_index", "chunk_labels", "chunk_text", "embedding", "file_id", "file_path", "text", "type"]
+  ],
+  "sample_chunk_labels": null,
+  "null_embedding_chunks": 0,
+  "embedding_dims": 768,
+  "retrieval": {
+    "status": 200,
+    "raw_head": "{\"id\":\"6204e37d17e90eb5a221136e0b36b27f\",\"retrieved_docs\":[],\"initial_query\":\"digital government services payment\",\"top_n\":1,\"metadata\":[]}",
+    "n_results": 0,
+    "top10": []
+  }
+}

@@ -6,14 +6,12 @@ WeatherAgent — orchestrates the full query pipeline:
   4. Risk classification (RiskEngine — stateless Tier 0–4)
   5. Explanation        (Gemma-3-4b-it via vllm-translation-guardrail)
 """
+
 import json
 import logging
 import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Literal, Optional
-
-from openai import AsyncOpenAI
-from pydantic import BaseModel
 
 from mcp_client import MCPClientManager
 from models import (
@@ -25,6 +23,8 @@ from models import (
     UnifiedForecast,
     WindData,
 )
+from openai import AsyncOpenAI
+from pydantic import BaseModel
 from risk_engine import RiskEngine
 
 if TYPE_CHECKING:
@@ -32,7 +32,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_INVALID_LOCATIONS = {"n/a", "none", "null", "unknown", "", "not specified", "not mentioned"}
+_INVALID_LOCATIONS = {
+    "n/a",
+    "none",
+    "null",
+    "unknown",
+    "",
+    "not specified",
+    "not mentioned",
+}
 
 
 class WeatherIntent(BaseModel):
@@ -41,34 +49,129 @@ class WeatherIntent(BaseModel):
     forecast_days: int  # 1–7
 
 
+# Language names for the explanation prompt (ISO 639-1 -> name the LLM knows).
+_LANGUAGE_NAMES: dict[str, str] = {
+    "en": "English",
+    "bn": "Bengali (Bangla)",
+}
+
+# Programmatic header / note strings per UI language. The LLM never writes
+# these, so they are localised here; unknown languages fall back to English.
+_BENGALI_DIGITS = str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯")
+
+
+def _localized_district_name(english_name: str, language: str) -> str:
+    """District name in the UI language; falls back to the English name."""
+    if language == "bn":
+        try:
+            from mcp_weather.tools.weather_forecast import BENGALI_TO_ENGLISH
+
+            for bn, en in BENGALI_TO_ENGLISH.items():
+                if en.lower() == (english_name or "").lower():
+                    return bn
+        except Exception:  # pragma: no cover - map missing in a stripped build
+            pass
+    return english_name
+
+
+_UI_STRINGS: dict[str, dict] = {
+    "en": {
+        "header": "**{location} — {n_days}-day forecast**\n\n",
+        "daily_outlook": "Daily outlook",
+        "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "months": [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ],
+        "soil": {
+            "saturated": "saturated",
+            "wet": "wet",
+            "moist": "moist",
+            "dry": "dry",
+        },
+        "speed_unit": "km/h",
+        "digits": None,
+        "availability_note": (
+            "**Note:** You requested {requested} days but forecast data is only available "
+            "for the next {n_days} days. For extended outlooks beyond {n_days} days please "
+            "check the Bangladesh Meteorological Department directly.\n\n"
+        ),
+    },
+    "bn": {
+        "header": "**{location} — {n_days} দিনের পূর্বাভাস**\n\n",
+        "daily_outlook": "দৈনিক পূর্বাভাস",
+        "weekdays": ["সোম", "মঙ্গল", "বুধ", "বৃহস্পতি", "শুক্র", "শনি", "রবি"],
+        "months": [
+            "জানুয়ারি",
+            "ফেব্রুয়ারি",
+            "মার্চ",
+            "এপ্রিল",
+            "মে",
+            "জুন",
+            "জুলাই",
+            "আগস্ট",
+            "সেপ্টেম্বর",
+            "অক্টোবর",
+            "নভেম্বর",
+            "ডিসেম্বর",
+        ],
+        "soil": {"saturated": "সম্পৃক্ত", "wet": "ভেজা", "moist": "আর্দ্র", "dry": "শুষ্ক"},
+        "speed_unit": "কিমি/ঘণ্টা",
+        "digits": _BENGALI_DIGITS,
+        "availability_note": (
+            "**দ্রষ্টব্য:** আপনি {requested} দিনের পূর্বাভাস চেয়েছেন, কিন্তু পরবর্তী {n_days} দিনের "
+            "তথ্যই পাওয়া যাচ্ছে। {n_days} দিনের বেশি সময়ের পূর্বাভাসের জন্য সরাসরি বাংলাদেশ "
+            "আবহাওয়া অধিদপ্তরের সাথে যোগাযোগ করুন।\n\n"
+        ),
+    },
+}
+
+
 class WeatherAgent:
     def __init__(
         self,
         mcp_manager: MCPClientManager,
         storage: Optional["StorageLayer"] = None,
     ) -> None:
-        self.mcp         = mcp_manager
-        self.storage     = storage
+        self.mcp = mcp_manager
+        self.storage = storage
         self.risk_engine = RiskEngine()
 
-        vllm_base = os.getenv("VLLM_TRANSLATION_ENDPOINT", "http://vllm-translation-guardrail:9031")
-        self.llm   = AsyncOpenAI(base_url=f"{vllm_base}/v1", api_key="EMPTY")
+        vllm_base = os.getenv(
+            "VLLM_TRANSLATION_ENDPOINT", "http://vllm-translation-guardrail:9031"
+        )
+        self.llm = AsyncOpenAI(base_url=f"{vllm_base}/v1", api_key="EMPTY")
         self.model = os.getenv("VLLM_TRANSLATION_MODEL_ID", "google/gemma-3-4b-it")
 
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
 
-    async def run(self, query: str) -> dict:
+    async def run(self, query: str, language: str = "en") -> dict:
         """
         Execute the full pipeline for a natural-language weather query.
 
+        ``language`` is the UI language code ("en", "bn", ...). The explanation
+        is written in that language when the LLM call succeeds; ``language`` in
+        the returned dict reports the language the answer is actually in.
+
         Returns a dict with keys:
           answer, risk_tier, risk_label, advisory, triggers,
-          buffer, location, forecast
+          buffer, location, forecast, language
         """
+        language = (language or "en").lower()
         logger.info("[AGENT] ── New query ──────────────────────────────────")
-        logger.info("[AGENT] Raw query: %r", query)
+        logger.info("[AGENT] Raw query: %r  (language=%s)", query, language)
 
         # Step 1: Extract intent
         try:
@@ -76,39 +179,44 @@ class WeatherAgent:
         except ValueError as exc:
             logger.warning("[AGENT] Intent rejected: %s", exc)
             return {
-                "answer":     str(exc),
-                "risk_tier":  0,
+                "answer": str(exc),
+                "risk_tier": 0,
                 "risk_label": "No Risk",
-                "advisory":   "",
-                "triggers":   [],
-                "buffer":     None,
-                "location":   "",
-                "forecast":   {},
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": "",
+                "forecast": {},
             }
 
         logger.info(
             "[AGENT] Intent extracted — location=%r  context=%s  forecast_days=%d",
-            intent.location, intent.user_context, intent.forecast_days,
+            intent.location,
+            intent.user_context,
+            intent.forecast_days,
         )
 
         # Step 2: Resolve district from location string (local lookup, no Mapbox)
         from mcp_weather.tools.weather_forecast import _find_district
+
         district = _find_district(intent.location)
         if not district:
-            logger.warning("[AGENT] _find_district returned None for %r", intent.location)
+            logger.warning(
+                "[AGENT] _find_district returned None for %r", intent.location
+            )
             answer = (
-                f"I couldn't find a matching Bangladesh district for \"{intent.location}\". "
+                f'I couldn\'t find a matching Bangladesh district for "{intent.location}". '
                 "Please specify a district name (e.g. Dhaka, Sylhet, Barisal, Chittagong)."
             )
             return {
-                "answer":     answer,
-                "risk_tier":  0,
+                "answer": answer,
+                "risk_tier": 0,
                 "risk_label": "No Risk",
-                "advisory":   "",
-                "triggers":   [],
-                "buffer":     None,
-                "location":   intent.location,
-                "forecast":   {},
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": intent.location,
+                "forecast": {},
             }
 
         logger.info("[AGENT] District resolved: %r → %r", intent.location, district)
@@ -116,21 +224,23 @@ class WeatherAgent:
 
         # Step 3: Forecast from ArangoDB cache (scheduler fills all 64 districts hourly)
         logger.info("[AGENT] Fetching cached forecast for district=%r …", district)
-        forecast_data, unified_forecast = await self._get_forecast(district, intent.forecast_days)
+        forecast_data, unified_forecast = await self._get_forecast(
+            district, intent.forecast_days
+        )
         if forecast_data is None:
             answer = (
                 f"Forecast data for {district} is not yet available — "
                 "the data pipeline refreshes hourly. Please try again shortly."
             )
             return {
-                "answer":     answer,
-                "risk_tier":  0,
+                "answer": answer,
+                "risk_tier": 0,
                 "risk_label": "No Risk",
-                "advisory":   "",
-                "triggers":   [],
-                "buffer":     None,
-                "location":   district,
-                "forecast":   {},
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": district,
+                "forecast": {},
             }
 
         # Step 4: Risk classification
@@ -138,8 +248,10 @@ class WeatherAgent:
         risk_assessment = self._classify(unified_forecast, forecast_data, district)
         logger.info(
             "[AGENT] Risk result — tier=%d (%s)  triggers=%d  source=%s",
-            risk_assessment.tier, risk_assessment.tier_label,
-            len(risk_assessment.triggers), risk_assessment.forecast_source,
+            risk_assessment.tier,
+            risk_assessment.tier_label,
+            len(risk_assessment.triggers),
+            risk_assessment.forecast_source,
         )
         if risk_assessment.triggers:
             for t in risk_assessment.triggers:
@@ -147,23 +259,32 @@ class WeatherAgent:
 
         # Step 5: Generate explanation
         logger.debug("[AGENT] Generating explanation …")
-        answer = await self._generate_explanation(query, intent, geo, forecast_data, risk_assessment)
-        logger.info("[AGENT] Explanation generated — length=%d chars", len(answer))
+        answer, answer_language = await self._generate_explanation(
+            query, intent, geo, forecast_data, risk_assessment, language=language
+        )
+        logger.info(
+            "[AGENT] Explanation generated — length=%d chars  language=%s",
+            len(answer),
+            answer_language,
+        )
 
         result = {
-            "answer":     answer,
-            "risk_tier":  risk_assessment.tier,
+            "answer": answer,
+            "risk_tier": risk_assessment.tier,
             "risk_label": risk_assessment.tier_label,
-            "advisory":   risk_assessment.reasoning,
-            "triggers":   risk_assessment.triggers,
-            "buffer":     None,
-            "location":   district,
-            "forecast":   forecast_data,
+            "advisory": risk_assessment.reasoning,
+            "triggers": risk_assessment.triggers,
+            "buffer": None,
+            "location": district,
+            "forecast": forecast_data,
+            "language": answer_language,
         }
 
         logger.info(
             "[AGENT] ── Response ready — location=%r  tier=%d (%s) ──",
-            result["location"], result["risk_tier"], result["risk_label"],
+            result["location"],
+            result["risk_tier"],
+            result["risk_label"],
         )
         return result
 
@@ -180,7 +301,9 @@ class WeatherAgent:
         The scheduler pre-populates all 64 districts every hour; live scraping is not needed.
         """
         if self.storage:
-            logger.debug("[AGENT] Checking ArangoDB cache for %r (max_age=6h) …", district)
+            logger.debug(
+                "[AGENT] Checking ArangoDB cache for %r (max_age=6h) …", district
+            )
             try:
                 stored = self.storage.get_latest_forecast(
                     district, horizon="short", max_age_hours=6
@@ -190,17 +313,23 @@ class WeatherAgent:
                     stored.forecast = stored.forecast[:forecast_days]
                     logger.info(
                         "[AGENT] Cache HIT — source=%s  ingested_at=%s  days_available=%d  days_served=%d",
-                        stored.source, stored.ingested_at,
-                        len(stored.forecast), len(stored.forecast),
+                        stored.source,
+                        stored.ingested_at,
+                        len(stored.forecast),
+                        len(stored.forecast),
                     )
                     return self._unified_to_legacy(stored), stored
                 else:
-                    logger.warning("[AGENT] Cache MISS — no fresh forecast for %r", district)
+                    logger.warning(
+                        "[AGENT] Cache MISS — no fresh forecast for %r", district
+                    )
                     return None, None
             except Exception as exc:
                 logger.error(
                     "[AGENT] ArangoDB lookup failed for %r (%s: %s)",
-                    district, type(exc).__name__, exc,
+                    district,
+                    type(exc).__name__,
+                    exc,
                 )
                 return None, None
         else:
@@ -219,7 +348,8 @@ class WeatherAgent:
     ) -> RiskAssessment:
         if unified is None:
             logger.warning(
-                "[AGENT] unified_forecast is None for %r — rebuilding from legacy dict", district
+                "[AGENT] unified_forecast is None for %r — rebuilding from legacy dict",
+                district,
             )
             unified = self._bmd_to_unified(forecast_data, district)
         return self.risk_engine.classify(unified)
@@ -235,9 +365,9 @@ class WeatherAgent:
     @staticmethod
     def _weather_condition(params: dict) -> tuple[str, str]:
         """Return (emoji, label) for the overall sky condition of a single day."""
-        pr       = params.get("precipitation", {}) or {}
-        rain_mm  = float(pr.get("value", 0) or 0)
-        rain_p   = float(pr.get("probability", 0) or 0)
+        pr = params.get("precipitation", {}) or {}
+        rain_mm = float(pr.get("value", 0) or 0)
+        rain_p = float(pr.get("probability", 0) or 0)
         humidity = float((params.get("humidity", {}) or {}).get("value", 0) or 0)
 
         if rain_mm >= 25 or (rain_mm >= 10 and rain_p >= 0.7):
@@ -254,57 +384,77 @@ class WeatherAgent:
 
     @staticmethod
     def _wind_emoji(speed_kmh: float) -> str:
-        if speed_kmh >= 62:   return "💨"   # storm / cyclone
-        if speed_kmh >= 30:   return "💨"    # strong / windy
-        if speed_kmh >= 15:   return "💨"   # breezy
-        return "💨"                           # calm
+        if speed_kmh >= 62:
+            return "💨"  # storm / cyclone
+        if speed_kmh >= 30:
+            return "💨"  # strong / windy
+        if speed_kmh >= 15:
+            return "💨"  # breezy
+        return "💨"  # calm
 
     @staticmethod
-    def _soil_emoji(sm: float) -> str:
+    def _soil_emoji(sm: float, language: str = "en") -> str:
         """sm is volumetric water content in m³/m³."""
-        if sm >= 0.40:  return " saturated 🌊"   # saturated
-        if sm >= 0.25:  return "wet 💧"   # wet / field capacity
-        if sm >= 0.10:  return "moist 🌱"   # moist — good for crops
-        return "dry 🌵"                    # dry / drought risk
+        words = _UI_STRINGS.get(language, _UI_STRINGS["en"])["soil"]
+        if sm >= 0.40:
+            return f"{words['saturated']} 🌊"  # saturated
+        if sm >= 0.25:
+            return f"{words['wet']} 💧"  # wet / field capacity
+        if sm >= 0.10:
+            return f"{words['moist']} 🌱"  # moist — good for crops
+        return f"{words['dry']} 🌵"  # dry / drought risk
 
     @staticmethod
-    def _build_forecast_strip(days: list) -> str:
-        """Build a compact per-day visual strip in markdown list format."""
+    def _build_forecast_strip(days: list, language: str = "en") -> str:
+        """Build a compact per-day visual strip in markdown list format.
+
+        Weekday/month names, the soil words, the speed unit and (for scripts
+        that use their own numerals, e.g. Bengali) the digits follow ``language``.
+        """
         from datetime import datetime as _dt
+
+        ui = _UI_STRINGS.get(language, _UI_STRINGS["en"])
         lines = []
         for d in days:
             date_str = d.get("date", "")
             try:
-                date_label = _dt.strptime(date_str, "%Y-%m-%d").strftime("%a %d %b")
+                dt = _dt.strptime(date_str, "%Y-%m-%d")
+                date_label = f"{ui['weekdays'][dt.weekday()]} {dt.day} {ui['months'][dt.month - 1]}"
             except ValueError:
                 date_label = date_str
 
-            p     = d.get("parameters", {})
+            p = d.get("parameters", {})
             sky_emoji, _ = WeatherAgent._weather_condition(p)
 
-            t    = p.get("temperature", {}) or {}
-            pr   = p.get("precipitation", {}) or {}
+            t = p.get("temperature", {}) or {}
+            pr = p.get("precipitation", {}) or {}
             wind = p.get("wind", {}) or {}
-            sm   = p.get("soil_moisture", {}) or {}
+            sm = p.get("soil_moisture", {}) or {}
 
-            t_min     = t.get("min", "?")
-            t_max     = t.get("max", "?")
-            rain      = float(pr.get("value", 0) or 0)
-            prob      = int(float(pr.get("probability", 0) or 0) * 100)
-            wind_spd  = float(wind.get("speed", 0) or 0)
-            soil_val  = sm.get("value")
+            t_min = t.get("min", "?")
+            t_max = t.get("max", "?")
+            rain = float(pr.get("value", 0) or 0)
+            prob = int(float(pr.get("probability", 0) or 0) * 100)
+            wind_spd = float(wind.get("speed", 0) or 0)
+            soil_val = sm.get("value")
 
-            wind_part = f" · {WeatherAgent._wind_emoji(wind_spd)} {wind_spd:.0f} km/h" if wind_spd else ""
+            wind_part = (
+                f" · {WeatherAgent._wind_emoji(wind_spd)} {wind_spd:.0f} {ui['speed_unit']}"
+                if wind_spd
+                else ""
+            )
             soil_part = (
-                f" · {WeatherAgent._soil_emoji(soil_val)} {soil_val:.2f} m³/m³"
-                if soil_val is not None else ""
+                f" · {WeatherAgent._soil_emoji(soil_val, language)} {soil_val:.2f} m³/m³"
+                if soil_val is not None
+                else ""
             )
 
-            lines.append(
+            line = (
                 f"- {sky_emoji} **{date_label}** — {t_min}–{t_max}°C"
                 f" · 💧{prob}%{wind_part}{soil_part}"
             )
-        return "---\n\n**Daily outlook:**\n" + "\n".join(lines)
+            lines.append(line.translate(ui["digits"]) if ui.get("digits") else line)
+        return f"---\n\n**{ui['daily_outlook']}:**\n" + "\n".join(lines)
 
     async def _generate_explanation(
         self,
@@ -313,24 +463,37 @@ class WeatherAgent:
         geo: dict,
         forecast_data: dict,
         risk_assessment: RiskAssessment,
-    ) -> str:
+        language: str = "en",
+    ) -> tuple[str, str]:
+        """Return (answer_markdown, answer_language)."""
+        language = (language or "en").lower()
+        ui = _UI_STRINGS.get(language, _UI_STRINGS["en"])
         days = forecast_data.get("forecast", [])
         n_days = len(days)
-        ctx = "a farmer planning agricultural activities" if intent.user_context == "FARMER" else "a citizen"
-        location_name = geo.get("display_name", intent.location)
+        ctx = (
+            "a farmer planning agricultural activities"
+            if intent.user_context == "FARMER"
+            else "a citizen"
+        )
+        # Canonical district name (e.g. "Dhaka"), not the user's spelling ("dhaka").
+        location_name = geo.get("district") or geo.get("display_name", intent.location)
+        if language != "en":
+            location_name = _localized_district_name(
+                geo.get("district") or location_name, language
+            )
 
         # Build a compact, structured per-day summary the LLM can annotate.
         # We never let the LLM write the duration framing — we inject it ourselves.
         day_lines = []
         for d in days:
             date = d.get("date", "")
-            p    = d.get("parameters", {})
-            t    = p.get("temperature", {})
-            pr   = p.get("precipitation", {})
-            hum  = p.get("humidity", {})
+            p = d.get("parameters", {})
+            t = p.get("temperature", {})
+            pr = p.get("precipitation", {})
+            hum = p.get("humidity", {})
             day_lines.append(
                 f"  {date}: {t.get('min')}–{t.get('max')}°C, "
-                f"rain {pr.get('value', 0):.1f}mm ({int(pr.get('probability', 0)*100)}%), "
+                f"rain {pr.get('value', 0):.1f}mm ({int(pr.get('probability', 0) * 100)}%), "
                 f"humidity {hum.get('value', '?')}%"
             )
         day_summary = "\n".join(day_lines)
@@ -350,29 +513,39 @@ class WeatherAgent:
             f"{day_summary}\n"
             f"{risk_context}\n"
             "Write 2–4 sentences summarising temperatures, rain, and one practical agriculture tip. "
-            "In the same 2–4 sentences, also mention that the data sources are Bangladesh Agro-Meteorological Information Service (BAMIS) and the Open-Meteo Weather API. "
-            "Do NOT mention any number of days or time period — just describe the conditions and advice."
+            "Do NOT mention where the data comes from, do NOT greet the reader, and "
+            "do NOT mention any number of days or time period — just describe the conditions and advice."
         )
+        lang_name = _LANGUAGE_NAMES.get(language)
+        if language != "en" and lang_name:
+            prompt += (
+                f"\nWrite the entire answer in {lang_name} only, in that language's own script "
+                f"and numerals, with no English words or phrases."
+            )
 
         # Header and availability note are set programmatically — never by the LLM
         requested = intent.forecast_days
         if requested > n_days:
-            availability_note = (
-                f"**Note:** You requested {requested} days but forecast data is only available "
-                f"for the next {n_days} days. For extended outlooks beyond {n_days} days please "
-                "check the Bangladesh Meteorological Department directly.\n\n"
+            availability_note = ui["availability_note"].format(
+                requested=requested, n_days=n_days
             )
         else:
             availability_note = ""
 
-        header = f"**{location_name} — {n_days}-day forecast**\n\n"
+        header = ui["header"].format(location=location_name, n_days=n_days)
+        if ui.get("digits"):
+            header = header.translate(ui["digits"])
+            availability_note = availability_note.translate(ui["digits"])
 
         # Build the visual strip once — deterministic, no LLM needed
-        strip = self._build_forecast_strip(days) if days else ""
+        strip = self._build_forecast_strip(days, language) if days else ""
 
         logger.debug(
             "[AGENT] Explanation prompt — model=%s  tier=%d  n_days=%d  requested=%d",
-            self.model, risk_assessment.tier, n_days, requested,
+            self.model,
+            risk_assessment.tier,
+            n_days,
+            requested,
         )
 
         try:
@@ -384,30 +557,41 @@ class WeatherAgent:
             )
             body = (response.choices[0].message.content or "").strip()
             logger.debug("[AGENT] Explanation call succeeded")
-            return header + availability_note + body + ("\n\n" + strip if strip else "")
+            return header + availability_note + body + (
+                "\n\n" + strip if strip else ""
+            ), language
 
         except Exception as exc:
             logger.error(
                 "[AGENT] Explanation generation failed (%s: %s) — using template fallback",
-                type(exc).__name__, exc,
+                type(exc).__name__,
+                exc,
             )
             try:
                 first = days[0]["parameters"]
                 t_min = first["temperature"]["min"]
                 t_max = first["temperature"]["max"]
-                rain  = first["precipitation"]["value"]
+                rain = first["precipitation"]["value"]
                 tier_note = (
                     f" Risk: {risk_assessment.tier_label}."
-                    if risk_assessment.tier >= 1 else ""
+                    if risk_assessment.tier >= 1
+                    else ""
                 )
                 body = (
                     f"Temperatures between {t_min}°C and {t_max}°C, "
                     f"approximately {rain:.1f} mm of rain expected.{tier_note}"
                 )
-                return header + availability_note + body + ("\n\n" + strip if strip else "")
+                return header + availability_note + body + (
+                    "\n\n" + strip if strip else ""
+                ), "en"
             except Exception as inner_exc:
                 logger.error("[AGENT] Template fallback also failed: %s", inner_exc)
-                return header + availability_note + "Forecast data retrieved. (Explanation unavailable.)"
+                return (
+                    header
+                    + availability_note
+                    + "Forecast data retrieved. (Explanation unavailable.)",
+                    "en",
+                )
 
     # ------------------------------------------------------------------
     # Intent extraction — Gemma-3-4b-it
@@ -435,7 +619,7 @@ class WeatherAgent:
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system},
-                    {"role": "user",   "content": user},
+                    {"role": "user", "content": user},
                 ],
                 max_tokens=80,
                 temperature=0,
@@ -444,8 +628,7 @@ class WeatherAgent:
             # Strip markdown code fences if present
             if raw.startswith("```"):
                 raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
+                raw = raw.removeprefix("json")
             raw = raw.strip()
             logger.debug("[AGENT] Intent raw response: %s", raw[:120])
             data = json.loads(raw)
@@ -454,7 +637,7 @@ class WeatherAgent:
                 raise ValueError(
                     "Your question doesn't mention a specific location. "
                     "Please include a Bangladesh district name — for example: "
-                    "\"What is the weather in Dhaka tomorrow?\""
+                    '"What is the weather in Dhaka tomorrow?"'
                 )
             return WeatherIntent(
                 location=location,
@@ -466,10 +649,13 @@ class WeatherAgent:
         except Exception as exc:
             logger.warning(
                 "[AGENT] Intent extraction failed (%s: %s) — falling back to raw query as location",
-                type(exc).__name__, exc,
+                type(exc).__name__,
+                exc,
             )
             # Fallback: treat entire query as location attempt; _find_district will gate it
-            return WeatherIntent(location=query[:100], user_context="CITIZEN", forecast_days=3)
+            return WeatherIntent(
+                location=query[:100], user_context="CITIZEN", forecast_days=3
+            )
 
     # ------------------------------------------------------------------
     # Format converters
@@ -484,18 +670,18 @@ class WeatherAgent:
                 {
                     "date": day.date,
                     "parameters": {
-                        "temperature":  {
-                            "min":  day.temperature.min,
-                            "max":  day.temperature.max,
+                        "temperature": {
+                            "min": day.temperature.min,
+                            "max": day.temperature.max,
                             "unit": "Celsius",
                         },
                         "precipitation": {
-                            "value":       day.precipitation.value,
-                            "unit":        "mm",
+                            "value": day.precipitation.value,
+                            "unit": "mm",
                             "probability": day.precipitation.probability,
                         },
-                        "humidity":      {"value": day.humidity, "unit": "percent"},
-                        "wind":          {"speed": day.wind.speed, "unit": "km/h"},
+                        "humidity": {"value": day.humidity, "unit": "percent"},
+                        "wind": {"speed": day.wind.speed, "unit": "km/h"},
                         "soil_moisture": {"value": day.soil_moisture, "unit": "m3/m3"},
                     },
                 }
@@ -508,23 +694,25 @@ class WeatherAgent:
         """Convert legacy BMD dict → UnifiedForecast for the risk engine."""
         days: list[DayForecast] = []
         for day in forecast_data.get("forecast", []):
-            p    = day["parameters"]
+            p = day["parameters"]
             temp = p["temperature"]
             rain = p["precipitation"]
-            hum  = p["humidity"]["value"]
-            days.append(DayForecast(
-                date=day["date"],
-                temperature=TemperatureData(min=temp["min"], max=temp["max"]),
-                precipitation=PrecipitationData(
-                    value=rain["value"], probability=rain["probability"]
-                ),
-                wind=WindData(speed=0.0),
-                humidity=hum,
-                extreme_flags=ExtremeFlags(
-                    heavy_rain=rain["value"] >= 50.0,
-                    heatwave=temp["max"]     >= 40.0,
-                ),
-            ))
+            hum = p["humidity"]["value"]
+            days.append(
+                DayForecast(
+                    date=day["date"],
+                    temperature=TemperatureData(min=temp["min"], max=temp["max"]),
+                    precipitation=PrecipitationData(
+                        value=rain["value"], probability=rain["probability"]
+                    ),
+                    wind=WindData(speed=0.0),
+                    humidity=hum,
+                    extreme_flags=ExtremeFlags(
+                        heavy_rain=rain["value"] >= 50.0,
+                        heatwave=temp["max"] >= 40.0,
+                    ),
+                )
+            )
         return UnifiedForecast(
             location=district,
             source="bmd",

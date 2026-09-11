@@ -227,6 +227,127 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     return client, model
 
 
+# ---------------------------------------------------------------------------
+# Agro-meteorological chunk post-processing (ported from PolisenseAI, 53d42e992)
+# ---------------------------------------------------------------------------
+# Crop-calendar / BAMIS PDFs are extracted column-by-column, which produces two
+# retrieval problems these helpers fix:
+#
+#  1. PyMuPDF encodes table cell addresses as "CropName.Month.WeekNumber"
+#     (e.g. "Potato.November.47 = 22.3"). Raw week numbers leak into LLM answers
+#     and confuse users, so they are rewritten as "November (week 47)".
+#  2. A "list all crop stages / pests" question spans many single-column chunks,
+#     so no single chunk ever contains the whole answer. One synthetic
+#     [AGGREGATED] chunk per detected list-type column gives the retriever a
+#     chunk that does.
+#
+# Adapted from the original: this pipeline carries chunks as plain strings
+# (``_load_and_chunk`` -> ``list[str]``), whereas the source branch used dicts
+# of {text, headings, page_numbers}.
+
+_MONTH_WEEK_RE = re.compile(
+    r"\b[A-Z]\w*\.(January|February|March|April|May|June|July|August|September|"
+    r"October|November|December)\.(\d{1,2})\b"
+)
+
+_METEO_COLUMN_RE = re.compile(
+    r"(?i)^(max\.?\s*temp|min\.?\s*temp|max\s+temp|min\s+temp|"
+    r"rainfall|humidity|rh\s*max|rh\s*min|wind\s*speed|wind\s*dir|"
+    r"wind\s+direction|sunshine|evapor|solar|ws\b|wd\b|"
+    r"time\s*duration|week|period|month|day\b|january|february|march|"
+    r"april|may|june|july|august|september|october|november|december)"
+)
+
+_LIFECYCLE_RE = re.compile(
+    r"(?i)\b(stage|sprouting|seedling|vegetative|tuber|maturity|harvest|"
+    r"germination|flowering|ripening|tillering|heading|panicle|booting|"
+    r"emergence|transplant|nursery)\b"
+)
+
+_ENTITY_RE = re.compile(
+    r"(?i)\b(pest|worm|aphid|mite|larva|larvae|nematode|insect|blight|"
+    r"fungus|bacteria|virus|rust|rot|mould|mold|weevil|caterpillar|beetle|"
+    r"fly|moth|bug|thrip|scale|whitefly|leafhopper|disease|pathogen|wire\s*worm)\b"
+)
+
+
+def _clean_chunk_text(text: str) -> str:
+    """Replace 'CropName.Month.NN' with 'Month (week NN)'."""
+    if not text:
+        return text
+    return _MONTH_WEEK_RE.sub(r"\1 (week \2)", text)
+
+
+def _build_aggregation_chunks(chunks: list[str]) -> list[str]:
+    """Return synthetic [AGGREGATED] chunks covering list-type columns.
+
+    Two shapes are handled:
+
+    Type A - pure short-line list (no "=" in the chunk): the first line is the
+        column header and the rest are values, e.g. "Stages\nSprouting\nSeedling".
+    Type B - key=value rows ("EntityName, N = Condition"): multi-word entity
+        names (pests, diseases) are collected across all matching entries.
+    """
+    lifecycle_values: list[str] = []
+    entity_names: set[str] = set()
+
+    for text in chunks:
+        if not text:
+            continue
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+        if "=" not in text:
+            # Type A: pure short-line list
+            all_short = all(len(ln) <= 80 and len(ln.split()) <= 8 for ln in lines)
+            if all_short and len(lines) >= 2:
+                if _LIFECYCLE_RE.search(text):
+                    lifecycle_values.extend(lines)
+                elif _ENTITY_RE.search(text):
+                    for line in lines:
+                        # Skip bare category header lines ("Pest", "Disease", ...)
+                        if not re.match(r"(?i)^(pest|disease|insect|pathogen)s?$", line):
+                            entity_names.add(line)
+        else:
+            # Type B: "EntityName, N = Condition"
+            for entry in re.split(r"\.\s+", text):
+                m = re.match(r"^(.+?),\s*\d+\s*=", entry.strip())
+                if not m:
+                    continue
+                col_name = m.group(1).strip()
+                if _METEO_COLUMN_RE.match(col_name):
+                    continue  # meteorological variable, not an entity name
+                if len(col_name.split()) >= 2:
+                    entity_names.add(col_name)
+
+    synthetic: list[str] = []
+
+    if lifecycle_values:
+        seen: set[str] = set()
+        unique: list[str] = []
+        for v in lifecycle_values:
+            key = v.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                if not re.match(r"(?i)^stages?$", v.strip()):
+                    unique.append(v)
+        if unique:
+            body = "\n".join(f"- {v}" for v in unique)
+            synthetic.append(
+                "[AGGREGATED] Crop stages, growth phases, and development cycle "
+                "(complete list of all stages in this document):\n" + body
+            )
+
+    if entity_names:
+        body = "\n".join(f"- {name}" for name in sorted(entity_names))
+        synthetic.append(
+            "[AGGREGATED] Pests, diseases, and organisms affecting this crop "
+            "(complete list from this document):\n" + body
+        )
+
+    return synthetic
+
+
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
     """
@@ -478,10 +599,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         # every downstream consumer (is_valid_content, embedding,
                         # labelling) receives the wrong type.
                         split_result = text_splitter.split_text(item_str)
-                        raw_chunks.extend(
-                            r.page_content if hasattr(r, "page_content") else r
-                            for r in split_result
-                        )
+                        raw_chunks.extend(r.page_content if hasattr(r, "page_content") else r for r in split_result)
                     else:
                         raw_chunks.append(item_str)
                 plain_chunks = raw_chunks
@@ -510,7 +628,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 docs = text_splitter.create_documents([content])
                 plain_chunks = [d.page_content for d in docs]
 
-            valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+            valid_chunks = [_clean_chunk_text(c) for c in plain_chunks if is_valid_content(c)]
+            # Synthetic aggregation chunks so "list all stages / pests" queries hit a
+            # single chunk holding the complete answer instead of many column fragments.
+            valid_chunks += _build_aggregation_chunks(valid_chunks)
             span.set_attribute("dataprep.chunk_count", len(valid_chunks))
 
         return valid_chunks
@@ -1238,8 +1359,33 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 try:
                     graph_docs = await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, batch_docs)
                 except Exception as ge:
-                    logger.error(f"Batch {current_batch_num} graph conversion failed: {type(ge).__name__}: {ge}")
-                    raise
+                    # One malformed LLM graph response (e.g. an entity with a list-valued
+                    # property -> "unhashable type: 'list'") used to abort the whole batch,
+                    # silently dropping every chunk in it. Retry chunk-by-chunk so only the
+                    # chunk that genuinely fails is lost, and say which one.
+                    logger.warning(
+                        f"Batch {current_batch_num} graph conversion failed ({type(ge).__name__}: {ge}); "
+                        f"retrying its {len(batch_docs)} chunks individually"
+                    )
+                    graph_docs = []
+                    dropped = []
+                    for doc in batch_docs:
+                        try:
+                            graph_docs.extend(
+                                await asyncio.to_thread(self.llm_transformer.convert_to_graph_documents, [doc])
+                            )
+                        except Exception as ce:
+                            idx = doc.metadata.get("chunk_index", "?")
+                            dropped.append(idx)
+                            logger.error(f"Chunk {idx} graph conversion failed: {type(ce).__name__}: {ce}")
+                    if dropped:
+                        await self._write_ingestion_log(
+                            input.file_id,
+                            "WARN",
+                            "Graph",
+                            f"Batch {current_batch_num}: {len(dropped)} chunk(s) dropped after per-chunk retry "
+                            f"(chunk_index {dropped}); {len(batch_docs) - len(dropped)} recovered.",
+                        )
 
                 if graph_docs:
                     logger.info(f"Batch {current_batch_num}: {len(graph_docs)} graph_docs extracted")

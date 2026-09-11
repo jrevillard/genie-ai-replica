@@ -499,8 +499,14 @@ const ROUTE_CONFIGS = [
     extraServiceName: 'logsService',
     keycloakAuth: true
   },
+  // Public drought PDF (plain browser navigation, no bearer header). Must be
+  // listed before '/api/weather' so the more specific path is matched first.
+  { file: 'weather-report-routes', paths: ['/api/weather/drought-report'], keycloakAuth: false },
   { file: 'weather-routes', paths: ['/api/weather'], serviceName: 'weatherService', keycloakAuth: true },
-  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true }
+  { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true },
+  // Mixed auth handled inside the router (Keycloak for register/unregister,
+  // shared secret for broadcast/status/health) - so no mount-level keycloakAuth.
+  { file: 'notification-routes', paths: ['/api/notifications'], serviceName: 'notificationService' }
 ];
 
 /**
@@ -1036,7 +1042,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, logsService;
-  let databaseOperationsService, weatherService, securityScanService, translationService;
+  let databaseOperationsService, weatherService, securityScanService, translationService, notificationService;
 
   const importService = async (name, servicePath) => {
     logger.info(`Importing service: ${name}`);
@@ -1070,6 +1076,7 @@ async function initializeServices() {
     weatherService = await importService('WeatherService', './services/weather-service');
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
+    notificationService = await importService('NotificationService', './services/notification-service');
 
     // Initialize user provisioning schema (indexes, legacy cleanup)
     const userProvisioningService = require('./services/user-provisioning-service');
@@ -1087,7 +1094,8 @@ async function initializeServices() {
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
-      translationService: { instance: translationService, name: 'TranslationService' }
+      translationService: { instance: translationService, name: 'TranslationService' },
+      notificationService: { instance: notificationService, name: 'NotificationService' }
     };
 
     // Validate services
@@ -1134,7 +1142,9 @@ async function initializeServices() {
       { service: services.logsService, name: 'LogsService' },
       // Marked optional: true to prevent boot failure on rate limits
       { service: services.weatherService, name: 'WeatherService', optional: true },
-      { service: services.translationService, name: 'TranslationService' }
+      { service: services.translationService, name: 'TranslationService' },
+      // Optional: push notifications degrade gracefully without Redis/Firebase
+      { service: services.notificationService, name: 'NotificationService', optional: true }
     ];
 
     for (const { service, name, preInit, optional } of initPromises) {
@@ -1248,6 +1258,26 @@ async function startApp() {
 
   const app = createApp({ services });
   const PORT = process.env.PORT || 3000;
+
+  // Start the BullMQ notification workers in-process. Set
+  // NOTIFICATION_WORKER_ENABLED=false to run them in a separate container
+  // instead via `node workers/notification-worker.js` from the same image.
+  // Failure here is non-fatal: broadcasts still queue, they just do not send.
+  if (process.env.NOTIFICATION_WORKER_ENABLED !== 'false' && services.notificationService?.initialized) {
+    try {
+      const { startWorkers } = require('./workers/notification-worker');
+      await startWorkers({
+        tokenRepository: services.notificationService.tokenRepository,
+        broadcastRepository: services.notificationService.broadcastRepository,
+        fcmSender: services.notificationService.fcmSender
+      });
+      logger.info('Notification workers started in-process');
+    } catch (workerError) {
+      logger.error('Failed to start notification workers - broadcasts will queue but not send', {
+        error: workerError.message
+      });
+    }
+  }
 
   try {
     const server = app.listen(PORT, () => {

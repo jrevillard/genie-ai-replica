@@ -2,10 +2,90 @@ const express = require('express');
 const router = express.Router();
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
+const axios = require('axios');
+const translationService = require('../services/translation-service');
+
+// Weather MCP service (PolisenseAI). Serves /geocode for the chat map command;
+// resolves Bangladesh district names locally, falls back to Mapbox Geocoding.
+const WEATHER_MCP_URL = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
 
 module.exports = (weatherService) => {
   // Apply authentication middleware
   router.use(keycloakAuthMiddleware.authenticate);
+
+  /**
+   * @swagger
+   * /api/weather/geocode:
+   *   get:
+   *     summary: Resolve a place name to coordinates for the chat map view
+   *     description: Proxies to the weather MCP service. Bangladesh districts resolve locally; other places via Mapbox Geocoding.
+   *     parameters:
+   *       - in: query
+   *         name: location
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       200: { description: '{ lat, lon, name, zoom }' }
+   *       404: { description: Location not found }
+   *       502: { description: Geocoding service unavailable }
+   */
+  /**
+   * Latest deterministic risk assessments for the crop early-warning banner
+   * (CropAlertBanner.vue). Both proxy weather-mcp-service, which reads the
+   * warning_system_engine / drought_monitoring outputs from ArangoDB.
+   */
+  /**
+   * Translate the free-text parts of a risk assessment (message + triggers)
+   * into the UI language. English is returned untouched. translateMarkdown is
+   * used per string because it is cached permanently in Redis by content hash,
+   * so the one-minute banner poll only pays the translation cost when the
+   * assessment text actually changes. Any failure falls back to English.
+   */
+  const localizeRisk = async (data, lang) => {
+    const target = (lang || 'en').toLowerCase();
+    if (target === 'en' || !data || typeof data !== 'object') return data;
+    const texts = [data.message || '', ...(Array.isArray(data.triggers) ? data.triggers : [])];
+    try {
+      await translationService.init();
+      const translated = await Promise.all(
+        texts.map((t) => (t ? translationService.translateMarkdown(t, 'en', target) : Promise.resolve(t)))
+      );
+      // translateMarkdown re-serialises markdown and appends a trailing newline.
+      const clean = translated.map((t) => (typeof t === 'string' ? t.trim() : t));
+      return { ...data, message: clean[0], triggers: clean.slice(1), language: target };
+    } catch (err) {
+      logger.warn(`[RISK] Translation to ${target} failed, returning English: ${err.message}`);
+      return data;
+    }
+  };
+
+  const proxyLatestRisk = (mcpPath) => async (req, res) => {
+    const { location, lang } = req.query;
+    if (!location) return res.status(400).json({ message: 'location query parameter is required' });
+    try {
+      const resp = await axios.get(`${WEATHER_MCP_URL}${mcpPath}`, { params: { location }, timeout: 8000 });
+      return res.json(await localizeRisk(resp.data, lang));
+    } catch (err) {
+      if (err.response?.status === 404) return res.status(404).json({ message: `No assessment for '${location}'` });
+      logger.error(`[RISK] Proxy error ${mcpPath} for ${location}: ${err.message}`);
+      return res.status(502).json({ message: 'Risk service unavailable' });
+    }
+  };
+  router.get('/potato-risk', proxyLatestRisk('/potato/risk/latest'));
+  router.get('/drought-risk', proxyLatestRisk('/drought/risk/latest'));
+
+  router.get('/geocode', async (req, res) => {
+    const { location } = req.query;
+    if (!location) return res.status(400).json({ message: 'location query parameter is required' });
+    try {
+      const resp = await axios.get(`${WEATHER_MCP_URL}/geocode`, { params: { location }, timeout: 8000 });
+      return res.json(resp.data);
+    } catch (err) {
+      if (err.response?.status === 404) return res.status(404).json({ message: `Location '${location}' not found` });
+      logger.error(`[GEOCODE] Proxy error for ${location}: ${err.message}`);
+      return res.status(502).json({ message: 'Geocoding service unavailable' });
+    }
+  });
 
   /**
    * @swagger

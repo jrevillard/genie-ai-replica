@@ -104,15 +104,23 @@ describe('WeatherService', () => {
       expect(dbService.getConnection).toHaveBeenCalledTimes(1);
     });
 
-    it('should throw on ipapi failure', async () => {
+    it('should still initialize when ipapi fails (geolocation is best-effort, never fatal)', async () => {
+      // Regression: a rate-limited ipapi.co (429) used to throw out of init()
+      // before the DB collection was bound, leaving every getWeather() to crash
+      // on this.weatherRequests.save() with "Cannot read properties of null".
       axios.get.mockRejectedValueOnce(new Error('Network error'));
       const { service } = setupService();
       service.initialized = false;
 
-      await expect(service.init()).rejects.toThrow('Network error');
+      await expect(service.init()).resolves.toBeUndefined();
+      expect(service.initialized).toBe(true);
+      expect(dbService.getConnection).toHaveBeenCalled();
+      expect(service.weatherRequests).toBeTruthy();
+      expect(service.serverLocation.city).toBe('Dhaka, Bangladesh');
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Server geolocation unavailable'));
     });
 
-    it('should warn when server location returns 0,0 coordinates', async () => {
+    it('should fall back to the Dhaka default when ipapi returns 0,0 coordinates', async () => {
       axios.get.mockResolvedValueOnce({
         status: 200,
         data: { latitude: 0, longitude: 0, city: '', country_name: '' }
@@ -120,7 +128,10 @@ describe('WeatherService', () => {
       const { service } = setupService();
       await initService(service);
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Server location fetch failed'));
+      // 0,0 is treated as "no answer": keep the regional default rather than the ocean.
+      expect(service.serverLocation.latitude).toBeCloseTo(23.8103);
+      expect(service.serverLocation.longitude).toBeCloseTo(90.4125);
+      expect(service.initialized).toBe(true);
     });
   });
 

@@ -91,10 +91,11 @@ EMAIL_FROM=
 # Get your token at: https://huggingface.co/settings/tokens
 # Used by: vLLM, TEI (embedding/reranking services)
 # Accept: "Read" permissions sufficient
-HUGGING_FACE_HUB_TOKEN=
+HUGGING_FACE_HUB_TOKEN=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
 
 # Optional: vLLM API key if required by your vLLM deployment
-# VLLM_API_KEY=
+VLLM_API_KEY=eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJBV2QyR2lmQVRFT2wtRExhdFF0Qi1GRGRXVHRDdzlONUZWYWpXR2EwTjRzIn0.eyJleHAiOjE3NDQzNDA2OTcsImlhdCI6MTc0MzAwMTQ5NywianRpIjoiMDU5ZDg1YTUtYTlmOC00NTBhLTg5ODktYjRhYTJkZDczZDA0IiwiaXNzIjoiaHR0cHM6Ly9pbmZlcmVuY2UtYXBpLmNsb3VkLmRlbnZyZGF0YS5jb20vcmVhbGzL21hc3RlciIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiJkMGJjYjQ3Zi1lYTI4LTQ1YjQtYjQyOS0zNGExMjAzMWVlOTkiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ1bl9pdHVfUHJlZXRoaV92cnMiLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtbWFzdGVyIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoicHJvZmlsZSBjdXN0b21fbW9kZWxfbGxhbWFfM184QiBlbWFpbCIsImNsaWVudEhvc3QiOiIxMC4yMzMuOTIuMTU4IiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJzZXJ2aWNlLWFjY291bnQtdW5faXR1X3ByZWV0aGlfdnJzIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIzMy45Mi4xNTgiLCJjbGllbnRfaWQiOiJ1bl9pdHVfUHJlZXRoaV92cnMifQ.S9KcGTwc8MIK7vTm9NrWGM0hGcxdRDD6XEhu5E3zJCHQNJLaVDzJv_CC-jDwPYMPK4fHV0AsRXBstJUDDG0DFsFDDYr9z0rhwCgVVCX36m2WS7E9mOPoLzOFW-Rp8evfLOr2xbF0PtU7eeSbTP6g0zou1MA0BMJVq86EkMDwDgH41Ns4frAHuM0nKzbzMDqHtLbuF8Ey_EzAmbnzB5xYHICV2AEqN6sd_G_Zgbf9fA6NL801_3ebtHgH5QIjz92KyrNCqG8fZSWrfpuXOSfgfwMyfMBn7QhSqW5ZkhkxTcQDEDKZEsbmNhHHQx-M_bSt3MemnVRB-4JpprJ6W6yBWA
+
 
 # =============================================================================
 # SECTION 3b: DEPLOYMENT OPTIONS
@@ -323,6 +324,21 @@ HUGGING_FACE_HUB_TOKEN=
 # Default: info
 # LOG_LEVEL=debug
 
+# Translation backend selection
+# Used by: backend (services/translation-service.js)
+# Values: cpu (local NLLB via transformers.js), gpu (vLLM translation model),
+#         auto (try GPU, fall back to CPU)
+# Default: auto
+# Set to 'cpu' on deployments that do not run a translation model on the GPU node.
+# TRANSLATION_BACKEND=auto
+
+# CPU translation model and tuning (used when TRANSLATION_BACKEND=cpu or auto)
+# Used by: backend (services/translation/cpu-translate-backend.js)
+# Defaults: Xenova/nllb-200-distilled-600M, 4 threads, 5 parallel batches
+# TRANSLATION_CPU_MODEL_ID=Xenova/nllb-200-distilled-600M
+# TRANSLATION_THREADS=4
+# TRANSLATION_BATCHES=5
+
 # Stream the target-language translation during chat streaming (issue #829) instead
 # of streaming English and flipping to the UI language at the end. 1 = stream-translate
 # complete sentence/paragraph units as they arrive; 0 (default) = current behavior.
@@ -351,6 +367,50 @@ HUGGING_FACE_HUB_TOKEN=
 # SSO Session Max or Access Token Lifespan to ensure sessions are purged after
 # the user's authentication expires.
 # SESSION_EXPIRATION_TIME=
+
+# =============================================================================
+# SECTION 6B: DOCUMENT REPOSITORY (OPTIONAL)
+# =============================================================================
+# Upload limits, virus scanning and crawler tuning for the document-repository
+# service. Every value below has a code default; override only when the
+# deployment differs from it.
+
+# Enable ClamAV scanning of uploaded documents.
+# Used by: document-repository (src/config/appConfig.js)
+# Default: false. The clamav service IS deployed by docker-compose.yaml, but the
+# document-repository does not scan uploads unless this is explicitly "true".
+# VIRUS_SCANNING=true
+
+# ClamAV daemon address (TCP; CLAMSCAN_SOCKET stays false in container deployments)
+# Used by: document-repository (clamscan client)
+# Default in code: 127.0.0.1:3310 — that is the wrong target under Compose/Swarm,
+# where clamd runs in its own container. Set the host to the service name when
+# turning VIRUS_SCANNING on.
+# CLAMSCAN_HOST=clamav
+# CLAMSCAN_PORT=3310
+
+# What to do with an infected upload (defaults: keep the file, do not quarantine)
+# CLAMSCAN_REMOVE_INFECTED=false
+# CLAMSCAN_QUARANTINE_INFECTED=false
+
+# Upload limits
+# Used by: document-repository (src/config/appConfig.js)
+# Defaults: 52428800 bytes (50 MB) per file, 10 files per request
+# Keep MAX_FILE_SIZE at or below the gateway's nginx client_max_body_size.
+# MAX_FILE_SIZE=52428800
+# MAX_FILES_UPLOAD=10
+
+# Language a document must be in to be accepted for ingestion
+# Used by: document-repository (src/config/appConfig.js)
+# Default: en (English is the source of truth for RAG — see the i18n policy)
+# DOCUMENT_INGESTION_LANGUAGE=en
+
+# Web crawler tuning (URL ingestion)
+# Used by: document-repository (src/workers/crawlWorker.js)
+# Defaults: 5000 ms poll interval, 1000 pages per job, 10 concurrent fetches
+# CRAWLER_POLL_INTERVAL_MS=5000
+# CRAWLER_MAX_PAGES=1000
+# CRAWLER_WORKER_CONCURRENCY=10
 
 # =============================================================================
 # SECTION 7: API GATEWAY CONFIGURATION
@@ -415,6 +475,9 @@ HUGGING_FACE_HUB_TOKEN=
 # **Flags** (behavior toggles):
 #   - CHATQNA_ENFORCE_ABSTENTION: Whether to enforce abstention (default: true)
 #
+# **Privacy**:
+#   - SENSITIVE_KEYS: keys stripped from context data before it reaches the LLM
+#
 # To customize: Uncomment and set values below. To change built-in defaults,
 # edit the Python code in genie-ai-overlay/chatqna/ or genie-ai-overlay/dataprep/
 
@@ -425,6 +488,13 @@ HUGGING_FACE_HUB_TOKEN=
 # CONTEXTUAL_RETRIEVAL_PROMPT="..."    # per-chunk doc-context generation prompt
 #                                      #   (Contextual Retrieval; contains a
 #                                      #   {document_context} placeholder).
+
+# Keys masked out of user/context data before it is sent to the LLM.
+# Used by: chatqna (genieai_chatqna.py)
+# The code default is EMPTY: masking is a no-op and the service logs
+# "Attention: SENSITIVE_KEYS parameter is not defined" instead. Any deployment
+# handling personal data must keep this set. Comma-separated, no spaces.
+SENSITIVE_KEYS=email,phone,currentAddress,ip_address,ssn,ssb,dob,credit_card,password,encPassword,salt,location,accessToken,refreshToken,_rev,_key
 
 # =============================================================================
 # SECTION 9: KEYCLOAK IDENTITY PROVIDER (REQUIRED)
@@ -592,6 +662,8 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # Restricts the Keycloak language picker. Default (unset): the curated set
 # ["ar","de","en","es","fr","pt","ru","th","zh-Hans"].
 # Example (El Salvador): ["en","es"]
+# Name shown on the Keycloak login page heading and browser tab (realm displayName).
+# KEYCLOAK_REALM_DISPLAY_NAME=GENIE.AI
 # KEYCLOAK_SUPPORTED_LOCALES=
 
 # Access token lifespan in seconds (default: 300 = 5 minutes)
@@ -857,3 +929,35 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 #   Only affects dataprep-arango-service. Backend and chatqna use NODE_TLS_REJECT_UNAUTHORIZED
 #   for NGINX TLS verification instead.
 
+
+# =============================================================================
+# SECTION 15: PUSH NOTIFICATIONS (FCM fan-out via BullMQ)
+# =============================================================================
+# Shared secret guarding POST /api/notifications/broadcast. The endpoint fails
+# closed (503) when unset. Generate: openssl rand -hex 32
+# Must match NOTIFICATION_BROADCAST_SECRET in warning_system_engine's env.
+NOTIFICATION_BROADCAST_SECRET=
+
+# Google Earth Engine (drought-monitoring, geo-inference-worker). Place the GEE
+# service-account key at ./secrets/credentials.json; it is mounted read-only at
+# /app/secrets/credentials.json. GEE_PROJECT is the GEE cloud project id.
+GEE_PROJECT=
+# weather-mcp-service -> geo-inference-worker (field delineation, flood maps).
+# Leave empty to disable; the chat answers with an honest "not enabled" message.
+# GEO_INFERENCE_URL=http://geo-inference-worker:8001
+# GEO_GPU_INFERENCE=true
+
+# Firebase Admin credentials — path to the service-account JSON as mounted
+# inside the backend container (see the backend volumes in docker-compose.yaml).
+# Alternatively supply the JSON inline via FIREBASE_SERVICE_ACCOUNT_JSON.
+GOOGLE_APPLICATION_CREDENTIALS=
+# FIREBASE_SERVICE_ACCOUNT_JSON=
+
+# real | mock — 'mock' simulates FCM for load testing without consuming quota
+# FCM_TRANSPORT=real
+# Redis for the notification queues. Falls back to TRANSLATION_CACHE_* when
+# unset; logical db 1 keeps BullMQ keys away from the translation cache.
+# NOTIFICATION_REDIS_DB=1
+# NOTIFICATION_SEND_CONCURRENCY=4
+# NOTIFICATION_CHUNKS_PER_SEC=8
+# NOTIFICATION_WORKER_ENABLED=true

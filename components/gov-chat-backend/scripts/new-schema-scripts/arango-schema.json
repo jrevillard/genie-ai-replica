@@ -1180,7 +1180,7 @@
           "sparse": false,
           "deduplicate": true,
           "name": "idx_1846970676488962048",
-          "selectivityEstimate": 0.0000023097782150957865,
+          "selectivityEstimate": 2.3097782150957865e-06,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -1510,7 +1510,7 @@
           "sparse": false,
           "deduplicate": true,
           "name": "idx_1846970676927266816",
-          "selectivityEstimate": 0.0000038704783137100085,
+          "selectivityEstimate": 3.8704783137100085e-06,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -1773,7 +1773,7 @@
           "sparse": false,
           "deduplicate": true,
           "name": "idx_1846970677232402432",
-          "selectivityEstimate": 0.000002883805700707109,
+          "selectivityEstimate": 2.883805700707109e-06,
           "estimates": true,
           "geoJson": false,
           "constraint": false,
@@ -2358,6 +2358,127 @@
           "cacheEnabled": false,
           "storedValues": [],
           "inBackground": false
+        }
+      ]
+    },
+    {
+      "name": "notificationDeviceTokens",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "persistent",
+          "fields": [
+            "active",
+            "preferences.districts[*]"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_ndt_active_district"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "active",
+            "preferences.crops[*]"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_ndt_active_crop"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "active",
+            "preferences.alertTypes[*]"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_ndt_active_alertType"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "fcmToken"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_ndt_fcmToken"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "userId"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_ndt_userId"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "active",
+            "lastSeenAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_ndt_active_lastSeen"
+        }
+      ]
+    },
+    {
+      "name": "notificationBroadcasts",
+      "type": "document",
+      "properties": {
+        "waitForSync": false,
+        "keyOptions": {},
+        "schema": null,
+        "computedValues": []
+      },
+      "indexes": [
+        {
+          "type": "persistent",
+          "fields": [
+            "status",
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_nb_status_createdAt"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "broadcastId"
+          ],
+          "unique": true,
+          "sparse": false,
+          "name": "idx_nb_broadcastId"
+        },
+        {
+          "type": "persistent",
+          "fields": [
+            "source",
+            "createdAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_nb_source_createdAt"
+        },
+        {
+          "type": "ttl",
+          "fields": [
+            "expiresAt"
+          ],
+          "unique": false,
+          "sparse": false,
+          "name": "idx_nb_ttl",
+          "expireAfter": 0
         }
       ]
     }

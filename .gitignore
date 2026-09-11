@@ -123,3 +123,10 @@ docker-compose.override.yml
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/
 .tokensave/
+
+# Firebase / notification secrets
+.secrets/
+firebase-service-account.json
+# Service-account keys dropped into ./secrets (GEE, Firebase, ...)
+secrets/*.json
+*-firebase-adminsdk-*.json

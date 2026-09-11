@@ -1572,5 +1572,21 @@ export default {
       uploadSuccess: 'Successfully uploaded {fileName}',
       uploadFailed: 'Failed to upload {fileName}.'
     }
+  },
+  cropAlert: {
+    potato: 'Potato',
+    drought: 'Drought',
+    dismiss: 'Dismiss',
+    viewDroughtReport: 'View drought report',
+    tier: {
+      normal: 'Normal',
+      advisory: 'Advisory',
+      warning: 'Warning',
+      severe: 'Severe',
+      emergency: 'Emergency'
+    }
+  },
+  map: {
+    backToChat: 'Back to chat'
   }
 };

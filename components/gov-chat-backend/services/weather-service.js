@@ -22,25 +22,31 @@ class WeatherService {
       return;
     }
     try {
-      // Fetch server location from ipapi.co
-      logger.debug('WeatherService.fetching_server_location');
-      const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
-      logger.debug('WeatherService.server_location_response', {
-        status: geoResponse.status,
-        data: geoResponse.data
-      });
-      this.serverLocation = {
-        latitude: geoResponse.data.latitude || 0,
-        longitude: geoResponse.data.longitude || 0,
-        city: geoResponse.data.city ? `${geoResponse.data.city}, ${geoResponse.data.country_name}` : 'Unknown'
-      };
-      if (this.serverLocation.latitude === 0 && this.serverLocation.longitude === 0) {
-        logger.warn('Server location fetch failed; using default coordinates (0, 0)');
-      }
-      logger.info('WeatherService.server_location_set', { serverLocation: this.serverLocation });
-
+      // Bind the database FIRST. Previously the ipapi.co geolocation call ran
+      // before this, so a rate-limit (429) threw out of init() with the
+      // collection never bound - and every subsequent getWeather() crashed on
+      // this.weatherRequests.save() with "Cannot read properties of null".
+      // A best-effort location lookup must never disable the whole service.
       this.db = await this.dbService.getConnection('default');
       this.weatherRequests = this.db.collection('weatherRequests');
+
+      // Server location is a fallback for requests with no coordinates. Default
+      // to Dhaka (this deployment's region) and upgrade from ipapi.co if it answers.
+      this.serverLocation = { latitude: 23.8103, longitude: 90.4125, city: 'Dhaka, Bangladesh' };
+      try {
+        logger.debug('WeatherService.fetching_server_location');
+        const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
+        if (geoResponse.data?.latitude && geoResponse.data?.longitude) {
+          this.serverLocation = {
+            latitude: geoResponse.data.latitude,
+            longitude: geoResponse.data.longitude,
+            city: geoResponse.data.city ? `${geoResponse.data.city}, ${geoResponse.data.country_name}` : 'Unknown'
+          };
+        }
+      } catch (geoError) {
+        logger.warn(`Server geolocation unavailable (${geoError.message}); using default ${this.serverLocation.city}`);
+      }
+      logger.info('WeatherService.server_location_set', { serverLocation: this.serverLocation });
       this.initialized = true;
       logger.info('WeatherService initialized successfully');
     } catch (error) {
@@ -179,6 +185,9 @@ class WeatherService {
           lowTemp: Math.round(response.data.daily.temperature_2m_min[index + 1])
         }))
       };
+
+      // Self-heal: if startup init failed (or was skipped as optional), bind now.
+      if (!this.initialized) await this.init();
 
       // Store request in ArangoDB
       const requestDoc = {

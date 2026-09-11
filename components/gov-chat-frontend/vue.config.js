@@ -31,6 +31,14 @@ module.exports = {
     config.module.rule('ts').uses.delete('cache-loader');
     config.module.rule('tsx').uses.delete('cache-loader');
 
+    // Static <title> shown before genie-ai-config.json loads; main.js then sets
+    // document.title from config.app.title. Defaults to the framework name
+    // rather than the npm package name ("gov-chat-app").
+    config.plugin('html').tap(args => {
+      args[0].title = process.env.VUE_APP_TITLE || 'MEWA Bangladesh';
+      return args;
+    });
+
     // Strip debug console calls in production (keep error/warn for diagnostics)
     if (isProduction) {
       config.optimization.minimizer('terser').tap(args => {

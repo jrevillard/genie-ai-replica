@@ -1,0 +1,26 @@
+# Local single-host GPU override (docker compose only; ignored by docker stack deploy).
+#
+# docker-compose.yaml targets Swarm, where the GPU node's Docker daemon has
+# nvidia as its DEFAULT runtime, so NVIDIA_VISIBLE_DEVICES alone exposes the GPU.
+# On a plain single-host `docker compose` run the default runtime is runc, so the
+# driver libraries are never injected and the containers die with
+# "libcuda.so.1: cannot open shared object file" / "Failed to infer device type".
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.local-gpu.yaml \
+#     --profile opea --profile gpu-models up -d
+services:
+  vllm:
+    runtime: nvidia
+  vllm-translation-guardrail:
+    runtime: nvidia
+  tei:
+    runtime: nvidia
+  tei_reranker:
+    runtime: nvidia
+  # Docling/EasyOCR GPU OCR (MR 357 + driver 580). NVIDIA_VISIBLE_DEVICES alone is
+  # inert under the runc default runtime - the nvidia runtime must inject the driver.
+  dataprep-arango-service:
+    runtime: nvidia
+  geo-inference-worker:
+    runtime: nvidia

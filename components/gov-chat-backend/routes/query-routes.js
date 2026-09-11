@@ -158,9 +158,10 @@ module.exports = (queryService) => {
     let keepalive = null;
 
     try {
-      const { queryId, opeaUrl, opeaPayload, authHeaders } = await queryService.initStreamQuery(queryData, {
-        authorization: req.headers.authorization
-      });
+      const { queryId, opeaUrl, opeaPayload, authHeaders, weatherResult } = await queryService.initStreamQuery(
+        queryData,
+        { authorization: req.headers.authorization }
+      );
 
       // SSE response headers
       res.writeHead(200, {
@@ -169,6 +170,31 @@ module.exports = (queryService) => {
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no'
       });
+
+      // Weather / geo-inference answers arrive whole from weather-mcp-service, not as
+      // an OPEA token stream. Emit them with the same chunk -> metadata -> done framing
+      // so the client (and its map overlay, which reads metadata.field_delineation /
+      // flood_analysis) needs no special case.
+      if (weatherResult) {
+        const weatherStart = Date.now();
+        // The agent writes in the UI language when it can (Gemma); only fall back
+        // to the post-stream translation when the answer came back in English
+        // for a non-English UI.
+        const uiLang = String(queryData.context?.language || 'en').toLowerCase();
+        const alreadyLocalized = (weatherResult.answerLanguage || 'en') === uiLang;
+        res.write(`data: ${JSON.stringify({ type: 'chunk', content: weatherResult.text })}\n\n`);
+        await handleStreamDone(
+          queryId,
+          weatherResult.text,
+          weatherStart,
+          queryData,
+          req,
+          res,
+          weatherResult.metadata,
+          alreadyLocalized
+        );
+        return;
+      }
 
       const streamTimeout = parseInt(process.env.CHATQNA_STREAM_TIMEOUT, 10) || 3600000;
       opeaController = new AbortController();
@@ -189,6 +215,9 @@ module.exports = (queryService) => {
       let fullResponseText = '';
       const startTime = Date.now();
       let buffer = '';
+      // Bounded copy of the raw upstream body, used only to explain a stream
+      // that ended without producing any parsable SSE chunk (see stream.on('end')).
+      let rawBody = '';
       const doneState = { handled: false };
       // Metadata emitted by chatqna in-stream (reranker-grounded source docs + is_grounded),
       // forwarded to the client instead of running a separate backend-side retrieval.
@@ -287,7 +316,9 @@ module.exports = (queryService) => {
       };
 
       stream.on('data', (chunk) => {
-        buffer += chunk.toString();
+        const asText = chunk.toString();
+        if (rawBody.length < 2000) rawBody += asText;
+        buffer += asText;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
@@ -350,7 +381,31 @@ module.exports = (queryService) => {
       stream.on('end', () => {
         if (fullResponseText && res.writableEnded === false) {
           doHandleStreamDone();
+          return;
         }
+        if (res.writableEnded) return;
+        // The upstream ended without a single parsable chunk. chatqna reports
+        // some failures (e.g. a bearer token that fails JWKS validation) as
+        // HTTP 200 with a plain JSON body and NO SSE framing, so no line ever
+        // matches 'data: ' and fullResponseText stays empty. Before this branch
+        // existed the response was never ended: keepalives kept the connection
+        // open and the client waited forever on "Thinking...".
+        cleanupKeepalive();
+        let message = 'The assistant service returned no content.';
+        try {
+          const parsedBody = JSON.parse(rawBody.trim());
+          if (parsedBody && (parsedBody.message || parsedBody.error)) {
+            message = parsedBody.message || parsedBody.error;
+          }
+        } catch {
+          // Body was not JSON — keep the generic message, log the raw prefix below.
+        }
+        logger.error('QueryService.stream_ended_without_content', {
+          queryId,
+          rawPrefix: rawBody.slice(0, 200)
+        });
+        res.write(`data: ${JSON.stringify({ type: 'error', message, code: 'CHATQNA_NO_CONTENT' })}\n\n`);
+        res.end();
       });
 
       req.on('close', () => {

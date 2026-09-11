@@ -1329,7 +1329,7 @@ export default {
   chatbot: {
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    welcomeMessage: 'স্বাগতম! আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
     configMismatchWarning:
       'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',
     categoryNotFound: 'ক্যাটাগরি "{label}" জ্ঞান শ্রেণিবিন্যাসে পাওয়া যায়নি',
@@ -1545,5 +1545,21 @@ export default {
       uploadSuccess: 'সফলভাবে আপলোড হয়েছে {fileName}',
       uploadFailed: '{fileName} আপলোড করতে ব্যর্থ।'
     }
+  },
+  cropAlert: {
+    potato: 'আলু',
+    drought: 'খরা',
+    dismiss: 'বন্ধ করুন',
+    viewDroughtReport: 'খরা প্রতিবেদন দেখুন',
+    tier: {
+      normal: 'স্বাভাবিক',
+      advisory: 'পরামর্শ',
+      warning: 'সতর্কতা',
+      severe: 'তীব্র',
+      emergency: 'জরুরি'
+    }
+  },
+  map: {
+    backToChat: 'চ্যাটে ফিরে যান'
   }
 };

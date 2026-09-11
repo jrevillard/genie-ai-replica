@@ -22,6 +22,11 @@
         @logout="handleLogout"
       />
 
+      <!-- Crop early-warning banner: deterministic risk tier from warning_system_engine,
+           fetched by the component itself (weather/potato-risk + drought-risk). Sits
+           outside the chatbot so an active alert is visible on every authenticated view. -->
+      <crop-alert-banner />
+
       <div class="main-container">
         <!-- Sidebar (collapsible, only on routes with showSidebar meta) -->
         <side-bar-component v-if="showSidebar" :is-open="isSidebarOpen" />
@@ -46,6 +51,7 @@
 <script>
 import NavBarComponent from './components/NavBarComponent.vue';
 import SideBarComponent from './components/SideBarComponent.vue';
+import CropAlertBanner from './components/CropAlertBanner.vue';
 import SplashScreen from './components/SplashScreen.vue';
 import { mapGetters } from 'vuex';
 import { eventBus } from './eventBus.js';
@@ -56,6 +62,7 @@ import { themeManager } from './utils/ThemeManager';
 export default {
   name: 'App',
   components: {
+    CropAlertBanner,
     NavBarComponent,
     SideBarComponent,
     SplashScreen

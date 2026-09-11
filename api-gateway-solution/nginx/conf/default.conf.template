@@ -129,7 +129,7 @@ server {
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
         add_header 'Access-Control-Allow-Credentials' 'true' always;
-        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com;" always;
 
         if ($request_method = 'OPTIONS') {
             include conf.d/security-headers.inc;
@@ -182,7 +182,7 @@ server {
         add_header 'Access-Control-Allow-Credentials' 'true' always;
 
         # API-specific CSP
-        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com;" always;
 
         # Proxy settings to Kong
         # Note: when proxy_pass uses a variable, nginx does NOT perform
@@ -207,7 +207,7 @@ server {
     location /api-docs {
         include conf.d/security-headers.inc;
 
-        add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com;" always;
 
         proxy_pass http://$kong_addr;
         proxy_http_version 1.1;
@@ -244,7 +244,7 @@ server {
         include conf.d/security-headers.inc;
 
         add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT} https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT} https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; frame-ancestors 'self'; form-action 'self' 'unsafe-inline' https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT}; base-uri 'self'; object-src 'none'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com;" always;
 
         proxy_pass http://$kong_addr;
         proxy_http_version 1.1;
@@ -265,7 +265,7 @@ server {
         include conf.d/security-headers.inc;
 
         # Frontend CSP with parameterized connect-src
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC} https://api.mapbox.com https://events.mapbox.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com;" always;
 
         # Proxy settings to Vue frontend
         proxy_pass http://$frontend_addr;
@@ -289,7 +289,7 @@ server {
     # Named location for SPA fallback
     location @frontend_spa {
         include conf.d/security-headers.inc;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC}; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; font-src 'self' data: https://cdnjs.cloudflare.com;" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src ${CSP_CONNECT_SRC} https://api.mapbox.com https://events.mapbox.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com;" always;
 
         proxy_pass http://$frontend_addr;
         proxy_http_version 1.1;

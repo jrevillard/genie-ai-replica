@@ -16,14 +16,16 @@
         </DsButton>
 
         <!-- Logo container for GENIE.AI configured icon -->
-        <router-link to="/dashboard" class="logo-container">
+        <router-link to="/dashboard" class="logo-container" @click="goHome">
           <!-- Display SVG icon from config (file or inline) -->
           <img v-if="config.app.icon.type === 'file'" :src="config.app.icon.value" class="govt-logo" alt="App Icon" />
           <!-- eslint-disable-next-line vue/no-v-html -->
           <span v-else class="govt-logo" v-html="config.app.icon.value"></span>
         </router-link>
         <!-- Title from GENIE.AI config - Hide on mobile -->
-        <router-link to="/dashboard" class="brand-name hide-on-mobile">{{ config.app.title }}</router-link>
+        <router-link to="/dashboard" class="brand-name hide-on-mobile" @click="goHome">{{
+          config.app.title
+        }}</router-link>
 
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
@@ -281,6 +283,7 @@
 
 <script>
 import LanguageSelector from '@/components/LanguageSelector.vue';
+import { eventBus } from '../eventBus.js';
 import DsButton from './ds/Button.vue';
 
 export default {
@@ -341,6 +344,9 @@ export default {
     },
     toggleSidebar() {
       this.$emit('toggleSidebar');
+    },
+    goHome() {
+      eventBus.$emit('go-home');
     }
   }
 };
@@ -395,7 +401,10 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.5px;
-  color: var(--accent-fg);
+  /* Follow the configured navbar text colour (theme.navbar.text) like .nav-bar
+     does; --accent-fg is derived from the brand hue and goes dark in dark mode,
+     which is unreadable on a dark navbar background. */
+  color: var(--navbar-fg, var(--accent-fg));
   text-decoration: none;
 }
 
@@ -522,16 +531,18 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-fg);
-  --ds-btn-ghost-color: var(--accent-fg);
-  --ds-btn-ghost-hover-color: var(--fg);
-  --ds-btn-ghost-hover-bg: color-mix(in oklch, var(--fg) 15%, transparent);
+  /* Same rationale as .brand-name: icons must contrast with the navbar
+     background, not with the page background. */
+  color: var(--navbar-fg, var(--accent-fg));
+  --ds-btn-ghost-color: var(--navbar-fg, var(--accent-fg));
+  --ds-btn-ghost-hover-color: var(--navbar-fg, var(--fg));
+  --ds-btn-ghost-hover-bg: color-mix(in oklch, var(--navbar-fg, var(--fg)) 18%, transparent);
 }
 
 .icon-btn svg {
   width: 22px;
   height: 22px;
-  color: var(--ds-btn-ghost-color, var(--accent-fg));
+  color: var(--ds-btn-ghost-color, var(--navbar-fg, var(--accent-fg)));
   transition:
     transform 0.2s ease,
     color 0.2s ease;
@@ -539,7 +550,7 @@ export default {
 
 .icon-btn:hover svg {
   transform: scale(1.1);
-  color: var(--ds-btn-ghost-hover-color, var(--fg));
+  color: var(--ds-btn-ghost-hover-color, var(--navbar-fg, var(--fg)));
 }
 
 /* Disabled button styling */
@@ -607,7 +618,8 @@ export default {
   position: relative;
   width: 18px;
   height: 2px;
-  background-color: var(--accent-fg);
+  /* Bars sit on the navbar background: follow theme.navbar.text like the title. */
+  background-color: var(--navbar-fg, var(--accent-fg));
   transition: background-color 0.2s ease;
 }
 
@@ -618,7 +630,7 @@ export default {
   left: 0;
   width: 18px;
   height: 2px;
-  background-color: var(--accent-fg);
+  background-color: var(--navbar-fg, var(--accent-fg));
   transition:
     transform 0.3s ease,
     background-color 0.2s ease;
@@ -635,7 +647,7 @@ export default {
 .hamburger-btn:hover .hamburger-inner,
 .hamburger-btn:hover .hamburger-inner::before,
 .hamburger-btn:hover .hamburger-inner::after {
-  background-color: var(--fg);
+  background-color: var(--navbar-fg, var(--fg));
 }
 
 /* Centered X state */

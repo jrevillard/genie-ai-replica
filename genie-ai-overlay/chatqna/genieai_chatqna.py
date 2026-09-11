@@ -502,6 +502,29 @@ CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "tru
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
+# Markers that close the system prompt, immediately before the model's own answer.
+# Some models echo their instructions back before answering; when that happens we
+# drop everything up to and including the last marker so the user never sees the
+# prompt. Ported from the PolisenseAI branch (53d42e992).
+_SYSTEM_PROMPT_END_MARKERS = [
+    "Answer the user's latest question using ONLY the provided knowledge base content.",
+    "</INSTRUCTIONS>",
+]
+
+
+def _strip_system_prompt_leakage(text: str) -> str:
+    """Remove system-prompt content if the LLM echoed it before its answer."""
+    if not text:
+        return text
+    for marker in _SYSTEM_PROMPT_END_MARKERS:
+        if marker in text:
+            idx = text.find(marker) + len(marker)
+            stripped = text[idx:].lstrip("\n ")
+            if stripped:
+                logger.warning("[LLM] System prompt leakage detected and stripped.")
+                return stripped
+    return text
+
 
 def _gp(kwargs: dict, key: str, default=None):
     """Extract a GENIE param from ``kwargs`` with bundled-dict preference.
@@ -1351,7 +1374,8 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
         else:
             if logflag:
                 logger.debug(f"\nRaw output of the llm\n {data}\n")
-            next_data["text"] = data["choices"][0]["message"]["content"]
+            raw_text = data["choices"][0]["message"]["content"]
+            next_data["text"] = _strip_system_prompt_leakage(raw_text)
         if logflag:
             logger.debug(f"\nAligned output of the llm\n {next_data}\n")
     else:
@@ -2268,7 +2292,10 @@ class ChatQnAService:
                         f"{last_user_content[:100] if last_user_content else 'None'}"
                     )
 
-                if last_user_content:
+                # langdetect is unreliable on short text: a greeting like "Hi" is
+                # routinely misclassified, which then forces the whole answer into the
+                # wrong language. Require a meaningful sample before trusting it.
+                if last_user_content and len(last_user_content.strip()) >= 80:
                     detected_lang = detect(last_user_content)
                     if logflag:
                         logger.info(
@@ -2303,6 +2330,12 @@ class ChatQnAService:
                         )
                         logger.warning(msg)
                         original_language = "EN"
+                else:
+                    sample_len = len(last_user_content.strip()) if last_user_content else 0
+                    logger.info(
+                        f"Text too short for reliable language detection ({sample_len} chars) - defaulting to EN."
+                    )
+                    original_language = "EN"
         except Exception as e:
             logger.warning(f"Language detection failed: {e}")
             # Fallback to English if detection fails
@@ -2380,7 +2413,7 @@ class ChatQnAService:
         llm_kwargs = dict(
             top_k=chat_request.top_k if chat_request.top_k else 10,
             top_p=chat_request.top_p if chat_request.top_p else 0.95,
-            temperature=chat_request.temperature if chat_request.temperature else 0.01,
+            temperature=chat_request.temperature if chat_request.temperature else 0,
             frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
             presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
             repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,

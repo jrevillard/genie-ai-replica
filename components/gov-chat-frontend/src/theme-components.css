@@ -37,13 +37,16 @@ main {
   color: var(--navbar-fg, var(--accent-fg));
 }
 
+/* Navbar foreground must contrast with the navbar background (theme.navbar.text),
+   not with the page background. --accent-fg is derived from the brand hue and
+   turns dark in dark mode, which is unreadable on a dark navbar. */
 .brand-name,
 .nav-bar h4,
 .nav-bar .brand-name,
 [class*='brand-name'],
 .nav-bar [class*='title'],
 .nav-bar [class*='heading'] {
-  color: var(--accent-fg);
+  color: var(--navbar-fg, var(--accent-fg));
 }
 
 /* --- Sidebar --- */

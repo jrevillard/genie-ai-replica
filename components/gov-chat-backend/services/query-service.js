@@ -6,6 +6,379 @@ const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
+const axios = require('axios');
+const translationService = require('./translation-service');
+
+/**
+ * Weather / geo-inference query router, ported from the PolisenseAI branch
+ * (67d88bce2 "router regex", f68d0fc46). Decides whether a chat message is a
+ * live weather / satellite-geospatial request (answered by weather-mcp-service)
+ * or a knowledge-base question (answered by OPEA ChatQnA RAG).
+ *
+ * Four tiers, cheapest first, so the LLM is only consulted for truly ambiguous text:
+ *   Tier 0: document/knowledge signal ("uploaded", "calendar", "table")  -> RAG, no LLM
+ *   Tier 1: unambiguous forecast phrase, hard event word (flood, cyclone),
+ *           geo-inference word (delineate, flood map), or a current planting
+ *           decision                                                       -> weather, no LLM
+ *   Tier 2: agricultural term (soil, pest, crop)                           -> RAG, no LLM
+ *   Tier 3: ambiguous measurable (weather, rain, temperature) alone        -> ask the LLM YES/NO
+ *   Tier 4: nothing                                                        -> RAG
+ *
+ * Gated by WEATHER_ENABLED=true so deployments without the climate profile
+ * are untouched.
+ */
+const RAG_OVERRIDE = [
+  'uploaded',
+  'listed',
+  'according to',
+  'in the document',
+  'from the document',
+  'threshold',
+  'calendar',
+  'table',
+  'chart',
+  'section',
+  'page',
+  'schedule',
+  'what does',
+  'what is listed',
+  'what is stated',
+  'document says'
+];
+const WEATHER_FORECAST_PHRASES = [
+  'how is the weather',
+  'what is the weather',
+  'what will the weather',
+  'weather today',
+  'weather tomorrow',
+  'weather this week',
+  'weather next week',
+  'weather next month',
+  'next month',
+  '30 days',
+  'next 30 days',
+  'weather in 1',
+  'weather in 2',
+  'weather in 3',
+  'weather in 4',
+  'weather in 5',
+  'weather in 6',
+  'weather in 7',
+  'weather forecast',
+  'current weather',
+  'will it rain',
+  'will it be hot',
+  'will it be cold',
+  'how hot will',
+  'how cold will'
+];
+const WEATHER_HARD = [
+  'rainfall',
+  'storm',
+  'flood',
+  'cyclone',
+  'monsoon',
+  'typhoon',
+  'bulletin',
+  'agrometeorological',
+  'agromet',
+  'agri advisory',
+  'national bulletin',
+  'advisory bulletin',
+  // geo-inference: field delineation and satellite flood detection
+  'delineat',
+  'field boundar',
+  'farm boundar',
+  'plot boundar',
+  'field segment',
+  'flood detection',
+  'flood mapping',
+  'flood map',
+  'flood extent',
+  'flood zone',
+  'satellite flood',
+  'inundation map',
+  'detect flood',
+  'map flood',
+  'prithvi'
+];
+const AGRO_TERMS = [
+  'soil',
+  'crop',
+  'plant',
+  'pest',
+  'disease',
+  'seed',
+  'harvest',
+  'fertilizer',
+  'worm',
+  'insect',
+  'fungus',
+  'larvae',
+  'larva',
+  'bacteria',
+  'bacterial',
+  'viral',
+  'nitrogen',
+  'phosphorus',
+  'germination',
+  'irrigation',
+  'variety',
+  'hybrid',
+  'cultivation',
+  'paddy',
+  'rice',
+  'wheat',
+  'potato',
+  'maize',
+  'vegetable',
+  'infestation',
+  'blight',
+  'mite',
+  'aphid',
+  'thrip',
+  'nematode'
+];
+const WEATHER_AMBIGUOUS = ['weather', 'temperature', 'rain', 'humid', 'climate', 'forecast', 'wind', 'drought'];
+const PLANTING_DECISION_TERMS = ['sow', 'sowing', 'plant', 'planting', 'transplant', 'good time', 'right time'];
+const CURRENT_TIME_TERMS = ['now', 'today', 'currently', 'current', 'this week', 'right now'];
+const LONG_TERM_FORECAST_HORIZON =
+  /\b(?:(?:next|in|for)\s+)?(?:[8-9]|[1-9]\d)\s*days?\b|\b(?:(?:next|in|for)\s+)?(?:two|three|four|five|six|[2-6])\s*weeks?\b|\bfortnight\b|\bnext\s+month\b|\b(?:next\s+)?(?:few|couple\s+of|coming)\s+months?\b/;
+// Geo-inference (SAM / Prithvi on satellite imagery) takes minutes; forecasts take seconds.
+const GEO_KEYWORDS = [
+  'delineat',
+  'field boundar',
+  'farm boundar',
+  'flood detection',
+  'flood map',
+  'flood extent',
+  'satellite flood',
+  'inundation',
+  'prithvi'
+];
+
+/** Tier 3: ask the LLM whether an ambiguous message is a weather request. */
+async function classifyWeatherWithLLM(query) {
+  const vllmBase = process.env.VLLM_ENDPOINT || 'http://vllm:8000';
+  const model = process.env.VLLM_LLM_MODEL_ID || 'ibm-granite/granite-3.3-8b-instruct';
+  try {
+    const resp = await axios.post(
+      `${vllmBase}/v1/chat/completions`,
+      {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a query classifier. Reply with exactly one word: YES or NO. No punctuation.'
+          },
+          {
+            role: 'user',
+            content:
+              'Is the following query asking about weather conditions or a meteorological ' +
+              `forecast for a specific location or time period (past, present, or future)?\n\nQuery: "${query}"`
+          }
+        ],
+        max_tokens: 3,
+        temperature: 0
+      },
+      { timeout: 5000 }
+    );
+    const answer = (resp.data?.choices?.[0]?.message?.content || '').trim().toUpperCase();
+    logger.info(`[WEATHER] LLM classifier -> "${answer}"`);
+    return answer.startsWith('YES');
+  } catch (err) {
+    logger.warn(`[WEATHER] LLM classifier failed (${err.message}) - defaulting to RAG`);
+    return false;
+  }
+}
+
+// Bengali (Bangla) script block. The weather/geo keyword lists are English, and
+// the weather agent's intent extractor resolves English district names, so a
+// Bengali message is translated to English once (Redis-cached) and that text is
+// used for routing and for the MCP call. The user's own text is untouched.
+const BENGALI_RE = /[\u0980-\u09ff]/;
+
+/**
+ * Resolve the text to route on. Returns { text, sourceLang }: `text` is English
+ * when the message was Bengali and translation succeeded, otherwise the
+ * original message; `sourceLang` is 'bn' or 'en'.
+ */
+async function resolveRoutingText(message) {
+  const original = message || '';
+  if (!BENGALI_RE.test(original)) return { text: original, sourceLang: 'en' };
+  try {
+    await translationService.init();
+    const english = (await translationService.translateMarkdown(original, 'bn', 'en')) || '';
+    const text = english.trim();
+    if (text) {
+      logger.info(`[WEATHER] Bengali message translated for routing: "${text.slice(0, 120)}"`);
+      return { text, sourceLang: 'bn' };
+    }
+  } catch (err) {
+    logger.warn(`[WEATHER] Bengali->English routing translation failed: ${err.message}`);
+  }
+  return { text: original, sourceLang: 'bn' };
+}
+
+/**
+ * Text of the most recent user turn. The web client sends the streaming
+ * assistant placeholder ({ role: 'assistant', content: '' }) as the last
+ * element, so the array tail cannot be used as the query text.
+ */
+function lastUserMessageText(messages) {
+  if (!Array.isArray(messages)) return '';
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m && m.role === 'user' && typeof m.content === 'string' && m.content.trim()) {
+      return m.content;
+    }
+  }
+  const last = messages[messages.length - 1];
+  return last && typeof last.content === 'string' ? last.content : '';
+}
+
+/**
+ * Normalised copies of the message for keyword matching only (the text sent to
+ * the model is untouched). Handles what real input looks like: "7days" (digit
+ * glued to a word), repeated spaces, and a line break typed inside a word
+ * ("w\neather"). The joined variant is only added when it differs, and every
+ * keyword test passes if it matches either variant.
+ */
+// Common misspellings of "delineate" seen in real input (delneate, deliniate,
+// delinate ...). Applied to the routing copies only.
+const DELINEATE_TYPO_RE = /\bdel[ei]?n[ei]?[ae]?t(e|es|ed|ion|ing)?\b/g;
+
+function routingVariants(message) {
+  const base = (message || '')
+    .toLowerCase()
+    .replace(/(\d)([a-z])/g, '$1 $2')
+    .replace(DELINEATE_TYPO_RE, 'delineate');
+  const spaced = base.replace(/\s+/g, ' ').trim();
+  const joined = base
+    .replace(/([a-z])\r?\n([a-z])/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return spaced === joined ? [spaced] : [spaced, joined];
+}
+
+/**
+ * The variant to hand to weather-mcp-service: the one with the most weather/geo
+ * keyword hits (ties keep the plain spaced copy). The MCP runs its own keyword
+ * checks, so it must see "delineate", not "deli\neate".
+ */
+function bestRoutingText(message) {
+  const lists = [WEATHER_HARD, WEATHER_FORECAST_PHRASES, WEATHER_AMBIGUOUS, GEO_KEYWORDS];
+  const score = (text) => lists.reduce((n, list) => n + list.filter((kw) => text.includes(kw)).length, 0);
+  let best = null;
+  let bestScore = -1;
+  for (const v of routingVariants(message)) {
+    const sc = score(v);
+    if (sc > bestScore) {
+      best = v;
+      bestScore = sc;
+    }
+  }
+  return best || message || '';
+}
+
+/** Returns true when the message should be answered by weather-mcp-service. */
+async function isWeatherQuery(message) {
+  if (process.env.WEATHER_ENABLED !== 'true') return false;
+  const variants = routingVariants(message);
+  const has = (list) => variants.some((text) => list.some((kw) => text.includes(kw)));
+  const matches = (re) => variants.some((text) => re.test(text));
+  const hasAgroTerm = has(AGRO_TERMS);
+  const asksPlantingDecision = hasAgroTerm && has(PLANTING_DECISION_TERMS) && has(CURRENT_TIME_TERMS);
+
+  if (has(RAG_OVERRIDE)) {
+    logger.info('[WEATHER] Tier 0 - document/knowledge signal -> RAG');
+    return false;
+  }
+  if (
+    has(WEATHER_FORECAST_PHRASES) ||
+    has(WEATHER_HARD) ||
+    asksPlantingDecision ||
+    (has(WEATHER_AMBIGUOUS) && matches(LONG_TERM_FORECAST_HORIZON))
+  ) {
+    logger.info('[WEATHER] Tier 1 - unambiguous weather/geo signal -> weather');
+    return true;
+  }
+  if (hasAgroTerm) {
+    logger.info('[WEATHER] Tier 2 - agricultural term -> RAG');
+    return false;
+  }
+  if (has(WEATHER_AMBIGUOUS)) {
+    logger.info('[WEATHER] Tier 3 - ambiguous term, asking LLM');
+    return classifyWeatherWithLLM(message);
+  }
+  logger.info('[WEATHER] Tier 4 - no weather signal -> RAG');
+  return false;
+}
+
+/**
+ * Answer a weather/geo message via weather-mcp-service. Never throws: on
+ * failure it returns a user-facing message, distinguishing a missing
+ * geo-inference-worker from a generic weather outage.
+ */
+const WEATHER_FALLBACK_TEXT = {
+  en: {
+    geoUnavailable: 'Field mapping is temporarily unavailable. Please try again in a few minutes.',
+    weatherUnavailable: "I couldn't fetch the weather information right now. Please try again later."
+  },
+  bn: {
+    geoUnavailable: 'জমির মানচিত্র সেবা সাময়িকভাবে পাওয়া যাচ্ছে না। অনুগ্রহ করে কয়েক মিনিট পর আবার চেষ্টা করুন।',
+    weatherUnavailable: 'এই মুহূর্তে আবহাওয়ার তথ্য আনা সম্ভব হয়নি। অনুগ্রহ করে পরে আবার চেষ্টা করুন।'
+  }
+};
+
+async function answerViaWeatherMcp(message, language = 'en') {
+  const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
+  const lowerMsg = message.toLowerCase();
+  const isGeo = GEO_KEYWORDS.some((kw) => lowerMsg.includes(kw));
+  const timeout = isGeo ? 660000 : 30000; // 11 min for satellite inference, 30 s for forecasts
+  if (isGeo) logger.info('[WEATHER] geo-inference query - using 11-minute timeout');
+  try {
+    // `language` asks the agent to write its explanation in the UI language;
+    // the response's `language` says which language the answer actually is in
+    // (English when the agent fell back to a template), so the route knows
+    // whether the post-stream translation is still needed.
+    const wResp = await axios.post(`${weatherMcpUrl}/query`, { query: message, language }, { timeout });
+    const d = wResp.data || {};
+    return {
+      text: d.answer || '',
+      answerLanguage: String(d.language || 'en').toLowerCase(),
+      metadata: {
+        source_documents: [],
+        confidence_score: 1.0,
+        weather: true,
+        location: d.location ?? null,
+        forecast: d.forecast ?? null,
+        field_delineation: d.field_delineation ?? null,
+        flood_analysis: d.flood_analysis ?? null,
+        risk_tier: d.risk_tier ?? null,
+        risk_label: d.risk_label ?? null
+      }
+    };
+  } catch (wErr) {
+    logger.error(`[WEATHER] weather-mcp-service call failed: ${wErr.message}`);
+    const body = wErr.response?.data?.detail || wErr.response?.data || '';
+    const errStr = typeof body === 'string' ? body : JSON.stringify(body);
+    const isGeoErr =
+      isGeo ||
+      /geo|delineat|flood|inference/.test(errStr) ||
+      wErr.response?.status === 502 ||
+      wErr.code === 'ECONNABORTED';
+    // User-facing text only; the cause is in the log line above. Bengali is
+    // served directly so the fallback never depends on the translator.
+    const lang = String(language || 'en').toLowerCase();
+    const texts = WEATHER_FALLBACK_TEXT[lang] || WEATHER_FALLBACK_TEXT.en;
+    return {
+      text: isGeoErr ? texts.geoUnavailable : texts.weatherUnavailable,
+      answerLanguage: WEATHER_FALLBACK_TEXT[lang] ? lang : 'en',
+      metadata: { source_documents: [], confidence_score: 0, weather: true }
+    };
+  }
+}
 
 class QueryService {
   constructor() {
@@ -312,8 +685,11 @@ class QueryService {
       throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
     }
 
-    const lastMessage = queryData.messages[queryData.messages.length - 1];
-    const queryText = lastMessage ? lastMessage.content : '';
+    // The web client appends an empty assistant placeholder (the streaming
+    // bubble) as the final element, so "last message" is not the user's text.
+    // Take the last non-empty user turn instead - it feeds analytics, the
+    // single-message payload and the weather/geo router.
+    const queryText = lastUserMessageText(queryData.messages);
 
     // Resolve categoryId
     let categoryId = queryData.categoryId || null;
@@ -386,6 +762,19 @@ class QueryService {
         },
         stream: true
       };
+    }
+
+    // Weather / geo-inference routing (PolisenseAI). When the message is a live
+    // weather or satellite-geospatial request, answer it from weather-mcp-service
+    // and hand the route a finished result instead of an OPEA stream target.
+    // The route emits it with the same SSE framing the client already parses,
+    // so metadata.field_delineation / flood_analysis reach the map overlay.
+    const routing = await resolveRoutingText(queryText);
+    if (await isWeatherQuery(routing.text)) {
+      logger.info(`[WEATHER] routing to weather-mcp-service: "${routing.text}"`);
+      const uiLanguage = String(queryData.context?.language || routing.sourceLang || 'en').toLowerCase();
+      const weatherResult = await answerViaWeatherMcp(bestRoutingText(routing.text), uiLanguage);
+      return { queryId, weatherResult, authHeaders, queryData };
     }
 
     return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
@@ -506,8 +895,7 @@ class QueryService {
       logger.info('[DEBUG] All validations passed successfully.');
 
       // Derive text from the last message for backward compatibility and analytics
-      const lastMessage = queryData.messages[queryData.messages.length - 1];
-      const queryText = lastMessage ? lastMessage.content : '';
+      const queryText = lastUserMessageText(queryData.messages);
       if (!queryText) {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
@@ -607,8 +995,7 @@ class QueryService {
         let opeaPayload;
         if (backendMode === 'single-message') {
           logger.info('[DEBUG] Backend mode is "single-message". Extracting last message for OPEA.');
-          const lastMessage = queryData.messages[queryData.messages.length - 1];
-          const queryText = lastMessage ? lastMessage.content : '';
+          const queryText = lastUserMessageText(queryData.messages);
 
           if (!queryText) {
             throw new Error('Could not extract last message content for single-message mode.');

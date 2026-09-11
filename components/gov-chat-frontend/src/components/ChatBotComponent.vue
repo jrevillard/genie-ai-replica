@@ -1,5 +1,15 @@
 <template>
   <div class="app-container">
+    <!-- Map overlay - renders on top when mapMode is active (PolisenseAI climate view) -->
+    <MapView
+      v-if="mapMode && mapLocation"
+      :lat="mapLocation.lat"
+      :lon="mapLocation.lon"
+      :name="mapLocation.name"
+      :zoom="mapLocation.zoom"
+      :geojson-layers="geoLayers"
+      @back="closeMap"
+    />
     <!-- Main chatbot container -->
     <div class="chatbot-container" data-test-id="chatbot-container">
       <!-- New Chat Confirmation Dialog -->
@@ -279,7 +289,9 @@ import { getUserId } from '../utils/userUtils';
 import ChatResponseFeedbackDialog from './ChatResponseFeedbackDialog.vue';
 import ModalDialog from './ModalDialog.vue';
 import RightSideBarComponent from './RightSideBarComponent.vue';
+import MapView from './MapView.vue';
 import chatbotService from '../services/chatbotService';
+import httpService from '../services/httpService';
 import serviceTreeService from '../services/serviceTreeService'; // *** NEW: Import serviceTreeService
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import chatHistoryService from '../services/chatHistoryService';
@@ -307,6 +319,7 @@ export default {
     ModalDialog,
     RightSideBarComponent,
     ConfirmDialog,
+    MapView,
     DsPill,
     DsSpinner,
     DsButton,
@@ -317,6 +330,11 @@ export default {
 
   data() {
     return {
+      // Climate map overlay state (PolisenseAI): mapMode toggles the MapView
+      // overlay, mapLocation carries the centre, geoLayers the GeoJSON overlays.
+      mapMode: false,
+      mapLocation: null,
+      geoLayers: [],
       conversationId: null,
       chatMessages: [],
       newMessage: '',
@@ -472,6 +490,7 @@ export default {
 
     eventBus.$on('treeNodeSelected', this.handleTreeNodeSelected);
     eventBus.$on('open-chat', this.loadChatFromHistory);
+    eventBus.$on('go-home', this.goHome);
     this.scrollToBottom();
     this.loadQuickHelpButtons();
     this.loadServiceCategories(); // Fetch categories on mount
@@ -483,6 +502,7 @@ export default {
   beforeUnmount() {
     eventBus.$off('treeNodeSelected', this.handleTreeNodeSelected);
     eventBus.$off('open-chat', this.loadChatFromHistory);
+    eventBus.$off('go-home', this.goHome);
     eventBus.$off('chat-deleted'); // Clean up the chat-deleted listener
     // Removed clearInterval
     eventBus.$off('load-conversation');
@@ -494,6 +514,76 @@ export default {
 
   methods: {
     ...mapActions('chatHistory', ['createChat', 'updateChat']),
+
+    /** Bounding box [minLng, minLat, maxLng, maxLat] of a GeoJSON FeatureCollection. */
+    computeGeojsonBbox(geojson) {
+      let minLng = Infinity;
+      let minLat = Infinity;
+      let maxLng = -Infinity;
+      let maxLat = -Infinity;
+      const visit = (coords) => {
+        if (typeof coords[0] === 'number') {
+          if (coords[0] < minLng) minLng = coords[0];
+          if (coords[0] > maxLng) maxLng = coords[0];
+          if (coords[1] < minLat) minLat = coords[1];
+          if (coords[1] > maxLat) maxLat = coords[1];
+        } else {
+          coords.forEach(visit);
+        }
+      };
+      (geojson.features || []).forEach((f) => {
+        if (f.geometry?.coordinates) visit(f.geometry.coordinates);
+      });
+      return [minLng, minLat, maxLng, maxLat];
+    },
+
+    /**
+     * Open the map overlay when response metadata carries field-delineation or
+     * flood-analysis GeoJSON (weather-mcp-service via geo-inference-worker).
+     */
+    openMapFromMetadata(metadata) {
+      if (!metadata) return;
+      const layers = [];
+      const fd = metadata.field_delineation;
+      const fa = metadata.flood_analysis;
+      if (fd?.fields_geojson?.features?.length) {
+        layers.push({
+          id: 'field-boundaries',
+          geojson: fd.fields_geojson,
+          fillColor: '#22c55e',
+          lineColor: '#16a34a',
+          fillOpacity: 0.4,
+          label: `Field boundaries (${fd.field_count ?? fd.fields_geojson.features.length})`
+        });
+      }
+      if (fa?.flood_geojson?.features?.length) {
+        layers.push({
+          id: 'flood-areas',
+          geojson: fa.flood_geojson,
+          fillColor: '#3b82f6',
+          lineColor: '#1d4ed8',
+          fillOpacity: 0.5,
+          label: 'Flood extent'
+        });
+      }
+      if (!layers.length) return;
+      const allFeatures = layers.flatMap((l) => l.geojson.features || []);
+      const bbox = this.computeGeojsonBbox({ features: allFeatures });
+      this.mapLocation = {
+        lat: (bbox[1] + bbox[3]) / 2,
+        lon: (bbox[0] + bbox[2]) / 2,
+        name: layers.map((l) => l.label).join(' \u00b7 '),
+        zoom: 12
+      };
+      this.geoLayers = layers;
+      this.mapMode = true;
+    },
+
+    /** Close the climate map overlay and drop any GeoJSON layers. */
+    closeMap() {
+      this.mapMode = false;
+      this.geoLayers = [];
+    },
 
     formatMessageTime(timestamp) {
       if (!timestamp) return '';
@@ -810,6 +900,40 @@ export default {
       const content = this.newMessage.trim();
       if (!content) return;
 
+      // Map intent - intercept before the backend call (PolisenseAI f68d0fc46).
+      // `show me the map <location>` opens the MapView overlay via the geocoder
+      // and echoes a bot reply so the request shows in the transcript.
+      const mapMatch = content.match(/^show me the map\s+(.+)$/i);
+      if (mapMatch) {
+        const location = mapMatch[1].trim();
+        this.chatMessages.push({ sender: 'user', content, timestamp: new Date().toISOString(), isSaved: false });
+        this.newMessage = '';
+        this.showQuickHelp = false;
+        this.isLoading = true;
+        try {
+          const resp = await httpService.get('weather/geocode', { location });
+          const geo = resp.data;
+          this.mapLocation = { lat: geo.lat, lon: geo.lon, name: geo.name, zoom: geo.zoom || 12 };
+          this.mapMode = true;
+          this.chatMessages.push({
+            sender: 'bot',
+            content: `Opening map for **${geo.name}**.`,
+            timestamp: new Date().toISOString(),
+            isSaved: false
+          });
+        } catch {
+          this.chatMessages.push({
+            sender: 'bot',
+            content: `Sorry, I couldn't find the location **${location}**. Please try a more specific name.`,
+            timestamp: new Date().toISOString(),
+            isSaved: false
+          });
+        } finally {
+          this.isLoading = false;
+        }
+        return;
+      }
+
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
       const messageForBackend = this.hiddenPromptForNextMessage || content;
       const messageForDisplay = content;
@@ -938,6 +1062,11 @@ export default {
               const uniqueNewDocs = newDocs.filter((d) => !existingIds.has(d.id));
               this.relatedDocuments.unshift(...uniqueNewDocs);
             }
+
+            // Auto-open the map for geo-inference results (PolisenseAI). The
+            // weather router answers delineation / flood queries via
+            // weather-mcp-service, which returns GeoJSON in the metadata.
+            this.openMapFromMetadata(metadata);
           },
           onTranslation: (translatedContent) => {
             this.chatMessages[lastMessageIndex].content = translatedContent;
@@ -1393,6 +1522,20 @@ export default {
       }
       const now = new Date();
       return `Chat - ${now.toLocaleDateString()}`;
+    },
+
+    /**
+     * Navbar logo / brand click. Leave the current conversation and return to
+     * the dashboard state (welcome message + Quick Help). Closes an open map
+     * first. Nothing to do when the dashboard is already showing.
+     */
+    goHome() {
+      if (this.mapMode) {
+        this.closeMap();
+      }
+      const onDashboard = this.showQuickHelp && !this.conversationId && this.chatMessages.length <= 1;
+      if (onDashboard) return;
+      this.startNewChat();
     },
 
     startNewChat() {

@@ -1,14 +1,7 @@
 <template>
   <transition name="crop-alert-slide">
-    <div
-      v-if="visible"
-      class="crop-alert-banner"
-      :class="[`tier-${alert.tier}`, `type-${alertType}`]"
-      role="alert"
-    >
-      <div class="crop-alert-icon">
-        <i :class="tierIcon"></i>
-      </div>
+    <div v-if="visible" class="crop-alert-banner" :class="[`tier-${alert.tier}`, `type-${alertType}`]" role="alert">
+      <div class="crop-alert-icon" aria-hidden="true">{{ tierGlyph }}</div>
       <div class="crop-alert-body">
         <div class="crop-alert-title">{{ alertTypeLabel }} — {{ tierLabel }}</div>
         <div class="crop-alert-message">{{ alert.message }}</div>
@@ -22,11 +15,28 @@
           rel="noopener noreferrer"
           class="crop-alert-report-link"
         >
-          <i class="fas fa-file-pdf"></i> View Drought Report
+          {{ $t('cropAlert.viewDroughtReport') }}
         </a>
       </div>
-      <button class="crop-alert-close" @click="dismiss" :title="'Dismiss'">
-        <i class="fas fa-times"></i>
+      <button
+        class="crop-alert-close"
+        type="button"
+        :title="$t('cropAlert.dismiss')"
+        :aria-label="$t('cropAlert.dismiss')"
+        @click="dismiss"
+      >
+        <svg
+          viewBox="0 0 16 16"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <path d="M3 3l10 10M13 3L3 13" />
+        </svg>
       </button>
     </div>
   </transition>
@@ -41,6 +51,9 @@ function dismissKey(type) {
   return `${type}_alert_dismissed_until`;
 }
 
+// Risk tiers from warning_system_engine (models.TIER_LABELS) -> i18n keys.
+const TIER_KEYS = ['normal', 'advisory', 'warning', 'severe', 'emergency'];
+
 export default {
   name: 'CropAlertBanner',
 
@@ -53,26 +66,39 @@ export default {
         message: '',
         triggers: [],
         location: '',
-        report_filename: '',
+        report_filename: ''
       },
       alertType: 'potato', // 'potato' | 'drought'
-      pollTimer: null,
+      pollTimer: null
     };
   },
 
   computed: {
+    /** UI locale, lower-case (e.g. "en", "bn"); drives label keys and the API lang param. */
+    uiLocale() {
+      return String(this.$i18n?.locale || 'en').toLowerCase();
+    },
     tierLabel() {
-      return this.alert.tier_label || 'Alert';
+      const key = TIER_KEYS[this.alert.tier];
+      const translated = key ? this.$t(`cropAlert.tier.${key}`) : '';
+      return translated && translated !== `cropAlert.tier.${key}` ? translated : this.alert.tier_label || 'Alert';
     },
     alertTypeLabel() {
-      return this.alertType === 'drought' ? 'Drought' : 'Potato';
+      return this.$t(this.alertType === 'drought' ? 'cropAlert.drought' : 'cropAlert.potato');
     },
-    tierIcon() {
-      if (this.alert.tier >= 4) return 'fas fa-radiation';
-      if (this.alert.tier >= 3) return 'fas fa-exclamation-triangle';
-      if (this.alertType === 'drought') return 'fas fa-sun';
-      return 'fas fa-exclamation-circle';
-    },
+    // Plain glyphs: the app does not ship an icon font.
+    tierGlyph() {
+      if (this.alert.tier >= 3) return '\u26A0'; // warning sign
+      if (this.alertType === 'drought') return '\u2600'; // sun
+      return '\u2757'; // exclamation
+    }
+  },
+
+  watch: {
+    // Re-fetch in the new language when the user switches locale.
+    uiLocale() {
+      this.poll();
+    }
   },
 
   mounted() {
@@ -97,11 +123,12 @@ export default {
 
     async poll() {
       const location = 'Dhaka';
+      const lang = this.uiLocale;
 
       try {
         const [potatoResult, droughtResult] = await Promise.allSettled([
-          httpService.get('weather/potato-risk', { location }),
-          httpService.get('weather/drought-risk', { location }),
+          httpService.get('weather/potato-risk', { location, lang }),
+          httpService.get('weather/drought-risk', { location, lang })
         ]);
 
         const potato = potatoResult.status === 'fulfilled' ? potatoResult.value.data : null;
@@ -109,8 +136,8 @@ export default {
 
         // Collect active alerts (tier >= 2) that are not dismissed
         const candidates = [
-          potato  && potato.tier  >= 2 && !this.isDismissedRecently('potato')  ? { ...potato,  _type: 'potato'  } : null,
-          drought && drought.tier >= 2 && !this.isDismissedRecently('drought') ? { ...drought, _type: 'drought' } : null,
+          potato && potato.tier >= 2 && !this.isDismissedRecently('potato') ? { ...potato, _type: 'potato' } : null,
+          drought && drought.tier >= 2 && !this.isDismissedRecently('drought') ? { ...drought, _type: 'drought' } : null
         ].filter(Boolean);
 
         if (candidates.length === 0) {
@@ -140,8 +167,8 @@ export default {
     isDismissedRecently(type) {
       const until = parseInt(localStorage.getItem(dismissKey(type)) || '0', 10);
       return Date.now() < until;
-    },
-  },
+    }
+  }
 };
 </script>
 
@@ -197,15 +224,26 @@ export default {
 /* ── Icons ── */
 .crop-alert-icon {
   font-size: 1.4rem;
+  line-height: 1;
   flex-shrink: 0;
   margin-top: 2px;
 }
 
-.type-potato.tier-2 .crop-alert-icon { color: #f0a500; }
-.type-potato.tier-3 .crop-alert-icon { color: #dc3545; }
-.type-potato.tier-4 .crop-alert-icon { color: #6f42c1; }
-.type-drought.tier-2 .crop-alert-icon { color: #ef6c00; }
-.type-drought.tier-3 .crop-alert-icon { color: #b71c1c; }
+.type-potato.tier-2 .crop-alert-icon {
+  color: #f0a500;
+}
+.type-potato.tier-3 .crop-alert-icon {
+  color: #dc3545;
+}
+.type-potato.tier-4 .crop-alert-icon {
+  color: #6f42c1;
+}
+.type-drought.tier-2 .crop-alert-icon {
+  color: #ef6c00;
+}
+.type-drought.tier-3 .crop-alert-icon {
+  color: #b71c1c;
+}
 
 .crop-alert-body {
   flex: 1;
@@ -250,20 +288,30 @@ export default {
 }
 
 .crop-alert-close {
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
   cursor: pointer;
-  opacity: 0.55;
-  font-size: 1rem;
+  opacity: 0.8;
   flex-shrink: 0;
   padding: 0;
   line-height: 1;
   color: inherit;
-  transition: opacity 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
 }
 
-.crop-alert-close:hover {
+.crop-alert-close:hover,
+.crop-alert-close:focus-visible {
   opacity: 1;
+  background: rgba(0, 0, 0, 0.12);
+  outline: none;
 }
 
 /* ── Slide-in animation ── */
@@ -294,10 +342,20 @@ export default {
     gap: 12px;
   }
 
-  .type-potato.tier-2  { border-top-color: #f0a500; }
-  .type-potato.tier-3  { border-top-color: #dc3545; }
-  .type-potato.tier-4  { border-top-color: #6f42c1; }
-  .type-drought.tier-2 { border-top-color: #ef6c00; }
-  .type-drought.tier-3 { border-top-color: #b71c1c; }
+  .type-potato.tier-2 {
+    border-top-color: #f0a500;
+  }
+  .type-potato.tier-3 {
+    border-top-color: #dc3545;
+  }
+  .type-potato.tier-4 {
+    border-top-color: #6f42c1;
+  }
+  .type-drought.tier-2 {
+    border-top-color: #ef6c00;
+  }
+  .type-drought.tier-3 {
+    border-top-color: #b71c1c;
+  }
 }
 </style>

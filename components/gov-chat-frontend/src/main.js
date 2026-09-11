@@ -50,6 +50,10 @@ export async function loadConfig() {
     }
     const data = await response.json();
     config = { ...config, ...data };
+    // Browser tab title follows the configured app title (e.g. "MEWA Bangladesh").
+    if (typeof document !== 'undefined' && config.app?.title) {
+      document.title = config.app.title;
+    }
   } catch (error) {
     console.error('Error loading config:', error);
   }
@@ -64,11 +68,15 @@ export async function loadConfig() {
   if (theme.fg) {
     root.style.setProperty('--config-fg', theme.fg);
   }
+  // Set the --config-* inputs rather than --navbar-* directly: the dark-mode
+  // blocks in theme-variables.css redeclare --navbar-fg on <body>, which would
+  // override an inline value on <html>. The --config-* names are only ever
+  // read as fallback inputs, so they survive every colour mode.
   if (theme.navbar?.background) {
-    root.style.setProperty('--navbar-bg', theme.navbar.background);
+    root.style.setProperty('--config-navbar-bg', theme.navbar.background);
   }
   if (theme.navbar?.text) {
-    root.style.setProperty('--navbar-fg', theme.navbar.text);
+    root.style.setProperty('--config-navbar-fg', theme.navbar.text);
   }
   if (theme.colors) {
     ['success', 'warning', 'danger', 'info'].forEach((key) => {

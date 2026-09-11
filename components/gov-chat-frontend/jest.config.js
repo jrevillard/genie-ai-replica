@@ -12,7 +12,10 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@vue/test-utils$': '<rootDir>/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js'
+    '^@vue/test-utils$': '<rootDir>/node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js',
+    // mapbox-gl ships ESM + WebGL bindings Jest cannot parse; stub it and its CSS.
+    '^mapbox-gl$': '<rootDir>/src/__tests__/__mocks__/mapbox-gl.js',
+    '\\.css$': '<rootDir>/src/__tests__/__mocks__/styleMock.js'
   },
   setupFiles: ['<rootDir>/src/__tests__/setup.js'],
   collectCoverageFrom: [

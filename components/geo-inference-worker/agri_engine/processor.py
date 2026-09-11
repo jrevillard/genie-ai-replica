@@ -10,11 +10,14 @@ Strategy:
 
 Authentication: service account JSON at /app/secrets/credentials.json.
 """
+
+import gc
 import json
 import logging
 import os
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 
 import ee
@@ -30,7 +33,7 @@ _SA_CANDIDATES = (
 
 # Sentinel-2 RGB bands (10 m, surface reflectance)
 _S2_BANDS = ["B4", "B3", "B2"]
-_S2_SCALE = 10          # metres per pixel
+_S2_SCALE = 10  # metres per pixel
 _AOI_BUFFER_DEG = 0.02  # ~2.2 km half-width
 _S2_CLOUD_PCT = 20
 
@@ -51,7 +54,9 @@ def _initialize_gee() -> tuple:
     project_id = (os.getenv("GEE_PROJECT_ID") or data.get("project_id", "")).strip()
     credentials = ee.ServiceAccountCredentials(client_email, sa_path)
     ee.Initialize(credentials=credentials, project=project_id or None)
-    log.info("GEE authenticated (%s, project=%s)", client_email, project_id or "<default>")
+    log.info(
+        "GEE authenticated (%s, project=%s)", client_email, project_id or "<default>"
+    )
     return credentials, project_id
 
 
@@ -62,6 +67,7 @@ def _patch_agribound_gee(credentials, project_id: str) -> None:
     for module_path in ("agribound.auth", "agribound.composites.gee"):
         try:
             import importlib
+
             mod = importlib.import_module(module_path)
             mod.setup_gee = _setup_gee_override
         except Exception as exc:
@@ -71,17 +77,20 @@ def _patch_agribound_gee(credentials, project_id: str) -> None:
 def _resolve_device() -> str:
     if os.getenv("GPU_INFERENCE", "false").lower() in ("1", "true", "yes"):
         import torch
+
         return "cuda" if torch.cuda.is_available() else "cpu"
     return "cpu"
 
 
 def _download_s2_rgb(lat: float, lon: float, out_tif: str) -> None:
     """Download a cloud-free Sentinel-2 RGB GeoTIFF centred on lat/lon."""
-    import geemap  # noqa: PLC0415
+    import geemap
 
     region = ee.Geometry.BBox(
-        lon - _AOI_BUFFER_DEG, lat - _AOI_BUFFER_DEG,
-        lon + _AOI_BUFFER_DEG, lat + _AOI_BUFFER_DEG,
+        lon - _AOI_BUFFER_DEG,
+        lat - _AOI_BUFFER_DEG,
+        lon + _AOI_BUFFER_DEG,
+        lat + _AOI_BUFFER_DEG,
     )
     s2 = (
         ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
@@ -93,7 +102,9 @@ def _download_s2_rgb(lat: float, lon: float, out_tif: str) -> None:
         .multiply(0.0001)
         .toFloat()
     )
-    geemap.download_ee_image(s2, out_tif, region=region, scale=_S2_SCALE, crs="EPSG:4326")
+    geemap.download_ee_image(
+        s2, out_tif, region=region, scale=_S2_SCALE, crs="EPSG:4326"
+    )
     if not Path(out_tif).exists() or Path(out_tif).stat().st_size == 0:
         raise RuntimeError("GEE export produced no Sentinel-2 data for this location.")
 
@@ -107,7 +118,8 @@ def _ensure_sam_checkpoint(path: str) -> None:
         return
     log.info("SAM checkpoint not found — downloading to %s (~2.5 GB) …", path)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    import urllib.request  # noqa: PLC0415
+    import urllib.request
+
     urllib.request.urlretrieve(_SAM_URL, path + ".tmp")
     Path(path + ".tmp").rename(path)
     log.info("SAM checkpoint download complete.")
@@ -118,11 +130,11 @@ def _to_uint8_rgb(src_tif: str, dst_tif: str) -> None:
     Convert a float32 multi-band GeoTIFF to uint8 RGB for SAM input.
     Replaces non-finite values and applies a per-band percentile stretch.
     """
-    import numpy as np   # noqa: PLC0415
-    import rasterio      # noqa: PLC0415
+    import numpy as np
+    import rasterio
 
     with rasterio.open(src_tif) as src:
-        data = src.read(out_dtype="float32")   # (bands, H, W)
+        data = src.read(out_dtype="float32")  # (bands, H, W)
         profile = src.profile.copy()
 
     data = np.where(np.isfinite(data), data, 0.0)
@@ -143,39 +155,75 @@ def _to_uint8_rgb(src_tif: str, dst_tif: str) -> None:
         dst.write(out[:3].astype("uint8"))
 
 
-def _segment_with_sam(rgb_tif: str, sam_checkpoint: str, device: str, tmpdir: str) -> str:
+_GPU_LOCK = threading.Lock()
+
+
+def _release_gpu(*objects) -> None:
+    """Drop references to model objects and return cached GPU blocks to the driver."""
+    for obj in objects:
+        for attr in ("mask_generator", "predictor", "sam"):
+            if obj is not None and hasattr(obj, attr):
+                try:
+                    setattr(obj, attr, None)
+                except Exception:  # pragma: no cover - best effort
+                    pass
+    del objects
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception as exc:  # pragma: no cover - best effort
+        log.debug("GPU cache release skipped: %s", exc)
+
+
+def _segment_with_sam(
+    rgb_tif: str, sam_checkpoint: str, device: str, tmpdir: str
+) -> str:
     """
     Run SAM on an RGB GeoTIFF and return path to a GeoJSON of the segments.
     Uses samgeo.SamGeo (segment-geospatial).
     """
-    from samgeo import SamGeo  # noqa: PLC0415
+    from samgeo import SamGeo
 
     _ensure_sam_checkpoint(sam_checkpoint)
 
     # Preprocess: float32 → uint8 with finite values
-    uint8_tif  = str(Path(tmpdir) / "s2_uint8.tif")
-    mask_tif   = str(Path(tmpdir) / "sam_mask.tif")
+    uint8_tif = str(Path(tmpdir) / "s2_uint8.tif")
+    mask_tif = str(Path(tmpdir) / "sam_mask.tif")
     vector_out = str(Path(tmpdir) / "boundaries.geojson")
 
     log.info("Preprocessing raster to uint8 …")
     _to_uint8_rgb(rgb_tif, uint8_tif)
 
     log.info("Running SAM auto-segmentation …")
-    sam = SamGeo(
-        model_type="vit_h",
-        checkpoint=sam_checkpoint,
-        device=device,
-        automatic=True,
-    )
-    sam.generate(
-        uint8_tif,
-        output=mask_tif,
-        batch=True,
-        foreground=True,
-        erosion_kernel=(3, 3),
-        mask_multiplier=255,
-    )
-    sam.tiff_to_vector(mask_tif, vector_out)
+    # One GPU job at a time: two concurrent SAM runs need ~15 GB and the GPU is
+    # shared with the chat and translation models. The model is released after
+    # every run (weights reload from the local checkpoint in a few seconds), so
+    # the worker idles at a few hundred MB instead of pinning ~7.5 GB - the
+    # second request used to fail with CUDA out-of-memory otherwise.
+    with _GPU_LOCK:
+        sam = None
+        try:
+            sam = SamGeo(
+                model_type="vit_h",
+                checkpoint=sam_checkpoint,
+                device=device,
+                automatic=True,
+            )
+            sam.generate(
+                uint8_tif,
+                output=mask_tif,
+                batch=True,
+                foreground=True,
+                erosion_kernel=(3, 3),
+                mask_multiplier=255,
+            )
+            sam.tiff_to_vector(mask_tif, vector_out)
+        finally:
+            _release_gpu(sam)
     return vector_out
 
 
@@ -209,7 +257,7 @@ class AgriProcessor:
 
         # ── Primary: agribound delineate-anything ────────────────────────────
         try:
-            import agribound  # noqa: PLC0415
+            import agribound
 
             bounds_out = "/tmp/field_boundaries.geojson"
             if Path(bounds_out).exists():
@@ -218,7 +266,9 @@ class AgriProcessor:
             if cache.exists():
                 shutil.rmtree(cache)
 
-            log.info("Trying agribound delineate-anything (lat=%.4f, lon=%.4f)", lat, lon)
+            log.info(
+                "Trying agribound delineate-anything (lat=%.4f, lon=%.4f)", lat, lon
+            )
             agribound.delineate(
                 study_area=aoi_path,
                 source="sentinel2",
@@ -232,17 +282,21 @@ class AgriProcessor:
             )
 
             if Path(bounds_out).exists() and Path(bounds_out).stat().st_size > 0:
-                import geopandas as gpd  # noqa: PLC0415
+                import geopandas as gpd
+
                 gdf = gpd.read_file(bounds_out)
                 log.info("agribound: %d field boundaries", len(gdf))
                 return {
-                    "field_count":    len(gdf),
+                    "field_count": len(gdf),
                     "fields_geojson": json.loads(gdf.to_json()),
-                    "source":         "gee+delineate-anything",
+                    "source": "gee+delineate-anything",
                 }
 
         except Exception as exc:
-            log.warning("agribound delineate-anything failed (%s) — switching to GEE+SAM fallback", exc)
+            log.warning(
+                "agribound delineate-anything failed (%s) — switching to GEE+SAM fallback",
+                exc,
+            )
 
         # ── Fallback: GEE Sentinel-2 download → SAM segmentation ─────────────
         log.info("GEE+SAM fallback (lat=%.4f, lon=%.4f)", lat, lon)
@@ -255,14 +309,15 @@ class AgriProcessor:
             log.info("Running SAM segmentation …")
             vector_out = _segment_with_sam(rgb_tif, self.sam_path, self.device, tmpdir)
 
-            import geopandas as gpd  # noqa: PLC0415
+            import geopandas as gpd
+
             gdf = gpd.read_file(vector_out)
             # Filter tiny noise polygons (< 0.1 ha at 10m resolution ≈ 100 pixels)
             gdf = gdf[gdf.geometry.area > 1e-8].reset_index(drop=True)
             log.info("SAM segmentation: %d field polygons after filtering", len(gdf))
 
             return {
-                "field_count":    len(gdf),
+                "field_count": len(gdf),
                 "fields_geojson": json.loads(gdf.to_json()),
-                "source":         "gee+sam",
+                "source": "gee+sam",
             }

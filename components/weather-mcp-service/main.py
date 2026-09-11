@@ -15,21 +15,20 @@ Note: EWS scheduling, classification pipeline, and alert dispatch are owned by
 the Warning_system_engine container. This service reads risk data from the shared
 ArangoDB instance but does not write it.
 """
+
 import asyncio
 import logging
 import os
 import pathlib
 import re
 from contextlib import asynccontextmanager
-from typing import Optional
 
+from agent import WeatherAgent
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-
 from mcp_client import MCPClientManager
-from agent import WeatherAgent
 from mcp_weather.tools.weather_forecast import fetch_forecast_logic
+from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Logging — configure before any module-level loggers are used.
@@ -65,6 +64,7 @@ logging.getLogger("uvicorn.error").setLevel(logging.INFO)
 
 class _HealthCheckFilter(logging.Filter):
     """Drop GET /health access-log lines — they fire every 30 s and bury real traffic."""
+
     def filter(self, record: logging.LogRecord) -> bool:
         return "GET /health" not in record.getMessage()
 
@@ -77,14 +77,15 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Global singletons (set during lifespan startup)
 # ---------------------------------------------------------------------------
-mcp_manager:   Optional[MCPClientManager] = None
-weather_agent: Optional[WeatherAgent]     = None
-storage_layer  = None   # read-only: ArangoDB written by Warning_system_engine
+mcp_manager: MCPClientManager | None = None
+weather_agent: WeatherAgent | None = None
+storage_layer = None  # read-only: ArangoDB written by Warning_system_engine
 
 
 # ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
+
 
 async def _ingestor_loop(ingestor, storage):
     """Fetch fresh forecasts for all districts on startup, then repeat every hour."""
@@ -99,8 +100,14 @@ async def _ingestor_loop(ingestor, storage):
                     storage.upsert_forecast(fc)
                     stored += 1
                 except Exception as exc:
-                    logger.warning("[INGESTOR] Failed to store %s: %s", fc.location, exc)
-            logger.info("[INGESTOR] Refresh complete — %d/%d districts stored", stored, len(forecasts))
+                    logger.warning(
+                        "[INGESTOR] Failed to store %s: %s", fc.location, exc
+                    )
+            logger.info(
+                "[INGESTOR] Refresh complete — %d/%d districts stored",
+                stored,
+                len(forecasts),
+            )
         except asyncio.CancelledError:
             break
         except Exception as exc:
@@ -118,21 +125,28 @@ async def lifespan(app: FastAPI):
         await mcp_manager.start()
         logger.info("[STARTUP] MCP sessions initialised")
     except Exception as exc:
-        logger.warning("[STARTUP] MCP sessions failed: %s — continuing without MCP", exc)
+        logger.warning(
+            "[STARTUP] MCP sessions failed: %s — continuing without MCP", exc
+        )
         mcp_manager = None
 
     # ── ArangoDB read client (risk data written by Warning_system_engine) ─────
     try:
         from storage import StorageLayer
+
         storage_layer = StorageLayer()
         logger.info("[STARTUP] ArangoDB storage connected (read-only for risk queries)")
     except Exception as exc:
-        logger.warning("[STARTUP] ArangoDB unavailable: %s — /risk endpoints disabled", exc)
+        logger.warning(
+            "[STARTUP] ArangoDB unavailable: %s — /risk endpoints disabled", exc
+        )
 
     # ── WeatherAgent ──────────────────────────────────────────────────────────
     if mcp_manager:
         weather_agent = WeatherAgent(mcp_manager, storage=storage_layer)
-        logger.info("[STARTUP] WeatherAgent ready (storage=%s)", storage_layer is not None)
+        logger.info(
+            "[STARTUP] WeatherAgent ready (storage=%s)", storage_layer is not None
+        )
     else:
         logger.warning("[STARTUP] WeatherAgent not started — MCP unavailable")
 
@@ -141,8 +155,11 @@ async def lifespan(app: FastAPI):
     if storage_layer is not None:
         try:
             from data_ingestor import DataIngestor
+
             _ingestor = DataIngestor()
-            _ingestor_task = asyncio.create_task(_ingestor_loop(_ingestor, storage_layer))
+            _ingestor_task = asyncio.create_task(
+                _ingestor_loop(_ingestor, storage_layer)
+            )
             logger.info("[STARTUP] Forecast ingestor started — will refresh every hour")
         except Exception as exc:
             logger.warning("[STARTUP] Forecast ingestor failed to start: %s", exc)
@@ -168,13 +185,18 @@ app = FastAPI(title="Weather MCP + Early Warning Service", lifespan=lifespan)
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class QueryRequest(BaseModel):
     query: str
+    # UI language code (ISO 639-1, e.g. "en", "bn"). The agent writes its
+    # explanation in this language when the LLM supports it.
+    language: str = "en"
 
 
 # ---------------------------------------------------------------------------
 # Agent routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health():
@@ -182,13 +204,13 @@ async def health():
         return JSONResponse(
             status_code=503,
             content={
-                "status":  "unhealthy",
-                "reason":  "agent not initialized",
+                "status": "unhealthy",
+                "reason": "agent not initialized",
                 "storage": storage_layer is not None,
             },
         )
     return {
-        "status":  "healthy",
+        "status": "healthy",
         "storage": storage_layer is not None,
     }
 
@@ -206,6 +228,89 @@ _BULLETIN_KEYWORDS = re.compile(
 _PUBLIC_IMAGE_BASE = os.getenv("PUBLIC_API_BASE", "/api/weather/bulletin-image")
 
 _DROUGHT_MONITORING_URL = os.getenv("DROUGHT_MONITORING_URL", "")
+
+# ---------------------------------------------------------------------------
+# User-facing fallback texts (never operator instructions). Keyed by UI language;
+# unknown languages fall back to English and the caller translates.
+# ---------------------------------------------------------------------------
+_FALLBACK_TEXT: dict[str, dict[str, str]] = {
+    "en": {
+        "seasonal_unavailable": (
+            "## Seasonal Weather Outlook — {district}\n\n"
+            "A long-range outlook for {district} is not available yet. "
+            "Here is the short-term forecast instead:\n\n"
+        ),
+        "seasonal_unavailable_plain": (
+            "## Seasonal Weather Outlook — {district}\n\n"
+            "A long-range outlook for {district} is not available yet. "
+            "Please ask again later, or ask for this week's weather forecast."
+        ),
+        "drought_unavailable": (
+            "## Drought Outlook — {district}\n\n"
+            "I could not produce a drought assessment for {district} right now. "
+            "Please try again in a little while, or ask for this week's weather forecast."
+        ),
+        "delineation_disabled": (
+            "Field boundary mapping is not available right now. Please try again later."
+        ),
+        "delineation_need_place": (
+            "To map field boundaries I need a place I can locate. "
+            'Try: *"Delineate field boundaries around Rajshahi"*.'
+        ),
+    },
+    "bn": {
+        "seasonal_unavailable": (
+            "## মৌসুমি আবহাওয়ার পূর্বাভাস — {district}\n\n"
+            "{district}-এর জন্য দীর্ঘমেয়াদি পূর্বাভাস এখনও পাওয়া যাচ্ছে না। "
+            "এর পরিবর্তে স্বল্পমেয়াদি পূর্বাভাস দেওয়া হলো:\n\n"
+        ),
+        "seasonal_unavailable_plain": (
+            "## মৌসুমি আবহাওয়ার পূর্বাভাস — {district}\n\n"
+            "{district}-এর জন্য দীর্ঘমেয়াদি পূর্বাভাস এখনও পাওয়া যাচ্ছে না। "
+            "অনুগ্রহ করে পরে আবার জিজ্ঞাসা করুন, অথবা এই সপ্তাহের আবহাওয়ার পূর্বাভাস জানতে চান।"
+        ),
+        "drought_unavailable": (
+            "## খরার পূর্বাভাস — {district}\n\n"
+            "এই মুহূর্তে {district}-এর জন্য খরার মূল্যায়ন তৈরি করা সম্ভব হয়নি। "
+            "অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন, অথবা এই সপ্তাহের আবহাওয়ার পূর্বাভাস জানতে চান।"
+        ),
+        "delineation_disabled": (
+            "জমির সীমানা মানচিত্র সেবা এই মুহূর্তে পাওয়া যাচ্ছে না। অনুগ্রহ করে পরে আবার চেষ্টা করুন।"
+        ),
+        "delineation_need_place": (
+            "জমির সীমানা চিহ্নিত করতে আমার এমন একটি স্থানের নাম দরকার যা আমি খুঁজে পেতে পারি। "
+            'যেমন: *"রাজশাহীর আশেপাশে জমির সীমানা চিহ্নিত করুন"*।'
+        ),
+    },
+}
+
+
+def _fallback(lang: str, key: str, **fmt) -> tuple[str, str]:
+    """Return (text, language) for a user-facing fallback message."""
+    lang = (lang or "en").lower()
+    table = _FALLBACK_TEXT.get(lang) or _FALLBACK_TEXT["en"]
+    used = lang if lang in _FALLBACK_TEXT else "en"
+    if used == "bn":
+        fmt = {
+            k: _localized_district_name(v, "bn") if k == "district" else v
+            for k, v in fmt.items()
+        }
+    return table[key].format(**fmt), used
+
+
+def _localized_district_name(english_name: str, language: str) -> str:
+    if language == "bn":
+        try:
+            from mcp_weather.tools.weather_forecast import BENGALI_TO_ENGLISH
+
+            for bn, en in BENGALI_TO_ENGLISH.items():
+                if en.lower() == (english_name or "").lower():
+                    return bn
+        except Exception:
+            pass
+    return english_name
+
+
 _DROUGHT_KEYWORDS = re.compile(
     r"\b(drought|soil[\s\-]?moisture|dry[\s\-]?season|water[\s\-]?stress|"
     r"drought[\s\-]?risk|drought[\s\-]?forecast|drought[\s\-]?outlook|seasonal[\s\-]?risk)\b",
@@ -251,30 +356,64 @@ _LAT_LON_RE = re.compile(
     r"lat(?:itude)?\s*[=:]?\s*(-?\d+(?:\.\d+)?)\s*[,\s]+\s*lon(?:gitude)?\s*[=:]?\s*(-?\d+(?:\.\d+)?)",
     re.IGNORECASE,
 )
+# Place-name extractor for delineation queries without raw coordinates:
+# "delineate around Dhaka", "field boundaries near Rajshahi", "map my farm in Bogra".
+_PLACE_RE = re.compile(
+    r"\b(?:around|near|at|in|for|of)\s+([A-Za-z][A-Za-z .\'-]{1,60}?)\s*(?:[?.!,]|$)",
+    re.IGNORECASE,
+)
+
+
+def _extract_place_name(query: str):
+    """Best-effort place name from a delineation query; None when absent."""
+    m = _PLACE_RE.search(query)
+    if not m:
+        return None
+    place = m.group(1).strip()
+    # Drop trailing filler the regex may have swallowed ("Dhaka please").
+    place = re.sub(r"\s+(?:please|now|today)$", "", place, flags=re.IGNORECASE).strip()
+    return place or None
+
+
+async def _geocode_place(place: str):
+    """Resolve a place via the same logic as GET /geocode; None if not found."""
+    try:
+        return await geocode_location(place)
+    except HTTPException:
+        return None
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+    ) as exc:  # network error or malformed geocoder reply
+        logger.warning("[QUERY] place geocoding failed for %r: %s", place, exc)
+        return None
+
+
 _GEO_INFERENCE_URL = os.getenv("GEO_INFERENCE_URL", "").rstrip("/")
 
 # Matches runner.py DISTRICT_COORDS
 _DROUGHT_DISTRICT_COORDS: dict[str, tuple[float, float]] = {
-    "Dhaka":        (23.8103,  90.4125),
-    "Chittagong":   (22.3569,  91.7832),
-    "Sylhet":       (24.8949,  91.8687),
-    "Rajshahi":     (24.3745,  88.6042),
-    "Khulna":       (22.8456,  89.5403),
-    "Barisal":      (22.7010,  90.3535),
-    "Rangpur":      (25.7439,  89.2752),
-    "Mymensingh":   (24.7471,  90.4203),
-    "Comilla":      (23.4607,  91.1809),
-    "Jessore":      (23.1667,  89.2167),
-    "Bogra":        (24.8465,  89.3773),
-    "Dinajpur":     (25.6279,  88.6338),
-    "Pabna":        (24.0064,  89.2372),
-    "Tangail":      (24.2513,  89.9167),
-    "Faridpur":     (23.6070,  89.8429),
-    "Noakhali":     (22.8696,  91.0995),
-    "Brahmanbaria": (23.9608,  91.1115),
-    "Cox's Bazar":  (21.4272,  92.0058),
-    "Chandpur":     (23.2333,  90.6500),
-    "Narsingdi":    (23.9174,  90.7150),
+    "Dhaka": (23.8103, 90.4125),
+    "Chittagong": (22.3569, 91.7832),
+    "Sylhet": (24.8949, 91.8687),
+    "Rajshahi": (24.3745, 88.6042),
+    "Khulna": (22.8456, 89.5403),
+    "Barisal": (22.7010, 90.3535),
+    "Rangpur": (25.7439, 89.2752),
+    "Mymensingh": (24.7471, 90.4203),
+    "Comilla": (23.4607, 91.1809),
+    "Jessore": (23.1667, 89.2167),
+    "Bogra": (24.8465, 89.3773),
+    "Dinajpur": (25.6279, 88.6338),
+    "Pabna": (24.0064, 89.2372),
+    "Tangail": (24.2513, 89.9167),
+    "Faridpur": (23.6070, 89.8429),
+    "Noakhali": (22.8696, 91.0995),
+    "Brahmanbaria": (23.9608, 91.1115),
+    "Cox's Bazar": (21.4272, 92.0058),
+    "Chandpur": (23.2333, 90.6500),
+    "Narsingdi": (23.9174, 90.7150),
 }
 
 
@@ -317,8 +456,8 @@ def _build_seasonal_answer(district: str, doc: dict, requested_months: int) -> s
     from calendar import month_name as _month_name
 
     outlook: list[dict] = doc.get("outlook", [])
-    issue_month: str    = doc.get("issue_month", "")
-    fetched_at: str     = doc.get("fetched_at", "")[:10]
+    issue_month: str = doc.get("issue_month", "")
+    fetched_at: str = doc.get("fetched_at", "")[:10]
 
     # Limit to what the user asked for (and what we have)
     months_to_show = min(requested_months, len(outlook))
@@ -350,22 +489,40 @@ def _build_seasonal_answer(district: str, doc: dict, requested_months: int) -> s
         except Exception:
             month_label = vm
 
-        temp  = f"{rec['mean_temp_c']:.1f}°C" if rec.get("mean_temp_c") is not None else "—"
-        rain  = f"{rec['total_precip_mm']:.0f} mm" if rec.get("total_precip_mm") is not None else "—"
-        wind  = f"{rec['mean_wind_kmh']:.0f} km/h" if rec.get("mean_wind_kmh") is not None else "—"
-        humid = f"{rec['estimated_rh_pct']:.0f}%" if rec.get("estimated_rh_pct") is not None else "—"
+        temp = (
+            f"{rec['mean_temp_c']:.1f}°C" if rec.get("mean_temp_c") is not None else "—"
+        )
+        rain = (
+            f"{rec['total_precip_mm']:.0f} mm"
+            if rec.get("total_precip_mm") is not None
+            else "—"
+        )
+        wind = (
+            f"{rec['mean_wind_kmh']:.0f} km/h"
+            if rec.get("mean_wind_kmh") is not None
+            else "—"
+        )
+        humid = (
+            f"{rec['estimated_rh_pct']:.0f}%"
+            if rec.get("estimated_rh_pct") is not None
+            else "—"
+        )
         table_rows.append(f"| {month_label} | {temp} | {rain} | {wind} | {humid} |")
 
-    table = "\n".join([
-        "| Month | Avg Temp | Monthly Rain | Wind | Humidity |",
-        "|-------|----------|--------------|------|----------|",
-        *table_rows,
-    ])
+    table = "\n".join(
+        [
+            "| Month | Avg Temp | Monthly Rain | Wind | Humidity |",
+            "|-------|----------|--------------|------|----------|",
+            *table_rows,
+        ]
+    )
 
     # Derive a brief narrative from the data
-    temps  = [r["mean_temp_c"]   for r in rows if r.get("mean_temp_c")    is not None]
-    rains  = [r["total_precip_mm"] for r in rows if r.get("total_precip_mm") is not None]
-    humids = [r["estimated_rh_pct"] for r in rows if r.get("estimated_rh_pct") is not None]
+    temps = [r["mean_temp_c"] for r in rows if r.get("mean_temp_c") is not None]
+    rains = [r["total_precip_mm"] for r in rows if r.get("total_precip_mm") is not None]
+    humids = [
+        r["estimated_rh_pct"] for r in rows if r.get("estimated_rh_pct") is not None
+    ]
 
     narrative_parts = []
     if temps:
@@ -423,12 +580,11 @@ def _build_seasonal_answer(district: str, doc: dict, requested_months: int) -> s
         )
 
     agri_section = (
-        "\n**Agricultural Advisory**\n" + "\n".join(agri_notes)
-        if agri_notes else ""
+        "\n**Agricultural Advisory**\n" + "\n".join(agri_notes) if agri_notes else ""
     )
 
     source_line = (
-        f"*Source: Copernicus SEAS5 seasonal forecast (ECMWF)"
+        "*Source: Copernicus SEAS5 seasonal forecast (ECMWF)"
         + (f" — issued {issue_label}" if issue_label else "")
         + (f", retrieved {fetched_at}" if fetched_at else "")
         + "*"
@@ -461,35 +617,51 @@ def _assess_drought_forecast_logic(
     if not _DROUGHT_MONITORING_URL:
         return {
             "error": "Drought forecasting service not configured.",
-            "tier": 0, "tier_label": "Unknown", "triggers": [], "report_filename": "",
+            "tier": 0,
+            "tier_label": "Unknown",
+            "triggers": [],
+            "report_filename": "",
         }
 
     try:
         resp = _req.post(
             f"{_DROUGHT_MONITORING_URL}/run/district",
-            json={"location": district_name, "lat": lat, "lon": lon, "days": horizon_days},
+            json={
+                "location": district_name,
+                "lat": lat,
+                "lon": lon,
+                "days": horizon_days,
+            },
             timeout=180,
         )
         if not resp.ok:
             return {
                 "error": f"Drought service error {resp.status_code}",
-                "tier": 0, "tier_label": "Unknown", "triggers": [], "report_filename": "",
+                "tier": 0,
+                "tier_label": "Unknown",
+                "triggers": [],
+                "report_filename": "",
             }
         data = resp.json()
     except Exception as exc:
-        logger.error("[DROUGHT_FORECAST] /run/district failed for %s: %s", district_name, exc)
+        logger.error(
+            "[DROUGHT_FORECAST] /run/district failed for %s: %s", district_name, exc
+        )
         return {
             "error": str(exc),
-            "tier": 0, "tier_label": "Unknown", "triggers": [], "report_filename": "",
+            "tier": 0,
+            "tier_label": "Unknown",
+            "triggers": [],
+            "report_filename": "",
         }
 
-    tier            = data.get("tier", 0)
-    tier_label      = data.get("tier_label", "Normal")
-    drought_level   = data.get("drought_level", "NORMAL")
-    message         = data.get("message", "")
-    trend           = data.get("trend", "STABLE")
-    trend_run_days  = data.get("trend_run_days", 0)
-    triggers        = data.get("triggers", [])
+    tier = data.get("tier", 0)
+    tier_label = data.get("tier_label", "Normal")
+    drought_level = data.get("drought_level", "NORMAL")
+    message = data.get("message", "")
+    trend = data.get("trend", "STABLE")
+    trend_run_days = data.get("trend_run_days", 0)
+    triggers = data.get("triggers", [])
     report_filename = data.get("report_filename", "")
 
     if horizon_days <= 7:
@@ -501,9 +673,13 @@ def _assess_drought_forecast_logic(
     else:
         horizon_label = "next month"
 
-    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(drought_level, "⚪")
+    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(
+        drought_level, "⚪"
+    )
     trend_icon = {"WORSENING": "📈", "IMPROVING": "📉", "STABLE": "➡️"}.get(trend, "➡️")
-    trend_str  = trend + (f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else "")
+    trend_str = trend + (
+        f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else ""
+    )
 
     lines = [
         f"## Drought Outlook — {district_name} ({horizon_label})",
@@ -520,41 +696,55 @@ def _assess_drought_forecast_logic(
             lines.append(f"- {t}")
 
     if tier == 0:
-        lines += ["", "No drought stress detected — soil moisture and vegetation within safe ranges."]
+        lines += [
+            "",
+            "No drought stress detected — soil moisture and vegetation within safe ranges.",
+        ]
     elif tier == 1:
-        lines += ["", "⚠️ Early watch — conditions are slightly stressed. Continue monitoring."]
+        lines += [
+            "",
+            "⚠️ Early watch — conditions are slightly stressed. Continue monitoring.",
+        ]
     elif tier == 2:
-        lines += ["", "⚠️ **Warning level** — consider water conservation and crop protection."]
+        lines += [
+            "",
+            "⚠️ **Warning level** — consider water conservation and crop protection.",
+        ]
     elif tier >= 3:
-        lines += ["", "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection."]
+        lines += [
+            "",
+            "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection.",
+        ]
 
     if report_filename:
         report_url = f"/api/weather/drought-report/{report_filename}"
         lines += ["", f"📄 [View Full Drought Report]({report_url})"]
 
     return {
-        "answer":          "\n".join(lines),
-        "tier":            tier,
-        "tier_label":      tier_label,
-        "drought_level":   drought_level,
-        "triggers":        triggers,
-        "trend":           trend,
+        "answer": "\n".join(lines),
+        "tier": tier,
+        "tier_label": tier_label,
+        "drought_level": drought_level,
+        "triggers": triggers,
+        "trend": trend,
         "report_filename": report_filename,
-        "message":         message,
+        "message": message,
     }
 
 
-def _build_drought_answer_from_stored(district: str, stored: dict, requested_horizon: int) -> str:
+def _build_drought_answer_from_stored(
+    district: str, stored: dict, requested_horizon: int
+) -> str:
     """Format a stored ArangoDB drought assessment into a chatbot-ready markdown answer."""
-    tier            = stored.get("tier", 0)
-    tier_label      = stored.get("tier_label", "Normal")
-    drought_level   = stored.get("drought_level", "NORMAL")
-    message         = stored.get("message", "")
-    trend           = stored.get("trend", "STABLE")
-    trend_run_days  = stored.get("trend_run_days", 0)
-    triggers        = stored.get("triggers", [])
+    tier = stored.get("tier", 0)
+    tier_label = stored.get("tier_label", "Normal")
+    drought_level = stored.get("drought_level", "NORMAL")
+    message = stored.get("message", "")
+    trend = stored.get("trend", "STABLE")
+    trend_run_days = stored.get("trend_run_days", 0)
+    triggers = stored.get("triggers", [])
     report_filename = stored.get("report_filename", "")
-    window_days     = stored.get("window_days", 7)
+    window_days = stored.get("window_days", 7)
 
     if requested_horizon <= 7:
         horizon_label = "next week"
@@ -565,9 +755,13 @@ def _build_drought_answer_from_stored(district: str, stored: dict, requested_hor
     else:
         horizon_label = "next month"
 
-    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(drought_level, "⚪")
+    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(
+        drought_level, "⚪"
+    )
     trend_icon = {"WORSENING": "📈", "IMPROVING": "📉", "STABLE": "➡️"}.get(trend, "➡️")
-    trend_str  = trend + (f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else "")
+    trend_str = trend + (
+        f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else ""
+    )
 
     lines = [
         f"## Drought Outlook — {district} ({horizon_label})",
@@ -584,16 +778,31 @@ def _build_drought_answer_from_stored(district: str, stored: dict, requested_hor
             lines.append(f"- {t}")
 
     if tier == 0:
-        lines += ["", "No drought stress detected — soil moisture and vegetation within safe ranges."]
+        lines += [
+            "",
+            "No drought stress detected — soil moisture and vegetation within safe ranges.",
+        ]
     elif tier == 1:
-        lines += ["", "⚠️ Early watch — conditions are slightly stressed. Continue monitoring."]
+        lines += [
+            "",
+            "⚠️ Early watch — conditions are slightly stressed. Continue monitoring.",
+        ]
     elif tier == 2:
-        lines += ["", "⚠️ **Warning level** — consider water conservation and crop protection."]
+        lines += [
+            "",
+            "⚠️ **Warning level** — consider water conservation and crop protection.",
+        ]
     elif tier >= 3:
-        lines += ["", "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection."]
+        lines += [
+            "",
+            "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection.",
+        ]
 
     if report_filename:
-        lines += ["", f"📄 [View Full Drought Report](/api/weather/drought-report/{report_filename})"]
+        lines += [
+            "",
+            f"📄 [View Full Drought Report](/api/weather/drought-report/{report_filename})",
+        ]
 
     lines += ["", f"*Based on {window_days}-day satellite assessment. Updated daily.*"]
     return "\n".join(lines)
@@ -627,7 +836,9 @@ async def serve_bulletin_image(filename: str):
 
 
 @app.get("/geocode")
-async def geocode_location(location: str = Query(..., description="Free-text location")):
+async def geocode_location(
+    location: str = Query(..., description="Free-text location"),
+):
     """
     Resolve a location string to lat/lon.
     Checks Bangladesh DISTRICT_COORDS first; falls back to Mapbox Geocoding API.
@@ -642,9 +853,13 @@ async def geocode_location(location: str = Query(..., description="Free-text loc
 
     # Mapbox Geocoding API fallback
     if not _MAPBOX_TOKEN:
-        raise HTTPException(status_code=503, detail="Geocoding unavailable — MAPBOX_ACCESS_TOKEN not configured")
+        raise HTTPException(
+            status_code=503,
+            detail="Geocoding unavailable — MAPBOX_ACCESS_TOKEN not configured",
+        )
 
     import requests as _requests
+
     try:
         encoded = urllib.parse.quote(location)
         resp = _requests.get(
@@ -655,10 +870,17 @@ async def geocode_location(location: str = Query(..., description="Free-text loc
         resp.raise_for_status()
         features = resp.json().get("features", [])
         if not features:
-            raise HTTPException(status_code=404, detail=f"Location '{location}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Location '{location}' not found"
+            )
         feat = features[0]
         lon, lat = feat["center"]
-        return {"lat": lat, "lon": lon, "name": feat.get("place_name", location), "zoom": 12}
+        return {
+            "lat": lat,
+            "lon": lon,
+            "name": feat.get("place_name", location),
+            "zoom": 12,
+        }
     except HTTPException:
         raise
     except Exception as exc:
@@ -684,27 +906,51 @@ async def query(request: QueryRequest):
     # ── Field boundary delineation (geo-inference-worker) ────────────────────
     if _DELINEATION_KEYWORDS.search(request.query):
         if not _GEO_INFERENCE_URL:
+            logger.warning(
+                "[QUERY] Delineation requested but GEO_INFERENCE_URL is unset"
+            )
+            text, used = _fallback(request.language, "delineation_disabled")
             return {
-                "answer": (
-                    "Field boundary delineation is not currently enabled. "
-                    "Start the geo-inference-worker service and set `GEO_INFERENCE_URL` to use this feature."
-                ),
-                "risk_tier": 0, "risk_label": "Normal", "advisory": "",
-                "triggers": [], "buffer": None, "location": "", "forecast": {},
+                "answer": text,
+                "language": used,
+                "risk_tier": 0,
+                "risk_label": "Normal",
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": "",
+                "forecast": {},
             }
         m = _LAT_LON_RE.search(request.query)
-        if m is None:
-            return {
-                "answer": (
-                    "To delineate field boundaries I need explicit coordinates in your query. "
-                    "Try: *\"Delineate field boundaries at latitude 23.5 longitude 90.3\"*"
-                ),
-                "risk_tier": 0, "risk_label": "Normal", "advisory": "",
-                "triggers": [], "buffer": None, "location": "", "forecast": {},
-            }
-        lat, lon = float(m.group(1)), float(m.group(2))
+        if m is not None:
+            lat, lon = float(m.group(1)), float(m.group(2))
+        else:
+            # No raw coordinates: resolve a place name ("delineate around Dhaka") with
+            # the same geocoder the chat map command uses - Bangladesh districts
+            # locally, Mapbox for anything else. Only fall back to asking for
+            # coordinates when nothing in the message resolves.
+            place = _extract_place_name(request.query)
+            geo = await _geocode_place(place) if place else None
+            if geo is None:
+                text, used = _fallback(request.language, "delineation_need_place")
+                return {
+                    "answer": text,
+                    "language": used,
+                    "risk_tier": 0,
+                    "risk_label": "Normal",
+                    "advisory": "",
+                    "triggers": [],
+                    "buffer": None,
+                    "location": "",
+                    "forecast": {},
+                }
+            lat, lon = geo["lat"], geo["lon"]
+            logger.info(
+                "[QUERY] Field delineation - resolved %r -> %s", place, geo["name"]
+            )
         logger.info("[QUERY] Field delineation — lat=%.4f  lon=%.4f", lat, lon)
         import requests as _req
+
         try:
             resp = _req.post(
                 f"{_GEO_INFERENCE_URL}/delineate",
@@ -715,23 +961,39 @@ async def query(request: QueryRequest):
             result = resp.json()
         except Exception as exc:
             logger.error("[QUERY] Delineation worker error: %s", exc)
-            raise HTTPException(status_code=502, detail=f"Geo inference worker error: {exc}")
+            raise HTTPException(
+                status_code=502, detail=f"Geo inference worker error: {exc}"
+            )
         field_count = result.get("field_count", 0)
-        return {
-            "answer": (
+        # Fixed sentence, so it is localised here rather than machine-translated
+        # (the translator mangled "field" in the Bengali output).
+        lang = (request.language or "en").lower()
+        if lang == "bn":
+            answer = (
+                f"({lat:.4f}°N, {lon:.4f}°E) এর কাছাকাছি **{field_count}টি কৃষি জমির সীমানা** পাওয়া গেছে। "
+                "জমির বহুভুজগুলো মানচিত্রে দেখানো হয়েছে।"
+            ).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
+        else:
+            lang = "en"
+            answer = (
                 f"Found **{field_count} agricultural field boundaries** near "
                 f"({lat:.4f}°N, {lon:.4f}°E). "
-                f"Source: {result.get('source', 'gee')}. "
                 "The field polygons are shown on the map."
-            ),
-            "risk_tier": 0, "risk_label": "Normal", "advisory": "",
-            "triggers": [], "buffer": None,
+            )
+        return {
+            "answer": answer,
+            "language": lang,
+            "risk_tier": 0,
+            "risk_label": "Normal",
+            "advisory": "",
+            "triggers": [],
+            "buffer": None,
             "location": f"{lat:.4f},{lon:.4f}",
             "forecast": {},
             "field_delineation": {
-                "field_count":    field_count,
+                "field_count": field_count,
                 "fields_geojson": result.get("fields_geojson"),
-                "source":         result.get("source"),
+                "source": result.get("source"),
             },
         }
 
@@ -743,8 +1005,13 @@ async def query(request: QueryRequest):
                     "Satellite flood detection is not currently enabled. "
                     "Start the geo-inference-worker service and set `GEO_INFERENCE_URL` to use this feature."
                 ),
-                "risk_tier": 0, "risk_label": "Normal", "advisory": "",
-                "triggers": [], "buffer": None, "location": "", "forecast": {},
+                "risk_tier": 0,
+                "risk_label": "Normal",
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": "",
+                "forecast": {},
             }
         district_info = _find_drought_district(request.query)
         if district_info:
@@ -755,16 +1022,27 @@ async def query(request: QueryRequest):
                 return {
                     "answer": (
                         "To run flood detection I need a district name or coordinates. "
-                        "Try: *\"Show flood map for Dhaka\"* or "
-                        "*\"Flood detection at latitude 23.5 longitude 90.3\"*"
+                        'Try: *"Show flood map for Dhaka"* or '
+                        '*"Flood detection at latitude 23.5 longitude 90.3"*'
                     ),
-                    "risk_tier": 0, "risk_label": "Normal", "advisory": "",
-                    "triggers": [], "buffer": None, "location": "", "forecast": {},
+                    "risk_tier": 0,
+                    "risk_label": "Normal",
+                    "advisory": "",
+                    "triggers": [],
+                    "buffer": None,
+                    "location": "",
+                    "forecast": {},
                 }
             lat, lon = float(m.group(1)), float(m.group(2))
             district = f"{lat:.4f},{lon:.4f}"
-        logger.info("[QUERY] Flood detection — district=%s  lat=%.4f  lon=%.4f", district, lat, lon)
+        logger.info(
+            "[QUERY] Flood detection — district=%s  lat=%.4f  lon=%.4f",
+            district,
+            lat,
+            lon,
+        )
         import requests as _req
+
         try:
             resp = _req.post(
                 f"{_GEO_INFERENCE_URL}/flood-segment",
@@ -775,8 +1053,10 @@ async def query(request: QueryRequest):
             result = resp.json()
         except Exception as exc:
             logger.error("[QUERY] Flood worker error: %s", exc)
-            raise HTTPException(status_code=502, detail=f"Geo inference worker error: {exc}")
-        fraction  = result.get("flood_fraction", 0.0)
+            raise HTTPException(
+                status_code=502, detail=f"Geo inference worker error: {exc}"
+            )
+        fraction = result.get("flood_fraction", 0.0)
         flood_pct = fraction * 100
         if flood_pct >= 20:
             tier, label = 3, "High Risk"
@@ -798,97 +1078,134 @@ async def query(request: QueryRequest):
                 f"{advisory}\n\n"
                 f"*Source: Copernicus Sentinel-2 (GEE) + Prithvi-EO-2.0-300M*"
             ),
-            "risk_tier":  tier,
+            "risk_tier": tier,
             "risk_label": label,
-            "advisory":   advisory,
-            "triggers":   ["flood_detected"] if fraction >= 0.01 else [],
-            "buffer":     None,
-            "location":   district,
-            "forecast":   {},
+            "advisory": advisory,
+            "triggers": ["flood_detected"] if fraction >= 0.01 else [],
+            "buffer": None,
+            "location": district,
+            "forecast": {},
             "flood_analysis": {
-                "flood_fraction":    fraction,
+                "flood_fraction": fraction,
                 "flood_pixel_count": result.get("flood_pixel_count"),
                 "valid_pixel_count": result.get("valid_pixel_count"),
-                "flood_geojson":     result.get("flood_geojson"),
+                "flood_geojson": result.get("flood_geojson"),
             },
         }
 
     # ── Seasonal long-term outlook (Copernicus SEAS5) ─────────────────────────
-    if _SEASONAL_KEYWORDS.search(request.query) and storage_layer:
+    # Drought questions go to the drought branch below even when they mention a
+    # long horizon ("next two weeks"): the on-demand GEE assessment handles 7-30 days.
+    if (
+        _SEASONAL_KEYWORDS.search(request.query)
+        and storage_layer
+        and not _DROUGHT_KEYWORDS.search(request.query)
+    ):
         district_info = _find_drought_district(request.query)
         district = district_info[0] if district_info else "Dhaka"
         requested_months = _parse_seasonal_months(request.query)
         doc = storage_layer.get_seasonal_forecast(district)
         if doc:
-            logger.info("[QUERY] Serving Copernicus seasonal outlook for %s (%d months)", district, requested_months)
+            logger.info(
+                "[QUERY] Serving Copernicus seasonal outlook for %s (%d months)",
+                district,
+                requested_months,
+            )
             return {
-                "answer":     _build_seasonal_answer(district, doc, requested_months),
-                "risk_tier":  0,
+                "answer": _build_seasonal_answer(district, doc, requested_months),
+                "risk_tier": 0,
                 "risk_label": "Normal",
-                "advisory":   "",
-                "triggers":   [],
-                "buffer":     None,
-                "location":   district,
-                "forecast":   {},
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": district,
+                "forecast": {},
             }
-        logger.info("[QUERY] Seasonal data not yet available for %s — returning unavailable notice", district)
+        logger.info(
+            "[QUERY] Seasonal data not yet available for %s (Copernicus SEAS5 not seeded; "
+            "check CDSAPI_KEY / warning_system_engine) — falling back to the short-term forecast",
+            district,
+        )
+        # Give the user something useful: the note plus the 7-day forecast.
+        answer, used = _fallback(
+            request.language, "seasonal_unavailable_plain", district=district
+        )
+        if weather_agent is not None:
+            try:
+                short = await weather_agent.run(
+                    f"What is the weather forecast for {district} this week?",
+                    language=request.language,
+                )
+                note, used = _fallback(
+                    request.language, "seasonal_unavailable", district=district
+                )
+                answer = note + short.get("answer", "")
+                used = short.get("language", used)
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - agent failure is already logged
+                logger.warning("[QUERY] Short-term fallback failed: %s", exc)
         return {
-            "answer": (
-                f"## Seasonal Weather Outlook — {district}\n\n"
-                "The long-term seasonal forecast for this district is not yet available. "
-                "The warning system seeds Copernicus SEAS5 data when its container starts, "
-                "then refreshes it weekly. The initial download may still be running, or "
-                "Copernicus CDS credentials may be missing.\n\n"
-                "For short-term weather (next 1–7 days), please ask something like: "
-                f"*\"What is the weather forecast for {district} this week?\"*"
-            ),
-            "risk_tier":  0,
+            "answer": answer,
+            "language": used,
+            "risk_tier": 0,
             "risk_label": "Normal",
-            "advisory":   "",
-            "triggers":   [],
-            "buffer":     None,
-            "location":   district,
-            "forecast":   {},
+            "advisory": "",
+            "triggers": [],
+            "buffer": None,
+            "location": district,
+            "forecast": {},
         }
 
     if _BULLETIN_KEYWORDS.search(request.query):
         return {
-            "answer":     _build_bulletin_answer(),
-            "risk_tier":  0,
+            "answer": _build_bulletin_answer(),
+            "risk_tier": 0,
             "risk_label": "Normal",
-            "advisory":   "",
-            "triggers":   [],
-            "buffer":     None,
-            "location":   "Bangladesh",
-            "forecast":   {},
+            "advisory": "",
+            "triggers": [],
+            "buffer": None,
+            "location": "Bangladesh",
+            "forecast": {},
         }
 
-    if _DROUGHT_KEYWORDS.search(request.query) and (storage_layer or _DROUGHT_MONITORING_URL):
+    if _DROUGHT_KEYWORDS.search(request.query) and (
+        storage_layer or _DROUGHT_MONITORING_URL
+    ):
         district_info = _find_drought_district(request.query)
-        district, lat, lon = district_info if district_info else ("Dhaka", 23.8103, 90.4125)
+        district, lat, lon = (
+            district_info if district_info else ("Dhaka", 23.8103, 90.4125)
+        )
         horizon_days = _parse_horizon_days(request.query)
 
         # Path 1: try on-demand GEE assessment (custom horizon, fresh data)
         gee_result = None
         if _DROUGHT_MONITORING_URL:
             import asyncio as _asyncio
+
             gee_result = await _asyncio.get_event_loop().run_in_executor(
-                None, lambda: _assess_drought_forecast_logic(district, lat, lon, horizon_days)
+                None,
+                lambda: _assess_drought_forecast_logic(
+                    district, lat, lon, horizon_days
+                ),
             )
             if "error" in gee_result:
-                logger.warning("[QUERY] On-demand GEE failed (%s) — trying stored assessment", gee_result["error"])
+                logger.warning(
+                    "[QUERY] On-demand GEE failed (%s) — trying stored assessment",
+                    gee_result["error"],
+                )
                 gee_result = None
 
         if gee_result is not None:
             return {
-                "answer":     gee_result["answer"],
-                "risk_tier":  gee_result["tier"],
+                "answer": gee_result["answer"],
+                "risk_tier": gee_result["tier"],
                 "risk_label": gee_result["tier_label"],
-                "advisory":   gee_result.get("message", ""),
-                "triggers":   gee_result.get("triggers", []),
-                "buffer":     None,
-                "location":   district,
-                "forecast":   {},
+                "advisory": gee_result.get("message", ""),
+                "triggers": gee_result.get("triggers", []),
+                "buffer": None,
+                "location": district,
+                "forecast": {},
             }
 
         # Path 2: fall back to stored assessment in ArangoDB (populated by daily scheduler)
@@ -897,48 +1214,51 @@ async def query(request: QueryRequest):
             if stored:
                 logger.info("[QUERY] Using stored drought assessment for %s", district)
                 return {
-                    "answer":     _build_drought_answer_from_stored(district, stored, horizon_days),
-                    "risk_tier":  stored.get("tier", 0),
+                    "answer": _build_drought_answer_from_stored(
+                        district, stored, horizon_days
+                    ),
+                    "risk_tier": stored.get("tier", 0),
                     "risk_label": stored.get("tier_label", "Normal"),
-                    "advisory":   stored.get("message", ""),
-                    "triggers":   stored.get("triggers", []),
-                    "buffer":     None,
-                    "location":   district,
-                    "forecast":   {},
+                    "advisory": stored.get("message", ""),
+                    "triggers": stored.get("triggers", []),
+                    "buffer": None,
+                    "location": district,
+                    "forecast": {},
                 }
 
-        # Path 3: nothing available — return a clear message, not a weather fallback
+        # Path 3: nothing available — a plain user-facing message (the operator
+        # detail is in the log: daily pipeline at 07:00 UTC needs GEE credentials).
+        logger.warning(
+            "[QUERY] No drought assessment for %s (on-demand GEE and stored both unavailable)",
+            district,
+        )
+        text, used = _fallback(
+            request.language, "drought_unavailable", district=district
+        )
         return {
-            "answer": (
-                f"## Drought Outlook — {district}\n\n"
-                "Drought assessment data is not yet available for this district.\n\n"
-                "The drought monitoring pipeline runs daily at 07:00 UTC and requires "
-                "Google Earth Engine satellite credentials. Once configured, assessments "
-                "are stored and available instantly.\n\n"
-                "For an immediate test assessment, an administrator can run:\n"
-                "```\n"
-                f"python3 scripts/test_drought_alert_flow.py --scenario moderate --district {district}\n"
-                "```"
-            ),
-            "risk_tier":  0,
+            "answer": text,
+            "language": used,
+            "risk_tier": 0,
             "risk_label": "Normal",
-            "advisory":   "",
-            "triggers":   [],
-            "buffer":     None,
-            "location":   district,
-            "forecast":   {},
+            "advisory": "",
+            "triggers": [],
+            "buffer": None,
+            "location": district,
+            "forecast": {},
         }
 
     if weather_agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
-    result = await weather_agent.run(request.query)
+    result = await weather_agent.run(request.query, language=request.language)
     return result
 
 
 @app.get("/risk/latest")
 async def get_latest_risk(
-    location: str = Query(..., description="Bangladesh district name (e.g. 'Dhaka', 'Sylhet')"),
-    horizon:  str = Query("short", description="'short' (0–7 d) or 'long' (8–30 d)"),
+    location: str = Query(
+        ..., description="Bangladesh district name (e.g. 'Dhaka', 'Sylhet')"
+    ),
+    horizon: str = Query("short", description="'short' (0–7 d) or 'long' (8–30 d)"),
 ):
     """
     Return the most recent stored risk assessment for a district.
@@ -949,7 +1269,9 @@ async def get_latest_risk(
     if storage_layer is None:
         return JSONResponse(
             status_code=503,
-            content={"error": "Storage not available — early warning infrastructure offline"},
+            content={
+                "error": "Storage not available — early warning infrastructure offline"
+            },
         )
 
     assessment = storage_layer.get_latest_risk(location, horizon)
@@ -961,14 +1283,14 @@ async def get_latest_risk(
         try:
             result = await weather_agent.run(f"What is the weather in {location}?")
             return {
-                "location":    location,
+                "location": location,
                 "assessed_at": None,
-                "horizon":     horizon,
-                "tier":        result.get("risk_tier", 0),
-                "tier_label":  result.get("risk_label", "Normal"),
-                "triggers":    result.get("triggers", []),
-                "reasoning":   result.get("advisory", ""),
-                "source":      "live_query",
+                "horizon": horizon,
+                "tier": result.get("risk_tier", 0),
+                "tier_label": result.get("risk_label", "Normal"),
+                "triggers": result.get("triggers", []),
+                "reasoning": result.get("advisory", ""),
+                "source": "live_query",
             }
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
@@ -995,7 +1317,14 @@ async def get_potato_risk(
 
     assessment = storage_layer.get_latest_crop_risk(location, "potato")
     if assessment is None:
-        return {"location": location, "crop": "potato", "tier": 0, "tier_label": "Normal", "triggers": [], "message": ""}
+        return {
+            "location": location,
+            "crop": "potato",
+            "tier": 0,
+            "tier_label": "Normal",
+            "triggers": [],
+            "message": "",
+        }
 
     # Strip internal ArangoDB fields before returning
     for field in ("_key", "_id", "_rev"):
@@ -1018,12 +1347,12 @@ async def get_drought_risk(
     assessment = storage_layer.get_drought_assessment(location)
     if assessment is None:
         return {
-            "location":     location,
+            "location": location,
             "drought_level": "NORMAL",
-            "tier":          0,
-            "tier_label":    "Normal",
-            "triggers":      [],
-            "message":       "",
+            "tier": 0,
+            "tier_label": "Normal",
+            "triggers": [],
+            "message": "",
         }
 
     for field in ("_key", "_id", "_rev"):
@@ -1031,7 +1360,9 @@ async def get_drought_risk(
     return assessment
 
 
-_DROUGHT_REPORTS_DIR = pathlib.Path(os.getenv("DROUGHT_REPORTS_DIR", "/app/drought_reports"))
+_DROUGHT_REPORTS_DIR = pathlib.Path(
+    os.getenv("DROUGHT_REPORTS_DIR", "/app/drought_reports")
+)
 
 
 @app.get("/drought/report/{filename}")
@@ -1040,7 +1371,7 @@ async def serve_drought_report(filename: str):
     Serve a drought PDF report from the shared volume.
     The drought_monitoring container writes to the same named volume.
     """
-    safe_name   = pathlib.Path(filename).name
+    safe_name = pathlib.Path(filename).name
     report_path = _DROUGHT_REPORTS_DIR / safe_name
 
     if not report_path.exists() or report_path.suffix.lower() != ".pdf":
@@ -1051,7 +1382,6 @@ async def serve_drought_report(filename: str):
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
     )
-
 
 
 # ---------------------------------------------------------------------------
@@ -1149,7 +1479,7 @@ async def mcp_tools_call(request: Request):
 
     if name == "assess_drought_forecast":
         district_name = args.get("district_name", "Dhaka")
-        horizon_days  = int(args.get("horizon_days", 30))
+        horizon_days = int(args.get("horizon_days", 30))
 
         district_info = _find_drought_district(district_name)
         if district_info:
@@ -1160,15 +1490,31 @@ async def mcp_tools_call(request: Request):
             if coords:
                 district, lat, lon = district_name, coords[0], coords[1]
             else:
-                return {"content": [{"type": "text", "text": f"District '{district_name}' not found in supported Bangladesh districts."}]}
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"District '{district_name}' not found in supported Bangladesh districts.",
+                        }
+                    ]
+                }
 
         import asyncio as _asyncio
+
         result = await _asyncio.get_event_loop().run_in_executor(
-            None, lambda: _assess_drought_forecast_logic(district, lat, lon, horizon_days)
+            None,
+            lambda: _assess_drought_forecast_logic(district, lat, lon, horizon_days),
         )
 
         if "error" in result:
-            return {"content": [{"type": "text", "text": f"Drought assessment failed: {result['error']}"}]}
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Drought assessment failed: {result['error']}",
+                    }
+                ]
+            }
 
         return {"content": [{"type": "text", "text": result["answer"]}]}
 

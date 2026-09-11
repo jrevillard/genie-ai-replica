@@ -362,7 +362,7 @@ export default {
         role: 'Rôle'
       },
       userSearch: {
-        resultsFound: '{total} utilisateurs trouvés correspondant à \"{term}\"',
+        resultsFound: '{total} utilisateurs trouvés correspondant à "{term}"',
         error: "Erreur lors de la recherche d'utilisateurs"
       }
     },
@@ -450,11 +450,11 @@ export default {
       deleteCategory: 'Supprimer la catégorie',
       editService: 'Modifier le service',
       deleteService: 'Supprimer le service',
-      empty: 'Aucune catégorie trouvée. Cliquez sur \"Ajouter une nouvelle catégorie\" pour commencer.',
+      empty: 'Aucune catégorie trouvée. Cliquez sur "Ajouter une nouvelle catégorie" pour commencer.',
       formTitleCreateCategory: 'Créer une nouvelle catégorie',
-      formTitleAddService: 'Ajouter un service à \"{categoryName}\"',
-      formTitleEditCategory: 'Modifier la catégorie : \"{itemName}\"',
-      formTitleEditService: 'Modifier le service : \"{itemName}\"',
+      formTitleAddService: 'Ajouter un service à "{categoryName}"',
+      formTitleEditCategory: 'Modifier la catégorie : "{itemName}"',
+      formTitleEditService: 'Modifier le service : "{itemName}"',
       nameEnLabel: 'Nom (Anglais)',
       translationsTitle: "Traductions pour l'affichage",
       loadingTranslations: 'Chargement des traductions...',
@@ -472,9 +472,9 @@ export default {
       confirmDeleteTitleCategory: 'Supprimer la catégorie ?',
       confirmDeleteTitleService: 'Supprimer le service ?',
       confirmDeleteCategory:
-        'Êtes-vous sûr de vouloir supprimer la catégorie \"{itemName}\" ? Cette action est irréversible.',
+        'Êtes-vous sûr de vouloir supprimer la catégorie "{itemName}" ? Cette action est irréversible.',
       confirmDeleteService:
-        'Êtes-vous sûr de vouloir supprimer le service \"{itemName}\" ? Cette action est irréversible.',
+        'Êtes-vous sûr de vouloir supprimer le service "{itemName}" ? Cette action est irréversible.',
       deleteSuccessCategory: 'Catégorie supprimée avec succès.',
       deleteSuccessService: 'Service supprimé avec succès.',
       deleteErrorCategory: 'Échec de la suppression de la catégorie.',
@@ -508,8 +508,8 @@ export default {
       ingestQueuedSuccess: "{count} fichier(s) ont été mis en file d'attente pour ingestion.",
       ingestQueuedError: "Une erreur s'est produite lors du processus d'ingestion par lot.",
       uploadSuccessMultiple: '{count} fichier(s) téléchargé(s) avec succès.',
-      linkSubmitSuccess: '\"{fileName}\" a été exploré et enregistré avec succès.',
-      actionSuccess: 'L\'action \"{action}\" sur le fichier {fileId} a réussi.',
+      linkSubmitSuccess: '"{fileName}" a été exploré et enregistré avec succès.',
+      actionSuccess: 'L\'action "{action}" sur le fichier {fileId} a réussi.',
       metadataUpdateSuccess: 'Les métadonnées du fichier {fileId} ont été mises à jour.'
     }
   },
@@ -721,7 +721,7 @@ export default {
     emptyFolder: 'Ce dossier est vide. Déplacez des conversations ici depuis le menu de la discussion.',
     noStarredChats: "Aucune discussion en favori pour le moment. Mettez une discussion en favori pour l'ajouter ici.",
     noArchivedChats: 'Aucune discussion archivée pour le moment.',
-    noSearchResults: 'Aucune discussion trouvée pour \"{term}\"',
+    noSearchResults: 'Aucune discussion trouvée pour "{term}"',
     loadingChats: 'Chargement des discussions...',
     errorLoadingConversations: 'Échec du chargement des discussions. Veuillez réessayer.',
     errorLoadingUser: "Les données de l'utilisateur sont incomplètes. Veuillez recharger la page.",
@@ -1563,10 +1563,10 @@ export default {
     notifications: {
       dropError:
         'Seuls les fichiers peuvent être déposés. Veuillez vérifier que vous faites glisser un fichier valide depuis votre ordinateur.',
-      typeNotAllowed: 'Le type de fichier \"{extension}\" n\'est pas autorisé.',
+      typeNotAllowed: 'Le type de fichier "{extension}" n\'est pas autorisé.',
       shortcutUnsupported:
         'Les fichiers raccourcis (.url) ne sont pas pris en charge. Veuillez faire glisser le fichier réel.',
-      duplicate: 'Le fichier \"{fileName}\" a déjà été ajouté.',
+      duplicate: 'Le fichier "{fileName}" a déjà été ajouté.',
       uploadSuccess: '{fileName} téléchargé avec succès',
       uploadFailed: 'Échec du téléchargement de {fileName}.'
     }
@@ -1691,12 +1691,13 @@ export default {
         label: 'Concepts',
         loading: 'Loading…',
         resplit: 'Re-split',
-        flagged: 'flagged',
+        flagged: 'signalé',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          'Concepts avec des entités signalées — ouvrez chacun, supprimez ou modifiez l’entité, enregistrez (le scan se relance automatiquement) ; ou acceptez-les lors de la publication.',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTip:
+          'Entités signalées : {k}. Ouvrez, supprimez ou modifiez-les, puis enregistrez — le scan se relance automatiquement.',
+        piiTipBare: 'Entités signalées — ouvrez, révisez, puis enregistrez pour relancer le scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1746,7 +1747,7 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry'
+      saveFailed: 'Échec de l’enregistrement — réessayer'
     },
     dashboard: {
       bulk: {
@@ -1970,7 +1971,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2206,7 +2207,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'Dépôts créés à partir de cette exploration',
       convQueued: "En file d'attente...",
@@ -2280,65 +2281,66 @@ export default {
       }
     },
     pii: {
-      panel: 'Flagged entities',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
-      scanning: 'Scanning…',
-      clean: 'No flagged entities — this concept is clear.',
-      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
-      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      panel: 'Entités signalées',
+      nFlagged: '{n} trouvée(s)',
+      rescan: 'Re-scanner',
+      scanning: 'Scan en cours…',
+      clean: 'Aucune entité signalée — ce concept est propre.',
+      how: 'Correction : supprimez ou reformulez (ex. utilisez le rôle au lieu du nom), puis enregistrez — le nouveau scan met à jour cette liste.',
+      descFallback:
+        'Des données personnelles ont été détectées ici (RGPD Art. 4(1) — se rapportant à une personne identifiable).',
+      scanError: 'Scan indisponible',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
-        EMAIL_ADDRESS: 'Email address',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        PERSON: 'Nom de personne',
+        LOCATION: 'Lieu',
+        DATE_TIME: 'Date ou heure',
+        EMAIL_ADDRESS: 'Adresse e-mail',
+        PHONE_NUMBER: 'Numéro de téléphone',
+        IP_ADDRESS: 'Adresse IP',
+        NRP: 'Numéro d’enregistrement national',
+        BD_NATIONAL_ID: 'Numéro d’identité nationale'
       },
       desc: {
-        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
-        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
-        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
-        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
-        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
-        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
-        NRP: 'A national registration number was detected. It strongly identifies a person.',
-        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+        PERSON: 'Un nom de personne a été détecté. Les noms peuvent identifier directement une personne physique.',
+        LOCATION: 'Un nom de lieu a été détecté. Combiné à d’autres données, il peut identifier une personne.',
+        DATE_TIME: 'Une date ou une heure a été détectée. Les dates peuvent contribuer à identifier une personne.',
+        EMAIL_ADDRESS: 'Une adresse e-mail a été détectée. Elle identifie directement une personne contactable.',
+        PHONE_NUMBER: 'Un numéro de téléphone a été détecté. Il identifie directement une personne contactable.',
+        IP_ADDRESS: 'Une adresse IP a été détectée. Elle peut identifier un appareil ou un foyer.',
+        NRP: 'Un numéro d’enregistrement national a été détecté. Il identifie fortement une personne.',
+        BD_NATIONAL_ID: 'Un numéro d’identité nationale a été détecté. Il identifie fortement une personne.'
       },
-      allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      allClear: 'Propre',
+      redactFile: 'Masquer tout le fichier',
+      confirmRedactFile: 'Confirmer : masquer le fichier entier ?',
+      locateTip: 'Afficher ce texte dans l’éditeur',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        label: 'Fichier entier :',
+        redact: 'Masquer le fichier',
+        remove: 'Supprimer le corps',
+        accept: 'Tout accepter',
+        confirmRedact: 'Confirmer : masquer tout le fichier ?',
+        confirmRemove: 'Confirmer : supprimer tout le corps ?'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
-        replacement: 'Replacement text',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        redact: 'Masquer',
+        replace: 'Remplacer',
+        remove: 'Supprimer',
+        accept: 'Accepter',
+        replacement: 'Texte de remplacement',
+        apply: 'Appliquer',
+        cancel: 'Annuler'
       },
       resolved: {
-        title: 'Processed in this file',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
-        removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        title: 'Traité dans ce fichier',
+        redacted: 'Masqué',
+        replaced: 'Remplacé',
+        removed: 'Supprimé',
+        accepted: 'Accepté',
+        fileRedacted: 'Fichier masqué',
+        kept: 'conservé dans le texte',
+        removedWord: 'supprimé',
+        wholeFile: 'Corps du fichier entier masqué'
       }
     }
   }

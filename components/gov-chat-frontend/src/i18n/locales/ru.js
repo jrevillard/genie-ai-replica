@@ -362,7 +362,7 @@ export default {
         role: 'Роль'
       },
       userSearch: {
-        resultsFound: 'Найдено {total} пользователей, соответствующих \"{term}\"',
+        resultsFound: 'Найдено {total} пользователей, соответствующих "{term}"',
         error: 'Ошибка при поиске пользователей'
       }
     },
@@ -449,11 +449,11 @@ export default {
       deleteCategory: 'Удалить категорию',
       editService: 'Редактировать услугу',
       deleteService: 'Удалить услугу',
-      empty: 'Категории не найдены. Нажмите \"Добавить новую категорию\", чтобы начать.',
+      empty: 'Категории не найдены. Нажмите "Добавить новую категорию", чтобы начать.',
       formTitleCreateCategory: 'Создать новую категорию',
-      formTitleAddService: 'Добавить услугу в \"{categoryName}\"',
-      formTitleEditCategory: 'Редактировать категорию: \"{itemName}\"',
-      formTitleEditService: 'Редактировать услугу: \"{itemName}\"',
+      formTitleAddService: 'Добавить услугу в "{categoryName}"',
+      formTitleEditCategory: 'Редактировать категорию: "{itemName}"',
+      formTitleEditService: 'Редактировать услугу: "{itemName}"',
       nameEnLabel: 'Название (Английский)',
       translationsTitle: 'Переводы для отображения',
       loadingTranslations: 'Загрузка переводов...',
@@ -469,8 +469,8 @@ export default {
       confirmCancelEdit: 'У вас есть несохраненные изменения. Вы уверены, что хотите отменить?',
       confirmDeleteTitleCategory: 'Удалить категорию?',
       confirmDeleteTitleService: 'Удалить услугу?',
-      confirmDeleteCategory: 'Вы уверены, что хотите удалить категорию \"{itemName}\"? Это действие необратимо.',
-      confirmDeleteService: 'Вы уверены, что хотите удалить услугу \"{itemName}\"? Это действие необратимо.',
+      confirmDeleteCategory: 'Вы уверены, что хотите удалить категорию "{itemName}"? Это действие необратимо.',
+      confirmDeleteService: 'Вы уверены, что хотите удалить услугу "{itemName}"? Это действие необратимо.',
       deleteSuccessCategory: 'Категория успешно удалена.',
       deleteSuccessService: 'Услуга успешно удалена.',
       deleteErrorCategory: 'Не удалось удалить категорию.',
@@ -504,8 +504,8 @@ export default {
       ingestQueuedSuccess: '{count} файл(ов) добавлен(ы) в очередь на обработку.',
       ingestQueuedError: 'Произошла ошибка во время процесса пакетной обработки.',
       uploadSuccessMultiple: '{count} файл(ов) успешно загружен(ы).',
-      linkSubmitSuccess: 'Успешно просканировано и сохранено \"{fileName}\".',
-      actionSuccess: 'Действие \"{action}\" с файлом {fileId} прошло успешно.',
+      linkSubmitSuccess: 'Успешно просканировано и сохранено "{fileName}".',
+      actionSuccess: 'Действие "{action}" с файлом {fileId} прошло успешно.',
       metadataUpdateSuccess: 'Метаданные для файла {fileId} обновлены.'
     }
   },
@@ -716,7 +716,7 @@ export default {
     archivedChats: 'Архивированные чаты',
     noStarredChats: 'Пока нет избранных бесед. Добавьте беседу в избранное, чтобы она появилась здесь.',
     noArchivedChats: 'Пока нет архивированных бесед.',
-    noSearchResults: 'Не найдено бесед для \"{term}\"',
+    noSearchResults: 'Не найдено бесед для "{term}"',
     loadingChats: 'Загрузка бесед...',
     errorLoadingConversations: 'Не удалось загрузить беседы. Пожалуйста, попробуйте снова.',
     errorLoadingUser: 'Данные пользователя неполные. Пожалуйста, перезагрузите страницу.',
@@ -1353,9 +1353,9 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Несоответствие конфигурации: {warnings}. Проверьте конфигурацию быстрой помощи и иерархии знаний.',
-    categoryNotFound: 'Категория \"{label}\" не найдена в иерархии знаний',
+    categoryNotFound: 'Категория "{label}" не найдена в иерархии знаний',
     serviceLabelMismatch:
-      'Сервис \"{label}\" использует метку интерфейса, которая может не соответствовать иерархии знаний',
+      'Сервис "{label}" использует метку интерфейса, которая может не соответствовать иерархии знаний',
     noFilterWarning: 'Активный фильтр контекста отсутствует — запрос будет нефильтрованным.',
     placeholder: 'Введите ваш запрос здесь...',
     sendButton: 'Отправить',
@@ -1554,9 +1554,9 @@ export default {
     uploading: 'Загрузка...',
     notifications: {
       dropError: 'Можно перетаскивать только файлы. Убедитесь, что вы перетаскиваете действительный файл с компьютера.',
-      typeNotAllowed: 'Тип файла \"{extension}\" не разрешен.',
+      typeNotAllowed: 'Тип файла "{extension}" не разрешен.',
       shortcutUnsupported: 'Файлы ярлыков (.url) не поддерживаются. Пожалуйста, перетащите сам файл.',
-      duplicate: 'Файл \"{fileName}\" уже добавлен.',
+      duplicate: 'Файл "{fileName}" уже добавлен.',
       uploadSuccess: 'Файл {fileName} успешно загружен',
       uploadFailed: 'Не удалось загрузить файл {fileName}.'
     }
@@ -1681,12 +1681,13 @@ export default {
         label: 'Concepts',
         loading: 'Loading…',
         resplit: 'Re-split',
-        flagged: 'flagged',
+        flagged: 'отмечено',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          'Concepts с отмеченными объектами — откройте каждый, удалите или измените объект, сохраните (сканирование перезапустится автоматически); или подтвердите их при публикации.',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTip:
+          'Отмеченные объекты: {k}. Откройте, удалите или измените их, затем сохраните — сканирование перезапустится автоматически.',
+        piiTipBare: 'Отмеченные объекты — откройте, проверьте, затем сохраните для повторного сканирования.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1736,7 +1737,7 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry'
+      saveFailed: 'Сбой сохранения — повторите'
     },
     dashboard: {
       bulk: {
@@ -1960,7 +1961,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2196,7 +2197,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: 'Репозитории, созданные из этого обхода',
       convQueued: 'В очереди...',
@@ -2270,65 +2271,67 @@ export default {
       }
     },
     pii: {
-      panel: 'Flagged entities',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
-      scanning: 'Scanning…',
-      clean: 'No flagged entities — this concept is clear.',
-      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
-      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      panel: 'Отмеченные объекты',
+      nFlagged: 'Найдено {n}',
+      rescan: 'Пересканировать',
+      scanning: 'Сканирование…',
+      clean: 'Отмеченных объектов нет — этот concept чист.',
+      how: 'Решение: удалите или измените текст (например, укажите должность вместо имени), затем сохраните — повторное сканирование обновит этот список.',
+      descFallback:
+        'Здесь были обнаружены персональные данные (GDPR, ст. 4(1) — относящиеся к идентифицируемому лицу).',
+      scanError: 'Сканирование недоступно',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
-        EMAIL_ADDRESS: 'Email address',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        PERSON: 'Имя человека',
+        LOCATION: 'Местоположение',
+        DATE_TIME: 'Дата или время',
+        EMAIL_ADDRESS: 'Адрес электронной почты',
+        PHONE_NUMBER: 'Номер телефона',
+        IP_ADDRESS: 'IP-адрес',
+        NRP: 'Национальный регистрационный номер',
+        BD_NATIONAL_ID: 'Номер национального удостоверения личности'
       },
       desc: {
-        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
-        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
-        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
-        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
-        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
-        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
-        NRP: 'A national registration number was detected. It strongly identifies a person.',
-        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+        PERSON: 'Обнаружено имя человека. Имена могут напрямую идентифицировать физическое лицо.',
+        LOCATION:
+          'Обнаружено название места. В сочетании с другими данными это может помочь идентифицировать человека.',
+        DATE_TIME: 'Обнаружена дата или время. Даты могут способствовать идентификации человека.',
+        EMAIL_ADDRESS: 'Обнаружен адрес электронной почты. Он напрямую идентифицирует контактное лицо.',
+        PHONE_NUMBER: 'Обнаружен номер телефона. Он напрямую идентифицирует контактное лицо.',
+        IP_ADDRESS: 'Обнаружен IP-адрес. Он может идентифицировать устройство или домохозяйство.',
+        NRP: 'Обнаружен национальный регистрационный номер. Он точно идентифицирует человека.',
+        BD_NATIONAL_ID: 'Обнаружен номер национального удостоверения. Он точно идентифицирует человека.'
       },
-      allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      allClear: 'Чисто',
+      redactFile: 'Скрыть весь файл',
+      confirmRedactFile: 'Подтверждение: скрыть весь файл?',
+      locateTip: 'Показать этот текст в редакторе',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        label: 'Весь файл:',
+        redact: 'Скрыть файл',
+        remove: 'Удалить тело',
+        accept: 'Принять всё',
+        confirmRedact: 'Подтверждение: скрыть весь файл?',
+        confirmRemove: 'Подтверждение: удалить всё тело файла?'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
-        replacement: 'Replacement text',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        redact: 'Скрыть',
+        replace: 'Заменить',
+        remove: 'Удалить',
+        accept: 'Принять',
+        replacement: 'Текст для замены',
+        apply: 'Применить',
+        cancel: 'Отмена'
       },
       resolved: {
-        title: 'Processed in this file',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
-        removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        title: 'Обработано в этом файле',
+        redacted: 'Скрыто',
+        replaced: 'Заменено',
+        removed: 'Удалено',
+        accepted: 'Принято',
+        fileRedacted: 'Файл скрыт',
+        kept: 'оставлено в тексте',
+        removedWord: 'удалено',
+        wholeFile: 'Всё тело файла скрыто'
       }
     }
   }

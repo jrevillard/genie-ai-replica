@@ -362,7 +362,7 @@ export default {
         role: 'Karolo'
       },
       userSearch: {
-        resultsFound: 'Ho fumanwe basebedisi ba {total} ba tshoanang le \"{term}\"',
+        resultsFound: 'Ho fumanwe basebedisi ba {total} ba tshoanang le "{term}"',
         error: 'Phoso ha ho batlwa basebedisi'
       }
     },
@@ -450,11 +450,11 @@ export default {
       deleteCategory: 'Hlakola Sehlopha',
       editService: 'Fetola Tshebeletso',
       deleteService: 'Hlakola Tshebeletso',
-      empty: 'Ha ho dihlopha tse fumanweng. Tobetsa \"Eketsa Sehlopha se Setjha\" ho qala.',
+      empty: 'Ha ho dihlopha tse fumanweng. Tobetsa "Eketsa Sehlopha se Setjha" ho qala.',
       formTitleCreateCategory: 'Theha Sehlopha se Setjha',
-      formTitleAddService: 'Eketsa Tshebeletso ho \"{categoryName}\"',
-      formTitleEditCategory: 'Fetola Sehlopha: \"{itemName}\"',
-      formTitleEditService: 'Fetola Tshebeletso: \"{itemName}\"',
+      formTitleAddService: 'Eketsa Tshebeletso ho "{categoryName}"',
+      formTitleEditCategory: 'Fetola Sehlopha: "{itemName}"',
+      formTitleEditService: 'Fetola Tshebeletso: "{itemName}"',
       nameEnLabel: 'Lebitso (Senyesemane)',
       translationsTitle: 'Diphetolelo bakeng sa Pontsho',
       loadingTranslations: 'E kenya diphetolelo...',
@@ -471,9 +471,9 @@ export default {
       confirmDeleteTitleCategory: 'Hlakola Sehlopha?',
       confirmDeleteTitleService: 'Hlakola Tshebeletso?',
       confirmDeleteCategory:
-        'Na o na le bonnete ba hore o batla ho hlakola Sehlopha sa \"{itemName}\"? Keto ena ha e kgutlele morao.',
+        'Na o na le bonnete ba hore o batla ho hlakola Sehlopha sa "{itemName}"? Keto ena ha e kgutlele morao.',
       confirmDeleteService:
-        'Na o na le bonnete ba hore o batla ho hlakola Tshebeletso ya \"{itemName}\"? Keto ena ha e kgutlele morao.',
+        'Na o na le bonnete ba hore o batla ho hlakola Tshebeletso ya "{itemName}"? Keto ena ha e kgutlele morao.',
       deleteSuccessCategory: 'Sehlopha se hlakotswe ka katleho.',
       deleteSuccessService: 'Tshebeletso e hlakotswe ka katleho.',
       deleteErrorCategory: 'Ho hlolehile ho hlakola Sehlopha.',
@@ -507,8 +507,8 @@ export default {
       ingestQueuedSuccess: 'Difaele tse {count} di hlophisitswe molemong wa ho kenngwa.',
       ingestQueuedError: 'Ho bile le phoso nakong ya tshebetso ya ho kenya sehlopha.',
       uploadSuccessMultiple: 'Difaele tse {count} di kentswe ka katleho.',
-      linkSubmitSuccess: 'E fetile le ho boloka \"{fileName}\" ka katleho.',
-      actionSuccess: 'Keto ya \"{action}\" faeleng ya {fileId} e bile le katleho.',
+      linkSubmitSuccess: 'E fetile le ho boloka "{fileName}" ka katleho.',
+      actionSuccess: 'Keto ya "{action}" faeleng ya {fileId} e bile le katleho.',
       metadataUpdateSuccess: 'Metadata ya faele ya {fileId} e ntlafaditswe.'
     }
   },
@@ -719,7 +719,7 @@ export default {
     archivedChats: 'Meqoqo e Bolokilweng',
     noStarredChats: 'Ha ho meqoqo e kgethilweng ka linaledi ha jwale. Kgetha moqoqo ka naledi ho o kenya mona.',
     noArchivedChats: 'Ha ho meqoqo e bolokilweng ha jwale.',
-    noSearchResults: 'Ha ho meqoqo e fumanweng bakeng sa \"{term}\"',
+    noSearchResults: 'Ha ho meqoqo e fumanweng bakeng sa "{term}"',
     loadingChats: 'E kenya meqoqo...',
     errorLoadingConversations: 'Ho hlolehile ho kenya meqoqo. Ka kopo leka hape.',
     errorLoadingUser: 'Datha ya mosebedisi ha ea fella. Ka kopo, kenya leqephe bocha.',
@@ -1359,8 +1359,8 @@ export default {
     welcomeMessage: 'Welcome! How can I assist you today?',
     configMismatchWarning:
       'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
-    categoryNotFound: 'Category \"{label}\" not found in knowledge hierarchy',
-    serviceLabelMismatch: 'Service \"{label}\" uses a UI label that may not match the knowledge hierarchy',
+    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
+    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
     noFilterWarning: 'No context filter active — query will be unfiltered.',
     placeholder: 'Ngola potso ya hao mona...',
     sendButton: 'Romela',
@@ -1560,9 +1560,9 @@ export default {
     notifications: {
       dropError:
         "E batla difaele feela hore di behwe mona. Ka kopo hlahloba hore o hula faele e nepahetseng ho tswa k'homphieutheng ea hao.",
-      typeNotAllowed: 'Mofuta wa faele wa \"{extension}\" ha o dumellwe.',
+      typeNotAllowed: 'Mofuta wa faele wa "{extension}" ha o dumellwe.',
       shortcutUnsupported: 'Difaele tsa kgaoletso (.url) ha di tshehetswe. Ka kopo hula faele ya sebele.',
-      duplicate: 'Faele ya \"{fileName}\" e se e ntse e ekeditswe.',
+      duplicate: 'Faele ya "{fileName}" e se e ntse e ekeditswe.',
       uploadSuccess: 'E kentswe ka katleho {fileName}',
       uploadFailed: 'Ho hlolehile ho kenya {fileName}.'
     }
@@ -1689,10 +1689,10 @@ export default {
         resplit: 'Re-split',
         flagged: 'flagged',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          'Concepts with flagged entities — open each, remove kapa alter the entity, save (it re-scans automatically); kapa acknowledge them at publish.',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTip: 'Flagged entities: {k}. Open, remove kapa alter them, ebe u-save — it re-scans automatically.',
+        piiTipBare: 'Flagged entities — open, review, ebe u-save to re-scan.'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1966,7 +1966,7 @@ export default {
       emptyDashboard:
         '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer \"what kind of thing is this topic?\".)',
+        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
       hide: '__TODO_TRANSLATE__ (en: Hide)',
       whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
     },
@@ -2202,7 +2202,7 @@ export default {
         "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
       creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
       createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as \"[name]\". Opening the Studio to curate.)',
+      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
       createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
       conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
       convQueued: '__TODO_TRANSLATE__ (en: Queued...)',
@@ -2211,7 +2211,7 @@ export default {
       convAdding: '__TODO_TRANSLATE__ (en: Adding concepts ([p] pages so far)...)',
       convDone: '__TODO_TRANSLATE__ (en: Created ([p] pages))',
       convFailed: '__TODO_TRANSLATE__ (en: Failed)',
-      createStarted: '__TODO_TRANSLATE__ (en: Creating \"[name]\" — track progress below.)',
+      createStarted: '__TODO_TRANSLATE__ (en: Creating "[name]" — track progress below.)',
       modelTier: {
         label: '__TODO_TRANSLATE__ (en: Model)',
         options: {
@@ -2280,14 +2280,14 @@ export default {
       nFlagged: '{n} found',
       rescan: 'Re-scan',
       scanning: 'Scanning…',
-      clean: 'No flagged entities — this concept is clear.',
-      how: 'Fix: remove or reword it (e.g. to the role instead of the name), then save — the re-scan updates this list.',
-      descFallback: 'Personal data was detected here (GDPR Art. 4(1) — relating to an identifiable person).',
+      clean: 'No flagged entities — concept ena e hloekile.',
+      how: 'Lokisa: tlosa kapa fetola mantsoe (mohlala, the role ho e-na le lebitso), ebe u-save — the re-scan e tlisa sena nakong.',
+      descFallback: 'Personal data e fumanwe mona (GDPR Art. 4(1) — relating to an identifiable person).',
       scanError: 'Scan unavailable',
       type: {
         PERSON: 'Person name',
         LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
+        DATE_TIME: 'Date kapa time',
         EMAIL_ADDRESS: 'Email address',
         PHONE_NUMBER: 'Phone number',
         IP_ADDRESS: 'IP address',
@@ -2295,14 +2295,14 @@ export default {
         BD_NATIONAL_ID: 'National ID number'
       },
       desc: {
-        PERSON: 'A person’s name was detected. Names can directly identify a natural person.',
-        LOCATION: 'A place name was detected. Combined with other data it can identify a person.',
-        DATE_TIME: 'A date or time was detected. Dates can contribute to identifying a person.',
-        EMAIL_ADDRESS: 'An email address was detected. It directly identifies a contactable person.',
-        PHONE_NUMBER: 'A phone number was detected. It directly identifies a contactable person.',
-        IP_ADDRESS: 'An IP address was detected. It can identify a device or household.',
-        NRP: 'A national registration number was detected. It strongly identifies a person.',
-        BD_NATIONAL_ID: 'A national ID number was detected. It strongly identifies a person.'
+        PERSON: 'Lebitso la motho le fumanwe. Names can directly identify a natural person.',
+        LOCATION: 'Lebitso la sebaka le fumanwe. Combined with other data it can identify a person.',
+        DATE_TIME: 'Date kapa time e fumanwe. Dates can contribute to identifying a person.',
+        EMAIL_ADDRESS: 'Email address e fumanwe. It directly identifies a contactable person.',
+        PHONE_NUMBER: 'Phone number e fumanwe. It directly identifies a contactable person.',
+        IP_ADDRESS: 'IP address e fumanwe. It can identify a device or household.',
+        NRP: 'National registration number e fumanwe. It strongly identifies a person.',
+        BD_NATIONAL_ID: 'National ID number e fumanwe. It strongly identifies a person.'
       },
       allClear: 'Clear',
       redactFile: 'Redact whole file',

@@ -207,6 +207,19 @@ describe('proposeFrontmatter (#990 D-L)', () => {
     expect(binds).toMatchObject({ r: REPO.repo_id, c: 'c1' });
   });
 
+  test('repo-wide CURATED propose over the cap is refused, not hung (gov-uk 997-concept regression)', async () => {
+    mockDb = makeDb(Array.from({ length: 26 }, (_, i) => metaRow({ concept_id: 'c' + i })), []);
+    await expect(
+      service.proposeFrontmatter(REPO, null, { classification: 'llm' })
+    ).rejects.toMatchObject({ code: 'CURATED_PROPOSE_TOO_BROAD', status: 409 });
+    // Zero LLM calls — the refusal happens before any curation work.
+    expect(axios.post).not.toHaveBeenCalled();
+    // Heuristics over the same rows stays unbounded (pure planning).
+    mockDb = makeDb(Array.from({ length: 26 }, (_, i) => metaRow({ concept_id: 'c' + i })), []);
+    const out = await service.proposeFrontmatter(REPO, null, { classification: 'heuristics' });
+    expect(Array.isArray(out) ? out.length : 1).toBeGreaterThan(0);
+  });
+
   test('from-empty: blank frontmatter proposes the FULL correct frontmatter', async () => {
     mockDb = makeDb([metaRow({ frontmatter: {} })], []);
     llmReply({ type: 'entity', label: 'Culture', summary: 'Temple summary.' });

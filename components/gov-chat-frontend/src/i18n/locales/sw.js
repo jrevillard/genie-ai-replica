@@ -507,6 +507,53 @@ export default {
       linkSubmitSuccess: 'Imefanikiwa kutambaa na kuhifadhi "{fileName}".',
       actionSuccess: 'Kitendo "{action}" kwenye faili {fileId} kimefanikiwa.',
       metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.'
+    },
+    queryInspector: {
+      search: 'Search',
+      searchPlaceholder: 'Search query text...',
+      minConfidence: 'Min Confidence',
+      maxConfidence: 'Max Confidence',
+      from: 'From',
+      to: 'To',
+      reset: 'Reset',
+      colTime: 'Time',
+      colQuestion: 'User Question',
+      colConfidence: 'Confidence',
+      colResponseTime: 'Response Time',
+      colSources: 'Sources',
+      colFeedback: 'Feedback',
+      colActions: 'Actions',
+      inspect: 'Inspect',
+      noResults: 'No queries found matching your filters.',
+      prev: 'Prev',
+      pageInfo: 'Page {current} of {total} ({count} total)',
+      next: 'Next',
+      backToList: 'Back to list',
+      detailTitle: 'Query Inspector',
+      sectionQuestion: 'User Question',
+      user: 'User',
+      time: 'Time',
+      responseTime: 'Response Time',
+      mode: 'Mode',
+      sectionContext: 'Context (Labels sent to RAG)',
+      category: 'Category',
+      serviceLabels: 'Service Labels',
+      language: 'Language',
+      sectionMessages: 'Messages Sent to Pipeline',
+      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
+      score: 'Score',
+      labels: 'Labels',
+      viewDoc: 'View Document',
+      noDocuments: 'No source documents were retrieved for this query.',
+      sectionResponse: 'LLM Response',
+      confidenceScore: 'Confidence Score',
+      retrievalConfidenceScore: 'Retrieval Confidence',
+      selfConfidence: 'Self-Confidence (LLM)',
+      sectionFeedback: 'User Feedback',
+      rating: 'Rating',
+      comment: 'Comment',
+      providedAt: 'Provided at',
+      loadError: 'Failed to load queries.'
     }
   },
   auth: {
@@ -1789,7 +1836,8 @@ export default {
         title: 'Futa ghala'
       },
       filter: {
-        domain: 'Chuja kwa eneo la mada'
+        domain: 'Chuja kwa eneo la mada',
+        allDomains: 'All subject areas'
       },
       new: '+ Ghala jipya',
       pii: {
@@ -1815,7 +1863,21 @@ export default {
         stepOf: 'Step '
       },
       title: 'Repositories',
-      topics: 'topics'
+      topics: 'topics',
+      lane: {
+        draft: 'Import',
+        in_review: 'In review',
+        published: 'Published',
+        ingested: 'Ingested',
+        retracted: 'Retracted'
+      },
+      laneEmpty: {
+        draft: 'Nothing importing yet',
+        in_review: 'Nothing in review',
+        published: 'No published repositories yet',
+        ingested: 'Nothing ingested yet',
+        retracted: 'Nothing retracted'
+      }
     },
     build: {
       drainFailed: {
@@ -2078,6 +2140,10 @@ export default {
       },
       draft: {
         notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
+      },
+      mode: {
+        basic: 'Basic',
+        expert: 'Expert'
       }
     },
     wizard: {
@@ -2377,6 +2443,13 @@ export default {
         removedWord: 'imeondolewa',
         wholeFile: 'Mwili wote wa faili umekingwa'
       }
+    },
+    lifecycle: {
+      submit: 'Submit for review',
+      approve: 'Approve',
+      publish: 'Publish',
+      ingest: 'Ingest',
+      retract: 'Retract'
     }
   }
 };

@@ -15,10 +15,13 @@
 </template>
 
 <script>
+import translateMixin from '../../mixins/translateMixin';
+
 const STORAGE_KEY = 'okf.studio.seenNarratives';
 
 export default {
   name: 'OkfNarrative',
+  mixins: [translateMixin],
   props: {
     kind: { type: String, required: true },
     text: { type: String, default: null }
@@ -32,13 +35,15 @@ export default {
     },
     translated() {
       if (this.text) return this.text;
-      return this.$t ? this.$t(`okf.narrative.${this.kind}`, '') : '';
+      // translate() (not raw $t) — same accessor as every other OKF surface;
+      // raw $t left this banner in English under non-en locales (2026-09-12).
+      return this.translate(`okf.narrative.${this.kind}`, '');
     },
     hideLabel() {
-      return this.$t ? this.$t('okf.narrative.hide', 'Hide') : 'Hide';
+      return this.translate('okf.narrative.hide', 'Hide');
     },
     whatIsThisLabel() {
-      return this.$t ? this.$t('okf.narrative.whatIsThis', 'What is this?') : 'What is this?';
+      return this.translate('okf.narrative.whatIsThis', 'What is this?');
     },
     canShowCollapsed() {
       // Only offer the reopen if we have narrative text to show.

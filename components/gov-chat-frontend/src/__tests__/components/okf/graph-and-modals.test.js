@@ -258,6 +258,20 @@ describe('OkfRepoGraphView', () => {
     expect(wrapper.vm.card.visible).toBe(false);
   });
 
+  it('zoom buttons change the zoom level about the viewport centre (cy.center() regression)', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const cy = wrapper.vm.cy;
+    const before = cy.zoom();
+    // zoomIn (+): ×1.3. The old zoomBy passed cy.center() (the CORE, not a
+    // position) as renderedPosition → NaN pan → viewport rejected it.
+    wrapper.vm.zoomBy(1.3);
+    expect(cy.zoom()).toBeCloseTo(before * 1.3, 5);
+    wrapper.vm.zoomBy(1 / 1.3);
+    expect(cy.zoom()).toBeCloseTo(before, 5);
+  });
+
   it('shows the card for ADJACENT nodes of the selection, but not un-highlighted ones', async () => {
     const wrapper = mountWith(OkfRepoGraphView, {
       repoId: 'r-1',

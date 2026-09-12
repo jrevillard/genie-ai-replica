@@ -25,6 +25,7 @@
       @resplit="resplitOpen = true"
       @delete="onDeleteAsk"
       @label="onTreeLabel"
+      @pii-bulk="onPiiBulkAsk"
     />
     <!-- FLEXIBLE COLUMNS (David, 2026-09-09): drag either splitter to resize;
          double-click resets that pane; arrow keys nudge (a11y). Track order
@@ -199,6 +200,19 @@
       </p>
     </DsDialog>
 
+    <!-- REPO BULK PII (David, 2026-09-12): confirmation for the header-bar
+         Redact-all / Remove-all / Accept-all decision. -->
+    <DsDialog
+      :visible="piiBulkAsk !== null"
+      :title="piiBulkTitle"
+      size="sm"
+      :actions="piiBulkActions"
+      @close="piiBulkAsk = null"
+      @action="onPiiBulkAction"
+    >
+      <p>{{ piiBulkBody }}</p>
+    </DsDialog>
+
     <OkfResplitModal
       :visible="resplitOpen"
       :repo-id="repoId"
@@ -220,6 +234,7 @@ import { mapGetters } from 'vuex';
 import translateMixin from '../../../mixins/translateMixin';
 import serviceTreeService from '../../../services/serviceTreeService';
 import conceptService from '../../../services/conceptService';
+import repoOkfService from '../../../services/repoOkfService';
 import DsButton from '../../ds/Button.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsInput from '../../ds/Input.vue';
@@ -273,6 +288,10 @@ export default {
       resplitOpen: false,
       addOpen: false,
       deleteAsk: null,
+      // REPO BULK PII (David, 2026-09-12): 'redact'|'remove'|'accept' while
+      // the confirm dialog is open; null when closed.
+      piiBulkAsk: null,
+      piiBulkBusy: false,
       deleting: false,
       autocorrectOpen: false,
       // Right-rail bindings — synced from the selected row, written immediately.
@@ -323,6 +342,52 @@ export default {
           label: this.translate('okf.editor.delete.confirm', 'Delete'),
           variant: 'danger',
           disabled: this.deleting
+        }
+      ];
+    },
+    piiFlaggedCount() {
+      return this.concepts.filter((c) => c && c.pii_state === 'hit').length;
+    },
+    piiBulkTitle() {
+      const action = this.piiBulkAsk || 'accept';
+      const key = 'okf.editor.piiBulk.title.' + action;
+      const fallback = {
+        redact: 'Redact all flagged content',
+        remove: 'Remove all flagged content',
+        accept: 'Accept all flagged entities'
+      }[action];
+      return this.translate(key, fallback);
+    },
+    piiBulkBody() {
+      const action = this.piiBulkAsk || 'accept';
+      const key = 'okf.editor.piiBulk.body.' + action;
+      const fallback = {
+        redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+        remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+        accept: 'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+      }[action];
+      return (
+        this.translate(key, fallback) +
+        ' ' +
+        this.translate('okf.editor.piiBulk.scope', 'Concepts affected: {n}.').replace(
+          '{n}',
+          String(this.piiFlaggedCount)
+        )
+      );
+    },
+    piiBulkActions() {
+      return [
+        {
+          key: 'cancel',
+          label: this.translate('common.cancel', 'Cancel'),
+          variant: 'secondary',
+          disabled: this.piiBulkBusy
+        },
+        {
+          key: 'confirm',
+          label: this.translate('okf.editor.piiBulk.confirm', 'Apply'),
+          variant: this.piiBulkAsk === 'accept' ? 'primary' : 'danger',
+          disabled: this.piiBulkBusy
         }
       ];
     },
@@ -514,6 +579,28 @@ export default {
     },
     onDeleteAsk(node) {
       this.deleteAsk = node;
+    },
+    onPiiBulkAsk(action) {
+      this.piiBulkAsk = action;
+    },
+    async onPiiBulkAction(key) {
+      if (key === 'cancel') {
+        this.piiBulkAsk = null;
+        return;
+      }
+      if (key !== 'confirm' || !this.piiBulkAsk || this.piiBulkBusy) return;
+      this.piiBulkBusy = true;
+      const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
+      this.piiBulkBusy = false;
+      this.piiBulkAsk = null;
+      if (!result || !result.ok) {
+        this.metaError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
+        return;
+      }
+      // The flagged pills clear as the refreshed rows come back clean. The
+      // resolutions persist: suppressed items stay un-flagged across the
+      // save-triggered rescans until an explicit re-scan.
+      await this.$store.dispatch('okf/fetchConcepts', this.repoId);
     },
     async onDeleteAction(key) {
       if (key === 'cancel') {

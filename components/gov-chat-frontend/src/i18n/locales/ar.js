@@ -1820,7 +1820,10 @@ export default {
       hint: {
         import: 'The repository stays in Import until the file conversion completes.',
         rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.'
+        serving: 'This version is serving RAG traffic — retract it to make changes.',
+        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
+        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
+        idle: 'Import complete — Submit for review to continue the workflow.'
       },
       pages: 'Pages processed',
       serving: {
@@ -1829,12 +1832,28 @@ export default {
       },
       stage: {
         indexing: 'Indexing',
-        serving: 'Serving'
+        serving: 'Serving',
+        label: 'Stage'
       },
       title: {
         import: 'Import progress',
         rag: 'Ingestion progress',
-        serving: 'Serving status'
+        serving: 'Serving status',
+        review: 'Review status',
+        retracted: 'Retraction status',
+        idle: 'Repository status'
+      },
+      lifecycle: {
+        importing: 'Importing',
+        reviewing: 'Reviewing',
+        ingesting: 'Ingesting',
+        serving: 'Serving',
+        retracted: 'Retracted'
+      },
+      row: {
+        subject: 'Subject area',
+        topics: 'Topics',
+        lastVersion: 'Last version'
       }
     },
     create: {

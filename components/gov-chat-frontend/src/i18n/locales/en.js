@@ -1893,24 +1893,43 @@ export default {
         lt1: 'Started less than a minute ago',
         min: "Started {'{'}n{'}'} min ago"
       },
-      hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.'
-      },
       pages: 'Pages processed',
       serving: {
         graph: 'Serving graph',
         version: 'Serving version'
       },
+      title: {
+        serving: 'Serving status',
+        rag: 'Ingestion progress',
+        import: 'Import progress',
+        review: 'Review status',
+        retracted: 'Retraction status',
+        idle: 'Repository status'
+      },
+      lifecycle: {
+        importing: 'Importing',
+        reviewing: 'Reviewing',
+        ingesting: 'Ingesting',
+        serving: 'Serving',
+        retracted: 'Retracted'
+      },
+      row: {
+        subject: 'Subject area',
+        topics: 'Topics',
+        lastVersion: 'Last version'
+      },
+      hint: {
+        import: 'The repository stays in Import until the file conversion completes.',
+        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
+        serving: 'This version is serving RAG traffic — retract it to make changes.',
+        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
+        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
+        idle: 'Import complete — Submit for review to continue the workflow.'
+      },
       stage: {
+        label: 'Stage',
         indexing: 'Indexing',
         serving: 'Serving'
-      },
-      title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status'
       }
     },
     create: {

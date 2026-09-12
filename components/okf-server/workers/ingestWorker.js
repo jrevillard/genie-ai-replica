@@ -152,11 +152,23 @@ async function _refreshRagIngestion(db, repoId) {
       conceptMetaService.countByIndexStatus(repoId, 'failed')
     ]);
     if (parsed > 0) {
+      // ARANGODB GOTCHA (live-caught 2026-09-12, David's 0/997 card): update()
+      // keys are LITERAL attribute names — a dotted key like
+      // 'rag_ingestion.concepts_done' is stored as a FLAT attribute with that
+      // exact name, NOT as a nested path. Every progress refresh was landing
+      // in invisible flat attributes while the nested record the dashboard
+      // reads stayed at concepts_done: 0. Patch the nested object instead.
+      const current = await db
+        .collection('okf_repositories')
+        .document(repoId)
+        .catch(() => null);
       await db.collection('okf_repositories').update(repoId, {
-        'rag_ingestion.status': 'draining',
-        'rag_ingestion.concepts_done': indexed,
-        'rag_ingestion.concepts_total': indexed + parsed + failed,
-        'rag_ingestion.error': null
+        rag_ingestion: Object.assign({}, (current && current.rag_ingestion) || {}, {
+          status: 'draining',
+          concepts_done: indexed,
+          concepts_total: indexed + parsed + failed,
+          error: null
+        })
       });
       return;
     }
@@ -204,8 +216,12 @@ async function _refreshRagIngestion(db, repoId) {
           ? `1 concept failed to index: ${ids} — ${reason}. Re-ingest to retry.`
           : `${failed} concepts failed to index: ${ids} — ${reason}. Re-ingest to retry.`;
       await db.collection('okf_repositories').update(repoId, {
-        'rag_ingestion.error': errorText,
-        'rag_ingestion.failed_concepts': failedConcepts
+        // Nested merge (see the dotted-key gotcha above) — flat dotted keys
+        // land as literal attributes and the dashboard never sees them.
+        rag_ingestion: Object.assign({}, repo.rag_ingestion || {}, {
+          error: errorText,
+          failed_concepts: failedConcepts
+        })
       });
       writeBundleIngestionLog(
         repoId,

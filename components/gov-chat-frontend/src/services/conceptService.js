@@ -16,12 +16,20 @@ function notReady(reason) {
 
 const conceptService = {
   async listForRepo(repoId, opts = {}) {
-    const qs = opts.since ? `?since=${encodeURIComponent(opts.since)}` : '';
+    const params = [];
+    if (opts.since) params.push(`since=${encodeURIComponent(opts.since)}`);
+    // NON-BLOCKING LOAD (David, 2026-09-12): limit/offset page the server —
+    // the response is then { total, offset, limit, concepts } instead of the
+    // legacy full array. Both shapes pass through untouched.
+    if (opts.limit !== undefined) params.push(`limit=${encodeURIComponent(opts.limit)}`);
+    if (opts.offset !== undefined) params.push(`offset=${encodeURIComponent(opts.offset)}`);
+    const qs = params.length ? `?${params.join('&')}` : '';
     try {
       const res = await httpService.get(`/okf/repos/${encodeURIComponent(repoId)}/concepts${qs}`);
       return res && res.data ? res.data : [];
     } catch (err) {
-      if (err && (err.status === 404 || err.status === 501)) return [];
+      if (err && (err.status === 404 || err.status === 501))
+        return opts.limit !== undefined ? { concepts: [], total: 0 } : [];
       throw err;
     }
   },

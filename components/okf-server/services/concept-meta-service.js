@@ -808,6 +808,13 @@ async function patchConceptMeta(repo_id, concept_id, parsed) {
       : existing.labels || [];
     patch.ingest_labels = composeIngestLabels(repoDoc, patch.labels);
   }
+  // CONFORMANCE RECOMPUTE (David, 2026-09-12): every meta patch re-validates
+  // the concept, so an issue clears the moment its cause is fixed (metadata
+  // edits, Autocorrect) instead of haunting the publish gate with a stale
+  // row. Pure validation — no scanner call. Lazy require: conformance-service
+  // imports THIS module (same cycle break as ingest-service above).
+  const { validateConcept } = require('./conformance-service');
+  patch.conformance_issues = validateConcept(parsed).issues;
   await col.update(existing._key, patch);
   return { ...existing, ...patch };
 }
@@ -918,6 +925,40 @@ function planAutocorrectForConcept(meta) {
   // 3. sources — ensure array exists (empty is fine; OKF spec doesn't require sources).
   if (!Array.isArray(fm.sources)) {
     changes.push({ field: 'sources', before: null, after: [], reason: 'MISSING_SOURCES' });
+  } else {
+    // SOURCE_MISSING_RESOURCE fix (David, 2026-09-12: "automatically fix
+    // conformance issues like this"): a sources[] entry with an empty
+    // "resource" gets one determinately — the concept's own provenance
+    // (meta.sources, stamped by the crawl conversion) first, then the first
+    // non-empty sibling resource. When neither can supply one, the issue is
+    // surfaced as a warning (the gate treats warnings as advisory).
+    const provenance = (meta.sources || []).map((s) => s && s.resource).find((r) => r && String(r).trim());
+    let sibling = null;
+    for (const s of fm.sources) {
+      if (s && s.resource && String(s.resource).trim()) {
+        sibling = String(s.resource).trim();
+        break;
+      }
+    }
+    let touched = false;
+    const fixed = fm.sources.map((s, i) => {
+      if (s && (!s.resource || !String(s.resource).trim())) {
+        const fill = String(provenance || sibling || '').trim();
+        if (!fill) return s;
+        touched = true;
+        return { ...s, resource: fill };
+      }
+      return s;
+    });
+    if (touched) {
+      changes.push({
+        field: 'sources',
+        before: fm.sources,
+        after: fixed,
+        reason: 'SOURCE_MISSING_RESOURCE',
+        note: `resource filled from ${provenance ? 'concept provenance' : 'sibling source entry'}`
+      });
+    }
   }
 
   // 4. status — default 'draft'; warn if outside enum.
@@ -968,13 +1009,17 @@ async function autocorrectRepo(repo_id, dry_run = true) {
       allWarnings.push({ concept_id: meta.concept_id, warnings });
     }
     if (!dry_run && changes.length > 0) {
-      const patch = { updated_at: nowIso() };
+      // APPLY through patchConceptFields (NOT a raw row update): the patch
+      // re-parses the concept, so conformance_issues are RE-COMPUTED — the
+      // whole point of an autocorrect for a conformance finding. The old raw
+      // col.update fixed the frontmatter but left the stale issue sitting on
+      // the meta row, so the publish gate kept seeing it.
+      const patch = {};
       for (const c of changes) {
-        if (c.field === 'sources') patch.frontmatter = { ...(meta.frontmatter || {}), sources: c.after };
-        else patch.frontmatter = { ...(meta.frontmatter || {}), [c.field]: c.after };
+        patch[c.field] = c.after;
       }
-      await col.update(meta._key, patch);
-      appliedCount += 1;
+      const updated = await patchConceptFields(repo_id, meta.concept_id, { frontmatterPatch: patch });
+      if (updated) appliedCount += 1;
     }
   }
   return { changes: allChanges, warnings: allWarnings, applied: appliedCount, total_concepts: concepts.length };

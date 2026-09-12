@@ -949,10 +949,13 @@ async function autocorrectRepo(req, res, next) {
     // label, summary). Applying reuses the concept PATCH ({frontmatter} merge
     // incl. RFC-7386 null-deletes). dry_run defaults TRUE for curated
     // proposals — an LLM apply is always an explicit second step. Mode:
-    // explicit body mode wins; OMITTED routes by the repo's PERSISTED
-    // classification (set at import); heuristics keeps the Story #978
-    // mechanical path untouched below.
-    const mode = ['llm', 'hybrid'].includes(bodyMode)
+    // explicit body mode WINS — including explicit 'heuristics' (David,
+    // 2026-09-12: the Autocorrect panel pins heuristics; the previous
+    // resolution only recognized llm/hybrid as explicit, so an
+    // llm-classified repo silently rerouted the panel's mechanical scan
+    // into per-concept LLM proposals). OMITTED routes by the repo's
+    // PERSISTED classification (set at import).
+    const mode = ['llm', 'hybrid', 'heuristics'].includes(bodyMode)
       ? bodyMode
       : ['llm', 'hybrid'].includes(repoDoc.classification)
         ? repoDoc.classification

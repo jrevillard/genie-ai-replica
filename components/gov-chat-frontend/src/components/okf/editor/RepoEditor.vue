@@ -503,8 +503,10 @@ export default {
       }
     },
     onGraphNodeSelect(conceptId) {
-      // Graph node click -> open that file in the Files pane.
-      this.centerView = 'files';
+      // Graph node click selects the concept (David, 2026-09-12) but does NOT
+      // flip the pane — the user stays in Graph mode and flips to Files
+      // manually via the toggle. The Files pane reads selectedRow from the
+      // store, so on the manual flip it already shows the clicked node's file.
       this.onSelect(conceptId);
     },
     onConceptCreated(conceptId) {

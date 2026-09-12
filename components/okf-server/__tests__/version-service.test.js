@@ -277,7 +277,7 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     expect(mockDb._stores.okf_versions[REPO + '_2'].concepts[0].index_status).toBe('rejected');
   });
 
-  test('PUBLISH GATE: refuses mint while a concept carries conformance issues → 409', async () => {
+  test('PUBLISH GATE: conformance WARNINGS are advisory — the mint succeeds', async () => {
     seedRepo({ version: 1 });
     programQuery([
       {
@@ -285,13 +285,35 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
         title: 'Warn',
         content_hash: 'h',
         index_status: 'indexed',
-        conformance_issues: [{ code: 'INVALID_STATUS_ENUM' }],
+        conformance_issues: [
+          { code: 'INVALID_STATUS_ENUM', severity: 'warning' },
+          { code: 'SOURCE_MISSING_RESOURCE', severity: 'warning', message: 'Source entry 0 is missing a non-empty "resource" field' }
+        ],
+        pii_state: 'clean'
+      }
+    ]);
+    const result = await versionService.mintVersion(REPO);
+    expect(result.bundle_version).toBe(2);
+  });
+
+  test('PUBLISH GATE: conformance ERRORS block, naming the issues in clear terms → 409', async () => {
+    seedRepo({ version: 1 });
+    programQuery([
+      {
+        concept_id: 'index',
+        title: 'Index',
+        content_hash: 'h',
+        index_status: 'indexed',
+        conformance_issues: [
+          { code: 'MISSING_TYPE', severity: 'error', message: 'Concept is missing a non-empty "type" field' }
+        ],
         pii_state: 'clean'
       }
     ]);
     await expect(versionService.mintVersion(REPO)).rejects.toMatchObject({
       code: 'PUBLISH_GATE_BLOCKED',
-      status: 409
+      status: 409,
+      message: expect.stringContaining('index: MISSING_TYPE — Concept is missing a non-empty "type" field')
     });
   });
 

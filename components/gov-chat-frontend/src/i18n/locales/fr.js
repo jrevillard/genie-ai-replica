@@ -183,7 +183,7 @@ export default {
     TV: 'Tuvalu',
     UG: 'Ouganda',
     UA: 'Ukraine',
-    AE: 'Émirats Arabes Unis',
+    AE: 'Émirats arabes unis',
     GB: 'Royaume-Uni',
     US: 'États-Unis',
     UY: 'Uruguay',
@@ -1098,7 +1098,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Profil enregistré avec succès',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter enregistré',
       saveFailed: "Échec de l'enregistrement du profil",
       loadSuccess: 'Profil chargé avec succès',
       loadFailed: 'Échec du chargement du profil',
@@ -1356,11 +1356,11 @@ export default {
   },
   chatbot: {
     serviceLabelMismatch:
-      "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
-    noFilterWarning: 'Aucun filtre de contexte actif — la requête sera non filtrée.',
-    categoryNotFound: 'Catégorie « {label} » introuvable dans la hiérarchie de connaissances',
+      "Le service « {label} » utilise un libellé d'interface utilisateur qui peut ne pas correspondre à la hiérarchie des connaissances",
+    noFilterWarning: 'Aucun filtre de contexte actif — la requête ne sera pas filtrée.',
+    categoryNotFound: 'Catégorie « {label} » introuvable dans la hiérarchie des connaissances',
     configMismatchWarning:
-      "Incohérence de configuration : {warnings}. Vérifiez la configuration de l'Aide rapide et la hiérarchie de connaissances.",
+      "Discordance de configuration : {warnings}. Veuillez vérifier l'Aide rapide et la configuration de la hiérarchie des connaissances.",
     streamingError: 'La réponse a été interrompue. Veuillez réessayer.',
     aiGeneratedNoDocs: 'Généré par IA — non basé sur les documents de la bibliothèque',
     placeholder: 'Tapez votre requête ici...',
@@ -1368,7 +1368,7 @@ export default {
     fileReceived: 'Fichier reçu avec succès.',
     fileUploadError: 'Erreur lors du téléversement du fichier.',
     processingError: 'Erreur lors du traitement de votre demande.',
-    welcomeMessage: "Bienvenue ! Comment puis-je vous aider aujourd'hui avec les services du gouvernement kényan ?",
+    welcomeMessage: "Bienvenue ! Comment puis-je vous aider aujourd'hui ?",
     attachFile: 'Joindre un fichier',
     fileTooLarge: 'Le fichier est trop volumineux. La taille maximale est de {maxSize}.',
     saveChat: 'Enregistrer la discussion',
@@ -1410,23 +1410,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant qu'expert compétent de l'état civil kényan. Expliquez les étapes pour obtenir une carte d'identité nationale (Maisha Namba) ou remplacer une carte perdue. IMPORTANT : Fournissez une liste claire des documents requis (par ex. certificat de naissance, copies des pièces d'identité des parents) et conseillez à l'utilisateur de se rendre au Huduma Centre ou au bureau du Registrar of Persons le plus proche. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que guide de la KRA (Kenya Revenue Authority). Expliquez la démarche pour soumettre les déclarations fiscales, demander un code KRA PIN ou réinitialiser un mot de passe sur le portail iTax. IMPORTANT : Rappelez à l'utilisateur la date limite du 30 juin pour les déclarations annuelles et indiquez-lui comment déposer une déclaration néant (Nil return) s'il n'a perçu aucun revenu. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que conseiller d'entreprise pour les services eCitizen. Accompagnez l'utilisateur tout au long de la réservation de nom d'entreprise et de l'immatriculation de société au Kenya. IMPORTANT : Détaillez les coûts en vigueur pour la recherche de nom et l'enregistrement, puis orientez l'utilisateur vers le portail officiel eCitizen pour finaliser la demande. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que guide des services de santé. Fournissez des informations sur la transition de la NHIF vers le SHIF (Fonds d'assurance maladie sociale) et les modalités d'inscription. IMPORTANT : Partagez les codes USSD officiels (comme *263#) ou les liens web pour s'inscrire et détaillez les avantages de la couverture de santé publique. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que conseiller d'orientation scolaire et universitaire. Présentez le cursus CBC, l'enregistrement au NEMIS ou l'affectation universitaire via le KUCCPS. IMPORTANT : Expliquez comment les parents peuvent consulter les résultats des examens nationaux par SMS ou sur le portail KNEC dès leur publication. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que guide pour les services de la NTSA. Détaillez la démarche de renouvellement de permis de conduire, de contrôle technique automobile ou de gestion de compte TIMS. IMPORTANT : Indiquez à l'utilisateur la procédure de connexion au portail eCitizen NTSA pour demander son permis intelligent (Smart DL) ou réserver un contrôle technique. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que conseiller pour les programmes de logement. Présentez le programme de logements abordables (Boma Yangu), la procédure d'inscription et les cotisations volontaires. IMPORTANT : Orientez l'utilisateur vers le portail Boma Yangu pour consulter les projets et détaillez les critères d'éligibilité pour l'attribution. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      "Agissez en tant que conseiller d'orientation pour la fonction publique. Guidez l'utilisateur pour créer un profil et postuler aux offres via le portail de la Public Service Commission (PSC). IMPORTANT : Conseillez à l'utilisateur de préparer ses diplômes et certificats et de consulter régulièrement le site web de la PSC ou la presse quotidienne locale pour les annonces MyGov. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI ».",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Agissez en tant que compagnon local chaleureux. Soyez poli, serviable et démontrez une excellente connaissance de la culture kényane et de la vie quotidienne. IMPORTANT : Rappelez à l'utilisateur que, même si vous pouvez échanger sur tous les sujets, votre spécialité consiste à l'accompagner dans les démarches administratives kényanes telles que les pièces d'identité, les impôts et l'immatriculation d'entreprises. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI »."
   },
   common: {
     cancel: 'Annuler',
@@ -1494,13 +1494,13 @@ export default {
       details: 'Détails',
       ingestionLog: "Journal d'ingestion",
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        "Métadonnées de ce fichier : nom, auteur et libellés de hiérarchie des connaissances utilisés par l'IA pour acheminer les questions. L'action ingest requiert au moins un libellé.",
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        "Vue en direct de l'exploration du site web de ce fichier : débit, file d'attente, erreurs et progression. Une fois l'exploration réussie, le pied de page ci-dessous le transforme en référentiel OKF.",
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        "Journal par page de l'exploration du site web : URL récupérées, redirigées ou en échec. Rédigé pendant l'exécution de l'exploration.",
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        "Progression étape par étape de la préparation de ce fichier pour les réponses de l'IA : découpage, étiquetage, plongement et indexation. Les erreurs ici indiquent exactement où l'action ingest s'est arrêtée."
     },
     log: {
       killActions: "Actions d'arrêt :",
@@ -1583,31 +1583,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'Échec du chargement des versions',
+      none: "Aucune version générée pour l'instant — l'action publish crée la version v1.",
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: 'Créer une nouvelle version',
+      published: "Version v{'{'}v{'}'} publiée — archive {'{'}f{'}'} stockée dans le référentiel de documents.",
+      serving: 'Traitée par ingest (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Tableau de bord de Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'Le fichier source est toujours en cours de traitement',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: "Cette action supprime définitivement le référentiel, ses concepts, le contenu indexé, le graphe et les artefacts de l'archive.",
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Supprimer le référentiel'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Acquitter les entités signalées et publier',
+        note: 'Les entités signalées font partie du contenu publié. Si vous les avez vérifiées (par ex. des coordonnées officielles), acquittez et continuez.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "L'action publish génère la version v{'{'}n{'}'} et stocke l'archive « {'{'}file{'}'} » dans le référentiel de documents, remplaçant tout zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1625,26 +1625,26 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "étiquetés : {'{'}n{'}'}",
+      fallbacks: "solutions de repli LLM : {'{'}n{'}'}",
+      concepts: "concepts : {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'} entrées",
+      loadFailed: "Impossible de charger le journal d'activité.",
+      none: "Aucune activité enregistrée pour l'instant — les actions du référentiel s'affichent ici en temps réel.",
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'Graphe de concepts',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: "Aucun concept pour l'instant - rien à représenter sur le graphe.",
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: "Afficher ou masquer le nœud central d'index (ses liens de contenu sont structurels, il ne s'agit pas de connaissances)",
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
@@ -1661,23 +1661,23 @@ export default {
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (coller ou laisser vide)',
+        bodyPh: '# Titre\n\nCollez le markdown ici - le frontmatter est ajouté automatiquement.',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'Impossible de créer le fichier.',
+        title: 'Ajouter un fichier de concept',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'par ex. La faune dans le Mara',
+        updateIndex: "Ajouter à la liste des matières de l'index"
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'aucun frontmatter — proposition complète',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'Corrections de frontmatter planifiées sur chaque concept. Les corps de texte ne sont jamais modifiés.',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'Rien à corriger — tous les frontmatters sont déjà conformes.',
         col: {
           field: 'Field',
           after: 'After',
@@ -1686,14 +1686,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'Correction automatique (frontmatter uniquement)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: "Comment ce concept a fait l'objet d'une curation",
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: "Aucun fichier pour l'instant - ajoutez un concept ou re-divisez depuis la source.",
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1701,31 +1701,31 @@ export default {
         resplit: 'Re-split',
         flagged: 'signalé',
         flaggedTip:
-          'Concepts avec des entités signalées — ouvrez chacun, supprimez ou modifiez l’entité, enregistrez (le scan se relance automatiquement) ; ou acceptez-les lors de la publication.',
+          "Concepts avec des entités signalées — ouvrez chacun d'eux, supprimez ou modifiez l'entité, enregistrez (la réanalyse s'effectue automatiquement) ; ou acquittez-les lors de l'action publish.",
         piiBadge: 'PII',
         piiTip:
-          'Entités signalées : {k}. Ouvrez, supprimez ou modifiez-les, puis enregistrez — le scan se relance automatiquement.',
-        piiTipBare: 'Entités signalées — ouvrez, révisez, puis enregistrez pour relancer le scan.',
+          "Entités signalées : {k}. Ouvrez, supprimez ou modifiez-les, puis enregistrez — l'analyse se relance automatiquement.",
+        piiTipBare: 'Entités signalées — ouvrir, réviser, puis enregistrer pour réanalyser.',
         bulkAccept: 'Tout accepter',
         bulkRedact: 'Tout expurger',
         bulkRemove: 'Tout supprimer',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'Chargement des fichiers {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'Cette action supprime définitivement le fichier, ses fragments indexés et ses liens dans le graphe.',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'Éditeur de référentiel',
+      loadFailed: 'Impossible de charger ce concept.',
+      loadingConcept: 'Chargement du concept…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'Métadonnées du concept',
+        labelLabel: 'Libellé (Hiérarchie des connaissances)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'Aucun concept sélectionné',
+        saveFailed: "Échec de l'enregistrement des métadonnées",
+        saved: 'Métadonnées enregistrées',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1736,63 +1736,63 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: "Sélectionnez un concept dans la liste pour commencer l'édition.",
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'Cette action supprime tous les concepts actuels et le graphe dérivé, puis réimporte le fichier source avec le nouveau découpage. Les modifications apportées aux concepts seront perdues.',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'Échec du redécoupage — vérifiez le lien vers le fichier source.',
+        modeA: "Un concept pour l'ensemble de l'exploration",
+        modeAHint: "Méga-concept — l'intégralité du contenu dans un seul concept",
+        modeB: 'Un concept par page',
+        modeBHint: "Découpe selon les repères ## Source: du robot d'exploration (recommandé)",
+        modeC: "Utiliser l'extraction de sujets par LLM",
+        modeCHint: 'Story 10.6 — bientôt disponible',
+        title: 'Redécouper depuis la source'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'Modifications non enregistrées',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Échec de l’enregistrement — réessayer',
+      saveFailed: "Échec de l'enregistrement — réessayer",
       piiBulk: {
         title: {
-          redact: 'Expurger tout le contenu signalé',
+          redact: 'Caviarder tout le contenu signalé',
           remove: 'Supprimer tout le contenu signalé',
           accept: 'Accepter toutes les entités signalées'
         },
         body: {
           redact:
-            "Le corps de chaque concept signalé est remplacé par l'avis d'expurgation. Cette action est irréversible.",
-          remove: 'Le corps de chaque concept signalé est vidé. Cette action est irréversible.',
+            'Le corps de texte de chaque concept signalé est remplacé par la mention de caviardage. Cette action est irréversible.',
+          remove: 'Le corps de texte de chaque concept signalé est vidé. Cette action est irréversible.',
           accept:
-            'Toutes les entités signalées sont marquées comme examinées et conservées — elles ne seront plus signalées sauf nouvelle analyse.'
+            "Toutes les entités signalées sont marquées comme vérifiées et conservées — elles ne seront plus signalées à moins d'exécuter une nouvelle analyse."
         },
         scope: "Concepts concernés : {'{'}n{'}'}.",
         confirm: 'Appliquer',
         failed: "L'action PII groupée a échoué — réessayez."
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: "Application de l'action PII groupée",
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: "Chaque référentiel fait l'objet d'un contrôle de validation complet (examen PII, indexation, conformité) lors de l'action publish. Résultats par référentiel :",
+        pending: 'Confirmez pour exécuter publish sur les référentiels sélectionnés.',
+        publishConfirm: "Publier {'{'}n{'}'}",
+        title: 'Publier les référentiels sélectionnés'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "Actions pour {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'Génération en cours — le fichier source est toujours en cours de traitement',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1801,33 +1801,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: "Cette action supprime définitivement le référentiel, ses concepts, le contenu indexé, le graphe et les artefacts de l'archive. Cette action est irréversible.",
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Supprimer le référentiel'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'Filtrer par domaine'
       },
-      new: '+ New repository',
+      new: '+ Nouveau référentiel',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Acquitter les entités signalées et publier',
+        note: 'Les entités signalées font partie du contenu publié. Si vous les avez vérifiées (par ex. des coordonnées officielles), acquittez et continuez.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "L'action publish génère la version v{'{'}n{'}'} et stocke l'archive « {'{'}file{'}'} » dans le référentiel de documents, remplaçant le zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "Sélectionner {'{'}name{'}'} pour la publication groupée",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: "Échec de l'action ingest",
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "v{'{'}n{'}'} traitée par ingest",
+        published: "v{'{'}n{'}'} publiée",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1836,36 +1836,37 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ {'{'}n{'}'} de plus",
+        fixPath: 'Ré-exécuter ingest pour réessayer : retract → créer une version → ingest.'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'solutions de repli LLM',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'Lots stockés',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'concepts indexés',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "Démarré il y a {'{'}n{'}'} h",
+        lt1: "Démarré il y a moins d'une minute",
+        min: "Démarré il y a {'{'}n{'}'} min"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: "Le référentiel reste dans l'état Import jusqu'à ce que la conversion du fichier soit terminée.",
+        rag: "L'index RAG est en cours de création — la version passe en état serving dès que chaque concept est indexé.",
+        serving:
+          'Cette version est en état serving pour le trafic RAG — exécutez retract pour apporter des modifications.',
+        review: "En cours de review — un réviseur valide, puis l'administrateur effectue publish et ingest.",
+        retracted: 'Hors service — submit → review → approve → publish → ingest pour repasser en état serving.',
+        idle: 'Importation terminée — exécuter submit pour review afin de poursuivre le flux de travail.'
       },
-      pages: 'Pages processed',
+      pages: 'Pages traitées',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Graphe en état serving',
+        version: 'Version en état serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1873,12 +1874,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: "Progression de l'importation",
+        rag: "Progression de l'action ingest",
+        serving: 'État serving',
+        review: 'État de la review',
+        retracted: "État de l'action retract",
+        idle: 'État du référentiel'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1894,33 +1895,34 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: "Choisissez un fichier d'archive .zip.",
+      stagedFile: "Prêt : {'{'}name{'}'}",
+      staged: "Archive prête — cliquez sur Créer un référentiel pour lancer l'importation.",
+      openExisting: 'Ouvrir un référentiel existant',
+      name: 'Nom du référentiel',
+      importing: "Importation de l'archive...",
+      importHint: 'Ou importez une archive zip existante en tant que nouveau référentiel.',
+      importDefaultName: 'Référentiel importé',
+      failed: 'Échec de la création du référentiel',
+      duplicateInline: 'Un référentiel portant ce nom existe déjà. Ouvrez-le ou choisissez un autre nom.',
+      duplicate:
+        'Un référentiel portant ce nom existe déjà - ouvrez-le depuis le tableau de bord ou choisissez un autre nom.',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'Créer un référentiel',
+      title: 'Nouveau référentiel OKF',
+      hint: "Crée un référentiel vide avec un fichier index.md que vous modifiez dans l'éditeur de Studio.",
+      domainPlaceholder: 'Sélectionnez un domaine...',
+      domainRequired: "Choisissez d'abord un domaine — il ne pourra plus être modifié après la création.",
+      classLabel: 'Classification des concepts',
+      classHeuristics: 'Heuristique (par défaut)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'Nom de champ réservé.',
+      errKeyDuplicate: 'Ce nom de champ est utilisé deux fois.',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'Doit être un nombre',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1931,53 +1933,54 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'Chaque champ du frontmatter est modifiable. Ajoutez ou supprimez des clés librement.',
+      errRemovalPending: 'La suppression de champs nécessite le contrat de serveur merge-delete (disponible sous peu).',
+      errKeyRequired: 'Chaque champ doit avoir un nom.',
+      arrayPh: 'valeurs séparées par des virgules',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter enregistré',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: "Qu'est-ce que le Frontmatter ?",
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: "Aucun frontmatter pour l'instant — Modifier permet d'ajouter un type, un titre et des libellés.",
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'Libellé (Hiérarchie des connaissances)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'Enregistrer le frontmatter',
+      saveFailed: "Échec de l'enregistrement du frontmatter"
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        "Une entrée de votre référentiel — généralement une seule page ou un seul sujet. Chaque concept comporte un frontmatter structuré lu par l'assistant, ainsi que le texte en markdown sur lequel il s'appuie pour répondre.",
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        "Un ensemble de concepts structurés autour d'un domaine d'activité. Il devient une archive OKF que vous publiez, versionnez et mettez à la disposition de l'assistant.",
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
+        'À quel domaine ces connaissances appartiennent-elles ? Le domaine regroupe votre référentiel et cible les libellés que vous pouvez sélectionner. Il ne peut plus être modifié après la création.',
+      selectSubjectArea: 'Sélectionnez un domaine...',
       subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'Le domaine de ce référentiel ne figure pas dans la hiérarchie des connaissances — affichage de tous les libellés.',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        "Une catégorie issue de la hiérarchie des connaissances qui indique à l'assistant la nature de ce concept. C'est grâce aux libellés que les réponses ciblent le bon contenu.",
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        "L'export zip d'un référentiel — ses concepts, sa structure et ses métadonnées dans un seul fichier. Les archives permettent de transférer les référentiels d'un système à l'autre.",
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        "Un instantané figé d'un référentiel au moment de l'action publish. L'édition se poursuit sur la version suivante — les versions publiées ne changent jamais.",
+      serving:
+        "Cette version est en ligne : l'assistant consulte son contenu pour répondre. Exécutez retract pour y apporter des modifications.",
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        "L'étape au cours de laquelle une version publiée est préparée pour répondre aux requêtes — le texte est découpé, plongé et lié. Rien ne parvient à l'assistant avant cela.",
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        "La méthode employée pour déterminer ce qu'EST chaque concept (un sujet, une entité, un processus...). L'heuristique lit la page automatiquement ; l'option LLM est plus lente mais traite les pages complexes.",
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        "Découper à nouveau la source en concepts selon une autre méthode — par exemple, un concept par page plutôt qu'un seul pour tout le site.",
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: "L'importation a échoué — le fichier source n'a pas pu être converti.",
+      importFailedHint: 'Supprimez ce référentiel et importez à nouveau le fichier source.',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        "Les informations structurées en tête de chaque fichier — type, titre, libellés. L'assistant s'en sert pour savoir quel est l'objet de chaque concept."
     },
     md: {
       toolbar: 'Formatting',
@@ -1987,7 +1990,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'Liste numérotée',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1995,106 +1998,106 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'Un référentiel OKF est un ensemble structuré et versionné de sujets que vos réponses de chat peuvent citer. Considérez-le comme une couche ontologique légère pour votre domaine — les libellés définissent les catégories, les sujets définissent les entités, les sources définissent la provenance.',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'Un référentiel OKF est un ensemble structuré et versionné de sujets. Considérez-le comme une couche ontologique légère pour votre domaine — les libellés définissent les catégories, les sujets définissent les entités, les sources définissent la provenance. Une fois publiés, les réponses de chat en aval citent ces sujets par leur identifiant.',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        "Trois façons d'initialiser un référentiel OKF : extraire les sujets d'une exploration de site web, les tirer de documents que vous avez déjà importés ou partir d'une page blanche. Cloner un référentiel existant copie ses sujets et vous permet de dupliquer et poursuivre le travail.",
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        "Chaque document devient une source de sujets. Le producteur les lit, extrait des propositions de sujets et propose une hiérarchie. Vous examinerez chaque sujet à l'étape suivante — rien n'est validé tant que vous n'avez pas donné votre accord.",
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        "Nous lisons vos sources et suggérons des sujets. Les sujets sont regroupés sous les libellés de catégories que vous choisissez. Le producteur est prudent — il préfère suggérer un nombre restreint de sujets bien formulés plutôt qu'une profusion de sujets approximatifs.",
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        "Les libellés constituent les axes catégoriels de votre ontologie — quelle sorte d'entité ce sujet représente-t-il ? Choisissez entre 3 et 7 libellés qui couvrent les axes principaux ; le producteur les utilise comme armature pour la hiérarchie des sujets.",
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        "C'est le cœur du travail. Chaque sujet est une petite unité de connaissance citable. Les sujets reçoivent un titre, une description et héritent des libellés que vous avez choisis. Votre rôle consiste à rendre l'ensemble irréprochable : renommez les titres vagues, fusionnez les doublons évidents, supprimez ceux que vous ne pouvez pas étayer par une source.",
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        "Nous exécutons des vérifications de conformité : chaque sujet a-t-il un titre ? Les libellés sont-ils valides ? Les attributions de sources sont-elles intactes ? Les problèmes bloquants doivent être corrigés avant la publication ; les avertissements peuvent faire l'objet d'un acquittement.",
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        "Certains avertissements peuvent être corrigés automatiquement : les valeurs d'état peuvent être alignées sur des énumérations valides, les champs manquants peuvent être complétés avec des valeurs par défaut appropriées. Appliquez les correctifs approuvés, puis revenez à l'outil de curation pour vérification.",
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'Un récapitulatif de ce que vous vous apprêtez à publier : les sujets, les libellés, les sources et les éventuels points non résolus. Une fois votre accord donné, le référentiel passe dans le circuit de publication.',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        "L'action publish génère la version v1 de ce référentiel. Chaque modification ultérieure — un nouveau sujet, une description révisée, une réévaluation d'obsolescence — fait l'objet d'une publication sous forme de version v2, v3, etc. Les anciennes versions restent citables indéfiniment.",
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        "Créez un nouveau référentiel OKF à partir des documents sélectionnés. Les documents deviendront des sources ; vous examinerez et nommerez les sujets qu'ils produisent avant toute publication.",
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'Un référentiel OKF est un ensemble structuré et versionné de sujets que vos réponses de chat peuvent citer.',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
+        "Vous n'avez pas encore créé de référentiel OKF. Un référentiel OKF est un ensemble structuré et citable de sujets dans lequel vos réponses de chat peuvent puiser.",
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        "Les libellés constituent les axes catégoriels de votre ontologie — ils répondent à la question « quelle sorte d'entité ce sujet représente-t-il ? ».",
+      hide: 'Masquer',
+      whatIsThis: "De quoi s'agit-il ?"
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'Fermer',
+      cancel: 'Annuler',
+      save: 'Enregistrer',
+      clear: 'Effacer',
+      delete: 'Supprimer'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'Aide',
+      helpTitle: "À propos d'OKF Studio",
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'Les référentiels OKF constituent une couche ontologique légère — les libellés définissent les catégories, les sujets définissent les entités, les sources définissent la provenance. Une fois publiés, les réponses de chat citent les sujets par leur identifiant et révèlent leur provenance.',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'Tableau de bord',
+        wizard: 'Assistant'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'Cloné depuis {name} · version {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'Référentiel',
+        untitled: 'Référentiel sans titre',
+        trust: 'Confiance',
+        sources: 'Sources',
+        concepts: "Concepts définis jusqu'ici",
+        stale: 'obsolète'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'en cours',
+        inReview: 'en cours de review',
+        published: 'publié'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'En cours de review',
+        stepOf: 'Étape {n} sur 10',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'Référentiels',
+        new: '+ Nouveau référentiel',
+        search: 'Rechercher…',
+        empty: "Aucun référentiel ici pour l'instant.",
+        topics: 'sujets',
+        select: 'Sélectionner {name} pour la publication groupée',
+        stale: 'obsolète',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'En cours de review',
+          stepOf: 'Étape {n} sur 10',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: '{n} sélectionné(s)',
+          publish: 'Publier la sélection',
+          title: 'Publier les référentiels sélectionnés',
+          body: 'Une fois publiés, les réponses de chat en aval peuvent les exploiter. Chaque référentiel ci-dessous indique son statut final.',
+          results: 'Résultats',
+          publishConfirm: 'Publier {n}',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'Nom',
+            status: 'État',
+            topics: 'Sujets'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'Prêt'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'Les brouillons ne peuvent pas encore être enregistrés côté serveur ; enregistrés localement.'
       }
     },
     wizard: {
@@ -2103,233 +2106,234 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'Retour au tableau de bord',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'Référentiel sans titre',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: "Concepts définis jusqu'ici"
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'Assistant OKF Studio',
+      back: 'Retour',
+      continue: 'Continuer',
+      publish: 'Publier le référentiel'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'Nom du référentiel et domaine',
+        hint: 'Donnez à ce référentiel OKF un nom clair et choisissez son domaine.',
+        nameLabel: 'Nom du référentiel',
+        namePh: 'par ex. Permis de transport NL',
+        domainLabel: 'Domaine'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: "D'où ce référentiel OKF doit-il partir ?",
+        hint: 'Choisissez la manière dont vous souhaitez initialiser ce référentiel. Vous pourrez modifier ce choix ultérieurement.',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'Documents',
+            desc: 'Extraire des sujets à partir de documents que vous avez déjà importés.'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'Exploration de site web',
+            desc: 'Explorer un site web et proposer des sujets à partir de ses pages.'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'Page blanche',
+            desc: 'Partir de zéro et rédiger les sujets vous-même.'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: "Clone d'un référentiel existant",
+            desc: "Dupliquez les sujets et la structure d'un autre référentiel OKF."
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'Entrées',
+        documents: 'Choisissez les documents qui serviront de base à la liste de sujets.',
+        crawl: 'Choisissez le ou les sites web à explorer.',
+        manual: "Vous pourrez rédiger les sujets directement à l'étape suivante.",
+        clone: 'Choisissez le référentiel existant à cloner.',
+        placeholder: "L'interface de cette étape sera intégrée dans une story ultérieure."
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'Générer des sujets',
+        hint: 'Nous lisons vos sources et proposons des sujets.',
+        progress: "Producteur en cours d'exécution...",
+        placeholder: 'Le service de production sera raccordé dans une story ultérieure.'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'Choisir les libellés',
+        hint: 'Les libellés constituent les axes catégoriels de votre ontologie — quelle est la nature de ces sujets ? Choisissez-en 3 à 7.',
+        add: '+ Ajouter un libellé',
+        addConfirm: 'Ajouter',
+        placeholder: 'par ex. Permis'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'Examiner les sujets',
+        hint: 'Chaque sujet est une petite unité de connaissance citable. Modifiez le titre et la description.',
+        placeholder: "L'arborescence de curation et l'éditeur arrivent dans la Story 3-8."
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'Vérifier les anomalies',
+        hint: 'Nous exécutons des vérifications de conformité. Les problèmes bloquants doivent être corrigés avant la publication.',
+        placeholder: 'Le panneau de validation arrive dans la Story 3-8.'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'Correction automatique',
+        hint: "Certains avertissements peuvent être corrigés automatiquement. Appliquez les correctifs acceptés, puis revenez à l'outil de curation pour vérification.",
+        placeholder: 'Le service de correction automatique arrive dans la Story 10.2.'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'Vérification',
+        hint: 'Un récapitulatif de ce que vous vous apprêtez à publier.',
+        repo: 'Référentiel',
+        topics: 'Sujets',
+        labels: 'Libellés',
+        sources: 'Sources'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'Publier ce référentiel',
+        hint: 'La publication crée la version v1 de ce référentiel.',
+        nameOk: 'Nom du référentiel défini',
+        labelsOk: 'Libellés sélectionnés',
+        topicsOk: 'Sujets examinés'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'non vérifié',
+        'machine-confirmed': 'confirmé par la machine',
+        'human-reviewed': 'revu par un humain'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: "L'interface utilisateur de l'action retract sera intégrée dans la Story 3.9."
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: "Le service de manifeste d'archive sera raccordé dans une story ultérieure."
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'Créer un référentiel OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'Sélectionnez au moins un document',
+        alreadyInOkf: 'Retirer les documents qui se trouvent déjà dans un référentiel OKF',
+        alreadyIngested: 'Retirer les documents déjà traités par ingest'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'Le module producteur sera raccordé dans une story ultérieure.'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'Sélectionnez un domaine...',
+      classLabel: 'Classification des concepts',
+      classHeuristics: 'Heuristique (par défaut)',
+      classHeuristicsHint:
+        'Classification rapide basée sur des règles — sans coût LLM, idéale pour les explorations bien structurées.',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        "Le LLM assure la curation de chaque concept — type, libellé de hiérarchie des connaissances et description. Bien plus précis et complet que l'heuristique ; prévoir un délai supplémentaire par concept.",
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        "Heuristique d'abord ; le LLM examine les cas incertains et comble les lacunes. Équilibre entre temps et exhaustivité.",
+      targetLabel: 'Où cela doit-il aller ?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'Explorer vers un corpus libre',
+        okfRepo: 'Référentiel OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
+      targetHint: "Nous vous montrerons les sujets trouvés avant d'enregistrer quoi que ce soit.",
+      createOkfFromCrawl: 'Créer un référentiel OKF à partir de cette exploration',
+      splitLabel: 'Division des concepts',
+      splitA: "Un concept pour l'ensemble de l'exploration",
+      splitB: 'Un concept par page (recommandé)',
+      splitC: "Utiliser l'extraction de sujets par LLM",
+      splitCHint: 'Story 10.6 — bientôt disponible',
+      splitBHint: "Chaque page explorée devient son propre concept — l'IA peut citer des pages individuelles.",
+      splitAHint: "L'ensemble de l'exploration devient un seul grand concept — idéal pour les petits sites.",
+      progressDownload: 'Téléchargement du contenu exploré...',
+      progressSplit: 'Division en concepts...',
+      progressIngest: 'Ajout de concepts (lot [i] sur [n])...',
       postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
-      conversionsTitle: 'Dépôts créés à partir de cette exploration',
+        "Une fois l'exploration terminée, vous pouvez la transformer en référentiel OKF depuis l'onglet Tableau de bord du fichier.",
+      creating: 'Création du référentiel OKF...',
+      createOk: 'Référentiel OKF créé. Ouverture de Studio pour la curation.',
+      createOkRenamed: 'Référentiel OKF créé sous le nom « [name] ». Ouverture de Studio pour la curation.',
+      createFailed: 'Impossible de créer le référentiel OKF à partir de cette exploration.',
+      conversionsTitle: 'Référentiels créés à partir de cette exploration',
       convQueued: "En file d'attente...",
       convDownloading: "Téléchargement de l'exploration...",
-      convSplitting: 'Découpage en concepts...',
-      convAdding: "Ajout des concepts ([p] pages pour l'instant)...",
+      convSplitting: 'Division en concepts...',
+      convAdding: "Ajout de concepts ([p] pages jusqu'ici)...",
       convDone: 'Créé ([p] pages)',
       convFailed: 'Échec',
       createStarted: 'Création de « [name] » — suivez la progression ci-dessous.',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'Modèle',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'Local · petit',
+          'local-medium': 'Local · moyen',
+          'sovereign-large': 'Souverain · grand'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: "L'exploration doit se terminer avant de pouvoir créer un référentiel OKF.",
+        alreadyInOkf: 'Cette exploration est déjà dans un référentiel OKF.'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: "Choisissez un sujet à gauche pour l'afficher et le modifier.",
+      search: 'Rechercher des sujets',
+      noTopics: "Aucun sujet pour l'instant.",
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'Ajuster les libellés',
+        body: "Les libellés constituent les axes catégoriels de votre ontologie — quelle sorte d'entité ce sujet représente-t-il ?",
+        edit: 'Ajuster les libellés',
+        add: 'Ajouter',
+        addPh: 'par ex. Permis',
+        remove: 'Supprimer',
+        empty: "Aucun libellé pour l'instant.",
+        notReady: 'Libellés enregistrés localement — synchronisation avec le serveur bientôt disponible.'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'Modifier le frontmatter',
+        dialogTitle: 'Modifier le frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'Afficher la source',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'Le concept ne comporte aucun type.',
+        badActor: "L'acteur source doit commencer par agent:/human:/tool:/process:."
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: "Enregistrement bloqué : corrigez d'abord les problèmes de conformité."
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
+      frozen:
+        "Contenu figé à la version {'{'}v{'}'} — aperçu en lecture seule. Exécutez retract sur la version serving pour apporter des modifications.",
+      none: 'Aucun',
       expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+        'Passez en mode Expert pour afficher le format JSON brut de validation, filtrer par gravité et passer outre certaines vérifications.',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: '{n} problème(s) bloquant(s) — à corriger avant la publication',
+        warnings: '{n} élément(s) requièrent votre attention',
+        ok: 'Tout est correct. Rien à corriger.'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} sans erreur · {warnings} à vérifier · {blockers} bloquant(s)',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: "L'outil de formatage arrive dans la Story 4.2b."
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'La validation sera raccordée dans une story ultérieure.'
       }
     },
     pii: {
@@ -2341,7 +2345,7 @@ export default {
       how: 'Correction : supprimez ou reformulez (ex. utilisez le rôle au lieu du nom), puis enregistrez — le nouveau scan met à jour cette liste.',
       descFallback:
         'Des données personnelles ont été détectées ici (RGPD Art. 4(1) — se rapportant à une personne identifiable).',
-      scanError: 'Scan indisponible',
+      scanError: 'Analyse non disponible',
       type: {
         PERSON: 'Nom de personne',
         LOCATION: 'Lieu',
@@ -2349,8 +2353,8 @@ export default {
         EMAIL_ADDRESS: 'Adresse e-mail',
         PHONE_NUMBER: 'Numéro de téléphone',
         IP_ADDRESS: 'Adresse IP',
-        NRP: 'Numéro d’enregistrement national',
-        BD_NATIONAL_ID: 'Numéro d’identité nationale'
+        NRP: "Numéro d'enregistrement national",
+        BD_NATIONAL_ID: "Numéro d'identification national"
       },
       desc: {
         PERSON: 'Un nom de personne a été détecté. Les noms peuvent identifier directement une personne physique.',
@@ -2363,16 +2367,16 @@ export default {
         BD_NATIONAL_ID: 'Un numéro d’identité nationale a été détecté. Il identifie fortement une personne.'
       },
       allClear: 'Propre',
-      redactFile: 'Masquer tout le fichier',
-      confirmRedactFile: 'Confirmer : masquer le fichier entier ?',
-      locateTip: 'Afficher ce texte dans l’éditeur',
+      redactFile: 'Caviarder le fichier complet',
+      confirmRedactFile: "Confirmer : caviarder l'intégralité du fichier ?",
+      locateTip: "Afficher ce texte dans l'éditeur",
       file: {
         label: 'Fichier entier :',
         redact: 'Masquer le fichier',
         remove: 'Supprimer le corps',
         accept: 'Tout accepter',
-        confirmRedact: 'Confirmer : masquer tout le fichier ?',
-        confirmRemove: 'Confirmer : supprimer tout le corps ?'
+        confirmRedact: 'Confirmer : caviarder le fichier complet ?',
+        confirmRemove: 'Confirmer : supprimer tout le corps de texte ?'
       },
       action: {
         redact: 'Masquer',
@@ -2389,10 +2393,10 @@ export default {
         replaced: 'Remplacé',
         removed: 'Supprimé',
         accepted: 'Accepté',
-        fileRedacted: 'Fichier masqué',
+        fileRedacted: 'Fichier caviardé',
         kept: 'conservé dans le texte',
         removedWord: 'supprimé',
-        wholeFile: 'Corps du fichier entier masqué'
+        wholeFile: 'Corps complet du fichier caviardé'
       }
     }
   }

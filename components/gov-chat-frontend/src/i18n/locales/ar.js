@@ -32,7 +32,7 @@ export default {
     KH: 'كمبوديا',
     CM: 'الكاميرون',
     CA: 'كندا',
-    CF: 'جمهورية إفريقيا الوسطى',
+    CF: 'جمهورية أفريقيا الوسطى',
     TD: 'تشاد',
     CL: 'تشيلي',
     CN: 'الصين',
@@ -1074,7 +1074,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'تم حفظ الملف الشخصي بنجاح',
-      saved: 'Frontmatter saved',
+      saved: 'تم حفظ frontmatter',
       saveFailed: 'فشل حفظ الملف الشخصي',
       loadSuccess: 'تم تحميل الملف الشخصي بنجاح',
       loadFailed: 'فشل تحميل الملف الشخصي',
@@ -1331,13 +1331,13 @@ export default {
   },
   chatbot: {
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
-    aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'مُنشأ بواسطة الذكاء الاصطناعي — غير مستند إلى وثائق المكتبة',
+    welcomeMessage: 'مرحبًا بك! كيف يمكنني مساعدتك اليوم؟',
     configMismatchWarning:
-      'عدم تطابق في التكوين: {warnings}. يرجى التحقق من تكوين المساعدة السريعة والتسلسل الهرمي للمعرفة.',
+      'عدم تطابق في التكوين: {warnings}. يُرجى التحقق من المساعدة السريعة وتكوين التسلسل الهرمي للمعرفة.',
     categoryNotFound: 'الفئة "{label}" غير موجودة في التسلسل الهرمي للمعرفة',
-    serviceLabelMismatch: 'الخدمة "{label}" تستخدم تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
-    noFilterWarning: 'لا يوجد عامل تصفية سياق نشط — سيكون الاستعلام غير مُصفى.',
+    serviceLabelMismatch: 'تستخدم الخدمة "{label}" تسمية واجهة مستخدم قد لا تتطابق مع التسلسل الهرمي للمعرفة',
+    noFilterWarning: 'لا يوجد عامل تصفية نشط للسياق — سيكون الاستعلام غير مصفى.',
     placeholder: 'اكتب استفسارك هنا...',
     sendButton: 'إرسال',
     fileReceived: 'تم استلام الملف بنجاح.',
@@ -1383,23 +1383,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "تصرف كخبير مفيد في التسجيل المدني الكيني. اشرح خطوات الحصول على الهوية الوطنية (Maisha Namba) أو استبدال هوية مفقودة. هام: قدم قائمة واضحة بالمستندات المطلوبة (مثل شهادة الميلاد، ونسخ من هويات الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma Centre أو مكتب مسجل الأشخاص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كخبير تسجيل مدني كيني متعاون. اشرح خطوات الحصول على بطاقة الهوية الوطنية (Maisha Namba) أو استبدال بطاقة مفقودة. هام: قدم قائمة واضحة بالوثائق المطلوبة (مثل شهادة الميلاد، نسخ من بطاقات هوية الوالدين) وانصح المستخدم بزيارة أقرب مركز Huduma أو مكتب السجل المدني. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     payTaxesPrompt:
-      "تصرف كدليل لـ KRA (هيئة الإيرادات الكينية). اشرح عملية تقديم الإقرارات، أو التقدم بطلب للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بموعد 30 يونيو النهائي للإقرارات السنوية ووجهه حول كيفية تقديم إقرارات صفرية (Nil returns) إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمرشد لهيئة الإيرادات الكينية (KRA). اشرح عملية تقديم الإقرارات الضريبية، أو التقدم للحصول على KRA PIN، أو إعادة تعيين كلمة المرور على بوابة iTax. هام: ذكّر المستخدم بالموعد النهائي للإقرارات السنوية في 30 يونيو ووجهه حول كيفية تقديم إقرارات صفرية إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     startBusinessPrompt:
-      "تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز الاسم التجاري وتسجيل الشركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمستشار أعمال لخدمات eCitizen. وجه المستخدم خلال حجز اسم تجاري وتسجيل شركة في كينيا. هام: اشرح التكاليف الحالية للبحث عن الاسم والتسجيل، ووجّه المستخدم إلى بوابة eCitizen الرسمية لإكمال الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     findHealthcarePrompt:
-      "تصرف كموجه للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط الموقع للتسجيل واشرح فوائد التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمرشد للخدمات الصحية. قدم معلومات حول الانتقال من NHIF إلى SHIF (صندوق التأمين الصحي الاجتماعي) وكيفية التسجيل. هام: شارك رموز USSD الرسمية (مثل *263#) أو روابط مواقع الويب للتسجيل واشرح مزايا التغطية الصحية العامة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     educationServicesPrompt:
-      "تصرف كمستشار تعليمي. ناقش منهج CBC، أو تسجيل NEMIS، أو القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن للوالدين التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة أو بوابة KNEC عند إصدارها. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمستشار تعليمي. ناقش منهج CBC، أو التسجيل في NEMIS، أو تنسيق القبول الجامعي عبر KUCCPS. هام: اشرح كيف يمكن لأولياء الأمور التحقق من نتائج الامتحانات الوطنية عبر الرسائل القصيرة (SMS) أو بوابة KNEC عند صدورها. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     transportLicensesPrompt:
-      "تصرف كدليل لخدمات NTSA. اشرح عملية تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA لتقديم طلب للحصول على Smart DL أو حجز فحص للمركبة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمرشد لخدمات NTSA. اشرح إجراءات تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب TIMS. هام: وجه المستخدم حول كيفية تسجيل الدخول إلى بوابة eCitizen NTSA للتقدم بطلب للحصول على رخصة القيادة الذكية (Smart DL) أو حجز موعد لفحص المركبة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     housingProgramsPrompt:
-      "تصرف كمستشار لبرنامج الإسكان. اشرح التسجيل في برنامج الإسكان الميسر (Boma Yangu) وعملية المساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع وشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمستشار لبرامج الإسكان. اشرح برنامج الإسكان ميسور التكلفة (Boma Yangu) وعملية التسجيل والمساهمة الطوعية. هام: وجه المستخدم إلى بوابة Boma Yangu لعرض المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     findJobsPrompt:
-      "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم لإنشاء ملف تعريف والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بتجهيز شهاداته الأكاديمية والتحقق بانتظام من موقع PSC أو الصحف المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
+      "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم حول إنشاء ملف تعريفي والتقدم للوظائف الشاغرة عبر بوابة لجنة الخدمة العامة (PSC). هام: انصح المستخدم بإبقاء شهاداته الأكاديمية جاهزة ومراجعة موقع PSC بانتظام أو الصحف اليومية المحلية لإعلانات MyGov. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
     justChatPrompt:
-      "تصرف كرفيق محلي ودود. كن مهذبًا ومفيدًا وملمًا بالثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم بأنه بينما يمكنك الدردشة حول أي شيء، فإن قوتك الرئيسية تكمن في مساعدتهم على التنقل في الخدمات الحكومية الكينية مثل **الهويات**، و**الضرائب**، و**تسجيل الأعمال**. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'."
+      "تصرف كرفيق محلي ودود. كن مهذبًا، ومفيدًا، ومطلعًا على الثقافة الكينية والحياة اليومية. هام: ذكّر المستخدم أنه بينما يمكنك الدردشة حول أي شيء، فإن نقطة قوتك الرئيسية هي مساعدتهم في تصفح خدمات الحكومة الكينية مثل **الهويات** و**الضرائب** و**تسجيل الشركات**. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'."
   },
   common: {
     cancel: 'إلغاء',
@@ -1467,13 +1467,13 @@ export default {
       details: 'التفاصيل',
       ingestionLog: 'سجل الاستيعاب',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        'بيانات وصفية لهذا الملف: الاسم، المؤلف وتسميات التسلسل الهرمي للمعرفة التي يستخدمها الذكاء الاصطناعي لتوجيه الأسئلة. يتطلب إجراء ingest تسمية واحدة على الأقل.',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'عرض مباشر لزحف الموقع لهذا الملف: المعدل، قائمة الانتظار، الأخطاء والتقدم. عند نجاح الزحف، يُحوّله التذييل أدناه إلى مستودع OKF.',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'سجل لكل صفحة لعملية الزحف على الموقع: عناوين URL التي تم جلبها أو إعادة توجيهها أو التي فشلت. يُكتب أثناء تشغيل الزحف.',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'التقدم مرحلة بمرحلة لإعداد هذا الملف لإجابات الذكاء الاصطناعي: التقسيم، التصنيف، التضمين والفهرسة. تُظهر الأخطاء هنا بالضبط أين توقفت عملية ingest.'
     },
     log: {
       killActions: 'إجراءات الإنهاء:',
@@ -1553,31 +1553,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'فشل تحميل الإصدارات',
+      none: 'لم يتم إصدار أي إصدارات حتى الآن — النشر ينشئ الإصدار v1.',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: 'إنشاء إصدار جديد',
+      published: "تم نشر الإصدار v{'{'}v{'}'} — تم تخزين الحزمة {'{'}f{'}'} في مستودع المستندات.",
+      serving: 'مستوعب (قيد الخدمة)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'لوحة تحكم Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'لا يزال الملف المصدر قيد المعالجة',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'يؤدي هذا إلى إزالة المستودع ومفاهيمه والمحتوى المفهرس والرسم البياني ومخرجات الحزمة نهائيًا.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'حذف المستودع'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'الإقرار بالكيانات المميزة بنجمة والنشر',
+        note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "يؤدي النشر إلى إنشاء الإصدار v{'{'}n{'}'} وتخزين الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل أي ملف zip سابق. الإصدار الجديد لن يكون متاحًا للخدمة حتى تستوعبه.",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1595,59 +1595,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "تمت تسميتها: {'{'}n{'}'}",
+      fallbacks: "بدائل LLM الاحتياطية: {'{'}n{'}'}",
+      concepts: "المفاهيم: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'} مدخلات",
+      loadFailed: 'فشل تحميل سجل النشاط.',
+      none: 'لم يتم تسجيل أي نشاط حتى الآن — تظهر إجراءات المستودع هنا فور حدوثها.',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'الرسم البياني للمفهوم',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'لا توجد مفاهيم حتى الآن - لا يوجد شيء لعرضه بيانيًا.',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'إظهار أو إخفاء مركز الفهرس (روابط المحتويات هي بنية وليست معرفة)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "{'{'}n{'}'} روابط",
+        chunks: "{'{'}n{'}'} أجزاء",
+        failed: 'فشلت الفهرسة',
+        flagged: 'كيانات مميزة بنجمة',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: 'لم يُفهرس بعد'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (الصق أو اتركه فارغًا)',
+        bodyPh: '# العنوان\n\nالصق markdown هنا - تتم إضافة frontmatter تلقائيًا.',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'تعذر إنشاء الملف.',
+        title: 'إضافة ملف مفهوم',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'مثال: الحياة البرية في مارا',
+        updateIndex: 'إلحاق بقائمة المحتويات في الفهرس'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'لا يوجد frontmatter — اقتراح كامل',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'إصلاحات frontmatter المخطط لها عبر كل مفهوم. لا يتم تعديل المتن أبدًا.',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'لا يوجد شيء لإصلاحه — جميع بيانات frontmatter متوافقة بالفعل.',
         col: {
           field: 'Field',
           after: 'After',
@@ -1656,14 +1656,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'تصحيح تلقائي (frontmatter فقط)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'كيف تم تنظيم هذا المفهوم',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'لا توجد ملفات حتى الآن - أضف مفهومًا أو أعد التقسيم من المصدر.',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1671,30 +1671,30 @@ export default {
         resplit: 'Re-split',
         flagged: 'مميز',
         flaggedTip:
-          'تتضمن الـ concept كيانات مميزة — افتح كل منها، قم بإزالة الكيان أو تغييره، واحفظ (يُعاد المسح تلقائيًا)؛ أو أقر بها عند النشر.',
+          'مفاهيم تحتوي على كيانات مميزة — افتح كل منها، أو أزل الكيان أو عدّله، ثم احفظ (يُعاد الفحص تلقائيًا)؛ أو أقر بها عند publish.',
         piiBadge: 'PII',
-        piiTip: 'الكيانات المميزة: {k}. افتحها، قم بإزالتها أو تغييرها، ثم احفظ — يُعاد المسح تلقائيًا.',
-        piiTipBare: 'كيانات مميزة — افتحها وراجعها ثم احفظ لإعادة المسح.',
+        piiTip: 'الكيانات المميزة: {k}. افتحها أو أزلها أو عدّلها ثم احفظ — يُعاد الفحص تلقائيًا.',
+        piiTipBare: 'كيانات مميزة — افتحها، راجعها، ثم احفظ لإعادة الفحص.',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'تحميل الملفات {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'يؤدي هذا إلى إزالة الملف وأجزائه المفهرسة وروابط الرسم البياني نهائيًا.',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'محرر المستودع',
+      loadFailed: 'تعذر تحميل هذا المفهوم.',
+      loadingConcept: 'جارٍ تحميل المفهوم…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'البيانات الوصفية للمفهوم',
+        labelLabel: 'التسمية (التسلسل الهرمي للمعرفة)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'لم يتم تحديد أي مفهوم',
+        saveFailed: 'فشل حفظ البيانات الوصفية',
+        saved: 'تم حفظ البيانات الوصفية',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1705,23 +1705,23 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'حدد مفهومًا من القائمة لبدء التحرير.',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'يؤدي هذا إلى حذف جميع المفاهيم الحالية والرسم البياني المشتق، ثم إعادة استيراد الملف المصدر بالتقسيم الجديد. ستفقد تعديلات المفاهيم.',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'فشلت إعادة التقسيم — تحقق من رابط الملف المصدر.',
+        modeA: 'مفهوم واحد للزحف بأكمله',
+        modeAHint: 'مفهوم ضخم — المحتوى بأكمله في مفهوم واحد',
+        modeB: 'مفهوم واحد لكل صفحة',
+        modeBHint: 'ينقسم عند علامات `## Source:` الخاصة بأداة الزحف (موصى به)',
+        modeC: 'استخدام استخراج الموضوعات بواسطة LLM',
+        modeCHint: 'المهمة 10.6 — قريبًا',
+        title: 'إعادة التقسيم من المصدر'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'تغييرات غير محفوظة',
       view: {
         rendered: 'Rendered',
         source: 'Source'
@@ -1731,36 +1731,36 @@ export default {
       saveFailed: 'فشل الحفظ — أعد المحاولة',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: 'حجب جميع المحتويات المميزة',
+          remove: 'إزالة جميع المحتويات المميزة',
+          accept: 'قبول جميع الكيانات المميزة'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          redact: 'يتم استبدال متن كل مفهوم مميز بإشعار الحجب. لا يمكن التراجع عن هذا الإجراء.',
+          remove: 'يتم تفريغ متن كل مفهوم مميز. لا يمكن التراجع عن هذا الإجراء.',
           accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+            'تم وضع علامة تمت المراجعة والاحتفاظ على جميع الكيانات المميزة — لن يتم وضع علامة عليها مرة أخرى إلا إذا أعدت الفحص.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "المفاهيم المتأثرة: {'{'}n{'}'}.",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: 'فشل إجراء PII المجمع — حاول مرة أخرى.'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'تطبيق إجراء PII المجمع',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: 'يتم نشر كل مستودع مع الفحص الكامل للبوابة (مراجعة PII، الفهرسة، المطابقة). النتائج لكل مستودع:',
+        pending: 'تأكيد publish للمستودعات المحددة.',
+        publishConfirm: "نشر {'{'}n{'}'}",
+        title: 'نشر المستودعات المحددة'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "إجراءات {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'قيد الإنشاء — لا يزال الملف المصدر قيد المعالجة',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1769,33 +1769,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'يؤدي هذا إلى إزالة المستودع ومفاهيمه والمحتوى المفهرس والرسم البياني ومخرجات الحزمة نهائيًا. لا يمكن التراجع عن هذا الإجراء.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'حذف المستودع'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'تصفية حسب مجال الموضوع'
       },
-      new: '+ New repository',
+      new: '+ مستودع جديد',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'الإقرار بالكيانات المميزة بنجمة والنشر',
+        note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "يُنشئ إجراء publish الإصدار v{'{'}n{'}'} ويخزن الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل ملف zip السابق. الإصدار الجديد لن يكون في حالة serving حتى تقوم بإجراء Ingest له.",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "تحديد {'{'}name{'}'} للنشر المجمع",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'فشلت عملية ingest',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "تمت عملية ingest لـ v{'{'}n{'}'}",
+        published: "تم publish لـ v{'{'}n{'}'}",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1804,36 +1804,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ {'{'}n{'}'} المزيد",
+        fixPath: 'أعد إجراء ingest للمحاولة مرة أخرى: retract → إنشاء إصدار → ingest.'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'بدائل LLM الاحتياطية',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'الدفعات المخزنة',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'المفاهيم المفهرسة',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "بدأ منذ {'{'}n{'}'} ساعة",
+        lt1: 'بدأ منذ أقل من دقيقة',
+        min: "بدأ منذ {'{'}n{'}'} دقيقة"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'يبقى المستودع في حالة استيراد حتى يكتمل تحويل الملف.',
+        rag: 'يجري بناء فهرس RAG — يبدأ الإصدار في serving بمجرد فهرسة كل مفهوم.',
+        serving: 'يقوم هذا الإصدار بـ serving لنسبة استخدام RAG — قم بإجراء retract لإجراء تغييرات.',
+        review: 'قيد review — يقوم المراجع بالمصادقة، ثم ينشر المسؤول ويجري ingest.',
+        retracted: 'خارج الخدمة — submit → review → approve → publish → ingest لإعادة serving.',
+        idle: 'اكتمل الاستيراد — قم بإجراء submit للمراجعة لمتابعة سير العمل.'
       },
-      pages: 'Pages processed',
+      pages: 'الصفحات المعالجة',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'رسم بياني لـ serving',
+        version: 'إصدار serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1841,12 +1841,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'تقدم الاستيراد',
+        rag: 'تقدم عملية ingest',
+        serving: 'حالة serving',
+        review: 'حالة review',
+        retracted: 'حالة retract',
+        idle: 'حالة المستودع'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1862,33 +1862,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'اختر ملف حزمة .zip.',
+      stagedFile: "المجهز: {'{'}name{'}'}",
+      staged: 'تم تجهيز الحزمة — انقر على إنشاء مستودع لبدء الاستيراد.',
+      openExisting: 'فتح مستودع موجود',
+      name: 'اسم المستودع',
+      importing: 'جارٍ استيراد الحزمة…',
+      importHint: 'أو استورد حزمة zip موجودة كمستودع جديد.',
+      importDefaultName: 'مستودع مستورد',
+      failed: 'فشل إنشاء المستودع',
+      duplicateInline: 'يوجد مستودع بهذا الاسم بالفعل. افتحه، أو اختر اسمًا آخر.',
+      duplicate: 'يوجد مستودع بهذا الاسم بالفعل - افتحه من لوحة التحكم أو اختر اسمًا آخر.',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'إنشاء مستودع',
+      title: 'مستودع OKF جديد',
+      hint: 'ينشئ مستودعًا فارغًا يحتوي على index.md تقوم بتحريره في محرر Studio.',
+      domainPlaceholder: 'حدد مجال الموضوع…',
+      domainRequired: 'اختر مجال الموضوع أولاً — لا يمكن تغييره بعد الإنشاء.',
+      classLabel: 'تصنيف المفاهيم',
+      classHeuristics: 'الاستدلال (افتراضي)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'اسم حقل محجوز.',
+      errKeyDuplicate: 'اسم الحقل مستخدم مرتين.',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'يجب أن يكون رقمًا',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1899,53 +1899,51 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'كل حقل في frontmatter قابل للتحرير. أضف المفاتيح أو أزلها بحرية.',
+      errRemovalPending: 'تتطلب إزالة الحقول عقد خادم الدمج والحذف (سيتوفر قريبًا).',
+      errKeyRequired: 'كل حقل يحتاج إلى اسم.',
+      arrayPh: 'قيم مفصولة بفواصل',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'تم حفظ frontmatter',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'ما هو Frontmatter؟',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'لا يوجد frontmatter حتى الآن — التحرير يضيف النوع والعنوان والتسميات.',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'التسمية (التسلسل الهرمي للمعرفة)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'حفظ frontmatter',
+      saveFailed: 'فشل حفظ frontmatter'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        'مدخل واحد في المستودع الخاص بك — عادةً صفحة واحدة أو موضوع واحد. يحتوي كل مفهوم على frontmatter مهيكل يقرأه المساعد، بالإضافة إلى نص markdown الذي يجيب منه.',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'مجموعة من المفاهيم المنظمة حول مجال موضوع واحد. تصبح حزمة OKF تقوم بنشرها وتحديد إصدارها وإتاحتها للمساعد.',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'إلى أين تنتمي هذه المعرفة؟ يجمع مجال الموضوع مستودعك ويحدد التسميات التي يمكنك اختيارها. لا يمكن تغييره بعد الإنشاء.',
+      selectSubjectArea: 'حدد مجال الموضوع…',
+      subjectAreaMissing: 'مجال الموضوع لهذا المستودع غير موجود في التسلسل الهرمي للمعرفة — يتم عرض جميع التسميات.',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'فئة من التسلسل الهرمي للمعرفة تخبر المساعد بنوع هذا المفهوم. التسميات هي الطريقة التي تعثر بها الإجابات على المحتوى المناسب.',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
-      version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'تصدير zip لمستودع ما — مفاهيمه وبنيته وبياناته الوصفية في ملف واحد. الحزم هي طريقة نقل المستودعات بين الأنظمة.',
+      version: 'لقطة مجمدة لمستودع في وقت النشر. يستمر التحرير في الإصدار التالي — لا تتغير الإصدارات المنشورة أبدًا.',
+      serving: 'هذا الإصدار مباشر: يقرأ المساعد محتواه عند الإجابة. اسحبه لإجراء تغييرات.',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        'الخطوة التي يتم فيها تجهيز إصدار منشور للإجابة — يتم تقسيم النص وتضمينه وربطه. لا يصل أي شيء إلى المساعد قبل ذلك.',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'كيف نحدد ماهية كل مفهوم (موضوع، كيان، عملية…). يقرأ الاستدلال الصفحة تلقائيًا؛ بينما خيار LLM أبطأ ولكنه يتعامل مع الصفحات المعقدة.',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'إعادة تقسيم المصدر إلى مفاهيم بطريقة مختلفة — على سبيل المثال مفهوم واحد لكل صفحة بدلاً من مفهوم واحد للموقع بأكمله.',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: 'فشل الاستيراد — تعذر تحويل الملف المصدر.',
+      importFailedHint: 'احذف هذا المستودع واستورد الملف المصدر مرة أخرى.',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        'المعلومات المنظمة في الجزء العلوي من كل ملف — النوع، العنوان، التسميات. يستخدمها المساعد لمعرفة موضوع كل مفهوم.'
     },
     md: {
       toolbar: 'Formatting',
@@ -1955,7 +1953,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'قائمة مرقمة',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1963,106 +1961,104 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'مستودع OKF هو مجموعة مهيكلة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها. فكر فيه كطبقة أنطولوجية خفيفة لمجالك — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل والنسب.',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'مستودع OKF هو مجموعة منسقة وذات إصدارات من الموضوعات. فكر فيه كطبقة أنطولوجية خفيفة لمجالك — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل. بمجرد النشر، تستشهد إجابات الدردشة اللاحقة بهذه الموضوعات عبر المعرّف الخاص بها.',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'ثلاث طرق لبدء مستودع OKF: سحب الموضوعات من زحف موقع ويب، أو استخراجها من المستندات التي قمت بتحميلها بالفعل، أو البدء من لوحة فارغة. نسخ مستودع موجود ينسخ موضوعاته ويتيح لك تفريع العمل.',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        'يصبح كل مستند مصدرًا للموضوعات. يقرأ المنشئ هذه المستندات، ويستخرج الموضوعات المرشحة، ويقترح تسلسلاً هرميًا. ستراجع كل موضوع في الخطوة التالية — لا يتم اعتماد أي شيء حتى توافق عليه.',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        'نحن نقرأ مصادرك ونقترح الموضوعات. تتجمع الموضوعات تحت تسميات الفئات التي تختارها. المنشئ متحفظ — يفضل اقتراح موضوعات أقل وأكثر دقة بدلاً من العديد من الموضوعات المشوشة.',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما نوع هذا الموضوع؟ اختر من 3 إلى 7 تسميات تلتقط المحاور الرئيسية؛ يستخدمها المنشئ كهياكل داعمة للتسلسل الهرمي للموضوعات.',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        'هذا هو جوهر العمل. كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. تحصل الموضوعات على عنوان ووصف وترث التسميات التي اخترتها. مهمتك هي جعلها دقيقة وموثوقة: أعد تسمية العناوين الغامضة، وادمج العناصر شبه المتطابقة، واستبعد ما لا يمكنك دعمه بمصدر.',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'نجري فحوصات المطابقة: هل يحتوي كل موضوع على عنوان؟ هل التسميات صالحة؟ هل إسنادات المصدر سليمة؟ يجب إصلاح المشكلات المعرقلة قبل النشر؛ ويمكن الإقرار بالتحذيرات.',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'يمكن إصلاح بعض التحذيرات تلقائيًا: يمكن ضبط قيم الحالة إلى تعدادات صالحة، ويمكن ملء الحقول المفقودة بقيم افتراضية معقولة. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'ملخص لما أنت على وشك نشره: الموضوعات، والتسميات، والمصادر، وأي مشكلات لم يتم حلها. بمجرد الموافقة، ينتقل المستودع إلى مسار النشر.',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        'يؤدي النشر إلى إنشاء الإصدار v1 من هذا المستودع. كل تغيير لاحق — موضوع جديد، وصف منقح، إعادة تحقق دورية — يُنشر كـ v2 وv3، إلخ. تظل الإصدارات القديمة قابلة للاستشهاد بها إلى الأبد.',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
-      crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'إنشاء مستودع OKF جديد من المستندات المحددة. ستصبح المستندات مصادر؛ وستراجع وتسمي الموضوعات التي تنتجها قبل نشر أي شيء.',
+      crawlSegment: 'مستودع OKF هو مجموعة منظمة ذات إصدارات من الموضوعات التي يمكن لإجابات الدردشة الاستشهاد بها.',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'لم تقم بإنشاء أي مستودعات OKF حتى الآن. مستودع OKF هو مجموعة منظمة وقابلة للاستشهاد من الموضوعات التي يمكن لإجابات الدردشة الاستفادة منها.',
+      labels: 'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — فهي تجيب على "ما نوع هذا الموضوع؟".',
+      hide: 'إخفاء',
+      whatIsThis: 'ما هذا؟'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'إغلاق',
+      cancel: 'إلغاء',
+      save: 'حفظ',
+      clear: 'مسح',
+      delete: 'حذف'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'مساعدة',
+      helpTitle: 'حول OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'مستودعات OKF هي طبقة أنطولوجية خفيفة الوزن — تحدد التسميات الفئات، وتحدد الموضوعات الكيانات، وتحدد المصادر الأصل. بمجرد النشر، تستشهد إجابات الدردشة بالموضوعات حسب المعرف وتظهر أصلها ومصدرها.',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'لوحة التحكم',
+        wizard: 'المعالج'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'تم نسخه من {name} · الإصدار {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'المستودع',
+        untitled: 'مستودع بدون عنوان',
+        trust: 'الثقة',
+        sources: 'المصادر',
+        concepts: 'المفاهيم حتى الآن',
+        stale: 'قديم'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'قيد التقدم',
+        inReview: 'قيد المراجعة',
+        published: 'منشور'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'قيد المراجعة',
+        stepOf: 'الخطوة {n} من 10',
+        draft: 'مسودة'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'المستودعات',
+        new: '+ مستودع جديد',
+        search: 'بحث…',
+        empty: 'لا توجد مستودعات هنا حتى الآن.',
+        topics: 'موضوعات',
+        select: 'تحديد {name} للنشر المجمع',
+        stale: 'قديم',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'قيد المراجعة',
+          stepOf: 'الخطوة {n} من 10',
+          draft: 'مسودة'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: 'تم تحديد {n}',
+          publish: 'نشر المحدد',
+          title: 'نشر المستودعات المحددة',
+          body: 'بمجرد النشر، يمكن لإجابات الدردشة اللاحقة استخدامها. يسرد كل مستودع أدناه نتيجته النهائية.',
+          results: 'النتائج',
+          publishConfirm: 'نشر {n}',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'الاسم',
+            status: 'الحالة',
+            topics: 'الموضوعات'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'جاهز'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'لا يمكن حفظ المسودات على جانب الخادم حتى الآن؛ تم الحفظ محليًا.'
       }
     },
     wizard: {
@@ -2071,237 +2067,233 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'العودة إلى لوحة التحكم',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'مستودع بدون عنوان',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'المفاهيم حتى الآن'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'معالج OKF Studio',
+      back: 'رجوع',
+      continue: 'متابعة',
+      publish: 'نشر المستودع'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'اسم المستودع ومجال الموضوع',
+        hint: 'امنح مستودع OKF هذا اسمًا واضحًا واختر مجال موضوعه.',
+        nameLabel: 'اسم المستودع',
+        namePh: 'مثال: تصاريح النقل في هولندا',
+        domainLabel: 'مجال الموضوع'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'من أين يجب أن يبدأ مستودع OKF هذا؟',
+        hint: 'اختر الطريقة التي تريد بها بدء هذا المستودع. يمكنك تغييرها لاحقًا.',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'المستندات',
+            desc: 'استخراج الموضوعات من المستندات التي قمت بتحميلها بالفعل.'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'زحف موقع الويب',
+            desc: 'الزحف إلى موقع ويب واقتراح موضوعات من الصفحات.'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'لوحة فارغة',
+            desc: 'ابدأ من الصفر واكتب الموضوعات بنفسك.'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'نسخة من مستودع موجود',
+            desc: 'تفرع الموضوعات والهيكل من مستودع OKF آخر.'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'المدخلات',
+        documents: 'اختر المستندات التي يجب أن تبدأ قائمة الموضوعات.',
+        crawl: 'اختر موقع (مواقع) الويب للزحف إليها.',
+        manual: 'يمكنك كتابة الموضوعات مباشرة في الخطوة التالية.',
+        clone: 'اختر المستودع الحالي لنسخه.',
+        placeholder: 'ستتوفر واجهة الخطوة في مهمة لاحقة.'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'توليد الموضوعات',
+        hint: 'نحن نقرأ مصادرك ونقترح الموضوعات.',
+        progress: 'المنشئ قيد التشغيل...',
+        placeholder: 'سيتم ربط خدمة الإنشاء في مهمة لاحقة.'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'اختر التسميات',
+        hint: 'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما هي أنواع هذه الموضوعات؟ اختر من 3 إلى 7.',
+        add: '+ إضافة تسمية',
+        addConfirm: 'إضافة',
+        placeholder: 'مثال: التصاريح'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'مراجعة الموضوعات',
+        hint: 'كل موضوع هو وحدة معرفية صغيرة وقابلة للاستشهاد. قم بتحرير العنوان والوصف.',
+        placeholder: 'ستتوفر شجرة الإشراف والمحرر في المهمة 3-8.'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'التحقق من وجود مشكلات',
+        hint: 'نجري فحوصات المطابقة. يجب إصلاح المشكلات المعرقلة قبل النشر.',
+        placeholder: 'ستتوفر لوحة التحقق في المهمة 3-8.'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'إصلاح تلقائي',
+        hint: 'يمكن إصلاح بعض التحذيرات تلقائيًا. طبق الإصلاحات التي توافق عليها، ثم عد إلى المسؤول للمراجعة.',
+        placeholder: 'ستتوفر خدمة التصحيح التلقائي في المهمة 10.2.'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'مراجعة',
+        hint: 'ملخص لما أنت على وشك نشره.',
+        repo: 'المستودع',
+        topics: 'الموضوعات',
+        labels: 'التسميات',
+        sources: 'المصادر'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'نشر هذا المستودع',
+        hint: 'يؤدي النشر إلى إنشاء الإصدار v1 من هذا المستودع.',
+        nameOk: 'تم تعيين اسم المستودع',
+        labelsOk: 'تم تحديد التسميات',
+        topicsOk: 'تمت مراجعة الموضوعات'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'غير متحقق منه',
+        'machine-confirmed': 'مؤكد آليًا',
+        'human-reviewed': 'تمت مراجعته بشريًا'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'ستتوفر واجهة مستخدم سحب الإصدار في المهمة 3.9.'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'سيتم ربط خدمة بيان الحزمة في مهمة لاحقة.'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'إنشاء مستودع OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'حدد مستندًا واحدًا على الأقل',
+        alreadyInOkf: 'إزالة المستندات الموجودة بالفعل في مستودع OKF',
+        alreadyIngested: 'إزالة المستندات التي تمت معالجتها بالفعل عبر ingest'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'سيتم ربط المنشئ في مهمة لاحقة.'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'حدد مجال الموضوع…',
+      classLabel: 'تصنيف المفاهيم',
+      classHeuristics: 'الاستدلال (افتراضي)',
+      classHeuristicsHint: 'تصنيف سريع قائم على القواعد — لا توجد تكلفة LLM، مناسب لعمليات الزحف جيدة التنظيم.',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'ينسق LLM كل مفهوم — النوع، تسمية التسلسل الهرمي للمعرفة والوصف. أكثر دقة واكتمالاً بكثير من الاستدلال؛ توقع وقتًا إضافيًا لكل مفهوم.',
       classHybrid: 'Hybrid',
-      classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+      classHybridHint: 'الاستدلال أولاً؛ يراجع LLM الحالات غير المؤكدة ويسد الفجوات. متوازن بين الوقت والاكتمال.',
+      targetLabel: 'أين يجب أن يذهب هذا؟',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'الزحف إلى مجموعة بيانات حرة',
+        okfRepo: 'مستودع OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
-      postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
-      conversionsTitle: 'المستودعات المنشأة من هذه الزحفة',
+      targetHint: 'سنعرض لك الموضوعات التي وجدناها قبل حفظ أي شيء.',
+      createOkfFromCrawl: 'إنشاء مستودع OKF من هذا الزحف',
+      splitLabel: 'تقسيم المفاهيم',
+      splitA: 'مفهوم واحد للزحف بأكمله',
+      splitB: 'مفهوم واحد لكل صفحة (موصى به)',
+      splitC: 'استخدام استخراج الموضوعات بواسطة LLM',
+      splitCHint: 'المهمة 10.6 — قريبًا',
+      splitBHint: 'تصبح كل صفحة تم زحفها مفهومًا خاصًا بها — يمكن للذكاء الاصطناعي الاستشهاد بصفحات فردية.',
+      splitAHint: 'يصبح الزحف بأكمله مفهومًا واحدًا كبيرًا — الأفضل للمواقع الصغيرة.',
+      progressDownload: 'تنزيل المحتوى المزحوف...',
+      progressSplit: 'التقسيم إلى مفاهيم...',
+      progressIngest: 'إضافة مفاهيم (الدفعة [i] من [n])...',
+      postCrawlHint: 'بعد انتهاء الزحف، يمكنك تحويله إلى مستودع OKF من علامة تبويب لوحة التحكم للملف.',
+      creating: 'جارٍ إنشاء مستودع OKF...',
+      createOk: 'تم إنشاء مستودع OKF. جارٍ فتح Studio للإشراف والتنظيم.',
+      createOkRenamed: 'تم إنشاء مستودع OKF باسم "[name]". جارٍ فتح Studio للإشراف والتنظيم.',
+      createFailed: 'تعذر إنشاء مستودع OKF من هذا الزحف.',
+      conversionsTitle: 'المستودعات التي تم إنشاؤها من هذا الزحف',
       convQueued: 'في قائمة الانتظار...',
-      convDownloading: 'جارٍ تنزيل الزحفة...',
-      convSplitting: 'جارٍ التقسيم إلى مفاهيم...',
-      convAdding: 'جارٍ إضافة المفاهيم ([p] صفحة حتى الآن)...',
+      convDownloading: 'تنزيل الزحف...',
+      convSplitting: 'التقسيم إلى مفاهيم...',
+      convAdding: 'إضافة مفاهيم ([p] صفحة حتى الآن)...',
       convDone: 'تم الإنشاء ([p] صفحة)',
       convFailed: 'فشل',
-      createStarted: 'جارٍ إنشاء "[name]" — تابع التقدّم أدناه.',
+      createStarted: 'جارٍ إنشاء "[name]" — تتبع التقدم أدناه.',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'النموذج',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'محلي · صغير',
+          'local-medium': 'محلي · متوسط',
+          'sovereign-large': 'سيادي · كبير'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'يجب أن ينتهي الزحف قبل إنشاء مستودع OKF.',
+        alreadyInOkf: 'هذا الزحف موجود بالفعل في مستودع OKF.'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'اختر موضوعًا من اليمين لعرضه وتعديله.',
+      search: 'البحث في الموضوعات',
+      noTopics: 'لا توجد موضوعات حتى الآن.',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'ضبط التسميات',
+        body: 'التسميات هي المحاور الفئوية للأنطولوجيا الخاصة بك — ما هو نوع هذا الموضوع؟',
+        edit: 'ضبط التسميات',
+        add: 'إضافة',
+        addPh: 'مثال: التصاريح',
+        remove: 'إزالة',
+        empty: 'لا توجد تسميات حتى الآن.',
+        notReady: 'تم حفظ التسميات محليًا — ستتوفر مزامنة الخادم قريبًا.'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'تحرير frontmatter',
+        dialogTitle: 'تحرير frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'إظهار المصدر',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'المفهوم يفتقر إلى نوع.',
+        badActor: 'يجب أن يبدأ الفاعل المصدري بـ agent:/human:/tool:/process:.'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'تم حظر الحفظ: أصلح مشكلات المطابقة أولاً.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
-      expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+      frozen: "المحتوى مجمد عند {'{'}v{'}'} — معاينة للقراءة فقط. اسحب الإصدار المتاح للخدمة لإجراء تغييرات.",
+      none: 'لا يوجد',
+      expertHint: 'قم بالتبديل إلى وضع الخبير لرؤية كائن JSON الأولي للتحقق، والتصفية حسب الأهمية، وتجاوز الفحوصات.',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: '{n} مشكلة (مشكلات) معرقلة — يجب الإصلاح قبل النشر',
+        warnings: '{n} عنصر (عناصر) تحتاج إلى مراجعتك',
+        ok: 'يبدو جيدًا. لا يوجد شيء للإصلاح.'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} سليم · {warnings} يحتاج إلى مراجعة · {blockers} معرقل',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'ستتوفر أداة التنسيق في المهمة 4.2b.'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'سيتم ربط التحقق في مهمة لاحقة.'
       }
     },
     pii: {
-      panel: 'الكيانات المميزة',
+      panel: 'الكيانات المميزة بنجمة',
       nFlagged: 'تم العثور على {n}',
       rescan: 'إعادة المسح',
       scanning: 'جارٍ المسح…',
@@ -2309,7 +2301,7 @@ export default {
       how: 'الإصلاح: قم بإزالته أو إعادة صياغته (مثلًا للإشارة إلى الدور بدلًا من الاسم)، ثم احفظ — إعادة المسح تحدّث هذه القائمة.',
       descFallback:
         'تم اكتشاف بيانات شخصية هنا (اللائحة العامة لحماية البيانات المادة 4(1) — تتعلق بشخص يمكن التعرف عليه).',
-      scanError: 'المسح غير متاح',
+      scanError: 'الفحص غير متاح',
       type: {
         PERSON: 'اسم الشخص',
         LOCATION: 'الموقع',
@@ -2331,16 +2323,16 @@ export default {
         BD_NATIONAL_ID: 'تم اكتشاف رقم هوية وطنية. إنه يحدد هوية شخص بشكل قوي.'
       },
       allClear: 'سليم',
-      redactFile: 'تنقيح الملف بالكامل',
-      confirmRedactFile: 'تأكيد: تنقيح الملف بالكامل؟',
-      locateTip: 'عرض هذا النص في المحرر',
+      redactFile: 'حجب الملف بأكمله',
+      confirmRedactFile: 'تأكيد: هل تريد حجب الملف بأكمله؟',
+      locateTip: 'إظهار هذا النص في المحرر',
       file: {
         label: 'الملف بأكمله:',
         redact: 'تنقيح الملف',
         remove: 'إزالة المحتوى',
         accept: 'قبول الكل',
-        confirmRedact: 'تأكيد: تنقيح الملف بالكامل؟',
-        confirmRemove: 'تأكيد: إزالة المحتوى بالكامل؟'
+        confirmRedact: 'تأكيد: هل تريد حجب الملف بأكمله؟',
+        confirmRemove: 'تأكيد: هل تريد إزالة النص بالكامل؟'
       },
       action: {
         redact: 'تنقيح',
@@ -2357,10 +2349,10 @@ export default {
         replaced: 'تم الاستبدال',
         removed: 'تمت الإزالة',
         accepted: 'تم القبول',
-        fileRedacted: 'تم تنقيح الملف',
+        fileRedacted: 'تم حجب الملف',
         kept: 'تم الاحتفاظ به في النص',
         removedWord: 'تمت إزالته',
-        wholeFile: 'تم تنقيح محتوى الملف بالكامل'
+        wholeFile: 'تم حجب متن الملف بالكامل'
       }
     }
   }

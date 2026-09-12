@@ -653,7 +653,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'eCitizen Portal',
+    eCitizen: 'Portal ea eCitizen',
     taxFiling: 'Sistimi ya ho Kenya Lekgetho',
     idApplication: 'Kopo ya ID',
     businessReg: 'Ngwadisong ya Kgwebo',
@@ -685,8 +685,8 @@ export default {
     weatherLocationLoading: 'E kenya sebaka...',
     weatherErrorDefault: 'E sitwa ho fumana datha ya boemo ba lehodimo.',
     weatherGeolocationUnsupported: 'Sebaka sa mmele ha se tshehetswe ke phetisi ya hao ya inthanete.',
-    collapse: 'Kgutla thalamo ya mahlakore',
-    expand: 'Bula thalamo ya mahlakore',
+    collapse: 'Menela thoko',
+    expand: 'Katolosa thoko',
     weatherRefresh: 'Ntlafatsa Boemo ba Lehodimo',
     weatherConditions: {
       clear: 'Hlakileng',
@@ -1097,7 +1097,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Profaele e bolokilwe ka katleho',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter e bolokiloe',
       saveFailed: 'Ho hlolehile ho boloka profaele',
       loadSuccess: 'Profaele e kentswe ka katleho',
       loadFailed: 'Ho hlolehile ho kenya profaele',
@@ -1355,13 +1355,14 @@ export default {
   },
   chatbot: {
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
-    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: "E hlahisitsoe ke AI — ha e ea thehoa holim'a litokomane tsa laeborari",
+    welcomeMessage: 'Rea u amohela! Nka u thusa joang kajeno?',
     configMismatchWarning:
-      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
-    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
-    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
-    noFilterWarning: 'No context filter active — query will be unfiltered.',
+      'Ho se lumellane ha tlhophiso: {warnings}. Ka kopo hlahloba Thuso e Potlakileng le tlhophiso ea thulaganyo ea tsebo.',
+    categoryNotFound: 'Sehlopha sa "{label}" ha se ea fumanoa thulaganyong ea tsebo',
+    serviceLabelMismatch:
+      'Tšebeletso ea "{label}" e sebelisa leibole ea UI e ka \'nang ea se ke ea lumellana le thulaganyo ea tsebo',
+    noFilterWarning: 'Ha ho sefe ea maemo e sebetsang — patlo e ke ke ea sefuoa.',
     placeholder: 'Ngola potso ya hao mona...',
     sendButton: 'Romela',
     fileReceived: 'Faele e amohetswe ka katleho.',
@@ -1407,23 +1408,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka setsebi se thusang sa ngoliso ea baahi ba Kenya. Hlalosa mehato ea ho fumana Karata ea Boitsebiso ea Naha (Maisha Namba) kapa ho fetola e lahlehileng. EA BOHLOKOA: Fana ka lethathamo le hlakileng la litokomane tse hlokahalang (mohlala, Setifikeiti sa Tsoalo, likopi tsa boitsebiso ba batsoali) 'me u eletse mosebelisi ho etela Setsi sa Huduma kapa ofisi ea Registrar of Persons e haufi le bona. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka motataisi oa KRA (Kenya Revenue Authority). Hlalosa mokhoa oa ho faela lekhetho, ho etsa kopo ea KRA PIN, kapa ho seta phasewete bocha ho portal ea iTax. EA BOHLOKOA: Hopotsa mosebelisi ka nako ea ho qetela ea la 30 Phuptjane bakeng sa lifaele tsa selemo le selemo 'me u ba tataise mabapi le mokhoa oa ho faela lifaele tsa Nil haeba ba ne ba se na chelete e kenang. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka moeletsi oa khoebo bakeng sa lits'ebeletso tsa eCitizen. Tataisa mosebelisi mabapi le ho boloka lebitso la khoebo le ngoliso ea k'hamphani Kenya. EA BOHLOKOA: Hlalosa litšenyehelo tsa hajoale tsa patlo ea lebitso le ngoliso, 'me u tataisetse mosebelisi ho portal ea molao ea eCitizen ho phethela kopo. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka motataisi oa lits'ebeletso tsa bophelo bo botle. Fana ka leseli mabapi le phetoho ho tloha ho NHIF ho ea ho SHIF (Social Health Insurance Fund) le mokhoa oa ho ingolisa. EA BOHLOKOA: Arolelana likhoutu tsa molao tsa USSD (joaloka *263#) kapa lihokelo tsa sebaka sa marang-rang bakeng sa ngoliso le ho hlalosa melemo ea inshorense ea bophelo bo botle ea sechaba. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka moeletsi oa thuto. Bua ka kharikhulamo ea CBC, ngoliso ea NEMIS, kapa kabo ea liunivesithi ka KUCCPS. EA BOHLOKOA: Hlalosa kamoo batsoali ba ka hlahlobang liphetho tsa litlhahlobo tsa naha ka SMS kapa portal ea KNEC ha li lokolloa. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka motataisi oa lits'ebeletso tsa NTSA. Hlalosa mehato ea ho nchafatsa laesense ea ho khanna, tlhahlobo ea koloi, kapa tsamaiso ea ak'haonte ea TIMS. EA BOHLOKOA: Tataisa mosebelisi mabapi le mokhoa oa ho kena ho portal ea eCitizen NTSA ho etsa kopo ea Smart DL ea bona kapa ho behella nako ea tlhahlobo ea koloi. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka moeletsi oa lenaneo la matlo. Hlalosa Lenaneo la Matlo a Theko e Tlase (Boma Yangu), ngoliso le mokhoa oa ho kenya letsoho ka boithaopo. EA BOHLOKOA: Tataisa mosebelisi ho ea portal ea Boma Yangu ho bona merero le ho hlalosa mekhoa ea ho tšoaneleha bakeng sa kabo. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      "Sebetsa joaloka mokoetlisi oa mesebetsi bakeng sa litšebeletso tsa sechaba. Tataisa mosebelisi ho theha profil le ho etsa kopo ea mesebetsi e bulehileng ka portal ea Public Service Commission (PSC). EA BOHLOKOA: Eletsa mosebelisi ho boloka litifikeiti tsa hae tsa thuto li lokile le ho hlahloba sebaka sa marang-rang sa PSC kapa likoranta tsa lehae khafetsa bakeng sa lipapatso tsa MyGov. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Sebetsa joaloka motsoalle ea mosa oa sebaka seo. E-ba le mekhoa e metle, ea thusang, 'me u be le tsebo e batsi ka setso sa Kenya le bophelo ba letsatsi le letsatsi. EA BOHLOKOA: Hopotsa mosebelisi hore leha u ka qoqa ka eng kapa eng, matla a hau a maholo ke ho ba thusa ho tsamaea lits'ebeletsong tsa mmuso oa Kenya joaloka **Li-ID**, **Lekhetho**, le **Ngoliso ea Khoebo**. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'."
   },
   common: {
     cancel: 'Hlakola',
@@ -1491,13 +1492,13 @@ export default {
       details: 'Dintlha',
       ingestionLog: 'Log ya ho Kenya',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        "Metadata bakeng sa faele ena: lebitso, mongoli le lileibole tsa thulaganyo ea tsebo tseo AI e li sebelisang ho tsamaisa lipotso. Ingest e hloka bonyane leibole e le 'ngoe.",
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'Pono ea nako ea sebele ea ho batla ha sebaka sa marang-rang sa faele ena: lebelo, mola, liphoso le tsoelo-pele. Ha ho batla ho atlehile, karolo e ka tlaase e fetola sena polokelo ea OKF.',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'Tlaleho ea leqephe ka leng ea ho batla ha sebaka sa marang-rang: li-URL tse fumanoeng, tse tsamaisitsoeng kapa tse hlolehileng. E ngoloa ha ho batla ho ntse ho sebetsa.',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'Tsoelo-pele ea mohato ka mohato ea ho lokisetsa faele ena bakeng sa likarabo tsa AI: ho arola likaroloana (chunking), ho leibola, ho etsa di-embedding le ho kenya tšebetsong ho indexa. Liphoso mona li bontša hantle moo ingest e emisitseng teng.'
     },
     log: {
       killActions: 'Diketo tsa ho Bolaya:',
@@ -1579,31 +1580,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'E hlolehile ho jarolla mefuta',
+      none: 'Ha ho mefuta e entsoeng hajoale — ho phatlalatsa ho theha v1.',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: 'Theha mofuta o mocha',
+      published: "Mofuta oa v{'{'}v{'}'} o phatlalalitsoe — ngata ea {'{'}f{'}'} e bolokiloe polokelong ea litokomane.",
+      serving: 'E entsoe ingest (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Dashboard ea Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'Faele ea mohloli e ntse e sebetsoa',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Hlakola polokelo ruri'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Hlokomela mekhatlo e tšoailoeng & phatlalatsa',
+        note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "Ho etsa publish ho theha v{'{'}n{'}'} le ho boloka ngata ea \"{'{'}file{'}'}\" polokelong ea litokomane, ho nka sebaka sa zip efe kapa efe e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1621,59 +1622,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "tse leibotsoeng: {'{'}n{'}'}",
+      fallbacks: "mekhoa ea tšehetso ea LLM: {'{'}n{'}'}",
+      concepts: "mehopolo: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "lingoliloeng tse {'{'}n{'}'}",
+      loadFailed: 'E hlolehile ho jarolla tlaleho ea mesebetsi.',
+      none: 'Ha ho mesebetsi e rekotiloeng hajoale — liketso tsa polokelo li hlaha mona ha li ntse li etsahala.',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'Kerafo ea mohopolo',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'Ha ho mehopolo hajoale — ha ho letho le ka etsoang kerafo.',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'Bontša kapa u pate setsi sa index (likhokahano tsa litaba tsa eona ke sebopeho, hase tsebo)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "likhokahano tse {'{'}n{'}'}",
+        chunks: "likaroloana tse {'{'}n{'}'}",
+        failed: 'ho indexa ho hlolehile',
+        flagged: 'mekhatlo e tšoailoeng',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: "ha e e-s'o indexoe"
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (mamaretsa kapa u siee e se na letho)',
+        bodyPh: '# Sehlooho\n\nMamaretsa markdown mona — frontmatter e eketsetsoa uena.',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'Ha ea khona ho theha faele.',
+        title: 'Eketsa faele ea mohopolo',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'mohlala: Liphoofolo tse hlaha Mara',
+        updateIndex: 'Eketsa lethathamong la Tse ka Hare ho index'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'ha ho frontmatter — tlhahiso e felletseng',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'Litokiso tse reriloeng tsa frontmatter mehopolong eohle. Litaba tsa mantlha ha li so ka li fetoloa.',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'Ha ho letho le lokelang ho lokisoa — frontmatter eohle e se e ntse e lumellana.',
         col: {
           field: 'Field',
           after: 'After',
@@ -1682,14 +1683,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'Tokiso e iketsang (frontmatter feela)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'Kamoo mohopolo ona o hlophisitsoeng kateng',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'Ha ho lifaele hajoale — eketsa mohopolo kapa u arole hape ho tsoa mohloling.',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1697,30 +1698,30 @@ export default {
         resplit: 'Re-split',
         flagged: 'flagged',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove kapa alter the entity, save (it re-scans automatically); kapa acknowledge them at publish.',
+          "Mehopolo e nang le mekhatlo e tšoailoeng — bula e 'ngoe le e 'ngoe, tlosa kapa u fetole mokhatlo, boloka (e hlahloba hape ka bo eona); kapa u li hlokomele ha u etsa publish.",
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove kapa alter them, ebe u-save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, ebe u-save to re-scan.',
+        piiTip: 'Mekhatlo e tšoailoeng: {k}. Bula, tlosa kapa u li fetole, ebe u boloka — e hlahloba hape ka bo eona.',
+        piiTipBare: 'Mekhatlo e tšoailoeng — bula, hlahloba, ebe u boloka ho hlahloba hape.',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'Ho jarolla lifaele {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'Sena se tlosa faele, likaroloana tsa eona tse indexiloeng le likhokahano tsa eona tsa kerafo ruri.',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'Morulaganyi oa polokelo',
+      loadFailed: 'Ha ea khona ho jarolla mohopolo ona.',
+      loadingConcept: 'Ho jarolla mohopolo…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'Metadata ea mohopolo',
+        labelLabel: 'Leibole (Thulaganyo ea Tsebo)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'Ha ho mohopolo o khethiloeng',
+        saveFailed: 'Ho boloka metadata ho hlolehile',
+        saved: 'Metadata e bolokiloe',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1731,62 +1732,64 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'Khetha mohopolo lethathamong ho qala ho hlophisa.',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'Sena se hlakola mehopolo eohle ea hajoale le kerafo e thehiloeng, ebe se kenya faele ea mohloli hape ka karohano e ncha. Liphetoho tsa mehopolo li tla lahleha.',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'Ho arola hape ho hlolehile — hlahloba sehokelo sa faele ea mohloli.',
+        modeA: 'Mohopolo o le mong bakeng sa crawl eohle',
+        modeAHint: 'Mohopolo o moholohali — litaba tsohle mohopolong o le mong',
+        modeB: 'Mohopolo o le mong leqepheng ka leng',
+        modeBHint: 'E arola ho matšoao a batli a `## Source:` (e khothalelitsoeng)',
+        modeC: 'Sebelisa tlhahiso ea lihlooho tsa LLM',
+        modeCHint: 'Pale ea 10.6 — e tla haufinyane',
+        title: 'Arola hape ho tsoa mohloling'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'Liphetoho tse sa bolokoang',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry',
+      saveFailed: 'Ho boloka ho hlolehile — leka hape',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: 'Sireletsa boitsebiso ho litaba tsohle tse tšoailoeng',
+          remove: 'Tlosa litaba tsohle tse tšoailoeng',
+          accept: 'Amohela mekhatlo eohle e tšoailoeng'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          redact:
+            'Litaba tsa mantlha tsa mohopolo o mong le o mong o tšoailoeng li nkeloa sebaka ke tsebiso ea ho sireletsa boitsebiso. Sena se ke ke sa etsolloa.',
+          remove:
+            'Litaba tsa mantlha tsa mohopolo o mong le o mong o tšoailoeng lia tlosoa ka botlalo. Sena se ke ke sa etsolloa.',
           accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+            'Mekhatlo eohle e tšoailoeng e tšoauoa e le e hlahlobiloeng-le-ho-bolokoa — e ke ke ea tšoauoa hape ntle le ha u ka hlahloba hape.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "Mehopolo e amehileng: {'{'}n{'}'}.",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: 'Ketso ea bongata ea PII e hlolehile — leka hape.'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'Ho sebelisa ketso ea bongata ea PII',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: "Polokelo ka 'ngoe e phatlalatsoa ka tlhahlobo e felletseng ea heke (tlhahlobo ea PII, ho indexa, boikamahanyo). Liphetho tsa polokelo ka 'ngoe:",
+        pending: 'Netefatsa ho etsa publish polokelong tse khethiloeng.',
+        publishConfirm: "Phatlalatsa tse {'{'}n{'}'}",
+        title: 'Phatlalatsa lipolokelo tse khethiloeng'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "Liketso bakeng sa {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'E ntse e hahoa — faele ea mohloli e ntse e sebetsoa',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1795,33 +1798,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri. Ha se khone ho etsolloa.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Hlakola polokelo ruri'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'Sefa ka sebaka sa taba'
       },
-      new: '+ New repository',
+      new: '+ Polokelo e ncha',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Hlokomela mekhatlo e tšoailoeng & phatlalatsa',
+        note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "Ho etsa publish ho theha v{'{'}n{'}'} le ho boloka ngata ea \"{'{'}file{'}'}\" polokelong ea litokomane, ho nka sebaka sa zip e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "Khetha {'{'}name{'}'} bakeng sa phatlalatso e kholo",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'Ingest e hlolehile',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "E entsoe ingest v{'{'}n{'}'}",
+        published: "E phatlalalitsoe v{'{'}n{'}'}",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1830,36 +1833,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ tse ling tse {'{'}n{'}'}",
+        fixPath: 'Etsa ingest hape ho leka hape: retract → theha mofuta → ingest.'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'mekhoa ea tšehetso ea LLM',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'Lihlopha tse bolokiloeng',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'mehopolo e indexiloeng',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "E qalile lihora tse {'{'}n{'}'} tse fetileng",
+        lt1: 'E qalile ka tlase ho motsotso o le mong o fetileng',
+        min: "E qalile metsotso e {'{'}n{'}'} e fetileng"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'Polokelo e lula ho Import ho fihlela phetoho ea faele e phetheha.',
+        rag: 'Index ea RAG e ntse e hahoa — mofuta ona o qala serving hang ha mohopolo o mong le o mong o indexiloe.',
+        serving: 'Mofuta ona o sebetsa ho serving sephethephethe sa RAG — etsa retract ho etsa liphetoho.',
+        review: 'E ho review — mohlahlobi oa saena, joale mohlokomeli o etsa publish le ingest.',
+        retracted: 'Ha e sebetse — submit → review → approve → publish → ingest ho qala serving hape.',
+        idle: 'Ho kenya ho felile — etsa submit bakeng sa review ho tsoela pele ka phallo ea mosebetsi.'
       },
-      pages: 'Pages processed',
+      pages: 'Maqephe a sebelitsoeng',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Kerafo ea serving',
+        version: 'Mofuta oa serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1867,12 +1870,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'Tsoelo-pele ea ho kenya',
+        rag: 'Tsoelo-pele ea ingest',
+        serving: 'Boemo ba serving',
+        review: 'Boemo ba review',
+        retracted: 'Boemo ba retract',
+        idle: 'Boemo ba polokelo'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1888,33 +1891,34 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'Khetha faele ea ngata ea .zip.',
+      stagedFile: "E hlophisitsoe: {'{'}name{'}'}",
+      staged: 'Ngata e hlophisitsoe — tobetsa Theha Polokelo ho qala ho kenya.',
+      openExisting: 'Bula polokelo e teng',
+      name: 'Lebitso la polokelo',
+      importing: 'Ho kenya ngata…',
+      importHint: 'Kapa kenya ngata e teng ea zip e le polokelo e ncha.',
+      importDefaultName: 'Polokelo e kentseng',
+      failed: 'Ho thehoa ha polokelo ho hlolehile',
+      duplicateInline: 'Polokelo e nang le lebitso lena e se e ntse e le teng. E bule, kapa u khethe lebitso le leng.',
+      duplicate:
+        'Polokelo e nang le lebitso lena e se e ntse e le teng — e bule ho tsoa ho dashboard kapa u khethe lebitso le leng.',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'Theha polokelo',
+      title: 'Polokelo e ncha ea OKF',
+      hint: 'E theha polokelo e se nang letho e nang le index.md eo u e hlophisang ho morulaganyi oa Studio.',
+      domainPlaceholder: 'Khetha sebaka sa taba…',
+      domainRequired: 'Khetha sebaka sa taba pele — ha se khone ho fetoloa kamora ho thehoa.',
+      classLabel: 'Kemiso ea mohopolo',
+      classHeuristics: 'Li-heuristics (ea kamehla)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'Lebitso la lebala le boloketsoeng morero o khethehileng.',
+      errKeyDuplicate: 'Lebitso la lebala le sebelisitsoe habeli.',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'E tlameha ho ba palo',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1925,53 +1929,53 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'Lebala ka leng la frontmatter le ka hlophisoa. Eketsa kapa u tlose linotlolo ka bolokolohi.',
+      errRemovalPending: 'Ho tlosa mabala ho hloka konteraka ea seva ea merge-delete (e tla fihla haufinyane).',
+      errKeyRequired: 'Lebala le leng le le leng le hloka lebitso.',
+      arrayPh: 'boleng bo arohantsoeng ka likhefana',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter e bolokiloe',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'Frontmatter ke eng?',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'Ha ho frontmatter hajoale — Hlophisa e eketsa mofuta, sehlooho le lileibole.',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'Leibole (Thulaganyo ea Tsebo)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'Boloka frontmatter',
+      saveFailed: 'Ho boloka frontmatter ho hlolehile'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        "Kenyelletso e le 'ngoe polokelong ea hau — hangata leqephe le le leng kapa taba e le 'ngoe. Mohopolo o mong le o mong o na le frontmatter e hlophisitsoeng eo mothusi a e balang, hammoho le mongolo oa markdown oo a arabang ho tsoa ho oona.",
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'Pokello ea mehopolo e hlophisitsoeng ho potoloha Sebaka se le seng sa Taba. E fetoha ngata ea OKF eo u e phatlalatsang, u e fang mofuta, le ho e etsa hore e fumanehe ho mothusi.',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'Tsebo ee e hlahela kae? Sebaka sa Taba se arola polokelo ea hau le ho tsepamisa maikutlo ho lileibole tseo u ka li khethang. Ha se khone ho fetoloa kamora ho thehoa.',
+      selectSubjectArea: 'Khetha sebaka sa taba…',
+      subjectAreaMissing: "Sebaka sa Taba sa polokelo ena ha se eo ho Thulaganyo ea Tsebo — e bontša leibole ka 'ngoe.",
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'Sehlopha se tsoang ho Thulaganyo ea Tsebo se bolellang mothusi hore na mohopolo ona ke mofuta ofe oa ntho. Lileibole ke tsela eo likarabo li fumanang litaba tse nepahetseng ka eona.',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        "Phatlalatso ea zip ea polokelo — mehopolo ea eona, sebopeho le metadata faeleng e le 'ngoe. Dingata ke tsela eo lipolokelo li tsamaeang ka eona lipakeng tsa litsamaiso.",
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'Setšoantšo se tiisitsoeng sa polokelo ka nako ea publish. Ho hlophisa ho tsoela pele mofuteng o latelang — mefuta e phatlalalitsoeng ha e so ka e fetoha.',
+      serving:
+        'Mofuta ona o sebetsa hona joale: mothusi o bala litaba tsa oona ha a araba. Etsa retract ho etsa liphetoho ho oona.',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        "Mohato oo mofuta o phatlalalitsoeng o lokisetsoang ho araba — mongolo o aroloa, o etsoa di-embedding 'me oa hokahanngoa. Ha ho letho le fihlang ho mothusi pele ho sena.",
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'Kamoo re etsang qeto ea hore na mohopolo ka mong KE eng (sehlooho, mokhatlo, tshebetso…). Li-heuristics li bala leqephe ka bo tsona; khetho ea LLM e lieha haholo empa e ka khona ho sebetsana le maqephe a thata.',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'Ho arola mohloli hape ka mehopolo ka tsela e fapaneng — mohlala, mohopolo o le mong leqepheng ka leng ho fapana le o le mong bakeng sa sebaka sohle sa marang-rang.',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: 'Ho kenya ho hlolehile — faele ea mohloli ha ea khona ho fetoloa.',
+      importFailedHint: "Hlakola polokelo ena 'me u kenye faele ea mohloli hape.",
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        "Tlhahisoleseling e hlophisitsoeng holimo ho faele ka 'ngoe — mofuta, sehlooho, lileibole. Mothusi o e sebelisa ho tseba hore na mohopolo ka mong o bua ka eng."
     },
     md: {
       toolbar: 'Formatting',
@@ -1981,7 +1985,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'Lethathamo le nang le linomoro',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1989,106 +1993,106 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'Polokelo ea OKF ke pokello e hlophisitsoeng, e nang le mefuta ea lihlooho tseo likarabo tsa hau tsa moqoqo li ka li qotsang. E nke e le karolo e bobebe ea sebopeho sa tsebo bakeng sa sebaka sa hau — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho.',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'Polokelo ea OKF ke pokello e hlophisitsoeng, e nang le mefuta ea lihlooho. E nke e le karolo e bobebe ea sebopeho sa tsebo bakeng sa sebaka sa hau — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho. Hang ha e se e phatlalalitsoe, likarabo tsa moqoqo li qotsa lihlooho tsena ka boitsebiso (ID).',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'Litsela tse tharo tsa ho qala polokelo ea OKF: hula lihlooho ho tsoa ho crawl ea sebaka sa marang-rang, li nke ho tsoa litokomaneng tseo u seng u li kentse, kapa u qale ka leqephe le se nang letho. Ho etsa clone ea repo e teng ho kopitsa lihlooho tsa eona mme ho o lumella ho arola le ho ntšetsa pele mosebetsi.',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        "Tokomane ka 'ngoe e fetoha mohloli oa lihlooho. Moetsi o li bala, o ntša lihlooho tse ka bang teng, le ho sisinya thulaganyo. U tla hlahloba sehlooho ka seng mohatong o latelang — ha ho letho le etsoang ho fihlela u saena le ho lumela.",
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        "Re bala mehloli ea hau le ho sisinya lihlooho. Lihlooho li bokellana tlas'a lileibole tsa lihlopha tseo u li khethang. Moetsi o hlokolosi — o khetha ho sisinya lihlooho tse fokolang, tse entsoeng hantle ho e-na le tse ngata tse nang le lerata.",
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — na taba ee ke mofuta ofe oa ntho? Khetha lileibole tse 3-7 tse tšoarang likarolo tse kholo; moetsi o li sebelisa e le meaho ea thulaganyo ea lihlooho.',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        "Ena ke pelo ea mosebetsi. Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Lihlooho li fumana sehlooho, tlhaloso, 'me li nka lileibole tseo u li khethileng. Mosebetsi oa hau ke ho etsa hore e be e tšepahalang: reha bocha lihlooho tse sa hlakang, kopanya tse batlang li tšoana, tlosa tseo u ke keng ua li tšehetsa ka mohloli.",
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'Re etsa liteko tsa boikamahanyo: na sehlooho ka seng se na le sehlooho? Na lileibole li nepahetse? Na tšimoloho ea mehloli e bolokehile? Litaba tse thibelang li tlameha ho lokisoa pele ho phatlalatsoa; litemoso li ka hlokomeloa.',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'Litemoso tse ling li ka lokisoa ka bo tsona: litekanyetso tsa boemo li ka fetoloa ho li-enum tse nepahetseng, mabala a sieo a ka tlatsoa ka lintlha tse utloahalang tsa kamehla. Sebelisa litokiso tseo u lumellanang le tsona, ebe u khutlela ho mohlophisi ho hlahloba.',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'Kakaretso ea seo u tlang ho se phatlalatsa: lihlooho, lileibole, mehloli, le litaba life kapa life tse sa rarolloang. Hang ha u saena, polokelo e fetela tseleng ea phatlalatso.',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        "Ho etsa publish ho theha mofuta oa v1 oa polokelo ena. Phetoho e 'ngoe le e 'ngoe e latelang — sehlooho se secha, tlhaloso e nchafalitsoeng, netefatso e ncha ea khale — e phatlalatsoa e le v2, v3, joalo-joalo. Mefuta ea khale e lula e ka qotsoa ka ho sa feleng.",
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        'Theha polokelo e ncha ea OKF ho tsoa litokomaneng tse khethiloeng. Litokomane li tla fetoha mehloli; u tla hlahloba le ho reha lihlooho tseo li li hlahisang mabitso pele ho phatlalatsoa letho.',
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'Polokelo ea OKF ke pokello e hlophisitsoeng, e nang le mefuta ea lihlooho tseo likarabo tsa hau tsa moqoqo li ka li qotsang.',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
+        "Ha u e-s'o thehe lipolokelo tsa OKF. Polokelo ea OKF ke sete e hlophisitsoeng, e qotsehang ea lihlooho tseo likarabo tsa hau tsa moqoqo li ka fumanang tsebo ho tsona.",
       labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — li araba "na taba ee ke mofuta ofe oa ntho?".',
+      hide: 'Pata',
+      whatIsThis: 'See ke eng?'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'Koala',
+      cancel: 'Hlakola',
+      save: 'Boloka',
+      clear: 'Hlakola tsohle',
+      delete: 'Hlakola ruri'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'Thuso',
+      helpTitle: 'Mabapi le OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        "Lipolokelo tsa OKF ke mokhoa o bobebe oa thuto ea sebopeho sa tsebo — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho. Hang ha li phatlalalitsoe, likarabo tsa moqoqo li qotsa lihlooho ka ID 'me li senola tšimoloho ea tsona.",
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'Dashboard',
+        wizard: 'Wizard'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'E kopitsitsoe ho tsoa ho {name} · mofuta oa {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'Polokelo',
+        untitled: 'Polokelo e se nang lebitso',
+        trust: 'Tšepo',
+        sources: 'Mehloli',
+        concepts: 'Mehopolo ho fihlela joale',
+        stale: 'e siiloe ke nako'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'e ntse e tsoela pele',
+        inReview: 'e ntse e hlahlojoa',
+        published: 'e phatlalalitsoe'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'E ho review',
+        stepOf: 'Mohato oa {n} ho e 10',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'Lipolokelo',
+        new: '+ Polokelo e ncha',
+        search: 'Batla…',
+        empty: 'Ha ho lipolokelo mona hajoale.',
+        topics: 'lihlooho',
+        select: 'Khetha {name} bakeng sa phatlalatso e kholo',
+        stale: 'e siiloe ke nako',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'E ho review',
+          stepOf: 'Mohato oa {n} ho e 10',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: 'ho khethiloe tse {n}',
+          publish: 'Phatlalatsa tse khethiloeng',
+          title: 'Phatlalatsa lipolokelo tse khethiloeng',
+          body: "Hang ha e phatlalalitsoe, likarabo tsa morao tsa moqoqo li ka li sebelisa. Polokelo ka 'ngoe e ka tlase e thathamisa sephetho sa eona sa ho qetela.",
+          results: 'Liphetho',
+          publishConfirm: 'Phatlalatsa tse {n}',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'Lebitso',
+            status: 'Boemo',
+            topics: 'Lihlooho'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'E lokile'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: "Li-draft ha li e-s'o khone ho bolokoa lehlakoreng la seva; li bolokiloe mona sebakeng."
       }
     },
     wizard: {
@@ -2097,253 +2101,254 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'Khutlela ho dashboard',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'Polokelo e se nang lebitso',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'Mehopolo ho fihlela joale'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'Wizard ea OKF Studio',
+      back: 'Morao',
+      continue: 'Tsoela pele',
+      publish: 'Phatlalatsa polokelo'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'Lebitso la polokelo & sebaka sa taba',
+        hint: "Fana ka lebitso le hlakileng polokelong ena ea OKF 'me u khethe sebaka sa taba ea eona.",
+        nameLabel: 'Lebitso la polokelo',
+        namePh: 'mohlala: Litumello tsa lipalangoang NL',
+        domainLabel: 'Sebaka sa taba'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'Na polokelo ee ea OKF e lokela ho qala kae?',
+        hint: 'Khetha hore na u batla ho qala polokelo ee joang. U ka e fetola hamorao.',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'Litokomane',
+            desc: 'Ntša lihlooho litokomaneng tseo u seng u li kentse.'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'Ho batla ha sebaka sa marang-rang (crawl)',
+            desc: "Batla sebaka sa marang-rang 'me u sisinye lihlooho ho tsoa maqepheng."
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'Leqephe le se nang letho',
+            desc: "Qala qalong 'me u ingolle lihlooho."
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'Clone ea polokelo e teng',
+            desc: "Arola lihlooho le sebopeho ho tsoa polokelong e 'ngoe ea OKF."
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'Lintho tse kenoang',
+        documents: 'Khetha litokomane tse lokelang ho theha lethathamo la lihlooho.',
+        crawl: 'Khetha libaka tsa marang-rang tseo u batlang ho li batla.',
+        manual: 'U ka ngola lihlooho ka kotloloho mohatong o latelang.',
+        clone: 'Khetha polokelo e teng eo u batlang ho e kopitsa.',
+        placeholder: 'UI ea mohato e tla fihla paleng e tlang.'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'Hlahisa lihlooho',
+        hint: 'Re bala mehloli ea hau le ho sisinya lihlooho.',
+        progress: 'Moetsi o ntse a sebetsa...',
+        placeholder: 'Tšebeletso ea moetsi e tla hokahanngoa paleng e tlang.'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'Khetha lileibole',
+        hint: 'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — lihlooho tsee ke mefuta efe ea lintho? Khetha tse 3-7.',
+        add: '+ Eketsa leibole',
+        addConfirm: 'Eketsa',
+        placeholder: 'mohlala: Litumello'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'Hlahloba lihlooho',
+        hint: 'Sehlooho ka seng ke karolo e nyane ea tsebo e ka qotsoang. Hlophisa sehlooho le tlhaloso.',
+        placeholder: 'Sefate sa mohlophisi + morulaganyi li tla fihla ho Pale ea 3-8.'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'Hlahloba mathata',
+        hint: 'Re etsa liteko tsa boikamahanyo. Litaba tse thibelang li tlameha ho lokisoa pele ho phatlalatsoa.',
+        placeholder: 'Phanele ea netefatso e tla fihla ho Pale ea 3-8.'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'Ho lokisa ka bo eona',
+        hint: 'Litemoso tse ling li ka lokisoa ka bo tsona. Sebelisa litokiso tseo u lumellanang le tsona, ebe u khutlela ho mohlophisi ho hlahloba.',
+        placeholder: 'Tšebeletso ea ho lokisa ka bo eona e tla fihla ho Pale ea 10.2.'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'Hlahloba',
+        hint: 'Kakaretso ea seo u tlang ho se phatlalatsa.',
+        repo: 'Polokelo',
+        topics: 'Lihlooho',
+        labels: 'Lileibole',
+        sources: 'Mehloli'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'Phatlalatsa polokelo ena',
+        hint: 'Ho etsa publish ho theha mofuta oa v1 oa polokelo ena.',
+        nameOk: 'Lebitso la polokelo le behiloe',
+        labelsOk: 'Lileibole li khethiloe',
+        topicsOk: 'Lihlooho li hlahlobiloe'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'ha ea netefatsoa',
+        'machine-confirmed': 'e netefalitsoe ke mochini',
+        'human-reviewed': 'e hlahlobiloe ke motho'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'UI ea retract e tla tsoa ho Pale ea 3.9.'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'Tšebeletso ea manifest ea ngata e tla hokahanngoa paleng e tlang.'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'Theha polokelo ea OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: "Khetha bonyane tokomane e le 'ngoe",
+        alreadyInOkf: "Tlosa litokomane tse seng li ntse li le ka har'a polokelo ea OKF",
+        alreadyIngested: 'Tlosa litokomane tse seng li kile tsa etsoa ingest'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'Moetsi o tla hokahanngoa paleng e tlang.'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'Khetha sebaka sa taba…',
+      classLabel: 'Kemiso ea mohopolo',
+      classHeuristics: 'Li-heuristics (ea kamehla)',
+      classHeuristicsHint:
+        'Kemiso e potlakileng e ipapisitseng le melao — ha ho litšenyehelo tsa LLM, e ntle bakeng sa li-crawl tse hlophisitsoeng hantle.',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'LLM e hlophisa mohopolo o mong le o mong — mofuta, leibole ea Thulaganyo ea Tsebo le tlhaloso. E nepahetse le ho fella haholo ho feta li-heuristics; lebella nako e eketsehileng mohopolong ka mong.',
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        'Li-heuristics pele; LLM e hlahloba linyeoe tse sa tsitsang le ho koala likheo. E leka-lekanya nako le botlalo.',
+      targetLabel: 'Na see se lokela ho ea kae?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'Batla ho ea sehlopheng sa mongolo se sa lekanyetsoang',
+        okfRepo: 'Polokelo ea OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
+      targetHint: 'Re tla u bontša lihlooho tseo re li fumaneng pele re boloka letho.',
+      createOkfFromCrawl: 'Theha polokelo ea OKF ho tsoa ho crawl ena',
+      splitLabel: 'Karohano ea mohopolo',
+      splitA: 'Mohopolo o le mong bakeng sa crawl eohle',
+      splitB: 'Mohopolo o le mong leqepheng ka leng (e khothalelitsoeng)',
+      splitC: 'Sebelisa tlhahiso ea lihlooho tsa LLM',
+      splitCHint: 'Pale ea 10.6 — e tla haufinyane',
+      splitBHint: 'Leqephe ka leng le batliloeng le fetoha mohopolo oa lona — AI e ka qotsa maqephe ka bomong.',
+      splitAHint: 'Crawl eohle e fetoha mohopolo o le mong o moholo — e loketse libaka tse nyane tsa marang-rang.',
+      progressDownload: 'Ho jarolla litaba tse batliloeng...',
+      progressSplit: 'Ho arola ka mehopolo...',
+      progressIngest: 'Ho eketsa mehopolo (sehlopha sa [i] ho tse [n])...',
       postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+        'Kamora hore crawl e phethehe, o ka e fetola polokelo ea OKF ho tsoa ho tab ea Dashboard ea faele.',
+      creating: 'Ho theha polokelo ea OKF...',
+      createOk: 'Polokelo ea OKF e thehiloe. Ho bula Studio ho e hlophisa.',
+      createOkRenamed: 'Polokelo ea OKF e thehiloe e le "[name]". Ho bula Studio ho e hlophisa.',
+      createFailed: 'Ha ea khona ho theha polokelo ea OKF ho tsoa ho crawl ena.',
       conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
-      convQueued: '__TODO_TRANSLATE__ (en: Queued...)',
-      convDownloading: '__TODO_TRANSLATE__ (en: Downloading crawl...)',
-      convSplitting: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      convAdding: '__TODO_TRANSLATE__ (en: Adding concepts ([p] pages so far)...)',
-      convDone: '__TODO_TRANSLATE__ (en: Created ([p] pages))',
-      convFailed: '__TODO_TRANSLATE__ (en: Failed)',
-      createStarted: '__TODO_TRANSLATE__ (en: Creating "[name]" — track progress below.)',
+      convQueued: 'Moleng...',
+      convDownloading: 'Ho jarolla crawl...',
+      convSplitting: 'Ho arola ka mehopolo...',
+      convAdding: 'Ho eketsa mehopolo (maqephe a [p] ho fihlela joale)...',
+      convDone: 'E thehiloe (maqephe a [p])',
+      convFailed: 'E hlolehile',
+      createStarted: 'Ho theha "[name]" — latela tsoelo-pele ka tlaase.',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'Mohlala',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'Ea lehae · e nyane',
+          'local-medium': 'Ea lehae · e mahareng',
+          'sovereign-large': 'Ea boipuso · e kholo'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'Crawl e tlameha ho qeta pele ho thehoa polokelo ea OKF.',
+        alreadyInOkf: "Crawl ena e se e ntse e le ka har'a polokelo ea OKF."
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'Khetha taba ka ho le letšehali ho e bona le ho e hlophisa.',
+      search: 'Batla lihlooho',
+      noTopics: 'Ha ho lihlooho hajoale.',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'Fetola lileibole',
+        body: 'Lileibole ke likarolo tse arolang tsa thuto ea sebopeho sa tsebo ea hau — na taba ee ke mofuta ofe oa ntho?',
+        edit: 'Fetola lileibole',
+        add: 'Eketsa',
+        addPh: 'mohlala: Litumello',
+        remove: 'Tlosa',
+        empty: 'Ha ho lileibole hajoale.',
+        notReady: 'Lileibole li bolokiloe mona sebakeng — ho hokahana le seva ho tla haufinyane.'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'Hlophisa frontmatter',
+        dialogTitle: 'Hlophisa frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'Bontša mohloli',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'Mohopolo o haelloa ke mofuta.',
+        badActor: 'Moetsi oa mohloli o tlameha ho qala ka agent:/human:/tool:/process:.'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'Ho boloka ho thibiloe: lokisa litaba tsa boikamahanyo pele.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
+      frozen:
+        "Litaba li emisitsoe ho {'{'}v{'}'} — pono ea ho bala feela. Etsa retract mofuteng o sebetsang ho serving ho etsa liphetoho.",
+      none: 'Ha e eo',
       expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+        'Fetohela ho mokhoa oa Bo-ramahlale ho bona JSON e tala ea netefatso, sefa ka botebo ba bothata, le ho hlokomoloha licheke.',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: 'Mathata a thibelang a {n} — lokisa pele u phatlalatsa',
+        warnings: 'Lintho tse {n} li hloka tlhahlobo ea hau',
+        ok: 'E shebahala e le ntle. Ha ho letho le lokelang ho lokisoa.'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} e hloekileng · {warnings} e hloka tlhahlobo · {blockers} e thibelang',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'Sehlophisi se tla fihla ho Pale ea 4.2b.'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'Netefatso e tla hokahanngoa paleng e tlang.'
       }
     },
     pii: {
-      panel: 'Flagged entities',
+      panel: 'Mekhatlo e tšoailoeng',
       nFlagged: '{n} found',
       rescan: 'Re-scan',
       scanning: 'Scanning…',
       clean: 'No flagged entities — concept ena e hloekile.',
       how: 'Lokisa: tlosa kapa fetola mantsoe (mohlala, the role ho e-na le lebitso), ebe u-save — the re-scan e tlisa sena nakong.',
       descFallback: 'Personal data e fumanwe mona (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      scanError: 'Ho hlahloba ha ho fumanehe',
       type: {
         PERSON: 'Person name',
         LOCATION: 'Location',
         DATE_TIME: 'Date kapa time',
-        EMAIL_ADDRESS: 'Email address',
+        EMAIL_ADDRESS: 'Aterese ea imeile',
         PHONE_NUMBER: 'Phone number',
         IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        NRP: 'Nomoro ea ngoliso ea naha',
+        BD_NATIONAL_ID: 'Nomoro ea boitsebiso ea naha'
       },
       desc: {
         PERSON: 'Lebitso la motho le fumanwe. Names can directly identify a natural person.',
@@ -2356,36 +2361,36 @@ export default {
         BD_NATIONAL_ID: 'National ID number e fumanwe. It strongly identifies a person.'
       },
       allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      redactFile: 'Sireletsa boitsebiso faeleng eohle',
+      confirmRedactFile: 'Netefatsa: sireletsa boitsebiso faeleng eohle?',
+      locateTip: 'Bontša mongolo ona ho morulaganyi',
       file: {
         label: 'Whole file:',
         redact: 'Redact file',
         remove: 'Remove body',
         accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        confirmRedact: 'Netefatsa: sireletsa boitsebiso faeleng eohle?',
+        confirmRemove: 'Netefatsa: tlosa litaba tsohle tsa mantlha?'
       },
       action: {
         redact: 'Redact',
         replace: 'Replace',
         remove: 'Remove',
         accept: 'Accept',
-        replacement: 'Replacement text',
+        replacement: 'Mongolo o nkelang sebaka',
         apply: 'Apply',
         cancel: 'Cancel'
       },
       resolved: {
-        title: 'Processed in this file',
+        title: 'E sebelitsoe faeleng ena',
         redacted: 'Redacted',
         replaced: 'Replaced',
         removed: 'Removed',
         accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
+        fileRedacted: 'Faele e sirelelitsoe boitsebiso',
+        kept: 'e bolokiloe mongolong',
         removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        wholeFile: 'Litaba tsohle tsa mantlha tsa faele li sirelelitsoe boitsebiso'
       }
     }
   }

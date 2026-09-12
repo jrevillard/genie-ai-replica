@@ -32,6 +32,14 @@ class Crawler {
     this.fetchedPool = new Set();
     this.domainCoolDowns = new Map();
 
+    // --- HARD-ABORT SUPPORT ---
+    // abort() cancels every in-flight request so a killed job unwinds within
+    // ~one batch instead of waiting for fetch-retry storms to settle (see the
+    // 2026-09-12 zalora incident doc). isAborted doubles as the kill sentinel
+    // checked between fetch attempts and around batch boundaries.
+    this.abortController = new AbortController();
+    this.isAborted = false;
+
     // --- METRICS TRACKING STATE ---
     this.startTime = Date.now();
     this.stats = {
@@ -45,6 +53,15 @@ class Crawler {
     };
 
     logger.debug('Crawler initialized', { pool: this.pool });
+  }
+
+  // Hard-cancel: flips the sentinel checked between fetch attempts and around
+  // batch boundaries, and aborts every in-flight axios request via its
+  // AbortController. Called by the crawl worker when a job is killed or its
+  // job doc was deleted mid-crawl.
+  abort() {
+    this.isAborted = true;
+    this.abortController.abort();
   }
 
   getSublinks($) {
@@ -280,6 +297,7 @@ class Crawler {
     const totalAttempts = maxTimes;
 
     while (maxTimes > 0) {
+      if (this.isAborted) throw new Error('Killed');
       const attempt = totalAttempts - maxTimes + 1;
       try {
         if (!/^https?:\/\//i.test(url)) {
@@ -298,7 +316,8 @@ class Crawler {
           timeout: this.timeoutMs,
           maxRedirects: 0,
           httpAgent: httpAgent,
-          httpsAgent: httpsAgent
+          httpsAgent: httpsAgent,
+          signal: this.abortController.signal
         });
 
         // Manual redirect handling: re-validate every hop (axios internal
@@ -380,6 +399,10 @@ class Crawler {
       }
       return sublinks;
     } catch (error) {
+      // Aborted crawl (killed job / deleted job doc): the abort surfaces as an
+      // axios cancel — re-raise as the canonical kill sentinel, never swallow.
+      if (this.isAborted) throw new Error('Killed', { cause: error });
+
       // Domain Rate Limited -> Propagate to re-queue
       if (error.message === 'DomainRateLimited') throw error;
 
@@ -451,7 +474,7 @@ class Crawler {
             logger.error('Seed URL rate limited immediately. Aborting.');
             throw new Error('Seed Rate Limited', { cause: e });
           }
-          if (e.message && (e.message.includes('killed') || e.message === 'MaxPagesReached')) throw e;
+          if (this.isAborted || /killed/i.test(e.message) || e.message === 'MaxPagesReached') throw e;
           logger.error(`Failed to fetch seed URL ${url}: ${e.message}`);
         }
       }
@@ -518,15 +541,21 @@ class Crawler {
               } else {
                 // Failed
                 const err = result.reason;
+                // Hard stop on kill/abort. NOTE: this used to match lowercase
+                // 'killed' only (`includes('killed')`), silently swallowing the
+                // canonical 'Killed' sentinel thrown by the worker callbacks.
+                if (this.isAborted || /killed/i.test(err.message || '')) {
+                  throw new Error('Killed');
+                }
                 if (err.message === 'DomainRateLimited') {
                   nextDepthLinks.add(originalUrl);
-                } else if (err.message && (err.message.includes('killed') || err.message === 'MaxPagesReached')) {
+                } else if (err.message === 'MaxPagesReached') {
                   throw err; // Hard stop
                 }
               }
             }
           } catch (err) {
-            if (err.message && (err.message.includes('killed') || err.message === 'MaxPagesReached')) throw err;
+            if (this.isAborted || /killed/i.test(err.message || '') || err.message === 'MaxPagesReached') throw err;
             logger.error(`Batch processing error: ${err.message}`);
           }
 

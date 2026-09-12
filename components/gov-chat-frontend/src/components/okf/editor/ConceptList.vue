@@ -15,6 +15,35 @@
       <DsPill v-if="flaggedCount > 0" variant="warning" :title="flaggedTip">
         {{ flaggedCount }} {{ translate('okf.editor.concepts.flagged', 'flagged') }}
       </DsPill>
+      <!-- REPO BULK PII (David, 2026-09-12): Redact / Remove / Accept applied
+           to EVERY flagged concept in one steward decision. The parent
+           confirms (destructive for redact/remove) and refreshes the rows. -->
+      <span v-if="flaggedCount > 0 && !readOnly" class="okf-cl__bulk">
+        <button
+          type="button"
+          class="okf-cl__bulk-btn"
+          :title="translate('okf.editor.piiBulk.title.redact', 'Redact all flagged content')"
+          @click="$emit('pii-bulk', 'redact')"
+        >
+          {{ translate('okf.editor.concepts.bulkRedact', 'Redact all') }}
+        </button>
+        <button
+          type="button"
+          class="okf-cl__bulk-btn"
+          :title="translate('okf.editor.piiBulk.title.remove', 'Remove all flagged content')"
+          @click="$emit('pii-bulk', 'remove')"
+        >
+          {{ translate('okf.editor.concepts.bulkRemove', 'Remove all') }}
+        </button>
+        <button
+          type="button"
+          class="okf-cl__bulk-btn"
+          :title="translate('okf.editor.piiBulk.title.accept', 'Accept all flagged entities')"
+          @click="$emit('pii-bulk', 'accept')"
+        >
+          {{ translate('okf.editor.concepts.bulkAccept', 'Accept all') }}
+        </button>
+      </span>
     </header>
 
     <DsInput
@@ -186,7 +215,7 @@ export default {
     // READ ONLY (serving repo): add/delete/re-split/label writes are hidden.
     readOnly: { type: Boolean, default: false }
   },
-  emits: ['select', 'resplit', 'add', 'delete', 'label'],
+  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk'],
   data() {
     return {
       filter: '',
@@ -290,6 +319,7 @@ export default {
 .okf-cl__header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 .okf-cl__title {
@@ -302,6 +332,27 @@ export default {
   padding: 1px 8px;
   border-radius: 100px;
   font-size: var(--text-xs);
+}
+/* REPO BULK PII (David, 2026-09-12): header action group — compact, tokened. */
+.okf-cl__bulk {
+  display: inline-flex;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+.okf-cl__bulk-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-sm);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.okf-cl__bulk-btn:hover {
+  border-color: var(--brand);
+  color: var(--brand);
 }
 .okf-cl__filter {
   width: 100%;

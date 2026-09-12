@@ -597,6 +597,26 @@ async function getConcept(req, res, next) {
 }
 
 /**
+ * POST /api/okf/repos/:repo_id/pii-bulk — REPO BULK PII ACTION (David,
+ * 2026-09-12): Redact / Remove / Accept applied to EVERY flagged concept in
+ * one steward decision (Files-view header controls). Scan-free — the stored
+ * unresolved summary is the ledger — and the repo scan marker is stamped
+ * complete, so the repository is publishable immediately and is NOT scanned
+ * again by the publish gate. Writability asserted; audited.
+ */
+async function repoBulkPii(req, res, next) {
+  try {
+    const { repo_id } = req.params;
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
+    const out = await piiService.repoBulkAction(repo_id, req.body || {}, actorFrom(req));
+    res.status(200).json(out);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /api/okf/repos/:repo_id/concepts/:concept_id/pii-inspect — PII REVIEW
  * (David, 2026-09-09: every issue flagged, categorized and described in clear
  * language). A LIVE Presidio scan of the concept's CURRENT content returning
@@ -1136,6 +1156,7 @@ module.exports = {
   remediatePii,
   acceptPii,
   fileActionPii,
+  repoBulkPii,
   redactWholeFilePii,
   deleteConcept,
   mintRepoVersion,

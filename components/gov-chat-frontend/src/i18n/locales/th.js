@@ -1680,7 +1680,10 @@ export default {
           'Concepts ที่มีเอนทิตีที่ถูกตั้งค่าสถานะ — เปิดแต่ละอัน ลบ หรือเปลี่ยนแปลงเอนทิตี แล้วบันทึก (ระบบจะสแกนใหม่โดยอัตโนมัติ) หรือยอมรับเมื่อเผยแพร่',
         piiBadge: 'PII',
         piiTip: 'เอนทิตีที่ถูกตั้งค่าสถานะ: {k} เปิด ลบ หรือเปลี่ยนแปลง จากนั้นบันทึก — ระบบจะสแกนใหม่โดยอัตโนมัติ',
-        piiTipBare: 'เอนทิตีที่ถูกตั้งค่าสถานะ — เปิด ตรวจทาน จากนั้นบันทึกเพื่อสแกนอีกครั้ง'
+        piiTipBare: 'เอนทิตีที่ถูกตั้งค่าสถานะ — เปิด ตรวจทาน จากนั้นบันทึกเพื่อสแกนอีกครั้ง',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1730,7 +1733,23 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'บันทึกล้มเหลว — ลองใหม่'
+      saveFailed: 'บันทึกล้มเหลว — ลองใหม่',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      }
     },
     dashboard: {
       bulk: {

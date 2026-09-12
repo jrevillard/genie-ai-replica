@@ -1700,7 +1700,10 @@ export default {
         piiBadge: 'PII',
         piiTip:
           'Entidades sinalizadas: {k}. Abra, remova ou altere-as, depois guarde — o exame é repetido automaticamente.',
-        piiTipBare: 'Entidades sinalizadas — abra, reveja, e depois guarde para examinar novamente.'
+        piiTipBare: 'Entidades sinalizadas — abra, reveja, e depois guarde para examinar novamente.',
+        bulkAccept: 'Aceitar tudo',
+        bulkRedact: 'Redigir tudo',
+        bulkRemove: 'Remover tudo'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1750,7 +1753,24 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Falha ao guardar — tentar novamente'
+      saveFailed: 'Falha ao guardar — tentar novamente',
+      piiBulk: {
+        title: {
+          redact: 'Redigir todo o conteúdo sinalizado',
+          remove: 'Remover todo o conteúdo sinalizado',
+          accept: 'Aceitar todas as entidades sinalizadas'
+        },
+        body: {
+          redact:
+            'O corpo de cada conceito sinalizado é substituído pelo aviso de redação. Isto não pode ser desfeito.',
+          remove: 'O corpo de cada conceito sinalizado é esvaziado. Isto não pode ser desfeito.',
+          accept:
+            'Todas as entidades sinalizadas são marcadas como revistas e mantidas — não voltarão a ser sinalizadas sem nova análise.'
+        },
+        scope: "Conceitos afetados: {'{'}n{'}'}.",
+        confirm: 'Aplicar',
+        failed: 'A ação PII em massa falhou — tente novamente.'
+      }
     },
     dashboard: {
       bulk: {

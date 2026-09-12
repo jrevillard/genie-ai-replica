@@ -1688,7 +1688,10 @@ export default {
         piiBadge: 'PII',
         piiTip:
           'Vipengele vilivyotiwa alama: {k}. Vifungue, viondoe au vibadilishe, kisha hifadhi — inachanganua upya kiotomatiki.',
-        piiTipBare: 'Vipengele vilivyotiwa alama — fungua, kagua, kisha hifadhi ili kuchanganua tena.'
+        piiTipBare: 'Vipengele vilivyotiwa alama — fungua, kagua, kisha hifadhi ili kuchanganua tena.',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1738,7 +1741,23 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Hifadhi imeshindwa — jaribu tena'
+      saveFailed: 'Hifadhi imeshindwa — jaribu tena',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      }
     },
     dashboard: {
       bulk: {

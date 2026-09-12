@@ -644,3 +644,36 @@ describe('dedupeLinksForStorage (2026-09-08 crawl audit)', () => {
     expect(dedupeLinksForStorage(undefined)).toEqual([]);
   });
 });
+
+// 2026-09-12 live 500 — listConceptsMeta chained .all() onto the PROMISE
+// ("db.query(...).all is not a function"); every test mock at the time never
+// executed this body, so 600+ green tests shipped it. These run the REAL
+// function against the REAL arangojs v7 shape: db.query is ASYNC and resolves
+// to a cursor — .all() must be called on the awaited cursor, never the promise.
+describe('listConceptsMeta pagination (live-500 regression 2026-09-12)', () => {
+  beforeEach(() => mockDb._reset());
+  afterEach(() => {
+    mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
+  });
+
+  test('paginated branch awaits the cursor before .all() and returns {total, offset, limit, concepts}', async () => {
+    const rows = [{ title: 'Alpha' }, { title: 'Beta' }];
+    mockDb.query.mockImplementation(async (q, b) => {
+      if (q.includes('COLLECT WITH COUNT')) return { all: async () => [rows.length] };
+      expect(b).toEqual({ rid: 'r1', offset: 0, limit: 200 });
+      return { all: async () => rows };
+    });
+    await expect(conceptMeta.listConceptsMeta('r1', { limit: '200', offset: '0' })).resolves.toEqual({
+      total: 2,
+      offset: 0,
+      limit: 200,
+      concepts: rows
+    });
+  });
+
+  test('legacy branch (no limit/offset) awaits the cursor before .all() and returns the full array', async () => {
+    const rows = [{ title: 'Alpha' }];
+    mockDb.query.mockImplementation(async () => ({ all: async () => rows }));
+    await expect(conceptMeta.listConceptsMeta('r1')).resolves.toEqual(rows);
+  });
+});

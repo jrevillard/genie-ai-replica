@@ -11,11 +11,14 @@
     <header class="okf-bp__head">
       <span class="okf-bp__title">{{ title }}</span>
       <span class="okf-bp__head-pills">
-        <!-- D-B (David, 2026-09-07): the curation method must be VISIBLE
-             during import — nvidia-smi is not a UI signal. Defensive: old
-             repos carry no curation payload; nothing renders then. -->
-        <DsPill v-if="curationMethod" variant="info">{{ curationMethod }}</DsPill>
-        <DsPill :variant="phase === 'serving' ? 'success' : 'info'">{{ stageLabel }}</DsPill>
+        <!-- D-B (David, 2026-09-07) + ALL-STAGES (David, 2026-09-12): the
+             curation method and the LIFECYCLE stage are badges on EVERY
+             popup, at every stage — heuristics|llm|hybrid and
+             importing|reviewing|ingesting|serving|retracted. The
+             fine-grained machine stage (queued/splitting/adding/indexing)
+             stays in the body rows where it has progress to anchor it. -->
+        <DsPill v-if="classificationMethod" variant="neutral">{{ classificationMethod }}</DsPill>
+        <DsPill :variant="lifecycleVariant">{{ lifecycleStageLabel }}</DsPill>
       </span>
     </header>
     <template v-if="phase === 'rag'">
@@ -33,6 +36,12 @@
     </template>
     <dl v-if="phase === 'serving' && servingRows.length" class="okf-bp__rows">
       <div v-for="row in servingRows" :key="row.k" class="okf-bp__row">
+        <dt>{{ row.k }}</dt>
+        <dd>{{ row.v }}</dd>
+      </div>
+    </dl>
+    <dl v-if="statusRows.length" class="okf-bp__rows">
+      <div v-for="row in statusRows" :key="row.k" class="okf-bp__row">
         <dt>{{ row.k }}</dt>
         <dd>{{ row.v }}</dd>
       </div>
@@ -71,18 +80,7 @@
       </div>
     </dl>
     <p v-if="elapsed" class="okf-bp__hint">{{ elapsed }}</p>
-    <p class="okf-bp__hint">
-      {{
-        phase === 'serving'
-          ? translate('okf.build.hint.serving', 'This version is serving RAG traffic — retract it to make changes.')
-          : phase === 'rag'
-            ? translate(
-                'okf.build.hint.rag',
-                'The RAG index is building — the version starts serving once every concept is indexed.'
-              )
-            : translate('okf.build.hint.import', 'The repository stays in Import until the file conversion completes.')
-      }}
-    </p>
+    <p class="okf-bp__hint">{{ hint }}</p>
   </div>
 </template>
 
@@ -113,18 +111,61 @@ export default {
     view() {
       return this.fresh || this.repo || {};
     },
-    /** Import (conversion) vs RAG (drain armed at ingest) vs SERVING (the
-     * completed state an Ingested-lane repo shows). */
+    /** ALL-STAGES popup (David, 2026-09-12): serving | rag | import keep
+     * their progress bodies; review | retracted | idle give every other
+     * lifecycle stage a real popup with badges + summary rows. */
     phase() {
       if (this.view.ingested_at) return 'serving';
+      if (this.view.lifecycle_state === 'retracted') return 'retracted';
       const rag = this.view.rag_ingestion;
       if (rag && rag.status === 'draining') return 'rag';
-      return 'import';
+      if (['review', 'approve'].includes(this.view.lifecycle_state)) return 'review';
+      const conv = this.view.conversion;
+      if (conv && !['done', 'failed'].includes(conv.status)) return 'import';
+      return 'idle';
     },
     title() {
       if (this.phase === 'serving') return this.translate('okf.build.title.serving', 'Serving status');
       if (this.phase === 'rag') return this.translate('okf.build.title.rag', 'Ingestion progress');
+      if (this.phase === 'review') return this.translate('okf.build.title.review', 'Review status');
+      if (this.phase === 'retracted') return this.translate('okf.build.title.retracted', 'Retraction status');
+      if (this.phase === 'idle') return this.translate('okf.build.title.idle', 'Repository status');
       return this.translate('okf.build.title.import', 'Import progress');
+    },
+    // THE BADGES (David, 2026-09-12): the lifecycle stage at a glance —
+    // importing | reviewing | ingesting | serving | retracted.
+    lifecycleStage() {
+      if (this.phase === 'serving') return 'serving';
+      if (this.phase === 'rag') return 'ingesting';
+      if (this.phase === 'review') return 'reviewing';
+      if (this.phase === 'retracted') return 'retracted';
+      return 'importing';
+    },
+    lifecycleStageLabel() {
+      const fallback = {
+        importing: 'Importing',
+        reviewing: 'Reviewing',
+        ingesting: 'Ingesting',
+        serving: 'Serving',
+        retracted: 'Retracted'
+      }[this.lifecycleStage];
+      return this.translate('okf.build.lifecycle.' + this.lifecycleStage, fallback);
+    },
+    lifecycleVariant() {
+      return {
+        serving: 'success',
+        ingesting: 'info',
+        importing: 'accent',
+        reviewing: 'warning',
+        retracted: 'neutral'
+      }[this.lifecycleStage];
+    },
+    // The curation classification badge — EVERY stage (the old card showed
+    // it only during import and only from the curation payload; the repo's
+    // persisted classification is the durable source).
+    classificationMethod() {
+      const m = this.view.classification || (this.curation && this.curation.method);
+      return ['heuristics', 'llm', 'hybrid'].includes(m) ? m : '';
     },
     servingRows() {
       if (this.phase !== 'serving') return [];
@@ -140,6 +181,25 @@ export default {
         rows.push({
           k: this.translate('okf.build.conceptsIndexed', 'concepts indexed'),
           v: (rag.concepts_done || 0) + ' / ' + rag.concepts_total
+        });
+      }
+      return rows;
+    },
+    // Summary rows for the non-progress phases (review | retracted | idle):
+    // identity + scale, so every popup says something true about the repo.
+    statusRows() {
+      if (!['review', 'retracted', 'idle'].includes(this.phase)) return [];
+      const rows = [];
+      if (this.view.domain) {
+        rows.push({ k: this.translate('okf.build.row.subject', 'Subject area'), v: this.view.domain });
+      }
+      if (typeof this.view.concept_count === 'number') {
+        rows.push({ k: this.translate('okf.build.row.topics', 'Topics'), v: String(this.view.concept_count) });
+      }
+      if (this.view.version) {
+        rows.push({
+          k: this.translate('okf.build.row.lastVersion', 'Last version'),
+          v: 'v' + this.view.version
         });
       }
       return rows;
@@ -198,7 +258,9 @@ export default {
     conversionRows() {
       const c = this.view.conversion;
       if (!c || ['done', 'failed'].includes(c.status)) return [];
-      const rows = [];
+      // The fine-grained machine stage anchors the lifecycle badge (the
+      // head pill shows Importing; this row shows queued/splitting/adding).
+      const rows = [{ k: this.translate('okf.build.stage.label', 'Stage'), v: this.stageLabel }];
       if (typeof c.pages_done === 'number') {
         rows.push({ k: this.translate('okf.build.pages', 'Pages processed'), v: String(c.pages_done) });
       }
@@ -220,10 +282,6 @@ export default {
     curation() {
       const c = this.view.curation;
       return c && typeof c === 'object' ? c : null;
-    },
-    curationMethod() {
-      const m = this.curation && this.curation.method;
-      return ['heuristics', 'llm', 'hybrid'].includes(m) ? m : '';
     },
     curationRows() {
       const c = this.curation;
@@ -253,6 +311,9 @@ export default {
       return rows;
     },
     elapsed() {
+      // Only the two RUNNING phases show an elapsed line — review/retracted/
+      // idle popups are status summaries, not clocks.
+      if (!['import', 'rag'].includes(this.phase)) return '';
       // PHASE-AWARE (David's "Started 222 h ago", 2026-09-08): the drain's
       // start is the drain record's requested_at — NEVER the import
       // conversion's started_at (frozen at crawl time; Kenya showed a
@@ -273,6 +334,26 @@ export default {
       }
       const h = Math.floor(mins / 60);
       return this.translate('okf.build.elapsed.hr', 'Started {n} h ago').replace('{n}', String(h));
+    },
+    // Per-phase guidance line — the ALL-STAGES popup always ends with what
+    // is true now and what happens next.
+    hint() {
+      const hints = {
+        serving: ['okf.build.hint.serving', 'This version is serving RAG traffic — retract it to make changes.'],
+        rag: [
+          'okf.build.hint.rag',
+          'The RAG index is building — the version starts serving once every concept is indexed.'
+        ],
+        import: ['okf.build.hint.import', 'The repository stays in Import until the file conversion completes.'],
+        review: ['okf.build.hint.review', 'In review — a reviewer signs off, then the steward publishes and ingests.'],
+        retracted: [
+          'okf.build.hint.retracted',
+          'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.'
+        ],
+        idle: ['okf.build.hint.idle', 'Import complete — Submit for review to continue the workflow.']
+      };
+      const [key, fallback] = hints[this.phase] || hints.idle;
+      return this.translate(key, fallback);
     }
   },
   mounted() {

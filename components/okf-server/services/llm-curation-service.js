@@ -436,6 +436,10 @@ async function applyDecision(db, repo, meta, decision) {
  * correct frontmatter proposal. Mode-aware per David: heuristics proposes
  * mechanical fixes only; llm/hybrid propose curated type/label/summary too.
  */
+// Max concepts for a REPO-WIDE curated (llm/hybrid) propose — each concept is
+// one synchronous LLM call. Heuristics (pure planning) is unbounded.
+const CURATED_REPO_PROPOSE_CAP = 25;
+
 async function proposeFrontmatter(repo, concept_id, { classification } = {}) {
   const mode = classification === 'llm' || classification === 'hybrid' ? classification : 'heuristics';
   const db = await dbService.getConnection('default');
@@ -450,6 +454,21 @@ async function proposeFrontmatter(repo, concept_id, { classification } = {}) {
   const bindVars = concept_id ? { r: repo.repo_id, c: concept_id } : { r: repo.repo_id };
   const rows = await (await db.query(query, bindVars)).all();
   if (concept_id && rows.length === 0) return null;
+  // BOUNDED CURATED PROPOSE (David, 2026-09-12: "WTF is going on?" — the
+  // gov-uk crawl repo, 997 concepts, llm-classified): a repo-wide curated
+  // proposal fires ONE LLM call PER CONCEPT, synchronously — big crawls hold
+  // the request until the gateway times out. Heuristics is pure and stays
+  // unbounded; curated repo-wide passes beyond the cap are refused with the
+  // per-concept remedy instead of hanging.
+  if (mode !== 'heuristics' && !concept_id && rows.length > CURATED_REPO_PROPOSE_CAP) {
+    const err = new Error(
+      `repo-wide ${mode} proposal covers ${rows.length} concepts (cap ${CURATED_REPO_PROPOSE_CAP}) — ` +
+        'propose per concept, or use the heuristics mode for mechanical fixes'
+    );
+    err.code = 'CURATED_PROPOSE_TOO_BROAD';
+    err.status = 409;
+    throw err;
+  }
 
   const area = mode === 'heuristics' ? null : await resolveAreaContext(repo.domain);
   const areaLabels = area ? area.labels : [];

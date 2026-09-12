@@ -312,8 +312,7 @@ export default {
       const repo = this.$store.getters['okf/repoById'](this.draft.repo_id);
       if (repo && repo.ingested_at) return; // serving — nothing to mutate
       const s = repo && repo.lifecycle_state;
-      const action =
-        s === 'publish' ? 'ingest' : s === 'retracted' ? 'submit' : 'publish';
+      const action = s === 'publish' ? 'ingest' : s === 'retracted' ? 'submit' : 'publish';
       this.$store
         .dispatch('okf/lifecycleTransition', {
           repoId: this.draft.repo_id,

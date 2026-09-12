@@ -185,7 +185,7 @@ export default {
     UA: 'ইউক্রেন',
     AE: 'সংযুক্ত আরব আমিরাত',
     GB: 'যুক্তরাজ্য',
-    US: 'যুক্তরাষ্ট্র',
+    US: 'মার্কিন যুক্তরাষ্ট্র',
     UY: 'উরুগুয়ে',
     UZ: 'উজবেকিস্তান',
     VU: 'ভানুয়াতু',
@@ -649,7 +649,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'ই-সিটিজেন পোর্টাল',
+    eCitizen: 'eCitizen পোর্টাল',
     taxFiling: 'ট্যাক্স ফাইলিং সিস্টেম',
     idApplication: 'আইডি আবেদন',
     businessReg: 'ব্যবসা নিবন্ধন',
@@ -1070,7 +1070,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'প্রোফাইল সফলভাবে সেভ করা হয়েছে',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter সংরক্ষিত হয়েছে',
       saveFailed: 'প্রোফাইল সেভ করতে ব্যর্থ',
       loadSuccess: 'প্রোফাইল সফলভাবে লোড হয়েছে',
       loadFailed: 'প্রোফাইল লোড করতে ব্যর্থ',
@@ -1327,13 +1327,13 @@ export default {
   },
   chatbot: {
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
-    aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'AI-দ্বারা তৈরি — লাইব্রেরি নথির ওপর ভিত্তি করে নয়',
+    welcomeMessage: 'স্বাগতম! আজ আমি আপনাকে কীভাবে সাহায্য করতে পারি?',
     configMismatchWarning:
-      'কনফিগারেশন অসমঞ্জতা: {warnings}. দয়া করে দ্রুত সাহায্য এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',
-    categoryNotFound: 'ক্যাটাগরি "{label}" জ্ঞান শ্রেণিবিন্যাসে পাওয়া যায়নি',
-    serviceLabelMismatch: 'সার্ভিস "{label}" একটি UI লেবেল ব্যবহার করে যা জ্ঞান শ্রেণিবিন্যাসের সাথে মেলে না',
-    noFilterWarning: 'কোনো কনটেক্সট ফিল্টার সক্রিয় নেই — ক্যোয়ারী আনফিল্টারড থাকবে।',
+      'কনফিগারেশন অমিল: {warnings}। অনুগ্রহ করে দ্রুত সহায়তা এবং জ্ঞান শ্রেণিবিন্যাস কনফিগারেশন পরীক্ষা করুন।',
+    categoryNotFound: 'জ্ঞান শ্রেণিবিন্যাসে "{label}" বিভাগটি পাওয়া যায়নি',
+    serviceLabelMismatch: 'পরিষেবা "{label}" এমন একটি UI লেবেল ব্যবহার করে যা জ্ঞান শ্রেণিবিন্যাসের সাথে মেলে না',
+    noFilterWarning: 'কোনো প্রসঙ্গের ফিল্টার সক্রিয় নেই — অনুসন্ধানটি ফিল্টারহীন থাকবে।',
     placeholder: 'আপনার জিজ্ঞাসা এখানে লিখুন...',
     sendButton: 'পাঠান',
     fileReceived: 'ফাইল সফলভাবে গৃহীত হয়েছে।',
@@ -1379,23 +1379,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "একজন সহায়ক কেনিয়ান নাগরিক নিবন্ধন বিশেষজ্ঞ হিসেবে কাজ করুন। একটি জাতীয় পরিচয়পত্র (Maisha Namba) পাওয়ার বাহারিয়ে যাওয়া কার্ড প্রতিস্থাপনের পদক্ষেপগুলো ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রয়োজনীয় নথিপত্রের একটি স্পষ্ট তালিকা প্রদান করুন (যেমন: জন্ম সনদ, বাবা-মায়ের আইডির অনুলিপি) এবং ব্যবহারকারীকে তাদের নিকটস্থ হুদুমা (Huduma) কেন্দ্র বা রেজিস্ট্রার অফ পার্সন্স অফিসে যাওয়ার পরামর্শ দিন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "একজন সহায়ক কেনিয়ান নাগরিক নিবন্ধন বিশেষজ্ঞ হিসেবে কাজ করুন। একটি জাতীয় পরিচয়পত্র (Maisha Namba) প্রাপ্তি বা হারিয়ে যাওয়া পরিচয়পত্র প্রতিস্থাপনের পদক্ষেপগুলি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রয়োজনীয় নথির একটি পরিষ্কার তালিকা দিন (যেমন, জন্ম সনদ, পিতামাতার জাতীয় পরিচয়পত্রের কপি) এবং ব্যবহারকারীকে তাদের নিকটস্থ Huduma Centre বা Registrar of Persons অফিসে যাওয়ার পরামর্শ দিন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     payTaxesPrompt:
-      "একজন KRA (কেনিয়া রেভিনিউ অথরিটি) গাইড হিসেবে কাজ করুন। রিটার্ন জমা দেওয়া, KRA পিন-এর জন্য আবেদন করা বা iTax পোর্টালে পাসওয়ার্ড রিসেট করার প্রক্রিয়াটি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: বার্ষিক রিটার্ন জমা দেওয়ার জন্য ব্যবহারকারীকে ৩০শে জুনের সময়সীমার কথা মনে করিয়ে দিন এবং তাদের কোনো আয় না থাকলে কীভাবে শূন্য (Nil) রিটার্ন জমা দিতে হয সে বিষয়ে গাইড করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "একজন KRA (কেনিয়া রাজস্ব কর্তৃপক্ষ) গাইড হিসেবে কাজ করুন। রিটার্ন জমা দেওয়া, KRA PIN-এর জন্য আবেদন করা বা iTax পোর্টালে পাসওয়ার্ড রিসেট করার প্রক্রিয়া ব্যাখ্যা করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে বার্ষিক রিটার্নের জন্য ৩০ জুনের সময়সীমা মনে করিয়ে দিন এবং কোনো আয় না থাকলে কীভাবে শূন্য রিটার্ন জমা দিতে হয় তা তাদের গাইড করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     startBusinessPrompt:
-      "ই-সিটিজেন (eCitizen) পরিষেবাগুলোর জন্য একজন ব্যবসায়িক পরামর্শদাতা হিসেবে কাজ করুন। কেনিয়ায় ব্যবসার নাম সংরক্ষণ এবং কোম্পানি নিবন্ধনের মাধ্যমে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: নাম অনুসন্ধান এবং নিবন্ধনের জন্য বর্তমান খরচগুলো ব্যাখ্যা করুন এবং আবেদনটি সম্পূর্ণ করতে ব্যবহারকারীকে অফিসিয়াল ই-সিটিজেন পোর্টালে নির্দেশ করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "eCitizen পরিষেবার জন্য একজন ব্যবসায়িক পরামর্শদাতা হিসেবে কাজ করুন। কেনিয়ায় ব্যবসার নাম সংরক্ষণ এবং কোম্পানি নিবন্ধনের মাধ্যমে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: নাম অনুসন্ধান এবং নিবন্ধনের বর্তমান খরচ ব্যাখ্যা করুন এবং আবেদনটি সম্পূর্ণ করতে ব্যবহারকারীকে অফিসিয়াল eCitizen পোর্টালে নিয়ে যান। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     findHealthcarePrompt:
-      "একজন স্বাস্থ্য পরিষেবা নেভিগেটর হিসেবে কাজ করুন। NHIF থেকে SHIF (সোশ্যাল হেলথ ইন্স্যুরেন্স ফান্ড)-এ রূপান্তর এবং কীভাবে নিবন্ধন করতে হয় সে সম্পর্কে তথ্য প্রদান করুন। গুরুত্বপূর্ণ: নিবন্ধনের জন্য অফিসিয়াল USSD কোডগুলো (যেমন *263#) বা ওয়েবসাইটের লিঙ্কগুলো শেয়ার করুন এবং জনস্বাস্থ্য কভারের সুবিধাগুলো ব্যাখ্যা করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "একজন স্বাস্থ্যসেবা নেভিগেটর হিসেবে কাজ করুন। NHIF থেকে SHIF (সামাজিক স্বাস্থ্য বীমা তহবিল)-এ রূপান্তর এবং কীভাবে নিবন্ধন করতে হয় সে সম্পর্কে তথ্য দিন। গুরুত্বপূর্ণ: নিবন্ধনের জন্য অফিসিয়াল USSD কোড (যেমন *263#) বা ওয়েবসাইট লিঙ্ক শেয়ার করুন এবং জনস্বাস্থ্য কভারের সুবিধাগুলি ব্যাখ্যা করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     educationServicesPrompt:
-      "একজন শিক্ষা পরামর্শদাতা হিসেবে কাজ করুন। CBC পাঠ্যক্রম, NEMIS নিবন্ধন, বা KUCCPS-এর মাধ্যমে বিশ্ববিদ্যালয়ে নিয়োগ নিয়ে আলোচনা করুন। গুরুত্বপূর্ণ: পরীক্ষার ফলাফল প্রকাশিত হলে পিতামাতারা কীভাবে SMS বা KNEC পোর্টালের মাধ্যমে জাতীয় পরীক্ষার ফলাফল চেক করতে পারেন তা ব্যাখ্যা করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "একজন শিক্ষা পরামর্শদাতা হিসেবে কাজ করুন। CBC পাঠ্যক্রম, NEMIS নিবন্ধন বা KUCCPS-এর মাধ্যমে বিশ্ববিদ্যালয়ে প্লেসমেন্ট নিয়ে আলোচনা করুন। গুরুত্বপূর্ণ: জাতীয় পরীক্ষার ফলাফল প্রকাশের পর অভিভাবকরা কীভাবে SMS বা KNEC পোর্টালের মাধ্যমে তা দেখতে পারবেন তা ব্যাখ্যা করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     transportLicensesPrompt:
-      "একজন NTSA সার্ভিস গাইড হিসেবে কাজ করুন। ড্রাইভিং লাইসেন্স নবায়ন, যানবাহন পরিদর্শন, বা TIMS অ্যাকাউন্ট পরিচালনার প্রক্রিয়াটি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে তাদের স্মার্ট DL-এর জন্য আবেদন করতে বা গাড়ির পরিদর্শন বুক করতে eCitizen NTSA পোর্টালে কীভাবে লগইন করতে হয় সে সম্পর্কে গাইড করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "একজন NTSA পরিষেবা গাইড হিসেবে কাজ করুন। ড্রাইভিং লাইসেন্স নবায়ন, যানবাহন পরিদর্শন বা TIMS অ্যাকাউন্ট পরিচালনার প্রক্রিয়া ব্যাখ্যা করুন। গুরুত্বপূর্ণ: তাদের স্মার্ট DL-এর জন্য আবেদন করতে বা একটি যানবাহন পরিদর্শনের সময় নির্ধারণ করতে eCitizen NTSA পোর্টালে কীভাবে লগ ইন করতে হয় সে সম্পর্কে ব্যবহারকারীকে গাইড করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     housingProgramsPrompt:
-      "একজন আবাসন কর্মসূচি উপদেষ্টা হিসেবে কাজ করুন। অ্যাফোর্ডেবল হাউজিং প্রোগ্রাম (বোমা ইয়াঙ্গু/Boma Yangu) নিবন্ধন এবং স্বেচ্ছায় অবদান রাখার প্রক্রিয়াটি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রজেক্টগুলো দেখার জন্য ব্যবহারকারীকে বোমা ইয়াঙ্গু পোর্টালে গাইড করুন এবং বরাদ্দের যোগ্যতার মানদণ্ড ব্যাখ্যা করুন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "একটি আবাসন কর্মসূচির উপদেষ্টা হিসেবে কাজ করুন। সাশ্রয়ী মূল্যের আবাসন কর্মসূচি (Boma Yangu) নিবন্ধন এবং স্বেচ্ছাসেবী অবদান প্রক্রিয়া ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রকল্পগুলি দেখতে ব্যবহারকারীকে Boma Yangu পোর্টালে নির্দেশ করুন এবং বরাদ্দের যোগ্যতার মানদণ্ড ব্যাখ্যা করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     findJobsPrompt:
-      "পাবলিক সার্ভিসের জন্য একজন ক্যারিয়ার কোচ হিসেবে কাজ করুন। পাবলিক সার্ভিস কমিশন (PSC) পোর্টালের মাধ্যমে একটি প্রোফাইল তৈরি করা এবং শূন্যপদের জন্য আবেদন করার বিষয়ে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে তাদের একাডেমিক সার্টিফিকেট প্রস্তুত রাখতে এবং MyGov বিজ্ঞাপনের জন্য নিয়মিত PSC ওয়েবসাইট বা স্থানীয় সংবাদপত্র চেক করার পরামর্শ দিন। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।",
+      "পাবলিক সার্ভিসের জন্য একজন ক্যারিয়ার কোচ হিসেবে কাজ করুন। পাবলিক সার্ভিস কমিশন (PSC) পোর্টালের মাধ্যমে একটি প্রোফাইল তৈরি এবং শূন্যপদে আবেদনের বিষয়ে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে তাদের শিক্ষাগত সনদ প্রস্তুত রাখতে এবং MyGov বিজ্ঞাপনের জন্য PSC ওয়েবসাইট বা স্থানীয় সংবাদপত্রগুলি নিয়মিত পরীক্ষা করার পরামর্শ দিন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
     justChatPrompt:
-      "একজন বন্ধুত্বপূর্ণ স্থানীয় সঙ্গীহিসেবে কাজ করুন। কেনিয়ান সংস্কৃতি এবং দৈনন্দিন জীবন সম্পর্কে বিনয়ী, সহায়ক এবং জ্ঞানী হন। গুরুত্বপূর্ণ: ব্যবহারকারীকে মনে করিয়ে দিন যে আপনি যেকোনো বিষয়ে চ্যাট করতে পারলেও, আপনার মূল শক্তি হলো কেনিয়ান সরকারি পরিষেবা যেমন **আইডি**, **ট্যাক্স**, এবং **ব্যবসা নিবন্ধন** নেভিগেট করতে তাদের সাহায্য করা। নিয়ম: সর্বদা অ্যাপ্লিকেশনটিকে 'জিনি এআই (Genie AI)' হিসেবে উল্লেখ করবেন।"
+      "একজন বন্ধুত্বপূর্ণ স্থানীয় সঙ্গী হিসেবে কাজ করুন। কেনিয়ার সংস্কৃতি ও দৈনন্দিন জীবন সম্পর্কে বিনয়ী, সহায়ক এবং জ্ঞানী হন। গুরুত্বপূর্ণ: ব্যবহারকারীকে মনে করিয়ে দিন যে আপনি যেকোনো বিষয়ে চ্যাট করতে পারলেও আপনার মূল শক্তি হলো **পরিচয়পত্র**, **কর** এবং **ব্যবসায়িক নিবন্ধন**-এর মতো কেনিয়ার সরকারি পরিষেবা নেভিগেট করতে তাদের সাহায্য করা। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।"
   },
   common: {
     cancel: 'বাতিল করুন',
@@ -1463,13 +1463,13 @@ export default {
       details: 'বিবরণ',
       ingestionLog: 'ইনজেশন লগ',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        'এই ফাইলের মেটাডেটা: নাম, লেখক এবং জ্ঞান-শ্রেণিবিন্যাস লেবেল যা AI প্রশ্ন পাঠাতে ব্যবহার করে। Ingest করতে কমপক্ষে একটি লেবেল প্রয়োজন।',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'এই ফাইলের ওয়েবসাইট ক্রল-এর লাইভ ভিউ: গতি, সারি, ত্রুটি এবং অগ্রগতি। ক্রল সফল হলে, নিচের ফুটার এটিকে একটি OKF রিপোজিটরিতে রূপান্তর করে।',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'ওয়েবসাইট ক্রল-এর প্রতি পৃষ্ঠার লগ: কোন URLগুলি আনা হয়েছে, পুনঃনির্দেশিত হয়েছে বা ব্যর্থ হয়েছে। ক্রল চলার সময় এটি লেখা হয়।',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'AI উত্তরের জন্য এই ফাইলটি প্রস্তুত করার ধাপভিত্তিক অগ্রগতি: চাঙ্কিং, লেবেলিং, এম্বেডিং এবং ইনডেক্সিং। এখানকার ত্রুটিগুলি দেখায় ঠিক কোথায় ingest বন্ধ হয়েছে।'
     },
     log: {
       killActions: 'কিল অ্যাকশন (Kill Actions):',
@@ -1551,31 +1551,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'সংস্করণ লোড করতে ব্যর্থ হয়েছে',
+      none: 'এখনো কোনো সংস্করণ তৈরি হয়নি — publish করলে v1 তৈরি হয়।',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
+      publish: 'নতুন সংস্করণ তৈরি করুন',
+      published: "সংস্করণ v{'{'}v{'}'} প্রকাশিত হয়েছে — ডকুমেন্ট রিপোজিটরিতে {'{'}f{'}'} বান্ডিল সংরক্ষিত হয়েছে।",
       serving: 'Ingested (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Studio ড্যাশবোর্ড',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'উৎস ফাইলটি এখনও প্রক্রিয়াজাত হচ্ছে',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'এটি স্থায়ীভাবে রিপোজিটরি, এর ধারণা, ইনডেক্স করা সামগ্রী, গ্রাফ এবং বান্ডিল উপাদানগুলি সরিয়ে দেয়।',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'রিপোজিটরি মুছুন'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'চিহ্নিত সত্ত্বা স্বীকার করুন এবং প্রকাশ করুন',
+        note: 'চিহ্নিত সত্ত্বাগুলি প্রকাশিত সামগ্রীর অংশ। আপনি যদি সেগুলি পর্যালোচনা করে থাকেন (যেমন অফিসিয়াল যোগাযোগের বিবরণ), স্বীকার করুন এবং চালিয়ে যান।'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "Publish করলে v{'{'}n{'}'} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে \"{'{'}file{'}'}\" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী যেকোনো zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1593,59 +1593,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "লেবেলযুক্ত: {'{'}n{'}'}",
+      fallbacks: "LLM ফলব্যাক: {'{'}n{'}'}",
+      concepts: "ধারণা: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'}টি এন্ট্রি",
+      loadFailed: 'কার্যকলাপ লগ লোড করতে ব্যর্থ হয়েছে।',
+      none: 'এখনো কোনো কার্যকলাপ রেকর্ড করা হয়নি — রিপোজিটরির পদক্ষেপগুলি ঘটার সাথে সাথে এখানে উপস্থিত হবে।',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'ধারণা গ্রাফ',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'এখনো কোনো ধারণা নেই - গ্রাফ করার কিছু নেই।',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'ইনডেক্স হাব দেখান বা লুকান (এর বিষয়বস্তুর লিঙ্কগুলি কাঠামো, জ্ঞান নয়)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "{'{'}n{'}'}টি লিঙ্ক",
+        chunks: "{'{'}n{'}'}টি চাঙ্ক",
+        failed: 'ইনডেক্সিং ব্যর্থ হয়েছে',
+        flagged: 'চিহ্নিত সত্ত্বা',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: 'এখনো ইনডেক্স করা হয়নি'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (পেস্ট করুন বা খালি রাখুন)',
+        bodyPh: '# শিরোনাম\n\nএখানে markdown পেস্ট করুন - frontmatter আপনার জন্য যোগ করা হবে।',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'ফাইল তৈরি করা যায়নি।',
+        title: 'ধারণা ফাইল যোগ করুন',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'উদাঃ মারার বন্যপ্রাণী',
+        updateIndex: 'ইনডেক্স বিষয়বস্তুর তালিকায় যুক্ত করুন'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'কোনো frontmatter নেই — সম্পূর্ণ প্রস্তাব',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'প্রতিটি ধারণাজুড়ে পরিকল্পিত frontmatter সংশোধন। মূল অংশ কখনই পরিবর্তিত হয় না।',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'ঠিক করার কিছু নেই — সমস্ত frontmatter ইতিমধ্যে সঙ্গতিপূর্ণ।',
         col: {
           field: 'Field',
           after: 'After',
@@ -1654,14 +1654,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'স্বয়ংক্রিয় সংশোধন (শুধুমাত্র frontmatter)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'কীভাবে এই ধারণাটি কিউরেট করা হয়েছিল',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'এখনো কোনো ফাইল নেই - একটি ধারণা যোগ করুন বা উৎস থেকে পুনরায় বিভাজন করুন।',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1669,31 +1669,31 @@ export default {
         resplit: 'Re-split',
         flagged: 'চিহ্নিত',
         flaggedTip:
-          'চিহ্নিত সত্তা সহ concept — প্রতিটি খুলুন, সত্তাটি মুছে ফেলুন বা পরিবর্তন করুন, সেভ করুন (এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে); অথবা প্রকাশের সময় সেগুলি অনুমোদন করুন।',
+          'চিহ্নিত সত্ত্বাসহ ধারণাগুলি — প্রতিটি খুলুন, সত্ত্বাটি সরান বা পরিবর্তন করুন, সংরক্ষণ করুন (এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে); অথবা publish করার সময় সেগুলি স্বীকার করুন।',
         piiBadge: 'PII',
         piiTip:
-          'চিহ্নিত সত্তা: {k}। খুলুন, মুছে ফেলুন বা পরিবর্তন করুন, তারপর সেভ করুন — এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে।',
-        piiTipBare: 'চিহ্নিত সত্তা — খুলুন, পর্যালোচনা করুন, তারপর পুনরায় স্ক্যান করতে সেভ করুন।',
+          'চিহ্নিত সত্ত্বা: {k}। সেগুলি খুলুন, সরান বা পরিবর্তন করুন, তারপর সংরক্ষণ করুন — এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে।',
+        piiTipBare: 'চিহ্নিত সত্ত্বা — পুনরায় স্ক্যান করতে খুলুন, পর্যালোচনা করুন, তারপর সংরক্ষণ করুন।',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'এটি ফাইল, এর ইনডেক্স করা অংশ এবং এর গ্রাফ লিঙ্কগুলিকে স্থায়ীভাবে সরিয়ে দেয়।',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'রিপোজিটরি সম্পাদক',
+      loadFailed: 'এই ধারণাটি লোড করা যায়নি।',
+      loadingConcept: 'ধারণা লোড হচ্ছে…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'ধারণা মেটাডেটা',
+        labelLabel: 'লেবেল (জ্ঞান শ্রেণিবিন্যাস)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'কোনো ধারণা নির্বাচিত হয়নি',
+        saveFailed: 'মেটাডেটা সংরক্ষণ ব্যর্থ হয়েছে',
+        saved: 'মেটাডেটা সংরক্ষিত হয়েছে',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1704,62 +1704,63 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'সম্পাদনা শুরু করতে তালিকা থেকে একটি ধারণা নির্বাচন করুন।',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'এটি বর্তমানের সমস্ত ধারণা এবং উদ্ভূত গ্রাফ মুছে দেয়, তারপর নতুন বিভাজনের সাথে উৎস ফাইলটি পুনরায় আমদানি করে। ধারণার সম্পাদনা হারিয়ে যাবে।',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'পুনরায় বিভাজন ব্যর্থ হয়েছে — উৎস ফাইল লিঙ্ক পরীক্ষা করুন।',
+        modeA: 'পুরো ক্রলের জন্য একটি ধারণা',
+        modeAHint: 'মেগা-ধারণা — একক ধারণায় সম্পূর্ণ সামগ্রী',
+        modeB: 'প্রতি পৃষ্ঠার জন্য একটি ধারণা',
+        modeBHint: 'ক্রলারের `## Source:` চিহ্নে বিভক্ত হয় (প্রস্তাবিত)',
+        modeC: 'LLM বিষয় নিষ্কাশন ব্যবহার করুন',
+        modeCHint: 'গল্প ১০.৬ — শীঘ্রই আসছে',
+        title: 'উৎস থেকে পুনরায় বিভক্ত করুন'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'অসংরক্ষিত পরিবর্তন',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'সেভ করা যায়নি — আবার চেষ্টা করুন',
+      saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে — আবার চেষ্টা করুন',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: 'সমস্ত চিহ্নিত সামগ্রী সেন্সর (redact) করুন',
+          remove: 'সমস্ত চিহ্নিত সামগ্রী সরান',
+          accept: 'সমস্ত চিহ্নিত সত্ত্বা গ্রহণ করুন'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          redact:
+            'প্রতিটি চিহ্নিত ধারণার মূল অংশ রিঅ্যাকশন নোটিশ দিয়ে প্রতিস্থাপিত হয়। এটি পূর্বাবস্থায় ফেরানো যাবে না।',
+          remove: 'প্রতিটি চিহ্নিত ধারণার মূল অংশ খালি করা হয়েছে। এটি পূর্বাবস্থায় ফেরানো যাবে না।',
           accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+            'সমস্ত চিহ্নিত সত্ত্বা পর্যালোচিত-এবং-রাখা হয়েছে হিসেবে চিহ্নিত — আপনি পুনরায় স্ক্যান না করা পর্যন্ত সেগুলি আর চিহ্নিত হবে না।'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "প্রভাবিত ধারণা: {'{'}n{'}'}টি।",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: 'বাল্ক PII পদক্ষেপ ব্যর্থ হয়েছে — আবার চেষ্টা করুন।'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'বাল্ক PII পদক্ষেপ প্রয়োগ করা হচ্ছে',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: 'প্রতিটি রিপোজিটরি সম্পূর্ণ গেট চেক (PII পর্যালোচনা, ইনডেক্সিং, সঙ্গতি) সহ প্রকাশিত হয়। রিপোজিটরি ভিত্তিক ফলাফল:',
+        pending: 'নির্বাচিত রিপোজিটরিগুলি publish করতে নিশ্চিত করুন।',
+        publishConfirm: "{'{'}n{'}'}টি প্রকাশ করুন",
+        title: 'নির্বাচিত রিপোজিটরিগুলি প্রকাশ করুন'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "{'{'}name{'}'}-এর জন্য ক্রিয়া",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'তৈরি হচ্ছে — উৎস ফাইলটি এখনও প্রক্রিয়াজাত হচ্ছে',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1768,27 +1769,27 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'এটি স্থায়ীভাবে রিপোজিটরি, এর ধারণা, ইনডেক্স করা সামগ্রী, গ্রাফ এবং বান্ডিল উপাদানগুলি সরিয়ে দেয়। এটি পূর্বাবস্থায় ফেরানো যাবে না।',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'রিপোজিটরি মুছুন'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'বিষয় ক্ষেত্র অনুসারে ফিল্টার করুন'
       },
-      new: '+ New repository',
+      new: '+ নতুন রিপোজিটরি',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'চিহ্নিত সত্ত্বা স্বীকার করুন এবং প্রকাশ করুন',
+        note: 'চিহ্নিত সত্ত্বাগুলি প্রকাশিত সামগ্রীর অংশ। আপনি যদি সেগুলি পর্যালোচনা করে থাকেন (যেমন অফিসিয়াল যোগাযোগের বিবরণ), স্বীকার করুন এবং চালিয়ে যান।'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "Publish করলে v{'{'}n{'}'} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে \"{'{'}file{'}'}\" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "বাল্ক প্রকাশের জন্য {'{'}name{'}'} নির্বাচন করুন",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'Ingest ব্যর্থ হয়েছে',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
@@ -1803,36 +1804,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ আরও {'{'}n{'}'}টি",
+        fixPath: 'পুনরায় চেষ্টা করতে re-ingest করুন: retract → সংস্করণ তৈরি করুন → ingest।'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'LLM ফলব্যাক',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'ব্যাচ সংরক্ষিত হয়েছে',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'ধারণা ইনডেক্স করা হয়েছে',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "{'{'}n{'}'} ঘণ্টা আগে শুরু হয়েছে",
+        lt1: 'এক মিনিটেরও কম সময় আগে শুরু হয়েছে',
+        min: "{'{'}n{'}'} মিনিট আগে শুরু হয়েছে"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'ফাইল রূপান্তর সম্পন্ন না হওয়া পর্যন্ত রিপোজিটরিটি Import-এ থাকে।',
+        rag: 'RAG ইনডেক্স তৈরি হচ্ছে — প্রতিটি ধারণা ইনডেক্স করা হলে সংস্করণটি serving শুরু করে।',
+        serving: 'এই সংস্করণটি RAG ট্র্যাফিকের জন্য serving করছে — পরিবর্তন করতে এটিকে retract করুন।',
+        review: 'Review-তে আছে — একজন পর্যালোচক অনুমোদন দিলে স্টুয়ার্ড publish এবং ingest করেন।',
+        retracted: 'পরিষেবার বাইরে — পুনরায় serving করতে submit → review → approve → publish → ingest করুন।',
+        idle: 'আমদানি সম্পন্ন — কর্মপ্রবাহ চালিয়ে যেতে review-এর জন্য submit করুন।'
       },
-      pages: 'Pages processed',
+      pages: 'পৃষ্ঠা প্রক্রিয়াকৃত হয়েছে',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Serving গ্রাফ',
+        version: 'Serving সংস্করণ'
       },
       stage: {
         indexing: 'Indexing',
@@ -1840,12 +1841,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'আমদানির অগ্রগতি',
+        rag: 'Ingest অগ্রগতি',
+        serving: 'Serving স্থিতি',
+        review: 'Review স্থিতি',
+        retracted: 'Retract স্থিতি',
+        idle: 'রিপোজিটরির স্থিতি'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1861,33 +1862,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'একটি .zip বান্ডিল ফাইল বেছে নিন।',
+      stagedFile: "স্টেজ করা হয়েছে: {'{'}name{'}'}",
+      staged: 'বান্ডিল স্টেজ করা হয়েছে — আমদানি শুরু করতে রিপোজিটরি তৈরি করুন-এ ক্লিক করুন।',
+      openExisting: 'বিদ্যমান রিপোজিটরি খুলুন',
+      name: 'রিপোজিটরির নাম',
+      importing: 'বান্ডিল আমদানি করা হচ্ছে…',
+      importHint: 'অথবা একটি বিদ্যমান zip বান্ডিলকে নতুন রিপোজিটরি হিসেবে আমদানি করুন।',
+      importDefaultName: 'আমদানিকৃত রিপোজিটরি',
+      failed: 'রিপোজিটরি তৈরি ব্যর্থ হয়েছে',
+      duplicateInline: 'এই নামের একটি রিপোজিটরি ইতিমধ্যে বিদ্যমান। এটি খুলুন, অথবা অন্য নাম বেছে নিন।',
+      duplicate: 'এই নামের একটি রিপোজিটরি ইতিমধ্যে বিদ্যমান - ড্যাশবোর্ড থেকে এটি খুলুন বা অন্য একটি নাম বেছে নিন।',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'রিপোজিটরি তৈরি করুন',
+      title: 'নতুন OKF রিপোজিটরি',
+      hint: 'একটি খালি রিপোজিটরি তৈরি করে যাতে একটি index.md থাকে যা আপনি Studio সম্পাদকে সম্পাদনা করতে পারেন।',
+      domainPlaceholder: 'একটি বিষয় ক্ষেত্র নির্বাচন করুন…',
+      domainRequired: 'প্রথমে একটি বিষয় ক্ষেত্র বেছে নিন — তৈরির পরে এটি পরিবর্তন করা যাবে না।',
+      classLabel: 'ধারণার শ্রেণিবিন্যাস',
+      classHeuristics: 'হিউরিস্টিকস (ডিফল্ট)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'সংরক্ষিত ফিল্ডের নাম।',
+      errKeyDuplicate: 'ফিল্ডের নাম দুবার ব্যবহার করা হয়েছে।',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'অবশ্যই একটি সংখ্যা হতে হবে',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1898,53 +1899,52 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'প্রতিটি frontmatter ফিল্ড সম্পাদনযোগ্য। অবাধে কী যোগ বা অপসারণ করুন।',
+      errRemovalPending: 'ফিল্ড অপসারণের জন্য মার্জ-ডিলিট সার্ভার চুক্তি প্রয়োজন (শীঘ্রই আসছে)।',
+      errKeyRequired: 'প্রতিটি ফিল্ডের একটি নাম প্রয়োজন।',
+      arrayPh: 'কমা দ্বারা পৃথক করা মান',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter সংরক্ষিত হয়েছে',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'Frontmatter কী?',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'এখনো কোনো frontmatter নেই — সম্পাদনা ধরন, শিরোনাম এবং লেবেল যোগ করে।',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'লেবেল (জ্ঞান শ্রেণিবিন্যাস)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'Frontmatter সংরক্ষণ করুন',
+      saveFailed: 'Frontmatter সংরক্ষণ ব্যর্থ হয়েছে'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        'আপনার রিপোজিটরিতে একটি এন্ট্রি — সাধারণত একটি একক পৃষ্ঠা বা বিষয়। প্রতিটি ধারণায় কাঠামোগত frontmatter থাকে যা সহকারী পড়ে, সাথে থাকে markdown টেক্সট যা থেকে এটি উত্তর দেয়।',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'একটি বিষয় ক্ষেত্রের চারপাশে কিউরেট করা ধারণাগুলির একটি সংগ্রহ। এটি একটি OKF বান্ডিল হয়ে ওঠে যা আপনি publish করেন, সংস্করণ করেন এবং সহকারীর কাছে উপলব্ধ করেন।',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'এই জ্ঞান কোথায় অন্তর্ভুক্ত? বিষয় ক্ষেত্রটি আপনার রিপোজিটরিকে শ্রেণিবদ্ধ করে এবং আপনি কোন লেবেলগুলি বেছে নিতে পারেন তা নির্দিষ্ট করে। তৈরির পরে এটি পরিবর্তন করা যাবে না।',
+      selectSubjectArea: 'একটি বিষয় ক্ষেত্র নির্বাচন করুন…',
+      subjectAreaMissing: 'এই রিপোজিটরির বিষয় ক্ষেত্রটি জ্ঞান শ্রেণিবিন্যাসে নেই — সমস্ত লেবেল দেখানো হচ্ছে।',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'জ্ঞান শ্রেণিবিন্যাসের একটি বিভাগ যা সহকারীকে বলে এই ধারণাটি কী ধরনের। লেবেলের মাধ্যমেই উত্তরগুলি সঠিক সামগ্রী খুঁজে পায়।',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        'একটি রিপোজিটরির zip এক্সপোর্ট — এর ধারণা, কাঠামো এবং মেটাডেটা একটি ফাইলে থাকে। বান্ডিলের মাধ্যমে সিস্টেমের মধ্যে রিপোজিটরি আদান-প্রদান করা হয়।',
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'প্রকাশের সময় একটি রিপোজিটরির অপরিবর্তনীয় স্ন্যাপশট। পরবর্তী সংস্করণে সম্পাদনা চলতে থাকে — প্রকাশিত সংস্করণ কখনই পরিবর্তিত হয় না।',
+      serving: 'এই সংস্করণটি লাইভ: উত্তর দেওয়ার সময় সহকারী এর বিষয়বস্তু পড়ে। পরিবর্তন করতে এটিকে retract করুন।',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        'যে ধাপে একটি প্রকাশিত সংস্করণকে উত্তর প্রদানের জন্য প্রস্তুত করা হয় — পাঠ্য বিভক্ত, এম্বেড এবং লিঙ্ক করা হয়। এর আগে সহকারীর কাছে কিছুই পৌঁছায় না।',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'আমরা কীভাবে নির্ধারণ করি প্রতিটি ধারণা কী (একটি বিষয়, একটি সত্ত্বা, একটি প্রক্রিয়া…)। হিউরিস্টিকস স্বয়ংক্রিয়ভাবে পৃষ্ঠা পড়ে; LLM বিকল্পটি ধীরগতির হলেও জটিল পৃষ্ঠা পরিচালনা করতে পারে।',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'উৎসটিকে অন্য উপায়ে ধারণায় পুনরায় কাটা — উদাহরণস্বরূপ সম্পূর্ণ সাইটের জন্য একটির পরিবর্তে প্রতি পৃষ্ঠায় একটি ধারণা।',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: 'আমদানি ব্যর্থ হয়েছে — উৎস ফাইল রূপান্তর করা যায়নি।',
+      importFailedHint: 'এই রিপোজিটরিটি মুছুন এবং উৎস ফাইলটি আবার আমদানি করুন।',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        'প্রতিটি ফাইলের শীর্ষে থাকা কাঠামোগত তথ্য — ধরন, শিরোনাম, লেবেল। প্রতিটি ধারণা কী সম্পর্কে তা জানতে সহকারী এটি ব্যবহার করে।'
     },
     md: {
       toolbar: 'Formatting',
@@ -1954,7 +1954,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'সংখ্যাযুক্ত তালিকা',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1962,106 +1962,105 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'একটি OKF রিপোজিটরি হলো বিষয়গুলির একটি কাঠামোগত, সংস্করণযুক্ত সংগ্রহ যা আপনার চ্যাট উত্তর উদ্ধৃত করতে পারে। এটিকে আপনার ডোমেনের জন্য একটি হালকা তত্ত্বের স্তর হিসাবে ভাবুন — লেবেল বিভাগ নির্ধারণ করে, বিষয় সত্ত্বা নির্ধারণ করে, উৎস প্রমাণ নির্ধারণ করে।',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'একটি OKF রিপোজিটরি হলো বিষয়গুলির একটি কিউরেট করা, সংস্করণযুক্ত সংগ্রহ। এটিকে আপনার ডোমেনের জন্য একটি হালকা তত্ত্বের স্তর হিসেবে ভাবুন — লেবেল বিভাগ নির্ধারণ করে, বিষয় সত্ত্বা নির্ধারণ করে, উৎস প্রমাণ নির্ধারণ করে। একবার প্রকাশিত হলে, চ্যাট উত্তরগুলি আইডি দ্বারা এই বিষয়গুলি উদ্ধৃত করে।',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'একটি OKF রিপোজিটরি শুরু করার তিনটি উপায়: একটি ওয়েবসাইট ক্রল থেকে বিষয় আনা, আপনার আপলোড করা নথি থেকে বিষয় সংগ্রহ করা, বা একটি ফাঁকা ক্যানভাস থেকে শুরু করা। একটি বিদ্যমান রিপোজিটরি ক্লোন করলে তার বিষয়গুলি অনুলিপি হয় এবং আপনাকে কাজটি এগিয়ে নিতে দেয়।',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        'প্রতিটি নথি বিষয়ের একটি উৎস হয়ে ওঠে। প্রযোজক সেগুলি পড়ে, সম্ভাব্য বিষয় নিষ্কাশন করে এবং একটি শ্রেণিবিন্যাস প্রস্তাব করে। আপনি পরবর্তী ধাপে প্রতিটি বিষয় পর্যালোচনা করবেন — আপনি অনুমোদন না করা পর্যন্ত কিছুই চূড়ান্ত হয় না।',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        'আমরা আপনার উৎসগুলি পড়ছি এবং বিষয় প্রস্তাব করছি। আপনার বেছে নেওয়া বিভাগ লেবেলের অধীনে বিষয়গুলি ক্লাস্টার হয়। প্রযোজক রক্ষণশীল — এটি অনেক কোলাহলপূর্ণ বিষয়ের চেয়ে কম, সুগঠিত বিষয় প্রস্তাব করতে পছন্দ করে।',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়টি কী ধরনের জিনিস? ৩-৭টি লেবেল বেছে নিন যা মূল অক্ষগুলিকে ধরে রাখে; প্রযোজক তাদের বিষয় শ্রেণিবিন্যাসের কাঠামো হিসেবে ব্যবহার করে।',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        'এটি কাজের মূল অংশ। প্রতিটি বিষয় জ্ঞানের একটি ছোট, উদ্ধৃতিযোগ্য একক। বিষয়গুলি একটি শিরোনাম, একটি বিবরণ পায় এবং আপনার বেছে নেওয়া লেবেলগুলি গ্রহণ করে। আপনার কাজ হলো এটিকে নির্ভরযোগ্য করা: অস্পষ্ট শিরোনামের নাম পরিবর্তন করুন, সদৃশগুলি একত্রিত করুন, উৎসহীন বিষয়গুলি বাদ দিন।',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'আমরা সঙ্গতি পরীক্ষা চালাই: প্রতিটি বিষয়ের কি একটি শিরোনাম আছে? লেবেলগুলি কি বৈধ? উৎস বৈশিষ্ট্য অক্ষুণ্ন আছে কি? প্রকাশের আগে ব্লকিং সমস্যাগুলি ঠিক করতে হবে; সতর্কতাগুলি স্বীকার করা যেতে পারে।',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'কিছু সতর্কতা স্বয়ংক্রিয়ভাবে ঠিক করা যেতে পারে: স্থিতির মান বৈধ গণনায় সীমাবদ্ধ করা যেতে পারে, অনুপস্থিত ফিল্ডগুলি যুক্তিসঙ্গত ডিফল্ট দিয়ে পূরণ করা যেতে পারে। আপনি যে সংশোধনগুলি সমর্থন করেন তা প্রয়োগ করুন, তারপর পর্যালোচনা করতে কিউরেটরে ফিরে যান।',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'আপনি যা প্রকাশ করতে চলেছেন তার একটি সারাংশ: বিষয়, লেবেল, উৎস এবং যেকোনো অমীমাংসিত সমস্যা। একবার আপনি অনুমোদন দিলে, রিপোজিটরির কাজ প্রকাশিত ধাপে চলে যায়।',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        'Publish করলে এই রিপোজিটরির v1 সংস্করণ তৈরি হয়। পরবর্তী প্রতিটি পরিবর্তন — একটি নতুন বিষয়, একটি সংশোধিত বিবরণ, একটি পুরানো পুনঃযাচাই — v2, v3 ইত্যাদি হিসেবে প্রকাশিত হয়। পুরানো সংস্করণগুলি চিরকাল উদ্ধৃতিযোগ্য থাকে।',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        'নির্বাচিত নথিগুলি থেকে একটি নতুন OKF রিপোজিটরি তৈরি করুন। নথিগুলি উৎস হয়ে উঠবে; কোনো কিছু প্রকাশিত হওয়ার আগে সেগুলি যে বিষয়গুলি তৈরি করে তা আপনি পর্যালোচনা করবেন এবং নাম দেবেন।',
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'একটি OKF রিপোজিটরি হলো বিষয়গুলির একটি কাঠামোগত, সংস্করণযুক্ত সংগ্রহ যা আপনার চ্যাট উত্তর উদ্ধৃত করতে পারে।',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'আপনি এখনো কোনো OKF রিপোজিটরি তৈরি করেননি। একটি OKF রিপোজিটরি হলো বিষয়গুলির একটি কাঠামোগত, উদ্ধৃতিযোগ্য সেট যা থেকে আপনার চ্যাট উত্তর তথ্য নিতে পারে।',
+      labels: 'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — তারা উত্তর দেয় "এই বিষয়টি কী ধরনের জিনিস?"।',
+      hide: 'লুকান',
+      whatIsThis: 'এটি কী?'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'বন্ধ করুন',
+      cancel: 'বাতিল',
+      save: 'সংরক্ষণ করুন',
+      clear: 'পরিষ্কার করুন',
+      delete: 'মুছুন'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'সহায়তা',
+      helpTitle: 'OKF Studio সম্পর্কে',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'OKF রিপোজিটরিগুলি হলো একটি হালকা তত্ত্বের স্তর — লেবেল বিভাগ নির্ধারণ করে, বিষয় সত্ত্বা নির্ধারণ করে, উৎস প্রমাণ নির্ধারণ করে। একবার প্রকাশিত হলে, চ্যাট উত্তরগুলি আইডি দ্বারা বিষয়গুলি উদ্ধৃত করে এবং তাদের উৎস প্রকাশ করে।',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'ড্যাশবোর্ড',
+        wizard: 'উইজার্ড'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: '{name} থেকে ক্লোন করা হয়েছে · সংস্করণ {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'রিপোজিটরি',
+        untitled: 'শিরোনামহীন রিপোজিটরি',
+        trust: 'আস্থা',
+        sources: 'উৎস',
+        concepts: 'এখন পর্যন্ত ধারণা',
+        stale: 'পুরানো'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'চলমান',
+        inReview: 'পর্যালোচনায় রয়েছে',
+        published: 'প্রকাশিত'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'Review-তে আছে',
+        stepOf: 'ধাপ {n}/১০',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'রিপোজিটরিগুলি',
+        new: '+ নতুন রিপোজিটরি',
+        search: 'অনুসন্ধান করুন…',
+        empty: 'এখানে এখনো কোনো রিপোজিটরি নেই।',
+        topics: 'বিষয়',
+        select: 'বাল্ক প্রকাশের জন্য {name} নির্বাচন করুন',
+        stale: 'পুরানো',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'Review-তে আছে',
+          stepOf: 'ধাপ {n}/১০',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: '{n}টি নির্বাচিত',
+          publish: 'নির্বাচিতগুলি প্রকাশ করুন',
+          title: 'নির্বাচিত রিপোজিটরিগুলি প্রকাশ করুন',
+          body: 'একবার প্রকাশিত হলে, চ্যাট উত্তরগুলি সেগুলি ব্যবহার করতে পারে। নিচের প্রতিটি রিপোজিটরি তার চূড়ান্ত ফলাফল তালিকাভুক্ত করে।',
+          results: 'ফলাফল',
+          publishConfirm: '{n}টি প্রকাশ করুন',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'নাম',
+            status: 'স্থিতি',
+            topics: 'বিষয়'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'প্রস্তুত'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'খসড়া এখনো সার্ভার-সাইডে সংরক্ষণ করা যাবে না; স্থানীয়ভাবে সংরক্ষিত হয়েছে।'
       }
     },
     wizard: {
@@ -2070,244 +2069,244 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'ড্যাশবোর্ডে ফিরে যান',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'শিরোনামহীন রিপোজিটরি',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'এখন পর্যন্ত ধারণা'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'OKF Studio উইজার্ড',
+      back: 'পেছনে যান',
+      continue: 'চালিয়ে যান',
+      publish: 'রিপোজিটরি প্রকাশ করুন'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'রিপোজিটরির নাম ও বিষয় ক্ষেত্র',
+        hint: 'এই OKF রিপোজিটরিকে একটি স্পষ্ট নাম দিন এবং এর বিষয় ক্ষেত্র বেছে নিন।',
+        nameLabel: 'রিপোজিটরির নাম',
+        namePh: 'উদাঃ পরিবহন পারমিট NL',
+        domainLabel: 'বিষয় ক্ষেত্র'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'এই OKF রিপোজিটরিটি কোথা থেকে শুরু হওয়া উচিত?',
+        hint: 'আপনি কীভাবে এই রিপোজিটরিটি শুরু করতে চান তা বেছে নিন। আপনি এটি পরে পরিবর্তন করতে পারেন।',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'নথিপত্র',
+            desc: 'আপনার ইতিমধ্যে আপলোড করা নথিগুলি থেকে বিষয় সংগ্রহ করুন।'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'ওয়েবসাইট ক্রল',
+            desc: 'একটি ওয়েবসাইট ক্রল করুন এবং পৃষ্ঠাগুলি থেকে বিষয় প্রস্তাব করুন।'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'ফাঁকা ক্যানভাস',
+            desc: 'নতুন করে শুরু করুন এবং নিজে বিষয়গুলি লিখুন।'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'একটি বিদ্যমান রিপোজিটরির ক্লোন',
+            desc: 'অন্য একটি OKF রিপোজিটরি থেকে বিষয় এবং কাঠামো ফর্ক করুন।'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'ইনপুট',
+        documents: 'বিষয় তালিকা শুরু করার জন্য নথিগুলি বেছে নিন।',
+        crawl: 'ক্রল করার জন্য ওয়েবসাইট নির্বাচন করুন।',
+        manual: 'আপনি পরবর্তী ধাপে সরাসরি বিষয়গুলি লিখতে পারেন।',
+        clone: 'ক্লোন করার জন্য বিদ্যমান রিপোজিটরিটি বেছে নিন।',
+        placeholder: 'ধাপের UI পরবর্তী একটি গল্পে আসবে।'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'বিষয় তৈরি করুন',
+        hint: 'আমরা আপনার উৎসগুলি পড়ছি এবং বিষয় প্রস্তাব করছি।',
+        progress: 'প্রযোজক চলছে...',
+        placeholder: 'প্রযোজক পরিষেবা পরবর্তী একটি গল্পে যুক্ত হবে।'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'লেবেল বেছে নিন',
+        hint: 'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়গুলি কী ধরনের জিনিস? ৩-৭টি বেছে নিন।',
+        add: '+ লেবেল যোগ করুন',
+        addConfirm: 'যোগ করুন',
+        placeholder: 'উদাঃ পারমিট'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'বিষয়গুলি পর্যালোচনা করুন',
+        hint: 'প্রতিটি বিষয় জ্ঞানের একটি ছোট, উদ্ধৃতিযোগ্য একক। শিরোনাম এবং বিবরণ সম্পাদনা করুন।',
+        placeholder: 'কিউরেটর ট্রি + সম্পাদক গল্প ৩-৮-এ আসবে।'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'সমস্যার জন্য পরীক্ষা করুন',
+        hint: 'আমরা সঙ্গতি পরীক্ষা চালাই। প্রকাশের আগে ব্লকিং সমস্যাগুলি ঠিক করতে হবে।',
+        placeholder: 'যাচাইকরণ প্যানেল গল্প ৩-৮-এ আসবে।'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'স্বয়ংক্রিয় সমাধান',
+        hint: 'কিছু সতর্কতা স্বয়ংক্রিয়ভাবে ঠিক করা যেতে পারে। আপনি যে সংশোধনগুলি সমর্থন করেন তা প্রয়োগ করুন, তারপর পর্যালোচনা করতে কিউরেটরে ফিরে যান।',
+        placeholder: 'স্বয়ংক্রিয় সংশোধন পরিষেবা গল্প ১০.২-এ আসবে।'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'পর্যালোচনা',
+        hint: 'আপনি যা প্রকাশ করতে চলেছেন তার একটি সারাংশ।',
+        repo: 'রিপোজিটরি',
+        topics: 'বিষয়',
+        labels: 'লেবেল',
+        sources: 'উৎস'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'এই রিপোজিটরি প্রকাশ করুন',
+        hint: 'Publish করলে এই রিপোজিটরির v1 সংস্করণ তৈরি হয়।',
+        nameOk: 'রিপোজিটরির নাম সেট করা হয়েছে',
+        labelsOk: 'লেবেল নির্বাচিত হয়েছে',
+        topicsOk: 'বিষয় পর্যালোচনা করা হয়েছে'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'যাচাইহীন',
+        'machine-confirmed': 'মেশিন-দ্বারা-নিশ্চিত',
+        'human-reviewed': 'মানুষ-দ্বারা-পর্যালোচিত'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'Retract UI গল্প ৩.৯-এ আসবে।'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'বান্ডিল ম্যানিফেস্ট পরিষেবা পরবর্তী একটি গল্পে যুক্ত হবে।'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'OKF রিপোজিটরি তৈরি করুন',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'কমপক্ষে একটি নথি নির্বাচন করুন',
+        alreadyInOkf: 'ইতিমধ্যে একটি OKF রিপোজিটরিতে থাকা নথিগুলি সরান',
+        alreadyIngested: 'ইতিমধ্যে ingest করা নথিগুলি সরান'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'প্রযোজক পরবর্তী একটি গল্পে যুক্ত হবে।'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'একটি বিষয় ক্ষেত্র নির্বাচন করুন…',
+      classLabel: 'ধারণার শ্রেণিবিন্যাস',
+      classHeuristics: 'হিউরিস্টিকস (ডিফল্ট)',
+      classHeuristicsHint: 'দ্রুত নিয়মভিত্তিক শ্রেণিবিন্যাস — কোনো LLM খরচ নেই, সুগঠিত ক্রলের জন্য ভালো।',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'LLM প্রতিটি ধারণা কিউরেট করে — ধরন, একটি জ্ঞান-শ্রেণিবিন্যাস লেবেল এবং একটি বিবরণ। হিউরিস্টিকসের চেয়ে অনেক বেশি সঠিক ও সম্পূর্ণ; ধারণা প্রতি অতিরিক্ত সময় লাগতে পারে।',
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        'প্রথমে হিউরিস্টিকস; অনিশ্চিত ক্ষেত্রে LLM পর্যালোচনা করে এবং ফাঁক পূরণ করে। সময় এবং পূর্ণাঙ্গতার ভারসাম্যপূর্ণ।',
+      targetLabel: 'এটি কোথায় যাওয়া উচিত?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'মুক্ত-ফর্ম কর্পাসে ক্রল করুন',
+        okfRepo: 'OKF রিপোজিটরি'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
+      targetHint: 'কিছু সংরক্ষণ করার আগে আমরা আপনাকে প্রাপ্ত বিষয়গুলি দেখাব।',
+      createOkfFromCrawl: 'এই ক্রল থেকে OKF রিপোজিটরি তৈরি করুন',
+      splitLabel: 'ধারণা বিভাজন',
+      splitA: 'পুরো ক্রলের জন্য একটি ধারণা',
+      splitB: 'প্রতি পৃষ্ঠার জন্য একটি ধারণা (প্রস্তাবিত)',
+      splitC: 'LLM বিষয় নিষ্কাশন ব্যবহার করুন',
+      splitCHint: 'গল্প ১০.৬ — শীঘ্রই আসছে',
+      splitBHint: 'ক্রল করা প্রতিটি পৃষ্ঠা নিজস্ব ধারণায় পরিণত হয় — AI পৃথক পৃষ্ঠা উদ্ধৃত করতে পারে।',
+      splitAHint: 'পুরো ক্রলটি একটি বড় ধারণা হয়ে ওঠে — ছোট সাইটের জন্য সবচেয়ে ভালো।',
+      progressDownload: 'ক্রল করা সামগ্রী ডাউনলোড হচ্ছে...',
+      progressSplit: 'ধারণায় বিভক্ত করা হচ্ছে...',
+      progressIngest: 'ধারণা যোগ করা হচ্ছে (ব্যাচ [i]/[n])...',
       postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
-      conversionsTitle: 'এই ক্রল থেকে তৈরি রিপোজিটরি',
+        'ক্রল শেষ হওয়ার পরে, আপনি ফাইলের ড্যাশবোর্ড ট্যাব থেকে এটিকে একটি OKF রিপোজিটরিতে রূপান্তর করতে পারেন।',
+      creating: 'OKF রিপোজিটরি তৈরি হচ্ছে...',
+      createOk: 'OKF রিপোজিটরি তৈরি হয়েছে। কিউরেট করতে Studio খোলা হচ্ছে।',
+      createOkRenamed: '"[name]" হিসেবে OKF রিপোজিটরি তৈরি হয়েছে। কিউরেট করতে Studio খোলা হচ্ছে।',
+      createFailed: 'এই ক্রল থেকে OKF রিপোজিটরি তৈরি করা যায়নি।',
+      conversionsTitle: 'এই ক্রল থেকে তৈরি রিপোজিটরিগুলি',
       convQueued: 'সারিবদ্ধ...',
       convDownloading: 'ক্রল ডাউনলোড হচ্ছে...',
-      convSplitting: 'ধারণায় বিভক্ত হচ্ছে...',
-      convAdding: 'ধারণা যোগ করা হচ্ছে ([p] পৃষ্ঠা এখন পর্যন্ত)...',
+      convSplitting: 'ধারণায় বিভক্ত করা হচ্ছে...',
+      convAdding: 'ধারণা যোগ করা হচ্ছে (এখন পর্যন্ত [p] পৃষ্ঠা)...',
       convDone: 'তৈরি হয়েছে ([p] পৃষ্ঠা)',
       convFailed: 'ব্যর্থ হয়েছে',
-      createStarted: '"[name]" তৈরি হচ্ছে — নিচে অগ্রগতি দেখুন।',
+      createStarted: '"[name]" তৈরি করা হচ্ছে — নিচে অগ্রগতি ট্র্যাক করুন।',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'মডেল',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'স্থানীয় · ছোট',
+          'local-medium': 'স্থানীয় · মাঝারি',
+          'sovereign-large': 'সার্বভৌম · বড়'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'OKF রিপোজিটরি তৈরির আগে ক্রল শেষ হতে হবে।',
+        alreadyInOkf: 'এই ক্রলটি ইতিমধ্যে একটি OKF রিপোজিটরিতে রয়েছে।'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'দেখতে ও সম্পাদনা করতে বাম দিক থেকে একটি বিষয় বেছে নিন।',
+      search: 'বিষয় অনুসন্ধান করুন',
+      noTopics: 'এখনো কোনো বিষয় নেই।',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'লেবেল সামঞ্জস্য করুন',
+        body: 'লেবেল হলো আপনার তত্ত্বের শ্রেণিবদ্ধ অক্ষ — এই বিষয়টি কী ধরনের জিনিস?',
+        edit: 'লেবেল সামঞ্জস্য করুন',
+        add: 'যোগ করুন',
+        addPh: 'উদাঃ পারমিট',
+        remove: 'সরান',
+        empty: 'এখনো কোনো লেবেল নেই।',
+        notReady: 'লেবেল স্থানীয়ভাবে সংরক্ষিত হয়েছে — সার্ভার সিঙ্ক শীঘ্রই আসছে।'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'Frontmatter সম্পাদনা করুন',
+        dialogTitle: 'Frontmatter সম্পাদনা করুন',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'উৎস দেখান',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'ধারণাটির একটি ধরন অনুপস্থিত।',
+        badActor: 'উৎস অ্যাক্টর অবশ্যই agent:/human:/tool:/process: দিয়ে শুরু হতে হবে।'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'সংরক্ষণ অবরুদ্ধ: প্রথমে সঙ্গতি সমস্যাগুলি ঠিক করুন।'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
+      frozen:
+        "{'{'}v{'}'}-এ সামগ্রী স্থির করা হয়েছে — শুধুমাত্র পড়ার জন্য পূর্বরূপ। পরিবর্তন করতে serving সংস্করণটি retract করুন।",
+      none: 'কিছুই না',
       expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+        'কাঁচা বৈধকরণ JSON দেখতে, গুরুত্ব অনুসারে ফিল্টার করতে এবং পরীক্ষাগুলি ওভাররাইড করতে বিশেষজ্ঞ মোডে স্যুইচ করুন।',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: '{n}টি ব্লকিং সমস্যা — প্রকাশের আগে ঠিক করুন',
+        warnings: '{n}টি বিষয় আপনার পর্যালোচনা প্রয়োজন',
+        ok: 'সব ঠিক আছে। ঠিক করার কিছু নেই।'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean}টি ত্রুটিহীন · {warnings}টি পর্যালোচনার প্রয়োজন · {blockers}টি ব্লকিং',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'ফরম্যাটার গল্প ৪.২b-এ আসবে।'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'যাচাইকরণ পরবর্তী একটি গল্পে যুক্ত হবে।'
       }
     },
     pii: {
-      panel: 'চিহ্নিত সত্তা',
+      panel: 'চিহ্নিত সত্ত্বা',
       nFlagged: '{n} টি পাওয়া গেছে',
       rescan: 'পুনরায় স্ক্যান করুন',
       scanning: 'স্ক্যান করা হচ্ছে…',
       clean: 'কোনো চিহ্নিত সত্তা নেই — এই concept পরিষ্কার।',
       how: 'সমাধান: মুছে ফেলুন বা পরিবর্তন করুন (যেমন নামের পরিবর্তে ভূমিকা লিখুন), তারপর সেভ করুন — পুনরায় স্ক্যান এই তালিকা আপডেট করবে।',
       descFallback: 'এখানে ব্যক্তিগত তথ্য শনাক্ত করা হয়েছে (GDPR Art. 4(1) — শনাক্তযোগ্য ব্যক্তির সাথে সম্পর্কিত)।',
-      scanError: 'স্ক্যান উপলব্ধ নয়',
+      scanError: 'স্ক্যান অনুপলব্ধ',
       type: {
         PERSON: 'ব্যক্তির নাম',
         LOCATION: 'অবস্থান',
@@ -2315,8 +2314,8 @@ export default {
         EMAIL_ADDRESS: 'ইমেল ঠিকানা',
         PHONE_NUMBER: 'ফোন নম্বর',
         IP_ADDRESS: 'আইপি (IP) ঠিকানা',
-        NRP: 'জাতীয় নিবন্ধন নম্বর',
-        BD_NATIONAL_ID: 'জাতীয় পরিচয়পত্র নম্বর'
+        NRP: 'জাতীয় নিবন্ধন নম্বর',
+        BD_NATIONAL_ID: 'জাতীয় পরিচয়পত্র নম্বর'
       },
       desc: {
         PERSON: 'একজন ব্যক্তির নাম শনাক্ত করা হয়েছে। নাম সরাসরি কোনো ব্যক্তিকে শনাক্ত করতে পারে।',
@@ -2330,36 +2329,36 @@ export default {
         BD_NATIONAL_ID: 'একটি জাতীয় পরিচয়পত্র নম্বর শনাক্ত করা হয়েছে। এটি দৃঢ়ভাবে কোনো ব্যক্তিকে শনাক্ত করে।'
       },
       allClear: 'পরিষ্কার',
-      redactFile: 'সম্পূর্ণ ফাইল সেন্সর করুন',
-      confirmRedactFile: 'নিশ্চিত করুন: সম্পূর্ণ ফাইল সেন্সর করবেন?',
-      locateTip: 'এডিটরে এই টেক্সট দেখান',
+      redactFile: 'পুরো ফাইল সেন্সর (redact) করুন',
+      confirmRedactFile: 'নিশ্চিত করুন: পুরো ফাইলটি সেন্সর (redact) করবেন?',
+      locateTip: 'সম্পাদকে এই পাঠ্যটি দেখান',
       file: {
         label: 'সম্পূর্ণ ফাইল:',
         redact: 'ফাইল সেন্সর করুন',
         remove: 'বডি মুছে ফেলুন',
         accept: 'সব গ্রহণ করুন',
-        confirmRedact: 'নিশ্চিত করুন: সম্পূর্ণ ফাইল সেন্সর করবেন?',
-        confirmRemove: 'নিশ্চিত করুন: সম্পূর্ণ বডি মুছে ফেলবেন?'
+        confirmRedact: 'নিশ্চিত করুন: পুরো ফাইলটি সেন্সর (redact) করবেন?',
+        confirmRemove: 'নিশ্চিত করুন: সম্পূর্ণ মূল অংশ সরিয়ে ফেলবেন?'
       },
       action: {
         redact: 'সেন্সর করুন',
         replace: 'প্রতিস্থাপন করুন',
         remove: 'মুছে ফেলুন',
         accept: 'গ্রহণ করুন',
-        replacement: 'প্রতিস্থাপনের টেক্সট',
+        replacement: 'প্রতিস্থাপন পাঠ্য',
         apply: 'প্রয়োগ করুন',
         cancel: 'বাতিল করুন'
       },
       resolved: {
-        title: 'এই ফাইলে প্রক্রিয়াজাত করা হয়েছে',
+        title: 'এই ফাইলে প্রক্রিয়াজাত হয়েছে',
         redacted: 'সেন্সর করা হয়েছে',
         replaced: 'প্রতিস্থাপন করা হয়েছে',
         removed: 'মুছে ফেলা হয়েছে',
         accepted: 'গৃহীত',
-        fileRedacted: 'ফাইল সেন্সর করা হয়েছে',
-        kept: 'টেক্সটে রাখা হয়েছে',
+        fileRedacted: 'ফাইল সেন্সর (redact) করা হয়েছে',
+        kept: 'পাঠ্যে রাখা হয়েছে',
         removedWord: 'মুছে ফেলা হয়েছে',
-        wholeFile: 'সম্পূর্ণ ফাইলের বডি সেন্সর করা হয়েছে'
+        wholeFile: 'সম্পূর্ণ ফাইলের মূল অংশ সেন্সর করা হয়েছে'
       }
     }
   }

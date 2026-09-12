@@ -41,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Jamhuri ya Kidemokrasia ya Kongo',
     CR: 'Kosta Rika',
-    CI: 'Kodivaa',
+    CI: "Côte d'Ivoire",
     HR: 'Kroeshia',
     CU: 'Kuba',
     CY: 'Kupro',
@@ -650,7 +650,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'Tovuti ya eCitizen',
+    eCitizen: 'Lango la eCitizen',
     taxFiling: 'Mfumo wa Kutuma Kodi',
     idApplication: 'Maombi ya Kitambulisho',
     businessReg: 'Usajili wa Biashara',
@@ -682,8 +682,8 @@ export default {
     weatherLocationLoading: 'Inapakia eneo...',
     weatherErrorDefault: 'Haiwezi kupata data ya hali ya hewa.',
     weatherGeolocationUnsupported: 'Geolokeshoni haikubaliwa na kivinjari chako.',
-    collapse: 'Kunja upande wa kando',
-    expand: 'Panua upande wa kando',
+    collapse: 'Kunja upau wa kando',
+    expand: 'Panua upau wa kando',
     weatherRefresh: 'Sasisha Hali ya Hewa',
     weatherConditions: {
       clear: 'Wazi',
@@ -1085,7 +1085,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Wasifu umehifadhiwa kwa mafanikio',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter imehifadhiwa',
       saveFailed: 'Imeshindwa kuhifadhi wasifu',
       loadSuccess: 'Wasifu umepakiwa kwa mafanikio',
       loadFailed: 'Imeshindwa kupakia wasifu',
@@ -1342,13 +1342,13 @@ export default {
   },
   chatbot: {
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
-    aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'Imezalishwa na AI — haitokani na nyaraka za maktaba',
+    welcomeMessage: 'Karibu! Nawezaje kukusaidia leo?',
     configMismatchWarning:
-      'Hitilafu ya usanidi: {warnings}. Tafadhali angalia usanidi wa Msaada wa Haraka na mpangilio wa maarifa.',
-    categoryNotFound: 'Kategoria "{label}" haipatikani katika mpangilio wa maarifa',
-    serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya UI ambayo huenda isilingane na mpangilio wa maarifa',
-    noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja itakuwa bila kichujio.',
+      'Hitilafu ya ulinganifu wa usanidi: {warnings}. Tafadhali kagua Msaada wa Haraka na usanidi wa muundo wa maarifa.',
+    categoryNotFound: 'Kategoria ya "{label}" haijapatikana katika muundo wa maarifa',
+    serviceLabelMismatch: 'Huduma "{label}" inatumia lebo ya kiolesura ambayo huenda hailingani na muundo wa maarifa',
+    noFilterWarning: 'Hakuna kichujio cha muktadha kinachofanya kazi — hoja haitachujwa.',
     placeholder: 'Andika swali lako hapa...',
     sendButton: 'Tuma',
     fileReceived: 'Faili imepokelewa.',
@@ -1394,23 +1394,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama mtaalamu msaidizi wa usajili wa raia wa Kenya. Eleza hatua za kupata Kitambulisho cha Kitaifa (Maisha Namba) au kubadilisha kilichopotea. MUHIMU: Toa orodha iliyo wazi ya nyaraka zinazohitajika (mf. Cheti cha Kuzaliwa, nakala za vitambulisho vya wazazi) na mshauri mtumiaji kutembelea Kituo cha Huduma au ofisi ya Registrar of Persons iliyo karibu naye. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama mwongozo wa KRA (Kenya Revenue Authority). Eleza mchakato wa kuwasilisha ritani za kodi, kuomba KRA PIN, au kuweka upya nenosiri kwenye lango la iTax. MUHIMU: Mkumbushe mtumiaji kuhusu tarehe ya mwisho ya Juni 30 kwa ajili ya ritani za kila mwaka na umwelekeze jinsi ya kuwasilisha ritani zisizo na mapato (Nil returns) ikiwa hakuwa na mapato. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama mshauri wa biashara kwa huduma za eCitizen. Mwelekeze mtumiaji katika kuhifadhi jina la biashara na usajili wa kampuni nchini Kenya. MUHIMU: Eleza gharama za sasa za utafutaji wa jina na usajili, na umwelekeze mtumiaji kwenye tovuti rasmi ya eCitizen ili kukamilisha maombi. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama muongoza huduma za afya. Toa taarifa kuhusu mabadiliko kutoka NHIF kwenda SHIF (Social Health Insurance Fund) na jinsi ya kujiandikisha. MUHIMU: Shiriki misimbo rasmi ya USSD (kama vile *263#) au viungo vya tovuti kwa ajili ya usajili na ueleze manufaa ya bima ya afya ya umma. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama mshauri wa masuala ya elimu. Jadili mtaala wa CBC, usajili wa NEMIS, au upangaji wa vyuo vikuu kupitia KUCCPS. MUHIMU: Eleza jinsi wazazi wanavyoweza kuangalia matokeo ya mitihani ya kitaifa kupitia SMS au tovuti ya KNEC yanapotangazwa. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama mwongozo wa huduma za NTSA. Eleza mchakato wa kufanya upya leseni ya udereva, ukaguzi wa gari, au usimamizi wa akaunti ya TIMS. MUHIMU: Mwelekeze mtumiaji jinsi ya kuingia kwenye lango la eCitizen NTSA ili kuomba Smart DL yao au kuratibu miadi ya ukaguzi wa gari. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama mshauri wa mipango ya makazi. Eleza Mpango wa Makazi ya Bei Nafuu (Boma Yangu), usajili na mchakato wa uchangiaji wa hiari. MUHIMU: Mwelekeze mtumiaji kwenye tovuti ya Boma Yangu ili kuona miradi na ueleze vigezo vya kustahiki kupata mgao. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      "Fanya kazi kama kocha wa ajira katika utumishi wa umma. Mwelekeze mtumiaji jinsi ya kuunda wasifu na kutuma maombi ya nafasi za kazi kupitia lango la Public Service Commission (PSC). MUHIMU: Mshauri mtumiaji kuweka vyeti vyake vya masomo tayari na kuangalia mara kwa mara tovuti ya PSC au magazeti ya hapa nchini kwa ajili ya matangazo ya MyGov. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Fanya kazi kama mwenzi wa karibu mwenye urafiki. Kuwa na heshima, msaidizi, na mwenye ujuzi wa kina kuhusu utamaduni na maisha ya kila siku ya Kenya. MUHIMU: Mkumbushe mtumiaji kwamba ingawa unaweza kuzungumza kuhusu jambo lolote, uwezo wako mkuu ni kuwasaidia kutumia huduma za serikali ya Kenya kama vile Vitambulisho, Kodi, na Usajili wa Biashara. KANUNI: Kila mara rejelea programu hii kama 'Genie AI'."
   },
   common: {
     cancel: 'Ghairi',
@@ -1478,13 +1478,13 @@ export default {
       details: 'Maelezo',
       ingestionLog: 'Kumbukumbu ya Uchakataji',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        'Data ya maelezo ya faili hili: jina, mwandishi na lebo za muundo wa maarifa ambazo AI hutumia kuelekeza maswali. Hatua ya ingest inahitaji angalau lebo moja.',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'Mtazamo wa moja kwa moja wa ukusanyaji wa tovuti wa faili hili: kasi, foleni, makosa na maendeleo. Ukusanyaji ukifanikiwa, kijachini hapa chini kinakigeuza kuwa ghala la OKF.',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'Kumbukumbu ya kila ukurasa ya ukusanyaji wa tovuti: URL zipi zilipatikana, zilielekezwa kwingine au zilishindikana. Huandikwa wakati ukusanyaji ukiendelea.',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'Maendeleo ya hatua kwa hatua ya kuandaa faili hili kwa majibu ya AI: ugawaji wa vipande (chunking), kuweka lebo, uwekaji wa vipachiko (embedding) na uorodheshaji. Makosa hapa yanaonyesha mahali husika ambapo ingest ilisimama.'
     },
     log: {
       killActions: 'Vitendo vya Kusitisha:',
@@ -1566,31 +1566,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'Imeshindwa kupakia matoleo',
+      none: 'Bado hakuna matoleo yaliyotolewa — kufanya publish kunaunda v1.',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: 'Unda toleo jipya',
+      published: "Toleo la v{'{'}v{'}'} limechapishwa — kifurushi {'{'}f{'}'} kimehifadhiwa katika ghala la nyaraka.",
+      serving: 'Imeingizwa kupitia ingest (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Dashibodi ya Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'Faili chanzo bado inachakatwa',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'Hii inaondoa kabisa ghala, dhana zake, maudhui yaliyoorodheshwa, grafu na vifurushi vyake.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Futa ghala'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Kubali vitambulisho vilivyowekewa alama & chapisha',
+        note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1608,59 +1608,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "zilizowekewa lebo: {'{'}n{'}'}",
+      fallbacks: "mikakati mbadala ya LLM: {'{'}n{'}'}",
+      concepts: "dhana: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "maingizo {'{'}n{'}'}",
+      loadFailed: 'Imeshindwa kupakia kumbukumbu ya shughuli.',
+      none: 'Bado hakuna shughuli iliyorekodiwa — vitendo vya ghala vitaonekana hapa vinapotokea.',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'Grafu ya dhana',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'Bado hakuna dhana - hakuna cha kuonyesha kwenye grafu.',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'Onyesha au ficha kitovu cha faharasa (viungo vyake vya Yaliyomo ni muundo tu, si maarifa)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "viungo {'{'}n{'}'}",
+        chunks: "vipande {'{'}n{'}'}",
+        failed: 'uorodheshaji umeshindwa',
+        flagged: 'vitambulisho vilivyowekewa alama',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: 'bado haijafanyiwa uorodheshaji'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (bandika au acha tupu)',
+        bodyPh: '# Kichwa cha Habari\n\nBandika markdown hapa - frontmatter inaongezwa kiotomatiki kwa ajili yako.',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'Haikuweza kuunda faili.',
+        title: 'Ongeza faili ya dhana',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'mf. Wanyamapori katika Mara',
+        updateIndex: 'Ambatisha kwenye orodha ya Yaliyomo katika faharasa'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'hakuna frontmatter — pendekezo kamili',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'Marekebisho ya frontmatter yaliyopangwa katika kila dhana. Sehemu kuu za matini hazibadilishwi kamwe.',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'Hakuna cha kurekebisha — frontmatter zote tayari zinakidhi vigezo.',
         col: {
           field: 'Field',
           after: 'After',
@@ -1669,14 +1669,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'Sahihisha kiotomatiki (frontmatter pekee)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'Jinsi dhana hii ilivyoundwa na kuratibiwa',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'Bado hakuna faili - ongeza dhana au ugawanye upya kutoka chanzo.',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1684,31 +1684,31 @@ export default {
         resplit: 'Re-split',
         flagged: 'imetiwa alama',
         flaggedTip:
-          'Concepts zenye vipengele vilivyotiwa alama — fungua kila kimoja, ondoa au badilisha kipengele, hifadhi (itachanganua upya kiotomatiki); au zikubali unapochapisha.',
+          'Dhana zenye vitambulisho vilivyowekewa alama — fungua kila moja, ondoa au rekebisha kitambulisho, kisha hifadhi (huchanganua tena kiotomatiki); au zikubali wakati wa kufanya publish.',
         piiBadge: 'PII',
         piiTip:
-          'Vipengele vilivyotiwa alama: {k}. Vifungue, viondoe au vibadilishe, kisha hifadhi — inachanganua upya kiotomatiki.',
-        piiTipBare: 'Vipengele vilivyotiwa alama — fungua, kagua, kisha hifadhi ili kuchanganua tena.',
+          'Vitambulisho vilivyowekewa alama: {k}. Vifungue, viondoe au virekebishe, kisha uhifadhi — huchanganua tena kiotomatiki.',
+        piiTipBare: 'Vitambulisho vilivyowekewa alama — fungua, kagua, kisha uhifadhi ili kuchanganua upya.',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'Inapakia faili {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'Hii inaondoa kabisa faili, vipande vyake vilivyoorodheshwa na viungo vyake vya grafu.',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'Kihariri cha ghala',
+      loadFailed: 'Haikuweza kupakia dhana hii.',
+      loadingConcept: 'Inapakia dhana…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'Data ya maelezo ya dhana',
+        labelLabel: 'Lebo (Muundo wa Maarifa)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'Hakuna dhana iliyochaguliwa',
+        saveFailed: 'Uhifadhi wa data ya maelezo umeshindwa',
+        saved: 'Data ya maelezo imehifadhiwa',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1719,62 +1719,63 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'Chagua dhana kutoka kwenye orodha ili kuanza kuhariri.',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'Hii inafuta dhana zote za sasa na grafu inayotokana nazo, kisha inaingiza tena faili chanzo kwa mgawanyo mpya. Uhariri wa dhana utapotea.',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'Ugawanyaji upya umeshindwa — kagua kiungo cha faili chanzo.',
+        modeA: 'Dhana moja kwa ukusanyaji wote',
+        modeAHint: 'Dhana kuu moja — maudhui yote katika dhana moja',
+        modeB: 'Dhana moja kwa kila ukurasa',
+        modeBHint: 'Inagawanya kulingana na alama za ## Source: za mkusanyaji (inapendekezwa)',
+        modeC: 'Tumia unyambuaji mada wa LLM',
+        modeCHint: 'Kisa cha 10.6 — kinakuja hivi karibuni',
+        title: 'Gawanya upya kutoka chanzo'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'Mabadiliko ambayo hayajahifadhiwa',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Hifadhi imeshindwa — jaribu tena',
+      saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: 'Kinga maelezo yote yaliyowekewa alama',
+          remove: 'Ondoa maudhui yote yaliyowekewa alama',
+          accept: 'Kubali vitambulisho vyote vilivyowekewa alama'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          redact:
+            'Mwili mkuu wa kila dhana iliyowekewa alama unabadilishwa na taarifa ya ubadilishaji data. Hatua hii haiwezi kutenduliwa.',
+          remove: 'Mwili mkuu wa kila dhana iliyowekewa alama unafutwa kabisa. Hatua hii haiwezi kutenduliwa.',
           accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+            'Vitambulisho vyote vilivyowekewa alama vinatiwa alama ya kukaguliwa na kuhifadhiwa — havitawekewa alama tena isipokuwa ukichanganua upya.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "Dhana zilizoathirika: {'{'}n{'}'}.",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: 'Kitendo cha pamoja cha PII kimeshindwa — jaribu tena.'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'Inatumia kitendo cha PII kwa pamoja',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: 'Kila ghala huchapishwa kupitia ukaguzi kamili wa geti (ukaguzi wa PII, uorodheshaji, ulinganifu). Matokeo kwa kila ghala:',
+        pending: 'Thibitisha kufanya publish kwa maghala yaliyochaguliwa.',
+        publishConfirm: "Phatlalatsa {'{'}n{'}'}",
+        title: 'Chapisha maghala yaliyochaguliwa'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "Vitendo vya {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'Inajengwa — faili chanzo bado inachakatwa',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1783,33 +1784,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'Hii inaondoa kabisa ghala, dhana zake, maudhui yaliyoorodheshwa, grafu na vifurushi vyake. Hatua hii haiwezi kutenduliwa.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Futa ghala'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'Chuja kwa eneo la mada'
       },
-      new: '+ New repository',
+      new: '+ Ghala jipya',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Kubali vitambulisho vilivyowekewa alama & chapisha',
+        note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "Chagua {'{'}name{'}'} kwa uchapishaji wa pamoja",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'Ingest imeshindwa',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "Imeingizwa kupitia ingest v{'{'}n{'}'}",
+        published: "Imechapishwa v{'{'}n{'}'}",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1818,36 +1819,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ {'{'}n{'}'} zaidi",
+        fixPath: 'Fanya ingest tena ili kurudia: retract → unda toleo → ingest.'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'mikakati mbadala ya LLM',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'Makundi yaliyohifadhiwa',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'dhana zilizoorodheshwa',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "Ilianza saa {'{'}n{'}'} zilizopita",
+        lt1: 'Ilianza chini ya dakika moja iliyopita',
+        min: "Ilianza dakika {'{'}n{'}'} zilizopita"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'Ghala linabaki katika hatua ya Import hadi ubadilishaji wa faili utakapokamilika.',
+        rag: 'Faharasa ya RAG inaundwa — toleo linaanza serving mara tu kila dhana inapoorodheshwa.',
+        serving: 'Toleo hili linashughulikia serving kwa data ya RAG — lifanyie retract ili kufanya mabadiliko.',
+        review: 'Iko kwenye review — mhakiki anaithibitisha, kisha msimamizi hufanya publish na ingest.',
+        retracted: 'Haifanyi kazi — submit → review → approve → publish → ingest ili kuanza serving tena.',
+        idle: 'Uingizaji umekamilika — fanya submit kwa review ili kuendelea na mtiririko wa kazi.'
       },
-      pages: 'Pages processed',
+      pages: 'Kurasa zilizochakatwa',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Grafu ya serving',
+        version: 'Toleo linalofanya serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1855,12 +1856,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'Maendeleo ya uingizaji',
+        rag: 'Maendeleo ya ingest',
+        serving: 'Hali ya serving',
+        review: 'Hali ya review',
+        retracted: 'Hali ya retract',
+        idle: 'Hali ya ghala'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1876,33 +1877,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'Chagua faili ya kifurushi cha .zip.',
+      stagedFile: "Kimeandaliwa: {'{'}name{'}'}",
+      staged: 'Kifurushi kimeandaliwa — bofya Unda Ghala ili kuanza uingizaji.',
+      openExisting: 'Fungua ghala lililopo',
+      name: 'Jina la ghala',
+      importing: 'Inaingiza kifurushi…',
+      importHint: 'Au ingiza kifurushi cha zip kilichopo kama ghala jipya.',
+      importDefaultName: 'Ghala lililoingizwa',
+      failed: 'Uundaji wa ghala umeshindwa',
+      duplicateInline: 'Ghala lenye jina hili tayari lipo. Lifungue, au chagua jina lingine.',
+      duplicate: 'Ghala lenye jina hili tayari lipo - lifungue kutoka kwenye dashibodi au chagua jina lingine.',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'Unda ghala',
+      title: 'Ghala jipya la OKF',
+      hint: 'Inaunda ghala tupu lenye index.md unayoweza kuihariri katika kihariri cha Studio.',
+      domainPlaceholder: 'Chagua eneo la mada…',
+      domainRequired: 'Chagua eneo la mada kwanza — haliwezi kubadilishwa baada ya kuundwa.',
+      classLabel: 'Uainishaji wa dhana',
+      classHeuristics: 'Mbinu za uzoefu (chaguomsingi)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'Jina la uwanja limetengwa maalum.',
+      errKeyDuplicate: 'Jina la uwanja limetumika mara mbili.',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'Lazima liwe nambari',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1913,53 +1914,54 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'Kila uwanja wa frontmatter unaweza kuhaririwa. Ongeza au ondoa funguo kwa hiari.',
+      errRemovalPending:
+        'Kuondoa nyanja kunahitaji makubaliano ya seva ya kuunganisha na kufuta (inakuja hivi karibuni).',
+      errKeyRequired: 'Kila uwanja unahitaji jina.',
+      arrayPh: 'maadili yaliyotenganishwa kwa koma',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter imehifadhiwa',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'Frontmatter ni nini?',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'Bado hakuna frontmatter — Hariri ili kuongeza aina, kichwa na lebo.',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'Lebo (Muundo wa Maarifa)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'Hifadhi frontmatter',
+      saveFailed: 'Uhifadhi wa frontmatter umeshindwa'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        'Kipengee kimoja katika ghala lako — kwa kawaida ukurasa mmoja au mada moja. Kila dhana ina frontmatter yenye muundo thabiti ambayo msaidizi husoma, pamoja na matini ya markdown anayotumia kutoa majibu.',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'Mkusanyiko wa dhana zilizoratibiwa kuhusu Eneo moja la Mada. Huwa kifurushi cha OKF unachokichapisha, kukitolea toleo na kukifanya kipatikane kwa msaidizi.',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'Maarifa haya yanahusiana na wapi? Eneo la Mada hupanga ghala lako na kubainisha lebo unazoweza kuchagua. Haliwezi kubadilishwa baada ya kuundwa.',
+      selectSubjectArea: 'Chagua eneo la mada…',
+      subjectAreaMissing: 'Eneo la Mada la ghala hili halipo katika Muundo wa Maarifa — linaonyesha kila lebo.',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'Kundi kutoka kwenye Muundo wa Maarifa linalomweleza msaidizi dhana hii inawakilisha kitu gani. Lebo husaidia majibu kupata maudhui sahihi.',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        'Faili ya zip iliyotolewa ya ghala — dhana zake, muundo na data ya maelezo kwenye faili moja. Vifurushi ndiyo namna maghala yanavyohamishwa kati ya mifumo.',
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'Nakala isiyobadilika ya ghala wakati linapofanyiwa publish. Uhariri unaendelea kwenye toleo lijalo — matoleo yaliyochapishwa hayabadiliki kamwe.',
+      serving:
+        'Toleo hili liko mtandaoni: msaidizi husoma maudhui yake wakati akijibu. Lifanyie retract ili kufanya mabadiliko.',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        'Hatua ambapo toleo lililochapishwa huandaliwa kwa ajili ya kutoa majibu — matini hugawanywa, hupachikwa viini na kuunganishwa. Hakuna kinachomfikia msaidizi kabla ya hatua hii.',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'Jinsi tunavyoamua kila dhana NI nini (mada, kitambulisho, mchakato…). Mbinu za uzoefu husoma ukurasa kiotomatiki; chaguo la LLM linachukua muda mrefu zaidi lakini linashughulikia kurasa ngumu vizuri.',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'Kukata upya chanzo kuwa dhana kwa njia tofauti — kwa mfano dhana moja kwa kila ukurasa badala ya dhana moja kwa tovuti nzima.',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: 'Uingizaji umeshindwa — faili chanzo haikuweza kubadilishwa.',
+      importFailedHint: 'Futa ghala hili na uingize faili chanzo tena.',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        'Taarifa zilizoundwa kimpangilio zilizo juu ya kila faili — aina, kichwa, lebo. Msaidizi huzitumia kujua mada ya kila dhana inahusu nini.'
     },
     md: {
       toolbar: 'Formatting',
@@ -1969,7 +1971,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'Orodha yenye nambari',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1977,106 +1979,105 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'Ghala la OKF ni mkusanyiko wa mada zilizopangwa na kupewa matoleo ambao majibu yako ya mazungumzo yanaweza kuyataja. Lichukulie kama mfumo mwepesi wa uainishaji maarifa kwa uwanja wako — lebo hufafanua makundi, mada hufafanua vitambulisho, na vyanzo hufafanua asili.',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'Ghala la OKF ni mkusanyiko ulioratibiwa na wenye matoleo wa mada mbalimbali. Lichukulie kama tabaka jepesi la maarifa kwa uwanja wako — lebo hufafanua makundi, mada hufafanua vitambulisho, na vyanzo hufafanua asili. Baada ya kuchapishwa, majibu ya gumzo hutaja mada hizi kwa vitambulisho vyake vya kipekee.',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'Njia tatu za kuanzisha ghala la OKF: vuta mada kutoka kwenye ukusanyaji wa tovuti, zitoe kutoka kwenye nyaraka ulizokwisha pakia, au anza moja kwa moja kuanzia mwanzo. Kunakili ghala lililopo kunanukuu mada zake na kukuruhusu kugawa kazi.',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        'Kila waraka unakuwa chanzo cha mada. Mzalishaji huzisoma, hutoa mapendekezo ya mada na kupendekeza muundo. Utakagua kila mada katika hatua inayofuata — hakuna kitakachowekwa wazi hadi utakapothibitisha.',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        'Tunasoma vyanzo vyako na kupendekeza mada. Mada hujikusanya chini ya lebo za makundi unazochagua. Mzalishaji ni makini — anapendelea kupendekeza mada chache zilizoundwa vizuri badala ya mada nyingi zisizo na mpangilio.',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'Lebo ndizo misingi mikuu ya muundo wako — mada hii ni kitu cha namna gani? Chagua lebo 3 hadi 7 zinazoshikilia misingi mikuu; mzalishaji huzitumia kama nguzo za kuongoza muundo wa mada.',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        'Huu ndio msingi wa kazi yote. Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Mada hupata kichwa, maelezo, na kurithi lebo ulizochagua. Jukumu lako ni kuifanya iwe thabiti: badilisha vichwa visivyo wazi, unganisha vile vinavyokaribia kufanana, na ondoa vile usivyoweza kuvithibitisha kwa chanzo.',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'Tunafanya ukaguzi wa kufuata vigezo: je, kila mada ina kichwa? Je, lebo ni sahihi? Je, uthibitisho wa chanzo uko salama? Masuala yanayozuia lazima yarekebishwe kabla ya kuchapisha; maonyo yanaweza tu kukubaliwa.',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki: maadili ya hali yanaweza kurekebishwa kuwa orodha sahihi, nyanja zilizokosekana zinaweza kujazwa na maadili yanayofaa. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'Muhtasari wa kile unachokaribia kuchapisha: mada, lebo, vyanzo na masuala yoyote ambayo hayajatatuliwa. Mara tu unapothibitisha, ghala linaelekea kwenye njia ya uchapishaji.',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        'Kufanya publish kunaunda toleo la v1 la ghala hili. Kila mabadiliko ya baadaye — mada mpya, maelezo yaliyoboreshwa, uhakiki mpya wa taarifa zilizopitwa na wakati — huchapishwa kama v2, v3, n.k. Matoleo ya zamani yataendelea kutajika milele.',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        'Unda ghala jipya la OKF kutoka kwenye nyaraka zilizochaguliwa. Nyaraka zitakuwa vyanzo; utakagua na kutaja mada zinazozalishwa kabla ya chochote kuchapishwa.',
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'Ghala la OKF ni mkusanyiko wa mada zilizopangwa na kupewa matoleo ambao majibu ya mazungumzo yako yanaweza kuyataja kama ushahidi.',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'Bado hujaunda ghala lolote la OKF. Ghala la OKF ni seti ya mada iliyopangwa na inayoweza kutajwa ambayo majibu yako ya mazungumzo yanaweza kuitumia.',
+      labels: 'Lebo ndizo misingi mikuu ya muundo wako — zinajibu "mada hii inawakilisha kitu cha namna gani?".',
+      hide: 'Ficha',
+      whatIsThis: 'Hii ni nini?'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'Funga',
+      cancel: 'Ghairi',
+      save: 'Hifadhi',
+      clear: 'Futa',
+      delete: 'Futa kabisa'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'Msaada',
+      helpTitle: 'Kuhusu OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'Maghala ya OKF ni tabaka jepesi la uainishaji maarifa — lebo hufafanua makundi, mada hufafanua vitambulisho, vyanzo hufafanua asili. Mara tu yanapochapishwa, majibu ya gumzo hutaja mada kwa vitambulisho vyake na kuonyesha asili yake.',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'Dashibodi',
+        wizard: 'Kielekezi'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'Imenakiliwa kutoka {name} · toleo {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'Ghala',
+        untitled: 'Ghala lisilo na jina',
+        trust: 'Uaminifu',
+        sources: 'Vyanzo',
+        concepts: 'Dhana zilizopo hadi sasa',
+        stale: 'yamepitwa na wakati'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'inaendelea',
+        inReview: 'inapitiwa',
+        published: 'imechapishwa'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'Iko kwenye review',
+        stepOf: 'Hatua ya {n} kati ya 10',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'Maghala',
+        new: '+ Ghala jipya',
+        search: 'Tafuta…',
+        empty: 'Bado hakuna maghala hapa.',
+        topics: 'mada',
+        select: 'Chagua {name} kwa uchapishaji wa pamoja',
+        stale: 'yamepitwa na wakati',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'Iko kwenye review',
+          stepOf: 'Hatua ya {n} kati ya 10',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: '{n} zimechaguliwa',
+          publish: 'Chapisha zilizochaguliwa',
+          title: 'Chapisha maghala yaliyochaguliwa',
+          body: 'Mara tu zikichapishwa, majibu ya gumzo yataweza kuzitumia. Kila ghala hapa chini linaorodhesha matokeo yake ya mwisho.',
+          results: 'Matokeo',
+          publishConfirm: 'Chapisha {n}',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'Jina',
+            status: 'Hali',
+            topics: 'Mada'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'Tayari'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
       }
     },
     wizard: {
@@ -2085,244 +2086,245 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'Rudi kwenye dashibodi',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'Ghala lisilo na jina',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'Dhana zilizopo hadi sasa'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'Kielekezi cha OKF Studio',
+      back: 'Nyuma',
+      continue: 'Endelea',
+      publish: 'Chapisha ghala'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'Jina la ghala & eneo la mada',
+        hint: 'Lipe ghala hili la OKF jina lililo wazi na uchague eneo la mada yake.',
+        nameLabel: 'Jina la ghala',
+        namePh: 'mf. Vibali vya usafiri NL',
+        domainLabel: 'Eneo la mada'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'Ghala hili la OKF lianzie wapi?',
+        hint: 'Chagua jinsi unavyotaka kuanzisha ghala hili. Unaweza kubadilisha baadaye.',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'Nyaraka',
+            desc: 'Toa mada kutoka kwenye nyaraka ambazo tayari umezipakia.'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'Ukusanyaji wa tovuti',
+            desc: 'Kusanya tovuti na upendekeze mada kutoka kwenye kurasa zake.'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'Ukurasa mtupu',
+            desc: 'Anza kuanzia mwanzo kabisa na uandike mada wewe mwenyewe.'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'Nakala ya ghala lililopo',
+            desc: 'Gawa mada na muundo kutoka ghala lingine la OKF.'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'Pembejeo',
+        documents: 'Chagua nyaraka zinazopaswa kuanzisha orodha ya mada.',
+        crawl: 'Chagua tovuti utakazokusanya maelezo yake.',
+        manual: 'Unaweza kuandika mada moja kwa moja katika hatua inayofuata.',
+        clone: 'Chagua ghala lililopo ili kulinakili.',
+        placeholder: 'Kiolesura cha hatua hii kitatolewa katika kisa cha baadaye.'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'Zalisha mada',
+        hint: 'Tunasoma vyanzo vyako na kupendekeza mada.',
+        progress: 'Mzalishaji anaendelea na kazi...',
+        placeholder: 'Huduma ya mzalishaji itaunganishwa katika kisa cha baadaye.'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'Chagua lebo',
+        hint: 'Lebo ndizo misingi mikuu ya muundo wako — mada hizi ni vitu vya namna gani? Chagua 3 hadi 7.',
+        add: '+ Ongeza lebo',
+        addConfirm: 'Ongeza',
+        placeholder: 'mf. Vibali'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'Kagua mada',
+        hint: 'Kila mada ni kipande kidogo cha maarifa kinachoweza kutajwa. Hariri kichwa na maelezo.',
+        placeholder: 'Mti wa uratibu + kihariri vitatolewa katika Kisa cha 3-8.'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'Kagua masuala',
+        hint: 'Tunafanya ukaguzi wa kufuata vigezo. Masuala yanayozuia lazima yarekebishwe kabla ya kuchapisha.',
+        placeholder: 'Paneli ya uhalalishaji itatolewa katika Kisa cha 3-8.'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'Marekebisho ya kiotomatiki',
+        hint: 'Baadhi ya maonyo yanaweza kurekebishwa kiotomatiki. Tumia marekebisho unayokubaliana nayo, kisha rudi kwa mratibu ili kukagua.',
+        placeholder: 'Huduma ya kusahihisha kiotomatiki inatolewa katika Kisa cha 10.2.'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'Ukaguzi',
+        hint: 'Muhtasari wa kile unachokaribia kuchapisha.',
+        repo: 'Ghala',
+        topics: 'Mada',
+        labels: 'Lebo',
+        sources: 'Vyanzo'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'Chapisha ghala hili',
+        hint: 'Kufanya publish kunaunda toleo la v1 la ghala hili.',
+        nameOk: 'Jina la ghala limewekwa',
+        labelsOk: 'Lebo zimechaguliwa',
+        topicsOk: 'Mada zimekaguliwa'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'haijathibitishwa',
+        'machine-confirmed': 'imethibitishwa na mashine',
+        'human-reviewed': 'imekaguliwa na binadamu'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'Kiolesura cha retract kitatolewa katika Kisa cha 3.9.'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'Huduma ya maelezo ya kifurushi itaunganishwa katika kisa cha baadaye.'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'Unda ghala la OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'Chagua angalau waraka mmoja',
+        alreadyInOkf: 'Ondoa nyaraka ambazo tayari zimo katika ghala la OKF',
+        alreadyIngested: 'Ondoa nyaraka ambazo tayari zimefanyiwa ingest'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'Mzalishaji ataunganishwa katika kisa cha baadaye.'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'Chagua eneo la mada…',
+      classLabel: 'Uainishaji wa dhana',
+      classHeuristics: 'Mbinu za uzoefu (chaguomsingi)',
+      classHeuristicsHint:
+        'Uainishaji wa haraka unaozingatia kanuni — hakuna gharama ya LLM, inafaa kwa ukusanyaji uliopangwa vizuri.',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'LLM inaratibu kila dhana — aina, lebo ya Muundo wa Maarifa na maelezo. Ni sahihi na kamili zaidi kuliko mbinu za uzoefu; tegemea muda wa ziada kwa kila dhana.',
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        'Mbinu za uzoefu kwanza; kisha LLM hukagua kesi zisizo na uhakika na kujaza mapengo. Inasawazisha muda na ukamilifu.',
+      targetLabel: 'Hii inapaswa kuelekezwa wapi?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'Kusanya hadi kwenye mkusanyiko huru wa matini',
+        okfRepo: 'Ghala la OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
+      targetHint: 'Tutakuonyesha mada tulizopata kabla hatujahifadhi chochote.',
+      createOkfFromCrawl: 'Unda ghala la OKF kutoka kwa ukusanyaji huu',
+      splitLabel: 'Mgawanyo wa dhana',
+      splitA: 'Dhana moja kwa ukusanyaji wote',
+      splitB: 'Dhana moja kwa kila ukurasa (inapendekezwa)',
+      splitC: 'Tumia unyambuaji mada wa LLM',
+      splitCHint: 'Kisa cha 10.6 — kinakuja hivi karibuni',
+      splitBHint: 'Kila ukurasa uliokusanywa unakuwa dhana inayojitegemea — AI inaweza kutaja kurasa moja moja.',
+      splitAHint: 'Ukusanyaji mzima unakuwa dhana moja kubwa — inafaa zaidi kwa tovuti ndogo.',
+      progressDownload: 'Inapakua maudhui yaliyokusanywa...',
+      progressSplit: 'Inagawanya kuwa dhana...',
+      progressIngest: 'Inaongeza dhana (kundi la [i] kati ya [n])...',
       postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+        'Baada ya ukusanyaji kukamilika, unaweza kuugeuza kuwa ghala la OKF kutoka kwenye kichupo cha Dashibodi ya faili.',
+      creating: 'Inaunda ghala la OKF...',
+      createOk: 'Ghala la OKF limeundwa. Studio inafunguliwa kwa ajili ya kuratibu.',
+      createOkRenamed: 'Ghala la OKF limeundwa kama "[name]". Studio inafunguliwa kwa ajili ya kuratibu.',
+      createFailed: 'Haikuweza kuunda ghala la OKF kutoka kwa ukusanyaji huu.',
       conversionsTitle: 'Hifadhi zilizoundwa kutoka kwenye crawl hii',
-      convQueued: 'Inasubiri...',
-      convDownloading: 'Inapakua crawl...',
+      convQueued: 'Iko kwenye foleni...',
+      convDownloading: 'Inapakua maudhui ya ukusanyaji...',
       convSplitting: 'Inagawanya kuwa dhana...',
-      convAdding: 'Inaongeza dhana ([p] kurasa hadi sasa)...',
-      convDone: 'Imeundwa ([p] kurasa)',
-      convFailed: 'Imeshindikana',
-      createStarted: 'Inaunda "[name]" — fuata maendeleo hapa chini.',
+      convAdding: 'Inaongeza dhana (kurasa [p] hadi sasa)...',
+      convDone: 'Imeundwa (kurasa [p])',
+      convFailed: 'Imeshindwa',
+      createStarted: 'Inaunda "[name]" — fuatilia maendeleo hapa chini.',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'Mfano',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'Ya ndani · ndogo',
+          'local-medium': 'Ya ndani · ya wastani',
+          'sovereign-large': 'Ya kipekee · kubwa'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'Ukusanyaji lazima ukamilike kabla ya kuunda ghala la OKF.',
+        alreadyInOkf: 'Ukusanyaji huu tayari uko kwenye ghala la OKF.'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'Chagua mada upande wa kushoto ili kuitazama na kuihariri.',
+      search: 'Tafuta mada',
+      noTopics: 'Bado hakuna mada.',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'Rekebisha lebo',
+        body: 'Lebo ndizo misingi mikuu ya mgawanyo wa muundo wako — mada hii inawakilisha kitu cha namna gani?',
+        edit: 'Rekebisha lebo',
+        add: 'Ongeza',
+        addPh: 'mf. Vibali',
+        remove: 'Ondoa',
+        empty: 'Bado hakuna lebo.',
+        notReady: 'Lebo zimehifadhiwa hapa ndani — ulandanishaji wa seva unakuja hivi karibuni.'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'Hariri frontmatter',
+        dialogTitle: 'Hariri frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'Onyesha chanzo',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'Dhana inakosa aina.',
+        badActor: 'Mhusika wa chanzo lazima aanze na agent:/human:/tool:/process:.'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'Uhifadhi umezuiwa: rekebisha masuala ya ulinganifu kwanza.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
+      frozen:
+        "Maudhui yamesitishwa kwenye toleo la {'{'}v{'}'} — hakikisho la kusoma tu. Lifanyie toleo la serving hatua ya retract ili kufanya mabadiliko.",
+      none: 'Hakuna',
       expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+        'Badilisha hadi hali ya Utaalamu ili kuona JSON ghafi ya uhalalishaji, kuchuja kulingana na uzito, na kubatilisha ukaguzi.',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: 'Masuala {n} yanayozuia — yarekebishe kabla ya kuchapisha',
+        warnings: 'Mambo {n} yanahitaji uhakiki wako',
+        ok: 'Inaonekana vizuri. Hakuna cha kurekebisha.'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} ziko safi · {warnings} zinahitaji ukaguzi · {blockers} zinazuia',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'Kipangilio kitaletwa katika Kisa cha 4.2b.'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'Uhalalishaji utaunganishwa katika kisa cha baadaye.'
       }
     },
     pii: {
-      panel: 'Vipengele vilivyotiwa alama',
+      panel: 'Vitambulisho vilivyowekewa alama',
       nFlagged: '{n} zimepatikana',
       rescan: 'Changanua tena',
       scanning: 'Inachanganua…',
       clean: 'Hakuna vipengele vilivyotiwa alama — concept hii ni safi.',
       how: 'Suluhisho: ondoa au badilisha maneno (mfano kutumia jukumu badala ya jina), kisha hifadhi — uchanganuzi upya utasasisha orodha hii.',
       descFallback: 'Data za kibinafsi zimetambuliwa hapa (GDPR Art. 4(1) — zinazohusiana na mtu anayetambulika).',
-      scanError: 'Kuchanganua hakupatikani',
+      scanError: 'Uchanganuzi haupatikani',
       type: {
         PERSON: 'Jina la mtu',
         LOCATION: 'Mahali',
@@ -2330,8 +2332,8 @@ export default {
         EMAIL_ADDRESS: 'Barua pepe',
         PHONE_NUMBER: 'Nambari ya simu',
         IP_ADDRESS: 'Anwani ya IP',
-        NRP: 'Nambari ya usajili wa taifa',
-        BD_NATIONAL_ID: 'Nambari ya kitambulisho cha taifa'
+        NRP: 'Nambari ya usajili wa kitaifa',
+        BD_NATIONAL_ID: 'Nambari ya kitambulisho cha kitaifa'
       },
       desc: {
         PERSON: 'Jina la mtu limetambuliwa. Majina yanaweza kumtambulisha mtu moja kwa moja.',
@@ -2344,23 +2346,23 @@ export default {
         BD_NATIONAL_ID: 'Nambari ya kitambulisho cha taifa imetambuliwa. Inamtambulisha mtu kikamilifu.'
       },
       allClear: 'Safi',
-      redactFile: 'Ficha faili zima',
-      confirmRedactFile: 'Thibitisha: ficha faili zima?',
-      locateTip: 'Onyesha maandishi haya katika kihariri',
+      redactFile: 'Kinga faili zima',
+      confirmRedactFile: 'Thibitisha: kinga faili zima?',
+      locateTip: 'Onyesha matini haya katika kihariri',
       file: {
         label: 'Faili zima:',
         redact: 'Ficha faili',
         remove: 'Ondoa kiini',
         accept: 'Kubali zote',
-        confirmRedact: 'Thibitisha: ficha faili zima?',
-        confirmRemove: 'Thibitisha: ondoa kiini kizima?'
+        confirmRedact: 'Thibitisha: kinga faili zima?',
+        confirmRemove: 'Thibitisha: ondoa mwili wote wa matini?'
       },
       action: {
         redact: 'Ficha',
         replace: 'Badilisha',
         remove: 'Ondoa',
         accept: 'Kubali',
-        replacement: 'Maandishi mbadala',
+        replacement: 'Matini ya ubadilishaji',
         apply: 'Weka',
         cancel: 'Ghairi'
       },
@@ -2370,10 +2372,10 @@ export default {
         replaced: 'Imebadilishwa',
         removed: 'Imeondolewa',
         accepted: 'Imekubaliwa',
-        fileRedacted: 'Faili limefichwa',
-        kept: 'imehifadhiwa kwenye maandishi',
+        fileRedacted: 'Faili imekingwa',
+        kept: 'imehifadhiwa katika matini',
         removedWord: 'imeondolewa',
-        wholeFile: 'Kiini kizima cha faili kimefichwa'
+        wholeFile: 'Mwili wote wa faili umekingwa'
       }
     }
   }

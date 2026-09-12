@@ -1080,7 +1080,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'บันทึกโปรไฟล์สำเร็จ',
-      saved: 'Frontmatter saved',
+      saved: 'บันทึก frontmatter แล้ว',
       saveFailed: 'ล้มเหลวในการบันทึกโปรไฟล์',
       loadSuccess: 'โหลดโปรไฟล์สำเร็จ',
       loadFailed: 'ล้มเหลวในการโหลดโปรไฟล์',
@@ -1337,13 +1337,12 @@ export default {
   },
   chatbot: {
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
-    aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
-    welcomeMessage: 'Welcome! How can I assist you today?',
-    configMismatchWarning:
-      'การกำหนดค่าไม่ตรงกัน: {warnings}. กรุณาตรวจสอบการกำหนดค่าความช่วยเหลือด่วนและลำดับชั้นความรู้',
+    aiGeneratedNoDocs: 'สร้างโดย AI — ไม่ได้อิงจากเอกสารในคลัง',
+    welcomeMessage: 'ยินดีต้อนรับ! วันนี้มีอะไรให้ฉันช่วยเหลือไหม?',
+    configMismatchWarning: 'การกำหนดค่าไม่ตรงกัน: {warnings} โปรดตรวจสอบวิธีใช้ด่วนและการกำหนดค่าลำดับชั้นความรู้',
     categoryNotFound: 'ไม่พบหมวดหมู่ "{label}" ในลำดับชั้นความรู้',
-    serviceLabelMismatch: 'บริการ "{label}" ใช้ป้าย UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
-    noFilterWarning: 'ไม่มีตัวกรองบริบทที่ใช้งานอยู่ — คำค้นจะไม่ถูกกรอง',
+    serviceLabelMismatch: 'บริการ "{label}" ใช้ป้ายกำกับ UI ที่อาจไม่ตรงกับลำดับชั้นความรู้',
+    noFilterWarning: 'ไม่มีตัวกรองบริบทที่ใช้งานอยู่ — คำค้นหาจะไม่ได้รับการกรอง',
     placeholder: 'พิมพ์คำถามของคุณที่นี่...',
     sendButton: 'ส่ง',
     fileReceived: 'ได้รับไฟล์สำเร็จ',
@@ -1389,23 +1388,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นผู้เชี่ยวชาญด้านการจดทะเบียนราษฎรของเคนยาที่พร้อมช่วยเหลือ อธิบายขั้นตอนการขอรับบัตรประจำตัวประชาชน (Maisha Namba) หรือการขอออกบัตรใหม่กรณีสูญหาย ข้อสำคัญ: ระบุรายการเอกสารที่จำเป็นอย่างชัดเจน (เช่น สูติบัตร สำเนาบัตรประจำตัวประชาชนของบิดามารดา) และแนะนำให้ผู้ใช้เดินทางไปยังศูนย์ Huduma หรือสำนักงานนายทะเบียนราษฎร (Registrar of Persons) ที่ใกล้ที่สุด กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นผู้ให้คำแนะนำเกี่ยวกับ KRA (กรมสรรพากรเคนยา) อธิบายขั้นตอนการยื่นแบบแสดงรายการภาษี การขอ KRA PIN หรือการรีเซ็ตรหัสผ่านบนพอร์ทัล iTax ข้อสำคัญ: เตือนผู้ใช้เกี่ยวกับกำหนดเวลาสิ้นสุดวันที่ 30 มิถุนายนสำหรับการยื่นแบบประจำปี และแนะนำวิธียื่นแบบแสดงรายการเป็นศูนย์ (Nil return) หากไม่มีรายได้ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นที่ปรึกษาทางธุรกิจสำหรับบริการ eCitizen แนะนำผู้ใช้ตลอดขั้นตอนการจองชื่อธุรกิจและการจดทะเบียนบริษัทในเคนยา ข้อสำคัญ: อธิบายค่าใช้จ่ายปัจจุบันสำหรับการค้นหาชื่อและการจดทะเบียน และนำผู้ใช้ไปยังพอร์ทัล eCitizen อย่างเป็นทางการเพื่อกรอกใบสมัครให้เสร็จสมบูรณ์ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นผู้นำทางบริการด้านสุขภาพ ให้ข้อมูลเกี่ยวกับการเปลี่ยนผ่านจาก NHIF ไปเป็น SHIF (กองทุนประกันสุขภาพเพื่อสังคม) และขั้นตอนการลงทะเบียน ข้อสำคัญ: แบ่งปันรหัส USSD อย่างเป็นทางการ (เช่น *263#) หรือลิงก์เว็บไซต์สำหรับลงทะเบียน พร้อมอธิบายสิทธิประโยชน์ของความคุ้มครองสุขภาพภาครัฐ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นที่ปรึกษาด้านการศึกษา ให้คำแนะนำเกี่ยวกับหลักสูตร CBC การลงทะเบียน NEMIS หรือการจัดสรรที่เรียนในมหาวิทยาลัยผ่าน KUCCPS ข้อสำคัญ: อธิบายวิธีที่ผู้ปกครองสามารถตรวจสอบผลการสอบระดับชาติผ่าน SMS หรือพอร์ทัล KNEC เมื่อมีการประกาศผล กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นผู้ให้คำแนะนำบริการของ NTSA อธิบายขั้นตอนการต่ออายุใบขับขี่ การตรวจสภาพรถยนต์ หรือการจัดการบัญชี TIMS ข้อสำคัญ: แนะนำผู้ใช้วิธีเข้าสู่ระบบพอร์ทัล eCitizen NTSA เพื่อขอรับใบขับขี่อัจฉริยะ (Smart DL) หรือจองคิวตรวจสภาพรถยนต์ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นที่ปรึกษาโครงการที่อยู่อาศัย อธิบายโครงการที่อยู่อาศัยราคาประหยัด (Boma Yangu) การลงทะเบียน และขั้นตอนการสมทบทุนโดยสมัครใจ ข้อสำคัญ: แนะนำผู้ใช้ไปยังพอร์ทัล Boma Yangu เพื่อดูโครงการต่างๆ และอธิบายเกณฑ์คุณสมบัติในการได้รับการจัดสรร กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      "ทำหน้าที่เป็นโค้ชแนะแนวอาชีพสำหรับงานราชการ แนะนำผู้ใช้เกี่ยวกับการสร้างโปรไฟล์และการสมัครงานในตำแหน่งที่เปิดรับผ่านพอร์ทัลคณะกรรมการข้าราชการพลเรือน (PSC) ข้อสำคัญ: แนะนำให้ผู้ใช้เตรียมเอกสารรับรองคุณวุฒิการศึกษาให้พร้อม และหมั่นตรวจสอบเว็บไซต์ PSC หรือหนังสือพิมพ์รายวันท้องถิ่นเพื่อดูประกาศจาก MyGov เป็นประจำ กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "ทำหน้าที่เป็นเพื่อนร่วมพูดคุยท้องถิ่นที่เป็นมิตร สุภาพ ให้ความช่วยเหลือเป็นอย่างดี และรอบรู้เกี่ยวกับวัฒนธรรมเคนยารวมถึงชีวิตประจำวัน ข้อสำคัญ: เตือนผู้ใช้ว่าแม้คุณจะสามารถพูดคุยได้ทุกเรื่อง แต่จุดแข็งหลักของคุณคือการช่วยแนะนำการเข้าถึงบริการของรัฐบาลเคนยา เช่น **บัตรประจำตัวประชาชน**, **ภาษี** และ **การจดทะเบียนธุรกิจ** กฎ: อ้างถึงแอปพลิเคชันนี้ในชื่อ 'Genie AI' เสมอ"
   },
   common: {
     cancel: 'ยกเลิก',
@@ -1473,13 +1472,13 @@ export default {
       details: 'รายละเอียด',
       ingestionLog: 'บันทึกการนำเข้าข้อมูล',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        'ข้อมูลเมตาสำหรับไฟล์นี้: ชื่อ ผู้เขียน และป้ายกำกับลำดับชั้นความรู้ที่ AI ใช้กำหนดเส้นทางคำถาม การ ingest ต้องมีป้ายกำกับอย่างน้อยหนึ่งรายการ',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'มุมมองสดของการรวบรวมข้อมูลเว็บไซต์สำหรับไฟล์นี้: อัตรา คิว ข้อผิดพลาด และความคืบหน้า เมื่อการรวบรวมข้อมูลสำเร็จ ส่วนท้ายด้านล่างจะแปลงเป็นที่เก็บ OKF',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'บันทึกการรวบรวมข้อมูลเว็บไซต์แบบรายหน้า: URL ใดที่ดึงข้อมูลสำเร็จ เปลี่ยนเส้นทาง หรือล้มเหลว ซึ่งจะถูกบันทึกขณะกำลังรวบรวมข้อมูล',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'ความคืบหน้าทีละขั้นตอนในการจัดเตรียมไฟล์นี้สำหรับคำตอบของ AI: การแบ่งส่วนย่อย (chunking) การติดป้ายกำกับ การทำ embedding และการสร้างดัชนี ข้อผิดพลาดที่นี่จะแสดงจุดที่การ ingest หยุดลงอย่างแน่นอน'
     },
     log: {
       killActions: 'การดำเนินการหยุด:',
@@ -1559,31 +1558,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'โหลดเวอร์ชันไม่สำเร็จ',
+      none: 'ยังไม่มีการสร้างเวอร์ชัน — การ publish จะสร้าง v1',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: 'สร้างเวอร์ชันใหม่',
+      published: "เผยแพร่เวอร์ชัน v{'{'}v{'}'} แล้ว — จัดเก็บชุดไฟล์ {'{'}f{'}'} ไว้ในที่เก็บเอกสารเรียบร้อยแล้ว",
+      serving: 'ทำ ingest แล้ว (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'แดชบอร์ด Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'ไฟล์ต้นฉบับยังอยู่ระหว่างการประมวลผล',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'การดำเนินการนี้จะลบที่เก็บ แนวคิด เนื้อหาที่จัดทำดัชนี กราฟ และชุดไฟล์อาร์ติแฟกต์อย่างถาวร',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'ลบที่เก็บ'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'รับทราบเอนทิตีที่ถูกแจ้งเตือนและเผยแพร่',
+        note: 'เอนทิตีที่ถูกแจ้งเตือนเป็นส่วนหนึ่งของเนื้อหาที่เผยแพร่ หากคุณได้ตรวจสอบแล้ว (เช่น รายละเอียดการติดต่ออย่างเป็นทางการ) ให้รับทราบและดำเนินการต่อ'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "การ publish จะสร้าง v{'{'}n{'}'} และจัดเก็บชุดไฟล์ \"{'{'}file{'}'}\" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1601,59 +1600,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "ติดป้ายกำกับแล้ว: {'{'}n{'}'}",
+      fallbacks: "การสำรองข้อมูล LLM: {'{'}n{'}'}",
+      concepts: "แนวคิด: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'} รายการ",
+      loadFailed: 'โหลดบันทึกกิจกรรมไม่สำเร็จ',
+      none: 'ยังไม่มีกิจกรรมที่บันทึกไว้ — การดำเนินการของที่เก็บจะปรากฏที่นี่เมื่อเกิดขึ้น',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'กราฟแนวคิด',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'ยังไม่มีแนวคิด — ไม่มีข้อมูลสำหรับแสดงกราฟ',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'แสดงหรือซ่อนฮับดัชนี (ลิงก์สารบัญคือโครงสร้าง ไม่ใช่ความรู้)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "{'{'}n{'}'} ลิงก์",
+        chunks: "{'{'}n{'}'} ชิ้นส่วน",
+        failed: 'การสร้างดัชนีล้มเหลว',
+        flagged: 'เอนทิตีที่ถูกแจ้งเตือน',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: 'ยังไม่ได้สร้างดัชนี'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (วางหรือปล่อยว่างไว้)',
+        bodyPh: '# หัวข้อ\n\nวาง markdown ที่นี่ — frontmatter จะถูกเพิ่มให้คุณโดยอัตโนมัติ',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'ไม่สามารถสร้างไฟล์ได้',
+        title: 'เพิ่มไฟล์แนวคิด',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'เช่น สัตว์ป่าในมาไซมารา',
+        updateIndex: 'ต่อท้ายรายการสารบัญของดัชนี'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'ไม่มี frontmatter — ข้อเสนอแนะฉบับเต็ม',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'แผนการแก้ไข frontmatter ในทุกแนวคิด ส่วนเนื้อหาหลักจะไม่ได้รับการแก้ไข',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'ไม่มีส่วนที่ต้องแก้ไข — frontmatter ทั้งหมดเป็นไปตามข้อกำหนดแล้ว',
         col: {
           field: 'Field',
           after: 'After',
@@ -1662,14 +1661,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'แก้ไขอัตโนมัติ (เฉพาะ frontmatter)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'แนวคิดนี้ได้รับการดูแลจัดการอย่างไร',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'ยังไม่มีไฟล์ — เพิ่มแนวคิดหรือแบ่งส่วนใหม่จากแหล่งที่มา',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1677,30 +1676,30 @@ export default {
         resplit: 'Re-split',
         flagged: 'ถูกตั้งค่าสถานะ',
         flaggedTip:
-          'Concepts ที่มีเอนทิตีที่ถูกตั้งค่าสถานะ — เปิดแต่ละอัน ลบ หรือเปลี่ยนแปลงเอนทิตี แล้วบันทึก (ระบบจะสแกนใหม่โดยอัตโนมัติ) หรือยอมรับเมื่อเผยแพร่',
+          'แนวคิดที่มีเอนทิตีที่ถูกแจ้งเตือน — เปิดแต่ละรายการ ลบหรือแก้ไขเอนทิตี บันทึก (จะสแกนใหม่โดยอัตโนมัติ) หรือรับทราบเมื่อทำการ publish',
         piiBadge: 'PII',
-        piiTip: 'เอนทิตีที่ถูกตั้งค่าสถานะ: {k} เปิด ลบ หรือเปลี่ยนแปลง จากนั้นบันทึก — ระบบจะสแกนใหม่โดยอัตโนมัติ',
-        piiTipBare: 'เอนทิตีที่ถูกตั้งค่าสถานะ — เปิด ตรวจทาน จากนั้นบันทึกเพื่อสแกนอีกครั้ง',
+        piiTip: 'เอนทิตีที่ถูกแจ้งเตือน: {k} เปิด ลบ หรือแก้ไข จากนั้นบันทึก — ระบบจะสแกนใหม่โดยอัตโนมัติ',
+        piiTipBare: 'เอนทิตีที่ถูกแจ้งเตือน — เปิด ตรวจทาน แล้วบันทึกเพื่อสแกนใหม่',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'กำลังโหลดไฟล์ {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'การดำเนินการนี้จะลบไฟล์ ชิ้นส่วนดัชนี และลิงก์กราฟอย่างถาวร',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'ตัวแก้ไขที่เก็บ',
+      loadFailed: 'ไม่สามารถโหลดแนวคิดนี้ได้',
+      loadingConcept: 'กำลังโหลดแนวคิด…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'ข้อมูลเมตาของแนวคิด',
+        labelLabel: 'ป้ายกำกับ (ลำดับชั้นความรู้)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'ไม่ได้เลือกแนวคิด',
+        saveFailed: 'การบันทึกข้อมูลเมตาล้มเหลว',
+        saved: 'บันทึกข้อมูลเมตาแล้ว',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1711,62 +1710,62 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'เลือกแนวคิดจากรายการเพื่อเริ่มแก้ไข',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'การดำเนินการนี้จะลบแนวคิดปัจจุบันและกราฟที่ได้รับมาทั้งหมด จากนั้นนำเข้าไฟล์ต้นฉบับใหม่ด้วยการแบ่งส่วนใหม่ การแก้ไขแนวคิดจะสูญหาย',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'การแบ่งส่วนใหม่ล้มเหลว — ตรวจสอบลิงก์ไฟล์ต้นฉบับ',
+        modeA: 'หนึ่งแนวคิดสำหรับการรวบรวมข้อมูลทั้งหมด',
+        modeAHint: 'แนวคิดขนาดใหญ่ — รวมเนื้อหาทั้งหมดไว้ในแนวคิดเดียว',
+        modeB: 'หนึ่งแนวคิดต่อหน้า',
+        modeBHint: 'แยกตามเครื่องหมาย `## Source:` ของตัวรวบรวมข้อมูล (แนะนำ)',
+        modeC: 'ใช้การสกัดหัวข้อด้วย LLM',
+        modeCHint: 'เรื่องราว 10.6 — เร็วๆ นี้',
+        title: 'แบ่งส่วนใหม่จากแหล่งที่มา'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'การเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'บันทึกล้มเหลว — ลองใหม่',
+      saveFailed: 'การบันทึกล้มเหลว — ลองใหม่',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: 'เซ็นเซอร์เนื้อหาที่ถูกแจ้งเตือนทั้งหมด',
+          remove: 'ลบเนื้อหาที่ถูกแจ้งเตือนทั้งหมด',
+          accept: 'ยอมรับเอนทิตีที่ถูกแจ้งเตือนทั้งหมด'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          redact: 'เนื้อหาหลักของทุกแนวคิดที่ถูกแจ้งเตือนจะถูกแทนที่ด้วยประกาศการเซ็นเซอร์ ไม่สามารถยกเลิกได้',
+          remove: 'เนื้อหาหลักของทุกแนวคิดที่ถูกแจ้งเตือนจะถูกลบว่างเปล่า ไม่สามารถยกเลิกได้',
           accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+            'เอนทิตีที่ถูกแจ้งเตือนทั้งหมดจะถูกทำเครื่องหมายว่าตรวจสอบแล้วและเก็บไว้ — จะไม่ถูกแจ้งเตือนอีกเว้นแต่คุณจะสแกนใหม่'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "แนวคิดที่ได้รับผลกระทบ: {'{'}n{'}'} รายการ",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: 'การดำเนินการ PII แบบกลุ่มล้มเหลว — โปรดลองอีกครั้ง'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'กำลังใช้การดำเนินการ PII แบบกลุ่ม',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: 'ที่เก็บแต่ละแห่งจะได้รับการเผยแพร่พร้อมการตรวจสอบอย่างสมบูรณ์ (การตรวจทาน PII การจัดทำดัชนี ความสอดคล้อง) ผลลัพธ์ของแต่ละที่เก็บ:',
+        pending: 'ยืนยันเพื่อ publish ที่เก็บที่เลือก',
+        publishConfirm: "เผยแพร่ {'{'}n{'}'} รายการ",
+        title: 'เผยแพร่ที่เก็บที่เลือก'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "การดำเนินการสำหรับ {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'กำลังสร้าง — ไฟล์ต้นฉบับยังอยู่ระหว่างการประมวลผล',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1775,33 +1774,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'การดำเนินการนี้จะลบที่เก็บ แนวคิด เนื้อหาที่จัดทำดัชนี กราฟ และชุดไฟล์อาร์ติแฟกต์อย่างถาวร ไม่สามารถยกเลิกได้',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'ลบที่เก็บ'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'กรองตามสาขาวิชา'
       },
-      new: '+ New repository',
+      new: '+ ที่เก็บใหม่',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'รับทราบเอนทิตีที่ถูกแจ้งเตือนและเผยแพร่',
+        note: 'เอนทิตีที่ถูกแจ้งเตือนเป็นส่วนหนึ่งของเนื้อหาที่เผยแพร่ หากคุณได้ตรวจสอบแล้ว (เช่น รายละเอียดการติดต่ออย่างเป็นทางการ) ให้รับทราบและดำเนินการต่อ'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "การ publish จะสร้าง v{'{'}n{'}'} และจัดเก็บชุดไฟล์ \"{'{'}file{'}'}\" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "เลือก {'{'}name{'}'} สำหรับการเผยแพร่จำนวนมาก",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'การ ingest ล้มเหลว',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "ทำ ingest แล้ว v{'{'}n{'}'}",
+        published: "เผยแพร่แล้ว v{'{'}n{'}'}",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1810,36 +1809,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ อีก {'{'}n{'}'} รายการ",
+        fixPath: 'ทำ ingest ใหม่อีกครั้งเพื่อลองใหม่: retract → สร้างเวอร์ชัน → ingest'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'การสำรองข้อมูล LLM',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'ชุดข้อมูลที่จัดเก็บแล้ว',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'แนวคิดที่สร้างดัชนีแล้ว',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "เริ่มต้นเมื่อ {'{'}n{'}'} ชม. ที่แล้ว",
+        lt1: 'เริ่มต้นเมื่อไม่ถึงหนึ่งนาทีที่แล้ว',
+        min: "เริ่มต้นเมื่อ {'{'}n{'}'} นาทีที่แล้ว"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'ที่เก็บจะยังคงอยู่ในสถานะ Import จนกว่าการแปลงไฟล์จะเสร็จสมบูรณ์',
+        rag: 'กำลังสร้างดัชนี RAG — เวอร์ชันนี้จะเริ่ม serving เมื่อทุกแนวคิดได้รับการสร้างดัชนีแล้ว',
+        serving: 'เวอร์ชันนี้กำลัง serving การรับส่งข้อมูล RAG — ทำ retract เพื่อทำการเปลี่ยนแปลง',
+        review: 'อยู่ระหว่าง review — ผู้ตรวจสอบลงนามรับรอง จากนั้นผู้ดูแลจึง publish และ ingest',
+        retracted: 'ไม่พร้อมให้บริการ — submit → review → approve → publish → ingest เพื่อกลับมา serving อีกครั้ง',
+        idle: 'การนำเข้าเสร็จสมบูรณ์ — ให้ submit สำหรับ review เพื่อดำเนินการตามเวิร์กโฟลว์ต่อไป'
       },
-      pages: 'Pages processed',
+      pages: 'หน้าที่ประมวลผลแล้ว',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'กราฟที่ serving',
+        version: 'เวอร์ชันที่ serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1847,12 +1846,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'ความคืบหน้าในการนำเข้า',
+        rag: 'ความคืบหน้าของการ ingest',
+        serving: 'สถานะ serving',
+        review: 'สถานะ review',
+        retracted: 'สถานะ retract',
+        idle: 'สถานะที่เก็บ'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1868,33 +1867,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'เลือกไฟล์ชุดข้อมูล .zip',
+      stagedFile: "จัดเตรียมแล้ว: {'{'}name{'}'}",
+      staged: 'จัดเตรียมชุดไฟล์แล้ว — คลิกสร้างที่เก็บเพื่อเริ่มการนำเข้า',
+      openExisting: 'เปิดที่เก็บที่มีอยู่',
+      name: 'ชื่อที่เก็บ',
+      importing: 'กำลังนำเข้าชุดไฟล์…',
+      importHint: 'หรือนำเข้าชุดไฟล์ zip ที่มีอยู่เป็นที่เก็บใหม่',
+      importDefaultName: 'ที่เก็บที่นำเข้า',
+      failed: 'การสร้างที่เก็บล้มเหลว',
+      duplicateInline: 'มีที่เก็บที่ใช้ชื่อนี้อยู่แล้ว เปิดที่เก็บนี้ หรือเลือกชื่ออื่น',
+      duplicate: 'มีที่เก็บที่ใช้ชื่อนี้อยู่แล้ว - เปิดจากแดชบอร์ดหรือเลือกชื่ออื่น',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'สร้างที่เก็บ',
+      title: 'ที่เก็บ OKF ใหม่',
+      hint: 'สร้างที่เก็บว่างเปล่าพร้อม index.md ที่คุณแก้ไขได้ในตัวแก้ไข Studio',
+      domainPlaceholder: 'เลือกสาขาวิชา…',
+      domainRequired: 'เลือกสาขาวิชาก่อน — ไม่สามารถเปลี่ยนแปลงได้หลังจากการสร้าง',
+      classLabel: 'การจำแนกแนวคิด',
+      classHeuristics: 'ฮิวริสติกส์ (ค่าเริ่มต้น)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'ชื่อฟิลด์นี้สงวนไว้',
+      errKeyDuplicate: 'ชื่อฟิลด์ถูกใช้ซ้ำสองครั้ง',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'ต้องเป็นตัวเลข',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1905,53 +1904,53 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'ทุกฟิลด์ของ frontmatter สามารถแก้ไขได้ เพิ่มหรือลบคีย์ได้อย่างอิสระ',
+      errRemovalPending: 'การลบฟิลด์จำเป็นต้องใช้สัญญาเซิร์ฟเวอร์แบบผสานและลบ (จะพร้อมใช้งานเร็วๆ นี้)',
+      errKeyRequired: 'ทุกฟิลด์ต้องมีชื่อ',
+      arrayPh: 'ค่าที่คั่นด้วยเครื่องหมายจุลภาค',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'บันทึก frontmatter แล้ว',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'Frontmatter คืออะไร?',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'ยังไม่มี frontmatter — การแก้ไขจะเพิ่มประเภท ชื่อ และป้ายกำกับ',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'ป้ายกำกับ (ลำดับชั้นความรู้)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'บันทึก frontmatter',
+      saveFailed: 'การบันทึก frontmatter ล้มเหลว'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        'รายการหนึ่งรายการในที่เก็บของคุณ — มักจะเป็นหน้าเดียวหรือหัวข้อเดียว แต่ละแนวคิดมี frontmatter ที่มีโครงสร้างซึ่งระบบผู้ช่วยอ่านได้ ควบคู่ไปกับข้อความ markdown ที่ใช้อ้างอิงในการตอบ',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'คอลเลกชันของแนวคิดที่ได้รับการดูแลจัดการรอบสาขาวิชาหนึ่งๆ ซึ่งจะกลายเป็นชุดไฟล์ OKF ที่คุณ publish กำหนดเวอร์ชัน และเปิดให้ผู้ช่วยใช้งาน',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'ความรู้นี้อยู่ในหมวดหมู่ใด? สาขาวิชาจะจัดกลุ่มที่เก็บของคุณและกำหนดป้ายกำกับที่คุณสามารถเลือกได้ ไม่สามารถเปลี่ยนแปลงได้หลังจากการสร้าง',
+      selectSubjectArea: 'เลือกสาขาวิชา…',
+      subjectAreaMissing: 'สาขาวิชาของที่เก็บนี้ไม่อยู่ในลำดับชั้นความรู้ — แสดงป้ายกำกับทั้งหมด',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'หมวดหมู่จากลำดับชั้นความรู้ที่บอกผู้ช่วยว่าแนวคิดนี้เป็นสิ่งประเภทใด ป้ายกำกับช่วยให้คำตอบค้นพบเนื้อหาที่ถูกต้อง',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        'การส่งออกที่เก็บเป็นไฟล์ zip — รวบรวมแนวคิด โครงสร้าง และข้อมูลเมตาไว้ในไฟล์เดียว ชุดไฟล์เป็นวิธีถ่ายโอนที่เก็บระหว่างระบบต่างๆ',
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'สแนปชอตที่คงที่ของที่เก็บ ณ เวลาที่ publish การแก้ไขจะดำเนินต่อไปในเวอร์ชันถัดไป — เวอร์ชันที่เผยแพร่แล้วจะไม่เปลี่ยนแปลง',
+      serving:
+        'เวอร์ชันนี้ใช้งานอยู่: ผู้ช่วยจะอ่านเนื้อหาของเวอร์ชันนี้เมื่อตอบคำถาม ให้ทำ retract เพื่อทำการเปลี่ยนแปลง',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        'ขั้นตอนที่เวอร์ชันที่เผยแพร่ได้รับการจัดเตรียมเพื่อใช้ในการตอบ — ข้อความจะถูกแบ่งส่วน ทำ embedding และเชื่อมโยง ไม่มีสิ่งใดส่งไปยังผู้ช่วยก่อนขั้นตอนนี้',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'วิธีที่เราใช้กำหนดว่าแต่ละแนวคิดคืออะไร (หัวข้อ เอนทิตี กระบวนการ…) ฮิวริสติกส์จะอ่านหน้าเว็บโดยอัตโนมัติ ตัวเลือก LLM จะช้ากว่าแต่สามารถจัดการกับหน้าที่ซับซ้อนได้ดี',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'การตัดแบ่งแหล่งที่มาออกเป็นแนวคิดใหม่อีกวิธีหนึ่ง — เช่น แนวคิดละหนึ่งหน้า แทนที่จะเป็นแนวคิดเดียวสำหรับทั้งไซต์',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: 'การนำเข้าล้มเหลว — ไม่สามารถแปลงไฟล์ต้นฉบับได้',
+      importFailedHint: 'ลบที่เก็บนี้และนำเข้าไฟล์ต้นฉบับอีกครั้ง',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        'ข้อมูลที่มีโครงสร้างที่ด้านบนของแต่ละไฟล์ — ประเภท ชื่อ ป้ายกำกับ ผู้ช่วยใช้ข้อมูลนี้เพื่อให้ทราบว่าแต่ละแนวคิดเกี่ยวกับอะไร'
     },
     md: {
       toolbar: 'Formatting',
@@ -1961,7 +1960,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'รายการแบบมีลำดับเลข',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1969,106 +1968,105 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'ที่เก็บ OKF คือคอลเลกชันหัวข้อที่มีโครงสร้างและมีการกำหนดเวอร์ชัน ซึ่งคำตอบในแชทของคุณสามารถอ้างอิงได้ เปรียบเสมือนชั้นภววิทยาแบบกระชับสำหรับโดเมนของคุณ — ป้ายกำกับใช้กำหนดหมวดหมู่ หัวข้อใช้กำหนดเอนทิตี แหล่งที่มาใช้ระบุที่มา',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'ที่เก็บ OKF คือคอลเลกชันของหัวข้อที่ได้รับการดูแลจัดการและมีการกำหนดเวอร์ชัน เปรียบเสมือนชั้นภววิทยาแบบกระชับสำหรับโดเมนของคุณ — ป้ายกำกับกำหนดหมวดหมู่ หัวข้อกำหนดเอนทิตี แหล่งที่มากำหนดที่มา เมื่อเผยแพร่แล้ว คำตอบในแชทปลายทางจะอ้างอิงหัวข้อเหล่านี้ตาม id',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'สามวิธีในการเริ่มต้นที่เก็บ OKF: ดึงหัวข้อจากการรวบรวมข้อมูลเว็บไซต์ สกัดหัวข้อจากเอกสารที่คุณอัปโหลดไว้แล้ว หรือเริ่มต้นจากหน้ากระดาษว่างเปล่า การโคลนที่เก็บที่มีอยู่จะคัดลอกหัวข้อและช่วยให้คุณแตกแขนงงานต่อได้',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        'แต่ละเอกสารจะกลายเป็นแหล่งที่มาของหัวข้อ โมดูลตัวสร้างจะอ่านเอกสาร สกัดหัวข้อที่เป็นตัวเลือก และเสนอโครงสร้างลำดับชั้น คุณจะได้ตรวจสอบทุกหัวข้อในขั้นตอนถัดไป — จะไม่มีสิ่งใดถูกบันทึกถาวรจนกว่าคุณจะอนุมัติ',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        'เรากำลังอ่านแหล่งที่มาของคุณและเสนอหัวข้อ หัวข้อจะจัดกลุ่มภายใต้ป้ายกำกับหมวดหมู่ที่คุณเลือก โมดูลตัวสร้างจะทำงานอย่างระมัดระวัง — โดยเน้นเสนอหัวข้อที่มีคุณภาพและชัดเจนในจำนวนที่น้อยกว่า แทนที่จะเสนอหัวข้อจำนวนมากที่ซ้ำซ้อน',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อนี้เป็นสิ่งประเภทใด? เลือก 3-7 ป้ายกำกับที่ครอบคลุมแกนหลัก โดยโมดูลตัวสร้างจะใช้สิ่งเหล่านี้เป็นโครงร่างสำหรับลำดับชั้นของหัวข้อ',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        'นี่คือหัวใจสำคัญของงาน แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ หัวข้อจะได้รับชื่อ คำอธิบาย และสืบทอดป้ายกำกับที่คุณเลือก งานของคุณคือทำให้ข้อมูลมีความน่าเชื่อถือ: เปลี่ยนชื่อที่ไม่ชัดเจน รวมรายการที่ซ้ำกัน และตัดรายการที่ไม่มีแหล่งที่มารองรับออก',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'เราเรียกใช้การตรวจสอบความสอดคล้อง: ทุกหัวข้อมีชื่อหรือไม่? ป้ายกำกับถูกต้องหรือไม่? การระบุแหล่งที่มาสมบูรณ์หรือไม่? ปัญหาที่ขัดขวางการทำงานต้องได้รับการแก้ไขก่อนเผยแพร่ ส่วนคำเตือนสามารถกดยอมรับได้',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ: ค่าสถานะสามารถปรับให้อยู่ใน enum ที่ถูกต้อง สามารถเติมฟิลด์ที่ขาดหายไปได้ด้วยค่าเริ่มต้นที่สมเหตุสมผล นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'สรุปสิ่งที่คุณกำลังจะเผยแพร่: หัวข้อ ป้ายกำกับ แหล่งที่มา และปัญหาใดๆ ที่ยังไม่ได้รับการแก้ไข เมื่อคุณลงนามรับรอง ที่เก็บจะย้ายไปยังขั้นตอนที่เผยแพร่แล้ว',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        'การ publish จะสร้างเวอร์ชัน v1 ของที่เก็บนี้ การเปลี่ยนแปลงในภายหลังแต่ละครั้ง — หัวข้อใหม่ คำอธิบายที่แก้ไข การตรวจสอบข้อมูลเก่าใหม่ — จะเผยแพร่เป็น v2, v3 เป็นต้น เวอร์ชันเก่าจะยังคงสามารถอ้างอิงได้ตลอดไป',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        'สร้างที่เก็บ OKF ใหม่จากเอกสารที่เลือก เอกสารจะกลายเป็นแหล่งที่มา คุณจะได้ตรวจสอบและตั้งชื่อหัวข้อที่สร้างขึ้นก่อนที่จะเผยแพร่สิ่งใด',
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'ที่เก็บ OKF คือคอลเลกชันหัวข้อที่มีโครงสร้างและมีการกำหนดเวอร์ชัน ซึ่งคำตอบในแชทของคุณสามารถอ้างอิงได้',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'คุณยังไม่ได้สร้างที่เก็บ OKF ใดๆ เลย ที่เก็บ OKF คือชุดหัวข้อที่มีโครงสร้างและสามารถอ้างอิงได้ ซึ่งคำตอบในแชทของคุณสามารถนำไปใช้งานได้',
+      labels: 'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — ซึ่งตอบคำถามว่า "หัวข้อนี้เป็นสิ่งประเภทใด?"',
+      hide: 'ซ่อน',
+      whatIsThis: 'สิ่งนี้คืออะไร?'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'ปิด',
+      cancel: 'ยกเลิก',
+      save: 'บันทึก',
+      clear: 'ล้าง',
+      delete: 'ลบ'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'วิธีใช้',
+      helpTitle: 'เกี่ยวกับ OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'ที่เก็บ OKF เป็นชั้นภววิทยาแบบกระชับ — ป้ายกำกับกำหนดหมวดหมู่ หัวข้อกำหนดเอนทิตี แหล่งที่มากำหนดที่มา เมื่อเผยแพร่แล้ว คำตอบในแชทจะอ้างอิงหัวข้อตาม id และแสดงที่มาของข้อมูล',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'แดชบอร์ด',
+        wizard: 'วิซาร์ด'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'โคลนจาก {name} · เวอร์ชัน {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'ที่เก็บ',
+        untitled: 'ที่เก็บที่ไม่มีชื่อ',
+        trust: 'ความน่าเชื่อถือ',
+        sources: 'แหล่งที่มา',
+        concepts: 'แนวคิดทั้งหมดในขณะนี้',
+        stale: 'ล้าสมัย'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'กำลังดำเนินการ',
+        inReview: 'อยู่ระหว่างการตรวจทาน',
+        published: 'เผยแพร่แล้ว'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'อยู่ระหว่าง review',
+        stepOf: 'ขั้นตอนที่ {n} จาก 10',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'ที่เก็บทั้งหมด',
+        new: '+ ที่เก็บใหม่',
+        search: 'ค้นหา…',
+        empty: 'ยังไม่มีที่เก็บที่นี่',
+        topics: 'หัวข้อ',
+        select: 'เลือก {name} สำหรับการเผยแพร่จำนวนมาก',
+        stale: 'ล้าสมัย',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'อยู่ระหว่าง review',
+          stepOf: 'ขั้นตอนที่ {n} จาก 10',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: 'เลือกแล้ว {n} รายการ',
+          publish: 'เผยแพร่รายการที่เลือก',
+          title: 'เผยแพร่ที่เก็บที่เลือก',
+          body: 'เมื่อเผยแพร่แล้ว คำตอบในแชทปลายทางจะสามารถนำไปใช้ได้ แต่ละที่เก็บด้านล่างจะแสดงผลลัพธ์ขั้นสุดท้าย',
+          results: 'ผลลัพธ์',
+          publishConfirm: 'เผยแพร่ {n} รายการ',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'ชื่อ',
+            status: 'สถานะ',
+            topics: 'หัวข้อ'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'พร้อม'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'ฉบับร่างยังไม่สามารถบันทึกบนฝั่งเซิร์ฟเวอร์ได้ บันทึกไว้ในเครื่องแล้ว'
       }
     },
     wizard: {
@@ -2077,244 +2075,242 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'กลับสู่แดชบอร์ด',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'ที่เก็บที่ไม่มีชื่อ',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'แนวคิดทั้งหมดในขณะนี้'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'วิซาร์ด OKF Studio',
+      back: 'ย้อนกลับ',
+      continue: 'ดำเนินการต่อ',
+      publish: 'เผยแพร่ที่เก็บ'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'ชื่อที่เก็บและสาขาวิชา',
+        hint: 'ตั้งชื่อที่เก็บ OKF นี้ให้ชัดเจนและเลือกสาขาวิชา',
+        nameLabel: 'ชื่อที่เก็บ',
+        namePh: 'เช่น ใบอนุญาตขนส่ง เนเธอร์แลนด์',
+        domainLabel: 'สาขาวิชา'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'ที่เก็บ OKF นี้ควรเริ่มต้นจากที่ใด?',
+        hint: 'เลือกวิธีที่คุณต้องการเริ่มต้นที่เก็บนี้ คุณสามารถเปลี่ยนได้ในภายหลัง',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'เอกสาร',
+            desc: 'สกัดหัวข้อจากเอกสารที่คุณอัปโหลดไว้แล้ว'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'การรวบรวมข้อมูลเว็บไซต์',
+            desc: 'รวบรวมข้อมูลเว็บไซต์และเสนอหัวข้อจากหน้าเว็บเหล่านั้น'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'หน้ากระดาษว่างเปล่า',
+            desc: 'เริ่มต้นจากศูนย์และเขียนหัวข้อด้วยตัวคุณเอง'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'โคลนจากที่เก็บที่มีอยู่',
+            desc: 'แตกแขนงหัวข้อและโครงสร้างจากที่เก็บ OKF อื่น'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'ข้อมูลนำเข้า',
+        documents: 'เลือกเอกสารที่ควรใช้เป็นจุดเริ่มต้นของรายการหัวข้อ',
+        crawl: 'เลือกเว็บไซต์ที่ต้องการรวบรวมข้อมูล',
+        manual: 'คุณสามารถเขียนหัวข้อได้โดยตรงในขั้นตอนถัดไป',
+        clone: 'เลือกที่เก็บที่มีอยู่เพื่อโคลน',
+        placeholder: 'UI ขั้นตอนนี้จะพร้อมใช้งานในเรื่องราวถัดไป'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'สร้างหัวข้อ',
+        hint: 'เรากำลังอ่านแหล่งที่มาของคุณและเสนอหัวข้อ',
+        progress: 'โมดูลตัวสร้างกำลังทำงาน...',
+        placeholder: 'บริการตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'เลือกป้ายกำกับ',
+        hint: 'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อเหล่านี้จัดเป็นสิ่งประเภทใด? เลือก 3-7 รายการ',
+        add: '+ เพิ่มป้ายกำกับ',
+        addConfirm: 'เพิ่ม',
+        placeholder: 'เช่น ใบอนุญาต'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'ตรวจสอบหัวข้อ',
+        hint: 'แต่ละหัวข้อคือหน่วยความรู้ขนาดเล็กที่สามารถอ้างอิงได้ แก้ไขชื่อและคำอธิบาย',
+        placeholder: 'โครงสร้างแผนผังผู้ดูแล + ตัวแก้ไขจะพร้อมใช้งานในเรื่องราว 3-8'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'ตรวจสอบปัญหา',
+        hint: 'เราเรียกใช้การตรวจสอบความสอดคล้อง ปัญหาที่ขัดขวางการทำงานต้องได้รับการแก้ไขก่อนเผยแพร่',
+        placeholder: 'แผงการตรวจสอบความถูกต้องจะพร้อมใช้งานในเรื่องราว 3-8'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'แก้ไขอัตโนมัติ',
+        hint: 'คำเตือนบางอย่างสามารถแก้ไขได้โดยอัตโนมัติ นำการแก้ไขที่คุณเห็นชอบไปปรับใช้ จากนั้นกลับไปตรวจสอบที่โมดูลดูแลจัดการ',
+        placeholder: 'บริการแก้ไขอัตโนมัติจะพร้อมใช้งานในเรื่องราว 10.2'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'ตรวจสอบ',
+        hint: 'สรุปสิ่งที่คุณกำลังจะเผยแพร่',
+        repo: 'ที่เก็บ',
+        topics: 'หัวข้อ',
+        labels: 'ป้ายกำกับ',
+        sources: 'แหล่งที่มา'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'เผยแพร่ที่เก็บนี้',
+        hint: 'การเผยแพร่จะสร้างเวอร์ชัน v1 ของที่เก็บนี้',
+        nameOk: 'ตั้งชื่อที่เก็บแล้ว',
+        labelsOk: 'เลือกป้ายกำกับแล้ว',
+        topicsOk: 'ตรวจสอบหัวข้อแล้ว'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'ยังไม่ได้รับการยืนยัน',
+        'machine-confirmed': 'ยืนยันโดยระบบแล้ว',
+        'human-reviewed': 'ตรวจสอบโดยมนุษย์แล้ว'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'UI การ retract จะพร้อมใช้งานในเรื่องราว 3.9'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'บริการรายการไฟล์กำกับชุดข้อมูลจะเชื่อมต่อในเรื่องราวถัดไป'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'สร้างที่เก็บ OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'เลือกเอกสารอย่างน้อยหนึ่งรายการ',
+        alreadyInOkf: 'ลบเอกสารที่อยู่ในที่เก็บ OKF แล้ว',
+        alreadyIngested: 'ลบเอกสารที่ผ่านการ ingest แล้ว'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'โมดูลตัวสร้างจะเชื่อมต่อในเรื่องราวถัดไป'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'เลือกสาขาวิชา…',
+      classLabel: 'การจำแนกแนวคิด',
+      classHeuristics: 'ฮิวริสติกส์ (ค่าเริ่มต้น)',
+      classHeuristicsHint: 'การจำแนกตามกฎอย่างรวดเร็ว — ไม่มีค่าใช้จ่าย LLM เหมาะสำหรับการรวบรวมข้อมูลที่มีโครงสร้างดี',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'LLM ดูแลจัดการทุกแนวคิด — ประเภท ป้ายกำกับลำดับชั้นความรู้ และคำอธิบาย แม่นยำและสมบูรณ์กว่าฮิวริสติกส์มาก แต่อาจต้องใช้เวลาเพิ่มเติมต่อแนวคิด',
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        'ฮิวริสติกส์ก่อน LLM จะตรวจสอบกรณีที่ไม่แน่นอนและเติมเต็มช่องว่าง เพื่อสมดุลระหว่างเวลาและความสมบูรณ์',
+      targetLabel: 'สิ่งนี้ควรบันทึกไว้ที่ใด?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'รวบรวมข้อมูลไปยังคลังข้อความอิสระ',
+        okfRepo: 'ที่เก็บ OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
-      postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+      targetHint: 'เราจะแสดงหัวข้อที่พบให้คุณเห็นก่อนที่จะบันทึกสิ่งใด',
+      createOkfFromCrawl: 'สร้างที่เก็บ OKF จากการรวบรวมข้อมูลนี้',
+      splitLabel: 'การแยกแนวคิด',
+      splitA: 'หนึ่งแนวคิดสำหรับการรวบรวมข้อมูลทั้งหมด',
+      splitB: 'หนึ่งแนวคิดต่อหน้า (แนะนำ)',
+      splitC: 'ใช้การสกัดหัวข้อด้วย LLM',
+      splitCHint: 'เรื่องราว 10.6 — เร็วๆ นี้',
+      splitBHint: 'แต่ละหน้าที่รวบรวมได้จะกลายเป็นแนวคิดเฉพาะของตนเอง — AI สามารถอ้างอิงแต่ละหน้าได้',
+      splitAHint: 'การรวบรวมข้อมูลทั้งหมดจะกลายเป็นหนึ่งแนวคิดขนาดใหญ่ — เหมาะสำหรับไซต์ขนาดเล็ก',
+      progressDownload: 'กำลังดาวน์โหลดเนื้อหาที่รวบรวมได้...',
+      progressSplit: 'กำลังแยกออกเป็นแนวคิด...',
+      progressIngest: 'กำลังเพิ่มแนวคิด (ชุดที่ [i] จาก [n])...',
+      postCrawlHint: 'หลังจากการรวบรวมข้อมูลเสร็จสิ้น คุณสามารถแปลงเป็นที่เก็บ OKF ได้จากแท็บแดชบอร์ดของไฟล์',
+      creating: 'กำลังสร้างที่เก็บ OKF...',
+      createOk: 'สร้างที่เก็บ OKF เรียบร้อยแล้ว กำลังเปิด Studio เพื่อดูแลจัดการ',
+      createOkRenamed: 'สร้างที่เก็บ OKF ในชื่อ "[name]" เรียบร้อยแล้ว กำลังเปิด Studio เพื่อดูแลจัดการ',
+      createFailed: 'ไม่สามารถสร้างที่เก็บ OKF จากการรวบรวมข้อมูลนี้ได้',
       conversionsTitle: 'ที่เก็บที่สร้างจากการรวบรวมนี้',
       convQueued: 'อยู่ในคิว...',
-      convDownloading: 'กำลังดาวน์โหลดการรวบรวม...',
-      convSplitting: 'กำลังแบ่งเป็นหัวข้อแนวคิด...',
-      convAdding: 'กำลังเพิ่มหัวข้อแนวคิด ([p] หน้าแล้ว)...',
+      convDownloading: 'กำลังดาวน์โหลดข้อมูลที่รวบรวม...',
+      convSplitting: 'กำลังแยกออกเป็นแนวคิด...',
+      convAdding: 'กำลังเพิ่มแนวคิด (ประมวลผลไปแล้ว [p] หน้า)...',
       convDone: 'สร้างแล้ว ([p] หน้า)',
       convFailed: 'ล้มเหลว',
       createStarted: 'กำลังสร้าง "[name]" — ติดตามความคืบหน้าด้านล่าง',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'โมเดล',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'ท้องถิ่น · ขนาดเล็ก',
+          'local-medium': 'ท้องถิ่น · ปานกลาง',
+          'sovereign-large': 'อิสระ · ขนาดใหญ่'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'การรวบรวมข้อมูลต้องเสร็จสิ้นก่อนสร้างที่เก็บ OKF',
+        alreadyInOkf: 'การรวบรวมข้อมูลนี้อยู่ในที่เก็บ OKF แล้ว'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'เลือกหัวข้อทางด้านซ้ายเพื่อดูและแก้ไข',
+      search: 'ค้นหาหัวข้อ',
+      noTopics: 'ยังไม่มีหัวข้อ',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'ปรับแต่งป้ายกำกับ',
+        body: 'ป้ายกำกับคือแกนตามหมวดหมู่ของภววิทยาของคุณ — หัวข้อนี้จัดเป็นสิ่งประเภทใด?',
+        edit: 'ปรับแต่งป้ายกำกับ',
+        add: 'เพิ่ม',
+        addPh: 'เช่น ใบอนุญาต',
+        remove: 'ลบออก',
+        empty: 'ยังไม่มีป้ายกำกับ',
+        notReady: 'บันทึกป้ายกำกับในเครื่องแล้ว — การซิงค์กับเซิร์ฟเวอร์จะพร้อมใช้งานเร็วๆ นี้'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'แก้ไข frontmatter',
+        dialogTitle: 'แก้ไข frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'แสดงแหล่งที่มา',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'แนวคิดไม่มีการระบุประเภท',
+        badActor: 'แอคเตอร์แหล่งที่มาต้องขึ้นต้นด้วย agent:/human:/tool:/process:'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'การบันทึกถูกบล็อก: โปรดแก้ไขปัญหาความสอดคล้องก่อน'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
-      expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+      frozen:
+        "เนื้อหาถูกตรึงไว้ที่ {'{'}v{'}'} — ดูตัวอย่างแบบอ่านอย่างเดียว ทำ retract เวอร์ชันที่ serving เพื่อทำการเปลี่ยนแปลง",
+      none: 'ไม่มี',
+      expertHint: 'สลับเป็นโหมดผู้เชี่ยวชาญเพื่อดู JSON การตรวจสอบแบบดิบ กรองตามระดับความรุนแรง และแทนที่ผลการตรวจสอบ',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: 'ปัญหาที่ขัดขวาง {n} รายการ — โปรดแก้ไขก่อนเผยแพร่',
+        warnings: '{n} รายการต้องได้รับการตรวจทานจากคุณ',
+        ok: 'ดูเรียบร้อยดี ไม่มีส่วนที่ต้องแก้ไข'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} รายการสมบูรณ์ · {warnings} รายการต้องตรวจทาน · {blockers} รายการติดขัด',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'ตัวจัดรูปแบบจะพร้อมใช้งานในเรื่องราว 4.2b'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'การตรวจสอบจะเชื่อมต่อในเรื่องราวถัดไป'
       }
     },
     pii: {
-      panel: 'เอนทิตีที่ถูกตั้งค่าสถานะ',
+      panel: 'เอนทิตีที่ถูกแจ้งเตือน',
       nFlagged: 'พบ {n} รายการ',
       rescan: 'สแกนอีกครั้ง',
       scanning: 'กำลังสแกน…',
       clean: 'ไม่มีเอนทิตีที่ถูกตั้งค่าสถานะ — concept นี้ปลอดภัย',
       how: 'วิธีแก้: ลบออกหรือใช้คำอื่น (เช่น ใช้ตำแหน่งแทนชื่อ) จากนั้นบันทึก — การสแกนใหม่จะอัปเดตรายการนี้',
       descFallback: 'ตรวจพบข้อมูลส่วนบุคคลที่นี่ (GDPR Art. 4(1) — เกี่ยวข้องกับบุคคลที่สามารถระบุตัวตนได้)',
-      scanError: 'ไม่สามารถสแกนได้',
+      scanError: 'การสแกนไม่พร้อมใช้งาน',
       type: {
         PERSON: 'ชื่อบุคคล',
         LOCATION: 'สถานที่',
@@ -2323,7 +2319,7 @@ export default {
         PHONE_NUMBER: 'หมายเลขโทรศัพท์',
         IP_ADDRESS: 'ที่อยู่ IP',
         NRP: 'หมายเลขทะเบียนแห่งชาติ',
-        BD_NATIONAL_ID: 'หมายเลขประจำตัวประชาชน'
+        BD_NATIONAL_ID: 'หมายเลขบัตรประจำตัวประชาชน'
       },
       desc: {
         PERSON: 'ตรวจพบชื่อบุคคล ชื่ออาจระบุตัวบุคคลธรรมดาได้โดยตรง',
@@ -2336,16 +2332,16 @@ export default {
         BD_NATIONAL_ID: 'ตรวจพบหมายเลขประจำตัวประชาชน ซึ่งสามารถระบุตัวบุคคลได้อย่างชัดเจน'
       },
       allClear: 'ปลอดภัย',
-      redactFile: 'ปกปิดทั้งไฟล์',
-      confirmRedactFile: 'ยืนยัน: ปกปิดไฟล์ทั้งหมด?',
-      locateTip: 'แสดงข้อความนี้ในเครื่องมือแก้ไข',
+      redactFile: 'เซ็นเซอร์ข้อมูลทั้งไฟล์',
+      confirmRedactFile: 'ยืนยัน: เซ็นเซอร์ข้อมูลทั้งไฟล์หรือไม่?',
+      locateTip: 'แสดงข้อความนี้ในตัวแก้ไข',
       file: {
         label: 'ทั้งไฟล์:',
         redact: 'ปกปิดไฟล์',
         remove: 'ลบเนื้อหา',
         accept: 'ยอมรับทั้งหมด',
-        confirmRedact: 'ยืนยัน: ปกปิดทั้งไฟล์?',
-        confirmRemove: 'ยืนยัน: ลบเนื้อหาทั้งหมด?'
+        confirmRedact: 'ยืนยัน: เซ็นเซอร์ข้อมูลทั้งไฟล์หรือไม่?',
+        confirmRemove: 'ยืนยัน: ลบเนื้อหาหลักทั้งหมดหรือไม่?'
       },
       action: {
         redact: 'ปกปิด',
@@ -2362,10 +2358,10 @@ export default {
         replaced: 'แทนที่แล้ว',
         removed: 'ลบแล้ว',
         accepted: 'ยอมรับแล้ว',
-        fileRedacted: 'ปกปิดไฟล์แล้ว',
+        fileRedacted: 'เซ็นเซอร์ไฟล์แล้ว',
         kept: 'เก็บไว้ในข้อความ',
         removedWord: 'ลบแล้ว',
-        wholeFile: 'ปกปิดเนื้อหาไฟล์ทั้งหมดแล้ว'
+        wholeFile: 'เซ็นเซอร์เนื้อหาหลักของไฟล์ทั้งหมดแล้ว'
       }
     }
   }

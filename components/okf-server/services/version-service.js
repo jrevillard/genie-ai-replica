@@ -238,13 +238,29 @@ async function mintVersion(repo_id, opts = {}, actor) {
       // nothing is chunked until the Ingest transition (the drain then gates
       // serving completion, not publishing).
       const gateReasons = [];
+      // CONFORMANCE gate — severity is the contract (David, 2026-09-12):
+      // HARD_ERROR_CODES (MISSING_TYPE, BAD_ACTOR_PREFIX → severity 'error')
+      // BLOCK publishing; warnings are advisory — recorded on the meta row
+      // and fixable via Autocorrect, never a silent blocker. The previous
+      // any-issue gate bricked crawl-imported repos on trivial warnings like
+      // SOURCE_MISSING_RESOURCE (a machine-generated sources entry) that the
+      // steward cannot meaningfully author by hand. Each blocking entry names
+      // the concept AND its issues in clear terms.
       const nonConformant = concepts.filter(
-        (c) => Array.isArray(c.conformance_issues) && c.conformance_issues.length > 0
+        (c) =>
+          Array.isArray(c.conformance_issues) && c.conformance_issues.some((i) => i && i.severity === 'error')
       );
       if (nonConformant.length > 0) {
-        gateReasons.push(
-          `${nonConformant.length} concept(s) with conformance issues: ${nonConformant.map((c) => c.concept_id).join(', ')}`
-        );
+        const detail = nonConformant
+          .map((c) => {
+            const errs = (c.conformance_issues || [])
+              .filter((i) => i && i.severity === 'error')
+              .map((i) => `${i.code}${i.message ? ' — ' + i.message : ''}`)
+              .join('; ');
+            return `${c.concept_id}: ${errs}`;
+          })
+          .join(' | ');
+        gateReasons.push(`${nonConformant.length} concept(s) with conformance errors: ${detail}`);
       }
       // PII gate (split from the generic reasons — David, 2026-08-30): a
       // scanner 'error' hard-blocks; a reviewed 'hit' can be waived by the

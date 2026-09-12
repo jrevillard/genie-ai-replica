@@ -416,7 +416,12 @@ async function piiScan(req, res, next) {
     // Repo-existence + authorization gate (mirrors every other mutating route) —
     // fail BEFORE writing any meta docs (code-review fix #7). A repo outside
     // the caller's scopes 404s identically to a missing one (Story 6.1).
-    await repoService.getById(repo_id, { authz: authzForService(req) });
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    // DRAIN FREEZE (David, 2026-09-12): the scan OVERWRITES pii_state on
+    // every concept row — a GDPR re-scan mid-ingest races the drain snapshot
+    // and would flag/unflag content under a version being indexed. Frozen
+    // with everything else (the panel's read-only inspect stays available).
+    assertWritable(repoDoc);
 
     let inputs = [];
     let sourceFileIds = [];

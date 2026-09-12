@@ -81,4 +81,18 @@ describe('piiScan controller (code-review #15)', () => {
     expect(caught.status).toBe(400);
     expect(piiService.scanConcept).not.toHaveBeenCalled();
   });
+
+  it('DRAIN FREEZE (David, 2026-09-12): a GDPR scan mid-ingest is refused — the drain owns pii_state', async () => {
+    repoService.getById.mockResolvedValue({ repo_id: 'r1', rag_drain_active: true });
+    const r = res();
+    let caught = null;
+    await ctrl.piiScan(req({ discover: true }, { repo_id: 'r1' }), r, (e) => {
+      caught = e;
+    });
+    expect(caught).toBeTruthy();
+    expect(caught.code).toBe('DRAIN_IN_PROGRESS');
+    expect(caught.status).toBe(409);
+    expect(piiService.scanConcept).not.toHaveBeenCalled();
+    expect(piiService.markRepoPiiScanned).not.toHaveBeenCalled();
+  });
 });

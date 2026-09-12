@@ -1635,6 +1635,14 @@ export default {
     },
     graph: {
       aria: 'Concept graph',
+      card: {
+        chunks: "{'{'}n{'}'} chunks",
+        failed: 'indexing failed',
+        flagged: 'flagged entities',
+        hub: 'Index hub',
+        links: "{'{'}n{'}'} links",
+        pending: 'not indexed yet'
+      },
       concepts: 'concepts',
       empty: 'No concepts yet - nothing to graph.',
       fit: 'Fit graph',

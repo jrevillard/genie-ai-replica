@@ -1701,7 +1701,8 @@ export default {
         piiTipBare: 'Vipengele vilivyotiwa alama — fungua, kagua, kisha hifadhi ili kuchanganua tena.',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all'
+        bulkRemove: 'Remove all',
+        loadProgress: 'Loading files {done}/{total}'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1767,6 +1768,10 @@ export default {
         scope: "Concepts affected: {'{'}n{'}'}.",
         confirm: 'Apply',
         failed: 'The bulk PII action failed — try again.'
+      },
+      actions: {
+        bulkPii: 'Applying the bulk PII action',
+        deleting: 'Deleting'
       }
     },
     dashboard: {

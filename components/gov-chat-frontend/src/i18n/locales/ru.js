@@ -1639,7 +1639,15 @@ export default {
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out'
+      zoomOut: 'Zoom out',
+      card: {
+        links: "{'{'}n{'}'} ссылок",
+        chunks: "{'{'}n{'}'} фрагментов",
+        failed: 'ошибка индексации',
+        flagged: 'помеченные сущности',
+        hub: 'Индексный узел',
+        pending: 'ещё не проиндексировано'
+      }
     },
     editor: {
       addConcept: {

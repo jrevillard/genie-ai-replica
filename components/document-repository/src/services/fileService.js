@@ -16,6 +16,16 @@ const securityService = require('./securityService');
 // Import utils
 const appConfig = require('../config/appConfig');
 
+// Kill-before-delete: how long deleteFile waits for a 'Crawling' job to leave
+// that state after the kill signal, and how often it re-checks.
+const CRAWL_KILL_WAIT_MS = appConfig.crawler?.killWaitMs || 30000;
+const CRAWL_KILL_POLL_MS = 500;
+
+// Definitive arangojs not-found (ArangoError 404 / 1202 "document not found").
+// Distinct from transient connection errors, which must not be mistaken for it.
+const isDocumentNotFound = (e) =>
+  !!e && (e.statusCode === 404 || e.errorNum === 1202 || /not found/i.test(e.message || ''));
+
 class FileService {
   constructor() {
     this.uploadDir = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
@@ -688,6 +698,59 @@ class FileService {
     }
   }
 
+  // Kill-before-delete (server-enforced). The kill channel for a running crawl
+  // IS its crawl_job document — deleting a file mid-crawl used to REMOVE that
+  // job doc, leaving an unkillable zombie crawl that holds the single-flight
+  // worker so no new crawl can start (2026-09-12 zalora incident). An active
+  // crawl must be terminated and confirmed dead before any file state is
+  // removed: Crawling ⇒ kill + confirm; Pending ⇒ remove the not-yet-started
+  // job so the worker never picks it up for a deleted file.
+  async _terminateActiveCrawl(fileId) {
+    const db = await this.getDb();
+
+    const cursor = await db.query(
+      'FOR job IN crawl_job FILTER job.file_id == @id AND job.status IN [@p, @c] RETURN job',
+      { id: fileId, p: 'Pending', c: 'Crawling' }
+    );
+    const jobs = await cursor.all();
+
+    for (const job of jobs) {
+      if (job.status === 'Crawling') {
+        await this.killCrawlTask(fileId);
+        const confirmed = await this._waitCrawlStopped(job._key);
+        if (!confirmed) {
+          throw new Error('Crawl is still stopping; try deleting again in a few seconds');
+        }
+      } else {
+        await db.query(
+          "FOR job IN crawl_job FILTER job.file_id == @id AND job.status == 'Pending' REMOVE job IN crawl_job",
+          { id: fileId }
+        );
+        logger.info(`[FILE-SERVICE] Removed Pending crawl job for deleted file ${fileId}`);
+      }
+    }
+  }
+
+  // Waits until the crawl_job doc `jobKey` leaves 'Crawling' (worker marks it
+  // Killed/Failed), or the doc disappears, or timeout. Returns true when the
+  // stop is confirmed.
+  async _waitCrawlStopped(jobKey) {
+    const db = await this.getDb();
+    const deadline = Date.now() + CRAWL_KILL_WAIT_MS;
+    while (Date.now() < deadline) {
+      let current;
+      try {
+        current = await db.collection('crawl_job').document(jobKey);
+      } catch (e) {
+        if (isDocumentNotFound(e)) return true; // doc gone = job dead
+        throw e;
+      }
+      if (!current || current.status !== 'Crawling') return true;
+      await new Promise((r) => setTimeout(r, CRAWL_KILL_POLL_MS));
+    }
+    return false;
+  }
+
   /**
    * Delete file by ID
    * MODIFIED: Added cleanup for crawl_job, crawl_log, and crawl_metrics
@@ -696,6 +759,11 @@ class FileService {
    */
   async deleteFile(fileId) {
     try {
+      // Kill-before-delete: an active crawl must be terminated and confirmed
+      // dead BEFORE its job doc / logs / physical file are removed, otherwise
+      // the worker keeps crawling a deleted file (2026-09-12 zalora incident).
+      await this._terminateActiveCrawl(fileId);
+
       // Get file record
       const file = await metadataService.getMetadataById(fileId);
       if (!file) {

@@ -204,7 +204,16 @@ export default {
       this.error = '';
       this.changes = [];
       this.warnings = [];
-      const result = await this.$store.dispatch('okf/autocorrectRepo', { repoId: this.repoId, dryRun: true });
+      // MECHANICAL, ALWAYS (David, 2026-09-12): this panel is the frontmatter
+      // conformance fixer — mode is pinned to heuristics. The omitted-mode
+      // fallback routed by the repo's PERSISTED classification, so on an
+      // llm-classified crawl repo the scan fired one LLM proposal per concept
+      // (997 of them on gov-uk) and the gateway timed out.
+      const result = await this.$store.dispatch('okf/autocorrectRepo', {
+        repoId: this.repoId,
+        dryRun: true,
+        mode: 'heuristics'
+      });
       this.scanning = false;
       if (!result.ok) {
         this.error = result.message || this.translate('okf.editor.autocorrect.failed', 'Scan failed.');
@@ -244,7 +253,11 @@ export default {
       if (key !== 'apply' || this.applying || this.changeCount === 0) return;
       this.applying = true;
       this.error = '';
-      const result = await this.$store.dispatch('okf/autocorrectRepo', { repoId: this.repoId, dryRun: false });
+      const result = await this.$store.dispatch('okf/autocorrectRepo', {
+        repoId: this.repoId,
+        dryRun: false,
+        mode: 'heuristics'
+      });
       this.applying = false;
       if (!result.ok) {
         this.error = result.message || this.translate('okf.editor.autocorrect.failed', 'Apply failed.');

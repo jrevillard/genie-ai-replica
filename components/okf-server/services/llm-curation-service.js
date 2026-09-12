@@ -439,16 +439,16 @@ async function applyDecision(db, repo, meta, decision) {
 async function proposeFrontmatter(repo, concept_id, { classification } = {}) {
   const mode = classification === 'llm' || classification === 'hybrid' ? classification : 'heuristics';
   const db = await dbService.getConnection('default');
-  const filter = concept_id ? 'FILTER m.repo_id == @r AND m.concept_id == @c' : 'FILTER m.repo_id == @r';
-  const rows = await (
-    await db.query(
-      'FOR m IN okf_concepts_meta FILTER m.repo_id == @r ' + filter.replace('@c', '@c') + ' SORT m.concept_id RETURN m',
-      {
-        r: repo.repo_id,
-        c: concept_id || null
-      }
-    )
-  ).all();
+  // Bind vars MUST match the query text: the repo-wide pass (concept_id null)
+  // omits the @c filter, and ArangoDB rejects a query that declares binds the
+  // text never uses ("bind parameter 'c' was not declared") — the repo-wide
+  // autocorrect proposal 500'd on exactly that (live, 2026-09-12; the unit
+  // mocks never execute AQL so they couldn't see it).
+  const query = concept_id
+    ? 'FOR m IN okf_concepts_meta FILTER m.repo_id == @r AND m.concept_id == @c SORT m.concept_id RETURN m'
+    : 'FOR m IN okf_concepts_meta FILTER m.repo_id == @r SORT m.concept_id RETURN m';
+  const bindVars = concept_id ? { r: repo.repo_id, c: concept_id } : { r: repo.repo_id };
+  const rows = await (await db.query(query, bindVars)).all();
   if (concept_id && rows.length === 0) return null;
 
   const area = mode === 'heuristics' ? null : await resolveAreaContext(repo.domain);

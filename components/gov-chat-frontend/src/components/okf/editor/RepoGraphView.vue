@@ -620,7 +620,18 @@ export default {
       if (this.cy) this.cy.fit(undefined, 40);
     },
     zoomBy(f) {
-      if (this.cy) this.cy.zoom({ level: this.cy.zoom() * f, renderedPosition: this.cy.center() });
+      if (!this.cy) return;
+      // Zoom about the CURRENT VIEWPORT centre. The old code passed
+      // cy.center() as renderedPosition — but cy.center() PANS the graph and
+      // returns the CORE (not a position), so x/y were undefined, the
+      // zoom-about-point computed a NaN pan and the viewport silently
+      // rejected it: the +/- buttons did nothing (the wheel zoom has its own
+      // cytoscape handler and was never affected). Rendered coords = half
+      // the stage box; jsdom has no layout → fall back to the model size.
+      const stage = this.$refs.stage;
+      const w = (stage && stage.clientWidth) || this.size;
+      const h = (stage && stage.clientHeight) || this.size;
+      this.cy.zoom({ level: this.cy.zoom() * f, renderedPosition: { x: w / 2, y: h / 2 } });
     },
     // ---- hover summary card -------------------------------------------------
     hideCard() {

@@ -221,7 +221,9 @@ describe('OkfRepoGraphView', () => {
       index_status: 'indexed',
       pii_state: 'hit'
     },
-    { concept_id: 'parks', title: 'Parks', index_status: 'indexed' }
+    { concept_id: 'parks', title: 'Parks', index_status: 'indexed' },
+    // No links to/from it — outside every neighborhood.
+    { concept_id: 'orphan', title: 'Orphan Page', index_status: 'indexed' }
   ];
 
   it('select syncs via select AND hovering the SELECTED node shows the summary card', async () => {
@@ -253,6 +255,32 @@ describe('OkfRepoGraphView', () => {
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
     wrapper.vm.cy.getElementById('wildlife').emit('mouseover');
+    expect(wrapper.vm.card.visible).toBe(false);
+  });
+
+  it('shows the card for ADJACENT nodes of the selection, but not un-highlighted ones', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, {
+      repoId: 'r-1',
+      concepts: RICH_CONCEPTS,
+      selectedId: 'wildlife'
+    });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const cy = wrapper.vm.cy;
+    // parks is wildlife's drawn neighbor — hovering it shows ITS summary.
+    cy.getElementById('parks').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.card.visible).toBe(true);
+    expect(wrapper.vm.card.title).toBe('Parks');
+    // The selection itself still shows its own card.
+    cy.getElementById('parks').emit('mouseout');
+    cy.getElementById('wildlife').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.card.visible).toBe(true);
+    expect(wrapper.vm.card.title).toBe('Wildlife of the Mara');
+    // orphan is outside the highlighted neighborhood — nothing shows.
+    cy.getElementById('wildlife').emit('mouseout');
+    cy.getElementById('orphan').emit('mouseover');
     expect(wrapper.vm.card.visible).toBe(false);
   });
 

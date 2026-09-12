@@ -487,8 +487,12 @@ export default {
     },
     // P0-UI: a redraining publish repo keeps its progress popup — the
     // Re-draining chip alone doesn't show per-concept drain coverage.
-    hasStatusPopup(r) {
-      return this.isRedraining(r) || this.isBuilding(r) || this.isServing(r);
+    // ALL-STAGES (David, 2026-09-12): EVERY card now pops the status card —
+    // the classification + lifecycle badges (heuristics|llm|hybrid,
+    // importing|reviewing|ingesting|serving|retracted) are always on, and
+    // the progress detail appears whenever something is actually running.
+    hasStatusPopup() {
+      return true;
     },
     /** Cards that carry a hover status popup: anything building (Import or
      * drain) plus every serving (Ingested-lane) repo — David, 2026-09-04. */

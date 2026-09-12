@@ -314,6 +314,22 @@ const repoOkfService = {
       { timeout: 120000 }
     );
     return res && res.data ? res.data : { ok: false };
+  },
+
+  /**
+   * PII REPO BULK ACTION (David, 2026-09-12): redact | remove | accept
+   * applied to EVERY flagged concept of the repository in one decision
+   * (Files-view header controls). Scan-free on the server; stamps the scan
+   * marker so publish neither blocks nor re-scans. Returns
+   * {ok, action, concepts_affected}.
+   */
+  async bulkPiiAction(repoId, action) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/pii-bulk`,
+      { action },
+      { timeout: 120000 }
+    );
+    return res && res.data ? res.data : { ok: false };
   }
 };
 

@@ -123,6 +123,23 @@ describe('OkfConceptList', () => {
     await select.setValue('Health');
     expect(wrapper.emitted('label')).toEqual([[{ conceptId: 'c-2', label: 'Health' }]]);
   });
+
+  // NON-BLOCKING LOAD (David, 2026-09-12): while a chunked fetch streams the
+  // list in, the rail shows a REAL-count progress bar; without it, none.
+  it('renders the load progress bar with real counts while streaming', () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), {
+      concepts: base,
+      loadProgress: { repoId: 'r-1', done: 450, total: 997 }
+    });
+    expect(wrapper.find('.okf-cl__load').exists()).toBe(true);
+    expect(wrapper.find('.okf-cl__load-label').text()).toContain('450/997');
+    expect(wrapper.find('.ds-progress').exists()).toBe(true);
+  });
+
+  it('renders no load progress bar once the fetch settles', () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: base });
+    expect(wrapper.find('.okf-cl__load').exists()).toBe(false);
+  });
 });
 
 const OkfConceptEditor = require('@/components/okf/editor/ConceptEditor.vue').default;

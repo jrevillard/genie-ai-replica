@@ -382,21 +382,41 @@ async function stampRepoGraphName(repo_id, graph_name) {
 /** Story #978 — list a repo's concept meta rows for the Studio editor's left
  * rail. KEEP the fields the UI consumes (no body — that rides on the
  * per-concept GET). Sorted: failed first (needs attention), then parsed
- * (pending index), then the rest; title ascending within each band. */
-async function listConceptsMeta(repo_id) {
+ * (pending index), then the rest; title ascending within each band.
+ *
+ * NON-BLOCKING LOAD (David, 2026-09-12): a large repo returned as ONE payload
+ * blocked the editor until the browser complained. With { limit } the query
+ * pages (LIMIT offset, limit) and returns { total, offset, limit, concepts }
+ * so the client can fetch in chunks with a REAL progress bar; without opts
+ * the legacy full-array shape is returned (all other callers unchanged). */
+async function listConceptsMeta(repo_id, opts = {}) {
   if (!repo_id) return [];
   const db = await getDb();
-  return (
-    await db.query(
-      `FOR m IN okf_concepts_meta FILTER m.repo_id == @rid
-       SORT (m.index_status == 'failed' ? 0 : (m.index_status == 'parsed' ? 1 : 2)), m.title
-       RETURN KEEP(m, ["repo_id", "concept_id", "path", "title", "type", "labels", "tags", "summary",
+  const limit = Math.max(1, Math.min(500, parseInt(opts.limit, 10) || 0));
+  const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
+  const KEEP = `RETURN KEEP(m, ["repo_id", "concept_id", "path", "title", "type", "labels", "tags", "summary",
          "is_index", "index_status", "content_hash", "trust_tier", "sources", "chunk_count",
          "lifecycle_status", "pii_state", "pii_hits_summary", "pii_scanned_at",
-         "conformance_issues", "created_at", "updated_at"])`,
-      { rid: repo_id }
-    )
-  ).all();
+         "conformance_issues", "created_at", "updated_at"])`;
+  const SORT = `SORT (m.index_status == 'failed' ? 0 : (m.index_status == 'parsed' ? 1 : 2)), m.title`;
+  if (!limit) {
+    return await db
+      .query(`FOR m IN okf_concepts_meta FILTER m.repo_id == @rid ${SORT} ${KEEP}`, {
+        rid: repo_id
+      })
+      .all();
+  }
+  const totalRows = await db
+    .query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid COLLECT WITH COUNT INTO n RETURN n', { rid: repo_id })
+    .all();
+  const concepts = await db
+    .query(`FOR m IN okf_concepts_meta FILTER m.repo_id == @rid ${SORT} LIMIT @offset, @limit ${KEEP}`, {
+      rid: repo_id,
+      offset,
+      limit
+    })
+    .all();
+  return { total: totalRows[0] || 0, offset, limit, concepts };
 }
 
 /** Resolve a concept's meta row by concept_id across ALL repos (the dataprep
@@ -941,7 +961,7 @@ function planAutocorrectForConcept(meta) {
       }
     }
     let touched = false;
-    const fixed = fm.sources.map((s, i) => {
+    const fixed = fm.sources.map((s) => {
       if (s && (!s.resource || !String(s.resource).trim())) {
         const fill = String(provenance || sibling || '').trim();
         if (!fill) return s;

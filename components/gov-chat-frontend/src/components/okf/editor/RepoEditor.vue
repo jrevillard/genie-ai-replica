@@ -18,6 +18,7 @@
       :concepts="concepts"
       :selected-id="selectedId"
       :loading="loading"
+      :load-progress="loadProgress"
       :label-options="labelOptions"
       :read-only="readOnly"
       @select="onSelect"
@@ -51,6 +52,14 @@
           {{ translate('okf.editor.pane.graph', 'Graph') }}
         </DsButton>
       </div>
+      <!-- LONG-ACTION STRIP (David, 2026-09-12): any editor action that can
+           outlive a browser/gateway timeout renders here as a NON-BLOCKING
+           indeterminate bar with live elapsed seconds — the panes stay
+           interactive instead of the page freezing on a wait dialog. -->
+      <div v-if="longAction" class="okf-re__long" role="status">
+        <DsProgress indeterminate :value="1" size="xs" class="okf-re__long-bar" />
+        <span class="okf-re__long-label">{{ longAction.label }} · {{ longElapsed }}</span>
+      </div>
       <template v-if="centerView === 'files'">
         <!-- CROSS-REPO STALE-STATE GUARD (David, 2026-09-06): render the
              editor ONLY for a concept that exists in THIS repo's list — a
@@ -75,7 +84,7 @@
       <OkfRepoGraphView
         v-show="centerView === 'graph'"
         :repo-id="repoId"
-        :concepts="concepts"
+        :concepts="graphConcepts"
         :selected-id="selectedId"
         @select="onGraphNodeSelect"
       />
@@ -238,6 +247,7 @@ import repoOkfService from '../../../services/repoOkfService';
 import DsButton from '../../ds/Button.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsInput from '../../ds/Input.vue';
+import DsProgress from '../../ds/Progress.vue';
 import DsSelect from '../../ds/Select.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import OkfConceptList from './ConceptList.vue';
@@ -259,6 +269,7 @@ export default {
     DsFormGroup,
     DsInfoTip,
     DsInput,
+    DsProgress,
     DsSelect,
     OkfConceptList,
     OkfConceptEditor,
@@ -294,6 +305,11 @@ export default {
       piiBulkBusy: false,
       deleting: false,
       autocorrectOpen: false,
+      // LONG-ACTION STRIP (David, 2026-09-12): { label, startedAt } while a
+      // potentially-slow editor action runs; the strip is non-blocking and
+      // shows live elapsed seconds (longTick drives the re-render).
+      longAction: null,
+      longElapsed: '0s',
       // Right-rail bindings — synced from the selected row, written immediately.
       metaType: '',
       metaTitle: '',
@@ -308,7 +324,7 @@ export default {
     };
   },
   computed: {
-    ...mapGetters('okf', ['conceptsByRepo', 'selectedConceptId', 'editorLoading', 'repoById']),
+    ...mapGetters('okf', ['conceptsByRepo', 'selectedConceptId', 'editorLoading', 'editorLoadProgress', 'repoById']),
     gridStyle() {
       return {
         gridTemplateColumns: `${this.railWidth}px 6px minmax(0, 1fr) 6px ${this.metaWidth}px`
@@ -316,6 +332,16 @@ export default {
     },
     concepts() {
       return this.conceptsByRepo(this.repoId);
+    },
+    // NON-BLOCKING LOAD: this repo's chunked-fetch progress, else null.
+    loadProgress() {
+      const p = this.editorLoadProgress;
+      return p && p.repoId === this.repoId ? p : null;
+    },
+    // The graph waits for the WHOLE list: one cytoscape layout over the final
+    // array instead of a heavy re-layout per streamed page.
+    graphConcepts() {
+      return this.loading || this.loadProgress ? [] : this.concepts;
     },
     selectedId() {
       return this.selectedConceptId;
@@ -420,7 +446,30 @@ export default {
     await this.$store.dispatch('okf/openEditor', { repoId: this.repoId });
     this.loadLabelOptions();
   },
+  beforeUnmount() {
+    this.endLongAction();
+  },
   methods: {
+    // ── LONG-ACTION STRIP (David, 2026-09-12) ─────────────────────────────
+    // Wrap any editor action that can outlive a browser/gateway response
+    // window. Non-blocking: the strip animates and the elapsed counter ticks
+    // while the panes stay interactive.
+    beginLongAction(label) {
+      this.endLongAction();
+      this.longAction = { label, startedAt: Date.now() };
+      this.longElapsed = '0s';
+      this._longTimer = setInterval(() => {
+        if (!this.longAction) return;
+        this.longElapsed = Math.round((Date.now() - this.longAction.startedAt) / 1000) + 's';
+      }, 1000);
+    },
+    endLongAction() {
+      if (this._longTimer) {
+        clearInterval(this._longTimer);
+        this._longTimer = null;
+      }
+      this.longAction = null;
+    },
     // ── FLEXIBLE COLUMNS (David, 2026-09-09) ──────────────────────────────
     // Pointer-drag on either splitter (drag anywhere — listeners sit on the
     // window for the drag's lifetime), double-click resets, arrow keys nudge.
@@ -590,17 +639,22 @@ export default {
       }
       if (key !== 'confirm' || !this.piiBulkAsk || this.piiBulkBusy) return;
       this.piiBulkBusy = true;
-      const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
-      this.piiBulkBusy = false;
-      this.piiBulkAsk = null;
-      if (!result || !result.ok) {
-        this.metaError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
-        return;
+      this.beginLongAction(this.translate('okf.editor.actions.bulkPii', 'Applying the bulk PII action'));
+      try {
+        const result = await repoOkfService.bulkPiiAction(this.repoId, this.piiBulkAsk);
+        if (!result || !result.ok) {
+          this.metaError = this.translate('okf.editor.piiBulk.failed', 'The bulk PII action failed — try again.');
+          return;
+        }
+        // The flagged pills clear as the refreshed rows come back clean. The
+        // resolutions persist: suppressed items stay un-flagged across the
+        // save-triggered rescans until an explicit re-scan.
+        await this.$store.dispatch('okf/fetchConcepts', this.repoId);
+      } finally {
+        this.piiBulkBusy = false;
+        this.piiBulkAsk = null;
+        this.endLongAction();
       }
-      // The flagged pills clear as the refreshed rows come back clean. The
-      // resolutions persist: suppressed items stay un-flagged across the
-      // save-triggered rescans until an explicit re-scan.
-      await this.$store.dispatch('okf/fetchConcepts', this.repoId);
     },
     async onDeleteAction(key) {
       if (key === 'cancel') {
@@ -609,13 +663,22 @@ export default {
       }
       if (key !== 'confirm' || !this.deleteAsk || this.deleting) return;
       this.deleting = true;
-      const result = await this.$store.dispatch('okf/deleteConcept', {
-        repoId: this.repoId,
-        conceptId: this.deleteAsk.concept_id
-      });
-      this.deleting = false;
-      this.deleteAsk = null;
-      if (!result.ok) this.metaError = result.message;
+      this.beginLongAction(
+        this.translate('okf.editor.actions.deleting', 'Deleting') +
+          ' ' +
+          (this.deleteAsk.title || this.deleteAsk.concept_id)
+      );
+      try {
+        const result = await this.$store.dispatch('okf/deleteConcept', {
+          repoId: this.repoId,
+          conceptId: this.deleteAsk.concept_id
+        });
+        if (!result.ok) this.metaError = result.message;
+      } finally {
+        this.deleting = false;
+        this.deleteAsk = null;
+        this.endLongAction();
+      }
     },
     onConceptSaved() {
       // Body changed — index_status/content_hash were patched into the row by
@@ -668,6 +731,25 @@ export default {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+/* LONG-ACTION STRIP: slim non-blocking indicator with live elapsed seconds. */
+.okf-re__long {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+}
+.okf-re__long-bar {
+  flex: 1 1 auto;
+}
+.okf-re__long-label {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .okf-re__placeholder {
   color: var(--muted);

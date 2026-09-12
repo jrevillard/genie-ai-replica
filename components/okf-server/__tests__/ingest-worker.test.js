@@ -388,7 +388,13 @@ describe('ingestWorker._refreshRagIngestion — the wedge contract', () => {
       }
       return { all: async () => [] };
     });
-    mockDb.collection('okf_repositories').save({ _key: RW, repo_id: RW, name: 'K', rag_drain_active: true });
+    mockDb.collection('okf_repositories').save({
+      _key: RW,
+      repo_id: RW,
+      name: 'K',
+      rag_drain_active: true,
+      rag_ingestion: { status: 'draining', requested_at: '2026-09-12T06:23:05.841Z', failed_concepts: [] }
+    });
     await worker._refreshRagIngestion(mockDb, RW);
     const { _settleIngest } = require('../services/lifecycle-service');
     expect(_settleIngest).toHaveBeenCalledTimes(1);
@@ -397,11 +403,56 @@ describe('ingestWorker._refreshRagIngestion — the wedge contract', () => {
     expect(mockDb.collection('okf_repositories').update).toHaveBeenCalledWith(
       RW,
       expect.objectContaining({
-        'rag_ingestion.error': expect.stringContaining('1 concept failed to index: alpha'),
-        'rag_ingestion.failed_concepts': [
-          { concept_id: 'alpha', error: 'the AI model was unreachable during content preparation' }
-        ]
+        rag_ingestion: expect.objectContaining({
+          error: expect.stringContaining('1 concept failed to index: alpha'),
+          failed_concepts: [{ concept_id: 'alpha', error: 'the AI model was unreachable during content preparation' }],
+          requested_at: expect.any(String) // preserved from the live record
+        })
       })
     );
+  });
+});
+
+// ── THE 0/997 CARD (David, 2026-09-12): ArangoDB update() keys are LITERAL —
+// a dotted key 'rag_ingestion.concepts_done' is stored as a FLAT attribute,
+// never as a nested path. Every drain-progress refresh was invisible to the
+// dashboard while the nested record the card reads stayed at 0. ──
+describe('ingestWorker._refreshRagIngestion — nested-record contract (0/997 card bug)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('drain progress patches the NESTED rag_ingestion — never flat dotted keys', async () => {
+    conceptMeta.countByIndexStatus = jest
+      .fn()
+      .mockResolvedValueOnce(600) // parsed
+      .mockResolvedValueOnce(294) // indexed
+      .mockResolvedValueOnce(36); // failed
+    mockDb.collection('okf_repositories').save({
+      _key: 'uk',
+      repo_id: 'uk',
+      rag_drain_active: true,
+      rag_ingestion: {
+        status: 'draining',
+        requested_at: '2026-09-12T06:23:05.841Z',
+        finished_at: null,
+        concepts_total: 997,
+        concepts_done: 0,
+        error: null,
+        failed_concepts: []
+      }
+    });
+    await worker._refreshRagIngestion(mockDb, 'uk');
+    expect(mockDb.collection('okf_repositories').update).toHaveBeenCalledTimes(1);
+    const patch = mockDb.collection('okf_repositories').update.mock.calls[0][1];
+    expect(patch.rag_ingestion).toEqual(
+      expect.objectContaining({
+        status: 'draining',
+        concepts_done: 294,
+        concepts_total: 930,
+        error: null,
+        requested_at: '2026-09-12T06:23:05.841Z' // unlisted keys survive the merge
+      })
+    );
+    // THE REGRESSION: the patch carries NO flat dotted attribute names.
+    expect(Object.keys(patch).some((k) => k.includes('.'))).toBe(false);
   });
 });

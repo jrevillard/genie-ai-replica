@@ -1673,7 +1673,10 @@ export default {
         piiBadge: 'PII',
         piiTip:
           'চিহ্নিত সত্তা: {k}। খুলুন, মুছে ফেলুন বা পরিবর্তন করুন, তারপর সেভ করুন — এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে।',
-        piiTipBare: 'চিহ্নিত সত্তা — খুলুন, পর্যালোচনা করুন, তারপর পুনরায় স্ক্যান করতে সেভ করুন।'
+        piiTipBare: 'চিহ্নিত সত্তা — খুলুন, পর্যালোচনা করুন, তারপর পুনরায় স্ক্যান করতে সেভ করুন।',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1723,7 +1726,23 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'সেভ করা যায়নি — আবার চেষ্টা করুন'
+      saveFailed: 'সেভ করা যায়নি — আবার চেষ্টা করুন',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      }
     },
     dashboard: {
       bulk: {

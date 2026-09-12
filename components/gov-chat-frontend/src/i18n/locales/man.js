@@ -1643,7 +1643,10 @@ export default {
           'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
         piiBadge: 'PII',
         piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.'
+        piiTipBare: 'Flagged entities — open, review, then save to re-scan.',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1693,7 +1696,23 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry'
+      saveFailed: 'Save failed — retry',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      }
     },
     dashboard: {
       bulk: {

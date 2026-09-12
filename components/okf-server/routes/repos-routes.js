@@ -30,6 +30,11 @@ router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo
 // PII scan (Story 2.8 — ADR-okf-004 rev): explicit concepts OR file discovery.
 router.post('/:repo_id/pii-scan', requireRepoScope('repo_id', 'admin'), ctrl.piiScan);
 
+// REPO BULK PII ACTION (David, 2026-09-12): Redact / Remove / Accept applied
+// to EVERY flagged concept in one steward decision (Files-view header).
+// Scan-free; stamps the scan marker so publish neither blocks nor re-scans.
+router.post('/:repo_id/pii-bulk', requireRepoScope('repo_id', 'admin'), ctrl.repoBulkPii);
+
 // Concept IMPORT (Story 2.9.1 — ADR-021; renamed from /ingest, David
 // 2026-09-04: "import" is the creation word, "ingest" is the RAG word):
 // parse→meta→conformance→PII→dedup per concept; 202 once stored. NOTHING is

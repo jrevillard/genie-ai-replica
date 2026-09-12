@@ -761,6 +761,108 @@ async function fileActionPii(repo_id, concept_id, payload, actor) {
     };
   });
 }
+/** REPO BULK PII ACTION (David, 2026-09-12): Redact / Remove / Accept applied
+ * to EVERY flagged concept of the repository in ONE steward decision, from
+ * the Files-view header. SCAN-FREE: the stored unresolved summary
+ * (pii_hits_summary) is the ledger of what the action covers — no Presidio
+ * call — and each concept records its resolution (accept_repo / redact_file /
+ * remove_file) before landing pii_state='clean'. The repo scan marker is
+ * stamped complete: the review IS the scan's purpose, so the publish gate
+ * neither blocks nor re-scans afterwards (David: "must be able to be
+ * published and must not be scanned again"). Suppressions persist across
+ * save-triggered rescans — scanConcept subtracts stored acceptances, and
+ * redact/remove destroyed the flagged text — until an EXPLICIT re-scan is
+ * requested from the UI. */
+const REPO_BULK_ACTION_ENUM = FILE_ACTION_ENUM;
+
+async function repoBulkAction(repo_id, payload, actor) {
+  return withSpan('okf.pii.repoBulk', async (span) => {
+    span.setAttribute('okf.repo_id', repo_id);
+    const action = payload && payload.action;
+    if (!REPO_BULK_ACTION_ENUM.includes(action)) {
+      throw piiError('VALIDATION_ERROR', "action must be one of 'redact'|'remove'|'accept'", 400);
+    }
+    const db = await getDb();
+    let repo = null;
+    try {
+      repo = await db.collection(REPOS).document(repo_id);
+    } catch (err) {
+      if (!isArangoNotFound(err)) throw err;
+    }
+    if (!repo || repo.deleted_at) {
+      throw Object.assign(new Error('Repository ' + repo_id + ' not found'), { code: 'REPO_NOT_FOUND', status: 404 });
+    }
+    const flagged = await (
+      await db.query(
+        'FOR m IN @@meta FILTER m.repo_id == @r AND m.pii_state == "hit" SORT m.concept_id RETURN m',
+        { '@meta': META, r: repo_id }
+      )
+    ).all();
+    const by = (actor && actor.sub) || 'system';
+    const now = new Date().toISOString();
+    let affected = 0;
+    for (const doc of flagged) {
+      const prevSummary = doc.pii_hits_summary && typeof doc.pii_hits_summary === 'object' ? doc.pii_hits_summary : {};
+      if (action === 'accept') {
+        // Text stays; the decision suppresses every outstanding hit.
+        await appendResolution(db, doc._key, doc.pii_resolutions, {
+          id: newResolutionId(),
+          action: 'accept_repo',
+          type: null,
+          where: null,
+          before: null,
+          after: 'accepted (whole repository)',
+          hits_summary: prevSummary,
+          at: now,
+          actor: by
+        });
+      } else {
+        // redact / remove: destroy the body (frontmatter identity stays so
+        // navigation and the RAG labeler keep working). Scan-free ledger:
+        // the STORED unresolved summary records what the action covered.
+        const newBody = action === 'redact' ? REDACTED_BODY : '';
+        await conceptMetaService.patchConceptFields(repo_id, doc.concept_id, { body: newBody });
+        await appendResolution(db, doc._key, doc.pii_resolutions, {
+          id: newResolutionId(),
+          action: action === 'redact' ? 'redact_file' : 'remove_file',
+          type: null,
+          where: 'body',
+          before: null,
+          after: action === 'redact' ? 'REDACTED (whole repository)' : 'removed (whole repository)',
+          hits_summary: prevSummary,
+          at: now,
+          actor: by
+        });
+      }
+      await upsertPiiState(repo_id, doc.concept_id, {
+        pii_state: 'clean',
+        pii_hits_summary: {},
+        pii_scanned_at: now
+      });
+      affected++;
+    }
+    if (affected > 0) {
+      // The review decision doubles as the completed scan for the gate.
+      await markRepoPiiScanned(repo_id);
+    }
+    recordOp('repoBulk', action);
+    await auditService
+      .writeAudit({
+        action: 'repo.pii_bulk_' + action,
+        actor: by,
+        actor_name: (actor && actor.name) || null,
+        repo_id,
+        concepts_affected: affected,
+        description:
+          `PII BULK ${action.toUpperCase()} on repository — ${affected} flagged concept(s) processed ` +
+          `(scan-free; publish gate satisfied without a new scan)`
+      })
+      .catch(() => {});
+    logger.info('PII repo bulk action', { repo_id, action, affected, actor: by });
+    return { ok: true, action, concepts_affected: affected };
+  });
+}
+
 /** REDACT THE WHOLE FILE (David, 2026-09-09): when flagged entities dominate
  * a document, per-item work is pointless — the body is replaced wholesale
  * with a redaction notice. Frontmatter (title/labels/source — the concept's
@@ -1065,6 +1167,7 @@ module.exports = {
   remediatePii,
   acceptPii,
   fileActionPii,
+  repoBulkAction,
   redactWholeFile,
   listResolutions,
   subtractAccepted,

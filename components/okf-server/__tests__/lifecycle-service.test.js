@@ -191,6 +191,43 @@ describe('lifecycle transitions — the machine, exhaustively', () => {
     expect(doc.ingested_graph_name).toBe('OKF_demo-repo_v1');
   });
 
+  // ── DRAIN FREEZE (David, 2026-09-12): while the RAG drain is in flight ──
+  // ── NOTHING may modify the repo — transitions, content, PII state.     ──
+  describe('drain freeze (rag_drain_active)', () => {
+    test('transitions are frozen mid-drain → 409 DRAIN_IN_PROGRESS', async () => {
+      for (const action of ['submit', 'approve', 'publish', 'ingest']) {
+        seedRepo({ lifecycle_state: 'publish', version: 1, rag_drain_active: true });
+        await expect(lifecycleService.transition(REPO, action, {})).rejects.toMatchObject({
+          code: 'DRAIN_IN_PROGRESS',
+          status: 409
+        });
+      }
+    });
+
+    test('retract stays AVAILABLE mid-drain (the wedge-recovery escape hatch)', async () => {
+      seedRepo({
+        lifecycle_state: 'publish',
+        version: 1,
+        ingested_at: 'x',
+        ingested_version: 1,
+        ingested_graph_name: 'OKF_demo-repo_v1',
+        rag_drain_active: true
+      });
+      const res = await lifecycleService.transition(REPO, 'retract', {});
+      expect(res).toMatchObject({ ok: true, lifecycle_state: 'retracted' });
+      // Retract disarms the drain (the requeue path) — the freeze lifts.
+      expect(mockDb._stores.okf_repositories[REPO].rag_drain_active).toBe(false);
+    });
+
+    test('assertWritable freezes PII/content mutations mid-drain', () => {
+      expect(() => lifecycleService.assertWritable({ rag_drain_active: true })).toThrow(
+        expect.objectContaining({ code: 'DRAIN_IN_PROGRESS', status: 409 })
+      );
+      // Non-draining repo is untouched by the freeze.
+      expect(() => lifecycleService.assertWritable({ rag_drain_active: false })).not.toThrow();
+    });
+  });
+
   test('submit from retracted re-enters the loop (Retract → Edit → Review — David, 2026-09-04)', async () => {
     seedRepo({ lifecycle_state: 'retracted', version: 1 });
     await expect(lifecycleService.transition(REPO, 'submit', {})).resolves.toMatchObject({

@@ -127,6 +127,17 @@ async function buildingBlocker(repo) {
       409
     );
   }
+  // DRAIN FREEZE (David, 2026-09-12): while the RAG drain is in flight the
+  // lifecycle is frozen too — no submit/approve/publish/ingest can touch a
+  // repo whose content is mid-snapshot. Retract is exempt (the transition()
+  // gate skips this blocker for it — the wedge-recovery escape hatch).
+  if (repo && repo.rag_drain_active === true) {
+    return new LifecycleError(
+      'DRAIN_IN_PROGRESS',
+      'repository is being ingested (RAG drain active) — lifecycle transitions are frozen until the drain settles',
+      409
+    );
+  }
   return null;
 }
 
@@ -511,6 +522,19 @@ async function transition(repoId, action, actor) {
       ingested_at: null,
       ingested_version: null,
       ingested_graph_name: null,
+      // DRAIN FREEZE completion (David, 2026-09-12): retract is the ONE
+      // mutation allowed mid-drain (the wedge-recovery escape) — so it must
+      // also DISARM the freeze, or a retracted repo stays frozen forever.
+      // The drain record is cancelled honestly (the card-lies rule: write
+      // the COMPLETE shape, never a partial merge).
+      rag_drain_active: false,
+      rag_ingestion: {
+        status: 'cancelled',
+        error: 'drain cancelled — the repository was retracted mid-ingest',
+        concepts_total: 0,
+        concepts_done: 0,
+        failed_concepts: []
+      },
       updated_at: nowIso()
     });
     await audit('repo.retract', repoId, actor, {
@@ -541,6 +565,18 @@ function assertWritable(repo) {
     throw new LifecycleError(
       'REPO_READ_ONLY',
       'repository is serving (ingested) and is READ ONLY — retract it to make changes',
+      409
+    );
+  }
+  // DRAIN FREEZE (David, 2026-09-12): a published repo whose RAG drain is in
+  // flight is FROZEN — no PII scan, no bulk actions, no concept edits, no
+  // nothing. The drain is indexing a snapshot of this content; a concurrent
+  // mutation would race it and desync the version. Retract stays available
+  // (the transition building gate exempts it — the wedge-recovery escape).
+  if (repo && repo.rag_drain_active === true) {
+    throw new LifecycleError(
+      'DRAIN_IN_PROGRESS',
+      'repository is being ingested (RAG drain active) — content is frozen until the drain settles',
       409
     );
   }

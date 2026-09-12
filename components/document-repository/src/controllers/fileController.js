@@ -689,10 +689,12 @@ class FileController {
       logger.error('Delete file error:', error);
 
       // Kill-before-delete in progress or unconfirmed within the wait window —
-      // the file is untouched; the client should retry shortly.
+      // the file is untouched; the client should retry shortly. Code per the
+      // kill-first contract ruling (#992).
       if (error.message.includes('still stopping')) {
         return res.status(409).json({
           success: false,
+          code: 'CRAWL_ACTIVE',
           error: 'Crawl still stopping',
           message: error.message
         });

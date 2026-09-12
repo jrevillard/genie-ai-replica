@@ -207,6 +207,79 @@ describe('OkfRepoGraphView', () => {
       expect(String(p[k]) + ' (' + k + ')').toMatch(/^(rgba\(|#|oklch|rgb\(|--)/);
     }
   });
+
+  // ---- hover summary card (David, 2026-09-12) ----------------------------
+  const RICH_CONCEPTS = [
+    {
+      concept_id: 'wildlife',
+      title: 'Wildlife of the Mara',
+      type: 'topic',
+      labels: ['Wildlife'],
+      trust_tier: 'verified',
+      summary: 'Big-cat populations, migration corridors and park conservation programmes.',
+      chunk_count: 12,
+      index_status: 'indexed',
+      pii_state: 'hit'
+    },
+    { concept_id: 'parks', title: 'Parks', index_status: 'indexed' }
+  ];
+
+  it('select syncs via select AND hovering the SELECTED node shows the summary card', async () => {
+    mockGetRepoLinks.mockResolvedValue({
+      links: [{ from_concept_id: 'wildlife', to_concept_id: 'parks', label: '', source: 'author' }]
+    });
+    const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: RICH_CONCEPTS });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const cy = wrapper.vm.cy;
+    // Selection behavior UNCHANGED: tap emits 'select' (file-viewer sync).
+    cy.getElementById('wildlife').emit('tap');
+    expect(wrapper.emitted('select')).toEqual([['wildlife']]);
+    // Hover the selected node -> the card floats with the OKF summary.
+    cy.getElementById('wildlife').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.card.visible).toBe(true);
+    expect(wrapper.vm.card.title).toBe('Wildlife of the Mara');
+    expect(wrapper.vm.card.summary).toContain('migration corridors');
+    expect(wrapper.vm.card.chips).toEqual(['topic', 'Wildlife', 'verified']);
+    // out(1) + in(0) links, chunks, and the pii_state flag.
+    expect(wrapper.vm.card.meta.join(' | ')).toContain('1 links');
+    expect(wrapper.vm.card.meta.join(' | ')).toContain('12 chunks');
+    expect(wrapper.vm.card.meta.join(' | ')).toContain('flagged entities');
+  });
+
+  it('does NOT show the card for a node that is not selected', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: RICH_CONCEPTS });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    wrapper.vm.cy.getElementById('wildlife').emit('mouseover');
+    expect(wrapper.vm.card.visible).toBe(false);
+  });
+
+  it('hides the card on mouseout, on pan/zoom (viewport), and when the selection moves', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, {
+      repoId: 'r-1',
+      concepts: RICH_CONCEPTS,
+      selectedId: 'wildlife'
+    });
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    const cy = wrapper.vm.cy;
+    cy.getElementById('wildlife').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.card.visible).toBe(true);
+    cy.getElementById('wildlife').emit('mouseout');
+    expect(wrapper.vm.card.visible).toBe(false);
+    cy.getElementById('wildlife').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    cy.emit('viewport'); // pan/zoom moves the node from under the cursor
+    expect(wrapper.vm.card.visible).toBe(false);
+    cy.getElementById('wildlife').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    wrapper.vm.cy.getElementById('parks').emit('tap'); // selection moves
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.card.visible).toBe(false); // old card must not linger
+  });
 });
 
 const OkfAddConceptModal = require('@/components/okf/editor/AddConceptModal.vue').default;

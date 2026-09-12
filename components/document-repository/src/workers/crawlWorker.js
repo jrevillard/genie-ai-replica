@@ -26,6 +26,12 @@ const MAX_PAGES_PER_JOB = appConfig.crawler?.maxPages || 1000;
 const WORKER_CONCURRENCY = appConfig.crawler?.workerConcurrency || 20;
 const REQUIRED_LANG = (appConfig.upload?.requiredIngestionLanguage || 'en').toLowerCase();
 const UPLOAD_DIR = path.join(__dirname, '..', '..', appConfig.upload.uploadDir || 'uploads');
+const KILL_WATCH_INTERVAL_MS = appConfig.crawler?.killWatchIntervalMs || 2000;
+
+// Definitive arangojs not-found (ArangoError 404 / 1202 "document not found").
+// Distinct from transient connection errors, which must keep failing open.
+const isDocumentNotFound = (e) =>
+  !!e && (e.statusCode === 404 || e.errorNum === 1202 || /not found/i.test(e.message || ''));
 
 // --- THREAD POOL SETUP ---
 const NUM_CPUS = os.cpus().length;
@@ -165,16 +171,39 @@ const processJob = async (job, db) => {
         const currentJob = await db.collection('crawl_job').document(job._key);
         if (currentJob.kill_requested) {
           isJobKilled = true;
+          crawler.abort();
           throw new Error('Killed');
         }
       } catch (e) {
         if (e.message === 'Killed') throw e;
-        // Ignore DB errors during check, rely on next check
+        // The job doc is GONE (file deleted mid-crawl). The kill channel IS the
+        // job doc — once it is removed there is nothing left to save, report,
+        // or honor a kill signal from, so treat definitive not-found as a kill.
+        // Treating it as a transient error left an unkillable zombie crawl
+        // holding the single-flight worker (2026-09-12 zalora incident).
+        if (isDocumentNotFound(e)) {
+          isJobKilled = true;
+          crawler.abort();
+          throw new Error('Killed', { cause: e });
+        }
+        // Ignore transient DB errors during check, rely on next check
         logger.warn(`[CRAWL-WORKER] Kill check failed: ${e.message}`);
       }
       lastKillCheck = now;
     }
   };
+
+  // --- KILL WATCH (hard deadline) ---
+  // checkKillStatus only fires from crawl callbacks (per page / per batch), so
+  // a batch stuck in fetch-retry storms can delay the kill signal by minutes.
+  // This timer polls on a fixed cadence regardless of what the crawler is
+  // doing; when it fires, crawler.abort() cancels in-flight requests so the
+  // crawl unwinds within ~one batch.
+  const killWatch = setInterval(() => {
+    checkKillStatus().catch(() => {
+      // 'Killed' already aborted the crawler; transient errors retry next tick
+    });
+  }, KILL_WATCH_INTERVAL_MS);
 
   try {
     await updateJobStatus(db, job._key, 'Crawling');
@@ -350,6 +379,8 @@ const processJob = async (job, db) => {
     } catch (e) {
       logger.error('Failed to update error status', e);
     }
+  } finally {
+    clearInterval(killWatch);
   }
 };
 

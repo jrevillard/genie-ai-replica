@@ -304,7 +304,7 @@ describe('fileService', () => {
       metadataService.deleteMetadata.mockResolvedValue(true);
       fs.access.mockResolvedValue();
 
-      const mockCursor = { next: jest.fn() };
+      const mockCursor = { next: jest.fn(), all: jest.fn().mockResolvedValue([]) };
       const mockDb = { query: jest.fn().mockResolvedValue(mockCursor) };
       fileService.getDb = jest.fn().mockResolvedValue(mockDb);
 
@@ -320,6 +320,91 @@ describe('fileService', () => {
       metadataService.getMetadataById.mockResolvedValue(null);
 
       await expect(fileService.deleteFile('nonexistent')).rejects.toThrow('not found');
+    });
+
+    it('kills and confirms a Crawling job before deleting', async () => {
+      jest.useFakeTimers();
+      const file = { file_id: 'file-123', file_name: 'test.pdf', storage_path: './uploads/file-123.pdf' };
+      metadataService.getMetadataById.mockResolvedValue(file);
+      metadataService.deleteMetadata.mockResolvedValue(true);
+      fs.access.mockResolvedValue();
+      fs.unlink.mockResolvedValue();
+
+      const jobCursor = { all: jest.fn().mockResolvedValue([{ _key: 'k1', status: 'Crawling' }]) };
+      const document = jest
+        .fn()
+        .mockResolvedValueOnce({ status: 'Crawling' })
+        .mockResolvedValueOnce({ status: 'Killed' });
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(jobCursor),
+        collection: jest.fn().mockReturnValue({ document })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+      const killSpy = jest.spyOn(fileService, 'killCrawlTask').mockResolvedValue();
+
+      const pending = fileService.deleteFile('file-123');
+      await jest.advanceTimersByTimeAsync(1000);
+      await pending;
+      expect(fileService.killCrawlTask).toHaveBeenCalledWith('file-123');
+      expect(metadataService.deleteMetadata).toHaveBeenCalledWith('file-123');
+      killSpy.mockRestore();
+      jest.useRealTimers();
+    });
+
+    it('refuses delete while the kill is unconfirmed (timeout)', async () => {
+      jest.useFakeTimers();
+      const file = { file_id: 'file-123', file_name: 'test.pdf', storage_path: './uploads/file-123.pdf' };
+      metadataService.getMetadataById.mockResolvedValue(file);
+      const jobCursor = { all: jest.fn().mockResolvedValue([{ _key: 'k1', status: 'Crawling' }]) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValue(jobCursor),
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockResolvedValue({ status: 'Crawling' })
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+      const killSpy = jest.spyOn(fileService, 'killCrawlTask').mockResolvedValue();
+
+      const pending = expect(fileService.deleteFile('file-123')).rejects.toThrow('still stopping');
+      await jest.advanceTimersByTimeAsync(31000);
+      await pending;
+      expect(metadataService.deleteMetadata).not.toHaveBeenCalled();
+      killSpy.mockRestore();
+      jest.useRealTimers();
+    });
+
+    it('removes a Pending job without kill-waiting', async () => {
+      const file = { file_id: 'file-123', file_name: 'test.pdf', storage_path: './uploads/file-123.pdf' };
+      metadataService.getMetadataById.mockResolvedValue(file);
+      metadataService.deleteMetadata.mockResolvedValue(true);
+      fs.access.mockResolvedValue();
+      fs.unlink.mockResolvedValue();
+
+      const jobCursor = { all: jest.fn().mockResolvedValue([{ _key: 'k2', status: 'Pending' }]) };
+      const mockDb = { query: jest.fn().mockResolvedValue(jobCursor) };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+      const killSpy = jest.spyOn(fileService, 'killCrawlTask').mockResolvedValue();
+
+      await fileService.deleteFile('file-123');
+      const removePendingQuery = mockDb.query.mock.calls
+        .map((c) => c[0])
+        .find((q) => q.includes("status == 'Pending' REMOVE"));
+      expect(removePendingQuery).toBeDefined();
+      expect(fileService.killCrawlTask).not.toHaveBeenCalled();
+      expect(metadataService.deleteMetadata).toHaveBeenCalledWith('file-123');
+      killSpy.mockRestore();
+      jest.useRealTimers();
+    });
+
+    it('_waitCrawlStopped: deleted job doc counts as stopped', async () => {
+      const mockDb = {
+        collection: jest.fn().mockReturnValue({
+          document: jest.fn().mockRejectedValue(Object.assign(new Error('document not found'), { statusCode: 404 }))
+        })
+      };
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await expect(fileService._waitCrawlStopped('k1')).resolves.toBe(true);
     });
   });
 

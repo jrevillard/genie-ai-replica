@@ -688,6 +688,16 @@ class FileController {
     } catch (error) {
       logger.error('Delete file error:', error);
 
+      // Kill-before-delete in progress or unconfirmed within the wait window —
+      // the file is untouched; the client should retry shortly.
+      if (error.message.includes('still stopping')) {
+        return res.status(409).json({
+          success: false,
+          error: 'Crawl still stopping',
+          message: error.message
+        });
+      }
+
       if (error.message.includes('not found')) {
         return res.status(404).json({
           success: false,

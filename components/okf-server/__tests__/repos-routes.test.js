@@ -16,6 +16,7 @@ jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn
 jest.mock('../services/crawl-conversion-service');
 // Auto-mock (no factory) so all exports become jest.fn() and tests can stub.
 jest.mock('../services/concept-meta-service');
+jest.mock('../services/llm-curation-service');
 jest.mock('../services/parser-service');
 // pii-service: auto-mocked — the concept PATCH now re-scans on save (David,
 // 2026-09-09: flags must be clearable by editing), so every patch test needs
@@ -1082,6 +1083,23 @@ describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     authzAwareServiceMock();
+  });
+
+  test('explicit mode:"heuristics" WINS over the repo persisted classification (live regression)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    // The repo is llm-classified; the panel pins heuristics. The 2026-09-12
+    // routing bug discarded the explicit heuristics and rerouted the
+    // mechanical scan into per-concept LLM proposals (gateway timeout).
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', classification: 'llm' });
+    conceptMetaService.autocorrectRepo.mockResolvedValue({ changes: [], warnings: [], applied: 0, total_concepts: 0 });
+    const llmCuration = require('../services/llm-curation-service');
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/autocorrect')
+      .set('Authorization', TOKEN)
+      .send({ dry_run: true, mode: 'heuristics' });
+    expect(res.status).toBe(200);
+    expect(conceptMetaService.autocorrectRepo).toHaveBeenCalledWith('repoA', true, expect.anything());
+    expect(llmCuration.proposeFrontmatter).not.toHaveBeenCalled();
   });
 
   test('200 dry_run=true returns the planned changes without applying', async () => {

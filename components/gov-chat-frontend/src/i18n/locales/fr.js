@@ -1705,7 +1705,10 @@ export default {
         piiBadge: 'PII',
         piiTip:
           'Entités signalées : {k}. Ouvrez, supprimez ou modifiez-les, puis enregistrez — le scan se relance automatiquement.',
-        piiTipBare: 'Entités signalées — ouvrez, révisez, puis enregistrez pour relancer le scan.'
+        piiTipBare: 'Entités signalées — ouvrez, révisez, puis enregistrez pour relancer le scan.',
+        bulkAccept: 'Tout accepter',
+        bulkRedact: 'Tout expurger',
+        bulkRemove: 'Tout supprimer'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1755,7 +1758,24 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Échec de l’enregistrement — réessayer'
+      saveFailed: 'Échec de l’enregistrement — réessayer',
+      piiBulk: {
+        title: {
+          redact: 'Expurger tout le contenu signalé',
+          remove: 'Supprimer tout le contenu signalé',
+          accept: 'Accepter toutes les entités signalées'
+        },
+        body: {
+          redact:
+            "Le corps de chaque concept signalé est remplacé par l'avis d'expurgation. Cette action est irréversible.",
+          remove: 'Le corps de chaque concept signalé est vidé. Cette action est irréversible.',
+          accept:
+            'Toutes les entités signalées sont marquées comme examinées et conservées — elles ne seront plus signalées sauf nouvelle analyse.'
+        },
+        scope: "Concepts concernés : {'{'}n{'}'}.",
+        confirm: 'Appliquer',
+        failed: "L'action PII groupée a échoué — réessayez."
+      }
     },
     dashboard: {
       bulk: {

@@ -1686,7 +1686,10 @@ export default {
           'Concept dengan entitas yang ditandai — buka satu per satu, hapus atau ubah entitas, simpan (pemindaian ulang otomatis); atau akui saat publikasi.',
         piiBadge: 'PII',
         piiTip: 'Entitas yang ditandai: {k}. Buka, hapus atau ubah, lalu simpan — akan dipindai ulang secara otomatis.',
-        piiTipBare: 'Entitas yang ditandai — buka, tinjau, lalu simpan untuk memindai ulang.'
+        piiTipBare: 'Entitas yang ditandai — buka, tinjau, lalu simpan untuk memindai ulang.',
+        bulkAccept: 'Terima semua',
+        bulkRedact: 'Redak semua',
+        bulkRemove: 'Hapus semua'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1736,7 +1739,24 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Gagal menyimpan — coba lagi'
+      saveFailed: 'Gagal menyimpan — coba lagi',
+      piiBulk: {
+        title: {
+          redact: 'Redak semua konten yang ditandai',
+          remove: 'Hapus semua konten yang ditandai',
+          accept: 'Terima semua entitas yang ditandai'
+        },
+        body: {
+          redact:
+            'Isi setiap konsep yang ditandai diganti dengan pemberitahuan redaksi. Tindakan ini tidak dapat dibatalkan.',
+          remove: 'Isi setiap konsep yang ditandai dikosongkan. Tindakan ini tidak dapat dibatalkan.',
+          accept:
+            'Semua entitas yang ditandai ditandai sebagai telah ditinjau dan dipertahankan — tidak akan ditandai lagi kecuali Anda memindai ulang.'
+        },
+        scope: "Konsep terdampak: {'{'}n{'}'}.",
+        confirm: 'Terapkan',
+        failed: 'Tindakan PII massal gagal — coba lagi.'
+      }
     },
     dashboard: {
       bulk: {

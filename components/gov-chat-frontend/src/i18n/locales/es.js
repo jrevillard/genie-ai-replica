@@ -1700,7 +1700,10 @@ export default {
         piiBadge: 'PII',
         piiTip:
           'Entidades marcadas: {k}. Ábralas, elimínelas o altérelas, luego guarde — se vuelve a escanear automáticamente.',
-        piiTipBare: 'Entidades marcadas — abra, revise y luego guarde para volver a escanear.'
+        piiTipBare: 'Entidades marcadas — abra, revise y luego guarde para volver a escanear.',
+        bulkAccept: 'Aceptar todo',
+        bulkRedact: 'Redactar todo',
+        bulkRemove: 'Eliminar todo'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1750,7 +1753,24 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Fallo al guardar — reintentar'
+      saveFailed: 'Fallo al guardar — reintentar',
+      piiBulk: {
+        title: {
+          redact: 'Redactar todo el contenido marcado',
+          remove: 'Eliminar todo el contenido marcado',
+          accept: 'Aceptar todas las entidades marcadas'
+        },
+        body: {
+          redact:
+            'El cuerpo de cada concepto marcado se sustituye por el aviso de redacción. Esto no se puede deshacer.',
+          remove: 'El cuerpo de cada concepto marcado se vacía. Esto no se puede deshacer.',
+          accept:
+            'Todas las entidades marcadas se marcan como revisadas y conservadas; no volverán a marcarse salvo que vuelva a escanear.'
+        },
+        scope: "Conceptos afectados: {'{'}n{'}'}.",
+        confirm: 'Aplicar',
+        failed: 'La acción PII masiva falló; inténtelo de nuevo.'
+      }
     },
     dashboard: {
       bulk: {

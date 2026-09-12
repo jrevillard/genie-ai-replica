@@ -1738,6 +1738,9 @@ export default {
         originTip: 'How this concept was curated',
         add: 'Add concept',
         addLabel: 'Set label',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all',
         delete: 'Delete file',
         empty: 'No files yet - add a concept or re-split from source.',
         filter: 'Filter files',
@@ -1778,6 +1781,22 @@ export default {
         graph: 'Graph'
       },
       pickConcept: 'Select a concept from the list to start editing.',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      },
       resplit: {
         body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
         confirm: 'Re-split',

@@ -1699,7 +1699,10 @@ export default {
           'Concepts mit markierten Entitäten — öffnen Sie jedes, entfernen oder ändern Sie die Entität, speichern Sie (Scan erfolgt automatisch); oder bestätigen Sie diese bei Veröffentlichung.',
         piiBadge: 'PII',
         piiTip: 'Markierte Entitäten: {k}. Öffnen, entfernen oder ändern, dann speichern — Scan erfolgt automatisch.',
-        piiTipBare: 'Markierte Entitäten — öffnen, überprüfen, dann speichern, um neu zu scannen.'
+        piiTipBare: 'Markierte Entitäten — öffnen, überprüfen, dann speichern, um neu zu scannen.',
+        bulkAccept: 'Alle akzeptieren',
+        bulkRedact: 'Alle schwärzen',
+        bulkRemove: 'Alle entfernen'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1749,7 +1752,24 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Speichern fehlgeschlagen — wiederholen'
+      saveFailed: 'Speichern fehlgeschlagen — wiederholen',
+      piiBulk: {
+        title: {
+          redact: 'Allen markierten Inhalt schwärzen',
+          remove: 'Allen markierten Inhalt entfernen',
+          accept: 'Alle markierten Entitäten akzeptieren'
+        },
+        body: {
+          redact:
+            'Der Inhalt jedes markierten Konzepts wird durch den Schwärzungshinweis ersetzt. Dies kann nicht rückgängig gemacht werden.',
+          remove: 'Der Inhalt jedes markierten Konzepts wird geleert. Dies kann nicht rückgängig gemacht werden.',
+          accept:
+            'Alle markierten Entitäten werden als geprüft und behalten markiert — sie werden erst wieder markiert, wenn Sie neu scannen.'
+        },
+        scope: "Betroffene Konzepte: {'{'}n{'}'}.",
+        confirm: 'Anwenden',
+        failed: 'Die Sammel-PII-Aktion ist fehlgeschlagen — bitte erneut versuchen.'
+      }
     },
     dashboard: {
       bulk: {

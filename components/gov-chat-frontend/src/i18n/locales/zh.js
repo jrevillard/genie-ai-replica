@@ -1621,7 +1621,10 @@ export default {
           '包含已标记实体的 concept — 打开每个实体，移除或更改它，保存（将自动重新扫描）；或在发布时确认它们。',
         piiBadge: 'PII',
         piiTip: '已标记实体：{k}。打开、移除或更改它们，然后保存 — 将自动重新扫描。',
-        piiTipBare: '已标记实体 — 打开、检查，然后保存以重新扫描。'
+        piiTipBare: '已标记实体 — 打开、检查，然后保存以重新扫描。',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1671,7 +1674,23 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: '保存失败 — 重试'
+      saveFailed: '保存失败 — 重试',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      }
     },
     dashboard: {
       bulk: {

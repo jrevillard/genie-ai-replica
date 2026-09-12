@@ -1674,7 +1674,10 @@ export default {
           'تتضمن الـ concept كيانات مميزة — افتح كل منها، قم بإزالة الكيان أو تغييره، واحفظ (يُعاد المسح تلقائيًا)؛ أو أقر بها عند النشر.',
         piiBadge: 'PII',
         piiTip: 'الكيانات المميزة: {k}. افتحها، قم بإزالتها أو تغييرها، ثم احفظ — يُعاد المسح تلقائيًا.',
-        piiTipBare: 'كيانات مميزة — افتحها وراجعها ثم احفظ لإعادة المسح.'
+        piiTipBare: 'كيانات مميزة — افتحها وراجعها ثم احفظ لإعادة المسح.',
+        bulkAccept: 'Accept all',
+        bulkRedact: 'Redact all',
+        bulkRemove: 'Remove all'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1724,7 +1727,23 @@ export default {
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'فشل الحفظ — أعد المحاولة'
+      saveFailed: 'فشل الحفظ — أعد المحاولة',
+      piiBulk: {
+        title: {
+          redact: 'Redact all flagged content',
+          remove: 'Remove all flagged content',
+          accept: 'Accept all flagged entities'
+        },
+        body: {
+          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
+          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
+          accept:
+            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+        },
+        scope: "Concepts affected: {'{'}n{'}'}.",
+        confirm: 'Apply',
+        failed: 'The bulk PII action failed — try again.'
+      }
     },
     dashboard: {
       bulk: {

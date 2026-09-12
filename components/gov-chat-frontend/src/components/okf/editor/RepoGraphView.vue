@@ -45,10 +45,19 @@
           {{ translate('okf.graph.hub', 'index hub') }}
         </DsButton>
       </div>
-      <div ref="stage" class="okf-gv__stage" role="img" :aria-label="translate('okf.graph.aria', 'Concept graph')">
-        <p v-show="layouting" class="okf-gv__layouting">
-          {{ translate('okf.graph.layouting', 'Layouting…') }}
-        </p>
+      <!-- The card lives in a WRAPPER, not inside the stage: cytoscape mutates
+           the stage div's children directly (canvases added/removed on every
+           rebuild), and Vue-managed v-if content in that same container
+           desyncs the patcher's anchors — 'insertBefore' of a null container
+           on the first card toggle (live-caught 2026-09-12; jsdom runs
+           cytoscape headless so tests never see it). The wrapper has the
+           same geometry as the stage, so card coordinates are unchanged. -->
+      <div class="okf-gv__stage-wrap">
+        <div ref="stage" class="okf-gv__stage" role="img" :aria-label="translate('okf.graph.aria', 'Concept graph')">
+          <p v-show="layouting" class="okf-gv__layouting">
+            {{ translate('okf.graph.layouting', 'Layouting…') }}
+          </p>
+        </div>
         <!-- HOVER SUMMARY (David, 2026-09-12): floating summary card for the
              SELECTED node — the concept's OKF data at a glance without
              scrolling to the file viewer. Selection sync is untouched: tap
@@ -702,6 +711,10 @@ export default {
 .okf-gv__btn:hover {
   border-color: var(--brand);
   color: var(--brand);
+}
+.okf-gv__stage-wrap {
+  position: relative; /* anchor for the hover card overlay */
+  min-height: 0;
 }
 .okf-gv__stage {
   position: relative;

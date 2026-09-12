@@ -1702,7 +1702,8 @@ export default {
         piiTipBare: 'Markierte Entitäten — öffnen, überprüfen, dann speichern, um neu zu scannen.',
         bulkAccept: 'Alle akzeptieren',
         bulkRedact: 'Alle schwärzen',
-        bulkRemove: 'Alle entfernen'
+        bulkRemove: 'Alle entfernen',
+        loadProgress: 'Loading files {done}/{total}'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1769,6 +1770,10 @@ export default {
         scope: "Betroffene Konzepte: {'{'}n{'}'}.",
         confirm: 'Anwenden',
         failed: 'Die Sammel-PII-Aktion ist fehlgeschlagen — bitte erneut versuchen.'
+      },
+      actions: {
+        bulkPii: 'Applying the bulk PII action',
+        deleting: 'Deleting'
       }
     },
     dashboard: {

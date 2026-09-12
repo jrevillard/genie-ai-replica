@@ -1698,7 +1698,8 @@ export default {
         piiTipBare: 'Отмеченные объекты — откройте, проверьте, затем сохраните для повторного сканирования.',
         bulkAccept: 'Принять все',
         bulkRedact: 'Скрыть все',
-        bulkRemove: 'Удалить всё'
+        bulkRemove: 'Удалить всё',
+        loadProgress: 'Loading files {done}/{total}'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1764,6 +1765,10 @@ export default {
         scope: "Затронуто концептов: {'{'}n{'}'}.",
         confirm: 'Применить',
         failed: 'Не удалось выполнить массовое действие PII — попробуйте снова.'
+      },
+      actions: {
+        bulkPii: 'Applying the bulk PII action',
+        deleting: 'Deleting'
       }
     },
     dashboard: {

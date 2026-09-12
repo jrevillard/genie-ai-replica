@@ -46,7 +46,10 @@ const initialState = () => ({
     repoId: null,
     conceptsByRepo: {},
     selectedConceptId: null,
-    loading: false
+    loading: false,
+    // NON-BLOCKING LOAD (David, 2026-09-12): { repoId, done, total } while a
+    // chunked concept fetch is in flight (large repos), null otherwise.
+    loadProgress: null
   },
   ui: {
     expertMode: readExpertModeFromStorage()
@@ -104,6 +107,9 @@ function writeExpertModeToStorage(value) {
   }
 }
 
+/** NON-BLOCKING LOAD generation counter (see fetchConcepts). */
+let fetchGeneration = 0;
+
 const getters = {
   activeDraft: (state) => (repoId) => state.drafts[repoId] || null,
   repoById: (state) => (repoId) => state.reposById[repoId] || null,
@@ -118,6 +124,7 @@ const getters = {
   conceptById: (state) => (repoId, conceptId) =>
     (state.editor.conceptsByRepo[repoId] || []).find((c) => c.concept_id === conceptId) || null,
   selectedConceptId: (state) => state.editor.selectedConceptId,
+  editorLoadProgress: (state) => state.editor.loadProgress,
   versionsByRepo: (state) => (repoId) => state.versionsByRepo[repoId] || [],
   editorLoading: (state) => state.editor.loading,
   isExpert: (state) => state.ui.expertMode,
@@ -218,6 +225,9 @@ const mutations = {
   setConceptsLoading(state, loading) {
     state.editor = { ...state.editor, loading: !!loading };
   },
+  setConceptsLoadProgress(state, progress) {
+    state.editor = { ...state.editor, loadProgress: progress || null };
+  },
   setExpertMode(state, value) {
     state.ui = { ...state.ui, expertMode: !!value };
     writeExpertModeToStorage(!!value);
@@ -228,6 +238,9 @@ const mutations = {
 };
 
 const actions = {
+  // NON-BLOCKING LOAD: bumped on every fetchConcepts call — a superseded
+  // loop (repo switched, newer refetch) stops committing stale pages.
+  // Module-scope on purpose: single store instance, not serialized state.
   /**
    * Load (or return-cached) draft for a repo. NO-OP if a cached draft exists —
    * avoids server round-trip when resuming in-process.
@@ -543,20 +556,55 @@ const actions = {
     return dispatch('fetchConcepts', repoId);
   },
 
-  /** Fetch (or refetch) the concept list for the editor's left rail. */
-  async fetchConcepts({ commit }, repoId) {
+  /**
+   * Fetch (or refetch) the concept list for the editor's left rail.
+   *
+   * NON-BLOCKING LOAD (David, 2026-09-12): a large repository arrived as ONE
+   * payload and rendered in one synchronous patch — the browser showed the
+   * "page unresponsive" wait message. The fetch now pages the server
+   * (?limit=&offset=) and commits each page as it lands: rows appear
+   * progressively, every Vue patch stays bounded, and a REAL progress bar
+   * (done/total from the server) renders while the load runs. A legacy
+   * array response (or any single-page repo) commits once with no progress
+   * state — small repos never see a flash of bar.
+   */
+  async fetchConcepts({ commit, state }, repoId) {
     if (!repoId) return { ok: false, code: 'VALIDATION_ERROR' };
+    const PAGE = 200;
+    const myGen = ++fetchGeneration;
     commit('setConceptsLoading', true);
+    commit('setConceptsLoadProgress', null);
+    const stale = () => myGen !== fetchGeneration || (state.editor.repoId && state.editor.repoId !== repoId);
     try {
-      const concepts = await conceptService.listForRepo(repoId);
-      commit('setConcepts', { repoId, concepts: Array.isArray(concepts) ? concepts : [] });
-      return { ok: true, concepts };
+      const first = await conceptService.listForRepo(repoId, { limit: PAGE, offset: 0 });
+      // Legacy contract: a plain array (mocked tests / older servers) — one commit.
+      if (Array.isArray(first)) {
+        commit('setConcepts', { repoId, concepts: first });
+        return { ok: true, concepts: first };
+      }
+      const total = (first && first.total) || 0;
+      let acc = (first && Array.isArray(first.concepts) ? first.concepts : []).slice();
+      commit('setConcepts', { repoId, concepts: acc });
+      const multiPage = total > PAGE;
+      if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
+      while (acc.length < total) {
+        // Pages are SEQUENTIAL by design — each offset needs the previous count.
+        const page = await conceptService.listForRepo(repoId, { limit: PAGE, offset: acc.length });
+        if (stale()) return { ok: true, concepts: acc, stale: true };
+        const rows = page && Array.isArray(page.concepts) ? page.concepts : Array.isArray(page) ? page : [];
+        acc = acc.concat(rows);
+        commit('setConcepts', { repoId, concepts: acc });
+        if (multiPage) commit('setConceptsLoadProgress', { repoId, done: acc.length, total });
+      }
+      commit('setConceptsLoadProgress', null);
+      return { ok: true, concepts: acc };
     } catch (err) {
       commit('setError', err.message || 'fetchConcepts failed');
       commit('setConcepts', { repoId, concepts: [] });
+      commit('setConceptsLoadProgress', null);
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     } finally {
-      commit('setConceptsLoading', false);
+      if (!stale()) commit('setConceptsLoading', false);
     }
   },
 

@@ -1749,11 +1749,16 @@ export default {
           'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
         indexBadge: 'index',
         label: 'Concepts',
+        loadProgress: 'Loading files {done}/{total}',
         loading: 'Loading…',
         piiBadge: 'PII',
         piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
         piiTipBare: 'Flagged entities — open, review, then save to re-scan.',
         resplit: 'Re-split'
+      },
+      actions: {
+        bulkPii: 'Applying the bulk PII action',
+        deleting: 'Deleting'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',

@@ -1689,7 +1689,8 @@ export default {
         piiTipBare: 'Entitas yang ditandai — buka, tinjau, lalu simpan untuk memindai ulang.',
         bulkAccept: 'Terima semua',
         bulkRedact: 'Redak semua',
-        bulkRemove: 'Hapus semua'
+        bulkRemove: 'Hapus semua',
+        loadProgress: 'Loading files {done}/{total}'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1756,6 +1757,10 @@ export default {
         scope: "Konsep terdampak: {'{'}n{'}'}.",
         confirm: 'Terapkan',
         failed: 'Tindakan PII massal gagal — coba lagi.'
+      },
+      actions: {
+        bulkPii: 'Applying the bulk PII action',
+        deleting: 'Deleting'
       }
     },
     dashboard: {

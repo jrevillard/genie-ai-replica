@@ -1624,7 +1624,8 @@ export default {
         piiTipBare: '已标记实体 — 打开、检查，然后保存以重新扫描。',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all'
+        bulkRemove: 'Remove all',
+        loadProgress: 'Loading files {done}/{total}'
       },
       delete: {
         body: 'This permanently removes the file, its indexed chunks and its graph links.',
@@ -1690,6 +1691,10 @@ export default {
         scope: "Concepts affected: {'{'}n{'}'}.",
         confirm: 'Apply',
         failed: 'The bulk PII action failed — try again.'
+      },
+      actions: {
+        bulkPii: 'Applying the bulk PII action',
+        deleting: 'Deleting'
       }
     },
     dashboard: {

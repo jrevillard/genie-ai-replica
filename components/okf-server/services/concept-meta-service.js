@@ -392,7 +392,10 @@ async function stampRepoGraphName(repo_id, graph_name) {
 async function listConceptsMeta(repo_id, opts = {}) {
   if (!repo_id) return [];
   const db = await getDb();
-  const limit = Math.max(1, Math.min(500, parseInt(opts.limit, 10) || 0));
+  // limit: ONLY clamp when the caller actually passed one — a bare call must
+  // stay on the legacy full-array branch (limit 0), never paginate to 1 row.
+  const hasLimit = opts.limit !== undefined && opts.limit !== null && opts.limit !== '';
+  const limit = hasLimit ? Math.max(1, Math.min(500, parseInt(opts.limit, 10) || 1)) : 0;
   const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
   const KEEP = `RETURN KEEP(m, ["repo_id", "concept_id", "path", "title", "type", "labels", "tags", "summary",
          "is_index", "index_status", "content_hash", "trust_tier", "sources", "chunk_count",
@@ -400,22 +403,24 @@ async function listConceptsMeta(repo_id, opts = {}) {
          "conformance_issues", "created_at", "updated_at"])`;
   const SORT = `SORT (m.index_status == 'failed' ? 0 : (m.index_status == 'parsed' ? 1 : 2)), m.title`;
   if (!limit) {
-    return await db
-      .query(`FOR m IN okf_concepts_meta FILTER m.repo_id == @rid ${SORT} ${KEEP}`, {
+    return await (
+      await db.query(`FOR m IN okf_concepts_meta FILTER m.repo_id == @rid ${SORT} ${KEEP}`, {
         rid: repo_id
       })
-      .all();
+    ).all();
   }
-  const totalRows = await db
-    .query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid COLLECT WITH COUNT INTO n RETURN n', { rid: repo_id })
-    .all();
-  const concepts = await db
-    .query(`FOR m IN okf_concepts_meta FILTER m.repo_id == @rid ${SORT} LIMIT @offset, @limit ${KEEP}`, {
+  const totalRows = await (
+    await db.query('FOR m IN okf_concepts_meta FILTER m.repo_id == @rid COLLECT WITH COUNT INTO n RETURN n', {
+      rid: repo_id
+    })
+  ).all();
+  const concepts = await (
+    await db.query(`FOR m IN okf_concepts_meta FILTER m.repo_id == @rid ${SORT} LIMIT @offset, @limit ${KEEP}`, {
       rid: repo_id,
       offset,
       limit
     })
-    .all();
+  ).all();
   return { total: totalRows[0] || 0, offset, limit, concepts };
 }
 

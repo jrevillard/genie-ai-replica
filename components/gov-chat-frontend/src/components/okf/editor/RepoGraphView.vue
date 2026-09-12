@@ -49,6 +49,34 @@
         <p v-show="layouting" class="okf-gv__layouting">
           {{ translate('okf.graph.layouting', 'Layouting…') }}
         </p>
+        <!-- HOVER SUMMARY (David, 2026-09-12): floating summary card for the
+             SELECTED node — the concept's OKF data at a glance without
+             scrolling to the file viewer. Selection sync is untouched: tap
+             still emits 'select' (opens the file) and focuses the
+             neighborhood; the card is a read-only overlay (pointer-events:
+             none) so it never intercepts graph interaction. -->
+        <Transition name="okf-gv-card">
+          <div
+            v-if="card.visible"
+            ref="card"
+            class="okf-gv__card"
+            :class="['okf-gv__card--' + card.kind, { 'okf-gv__card--below': card.below }]"
+            role="tooltip"
+            :style="{ left: card.x + 'px', top: card.y + 'px' }"
+          >
+            <p class="okf-gv__card-title"><span class="okf-gv__card-dot" aria-hidden="true"></span>{{ card.title }}</p>
+            <p v-if="card.chips.length" class="okf-gv__card-chips">
+              <span v-for="chip in card.chips" :key="chip" class="okf-gv__card-chip">{{ chip }}</span>
+            </p>
+            <p v-if="card.summary" class="okf-gv__card-summary">{{ card.summary }}</p>
+            <p v-if="card.meta.length" class="okf-gv__card-meta">
+              <template v-for="(m, i) in card.meta" :key="m">
+                <span v-if="i" class="okf-gv__card-sep" aria-hidden="true">·</span>
+                <span>{{ m }}</span>
+              </template>
+            </p>
+          </div>
+        </Transition>
       </div>
       <p class="okf-gv__legend">
         {{ translate('okf.graph.legend', 'index') }} = hub · {{ nodes.length - 1 }}
@@ -85,7 +113,24 @@ export default {
       size: 640,
       showHub: false, // index hub + TOC edges hidden by default (structure, not knowledge)
       layouting: false, // true while the layout engine settles (large repos)
-      links: {} // concept_id -> [{ to_concept_id, label }]
+      links: {}, // concept_id -> [{ to_concept_id, label }]
+      // The node the graph itself has focused (tap OR the selectedId prop).
+      // The hover card gates on this rather than the prop alone: the parent
+      // feeds selectedId back asynchronously, and a hover in that window must
+      // still resolve to the node the user just chose.
+      activeId: null,
+      // Hover summary card state (selected node only — see template).
+      card: {
+        visible: false,
+        below: false, // flip placement when the node sits near the stage top
+        x: 0,
+        y: 0,
+        kind: 'topic', // index | topic | failed — drives the accent color
+        title: '',
+        chips: [],
+        summary: '',
+        meta: []
+      }
     };
   },
   computed: {
@@ -183,8 +228,10 @@ export default {
     modelKey() {
       this.$nextTick(() => this.rebuild());
     },
-    selectedId() {
+    selectedId(id) {
+      this.activeId = id || null;
       this.applyFocus();
+      this.hideCard(); // selection moved — the old node's card must not linger
     }
   },
   mounted() {
@@ -206,6 +253,7 @@ export default {
       this.cy.destroy();
       this.cy = null;
     }
+    this.card.visible = false;
   },
   methods: {
     shorten(s, max) {
@@ -490,14 +538,33 @@ export default {
       });
       this.cy.on('tap', 'node', (evt) => {
         const id = evt.target.id();
+        this.activeId = id; // the hover card arms on THIS node (prop follows async)
+        this.hideCard(); // a stale card for the previous node must not linger
         this.$emit('select', id);
         this.focus(id);
       });
       this.cy.on('tap', (evt) => {
         if (evt.target === this.cy) this.clearFocus();
       });
+      // HOVER SUMMARY (David, 2026-09-12): hovering the SELECTED node floats
+      // the summary card — a quick read of the concept's OKF data without
+      // scrolling to the file viewer. Selection is unchanged (tap above still
+      // emits 'select' → file-viewer sync + neighborhood focus); the card is
+      // a selected-node affordance, so non-selected nodes show nothing.
+      this.cy.on('mouseover', 'node', (evt) => {
+        if (evt.target.id() !== this.activeId) return;
+        this.showCard(evt.target);
+      });
+      this.cy.on('mouseout', 'node', () => this.hideCard());
+      // Pan/zoom/drag moves the node out from under the cursor — hide rather
+      // than chase it; the card re-appears on the next hover.
+      this.cy.on('viewport', () => this.hideCard());
+      this.cy.on('grab', 'node', () => this.hideCard());
       this.cy.fit(undefined, 40);
       this.applyFocus();
+      // Mirror the prop into the hover gate (a preset selectedId never fires
+      // the watcher — only changes do).
+      if (this.selectedId) this.activeId = this.selectedId;
       // The stage may have been created by THIS update (concepts arriving
       // after mount) — attach the resize observer here too, idempotently.
       this.attachStageObserver();
@@ -543,6 +610,61 @@ export default {
     },
     zoomBy(f) {
       if (this.cy) this.cy.zoom({ level: this.cy.zoom() * f, renderedPosition: this.cy.center() });
+    },
+    // ---- hover summary card -------------------------------------------------
+    hideCard() {
+      if (this.card.visible) this.card.visible = false;
+    },
+    // Build the summary from the concept meta the graph ALREADY holds (the
+    // listing projection carries title/type/labels/summary/trust_tier/
+    // chunk_count/index_status/pii_state — no extra API call) plus the link
+    // map (out- + in-degree). Placed at the node's rendered position, above
+    // by default, flipped below near the stage top, clamped to the stage
+    // bounds so the card never overflows its rounded frame.
+    showCard(node) {
+      const c = this.concepts.find((x) => x && x.concept_id === node.id()) || {};
+      const kind = c.is_index ? 'index' : c.index_status === 'failed' ? 'failed' : 'topic';
+      const chips = [];
+      if (c.type) chips.push(c.type);
+      if (c.labels && c.labels[0]) chips.push(c.labels[0]);
+      if (c.is_index) chips.push(this.translate('okf.graph.card.hub', 'Index hub'));
+      else if (c.trust_tier) chips.push(c.trust_tier);
+      const out = (this.links[c.concept_id] || []).length;
+      let inc = 0;
+      for (const k of Object.keys(this.links)) {
+        if (k !== c.concept_id && this.links[k].some((l) => l.to_concept_id === c.concept_id)) inc++;
+      }
+      const meta = [this.translate('okf.graph.card.links', '{n} links').replace('{n}', String(out + inc))];
+      if (c.chunk_count != null) {
+        meta.push(this.translate('okf.graph.card.chunks', '{n} chunks').replace('{n}', String(c.chunk_count)));
+      }
+      if (c.index_status === 'failed') {
+        meta.push(this.translate('okf.graph.card.failed', 'indexing failed'));
+      } else if (c.index_status !== 'indexed' && !c.is_index) {
+        meta.push(this.translate('okf.graph.card.pending', 'not indexed yet'));
+      }
+      if (c.pii_state === 'hit') {
+        meta.push(this.translate('okf.graph.card.flagged', 'flagged entities'));
+      }
+      this.card.title = c.title || node.id();
+      this.card.summary = c.summary || '';
+      this.card.chips = chips;
+      this.card.meta = meta;
+      this.card.kind = kind;
+      this.card.visible = true;
+      const p = node.renderedPosition();
+      const half = (node.renderedOuterWidth() || 24) / 2;
+      const stageW = (this.$refs.stage && this.$refs.stage.clientWidth) || this.size;
+      // Measure AFTER the card renders, then clamp the anchor point. The CSS
+      // transform does the actual above/below placement off (x, y).
+      this.$nextTick(() => {
+        const el = this.$refs.card;
+        const w = (el && el.offsetWidth) || 264;
+        const h = (el && el.offsetHeight) || 132;
+        this.card.below = p.y - half - 14 - h < 4;
+        this.card.x = Math.min(Math.max(p.x, w / 2 + 8), Math.max(stageW - w / 2 - 8, 8));
+        this.card.y = this.card.below ? p.y + half + 14 : p.y - half - 14;
+      });
     }
   }
 };
@@ -604,5 +726,126 @@ export default {
   color: var(--muted);
   font-size: var(--text-xs);
   margin: 0;
+}
+/* ---- hover summary card (selected node) -------------------------------- */
+.okf-gv__card {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none; /* pure overlay — the canvas keeps every interaction */
+  width: 272px;
+  max-width: calc(100% - 16px);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-light);
+  border-top: 2px solid var(--info);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(9, 14, 20, 0.16));
+  transform: translate(-50%, -100%);
+  color: var(--fg);
+}
+.okf-gv__card--below {
+  transform: translate(-50%, 0);
+}
+.okf-gv__card--index {
+  border-top-color: var(--brand);
+}
+.okf-gv__card--failed {
+  border-top-color: var(--danger);
+}
+.okf-gv__card::after {
+  /* caret: a rotated square matching border + surface */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5.5px;
+  width: 9px;
+  height: 9px;
+  background: var(--surface);
+  border-right: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  transform: translateX(-50%) rotate(45deg);
+}
+.okf-gv__card--below::after {
+  bottom: auto;
+  top: -5.5px;
+  border: none;
+  border-left: 1px solid var(--border-light);
+  border-top: 1px solid var(--border-light);
+}
+.okf-gv__card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.okf-gv__card-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info);
+}
+.okf-gv__card--index .okf-gv__card-dot {
+  background: var(--brand);
+}
+.okf-gv__card--failed .okf-gv__card-dot {
+  background: var(--danger);
+}
+.okf-gv__card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-xs);
+}
+.okf-gv__card-chip {
+  padding: 1px var(--space-sm);
+  border-radius: 999px;
+  background: var(--accent-muted, rgba(0, 0, 0, 0.06));
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.okf-gv__card-summary {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--fg);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.okf-gv__card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.okf-gv__card-sep {
+  color: var(--border);
+}
+.okf-gv-card-enter-active,
+.okf-gv-card-leave-active {
+  transition: opacity 140ms ease;
+}
+.okf-gv-card-enter-from,
+.okf-gv-card-leave-to {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .okf-gv-card-enter-active,
+  .okf-gv-card-leave-active {
+    transition: none;
+  }
 }
 </style>

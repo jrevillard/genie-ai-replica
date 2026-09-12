@@ -1631,7 +1631,15 @@ export default {
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out'
+      zoomOut: 'Zoom out',
+      card: {
+        links: "{'{'}n{'}'} tautan",
+        chunks: "{'{'}n{'}'} potongan",
+        failed: 'pengindeksan gagal',
+        flagged: 'entitas yang ditandai',
+        hub: 'Hub indeks',
+        pending: 'belum terindeks'
+      }
     },
     editor: {
       addConcept: {

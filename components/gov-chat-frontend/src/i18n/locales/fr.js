@@ -1649,7 +1649,15 @@ export default {
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out'
+      zoomOut: 'Zoom out',
+      card: {
+        links: "{'{'}n{'}'} liens",
+        chunks: "{'{'}n{'}'} fragments",
+        failed: "échec de l'indexation",
+        flagged: 'entités signalées',
+        hub: 'Nœud index',
+        pending: 'pas encore indexé'
+      }
     },
     editor: {
       addConcept: {

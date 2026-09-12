@@ -11,7 +11,13 @@
     <header class="okf-studio-tab__header">
       <h2 class="okf-studio-tab__title">{{ translate('okf.studio.title', 'OKF Studio') }}</h2>
       <div class="okf-studio-tab__modes">
-        <DsModeSwitch :model-value="expertMode" @update:model-value="onExpertChange" @help="helpOpen = true" />
+        <DsModeSwitch
+          :model-value="expertMode"
+          :basic-label="translate('okf.studio.mode.basic', 'Basic')"
+          :expert-label="translate('okf.studio.mode.expert', 'Expert')"
+          @update:model-value="onExpertChange"
+          @help="helpOpen = true"
+        />
         <DsButton variant="ghost" small @click="helpOpen = true">{{ translate('okf.studio.help', 'Help') }}</DsButton>
       </div>
     </header>

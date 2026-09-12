@@ -25,7 +25,9 @@
         class="okf-dashboard__filter-domain"
         :aria-label="translate('okf.dashboard.filter.domain', 'Filter by subject area')"
       >
-        <option v-for="opt in domainFilterOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        <option v-for="opt in domainFilterOptions" :key="opt.value" :value="opt.value">
+          {{ opt.value === '' ? translate('okf.dashboard.filter.allDomains', opt.label) : opt.label }}
+        </option>
       </DsSelect>
       <DsInput v-model="filters.search" :placeholder="translate('okf.dashboard.search', 'Search...')" />
       <DsButton variant="ghost" small @click="refreshAll">{{ translate('common.refresh', 'Refresh') }}</DsButton>
@@ -34,10 +36,12 @@
     <div class="okf-dashboard__lanes">
       <section v-for="lane in lanes" :key="lane.key" class="okf-dashboard__lane">
         <header class="okf-dashboard__lane-header">
-          <h4>{{ lane.label }}</h4>
+          <h4>{{ translate('okf.dashboard.lane.' + lane.key, lane.label) }}</h4>
           <span class="okf-dashboard__lane-count">{{ reposInLane(lane.key).length }}</span>
         </header>
-        <p v-if="reposInLane(lane.key).length === 0" class="okf-dashboard__empty">{{ lane.emptyText }}</p>
+        <p v-if="reposInLane(lane.key).length === 0" class="okf-dashboard__empty">
+          {{ translate('okf.dashboard.laneEmpty.' + lane.key, lane.emptyText) }}
+        </p>
         <div v-for="r in reposInLane(lane.key)" :key="r.repo_id" class="okf-dashboard__card-wrap">
           <button
             type="button"
@@ -454,7 +458,7 @@ export default {
       if (s === 'review' || s === 'approve') return this.translate('okf.dashboard.stage.inReview', 'In review');
       const step = r.studio_step;
       return step != null
-        ? this.translate('okf.dashboard.stage.stepOf', 'Step ' + (step + 1) + ' of 10')
+        ? this.translate('okf.dashboard.stage.stepOf', 'Step {n} of 10').replace('{n}', String(step + 1))
         : this.translate('okf.dashboard.stage.draft', 'Draft');
     },
     contextualAction(r) {

@@ -123,12 +123,11 @@ export default {
       showHub: false, // index hub + TOC edges hidden by default (structure, not knowledge)
       layouting: false, // true while the layout engine settles (large repos)
       links: {}, // concept_id -> [{ to_concept_id, label }]
-      // The node the graph itself has focused (tap OR the selectedId prop).
-      // The hover card gates on this rather than the prop alone: the parent
-      // feeds selectedId back asynchronously, and a hover in that window must
-      // still resolve to the node the user just chose.
-      activeId: null,
       // Hover summary card state (selected node only — see template).
+      // The hover GATE is `this._neighbourIds` (non-reactive, set by
+      // focus()/cleared by clearFocus()): the highlighted neighborhood —
+      // selected node + immediately adjacent nodes — is exactly the set of
+      // hoverable nodes. See the mouseover binding in rebuild().
       card: {
         visible: false,
         below: false, // flip placement when the node sits near the stage top
@@ -237,9 +236,8 @@ export default {
     modelKey() {
       this.$nextTick(() => this.rebuild());
     },
-    selectedId(id) {
-      this.activeId = id || null;
-      this.applyFocus();
+    selectedId() {
+      this.applyFocus(); // re-arms the highlight + the hover neighborhood
       this.hideCard(); // selection moved — the old node's card must not linger
     }
   },
@@ -547,21 +545,22 @@ export default {
       });
       this.cy.on('tap', 'node', (evt) => {
         const id = evt.target.id();
-        this.activeId = id; // the hover card arms on THIS node (prop follows async)
         this.hideCard(); // a stale card for the previous node must not linger
         this.$emit('select', id);
-        this.focus(id);
+        this.focus(id); // re-arms the highlight + the hover neighborhood
       });
       this.cy.on('tap', (evt) => {
         if (evt.target === this.cy) this.clearFocus();
       });
-      // HOVER SUMMARY (David, 2026-09-12): hovering the SELECTED node floats
-      // the summary card — a quick read of the concept's OKF data without
-      // scrolling to the file viewer. Selection is unchanged (tap above still
-      // emits 'select' → file-viewer sync + neighborhood focus); the card is
-      // a selected-node affordance, so non-selected nodes show nothing.
+      // HOVER SUMMARY (David, 2026-09-12): hovering the SELECTED node — or
+      // any node in its highlighted neighborhood (immediately adjacent nodes)
+      // — floats the summary card with that concept's OKF data, so the user
+      // can inspect, verify and validate the surrounding data visually and
+      // walk the graph node by node (tap re-arms the neighborhood; flipping
+      // to Files shows whatever was last clicked). Un-highlighted nodes show
+      // nothing: the card belongs to the focused neighborhood.
       this.cy.on('mouseover', 'node', (evt) => {
-        if (evt.target.id() !== this.activeId) return;
+        if (!this._neighbourIds || !this._neighbourIds.has(evt.target.id())) return;
         this.showCard(evt.target);
       });
       this.cy.on('mouseout', 'node', () => this.hideCard());
@@ -570,10 +569,7 @@ export default {
       this.cy.on('viewport', () => this.hideCard());
       this.cy.on('grab', 'node', () => this.hideCard());
       this.cy.fit(undefined, 40);
-      this.applyFocus();
-      // Mirror the prop into the hover gate (a preset selectedId never fires
-      // the watcher — only changes do).
-      if (this.selectedId) this.activeId = this.selectedId;
+      this.applyFocus(); // arms the hover neighborhood from the preset prop
       // The stage may have been created by THIS update (concepts arriving
       // after mount) — attach the resize observer here too, idempotently.
       this.attachStageObserver();
@@ -593,6 +589,11 @@ export default {
     focus(id) {
       if (!this.cy) return;
       const keep = this.cy.getElementById(id).closedNeighborhood();
+      // HOVER SET (David, 2026-09-12): the highlighted neighborhood — the
+      // selected node plus its immediately adjacent nodes — is exactly the
+      // set the hover summary card arms for, so the user can inspect/
+      // validate adjacent data without re-selecting each node.
+      this._neighbourIds = new Set(keep.nodes().map((n) => n.id()));
       this.cy.elements().addClass('faded');
       keep.removeClass('faded');
       this.cy.getElementById(id).addClass('hot');
@@ -603,6 +604,7 @@ export default {
     },
     clearFocus() {
       if (!this.cy) return;
+      this._neighbourIds = null; // nothing highlighted → nothing hoverable
       this.cy.elements().removeClass('faded');
       this.cy.nodes().removeClass('hot');
       this.cy.edges().removeClass('hot');

@@ -53,7 +53,14 @@
       size="sm"
     />
 
-    <p v-if="loading" class="okf-cl__empty">
+    <!-- NON-BLOCKING LOAD (David, 2026-09-12): a large repository loads in
+         pages — this bar reports REAL server counts while rows stream in. -->
+    <div v-if="loadProgress" class="okf-cl__load" role="status">
+      <DsProgress :value="loadProgress.done" :max="loadProgress.total || loadProgress.done" size="xs" />
+      <span class="okf-cl__load-label">{{ loadLabel }}</span>
+    </div>
+
+    <p v-if="loading && !loadProgress" class="okf-cl__empty">
       <DsSpinner size="sm" /> {{ translate('okf.editor.concepts.loading', 'Loading…') }}
     </p>
     <p v-else-if="filtered.length === 0" class="okf-cl__empty">
@@ -200,18 +207,21 @@ import translateMixin from '../../../mixins/translateMixin';
 import DsButton from '../../ds/Button.vue';
 import DsInput from '../../ds/Input.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsProgress from '../../ds/Progress.vue';
 import DsSelect from '../../ds/Select.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 
 export default {
   name: 'OkfConceptList',
-  components: { DsButton, DsInput, DsPill, DsSelect, DsSpinner },
+  components: { DsButton, DsInput, DsPill, DsProgress, DsSelect, DsSpinner },
   mixins: [translateMixin],
   props: {
     concepts: { type: Array, default: () => [] },
     selectedId: { type: String, default: null },
     loading: { type: Boolean, default: false },
     labelOptions: { type: Array, default: () => [] },
+    // NON-BLOCKING LOAD: { done, total } while a chunked fetch runs, else null.
+    loadProgress: { type: Object, default: null },
     // READ ONLY (serving repo): add/delete/re-split/label writes are hidden.
     readOnly: { type: Boolean, default: false }
   },
@@ -228,6 +238,12 @@ export default {
     // the header chip. Guarded — rows without pii fields contribute nothing.
     flaggedCount() {
       return this.concepts.filter((c) => c && c.pii_state === 'hit').length;
+    },
+    loadLabel() {
+      const p = this.loadProgress || { done: 0, total: 0 };
+      return this.translate('okf.editor.concepts.loadProgress', 'Loading files {done}/{total}')
+        .replace('{done}', String(p.done))
+        .replace('{total}', String(p.total));
     },
     flaggedTip() {
       return this.translate(
@@ -356,6 +372,19 @@ export default {
 }
 .okf-cl__filter {
   width: 100%;
+}
+/* NON-BLOCKING LOAD: slim determinate bar + live counts. */
+.okf-cl__load {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.okf-cl__load-label {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .okf-cl__empty {
   color: var(--muted);

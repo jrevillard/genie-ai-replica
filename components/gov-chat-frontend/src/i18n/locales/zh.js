@@ -1024,7 +1024,7 @@ export default {
     },
     notifications: {
       saveSuccess: '资料保存成功',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter 已保存',
       saveFailed: '保存资料失败',
       loadSuccess: '资料加载成功',
       loadFailed: '加载资料失败',
@@ -1281,12 +1281,12 @@ export default {
   },
   chatbot: {
     streamingError: '回复已中断。请重试。',
-    aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
-    welcomeMessage: 'Welcome! How can I assist you today?',
-    configMismatchWarning: '配置不匹配：{warnings}。请检查快速帮助和知识层次结构的配置。',
-    categoryNotFound: '在知识层次结构中未找到类别"{label}"',
-    serviceLabelMismatch: '服务"{label}"使用的UI标签可能与知识层次结构不匹配',
-    noFilterWarning: '没有活动的上下文筛选器 — 查询将不被筛选。',
+    aiGeneratedNoDocs: 'AI 生成 — 非基于知识库文档',
+    welcomeMessage: '欢迎！今天有什么我可以协助您的吗？',
+    configMismatchWarning: '配置不匹配：{warnings}。请检查“快速帮助”与知识层级配置。',
+    categoryNotFound: '在知识层级中未找到分类“{label}”',
+    serviceLabelMismatch: '服务“{label}”所使用的 UI 标签可能与知识层级不匹配',
+    noFilterWarning: '未激活上下文过滤器 — 查询将不经过滤直接执行。',
     placeholder: '在此输入您的查询...',
     sendButton: '发送',
     fileReceived: '文件接收成功。',
@@ -1331,23 +1331,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位热心助人的肯尼亚民事登记专家。说明申领国民身份证（Maisha Namba）或补办遗失身份证的步骤。重点：提供一份清晰的必备文件清单（例如：出生证明、父母身份证复印件），并建议用户前往就近的 Huduma Centre 或 Registrar of Persons 办事处办理。规则：始终将本应用称为“Genie AI”。',
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位 KRA（肯尼亚税务局）指引顾问。解释报税、申请 KRA PIN 码或在 iTax 门户重置密码的具体步骤。重点：提醒用户 6 月 30 日为年度个税申报截止日期，并指引其在无应税收入时如何按规定完成零申报（Nil returns）。规则：始终将本应用称为“Genie AI”。',
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位精通 eCitizen 服务的商业顾问。引导用户在肯尼亚办理企业字号核准与公司注册登记。重点：说明当前核名与企业登记的官方规费，并引导用户前往 eCitizen 官方门户提交办结申请。规则：始终将本应用称为“Genie AI”。',
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位医疗卫生服务引导员。提供有关从 NHIF 向 SHIF（社会健康保险基金）过渡的信息以及登记流程。重点：分享用于注册的官方 USSD 代码（如 *263#）或官方网站链接，并阐述全民公共医疗保障的各项权益。规则：始终将本应用称为“Genie AI”。',
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位教育咨询师。讨论 CBC 课程体系、NEMIS 注册或通过 KUCCPS 进行的高校录取派位事宜。重点：说明家长在全国考试成绩放榜时，如何通过短信（SMS）或 KNEC 门户网站进行查询。规则：始终将本应用称为“Genie AI”。',
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位 NTSA（国家运输安全局）业务指引顾问。解释驾驶证期满换发、机动车年检或 TIMS 账户管理的办理流程。重点：指导用户如何登录 eCitizen NTSA 门户在线申请电子驾照（Smart DL）或预约车辆检验。规则：始终将本应用称为“Genie AI”。',
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位住房保障计划顾问。解释经济适用房计划（Boma Yangu）的申请流程及自愿缴费机制。重点：引导用户访问 Boma Yangu 门户网站以查阅房产项目，并说明房源配租配售的资格准入标准。规则：始终将本应用称为“Genie AI”。',
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      '请扮演一位公共服务职业指导顾问。指导用户如何建立个人档案，并通过公共服务委员会（PSC）门户网站申请空缺职位。重点：提醒用户备齐学历与资质证明，并定期查看 PSC 官网或当地主流日报上的 MyGov 公告。规则：始终将本应用称为“Genie AI”。',
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      '请扮演一位亲切随和的本地向导伙伴。言语礼貌、乐于助人，且通晓肯尼亚本土文化及市井日常生活。重点：提醒用户，虽然您可以畅聊任何话题，但您的核心专长在于协助他们轻松办理各项肯尼亚政务服务，例如**身份证**、**税务**以及**企业工商登记**。规则：始终将本应用称为“Genie AI”。'
   },
   common: {
     cancel: '取消',
@@ -1414,14 +1414,12 @@ export default {
     tabs: {
       details: '详情',
       ingestionLog: '提取日志',
-      detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+      detailsHint: '该文件的元数据：名称、作者以及 AI 用于路由问题的知识层级标签。执行 ingest 至少需要一个标签。',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
-      crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        '该文件网站抓取状态的实时视图：速率、队列、错误与进度。抓取成功后，下方的页脚会将其转换为 OKF 知识库。',
+      crawlLogHint: '网站抓取的分页日志：哪些 URL 已成功抓取、重定向或失败。在抓取运行时实时写入。',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        '为 AI 回答准备该文件的分阶段进度：分块（chunking）、标注、向量化（embedding）与索引编制。此处的错误会精确指示 ingest 停止的位置。'
     },
     log: {
       killActions: '终止操作:',
@@ -1500,31 +1498,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: '加载版本失败',
+      none: '尚未铸造任何版本 — 执行 publish 将创建 v1。',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: '创建新版本',
+      published: "版本 v{'{'}v{'}'} 已发布 — 资产包 {'{'}f{'}'} 已存入文档库。",
+      serving: '已完成 ingest（serving）',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Studio 仪表盘',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: '源文件仍在处理中',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: '删除知识库'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: '确认标记的实体并发布',
+        note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}\"存储在文档库中，取代以往的任何 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1542,59 +1540,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "已标注：{'{'}n{'}'}",
+      fallbacks: "LLM 回退：{'{'}n{'}'}",
+      concepts: "概念：{'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'} 条记录",
+      loadFailed: '加载活动日志失败。',
+      none: '暂无活动记录 — 知识库的操作发生时将实时显示于此处。',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: '概念图谱',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: '暂无概念 — 暂无图谱可供展示。',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: '显示或隐藏索引中枢（其目录链接仅为结构信息，非知识本身）',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "{'{'}n{'}'} 条链接",
+        chunks: "{'{'}n{'}'} 个分块",
+        failed: '索引失败',
+        flagged: '个标记实体',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: '尚未建立索引'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown（粘贴或留空）',
+        bodyPh: '# 标题\n\n在此粘贴 markdown — frontmatter 将自动为您补齐。',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: '未能创建文件。',
+        title: '添加概念文件',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: '例如：马赛马拉的野生动物',
+        updateIndex: '追加至索引的目录列表'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: '无 frontmatter — 完整补全提案',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: '计划针对所有概念实施 frontmatter 修复。正文内容绝不会被改动。',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: '无需修复 — 所有 frontmatter 均已符合规范。',
         col: {
           field: 'Field',
           after: 'After',
@@ -1603,14 +1601,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: '自动更正（仅限 frontmatter）'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: '该概念的策展途径',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: '暂无文件 — 请添加新概念或从源文件重新切分。',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1618,30 +1616,30 @@ export default {
         resplit: 'Re-split',
         flagged: '已标记',
         flaggedTip:
-          '包含已标记实体的 concept — 打开每个实体，移除或更改它，保存（将自动重新扫描）；或在发布时确认它们。',
+          '包含标记实体的概念 — 逐一打开并删除或修改该实体后保存（将自动重新扫描）；或在 publish 时予以确认。',
         piiBadge: 'PII',
-        piiTip: '已标记实体：{k}。打开、移除或更改它们，然后保存 — 将自动重新扫描。',
-        piiTipBare: '已标记实体 — 打开、检查，然后保存以重新扫描。',
+        piiTip: '标记的实体：{k}。打开、删除或修改它们并保存 — 系统将自动重新扫描。',
+        piiTipBare: '标记的实体 — 打开、核对并保存以重新扫描。',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: '正在加载文件 {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: '此操作将永久移除该文件及其已索引分块和图谱链接。',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: '知识库编辑器',
+      loadFailed: '未能加载此概念。',
+      loadingConcept: '正在加载概念…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: '概念元数据',
+        labelLabel: '标签（知识层级）',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: '未选择任何概念',
+        saveFailed: '元数据保存失败',
+        saved: '元数据已保存',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1652,62 +1650,61 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: '从列表中选择一个概念以开始编辑。',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: '此操作将删除当前所有概念及派生的图谱，随后按新的切分方式重新导入源文件。针对概念的手动修改将会丢失。',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: '重新切分失败 — 请检查源文件链接。',
+        modeA: '整个抓取内容合并为一个概念',
+        modeAHint: '巨型概念 — 全部内容收纳于单一概念中',
+        modeB: '单页对应单一概念',
+        modeBHint: '依据抓取器的 `## Source:` 标记进行切分（推荐）',
+        modeC: '使用 LLM 进行主题提取',
+        modeCHint: '用户故事 10.6 — 即将推出',
+        title: '从源文件重新切分'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: '未保存的更改',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: '保存失败 — 重试',
+      saveFailed: '保存失败 — 请重试',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: '遮盖所有标记内容',
+          remove: '移除所有标记内容',
+          accept: '接受所有标记实体'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
-          accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+          redact: '每个被标记概念的正文都将被替换为遮盖提示。此操作无法撤销。',
+          remove: '每个被标记概念的正文都将被清空。此操作无法撤销。',
+          accept: '所有被标记实体均被设为“已核对并保留” — 除非重新扫描，否则它们将不再被标记。'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "受影响的概念数：{'{'}n{'}'}。",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: '批量 PII 操作失败 — 请重试。'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: '正在应用批量 PII 处理',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: '每个知识库都会经过完整的关卡检查（PII 审查、索引编制、规范符合性）后执行 publish。按知识库分类的结果：',
+        pending: '确认对所选知识库执行 publish。',
+        publishConfirm: "发布 {'{'}n{'}'} 个",
+        title: '发布所选知识库'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "{'{'}name{'}'} 的操作",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: '正在构建 — 源文件仍在处理中',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1716,33 +1713,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。此操作无法撤销。',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: '删除知识库'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: '按主题领域过滤'
       },
-      new: '+ New repository',
+      new: '+ 新建知识库',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: '确认标记的实体并发布',
+        note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}”存储在文档库中，取代此前的 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "选择 {'{'}name{'}'} 进行批量发布",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'Ingest 失败',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "已完成 ingest v{'{'}n{'}'}",
+        published: "已 publish v{'{'}n{'}'}",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1751,36 +1748,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ 另有 {'{'}n{'}'} 项",
+        fixPath: '重新执行 ingest 以重试：retract → 创建版本 → ingest。'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: '次 LLM 回退',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: '已存储批次',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: '个概念已建立索引',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "启动于 {'{'}n{'}'} 小时前",
+        lt1: '启动于不到 1 分钟前',
+        min: "启动于 {'{'}n{'}'} 分钟前"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: '知识库保持在 Import 状态，直至文件转换完成。',
+        rag: 'RAG 索引正在构建中 — 一旦所有概念完成索引编制，该版本即进入 serving 状态。',
+        serving: '此版本正在 serving RAG 流量 — 执行 retract 即可进行修改。',
+        review: '处于 review 状态 — 经审核员核准后，管护者将执行 publish 和 ingest。',
+        retracted: '已停止服务 — 依次执行 submit → review → approve → publish → ingest 以恢复 serving。',
+        idle: '导入完成 — 执行 submit 以提交 review 并继续工作流。'
       },
-      pages: 'Pages processed',
+      pages: '个已处理页面',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Serving 图谱',
+        version: 'Serving 版本'
       },
       stage: {
         indexing: 'Indexing',
@@ -1788,12 +1785,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: '导入进度',
+        rag: 'Ingest 进度',
+        serving: 'Serving 状态',
+        review: 'Review 状态',
+        retracted: 'Retract 状态',
+        idle: '知识库状态'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1809,33 +1806,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: '请选择 .zip 资产包文件。',
+      stagedFile: "已暂存：{'{'}name{'}'}",
+      staged: '资产包已暂存 — 单击“创建知识库”开始导入。',
+      openExisting: '打开已有知识库',
+      name: '知识库名称',
+      importing: '正在导入资产包…',
+      importHint: '或将现有的 zip 资产包导入为新知识库。',
+      importDefaultName: '导入的知识库',
+      failed: '知识库创建失败',
+      duplicateInline: '同名知识库已存在。请将其打开，或另选一个名称。',
+      duplicate: '同名知识库已存在 — 请从仪表盘中打开它，或另选一个名称。',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: '创建知识库',
+      title: '新建 OKF 知识库',
+      hint: '创建一个带有 index.md 的空知识库，您可在 Studio 编辑器中对其进行编辑。',
+      domainPlaceholder: '选择主题领域…',
+      domainRequired: '请先选择主题领域 — 创建后将无法更改。',
+      classLabel: '概念分类',
+      classHeuristics: '启发式规则（默认）',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: '系统保留字段名。',
+      errKeyDuplicate: '字段名重复出现。',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: '必须为数字',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1846,53 +1843,45 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: '所有 frontmatter 字段均支持编辑。可自由增删键值。',
+      errRemovalPending: '移除字段需要服务端合并删除协议支持（即将上线）。',
+      errKeyRequired: '每个字段都必须有名称。',
+      arrayPh: '逗号分隔的数值',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter 已保存',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: '什么是 Frontmatter？',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: '暂无 frontmatter — 编辑可补齐类型、标题和标签。',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: '标签（知识层级）',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: '保存 frontmatter',
+      saveFailed: 'Frontmatter 保存失败'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        '知识库中的一个条目 — 通常为单页或单一主题。每个概念都具备供助手读取的结构化 frontmatter，以及用于生成答案的 markdown 正文。',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
-      subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
-      label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
-      bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
-      version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
-      ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        '围绕某一主题领域精心策展的一组概念集合。它最终打包为 OKF 资产包，供您 publish、管理版本并提供给助手调用。',
+      subjectArea: '该知识归属于何处？主题领域用于组织您的知识库并约束可选标签范围。创建后无法更改。',
+      selectSubjectArea: '选择主题领域…',
+      subjectAreaMissing: '此知识库的主题领域不存在于知识层级中 — 现显示全部标签。',
+      label: '来自知识层级的一个分类，用于指示助手该概念的实体性质。标签是检索答案对应正确内容的纽带。',
+      bundle: '知识库的 zip 导出文件 — 将其概念、结构与元数据封装为一个文件。资产包是知识库在系统间流转的载体。',
+      version: '知识库在执行 publish 时刻的静态冻结快照。编辑操作将在后续版本上继续 — 已发布版本永不变更。',
+      serving: '此版本处于在线生效状态：助手在应答时将调阅其内容。执行 retract 即可对其进行修改。',
+      ingestion: '为已发布的版本建立应答准备的步骤 — 文本将被分块、向量化与关联。在此之前，任何内容均不会触达助手。',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
-      resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
+      resplit: '以另一种方式重新切分源文件为概念 — 例如改为每页一个概念，而非整个站点合并为一个概念。',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
-      frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+      importFailedTitle: '导入失败 — 源文件未能完成转换。',
+      importFailedHint: '请删除此知识库并重新导入源文件。',
+      frontmatter: '位于每个文件顶部的结构化元数据 — 包含类型、标题与标签。助手依此明确每个概念的主旨内容。'
     },
     md: {
       toolbar: 'Formatting',
@@ -1902,7 +1891,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: '编号列表',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1910,106 +1899,103 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'OKF 知识库是一个结构化、版本化的主题集合，供您的对话回答作为引用出处。可将其视为针对您业务领域的轻量本体层 — 标签定义分类，主题定义实体，来源明确出处。',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'OKF 知识库是一个经策展、带版本的结构化主题集合。可将其视为您业务领域的轻量本体层 — 标签确立分类，主题确立实体，来源追溯出处。一旦发布，下游的对话回答即可按 ID 引用这些主题。',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        '启动 OKF 知识库的三种方式：从网站抓取中提取主题、从已上传文档中提炼主题，或从空白画布开始起步。克隆现有知识库将复制其主题，方便您在此基础上派生开展新工作。',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        '每份文档都将成为主题的来源。生产模块会解析它们、提取候选主题并提议层级结构。您将在下一步逐一复核每个主题 — 在您审核批准前不会确认任何内容。',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        '我们正在读取您的来源并提议主题。主题将归聚在您挑选的分类标签之下。生产模块秉持审慎原则 — 宁可推荐少量规整的主题，也不引入大量杂乱内容。',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        '标签是您本体架构的分类维度 — 该主题属于何种实体性质？请挑选 3 至 7 个能概括主轴的标签；生产模块将以此作为主题层级结构的骨架。',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        '这是工作的核心所在。每个主题都是一个细粒度、可被引用的知识单元。主题拥有标题、描述并继承您所选的标签。您的职责是确保其严谨可靠：更正含糊的标题、合并近似重复项、剔除缺乏来源佐证的内容。',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        '我们正在运行规范符合性检查：每个主题是否有标题？标签是否合规？来源归属是否完整？阻断性问题必须在发布前修复；警告项则可直接确认放行。',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
-      step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        '部分警告支持自动修复：状态值可自动对齐至有效枚举，缺失字段可由合理的默认值补齐。应用您认同的修复项，随后返回策展视图进行核对。',
+      step8: '即将发布内容的汇总概览：主题、标签、来源及所有未解决问题。一旦您完成核准，知识库即流转至已发布通道。',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        '执行 publish 会生成该知识库的 v1 版本。后续的每次变更 — 无论是新增主题、修订描述还是过期重新核验 — 均会发布为 v2、v3 等后续版本。旧版本永久保持可引用状态。',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
-      crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        '基于所选文档创建新的 OKF 知识库。文档将作为来源；在正式发布任何内容前，您将核对并命名由其生成的主题。',
+      crawlSegment: 'OKF 知识库是一个结构化、版本化的主题集合，可供对话回答作为引用出处。',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        '您尚未创建任何 OKF 知识库。OKF 知识库是一个结构化、可引用的主题集合，供您的对话回答从中提取支撑依据。',
+      labels: '标签是您本体架构的分类维度 — 旨在解答“该主题属于何种实体性质？”。',
+      hide: '隐藏',
+      whatIsThis: '这是什么？'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: '关闭',
+      cancel: '取消',
+      save: '保存',
+      clear: '清除',
+      delete: '删除'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: '帮助',
+      helpTitle: '关于 OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'OKF 知识库是一个轻量本体层 — 标签定义分类，主题定义实体，来源追溯出处。一旦发布，对话回答将按 ID 引用各主题并呈现其数据源溯源信息。',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: '仪表盘',
+        wizard: '向导'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: '克隆自 {name} · 版本 {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: '知识库',
+        untitled: '未命名知识库',
+        trust: '置信等级',
+        sources: '来源',
+        concepts: '当前概念数',
+        stale: '已陈旧'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: '进行中',
+        inReview: '审核中',
+        published: '已发布'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: '处于 review 状态',
+        stepOf: '第 {n} 步，共 10 步',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: '知识库列表',
+        new: '+ 新建知识库',
+        search: '搜索…',
+        empty: '此处暂无知识库。',
+        topics: '个主题',
+        select: '选择 {name} 进行批量发布',
+        stale: '已陈旧',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: '处于 review 状态',
+          stepOf: '第 {n} 步，共 10 步',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: '已选择 {n} 项',
+          publish: '发布所选项',
+          title: '发布所选知识库',
+          body: '一旦发布，下游的对话回答便可调用。下方列出了每个知识库的最终产出情况。',
+          results: '结果',
+          publishConfirm: '发布 {n} 项',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: '名称',
+            status: '状态',
+            topics: '主题'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: '就绪'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: '草稿暂不支持服务端保存；现已保存在本地。'
       }
     },
     wizard: {
@@ -2018,233 +2004,229 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: '返回仪表盘',
       context: {
-        untitled: 'Untitled repository',
+        untitled: '未命名知识库',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: '当前概念数'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'OKF Studio 向导',
+      back: '返回',
+      continue: '继续',
+      publish: '发布知识库'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: '知识库名称与主题领域',
+        hint: '为此 OKF 知识库指定明确的名称，并选定其所属的主题领域。',
+        nameLabel: '知识库名称',
+        namePh: '例如：荷兰交通运输许可证',
+        domainLabel: '主题领域'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: '此 OKF 知识库应从何处起步？',
+        hint: '请选择初始化此知识库的方式。稍后您仍可进行调整。',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: '文档',
+            desc: '从您已上传的文档中提取主题。'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: '网站抓取',
+            desc: '抓取网站并基于网页提炼主题。'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: '空白画布',
+            desc: '从零开始，亲手编写主题。'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: '克隆已有知识库',
+            desc: '从另一个 OKF 知识库中复刻主题与架构。'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: '输入项',
+        documents: '挑选作为主题列表来源的文档。',
+        crawl: '选择待抓取的网站。',
+        manual: '您可以在下一步中直接编写主题。',
+        clone: '选择要克隆的已有知识库。',
+        placeholder: '此步骤 UI 将在后续故事中接入。'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: '生成主题',
+        hint: '我们正在读取您的来源并提炼主题建议。',
+        progress: '生产模块运行中...',
+        placeholder: '生成服务将在后续故事中接入。'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: '挑选标签',
+        hint: '标签是您本体架构的分类维度 — 这些主题属于哪些性质类别？请挑选 3 至 7 个。',
+        add: '+ 添加标签',
+        addConfirm: '添加',
+        placeholder: '例如：许可审批'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: '审核主题',
+        hint: '每个主题都是一个细粒度、可引用的知识单元。支持编辑标题与描述。',
+        placeholder: '策展树与编辑器将在故事 3-8 中交付。'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: '检查问题',
+        hint: '我们正在执行规范符合性检查。阻断性问题必须在发布前修复。',
+        placeholder: '校验面板将在故事 3-8 中交付。'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: '自动修复',
+        hint: '部分警告支持自动修复。应用您认可的修复项，然后返回策展视图核对。',
+        placeholder: '自动更正服务将在故事 10.2 中落地。'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: '核对',
+        hint: '即将发布内容的汇总概览。',
+        repo: '知识库',
+        topics: '主题',
+        labels: '标签',
+        sources: '来源'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: '发布此知识库',
+        hint: '执行 publish 将创建此知识库的 v1 版本。',
+        nameOk: '知识库名称已设定',
+        labelsOk: '标签已选定',
+        topicsOk: '主题已审核'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: '未验证',
+        'machine-confirmed': '机器确认',
+        'human-reviewed': '人工审核'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'Retract 操作界面将在故事 3.9 中交付。'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: '资产包清单服务将在后续故事中接入。'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: '创建 OKF 知识库',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: '请至少选择一份文档',
+        alreadyInOkf: '移除已存在于 OKF 知识库中的文档',
+        alreadyIngested: '移除已完成 ingest 的文档'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: '生产模块将在后续故事中接入。'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: '选择主题领域…',
+      classLabel: '概念分类',
+      classHeuristics: '启发式规则（默认）',
+      classHeuristicsHint: '快速基于规则分类 — 无 LLM 成本，适用于结构规范的抓取内容。',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        '由 LLM 策展每个概念 — 包含类型、知识层级标签与描述。相较启发式规则更加精准详尽；每个概念预计耗时更长。',
       classHybrid: 'Hybrid',
-      classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+      classHybridHint: '启发式优先；LLM 介入复核存疑情形并填补空白。兼顾耗时与完整性。',
+      targetLabel: '目标保存位置',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: '抓取至自由格式语料库',
+        okfRepo: 'OKF 知识库'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
-      postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+      targetHint: '在保存任何内容之前，我们会先向您展示发现的主题。',
+      createOkfFromCrawl: '基于此抓取内容创建 OKF 知识库',
+      splitLabel: '概念切分方式',
+      splitA: '整个抓取内容合并为一个概念',
+      splitB: '单页对应单一概念（推荐）',
+      splitC: '使用 LLM 进行主题提取',
+      splitCHint: '用户故事 10.6 — 即将推出',
+      splitBHint: '抓取的每个页面都成为独立的概念 — 便于 AI 精准引用单页内容。',
+      splitAHint: '全部抓取内容将合并为一个庞大的单一概念 — 最适合小型站点。',
+      progressDownload: '正在下载抓取内容...',
+      progressSplit: '正在切分为概念...',
+      progressIngest: '正在添加概念（第 [i] 批，共 [n] 批）...',
+      postCrawlHint: '抓取完成后，您可以在该文件的“仪表盘”选项卡中将其转换为 OKF 知识库。',
+      creating: '正在创建 OKF 知识库...',
+      createOk: 'OKF 知识库已创建。正在打开 Studio 进行策展。',
+      createOkRenamed: 'OKF 知识库已创建为“[name]”。正在打开 Studio 进行策展。',
+      createFailed: '无法根据此抓取内容创建 OKF 知识库。',
       conversionsTitle: '从此爬取创建的仓库',
       convQueued: '排队中...',
-      convDownloading: '正在下载爬取内容...',
-      convSplitting: '正在拆分为概念...',
-      convAdding: '正在添加概念（已处理 [p] 页）...',
-      convDone: '已创建（[p] 页）',
+      convDownloading: '正在下载抓取内容...',
+      convSplitting: '正在切分为概念...',
+      convAdding: '正在添加概念（目前已处理 [p] 页）...',
+      convDone: '已创建（共 [p] 页）',
       convFailed: '失败',
-      createStarted: '正在创建「[name]」— 请在下方查看进度。',
+      createStarted: '正在创建“[name]” — 请在下方跟踪进度。',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: '模型',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': '本地 · 小型',
+          'local-medium': '本地 · 中型',
+          'sovereign-large': '自主可控 · 大型'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: '创建 OKF 知识库前抓取必须已完成。',
+        alreadyInOkf: '此抓取内容已存在于某个 OKF 知识库中。'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: '从左侧选择一个主题以查看和编辑。',
+      search: '搜索主题',
+      noTopics: '暂无主题。',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: '调整标签',
+        body: '标签是您本体架构的分类维度 — 该主题属于何种实体性质？',
+        edit: '调整标签',
+        add: '添加',
+        addPh: '例如：许可审批',
+        remove: '移除',
+        empty: '暂无标签。',
+        notReady: '标签已保存在本地 — 服务端同步功能即将上线。'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: '编辑 frontmatter',
+        dialogTitle: '编辑 frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: '显示来源',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: '概念缺失类型属性。',
+        badActor: '来源主体必须以 agent:/human:/tool:/process: 开头。'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: '保存已被阻止：请先修复规范符合性问题。'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
-      expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+      frozen: "内容已冻结于 {'{'}v{'}'} — 仅供只读预览。如需更改，请先对 serving 版本执行 retract。",
+      none: '无',
+      expertHint: '切换至专家模式可查看原始校验 JSON、按严重级别过滤并覆盖检查项。',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: '{n} 个阻断性问题 — 发布前必须修复',
+        warnings: '{n} 项内容需要您核对',
+        ok: '一切就绪。没有需要修复的问题。'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} 项正常 · {warnings} 项需复核 · {blockers} 项阻断',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: '格式化工具将在故事 4.2b 中落地。'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: '校验逻辑将在后续故事中接入。'
       }
     },
     pii: {
@@ -2260,11 +2242,11 @@ export default {
         PERSON: '人名',
         LOCATION: '位置',
         DATE_TIME: '日期或时间',
-        EMAIL_ADDRESS: '电子邮件地址',
+        EMAIL_ADDRESS: '电子邮箱地址',
         PHONE_NUMBER: '电话号码',
         IP_ADDRESS: 'IP 地址',
-        NRP: '国家注册号码',
-        BD_NATIONAL_ID: '国民身份证号码'
+        NRP: '全国登记号',
+        BD_NATIONAL_ID: '国民身份证号'
       },
       desc: {
         PERSON: '检测到人名。名字可以直接识别自然人。',
@@ -2278,15 +2260,15 @@ export default {
       },
       allClear: '正常',
       redactFile: '遮盖整个文件',
-      confirmRedactFile: '确认：遮盖整个文件？',
-      locateTip: '在编辑器中显示此文本',
+      confirmRedactFile: '确认：是否遮盖整个文件？',
+      locateTip: '在编辑器中定位此文本',
       file: {
         label: '整个文件：',
         redact: '遮盖文件',
         remove: '移除正文',
         accept: '全部接受',
-        confirmRedact: '确认：遮盖整个文件？',
-        confirmRemove: '确认：移除整个正文？'
+        confirmRedact: '确认：是否遮盖整个文件？',
+        confirmRemove: '确认：是否清空整个正文？'
       },
       action: {
         redact: '遮盖',
@@ -2298,7 +2280,7 @@ export default {
         cancel: '取消'
       },
       resolved: {
-        title: '已在此文件中处理',
+        title: '在此文件中已处理',
         redacted: '已遮盖',
         replaced: '已替换',
         removed: '已移除',
@@ -2306,7 +2288,7 @@ export default {
         fileRedacted: '文件已遮盖',
         kept: '保留在文本中',
         removedWord: '已移除',
-        wholeFile: '整个文件正文已被遮盖'
+        wholeFile: '整份文件正文已遮盖'
       }
     }
   }

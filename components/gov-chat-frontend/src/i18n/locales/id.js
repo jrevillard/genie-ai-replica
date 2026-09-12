@@ -41,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Republik Demokratik Kongo',
     CR: 'Kosta Rika',
-    CI: 'Pantai Gading',
+    CI: "Côte d'Ivoire",
     HR: 'Kroasia',
     CU: 'Kuba',
     CY: 'Siprus',
@@ -53,7 +53,7 @@ export default {
     EC: 'Ekuador',
     EG: 'Mesir',
     SV: 'El Salvador',
-    GQ: 'Guinea Khatulistiwa',
+    GQ: 'Guinea Ekuatorial',
     ER: 'Eritrea',
     EE: 'Estonia',
     ET: 'Etiopia',
@@ -184,7 +184,7 @@ export default {
     UG: 'Uganda',
     UA: 'Ukraina',
     AE: 'Uni Emirat Arab',
-    GB: 'Britania Raya',
+    GB: 'Inggris Raya',
     US: 'Amerika Serikat',
     UY: 'Uruguay',
     UZ: 'Uzbekistan',
@@ -685,8 +685,8 @@ export default {
     weatherAuthRequired: 'Silakan masuk untuk melihat cuaca.',
     weatherErrorDefault: 'Tidak dapat mengambil data cuaca.',
     weatherGeolocationUnsupported: 'Geolokasi tidak didukung oleh browser Anda.',
-    collapse: 'Perkecil sidebar',
-    expand: 'Perbesar sidebar',
+    collapse: 'Ciutkan bilah sisi',
+    expand: 'Perluas bilah sisi',
     weatherRefresh: 'Segarkan Cuaca',
     weatherConditions: {
       clear: 'Cerah',
@@ -1084,7 +1084,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Profil berhasil disimpan',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter disimpan',
       saveFailed: 'Gagal menyimpan profil',
       loadSuccess: 'Profil berhasil dimuat',
       loadFailed: 'Gagal memuat profil',
@@ -1341,13 +1341,14 @@ export default {
   },
   chatbot: {
     streamingError: 'Respons terputus. Silakan coba lagi.',
-    aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen pustaka',
+    welcomeMessage: 'Selamat datang! Ada yang bisa saya bantu hari ini?',
     configMismatchWarning:
-      'Ketidakcocokan konfigurasi: {warnings}. Silakan periksa konfigurasi Bantuan Cepat dan hierarki pengetahuan.',
+      'Ketidakcocokan konfigurasi: {warnings}. Harap periksa Bantuan Cepat dan konfigurasi hierarki pengetahuan.',
     categoryNotFound: 'Kategori "{label}" tidak ditemukan dalam hierarki pengetahuan',
-    serviceLabelMismatch: 'Layanan "{label}" menggunakan label UI yang mungkin tidak cocok dengan hierarki pengetahuan',
-    noFilterWarning: 'Tidak ada filter konteks aktif — kueri akan tidak difilter.',
+    serviceLabelMismatch:
+      'Layanan "{label}" menggunakan label antarmuka pengguna yang mungkin tidak sesuai dengan hierarki pengetahuan',
+    noFilterWarning: 'Tidak ada filter konteks yang aktif — kueri tidak akan difilter.',
     placeholder: 'Ketik pertanyaan Anda di sini...',
     sendButton: 'Kirim',
     fileReceived: 'File berhasil diterima.',
@@ -1393,23 +1394,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai pakar pendaftaran sipil Kenya yang solutif. Jelaskan langkah-langkah untuk mendapatkan KTP Nasional (Maisha Namba) atau mengganti yang hilang. PENTING: Berikan daftar dokumen yang diperlukan secara jelas (mis. Akta Kelahiran, salinan KTP orang tua) dan sarankan pengguna untuk mengunjungi Huduma Centre atau kantor Registrar of Persons terdekat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai pemandu KRA (Kenya Revenue Authority). Jelaskan proses pelaporan SPT, pengajuan KRA PIN, atau pengaturan ulang kata sandi di portal iTax. PENTING: Ingatkan pengguna tentang batas waktu 30 Juni untuk pelaporan tahunan dan pandu mereka tentang cara mengajukan SPT Nihil jika mereka tidak memiliki penghasilan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai konsultan bisnis untuk layanan eCitizen. Pandu pengguna melalui reservasi nama bisnis dan pendaftaran perusahaan di Kenya. PENTING: Jelaskan biaya terkini untuk pencarian nama dan pendaftaran, dan arahkan pengguna ke portal resmi eCitizen untuk menyelesaikan aplikasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai pemandu layanan kesehatan. Berikan informasi tentang transisi dari NHIF ke SHIF (Social Health Insurance Fund) dan cara mendaftar. PENTING: Bagikan kode USSD resmi (seperti *263#) atau tautan situs web untuk pendaftaran dan jelaskan manfaat perlindungan kesehatan masyarakat. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai konselor pendidikan. Bahas kurikulum CBC, pendaftaran NEMIS, atau penempatan universitas melalui KUCCPS. PENTING: Jelaskan bagaimana orang tua dapat memeriksa hasil ujian nasional melalui SMS atau portal KNEC saat dirilis. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai pemandu layanan NTSA. Jelaskan proses pembaruan SIM, uji kelayakan kendaraan, atau pengelolaan akun TIMS. PENTING: Pandu pengguna tentang cara masuk ke portal eCitizen NTSA untuk mengajukan Smart DL mereka atau memesan jadwal uji kelayakan kendaraan. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai penasihat program perumahan. Jelaskan pendaftaran Program Perumahan Terjangkau (Boma Yangu) dan proses kontribusi sukarela. PENTING: Arahkan pengguna ke portal Boma Yangu untuk melihat proyek dan jelaskan kriteria kelayakan untuk alokasi. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      "Bertindaklah sebagai pelatih karier untuk pelayanan publik. Pandu pengguna dalam membuat profil dan melamar lowongan melalui portal Public Service Commission (PSC). PENTING: Sarankan pengguna untuk menyiapkan sertifikat akademik mereka dan secara rutin memeriksa situs web PSC atau harian lokal untuk iklan MyGov. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Bertindaklah sebagai pendamping lokal yang ramah. Bersikap sopan, membantu, dan berpengetahuan luas tentang budaya dan kehidupan sehari-hari Kenya. PENTING: Ingatkan pengguna bahwa meskipun Anda dapat mengobrol tentang apa pun, kekuatan utama Anda adalah membantu mereka menavigasi layanan pemerintah Kenya seperti **KTP**, **Pajak**, dan **Pendaftaran Usaha**. ATURAN: Selalu sebut aplikasi sebagai 'Genie AI'."
   },
   common: {
     cancel: 'Batal',
@@ -1477,13 +1478,13 @@ export default {
       details: 'Detail',
       ingestionLog: 'Log Pemrosesan',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        'Metadata untuk berkas ini: nama, penulis, dan label hierarki pengetahuan yang digunakan AI untuk mengarahkan pertanyaan. Proses ingest membutuhkan setidaknya satu label.',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'Tampilan langsung perayapan situs web berkas ini: kecepatan, antrean, kesalahan, dan kemajuan. Ketika perayapan berhasil, footer di bawah mengubahnya menjadi repositori OKF.',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'Log per halaman perayapan situs web: URL mana yang diambil, dialihkan, atau gagal. Ditulis saat perayapan berjalan.',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'Kemajuan tahap demi tahap penyiapan berkas ini untuk jawaban AI: pemotongan (chunking), pelabelan, embedding, dan pengindeksan. Kesalahan di sini menunjukkan secara tepat di mana proses ingest terhenti.'
     },
     log: {
       killActions: 'Tindakan Penghentian:',
@@ -1565,31 +1566,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'Gagal memuat versi',
+      none: 'Belum ada versi yang dicetak — melakukan publish akan membuat v1.',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
-      serving: 'Ingested (serving)',
+      publish: 'Buat versi baru',
+      published: "Versi v{'{'}v{'}'} dipublikasikan — bundel {'{'}f{'}'} disimpan di repositori dokumen.",
+      serving: 'Di-ingest (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Dasbor Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'Berkas sumber masih diproses',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Hapus repositori'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Konfirmasikan entitas yang ditandai & publikasikan',
+        note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1607,26 +1608,26 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "diberi label: {'{'}n{'}'}",
+      fallbacks: "fallback LLM: {'{'}n{'}'}",
+      concepts: "konsep: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'} entri",
+      loadFailed: 'Gagal memuat log aktivitas.',
+      none: 'Belum ada aktivitas yang dicatat — tindakan repositori muncul di sini saat terjadi.',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'Grafik konsep',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'Belum ada konsep - tidak ada yang dapat digambarkan.',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'Tampilkan atau sembunyikan hub indeks (tautan Isinya adalah struktur, bukan pengetahuan)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
@@ -1636,30 +1637,30 @@ export default {
         links: "{'{'}n{'}'} tautan",
         chunks: "{'{'}n{'}'} potongan",
         failed: 'pengindeksan gagal',
-        flagged: 'entitas yang ditandai',
+        flagged: 'entitas ditandai',
         hub: 'Hub indeks',
-        pending: 'belum terindeks'
+        pending: 'belum diindeks'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (tempel atau biarkan kosong)',
+        bodyPh: '# Judul\n\nTempel markdown di sini - frontmatter ditambahkan secara otomatis.',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'Tidak dapat membuat berkas.',
+        title: 'Tambah berkas konsep',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'mis. Satwa liar di Mara',
+        updateIndex: 'Tambahkan ke daftar Isi indeks'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'tanpa frontmatter — proposal lengkap',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'Perbaikan frontmatter yang direncanakan di setiap konsep. Batang tubuh tidak pernah dimodifikasi.',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'Tidak ada yang perlu diperbaiki — semua frontmatter sudah sesuai.',
         col: {
           field: 'Field',
           after: 'After',
@@ -1668,14 +1669,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'Koreksi otomatis (khusus frontmatter)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'Bagaimana konsep ini dikurasi',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'Belum ada berkas - tambah konsep atau bagi ulang dari sumber.',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1683,30 +1684,30 @@ export default {
         resplit: 'Re-split',
         flagged: 'ditandai',
         flaggedTip:
-          'Concept dengan entitas yang ditandai — buka satu per satu, hapus atau ubah entitas, simpan (pemindaian ulang otomatis); atau akui saat publikasi.',
+          'Konsep dengan entitas yang ditandai — buka masing-masing, hapus atau ubah entitas, simpan (memindai ulang secara otomatis); atau konfirmasikan saat publish.',
         piiBadge: 'PII',
-        piiTip: 'Entitas yang ditandai: {k}. Buka, hapus atau ubah, lalu simpan — akan dipindai ulang secara otomatis.',
+        piiTip: 'Entitas yang ditandai: {k}. Buka, hapus atau ubah, lalu simpan — memindai ulang secara otomatis.',
         piiTipBare: 'Entitas yang ditandai — buka, tinjau, lalu simpan untuk memindai ulang.',
         bulkAccept: 'Terima semua',
         bulkRedact: 'Redak semua',
         bulkRemove: 'Hapus semua',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'Memuat berkas {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'Tindakan ini menghapus berkas, potongan yang diindeks, dan tautan grafiknya secara permanen.',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'Editor repositori',
+      loadFailed: 'Tidak dapat memuat konsep ini.',
+      loadingConcept: 'Memuat konsep…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'Metadata konsep',
+        labelLabel: 'Label (Hierarki Pengetahuan)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'Tidak ada konsep yang dipilih',
+        saveFailed: 'Penyimpanan metadata gagal',
+        saved: 'Metadata disimpan',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1717,63 +1718,63 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'Pilih konsep dari daftar untuk mulai mengedit.',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'Tindakan ini menghapus semua konsep saat ini dan grafik turunannya, lalu mengimpor ulang berkas sumber dengan pemisahan baru. Pengeditan konsep akan hilang.',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'Pemisahan ulang gagal — periksa tautan berkas sumber.',
+        modeA: 'Satu konsep untuk seluruh perayapan',
+        modeAHint: 'Mega-konsep — seluruh konten dalam satu konsep tunggal',
+        modeB: 'Satu konsep per halaman',
+        modeBHint: 'Memisahkan pada penanda `## Source:` milik perayap (disarankan)',
+        modeC: 'Gunakan ekstraksi topik LLM',
+        modeCHint: 'Story 10.6 — segera hadir',
+        title: 'Bagi ulang dari sumber'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'Perubahan belum disimpan',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Gagal menyimpan — coba lagi',
+      saveFailed: 'Penyimpanan gagal — coba lagi',
       piiBulk: {
         title: {
-          redact: 'Redak semua konten yang ditandai',
+          redact: 'Redaksi semua konten yang ditandai',
           remove: 'Hapus semua konten yang ditandai',
           accept: 'Terima semua entitas yang ditandai'
         },
         body: {
           redact:
-            'Isi setiap konsep yang ditandai diganti dengan pemberitahuan redaksi. Tindakan ini tidak dapat dibatalkan.',
-          remove: 'Isi setiap konsep yang ditandai dikosongkan. Tindakan ini tidak dapat dibatalkan.',
+            'Batang tubuh setiap konsep yang ditandai diganti dengan pemberitahuan redaksi. Tindakan ini tidak dapat dibatalkan.',
+          remove: 'Batang tubuh setiap konsep yang ditandai dikosongkan. Tindakan ini tidak dapat dibatalkan.',
           accept:
-            'Semua entitas yang ditandai ditandai sebagai telah ditinjau dan dipertahankan — tidak akan ditandai lagi kecuali Anda memindai ulang.'
+            'Semua entitas yang ditandai ditandai sebagai ditinjau-dan-disimpan — entitas tersebut tidak akan ditandai lagi kecuali Anda memindai ulang.'
         },
-        scope: "Konsep terdampak: {'{'}n{'}'}.",
+        scope: "Konsep yang terpengaruh: {'{'}n{'}'}.",
         confirm: 'Terapkan',
         failed: 'Tindakan PII massal gagal — coba lagi.'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'Menerapkan tindakan PII massal',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
-        publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        body: 'Setiap repositori dipublikasikan dengan pemeriksaan gerbang penuh (peninjauan PII, pengindeksan, kesesuaian). Hasil per repositori:',
+        pending: 'Konfirmasikan untuk melakukan publish pada repositori yang dipilih.',
+        publishConfirm: "Publikasikan {'{'}n{'}'}",
+        title: 'Publikasikan repositori yang dipilih'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "Tindakan untuk {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'Membangun — berkas sumber masih diproses',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1782,33 +1783,33 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen. Tindakan ini tidak dapat dibatalkan.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Hapus repositori'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'Filter berdasarkan bidang subjek'
       },
-      new: '+ New repository',
+      new: '+ Repositori baru',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Konfirmasikan entitas yang ditandai & publikasikan',
+        note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "Pilih {'{'}name{'}'} untuk publikasi massal",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'Proses ingest gagal',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
         inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
+        ingested: "Di-ingest v{'{'}n{'}'}",
+        published: "Dipublikasikan v{'{'}n{'}'}",
         retracted: 'Retracted',
         stepOf: 'Step '
       },
@@ -1817,36 +1818,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ {'{'}n{'}'} lainnya",
+        fixPath: 'Lakukan ingest ulang untuk mencoba lagi: retract → buat versi → ingest.'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'fallback LLM',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'Batch disimpan',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'konsep diindeks',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "Dimulai {'{'}n{'}'} jam lalu",
+        lt1: 'Dimulai kurang dari satu menit lalu',
+        min: "Dimulai {'{'}n{'}'} menit lalu"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'Repositori tetap dalam status Import hingga konversi berkas selesai.',
+        rag: 'Indeks RAG sedang dibangun — versi mulai berstatus serving setelah setiap konsep diindeks.',
+        serving: 'Versi ini sedang serving lalu lintas RAG — lakukan retract untuk membuat perubahan.',
+        review: 'Dalam status review — peninjau menyetujui, lalu pengelola melakukan publish dan ingest.',
+        retracted: 'Tidak beroperasi — submit → review → approve → publish → ingest untuk kembali serving.',
+        idle: 'Impor selesai — lakukan submit untuk review guna melanjutkan alur kerja.'
       },
-      pages: 'Pages processed',
+      pages: 'Halaman diproses',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Grafik serving',
+        version: 'Versi serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1854,12 +1855,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'Kemajuan impor',
+        rag: 'Kemajuan ingest',
+        serving: 'Status serving',
+        review: 'Status review',
+        retracted: 'Status retract',
+        idle: 'Status repositori'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1875,33 +1876,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'Pilih berkas bundel .zip.',
+      stagedFile: "Disiapkan: {'{'}name{'}'}",
+      staged: 'Bundel disiapkan — klik Buat Repositori untuk memulai impor.',
+      openExisting: 'Buka repositori yang ada',
+      name: 'Nama repositori',
+      importing: 'Mengimpor bundel…',
+      importHint: 'Atau impor bundel zip yang ada sebagai repositori baru.',
+      importDefaultName: 'Repositori yang diimpor',
+      failed: 'Pembuatan repositori gagal',
+      duplicateInline: 'Repositori dengan nama ini sudah ada. Buka, atau pilih nama lain.',
+      duplicate: 'Repositori dengan nama ini sudah ada - buka dari dasbor atau pilih nama lain.',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'Buat repositori',
+      title: 'Repositori OKF baru',
+      hint: 'Membuat repositori kosong dengan index.md yang dapat Anda edit di editor Studio.',
+      domainPlaceholder: 'Pilih bidang subjek…',
+      domainRequired: 'Pilih bidang subjek terlebih dahulu — tidak dapat diubah setelah pembuatan.',
+      classLabel: 'Klasifikasi konsep',
+      classHeuristics: 'Heuristik (default)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'Nama bidang khusus yang dipesan.',
+      errKeyDuplicate: 'Nama bidang digunakan dua kali.',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'Harus berupa angka',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1912,53 +1913,53 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'Setiap bidang frontmatter dapat diedit. Tambah atau hapus kunci secara bebas.',
+      errRemovalPending: 'Menghapus bidang membutuhkan kontrak server merge-delete (segera hadir).',
+      errKeyRequired: 'Setiap bidang membutuhkan nama.',
+      arrayPh: 'nilai yang dipisahkan koma',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter disimpan',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'Apa itu Frontmatter?',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'Belum ada frontmatter — Edit untuk menambahkan jenis, judul, dan label.',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'Label (Hierarki Pengetahuan)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'Simpan frontmatter',
+      saveFailed: 'Penyimpanan frontmatter gagal'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        'Satu entri di repositori Anda — biasanya satu halaman atau topik tunggal. Setiap konsep memiliki frontmatter terstruktur yang dibaca asisten, ditambah teks markdown yang menjadi rujukan jawabannya.',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'Kumpulan konsep terkurasi di sekitar satu Bidang Subjek. Ini menjadi bundel OKF yang Anda publikasikan, berikan versi, dan sediakan untuk asisten.',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
+        'Di manakah pengetahuan ini berada? Bidang Subjek mengelompokkan repositori Anda dan memfokuskan label mana yang dapat Anda pilih. Tidak dapat diubah setelah pembuatan.',
+      selectSubjectArea: 'Pilih bidang subjek…',
       subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'Bidang Subjek dari repositori ini tidak ada dalam Hierarki Pengetahuan — menampilkan setiap label.',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'Kategori dari Hierarki Pengetahuan yang memberi tahu asisten entitas macam apa konsep ini. Label adalah cara jawaban menemukan konten yang tepat.',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        'Ekspor zip dari repositori — konsep, struktur, dan metadatanya dalam satu berkas. Bundel adalah cara repositori berpindah antar-sistem.',
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'Cuplikan beku dari repositori pada saat publish. Pengeditan berlanjut pada versi berikutnya — versi yang dipublikasikan tidak pernah berubah.',
+      serving: 'Versi ini aktif: asisten membaca kontennya saat menjawab. Lakukan retract untuk membuat perubahan.',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        'Langkah di mana versi yang dipublikasikan disiapkan untuk menjawab — teks dipecah, di-embed, dan ditautkan. Tidak ada yang sampai ke asisten sebelum proses ini.',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'Bagaimana kami menentukan entitas apa dari setiap konsep (topik, entitas, proses…). Heuristik membaca halaman secara otomatis; opsi LLM lebih lambat tetapi dapat menangani halaman yang rumit.',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'Memotong ulang sumber menjadi konsep dengan cara berbeda — misalnya satu konsep per halaman alih-alih satu untuk seluruh situs.',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
+      importFailedTitle: 'Impor gagal — berkas sumber tidak dapat dikonversi.',
+      importFailedHint: 'Hapus repositori ini dan impor kembali berkas sumber.',
       frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+        'Informasi terstruktur di bagian atas setiap berkas — jenis, judul, label. Asisten menggunakannya untuk mengetahui tentang apa konsep tersebut.'
     },
     md: {
       toolbar: 'Formatting',
@@ -1968,7 +1969,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'Daftar bernomor',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1976,106 +1977,105 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'Repositori OKF adalah kumpulan topik terstruktur dan berversi yang dapat dikutip oleh jawaban obrolan Anda. Anggap ini sebagai lapisan ontologis ringan untuk domain Anda — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul.',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'Repositori OKF adalah kumpulan topik terkurasi dan berversi. Anggap ini sebagai lapisan ontologis ringan untuk domain Anda — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan hilir mengutip topik-topik ini berdasarkan id.',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'Tiga cara untuk mengawali repositori OKF: ambil topik dari perayapan situs web, ekstrak dari dokumen yang telah Anda unggah, atau mulai dari kanvas kosong. Mengkloning repositori yang ada akan menyalin topiknya dan memungkinkan Anda mencabangkan pekerjaan.',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        'Setiap dokumen menjadi sumber topik. Produser membacanya, mengekstrak kandidat topik, dan mengusulkan hierarki. Anda akan meninjau setiap topik pada langkah berikutnya — tidak ada yang diterapkan sampai Anda menyetujuinya.',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        'Kami sedang membaca sumber Anda dan mengusulkan topik. Topik dikelompokkan di bawah label kategori yang Anda pilih. Produser bersifat konservatif — ia lebih suka menyarankan topik yang lebih sedikit tetapi terstruktur rapi daripada banyak topik yang membingungkan.',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik ini? Pilih 3-7 label yang mencakup sumbu utama; produser menggunakannya sebagai kerangka kerja untuk hierarki topik.',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        'Ini adalah inti pekerjaan. Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Topik mendapatkan judul, deskripsi, dan mewarisi label yang Anda pilih. Tugas Anda adalah membuatnya teruji dan dapat dipertanggungjawabkan: ganti nama judul yang samar, gabungkan yang hampir duplikat, hapus yang tidak dapat didukung dengan sumber.',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'Kami menjalankan pemeriksaan kesesuaian: apakah setiap topik memiliki judul? Apakah labelnya valid? Apakah atribusi sumber utuh? Masalah pemblokir harus diperbaiki sebelum publikasi; peringatan dapat dikonfirmasikan.',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'Beberapa peringatan dapat diperbaiki secara otomatis: nilai status dapat disesuaikan ke enum yang valid, bidang yang hilang dapat diisi dengan default yang wajar. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'Ringkasan tentang apa yang akan Anda publikasikan: topik, label, sumber, dan masalah yang belum terselesaikan. Setelah Anda menyetujui, repositori berpindah ke jalur yang dipublikasikan.',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        'Melakukan publish akan membuat versi v1 dari repositori ini. Setiap perubahan berikutnya — topik baru, deskripsi yang direvisi, verifikasi ulang yang basi — dipublikasikan sebagai v2, v3, dll. Versi lama tetap dapat dikutip selamanya.',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        'Buat repositori OKF baru dari dokumen yang dipilih. Dokumen akan menjadi sumber; Anda akan meninjau dan menamai topik yang dihasilkan sebelum apa pun dipublikasikan.',
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'Repositori OKF adalah kumpulan topik terstruktur dan berversi yang dapat dikutip oleh jawaban obrolan Anda.',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'Anda belum membuat repositori OKF apa pun. Repositori OKF adalah kumpulan topik terstruktur dan dapat dikutip yang dapat dimanfaatkan oleh jawaban obrolan Anda.',
+      labels: 'Label adalah sumbu kategoris dari ontologi Anda — mereka menjawab "entitas macam apakah topik ini?".',
+      hide: 'Sembunyikan',
+      whatIsThis: 'Apakah ini?'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'Tutup',
+      cancel: 'Batal',
+      save: 'Simpan',
+      clear: 'Bersihkan',
+      delete: 'Hapus'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'Bantuan',
+      helpTitle: 'Tentang OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'Repositori OKF adalah lapisan ontologis ringan — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan mengutip topik berdasarkan id dan memunculkan asal-usulnya.',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'Dasbor',
+        wizard: 'Wizard'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'Dikloning dari {name} · versi {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'Repositori',
+        untitled: 'Repositori tanpa judul',
+        trust: 'Kepercayaan',
+        sources: 'Sumber',
+        concepts: 'Konsep sejauh ini',
+        stale: 'usang'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'sedang berlangsung',
+        inReview: 'sedang ditinjau',
+        published: 'dipublikasikan'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'Dalam status review',
+        stepOf: 'Langkah {n} dari 10',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'Repositori',
+        new: '+ Repositori baru',
+        search: 'Cari…',
+        empty: 'Belum ada repositori di sini.',
+        topics: 'topik',
+        select: 'Pilih {name} untuk publikasi massal',
+        stale: 'usang',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'Dalam status review',
+          stepOf: 'Langkah {n} dari 10',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: '{n} dipilih',
+          publish: 'Publikasikan yang dipilih',
+          title: 'Publikasikan repositori yang dipilih',
+          body: 'Setelah dipublikasikan, jawaban obrolan hilir dapat menggunakannya. Setiap repositori di bawah mencantumkan hasil akhirnya.',
+          results: 'Hasil',
+          publishConfirm: 'Publikasikan {n}',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'Nama',
+            status: 'Status',
+            topics: 'Topik'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'Siap'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'Draf belum dapat disimpan di sisi server; disimpan secara lokal.'
       }
     },
     wizard: {
@@ -2084,233 +2084,233 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'Kembali ke dasbor',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'Repositori tanpa judul',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'Konsep sejauh ini'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'Wizard OKF Studio',
+      back: 'Kembali',
+      continue: 'Lanjutkan',
+      publish: 'Publikasikan repositori'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'Nama repositori & bidang subjek',
+        hint: 'Beri nama yang jelas untuk repositori OKF ini dan pilih bidang subjeknya.',
+        nameLabel: 'Nama repositori',
+        namePh: 'mis. Izin transportasi NL',
+        domainLabel: 'Bidang subjek'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'Dari mana repositori OKF ini harus dimulai?',
+        hint: 'Pilih cara Anda mengawali repositori ini. Anda dapat mengubahnya nanti.',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'Dokumen',
+            desc: 'Ambil topik dari dokumen yang telah Anda unggah.'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'Perayapan situs web',
+            desc: 'Rayapi situs web dan usulkan topik dari halaman-halamannya.'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'Kanvas kosong',
+            desc: 'Mulai dari awal dan tulis topik Anda sendiri.'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'Klon dari repositori yang ada',
+            desc: 'Cabangkan topik dan struktur dari repositori OKF lain.'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'Masukan',
+        documents: 'Pilih dokumen yang akan mengawali daftar topik.',
+        crawl: 'Pilih situs web yang akan dirayapi.',
+        manual: 'Anda dapat menulis topik secara langsung pada langkah berikutnya.',
+        clone: 'Pilih repositori yang ada untuk dikloning.',
+        placeholder: 'UI langkah hadir dalam story berikutnya.'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'Hasilkan topik',
+        hint: 'Kami sedang membaca sumber Anda dan mengusulkan topik.',
+        progress: 'Produser sedang berjalan...',
+        placeholder: 'Layanan produser dihubungkan dalam story berikutnya.'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'Pilih label',
+        hint: 'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik-topik ini? Pilih 3-7.',
+        add: '+ Tambah label',
+        addConfirm: 'Tambah',
+        placeholder: 'mis. Izin'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'Tinjau topik',
+        hint: 'Setiap topik adalah unit pengetahuan kecil yang dapat dikutip. Edit judul dan deskripsi.',
+        placeholder: 'Pohon kurator + editor hadir di Story 3-8.'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'Periksa masalah',
+        hint: 'Kami menjalankan pemeriksaan kesesuaian. Masalah pemblokir harus diperbaiki sebelum publikasi.',
+        placeholder: 'Panel validasi hadir di Story 3-8.'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'Perbaikan otomatis',
+        hint: 'Beberapa peringatan dapat diperbaiki secara otomatis. Terapkan perbaikan yang Anda setujui, lalu kembali ke kurator untuk meninjau.',
+        placeholder: 'Layanan koreksi otomatis hadir di Story 10.2.'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'Tinjau',
+        hint: 'Ringkasan tentang apa yang akan Anda publikasikan.',
+        repo: 'Repositori',
+        topics: 'Topik',
+        labels: 'Label',
+        sources: 'Sumber'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'Publikasikan repositori ini',
+        hint: 'Melakukan publish akan membuat versi v1 dari repositori ini.',
+        nameOk: 'Nama repositori ditetapkan',
+        labelsOk: 'Label dipilih',
+        topicsOk: 'Topik ditinjau'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'belum diverifikasi',
+        'machine-confirmed': 'dikonfirmasi mesin',
+        'human-reviewed': 'ditinjau oleh manusia'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'UI retract hadir di Story 3.9.'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'Layanan manifes bundel dihubungkan dalam story berikutnya.'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'Buat repositori OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'Pilih setidaknya satu dokumen',
+        alreadyInOkf: 'Hapus dokumen yang sudah ada di repositori OKF',
+        alreadyIngested: 'Hapus dokumen yang sudah di-ingest'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'Produser dihubungkan dalam story berikutnya.'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'Pilih bidang subjek…',
+      classLabel: 'Klasifikasi konsep',
+      classHeuristics: 'Heuristik (default)',
+      classHeuristicsHint:
+        'Klasifikasi berbasis aturan yang cepat — tanpa biaya LLM, baik untuk perayapan yang terstruktur rapi.',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'LLM mengurasi setiap konsep — jenis, label Hierarki Pengetahuan, dan deskripsi. Jauh lebih akurat dan lengkap daripada heuristik; memerlukan waktu tambahan per konsep.',
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        'Heuristik terlebih dahulu; LLM meninjau kasus yang belum pasti dan melengkapi celah. Seimbang antara waktu dan kelengkapan.',
+      targetLabel: 'Ke mana ini harus disimpan?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'Rayapi ke korpus bentuk bebas',
+        okfRepo: 'Repositori OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
-      postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
-      conversionsTitle: 'Repositori yang dibuat dari crawl ini',
+      targetHint: 'Kami akan menampilkan topik yang ditemukan sebelum menyimpan apa pun.',
+      createOkfFromCrawl: 'Buat repositori OKF dari perayapan ini',
+      splitLabel: 'Pemisahan konsep',
+      splitA: 'Satu konsep untuk seluruh perayapan',
+      splitB: 'Satu konsep per halaman (disarankan)',
+      splitC: 'Gunakan ekstraksi topik LLM',
+      splitCHint: 'Story 10.6 — segera hadir',
+      splitBHint: 'Setiap halaman yang dirayapi menjadi konsep tersendiri — AI dapat mengutip halaman individual.',
+      splitAHint: 'Seluruh perayapan menjadi satu konsep besar — terbaik untuk situs kecil.',
+      progressDownload: 'Mengunduh konten yang dirayapi...',
+      progressSplit: 'Membagi menjadi konsep...',
+      progressIngest: 'Menambahkan konsep (batch [i] dari [n])...',
+      postCrawlHint: 'Setelah perayapan selesai, Anda dapat mengubahnya menjadi repositori OKF dari tab Dasbor berkas.',
+      creating: 'Membuat repositori OKF...',
+      createOk: 'Repositori OKF dibuat. Membuka Studio untuk kurasi.',
+      createOkRenamed: 'Repositori OKF dibuat sebagai "[name]". Membuka Studio untuk kurasi.',
+      createFailed: 'Tidak dapat membuat repositori OKF dari perayapan ini.',
+      conversionsTitle: 'Repositori yang dibuat dari perayapan ini',
       convQueued: 'Dalam antrean...',
-      convDownloading: 'Mengunduh crawl...',
-      convSplitting: 'Memisahkan menjadi konsep...',
+      convDownloading: 'Mengunduh perayapan...',
+      convSplitting: 'Membagi menjadi konsep...',
       convAdding: 'Menambahkan konsep ([p] halaman sejauh ini)...',
       convDone: 'Dibuat ([p] halaman)',
       convFailed: 'Gagal',
       createStarted: 'Membuat "[name]" — pantau kemajuan di bawah.',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'Model',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'Lokal · kecil',
+          'local-medium': 'Lokal · sedang',
+          'sovereign-large': 'Sovereign · besar'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'Perayapan harus selesai sebelum membuat repositori OKF.',
+        alreadyInOkf: 'Perayapan ini sudah berada dalam repositori OKF.'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'Pilih topik di sebelah kiri untuk melihat + mengedit.',
+      search: 'Cari topik',
+      noTopics: 'Belum ada topik.',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'Sesuaikan label',
+        body: 'Label adalah sumbu kategoris dari ontologi Anda — entitas macam apakah topik ini?',
+        edit: 'Sesuaikan label',
+        add: 'Tambah',
+        addPh: 'mis. Izin',
+        remove: 'Hapus',
+        empty: 'Belum ada label.',
+        notReady: 'Label disimpan secara lokal — sinkronisasi server segera hadir.'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'Edit frontmatter',
+        dialogTitle: 'Edit frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'Tampilkan sumber',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'Konsep kehilangan jenis.',
+        badActor: 'Pelaku sumber harus diawali dengan agent:/human:/tool:/process:.'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'Penyimpanan diblokir: perbaiki masalah kesesuaian terlebih dahulu.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
+      frozen:
+        "Konten dibekukan pada {'{'}v{'}'} — pratinjau hanya-baca. Lakukan retract pada versi yang sedang serving untuk membuat perubahan.",
+      none: 'Tidak ada',
       expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+        'Beralih ke mode Pakar untuk melihat JSON validasi mentah, memfilter berdasarkan tingkat keparahan, dan mengesampingkan pemeriksaan.',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: '{n} masalah pemblokir — perbaiki sebelum mempublikasikan',
+        warnings: '{n} hal memerlukan peninjauan Anda',
+        ok: 'Terlihat bagus. Tidak ada yang perlu diperbaiki.'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} bersih · {warnings} perlu peninjauan · {blockers} memblokir',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'Pemformat hadir di Story 4.2b.'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'Validasi dihubungkan dalam story berikutnya.'
       }
     },
     pii: {
@@ -2331,7 +2331,7 @@ export default {
         PHONE_NUMBER: 'Nomor telepon',
         IP_ADDRESS: 'Alamat IP',
         NRP: 'Nomor registrasi nasional',
-        BD_NATIONAL_ID: 'Nomor ID nasional'
+        BD_NATIONAL_ID: 'Nomor KTP / Identitas Nasional'
       },
       desc: {
         PERSON: 'Nama seseorang terdeteksi. Nama dapat secara langsung mengidentifikasi orang pribadi.',
@@ -2344,16 +2344,16 @@ export default {
         BD_NATIONAL_ID: 'Nomor ID nasional terdeteksi. Ini secara kuat mengidentifikasi seseorang.'
       },
       allClear: 'Aman',
-      redactFile: 'Sensor seluruh file',
-      confirmRedactFile: 'Konfirmasi: sensor seluruh file?',
+      redactFile: 'Redaksi seluruh berkas',
+      confirmRedactFile: 'Konfirmasi: redaksi seluruh berkas?',
       locateTip: 'Tampilkan teks ini di editor',
       file: {
         label: 'Seluruh file:',
         redact: 'Sensor file',
         remove: 'Hapus isi',
         accept: 'Terima semua',
-        confirmRedact: 'Konfirmasi: sensor seluruh file?',
-        confirmRemove: 'Konfirmasi: hapus seluruh isi?'
+        confirmRedact: 'Konfirmasi: redaksi seluruh berkas?',
+        confirmRemove: 'Konfirmasi: hapus seluruh batang tubuh?'
       },
       action: {
         redact: 'Sensor',
@@ -2365,15 +2365,15 @@ export default {
         cancel: 'Batal'
       },
       resolved: {
-        title: 'Diproses di file ini',
+        title: 'Diproses dalam berkas ini',
         redacted: 'Disensor',
         replaced: 'Diganti',
         removed: 'Dihapus',
         accepted: 'Diterima',
-        fileRedacted: 'File disensor',
+        fileRedacted: 'Berkas diredaksi',
         kept: 'dipertahankan dalam teks',
         removedWord: 'dihapus',
-        wholeFile: 'Seluruh isi file disensor'
+        wholeFile: 'Seluruh batang tubuh berkas diredaksi'
       }
     }
   }

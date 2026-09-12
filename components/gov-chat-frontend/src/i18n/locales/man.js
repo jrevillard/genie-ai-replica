@@ -32,7 +32,7 @@ export default {
     KH: 'Kambodiya',
     CM: 'Kamerun',
     CA: 'Kanada',
-    CF: 'Sentaral Afrika',
+    CF: 'Central African Republic',
     TD: 'Caad',
     CL: 'Cili',
     CN: 'Siin (China)',
@@ -41,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Kongo (Repubilik Demokaraatik)',
     CR: 'Kosatarika',
-    CI: 'Kodiwar',
+    CI: "Côte d'Ivoire",
     HR: 'Korowasiya',
     CU: 'Kuba',
     CY: 'Sipirus',
@@ -49,11 +49,11 @@ export default {
     DK: 'Denmark',
     DJ: 'Jibuti',
     DM: 'Dominika',
-    DO: 'Dominikan Repubilik',
+    DO: 'Dominican Republic',
     EC: 'Ekuwador',
     EG: 'Misira (Egypt)',
     SV: 'El Salvador',
-    GQ: 'Ekuwatoriyal Gini',
+    GQ: 'Equatorial Guinea',
     ER: 'Eritereya',
     EE: 'Estoniya',
     ET: 'Etiyopiya',
@@ -107,7 +107,7 @@ export default {
     MV: 'Maldiifs',
     ML: 'Mali',
     MT: 'Malta',
-    MH: 'Marsal Tundol',
+    MH: 'M̧ajeļ',
     MR: 'Moritani',
     MU: 'Morisiyos',
     MX: 'Meksiko',
@@ -127,14 +127,14 @@ export default {
     NI: 'Nikaraguwa',
     NE: 'Nijeyr',
     NG: 'Nijeriya',
-    MK: 'Masedoniya',
+    MK: 'North Macedonia',
     NO: 'Norwey',
     OM: 'Oman',
     PK: 'Pakistaan',
     PW: 'Palawu',
     PS: 'Falastin',
     PA: 'Panama',
-    PG: 'Papuwa Niwu Gini',
+    PG: 'Papua New Guinea',
     PY: 'Paraguwey',
     PE: 'Peru',
     PH: 'Filipins',
@@ -158,7 +158,7 @@ export default {
     SG: 'Singapur',
     SK: 'Silovakiya',
     SI: 'Siloveniya',
-    SB: 'Solomon Tundol',
+    SB: 'Solomon Islands',
     SO: 'Somaliya',
     ZA: 'Safrika',
     SS: 'Sudan Batoo',
@@ -183,9 +183,9 @@ export default {
     TV: 'Tuvalu',
     UG: 'Uganda',
     UA: 'Ukeren',
-    AE: 'Imaaraat',
-    GB: 'Angalteer',
-    US: 'Ameriki (US)',
+    AE: 'United Arab Emirates',
+    GB: 'United Kingdom',
+    US: 'Amedka',
     UY: 'Uruguwey',
     UZ: 'Ujibekistan',
     VU: 'Vanuwatu',
@@ -648,7 +648,7 @@ export default {
     }
   },
   services: {
-    eCitizen: 'e-Jamo Portal',
+    eCitizen: 'Portal an eCitizen',
     taxFiling: 'Jooyaa Lataramoo',
     idApplication: 'ID Ñiningo',
     businessReg: 'Bita Lataramoo',
@@ -680,8 +680,8 @@ export default {
     weatherAuthRequired: 'Taa ɲinena kuma na sanno kibaroo lootay.',
     weatherErrorDefault: 'Sanoo kibaroo ñiningo mang ben.',
     weatherGeolocationUnsupported: 'Browser ti nying dulaa kumpabo faa.',
-    collapse: 'Collapse sidebar',
-    expand: 'Expand sidebar',
+    collapse: 'Kaduik jikin itulik',
+    expand: 'Kal̦ap jikin itulik',
     weatherRefresh: 'Sanoo Kurandi',
     weatherConditions: {
       clear: 'A keta-le (Clear)',
@@ -1043,7 +1043,7 @@ export default {
     },
     notifications: {
       saveSuccess: 'Moo-kibaroo marata benta',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter em̦ōj kōjparoke',
       saveFailed: 'Moo-kibaroo mara mang ben',
       loadSuccess: 'Moo-kibaroo lootita benta',
       loadFailed: 'Moo-kibaroo looti mang ben',
@@ -1301,13 +1301,14 @@ export default {
   },
   chatbot: {
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
-    aiGeneratedNoDocs: 'AI-generated — not based on library documents',
-    welcomeMessage: 'Welcome! How can I assist you today?',
+    aiGeneratedNoDocs: 'AI-e kõm̦m̦ane — ejjab pedped ioon peba ko ilo laibri',
+    welcomeMessage: 'Iakwe! Ewi wāween aõ maron̦ jipañ eok rainin?',
     configMismatchWarning:
-      'Configuration mismatch: {warnings}. Please check the Quick Help and knowledge hierarchy configuration.',
-    categoryNotFound: 'Category "{label}" not found in knowledge hierarchy',
-    serviceLabelMismatch: 'Service "{label}" uses a UI label that may not match the knowledge hierarchy',
-    noFilterWarning: 'No context filter active — query will be unfiltered.',
+      'Kajuuj eo ejjab errā: {warnings}. Jouj im etale Jipañ M̦ōkaj eo im kajuuj eo an laajrak in jel̦āl̦o̦kjen̦.',
+    categoryNotFound: 'Katiikori "{label}" ejjab wal̦o̦k ilo laajrak in jel̦āl̦o̦kjen̦',
+    serviceLabelMismatch:
+      'Jikin jerbal "{label}" ej kōjerbal kakōl̦l̦e in UI eo emaron̦ ban errā ibben laajrak in jel̦āl̦o̦kjen̦',
+    noFilterWarning: 'Ejjel̦o̦k kajjitōk in kapijuknen em̦ool — kajjitōk enaj alikkar aolepen.',
     placeholder: 'I la ñiningo nyining jang...',
     sendButton: 'Kii',
     fileReceived: 'Fayiloo yeleta benta.',
@@ -1353,23 +1354,23 @@ export default {
   },
   quickhelp: {
     applyForIDPrompt:
-      "Act as a helpful Kenyan civil registration expert. Explain the steps for obtaining a National ID (Maisha Namba) or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest Huduma Centre or Registrar of Persons office. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-jel̦ā kōn rejistōr an armij ro ilo Kenya. Kōmel̦el̦eik buñtōn ko ñan bōk National ID (Maisha Namba) ak ukōt juon me ear joko. MEN EAUJELOK: Lelok juon laajrak ealikkar kōn peba ko rej aikuji (āinwōt Peba in L̦otak, kopi in ID ko an jinen im jemān) im kappe armij eo bwe en etal ñan Huduma Centre ak opij an Registrar of Persons eo epaaktata. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     payTaxesPrompt:
-      "Act as a KRA (Kenya Revenue Authority) guide. Explain the process of filing returns, applying for a KRA PIN, or resetting a password on the iTax portal. IMPORTANT: Remind the user of the June 30th deadline for annual returns and guide them on how to file Nil returns if they had no income. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl an KRA (Kenya Revenue Authority). Kōmel̦el̦eik wāween kōllā taaj, kajjitōk kōn KRA PIN, ak bar kōm̦m̦an password ekāāl ilo portal an iTax. MEN EAUJELOK: Kakememej armij eo kōn Raan 30 in Juun bwe eñin ej jem̦l̦o̦k eo an taaj kōn iiō eo im tōl er ilo an kōllā Nil returns ñe ejjel̦o̦k wōr aer m̦ōni. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     startBusinessPrompt:
-      "Act as a business consultant for eCitizen services. Guide the user through business name reservation and company registration in Kenya. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official eCitizen portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn būjinij ilo jikin jerbal ko an eCitizen. Tōl armij eo ilo an kōjparok āt an būjinij im rejistōr kōmboni ilo Kenya. MEN EAUJELOK: Kōmel̦el̦eik on̦ean pukot āt im rejistōr kiiō, im jilkinl̦o̦k armij eo ñan portal em̦ool an eCitizen bwe en dedel̦o̦k application eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     findHealthcarePrompt:
-      "Act as a health services navigator. Provide information on the transition from NHIF to SHIF (Social Health Insurance Fund) and how to register. IMPORTANT: Share the official USSD codes (like *263#) or website links for registration and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl ilo jikin jipañ ko an ājmour. Lelok melele kōn oktak jān NHIF ñan SHIF (Social Health Insurance Fund) im ewi wāween rejistōr. MEN EAUJELOK: Kwal̦o̦k code ko an USSD (āinwōt *263#) ak website ko ñan rejistōr im kōmel̦el̦eik em̦m̦an ko an jipañ in ājmour an aolep. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     educationServicesPrompt:
-      "Act as an education counselor. Discuss the CBC curriculum, NEMIS registration, or university placement via KUCCPS. IMPORTANT: Explain how parents can check national exam results via SMS or the KNEC portal when released. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn jikuul̦. Kōnono kōn CBC curriculum, NEMIS registration, ak jikin ilo jikuul̦ el̦ap ikkijeen KUCCPS. MEN EAUJELOK: Kōmel̦el̦eik ewi wāween jemān im jinen remaron̦ lale jem̦l̦o̦k in ekkatak ko ikkijeen SMS ak portal an KNEC ñe rej wal̦o̦k. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     transportLicensesPrompt:
-      "Act as an NTSA service guide. Explain the process for driving license renewal, vehicle inspection, or TIMS account management. IMPORTANT: Guide the user on how to log in to the eCitizen NTSA portal to apply for their Smart DL or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-tōl an jikin jerbal ko an NTSA. Kōmel̦el̦eik wāween kōkāāl laijen in tōrreep, etale wa ko, ak jerbale account an TIMS. MEN EAUJELOK: Tōl armij eo ilo wāween an deļo̧ñ ilo portal an eCitizen NTSA ñan kajjitōk kōn Smart DL ak kāālet iien ñan etale wa eo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     housingProgramsPrompt:
-      "Act as a housing program advisor. Explain the Affordable Housing Program (Boma Yangu) registration and voluntary contribution process. IMPORTANT: Guide the user to the Boma Yangu portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn pōrōkram̦ in m̦ōn em̧m̧akūt. Kōmel̦el̦eik Affordable Housing Program (Boma Yangu) rejistōr im wāween kōllā ilo anan. MEN EAUJELOK: Tōl armij eo ñan portal an Boma Yangu bwe en lo jerbal ko im kōmel̦el̦eik kakien ko ñan bōk juon m̦weo. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     findJobsPrompt:
-      "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the Public Service Commission (PSC) portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the PSC website or local dailies for MyGov advertisements. RULE: Always refer to the application as 'Genie AI'.",
+      "Jerbal āinwōt juon ri-kappe kōn jerbal ilo kien. Tōl armij eo ilo an kōm̦m̦an pōrofael im kajjitōk kōn jerbal ko reppālõt ikkijeen portal an Public Service Commission (PSC). MEN EAUJELOK: Kappe armij eo bwe en kōpooj peba in jikuul̦ ko an im lale website an PSC ak nuujpeba ko kōn kōkalikkar an MyGov. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'.",
     justChatPrompt:
-      "Act as a friendly local companion. Be polite, helpful, and knowledgeable about Kenyan culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate Kenyan government services like **IDs**, **Taxes**, and **Business Registration**. RULE: Always refer to the application as 'Genie AI'."
+      "Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an Kenya im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien Kenya āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'."
   },
   common: {
     cancel: 'A bula',
@@ -1437,13 +1438,13 @@ export default {
       details: 'Kibaroo',
       ingestionLog: 'Dung Log',
       detailsHint:
-        '__TODO_TRANSLATE__ (en: Metadata for this file: name, author and the knowledge-hierarchy labels the AI uses to route questions. Ingest requires at least one label.)',
+        'Melele kōn fail in: ēt, ri-jeje im kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ ko AI ej kōjerbali ñan jilkinl̦o̦k kajjitōk ko. Ingest ej aikuj jañin kab juon kakōl̦l̦e.',
       dashboardHint:
-        "__TODO_TRANSLATE__ (en: Live view of this file's website crawl: rate, queue, errors and progress. When the crawl has succeeded, the footer below turns it into an OKF repository.)",
+        'Kalimjōk ilo iien em̦ool crawl an website kōn fail in: tōrrein, laan̦, l̦apier im wōnm̦aanl̦o̦k. Ñe em̦ōj an tōp crawl eo, jikin jeje eo ilal̦ ej kōm̦m̦an bwe en jikin kakwōn OKF.',
       crawlLogHint:
-        '__TODO_TRANSLATE__ (en: Per-page log of the website crawl: which URLs were fetched, redirected or failed. Written while the crawl runs.)',
+        'Ripot an kajojo peij kōn crawl an website: URL ta ko em̦ōj bōki, kōrōl̦o̦ki ak l̦apier. Jeje ilo iien eo crawl ej em̦m̦akūt.',
       ingestionLogHint:
-        '__TODO_TRANSLATE__ (en: Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.)'
+        'Wōnm̦aanl̦o̦k an kajojo wāween kōpooj fail in ñan uwaak ko an AI: kōm̦m̦an kōkōm̧bōļ (chunking), kakōl̦l̦e, embedding im kakoba ilo laajrak. L̦apier ilo ijin rej kwal̦o̦k kajjien ia eo ingest ear bōjrak ie.'
     },
     log: {
       killActions: 'Faha Kewol (Kill Actions):',
@@ -1522,31 +1523,31 @@ export default {
         version: 'Version'
       },
       current: 'current',
-      loadFailed: 'Failed to load versions',
-      none: 'No versions minted yet — publishing creates v1.',
+      loadFailed: 'Ban bōktok wāween ko',
+      none: 'Ejjan̄in wōr wāween em̦ōj kōm̦m̦an — publishing ej kōm̦m̦an v1.',
       notServing: 'Not serving',
-      publish: 'Create new version',
-      published: "Version v{'{'}v{'}'} published — bundle {'{'}f{'}'} stored in the document repository.",
+      publish: 'Kōm̦m̦an wāween ekāāl',
+      published: "Wāween v{'{'}v{'}'} em̦ōj publish — bundle {'{'}f{'}'} em̦ōj kakkwon ilo jikin kakwōn peba.",
       serving: 'Ingested (serving)',
       title: 'Versions'
     },
     shell: {
-      back: 'Studio dashboard',
+      back: 'Dashboard an Studio',
       building: 'Building…',
-      buildingHint: 'The source file is still being processed',
+      buildingHint: 'Peba in jikin eo ej pād ilo wāween jerbal',
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts.',
+        body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Jol̦o̦k jikin kakwōn'
       },
       export: 'Export .zip',
       logs: 'Logs',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Kwal̦o̦k bwe kwojel̦ā kōn men ko rej kakōl̦l̦e & publish',
+        note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
+        body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin jabdewōt zip m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
         confirm: 'Publish',
         title: 'Publish'
       },
@@ -1564,59 +1565,59 @@ export default {
       deleteLabel: 'Delete'
     },
     logs: {
-      labeled: "labeled: {'{'}n{'}'}",
-      fallbacks: "LLM fallbacks: {'{'}n{'}'}",
-      concepts: "concepts: {'{'}n{'}'}",
+      labeled: "kakōl̦l̦eiki: {'{'}n{'}'}",
+      fallbacks: "jipañ ko an LLM: {'{'}n{'}'}",
+      concepts: "kōm̦m̦an ko: {'{'}n{'}'}",
       col: {
         action: 'Action',
         description: 'Description',
         user: 'User',
         when: 'Date & time'
       },
-      count: "{'{'}n{'}'} entries",
-      loadFailed: 'Failed to load the activity log.',
-      none: 'No activity recorded yet — repository actions appear here as they happen.',
+      count: "{'{'}n{'}'} jikin ko",
+      loadFailed: 'Ban kōdāl̦o̦k ripot in m̦akūtkūt ko.',
+      none: 'Ejjan̄in wōr m̦akūtkūt em̦ōj jeje — jerbal ko an jikin kakwōn renaj wal̦o̦k ijin ilo aer wal̦o̦k.',
       title: 'Activity log'
     },
     graph: {
-      aria: 'Concept graph',
+      aria: 'Graf in kōm̦m̦an',
       concepts: 'concepts',
-      empty: 'No concepts yet - nothing to graph.',
+      empty: 'Ejjan̄in wōr kōm̦m̦an - ejjel̦o̦k men in kōm̦m̦an graf ie.',
       fit: 'Fit graph',
-      hub: 'Show or hide the index hub (its Contents links are structure, not knowledge)',
+      hub: 'Kwal̦o̦k ak nooj index hub (kebaake ko an kobban rej ejjaak, ejjab jel̦āl̦o̦kjen̦)',
       layouting: 'Layouting…',
       legend: 'index',
       links: 'links',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
       card: {
-        links: "{'{'}n{'}'} links",
-        chunks: "{'{'}n{'}'} chunks",
-        failed: 'indexing failed',
-        flagged: 'flagged entities',
+        links: "{'{'}n{'}'} kebaake ko",
+        chunks: "{'{'}n{'}'} kōkōm̧bōļ ko",
+        failed: 'laajrak ear l̦apier',
+        flagged: 'men ko ewōr kakōl̦l̦e ie',
         hub: 'Index hub',
-        pending: 'not indexed yet'
+        pending: 'ejjan̄in pād ilo laajrak'
       }
     },
     editor: {
       addConcept: {
-        bodyLabel: 'Markdown (paste or leave empty)',
-        bodyPh: '# Heading\\n\\nPaste markdown here - frontmatter is added for you.',
+        bodyLabel: 'Markdown (likūt ak kōjparok bwe en ejjel̦o̦k)',
+        bodyPh: '# Bōroji\n\nLikūt markdown ijin - frontmatter enaj make koba.',
         create: 'Create file',
-        failed: 'Could not create the file.',
-        title: 'Add concept file',
+        failed: 'Ban kōm̦m̦ane fail in.',
+        title: 'Kobaiki fail in kōm̦m̦an',
         titleLabel: 'Title',
-        titlePh: 'e.g. Wildlife in the Mara',
-        updateIndex: 'Append to the index Contents list'
+        titlePh: 'āinwōt Menin mour ilo Mara',
+        updateIndex: 'Kobaiki ilo laajrak in Kobban ilo index'
       },
       autocorrect: {
         blankBefore: '(blank)',
-        blankBadge: 'no frontmatter — full proposal',
+        blankBadge: 'ejjel̦o̦k frontmatter — aolepen peba',
         applyField: 'Apply',
         apply: 'Apply fixes',
-        body: 'Planned frontmatter fixes across every concept. Bodies are never modified.',
+        body: 'Kōm̦m̦an bwe frontmatter en jim̦we ilo aolep kōm̦m̦an ko. Bōbba ko ban oktak.',
         button: 'Autocorrect',
-        clean: 'Nothing to fix — all frontmatter already conforms.',
+        clean: 'Ejjel̦o̦k men in kōm̦m̦ane — aolep frontmatter ejim̦we.',
         col: {
           field: 'Field',
           after: 'After',
@@ -1625,14 +1626,14 @@ export default {
         },
         failed: 'Scan failed.',
         scanning: 'Scanning…',
-        title: 'Autocorrect (frontmatter only)'
+        title: 'Make-kōjim̦we (frontmatter wōt)'
       },
       concepts: {
-        originTip: 'How this concept was curated',
+        originTip: 'Ewi wāween kar kōm̦m̦an kōm̦m̦an in',
         add: 'Add concept',
         addLabel: 'Set label',
         delete: 'Delete file',
-        empty: 'No files yet - add a concept or re-split from source.',
+        empty: 'Ejjan̄in wōr fail - kobaiki juon kōm̦m̦an ak bar ajeje jān jikin eo.',
         filter: 'Filter files',
         indexBadge: 'index',
         label: 'Concepts',
@@ -1640,30 +1641,30 @@ export default {
         resplit: 'Re-split',
         flagged: 'flagged',
         flaggedTip:
-          'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+          'Kōm̦m̦an ko ewōr kakōl̦l̦e ie — kipel̦o̦k kajojo, jol̦o̦k ak ukōt men eo, kōjparok (ej make bar lale); ak kwal̦o̦k bwe kwojel̦ā ie ilo iien publish.',
         piiBadge: 'PII',
-        piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
-        piiTipBare: 'Flagged entities — open, review, then save to re-scan.',
+        piiTip: 'Men ko ewōr kakōl̦l̦e ie: {k}. Kipel̦o̦k, jol̦o̦k ak ukōti, innem kōjparok — ej make bar lale.',
+        piiTipBare: 'Men ko ewōr kakōl̦l̦e ie — kipel̦o̦k, etale, innem kōjparok bwe en bar lale.',
         bulkAccept: 'Accept all',
         bulkRedact: 'Redact all',
         bulkRemove: 'Remove all',
-        loadProgress: 'Loading files {done}/{total}'
+        loadProgress: 'Kōdāl̦o̦k fail ko {done}/{total}'
       },
       delete: {
-        body: 'This permanently removes the file, its indexed chunks and its graph links.',
+        body: 'Men in enaj jol̦o̦k fail eo, kōkōm̧bōļ ko em̦ōj laajraki, im kebaake ko an graf indreo.',
         confirm: 'Delete',
         title: 'Delete file'
       },
-      label: 'Repository editor',
-      loadFailed: 'Could not load this concept.',
-      loadingConcept: 'Loading concept…',
+      label: 'Jikin jeje an jikin kakwōn',
+      loadFailed: 'Ban bōktok kōm̦m̦an in.',
+      loadingConcept: 'Kōdāl̦o̦k kōm̦m̦an…',
       meta: {
-        label: 'Concept metadata',
-        labelLabel: 'Label (Knowledge Hierarchy)',
+        label: 'Melele kōn kōm̦m̦an',
+        labelLabel: 'Kakōl̦l̦e (Laajrak in Jel̦āl̦o̦kjen̦)',
         noLabel: 'No label',
-        none: 'No concept selected',
-        saveFailed: 'Metadata save failed',
-        saved: 'Metadata saved',
+        none: 'Ejjel̦o̦k kōm̦m̦an em̦ōj kāālete',
+        saveFailed: 'Kōjparok melele ear l̦apier',
+        saved: 'Melele ko em̦ōj kōjparoki',
         status: 'Index status',
         title: 'Title',
         trust: 'Trust tier',
@@ -1674,62 +1675,61 @@ export default {
         files: 'Files',
         graph: 'Graph'
       },
-      pickConcept: 'Select a concept from the list to start editing.',
+      pickConcept: 'Kāālet juon kōm̦m̦an jān laajrak eo bwe kwōn jino jeje.',
       resplit: {
-        body: 'This deletes all current concepts and the derived graph, then re-imports the source file with the new split. Concept edits are lost.',
+        body: 'Men in enaj jol̦o̦k aolep kōm̦m̦an kiiō im graf eo, innem bar bōktok fail eo kōn ajeje ekāāl. Jeje ko am ilo kōm̦m̦an ko renaj joko.',
         confirm: 'Re-split',
-        failed: 'Re-split failed — check the source file link.',
-        modeA: 'One concept for the whole crawl',
-        modeAHint: 'Mega-concept — the entire content in a single concept',
-        modeB: 'One concept per page',
-        modeBHint: 'Splits on the crawler’s `## Source:` markers (recommended)',
-        modeC: 'Use LLM topic extraction',
-        modeCHint: 'Story 10.6 — coming soon',
-        title: 'Re-split from source'
+        failed: 'Ajeje bar juon alen ear l̦apier — lale toor eo an fail eo.',
+        modeA: 'Juon wōt kōm̦m̦an ñan aolepen crawl eo',
+        modeAHint: 'Kōm̦m̦an ekanooj l̦ap — aolep kobban ilo juon wōt kōm̦m̦an',
+        modeB: 'Juon kōm̦m̦an ilo kajojo peij',
+        modeBHint: 'Ajeje ilo kakōl̦l̦e ko an crawler `## Source:` (karōk eo em̦m̦antata)',
+        modeC: 'Kōjerbal LLM ñan kōkalikkar un ko',
+        modeCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
+        title: 'Bar ajeje jān jikin eo'
       },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',
-      unsaved: 'Unsaved changes',
+      unsaved: 'Oktak ko rejan̄in kōjparok',
       view: {
         rendered: 'Rendered',
         source: 'Source'
       },
       viewToggle: 'Editor view',
       paneLabel: 'View pane',
-      saveFailed: 'Save failed — retry',
+      saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiBulk: {
         title: {
-          redact: 'Redact all flagged content',
-          remove: 'Remove all flagged content',
-          accept: 'Accept all flagged entities'
+          redact: 'Bwōbwe aolep men ko ewōr kakōl̦l̦e ie',
+          remove: 'Jol̦o̦k aolep kobba ko ewōr kakōl̦l̦e ie',
+          accept: 'Bōk aolep men ko ewōr kakōl̦l̦e ie'
         },
         body: {
-          redact: 'The body of every flagged concept is replaced with the redaction notice. This cannot be undone.',
-          remove: 'The body of every flagged concept is emptied. This cannot be undone.',
-          accept:
-            'All flagged entities are marked reviewed-and-kept — they will not be flagged again unless you re-scan.'
+          redact: 'Kobban kajojo kōm̦m̦an ewōr kakōl̦l̦e ie ej bōk jikin kōn naanin kōl̦apier. Ban maron̦ bar kōjepel̦o̦ke.',
+          remove: 'Kobban kajojo kōm̦m̦an ewōr kakōl̦l̦e ie ej ejjel̦o̦kl̦o̦k. Ban maron̦ bar kōjepel̦o̦ke.',
+          accept: 'Aolep men ko ewōr kakōl̦l̦e ie rej etale-im-kōjparok — ban bar kakōl̦l̦e m̦ae iien kwobar lale.'
         },
-        scope: "Concepts affected: {'{'}n{'}'}.",
+        scope: "Kōm̦m̦an ko ear jelōti: {'{'}n{'}'}.",
         confirm: 'Apply',
-        failed: 'The bulk PII action failed — try again.'
+        failed: 'Jerbal an PII l̦apier — bar kajjieon̦.'
       },
       actions: {
-        bulkPii: 'Applying the bulk PII action',
+        bulkPii: 'Jerbale kōm̦m̦an ko l̦ap an PII',
         deleting: 'Deleting'
       }
     },
     dashboard: {
       bulk: {
-        body: 'Each repository is published with the full gate check (PII review, indexing, conformance). Per-repository outcomes:',
-        pending: 'Confirm to publish the selected repositories.',
+        body: 'Kajojo jikin kakwōn ej publish kōn aolep etale ko (PII etale, kakoba ilo laajrak, jim̦we). Jem̦l̦o̦k an kajojo:',
+        pending: 'Kam̦ool ñan publish jikin kakwōn ko em̦ōj kāāleti.',
         publishConfirm: "Publish {'{'}n{'}'}",
-        title: 'Publish selected repositories'
+        title: 'Publish jikin kakwōn ko em̦ōj kāāleti'
       },
       card: {
-        actions: "Actions for {'{'}name{'}'}",
+        actions: "Kōm̦m̦an ko ñan {'{'}name{'}'}",
         building: 'Building…',
-        buildingAria: 'Building — the source file is still being processed',
+        buildingAria: 'Ej kōm̦m̦an — peba in jikin eo ej pād ilo wāween jerbal',
         delete: 'Delete',
         export: 'Export',
         ingesting: 'Ingesting…',
@@ -1738,27 +1738,27 @@ export default {
         versions: 'Versions'
       },
       delete: {
-        body: 'This permanently removes the repository, its concepts, indexed content, graph and bundle artifacts. It cannot be undone.',
+        body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo. Ban maron̦ bar kōjepel̦o̦ke.',
         confirm: 'Delete',
-        title: 'Delete repository'
+        title: 'Jol̦o̦k jikin kakwōn'
       },
       filter: {
-        domain: 'Filter by subject area'
+        domain: 'Kāālet ekkar ñan un ko'
       },
-      new: '+ New repository',
+      new: '+ Jikin kakwōn ekāāl',
       pii: {
-        ack: 'Acknowledge flagged entities & publish',
-        note: 'The flagged entities are part of the published content. If you have reviewed them (e.g. official contact details), acknowledge and continue.'
+        ack: 'Kwal̦o̦k bwe kwojel̦ā kōn men ko rej kakōl̦l̦e & publish',
+        note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
       publish: {
-        body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding the previous zip. The new version is not serving until you Ingest it.",
+        body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin zip eo m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
         confirm: 'Publish',
         title: 'Publish'
       },
       search: 'Search...',
-      select: "Select {'{'}name{'}'} for bulk publish",
+      select: "Kāālet {'{'}name{'}'} ñan l̦ap an publish",
       stage: {
-        drainFailed: 'Ingest failed',
+        drainFailed: 'Ingest ear l̦apier',
         redraining: 'Re-draining…',
         building: 'Building…',
         draft: 'Draft',
@@ -1773,36 +1773,36 @@ export default {
     },
     build: {
       drainFailed: {
-        more: "+ {'{'}n{'}'} more",
-        fixPath: 'Re-ingest to retry: retract → create version → ingest.'
+        more: "+ bar {'{'}n{'}'}",
+        fixPath: 'Bar ingest ñan kajjieon̦ bar juon alen: retract → kōm̦m̦an bar juon wāween → ingest.'
       },
       curation: {
-        fallbacks: 'LLM fallbacks',
+        fallbacks: 'jipañ ko an LLM',
         curated: 'Curated',
         typed: 'Typed',
         labeled: 'Labeled',
         described: 'Described'
       },
-      batches: 'Batches stored',
+      batches: 'Bōrokraam̦ ko em̦ōj kakkwon',
       bytes: 'Source read',
-      conceptsIndexed: 'concepts indexed',
+      conceptsIndexed: 'kōm̦m̦an ko em̦ōj laajraki',
       elapsed: {
-        hr: "Started {'{'}n{'}'} h ago",
-        lt1: 'Started less than a minute ago',
-        min: "Started {'{'}n{'}'} min ago"
+        hr: "Jinoe ilo {'{'}n{'}'} awa jim̦m̦a",
+        lt1: 'Jinoe dikl̦o̦k jān juon minit jim̦m̦a',
+        min: "Jinoe ilo {'{'}n{'}'} minit jim̦m̦a"
       },
       hint: {
-        import: 'The repository stays in Import until the file conversion completes.',
-        rag: 'The RAG index is building — the version starts serving once every concept is indexed.',
-        serving: 'This version is serving RAG traffic — retract it to make changes.',
-        review: 'In review — a reviewer signs off, then the steward publishes and ingests.',
-        retracted: 'Out of service — Submit → Review → Approve → Publish → Ingest to re-serve.',
-        idle: 'Import complete — Submit for review to continue the workflow.'
+        import: 'Jikin kakwōn eo ej pād ilo Import m̦ae iien peba eo ej dedel̦o̦k an oktak.',
+        rag: 'RAG index ej kōm̦m̦an — wāween in ej jino serving ñe em̦ōj laajrak aolep kōm̦m̦an ko.',
+        serving: 'Wāween in ej serving traffic an RAG — retract e bwe kwōn kōm̦m̦an oktak.',
+        review: 'Pād ilo review — ri-etale eo ej jain, innem ri-lale eo ej publish im ingest.',
+        retracted: 'Ejjab jerbal — submit → review → approve → publish → ingest bwe en bar jino serving.',
+        idle: 'Dedel̦o̦k kōdāl̦o̦k — submit ñan review bwe en wōnm̦aanl̦o̦k jerbal eo.'
       },
-      pages: 'Pages processed',
+      pages: 'Peij ko em̦ōj jerbali',
       serving: {
-        graph: 'Serving graph',
-        version: 'Serving version'
+        graph: 'Graf an serving',
+        version: 'Wāween in serving'
       },
       stage: {
         indexing: 'Indexing',
@@ -1810,12 +1810,12 @@ export default {
         label: 'Stage'
       },
       title: {
-        import: 'Import progress',
-        rag: 'Ingestion progress',
-        serving: 'Serving status',
-        review: 'Review status',
-        retracted: 'Retraction status',
-        idle: 'Repository status'
+        import: 'Wōnm̦aanl̦o̦k an kōdāl̦o̦k',
+        rag: 'Wōnm̦aanl̦o̦k an ingest',
+        serving: 'Ejjāliklik eo an serving',
+        review: 'Ejjāliklik eo an review',
+        retracted: 'Ejjāliklik eo an retract',
+        idle: 'Ejjāliklik eo an jikin kakwōn'
       },
       lifecycle: {
         importing: 'Importing',
@@ -1831,33 +1831,33 @@ export default {
       }
     },
     create: {
-      zipOnly: 'Pick a .zip bundle file.',
-      stagedFile: "Staged: {'{'}name{'}'}",
-      staged: 'Bundle staged — click Create Repository to start the import.',
-      openExisting: 'Open existing repository',
-      name: 'Repository name',
-      importing: 'Importing bundle…',
-      importHint: 'Or import an existing zip bundle as a new repository.',
-      importDefaultName: 'Imported repository',
-      failed: 'Repository creation failed',
-      duplicateInline: 'A repository with this name already exists. Open it, or pick another name.',
-      duplicate: 'A repository with this name already exists - open it from the dashboard or pick another name.',
+      zipOnly: 'Kāālet juon fail in bundle .zip.',
+      stagedFile: "Em̦ōj kōpooj: {'{'}name{'}'}",
+      staged: 'Bundle em̦ōj kōpooje — jidduuki Kōm̦m̦an Jikin Kakwōn ñan jino bōktok.',
+      openExisting: 'Kipel̦o̦k jikin kakwōn em̦ōj kōm̦m̦ane',
+      name: 'Āt an jikin kakwōn',
+      importing: 'Bōktok bundle…',
+      importHint: 'Ak bōktok juon zip bundle ñan kōm̦m̦an juon jikin kakwōn ekāāl.',
+      importDefaultName: 'Jikin kakwōn eo em̦ōj bōktok',
+      failed: 'Kōm̦m̦an jikin kakwōn eo ear l̦apier',
+      duplicateInline: 'Ewōr juon jikin kakwōn kōn āt in. Kipel̦o̦k, ak kāālet bar juon āt.',
+      duplicate: 'Ewōr juon jikin kakwōn kōn āt in — kipel̦o̦k jān dashboard ak kāālet bar juon āt.',
       domain: 'Subject area',
-      create: 'Create repository',
-      title: 'New OKF repository',
-      hint: 'Creates an empty repository with an index.md you edit in the Studio editor.',
-      domainPlaceholder: 'Select a subject area…',
-      domainRequired: 'Pick a subject area first — it cannot be changed after creation.',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
+      create: 'Kōm̦m̦an jikin kakwōn',
+      title: 'Jikin kakwōn OKF ekāāl',
+      hint: 'Ej kōm̦m̦an juon jikin kakwōn ejjel̦o̦k kobban kōn index.md eo kwonañin jeje ilo Studio.',
+      domainPlaceholder: 'Kāālet un ko…',
+      domainRequired: 'Kāālet un ko m̦oktata — ban ukōte ālikin an kōm̦m̦an.',
+      classLabel: 'Kalikkar kōm̦m̦an eo',
+      classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
       classLlm: 'LLM-assisted',
       classHybrid: 'Hybrid'
     },
     fm: {
-      errKeyCurated: 'Reserved field name.',
-      errKeyDuplicate: 'Field name is used twice.',
+      errKeyCurated: 'Āt in jikin kōjparok.',
+      errKeyDuplicate: 'Āt in jikin kōjerbal ruo alen.',
       errJson: 'Invalid JSON',
-      errNumber: 'Must be a number',
+      errNumber: 'Aikuj juon nōmba',
       kind: {
         json: 'JSON',
         array: 'List',
@@ -1868,53 +1868,51 @@ export default {
       removeKey: 'Remove field',
       kindLabel: 'Value type',
       keyPh: 'field name',
-      fullHint: 'Every frontmatter field is editable. Add or remove keys freely.',
-      errRemovalPending: 'Removing fields needs the merge-delete server contract (landing shortly).',
-      errKeyRequired: 'Every field needs a name.',
-      arrayPh: 'comma-separated values',
+      fullHint: 'Aolep jikin ilo frontmatter kwomaron̦ jeje ie. Kobaik ak jol̦o̦k ki ko ilo anan.',
+      errRemovalPending: 'Jol̦o̦k jikin ko aikuj kalimur an merge-delete server (etok wōt).',
+      errKeyRequired: 'Aolep jikin aikuj juon āt.',
+      arrayPh: 'uwaak ko kōkōm̧a eie',
       addKey: 'Add field',
-      saved: 'Frontmatter saved',
+      saved: 'Frontmatter em̦ōj kōjparoke',
       label: 'Frontmatter',
-      tipLabel: 'What is Frontmatter?',
+      tipLabel: 'Ta in Frontmatter?',
       edit: 'Edit',
-      empty: 'No frontmatter yet — Edit adds type, title and labels.',
+      empty: 'Ejjan̄in wōr frontmatter — Jeje ej kobaiki kain, āt im kakōl̦l̦e.',
       type: 'Type',
       noType: 'No type',
       titleLabel: 'Title',
-      labelsLabel: 'Label (Knowledge Hierarchy)',
+      labelsLabel: 'Kakōl̦l̦e (Laajrak in Jel̦āl̦o̦kjen̦)',
       noLabel: 'No label',
       descriptionLabel: 'Description',
-      save: 'Save frontmatter',
-      saveFailed: 'Frontmatter save failed'
+      save: 'Kōjparok frontmatter',
+      saveFailed: 'Kōjparok frontmatter ear l̦apier'
     },
     glossary: {
       concept:
-        'One entry in your repository — usually a single page or topic. Each concept has structured frontmatter the assistant reads, plus the markdown text it answers from.',
+        'Juon bwijin ilo jikin kakwōn eo am — juon wōt peij ak un. Kajojo kōm̦m̦an ewōr frontmatter ie me jipañ eo ej riiti, koba markdown me ej uwaak jān e.',
       repository:
-        'A collection of curated concepts around one Subject Area. It becomes an OKF bundle you publish, version and make available to the assistant.',
+        'Aolep kōm̦m̦an ko kōn juon wōt Un. Enaj erom juon OKF bundle me kwoj publish, bōk nōmba, im kōpel̦o̦k ñan jipañ eo.',
       subjectArea:
-        'Where does this knowledge belong? The Subject Area groups your repository and focuses which labels you can choose. It cannot be changed after creation.',
-      selectSubjectArea: 'Select a subject area…',
-      subjectAreaMissing:
-        'The Subject Area of this repository is not in the Knowledge Hierarchy — showing every label.',
+        'Jel̦āl̦o̦kjen̦ in epād ia? Un ko rej kobaik jikin kakwōn eo am im kalikkar kakōl̦l̦e ta ko kwomaron̦ kāāleti. Ban maron̦ ukōt ālikin an kōm̦m̦an.',
+      selectSubjectArea: 'Kāālet un ko…',
+      subjectAreaMissing: 'Un an jikin kakwōn in ejjab pād ilo Laajrak in Jel̦āl̦o̦kjen̦ — kwal̦o̦k aolep kakōl̦l̦e.',
       label:
-        'A category from the Knowledge Hierarchy that tells the assistant what kind of thing this concept is. Labels are how answers find the right content.',
+        'Juon laajrak jān Laajrak in Jel̦āl̦o̦kjen̦ me ej jiron̦ jipañ eo ta kain kōm̦m̦an in. Kakōl̦l̦e ko rej jipañ uwaak ko lo melele ko rejim̦we.',
       bundle:
-        'The zip export of a repository — its concepts, structure and metadata in one file. Bundles are how repositories move between systems.',
+        'Zip kōm̦m̦an an jikin kakwōn — kōm̦m̦an ko, ejaak im melele ko ilo juon fail. Bundle ko rej wāween an jikin kakwōn em̦m̦akūt ilo buñtōn ko.',
       version:
-        'A frozen snapshot of a repository at publish time. Editing continues on the next version — published versions never change.',
-      serving: 'This version is live: the assistant reads its content when answering. Retract it to make changes.',
+        'Juon pija em̦ōj kōjparoke ilo iien publish. Jeje ej wōnm̦aanl̦o̦k ilo wāween eo juon — wāween ko em̦ōj publish ban oktak.',
+      serving: 'Wāween in ej jerbal: jipañ eo ej riiti melele ko ilo an uwaak. Retract e bwe kwōn kōm̦m̦an oktak.',
       ingestion:
-        'The step where a published version is prepared for answering — text is split, embedded and linked. Nothing reaches the assistant before this.',
+        'Buñtōn eo me em̦ōj publish wāween eo ñan uwaak — bōjrak, embedded im kobaiki. Ejjel̦o̦k ej tōbar jipañ eo m̦okta jān men in.',
       classification:
-        'How we decide what each concept IS (a topic, an entity, a process…). Heuristics reads the page automatically; the LLM option is slower but can handle tricky pages.',
+        'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
       resplit:
-        'Re-cutting the source into concepts a different way — for example one concept per page instead of one for the whole site.',
+        'Bar ajeje melele ko ilo bar juon wāween — āinwōt juon kōm̦m̦an ilo kajojo peij ijellokin juon wōt ñan aolep jikin.',
       saveFailed: 'Save failed',
-      importFailedTitle: 'The import failed — the source file could not be converted.',
-      importFailedHint: 'Delete this repository and import the source file again.',
-      frontmatter:
-        'The structured information at the top of each file — type, title, labels. The assistant uses it to know what each concept is about.'
+      importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
+      importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
+      frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.'
     },
     md: {
       toolbar: 'Formatting',
@@ -1924,7 +1922,7 @@ export default {
       h2: 'Heading 2',
       h3: 'Heading 3',
       bullet: 'Bullet list',
-      numbered: 'Numbered list',
+      numbered: 'Laajrak kōn nōmba',
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
@@ -1932,106 +1930,105 @@ export default {
     },
     narrative: {
       intro:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite. Think of it as a lightweight ontological layer for your domain — labels define the categories, topics define the entities, sources define the provenance.)',
+        'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali. Lale āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e.',
       step0:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a curated, versioned collection of topics. Think of it as a lightweight ontological layer for your domain — labels define categories, topics define entities, sources define provenance. Once published, downstream chat answers cite these topics by id.)',
+        'Jikin kakwōn OKF ej juon koba in un ko em̦ōj karōki. Kalimjōke āinwōt juon buñtōn kōm̦m̦an ilo domain eo am — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko an chat rej kōjerbal un kein kōn ID.',
       step1:
-        '__TODO_TRANSLATE__ (en: Three ways to seed an OKF repository: pull topics from a website crawl, lift them from documents you have already uploaded, or start from a blank canvas. Cloning an existing repo copies its topics and lets you fork the work.)',
+        'Jilu wāween ñan jino jikin kakwōn OKF: bōk un ko jān crawl an website, bōki jān peba ko kwom̦ōj kalōki, ak jino jān ejjel̦o̦k men. Kōm̦m̦an kopi in juon repo ej bōk aolep un ko im kwomaron̦ wōnm̦aanl̦o̦k kōn jerbal eo.',
       step2:
-        '__TODO_TRANSLATE__ (en: Each document becomes a source of topics. The producer reads them, extracts candidate topics, and proposes a hierarchy. You will review every topic on the next step — nothing is committed until you sign off.)',
+        'Kajojo peba ej erom jikin bōk melele ñan un ko. Ri-kōm̦m̦an eo ej riiti, kalikkar un ko, im kōpooj juon laajrak. Kwonaj etale kajojo un ilo buñtōn eo juon — ejjel̦o̦k ej koba m̦ae iien kwoj kam̦ool.',
       step3:
-        '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics. Topics cluster under category labels you choose. The producer is conservative — it prefers to suggest fewer, well-formed topics over many noisy ones.)',
+        'Kōmij riiti jikin ko am im kōpooj un ko. Un ko rej koba ippān doon ilo kakōl̦l̦e ko kwoj kāāleti. Ri-kōm̦m̦an eo ej lale em̦m̦an — ej kāālet bwe en dik un ko reim̦m̦an jān an el̦ap ak bōtata.',
       step4:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic? Choose 3-7 labels that capture the main axes; the producer uses them as scaffolds for the topic hierarchy.)',
+        'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in? Kāālet 3-7 kakōl̦l̦e ko me rej bōk aolep melele; ri-kōm̦m̦an eo ej kōjerbali ñan ejaak an un ko.',
       step5:
-        '__TODO_TRANSLATE__ (en: This is the heart of the work. Each topic is a small, citable unit of knowledge. Topics get a title, a description, and inherit the labels you chose. Your job is to make it defensible: rename vague titles, merge near-duplicates, drop ones you cannot back with a source.)',
+        'Eñin ej aolepen jerbal eo. Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Un ko rej bōk āt, melele, im kakōl̦l̦e ko kwoar kāāleti. Jerbal eo am ej bwe en alikkar: ukōt āt ko rejjab alikkar, kobaik men ko reāinwōt doon, jol̦o̦k men ko ejjel̦o̦k jikin aer itok jān e.',
       step6:
-        '__TODO_TRANSLATE__ (en: We run conformance checks: do every topic have a title? Are the labels valid? Are the source attributions intact? Blocking issues must be fixed before publishing; warnings can be acknowledged.)',
+        'Kōmij etale bwe en jim̦we aolep men: aolep un ewōr ke āt ie? Kakōl̦l̦e ko rejim̦we ke? Jikin ko em̦ōj bōk melele jān er rejim̦we ke? Aikuj kōm̦m̦an bwe men ko reben ren jim̦we m̦okta jān publish; kakōl̦l̦e in kakkōl remaron̦ kam̦ool.',
       step7:
-        '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed: status values can be clamped to valid enums, missing fields can be filled with sensible defaults. Apply the fixes you agree with, then go back to the curator to review.)',
+        'Jet kakkōl remaron̦ make jim̦we: wāween ko remaron̦ pedped ioon kien ko, jikin ko ejjel̦o̦k kobbaer remaron̦ koba melele ko rejim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
       step8:
-        '__TODO_TRANSLATE__ (en: A summary of what you are about to publish: the topics, the labels, the sources, and any unresolved issues. Once you sign off, the repository moves to the published lane.)',
+        'Maron̦ in aolep men ko kwoj kōpooj ñan publish: un ko, kakōl̦l̦e ko, jikin ko, im jabdewōt men ko rejan̄in jim̦we. Ñe em̦ōj am kam̦ool, jikin kakwōn eo ej etal ñan lain in publish.',
       step9:
-        '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository. Every subsequent change — a new topic, a revised description, a stale re-verification — publishes as v2, v3, etc. Old versions stay citable forever.)',
+        'Publishing ej kōm̦m̦an wāween v1 an jikin kakwōn in. Aolep oktak tok ālik — un ekāāl, melele ekāāl, kōkāāl eo em̦ōj an kanooj etto — enaj publish āinwōt v2, v3, im aolep. Wāween ko rōtto renaj maron̦ kōjerbali indreo.',
       docMgmtEntry:
-        '__TODO_TRANSLATE__ (en: Create a new OKF repository from the selected documents. Documents will become sources; you will review and name the topics they produce before anything is published.)',
+        'Kōm̦m̦an juon jikin kakwōn OKF ekāāl jān peba ko em̦ōj kāāleti. Peba ko renaj jikin bōk melele; kwonaj etale im nōmbaar un ko renaj kōm̦m̦ani m̦okta jān an jabdewōt publish.',
       crawlSegment:
-        '__TODO_TRANSLATE__ (en: An OKF repository is a structured, versioned collection of topics your chat answers can cite.)',
+        'Jikin kakwōn OKF ej juon ejaak, koba in un ko ewōr aer wāween me uwaak ko ilo chat remaron̦ kōjerbali.',
       emptyDashboard:
-        '__TODO_TRANSLATE__ (en: You have not created any OKF repositories yet. An OKF repository is a structured, citable set of topics that your chat answers can draw from.)',
-      labels:
-        '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — they answer "what kind of thing is this topic?".)',
-      hide: '__TODO_TRANSLATE__ (en: Hide)',
-      whatIsThis: '__TODO_TRANSLATE__ (en: What is this?)'
+        'Kwojan̄in kōm̦m̦an jabdewōt jikin kakwōn OKF. Jikin kakwōn OKF ej juon karōk, koba in un ko kwomaron̦ kōjerbali bwe uwaak ko ilo chat ren bōk melele jān er.',
+      labels: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — rej uwaake "ta kain men in un in?".',
+      hide: 'Nooje',
+      whatIsThis: 'Ta in?'
     },
     common: {
-      close: '__TODO_TRANSLATE__ (en: Close)',
-      cancel: '__TODO_TRANSLATE__ (en: Cancel)',
-      save: '__TODO_TRANSLATE__ (en: Save)',
-      clear: '__TODO_TRANSLATE__ (en: Clear)',
-      delete: '__TODO_TRANSLATE__ (en: Delete)'
+      close: 'Kilōk',
+      cancel: 'Kōtōmraak',
+      save: 'Kōjparok',
+      clear: 'Kōrreoik',
+      delete: 'Jol̦o̦k'
     },
     studio: {
-      title: '__TODO_TRANSLATE__ (en: OKF Studio)',
-      help: '__TODO_TRANSLATE__ (en: Help)',
-      helpTitle: '__TODO_TRANSLATE__ (en: About OKF Studio)',
+      title: 'OKF Studio',
+      help: 'Jipañ',
+      helpTitle: 'Kōn OKF Studio',
       helpBody:
-        '__TODO_TRANSLATE__ (en: OKF repositories are a lightweight ontological layer — labels define categories, topics define entities, sources define provenance. Once published, chat answers cite topics by id and surface their provenance.)',
+        'Jikin kakwōn OKF ej juon buñtōn kōm̦m̦an me — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko ilo chat rej kwal̦o̦k un ko kōn ID im kwal̦o̦k ia eo ear itok jān e.',
       view: {
-        dashboard: '__TODO_TRANSLATE__ (en: Dashboard)',
-        wizard: '__TODO_TRANSLATE__ (en: Wizard)'
+        dashboard: 'Dashboard',
+        wizard: 'Wizard'
       },
-      clonedFrom: '__TODO_TRANSLATE__ (en: Cloned from {name} · version {version})',
+      clonedFrom: 'Kopi jān {name} · wāween {version}',
       context: {
-        title: '__TODO_TRANSLATE__ (en: Repository)',
-        untitled: '__TODO_TRANSLATE__ (en: Untitled repository)',
-        trust: '__TODO_TRANSLATE__ (en: Trust)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)',
-        concepts: '__TODO_TRANSLATE__ (en: Concepts so far)',
-        stale: '__TODO_TRANSLATE__ (en: stale)'
+        title: 'Jikin kakwōn',
+        untitled: 'Jikin kakwōn ejjel̦o̦k etan',
+        trust: 'Lōke',
+        sources: 'Jikin ko',
+        concepts: 'Kōm̦m̦an ko kiiō',
+        stale: 'ritto'
       },
       status: {
-        draft: '__TODO_TRANSLATE__ (en: in progress)',
-        inReview: '__TODO_TRANSLATE__ (en: in review)',
-        published: '__TODO_TRANSLATE__ (en: published)'
+        draft: 'ej wōnm̦aanl̦o̦k',
+        inReview: 'ej etale',
+        published: 'em̦ōj publish'
       },
       stage: {
-        inReview: '__TODO_TRANSLATE__ (en: In review)',
-        stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-        draft: '__TODO_TRANSLATE__ (en: Draft)'
+        inReview: 'Pād ilo review',
+        stepOf: 'Buñtōn {n} jān 10',
+        draft: 'Draft'
       },
       dashboard: {
-        title: '__TODO_TRANSLATE__ (en: Repositories)',
-        new: '__TODO_TRANSLATE__ (en: + New repository)',
-        search: '__TODO_TRANSLATE__ (en: Search...)',
-        empty: '__TODO_TRANSLATE__ (en: No repositories here yet.)',
-        topics: '__TODO_TRANSLATE__ (en: topics)',
-        select: '__TODO_TRANSLATE__ (en: Select {name} for bulk publish)',
-        stale: '__TODO_TRANSLATE__ (en: stale)',
+        title: 'Jikin kakwōn ko',
+        new: '+ Jikin kakwōn ekāāl',
+        search: 'Pukot…',
+        empty: 'Ejjan̄in wōr jikin kakwōn ijin.',
+        topics: 'un ko',
+        select: 'Kāālet {name} ñan l̦ap an publish',
+        stale: 'ritto',
         stage: {
-          inReview: '__TODO_TRANSLATE__ (en: In review)',
-          stepOf: '__TODO_TRANSLATE__ (en: Step {n} of 10)',
-          draft: '__TODO_TRANSLATE__ (en: Draft)'
+          inReview: 'Pād ilo review',
+          stepOf: 'Buñtōn {n} jān 10',
+          draft: 'Draft'
         },
         bulk: {
-          selected: '__TODO_TRANSLATE__ (en: {n} selected)',
-          publish: '__TODO_TRANSLATE__ (en: Publish selected)',
-          title: '__TODO_TRANSLATE__ (en: Publish selected repositories)',
-          body: '__TODO_TRANSLATE__ (en: Once published, downstream chat answers can use them. Each repository below lists its final outcome.)',
-          results: '__TODO_TRANSLATE__ (en: Results)',
-          publishConfirm: '__TODO_TRANSLATE__ (en: Publish {n})',
+          selected: '{n} em̦ōj kāāleti',
+          publish: 'Publish men ko em̦ōj kāāleti',
+          title: 'Publish jikin kakwōn ko em̦ōj kāāleti',
+          body: 'Ñe em̦ōj publish, uwaak ko ilo chat remaron̦ kōjerbali. Kajojo jikin kakwōn ilal̦ ej kwal̦o̦k jem̦l̦o̦k eo an.',
+          results: 'Jem̦l̦o̦k ko',
+          publishConfirm: 'Publish {n}',
           col: {
-            name: '__TODO_TRANSLATE__ (en: Name)',
-            status: '__TODO_TRANSLATE__ (en: Status)',
-            topics: '__TODO_TRANSLATE__ (en: Topics)'
+            name: 'Āt',
+            status: 'Ejjāliklik',
+            topics: 'Un ko'
           },
           status: {
-            ready: '__TODO_TRANSLATE__ (en: Ready)'
+            ready: 'M̦ōj kōpooj'
           }
         }
       },
       draft: {
-        notReady: '__TODO_TRANSLATE__ (en: Drafts cannot be saved server-side yet; saved locally.)'
+        notReady: 'Ban kōjparok draft ko ilo server kiiō; em̦ōj kōjparok ijin.'
       }
     },
     wizard: {
@@ -2040,253 +2037,251 @@ export default {
         inReview: 'in review',
         draft: 'in progress'
       },
-      exit: 'Back to dashboard',
+      exit: 'Jeblak ñan dashboard',
       context: {
-        untitled: 'Untitled repository',
+        untitled: 'Jikin kakwōn ejjel̦o̦k etan',
         trust: 'Trust',
         title: 'Repository',
         stale: 'stale',
         sources: 'Sources',
-        concepts: 'Concepts so far'
+        concepts: 'Kōm̦m̦an ko kiiō'
       },
-      label: '__TODO_TRANSLATE__ (en: OKF Studio wizard)',
-      back: '__TODO_TRANSLATE__ (en: Back)',
-      continue: '__TODO_TRANSLATE__ (en: Continue)',
-      publish: '__TODO_TRANSLATE__ (en: Publish repository)'
+      label: 'Wizard an OKF Studio',
+      back: 'Jeblak',
+      continue: 'Wōnm̦aanl̦o̦k',
+      publish: 'Publish jikin kakwōn'
     },
     steps: {
       entry: {
-        title: '__TODO_TRANSLATE__ (en: Repository name & subject area)',
-        hint: '__TODO_TRANSLATE__ (en: Give this OKF repository a clear name and pick its subject area.)',
-        nameLabel: '__TODO_TRANSLATE__ (en: Repository name)',
-        namePh: '__TODO_TRANSLATE__ (en: e.g. Transport permits NL)',
-        domainLabel: '__TODO_TRANSLATE__ (en: Subject area)'
+        title: 'Āt an jikin kakwōn & un ko',
+        hint: 'Kōm̦m̦an juon āt ealikkar ñan jikin kakwōn OKF in im kāālet un ko ie.',
+        nameLabel: 'Āt an jikin kakwōn',
+        namePh: 'āinwōt Peba in ettal NL',
+        domainLabel: 'Un ko'
       },
       choose: {
-        title: '__TODO_TRANSLATE__ (en: Where should this OKF repository start?)',
-        hint: '__TODO_TRANSLATE__ (en: Pick how you want to seed this repository. You can change it later.)',
+        title: 'Ia eo jikin kakwōn OKF in ej aikuj jino ie?',
+        hint: 'Kāālet ewi wāween am kōn̦aan jino jikin kakwōn in. Kwomaron̦ ukōte tok ālik.',
         source: {
           documents: {
-            title: '__TODO_TRANSLATE__ (en: Documents)',
-            desc: '__TODO_TRANSLATE__ (en: Lift topics from documents you have already uploaded.)'
+            title: 'Peba ko',
+            desc: 'Bōk un ko jān peba ko kwom̦ōj kalōki.'
           },
           crawl: {
-            title: '__TODO_TRANSLATE__ (en: Website crawl)',
-            desc: '__TODO_TRANSLATE__ (en: Crawl a website and propose topics from the pages.)'
+            title: 'Crawl an website',
+            desc: 'Crawl juon website im kōpooj un ko jān peij ko.'
           },
           manual: {
-            title: '__TODO_TRANSLATE__ (en: Blank canvas)',
-            desc: '__TODO_TRANSLATE__ (en: Start from scratch and write topics yourself.)'
+            title: 'Ejjel̦o̦k kobban',
+            desc: 'Jino jān jidikdik im make jeje un ko am.'
           },
           clone: {
-            title: '__TODO_TRANSLATE__ (en: Clone of an existing repository)',
-            desc: '__TODO_TRANSLATE__ (en: Fork the topics and structure from another OKF repository.)'
+            title: 'Kopi jān juon jikin kakwōn epād m̦okta',
+            desc: 'Bōk un ko im ejaak eo jān bar juon jikin kakwōn OKF.'
           }
         }
       },
       input: {
-        title: '__TODO_TRANSLATE__ (en: Inputs)',
-        documents: '__TODO_TRANSLATE__ (en: Pick the documents that should seed the topic list.)',
-        crawl: '__TODO_TRANSLATE__ (en: Pick the website(s) to crawl.)',
-        manual: '__TODO_TRANSLATE__ (en: You can write topics directly in the next step.)',
-        clone: '__TODO_TRANSLATE__ (en: Pick the existing repository to clone.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Step UI lands in a later story.)'
+        title: 'Kōdāl̦o̦k ko',
+        documents: 'Kāālet peba ko rej aikuj jino laajrak in un ko.',
+        crawl: 'Kāālet website ko kwonañin crawl iie.',
+        manual: 'Kwomaron̦ jeje un ko ilo buñtōn eo juon.',
+        clone: 'Kāālet jikin kakwōn eo em̦ōj an kōm̦m̦an bwe kwōn kopi.',
+        placeholder: 'UI an buñtōn in enaj itok ilo bwebwenato ko tok ālik.'
       },
       produce: {
-        title: '__TODO_TRANSLATE__ (en: Generate topics)',
-        hint: '__TODO_TRANSLATE__ (en: We are reading your sources and proposing topics.)',
-        progress: '__TODO_TRANSLATE__ (en: Producer running...)',
-        placeholder: '__TODO_TRANSLATE__ (en: Producer service wires in a later story.)'
+        title: 'Kōm̦m̦an un ko',
+        hint: 'Kōmij riiti jikin ko am im kōpooj un ko.',
+        progress: 'Ri-kōm̦m̦an ej jerbal...',
+        placeholder: 'Jerbal in kōm̦m̦an enaj itok ilo bwebwenato ko tok ālik.'
       },
       label: {
-        title: '__TODO_TRANSLATE__ (en: Pick the labels)',
-        hint: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kinds of things are these topics? Choose 3-7.)',
-        add: '__TODO_TRANSLATE__ (en: + Add label)',
-        addConfirm: '__TODO_TRANSLATE__ (en: Add)',
-        placeholder: '__TODO_TRANSLATE__ (en: e.g. Permits)'
+        title: 'Kāālet kakōl̦l̦e ko',
+        hint: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un kein? Kāālet 3-7.',
+        add: '+ Kobaiki kakōl̦l̦e',
+        addConfirm: 'Kobaiki',
+        placeholder: 'āinwōt Peba in kōmāl̦im'
       },
       curate: {
-        title: '__TODO_TRANSLATE__ (en: Review the topics)',
-        hint: '__TODO_TRANSLATE__ (en: Each topic is a small, citable unit of knowledge. Edit the title and description.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Curator tree + editor ship in Story 3-8.)'
+        title: 'Etale un ko',
+        hint: 'Kajojo un ej juon m̦ōttan dik in jel̦āl̦o̦kjen̦ me kwomaron̦ kōjerbale. Jeje āt im melele eo.',
+        placeholder: 'Wōjke in ri-karōk + ri-jeje enaj itok ilo Bwebwenato 3-8.'
       },
       validate: {
-        title: '__TODO_TRANSLATE__ (en: Check for issues)',
-        hint: '__TODO_TRANSLATE__ (en: We run conformance checks. Blocking issues must be fixed before publishing.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Validation panel ships in Story 3-8.)'
+        title: 'Lale eñin ewōr men enana',
+        hint: 'Kōmij etale bwe en jim̦we aolep men. Aikuj kōm̦m̦an bwe men ko reben ren jim̦we m̦okta jān publish.',
+        placeholder: 'Jikin kam̦ool enaj itok ilo Bwebwenato 3-8.'
       },
       autocorrect: {
-        title: '__TODO_TRANSLATE__ (en: Auto-fix)',
-        hint: '__TODO_TRANSLATE__ (en: Some warnings can be auto-fixed. Apply the fixes you agree with, then go back to the curator to review.)',
-        placeholder: '__TODO_TRANSLATE__ (en: Auto-correct service lands in Story 10.2.)'
+        title: 'Make-kōjim̦we',
+        hint: 'Jet kakkōl remaron̦ make jim̦we. Jerbale jim̦we ko kwotōmak ie, innem jeblak ñan ri-karōk eo ñan etale.',
+        placeholder: 'Make-kōjim̦we enaj itok ilo Bwebwenato 10.2.'
       },
       review: {
-        title: '__TODO_TRANSLATE__ (en: Review)',
-        hint: '__TODO_TRANSLATE__ (en: A summary of what you are about to publish.)',
-        repo: '__TODO_TRANSLATE__ (en: Repository)',
-        topics: '__TODO_TRANSLATE__ (en: Topics)',
-        labels: '__TODO_TRANSLATE__ (en: Labels)',
-        sources: '__TODO_TRANSLATE__ (en: Sources)'
+        title: 'Etale',
+        hint: 'Maron̦ in aolep men ko kwoj kōpooj ñan publish.',
+        repo: 'Jikin kakwōn',
+        topics: 'Un ko',
+        labels: 'Kakōl̦l̦e ko',
+        sources: 'Jikin ko'
       },
       publish: {
-        title: '__TODO_TRANSLATE__ (en: Publish this repository)',
-        hint: '__TODO_TRANSLATE__ (en: Publishing creates version v1 of this repository.)',
-        nameOk: '__TODO_TRANSLATE__ (en: Repository name set)',
-        labelsOk: '__TODO_TRANSLATE__ (en: Labels selected)',
-        topicsOk: '__TODO_TRANSLATE__ (en: Topics reviewed)'
+        title: 'Publish jikin kakwōn in',
+        hint: 'Publishing ej kōm̦m̦an wāween v1 an jikin kakwōn in.',
+        nameOk: 'Āt an jikin kakwōn em̦ōj likūti',
+        labelsOk: 'Kakōl̦l̦e ko em̦ōj kāāleti',
+        topicsOk: 'Un ko em̦ōj etale'
       }
     },
     trust: {
       tier: {
-        unverified: '__TODO_TRANSLATE__ (en: unverified)',
-        'machine-confirmed': '__TODO_TRANSLATE__ (en: machine-confirmed)',
-        'human-reviewed': '__TODO_TRANSLATE__ (en: human-reviewed)'
+        unverified: 'ejjan̄in kam̦ool',
+        'machine-confirmed': 'injin ear kam̦ool',
+        'human-reviewed': 'armij ear etale'
       }
     },
     repos: {
       retract: {
-        notReady: '__TODO_TRANSLATE__ (en: Retract UI ships in Story 3.9.)'
+        notReady: 'Retract UI enaj itok ilo Bwebwenato 3.9.'
       },
       manifest: {
-        notReady: '__TODO_TRANSLATE__ (en: Bundle manifest service wires in a later story.)'
+        notReady: 'Jikin manifest an bundle enaj kobatok tok ālik.'
       }
     },
     docs: {
-      createRepo: '__TODO_TRANSLATE__ (en: Create OKF repository)',
+      createRepo: 'Kōm̦m̦an jikin kakwōn OKF',
       gate: {
-        emptySelection: '__TODO_TRANSLATE__ (en: Select at least one document)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: Remove documents already in an OKF repository)',
-        alreadyIngested: '__TODO_TRANSLATE__ (en: Remove documents already ingested)'
+        emptySelection: 'Kāālet juon peba ak el̦ap l̦o̦k',
+        alreadyInOkf: 'Jol̦o̦k peba ko epād m̦okta ilo jikin kakwōn OKF',
+        alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest'
       },
       produce: {
-        notReady: '__TODO_TRANSLATE__ (en: Producer wires in a later story.)'
+        notReady: 'Kōm̦m̦an in ej pād ilo bwebwenato ko tok ālik.'
       }
     },
     crawl: {
       domainLabel: 'Subject area',
-      domainPlaceholder: 'Select a subject area…',
-      classLabel: 'Concept classification',
-      classHeuristics: 'Heuristics (default)',
-      classHeuristicsHint: 'Fast rule-based classification — no LLM cost, good for well-structured crawls.',
+      domainPlaceholder: 'Kāālet un ko…',
+      classLabel: 'Kalikkar kōm̦m̦an eo',
+      classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
+      classHeuristicsHint: 'Laajrak m̦ōkaj kōn kien ko — ejjel̦o̦k on̦ean LLM, em̦m̦an ñan crawl ko reim̦m̦an am karōki.',
       classLlm: 'LLM-assisted',
       classLlmHint:
-        'The LLM curates every concept — type, a Knowledge-Hierarchy label and a description. Far more accurate and complete than heuristics; expect added time per concept.',
+        'LLM ej kōm̦m̦an aolep kōm̦m̦an — kajejjet, kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ im melele. Ekanooj l̦ap an jim̦we im bwe jān heuristics; kōttar bwe en bōk iien ñan kōm̦m̦an ko.',
       classHybrid: 'Hybrid',
       classHybridHint:
-        'Heuristics first; the LLM reviews uncertain cases and fills gaps. Balanced time and completeness.',
-      targetLabel: '__TODO_TRANSLATE__ (en: Where should this go?)',
+        'Heuristics m̦oktata; LLM ej bar etale men ko rejjab alikkar im kobikobi jikin ko rebwāt. Em̦m̦an aolepen kōn iien im kadede.',
+      targetLabel: 'Eaikuj etal ñan ia?',
       target: {
-        freeform: '__TODO_TRANSLATE__ (en: Crawl to free-form corpus)',
-        okfRepo: '__TODO_TRANSLATE__ (en: OKF repository)'
+        freeform: 'Crawl ñan jikin melele ebar karōk',
+        okfRepo: 'Jikin kakwōn OKF'
       },
-      targetHint: '__TODO_TRANSLATE__ (en: We will show you the topics we found before we save anything.)',
-      createOkfFromCrawl: '__TODO_TRANSLATE__ (en: Create OKF repository from this crawl)',
-      splitLabel: '__TODO_TRANSLATE__ (en: Concept split)',
-      splitA: '__TODO_TRANSLATE__ (en: One concept for the whole crawl)',
-      splitB: '__TODO_TRANSLATE__ (en: One concept per page (recommended))',
-      splitC: '__TODO_TRANSLATE__ (en: Use LLM topic extraction)',
-      splitCHint: '__TODO_TRANSLATE__ (en: Story 10.6 — coming soon)',
-      splitBHint:
-        '__TODO_TRANSLATE__ (en: Each crawled page becomes its own concept — the AI can cite individual pages.)',
-      splitAHint: '__TODO_TRANSLATE__ (en: The entire crawl becomes one large concept — best for small sites.)',
-      progressDownload: '__TODO_TRANSLATE__ (en: Downloading crawled content...)',
-      progressSplit: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      progressIngest: '__TODO_TRANSLATE__ (en: Adding concepts (batch [i] of [n])...)',
-      postCrawlHint:
-        "__TODO_TRANSLATE__ (en: After the crawl finishes, you can turn it into an OKF repository from the file's Dashboard tab.)",
-      creating: '__TODO_TRANSLATE__ (en: Creating OKF repository...)',
-      createOk: '__TODO_TRANSLATE__ (en: OKF repository created. Opening the Studio to curate.)',
-      createOkRenamed: '__TODO_TRANSLATE__ (en: OKF repository created as "[name]". Opening the Studio to curate.)',
-      createFailed: '__TODO_TRANSLATE__ (en: Could not create the OKF repository from this crawl.)',
+      targetHint: 'Kōmij kwal̦o̦k un ko kōmar lo m̦okta jān aō kōjparok jabdewōt.',
+      createOkfFromCrawl: 'Kōm̦m̦an jikin kakwōn OKF jān crawl in',
+      splitLabel: 'Ajeje kōm̦m̦an ko',
+      splitA: 'Juon wōt kōm̦m̦an ñan aolepen crawl eo',
+      splitB: 'Juon kōm̦m̦an ilo kajojo peij (karōk eo em̦m̦antata)',
+      splitC: 'Kōjerbal LLM ñan kōkalikkar un ko',
+      splitCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
+      splitBHint: 'Kajojo peij ilo crawl ej erom kōm̦m̦an eo an make — AI emaron̦ kōjerbal kajojo peij.',
+      splitAHint: 'Aolepen crawl eo ej erom juon kōm̦m̦an el̦ap — em̦m̦antata ñan jikin ko redik.',
+      progressDownload: 'Bōk koba in melele ko jān crawl...',
+      progressSplit: 'Ajeje ilo kōm̦m̦an ko...',
+      progressIngest: 'Kobaiki kōm̦m̦an ko (bōrokraam̦ [i] jān [n])...',
+      postCrawlHint: 'Ñe ededel̦o̦k crawl eo, kwomaron̦ kōm̦m̦an jikin kakwōn OKF jān taab eo ilo Dashboard an fail eo.',
+      creating: 'Kōm̦m̦an jikin kakwōn OKF...',
+      createOk: 'Jikin kakwōn OKF em̦ōj kōm̦m̦ane. Kipel̦o̦k Studio ñan kōm̦m̦an.',
+      createOkRenamed: 'Jikin kakwōn OKF em̦ōj kōm̦m̦ane āt in "[name]". Kipel̦o̦k Studio ñan kōm̦m̦an.',
+      createFailed: 'Ban kōm̦m̦an jikin kakwōn OKF jān crawl in.',
       conversionsTitle: '__TODO_TRANSLATE__ (en: Repositories created from this crawl)',
-      convQueued: '__TODO_TRANSLATE__ (en: Queued...)',
-      convDownloading: '__TODO_TRANSLATE__ (en: Downloading crawl...)',
-      convSplitting: '__TODO_TRANSLATE__ (en: Splitting into concepts...)',
-      convAdding: '__TODO_TRANSLATE__ (en: Adding concepts ([p] pages so far)...)',
-      convDone: '__TODO_TRANSLATE__ (en: Created ([p] pages))',
-      convFailed: '__TODO_TRANSLATE__ (en: Failed)',
-      createStarted: '__TODO_TRANSLATE__ (en: Creating "[name]" — track progress below.)',
+      convQueued: 'Pād ilo laan̦...',
+      convDownloading: 'Kōdāl̦o̦k crawl eo...',
+      convSplitting: 'Ajeje ilo kōm̦m̦an ko...',
+      convAdding: 'Kobaiki kōm̦m̦an ko ([p] peij ko kiiō)...',
+      convDone: 'Dedel̦o̦k kōm̦m̦ane ([p] peij ko)',
+      convFailed: 'Eaar l̦apier',
+      createStarted: 'Kōm̦m̦ane "[name]" — lale wōnm̦aanl̦o̦k ilal̦.',
       modelTier: {
-        label: '__TODO_TRANSLATE__ (en: Model)',
+        label: 'Mool',
         options: {
-          'local-small': '__TODO_TRANSLATE__ (en: Local · small)',
-          'local-medium': '__TODO_TRANSLATE__ (en: Local · medium)',
-          'sovereign-large': '__TODO_TRANSLATE__ (en: Sovereign · large)'
+          'local-small': 'Ijin · dik',
+          'local-medium': 'Ijin · iolap',
+          'sovereign-large': 'An aelōn̄ · kileplep'
         }
       },
       gate: {
-        notSucceeded: '__TODO_TRANSLATE__ (en: Crawl must finish before creating an OKF repository.)',
-        alreadyInOkf: '__TODO_TRANSLATE__ (en: This crawl is already in an OKF repository.)'
+        notSucceeded: 'Aikuj dedel̦o̦k crawl eo m̦okta jān kōm̦m̦an jikin kakwōn OKF.',
+        alreadyInOkf: 'Crawl in epād m̦okta ilo jikin kakwōn OKF.'
       }
     },
     curator: {
-      placeholder: '__TODO_TRANSLATE__ (en: Pick a topic on the left to view + edit.)',
-      search: '__TODO_TRANSLATE__ (en: Search topics)',
-      noTopics: '__TODO_TRANSLATE__ (en: No topics yet.)',
+      placeholder: 'Kāālet juon un iturōn anbwijmāroñ ñan kalimjōk + jeje.',
+      search: 'Pukot un ko',
+      noTopics: 'Ejjan̄in wōr un.',
       labels: {
-        title: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        body: '__TODO_TRANSLATE__ (en: Labels are the categorical axes of your ontology — what kind of thing is this topic?)',
-        edit: '__TODO_TRANSLATE__ (en: Adjust labels)',
-        add: '__TODO_TRANSLATE__ (en: Add)',
-        addPh: '__TODO_TRANSLATE__ (en: e.g. Permits)',
-        remove: '__TODO_TRANSLATE__ (en: Remove)',
-        empty: '__TODO_TRANSLATE__ (en: No labels yet.)',
-        notReady: '__TODO_TRANSLATE__ (en: Labels saved locally — server sync coming soon.)'
+        title: 'Kōkāāl kakōl̦l̦e ko',
+        body: 'Kakōl̦l̦e ko rej aolep kain laajrak ko am — ta kain men in un in?',
+        edit: 'Kōkāāl kakōl̦l̦e ko',
+        add: 'Kobaiki',
+        addPh: 'āinwōt Peba in kōmāl̦im',
+        remove: 'Jol̦o̦k',
+        empty: 'Ejjan̄in wōr kakōl̦l̦e.',
+        notReady: 'Kakōl̦l̦e ko rej pād wōt ijin — enaj koba ibben server ilo iien em̦ool.'
       },
       frontmatter: {
-        label: '__TODO_TRANSLATE__ (en: Frontmatter)',
-        edit: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        dialogTitle: '__TODO_TRANSLATE__ (en: Edit frontmatter)',
-        okfVersion: '__TODO_TRANSLATE__ (en: okf_version)',
-        status: '__TODO_TRANSLATE__ (en: lifecycle.status)',
-        staleAfter: '__TODO_TRANSLATE__ (en: lifecycle.stale_after)',
-        trustTier: '__TODO_TRANSLATE__ (en: trust_tier)',
-        attestation: '__TODO_TRANSLATE__ (en: attestation)',
-        sources: '__TODO_TRANSLATE__ (en: provenance.sources)'
+        label: 'Frontmatter',
+        edit: 'Jeje frontmatter',
+        dialogTitle: 'Jeje frontmatter',
+        okfVersion: 'okf_version',
+        status: 'lifecycle.status',
+        staleAfter: 'lifecycle.stale_after',
+        trustTier: 'trust_tier',
+        attestation: 'attestation',
+        sources: 'provenance.sources'
       },
-      showSource: '__TODO_TRANSLATE__ (en: Show source)',
+      showSource: 'Kwal̦o̦k jikin eo ear itok jān e',
       issue: {
-        missingType: '__TODO_TRANSLATE__ (en: Concept is missing a type.)',
-        badActor: '__TODO_TRANSLATE__ (en: Source actor must start with agent:/human:/tool:/process:.)'
+        missingType: 'Ejjel̦o̦k kain kōm̦m̦an ie.',
+        badActor: 'M̧akūtkūt an jikin bōk melele aikuj jino kōn agent:/human:/tool:/process:.'
       },
-      saveBlocked: '__TODO_TRANSLATE__ (en: Save blocked: fix conformance issues first.)'
+      saveBlocked: 'Bōjrak kōjparok: kōm̦m̦an bwe en jim̦we wāween ko m̦oktata.'
     },
     validation: {
-      frozen: "Content frozen at {'{'}v{'}'} — read-only preview. Retract the serving version to make changes.",
-      none: '__TODO_TRANSLATE__ (en: None)',
+      frozen: "Kobban em̦ōj kabōjrak ilo {'{'}v{'}'} — riiti wōt. Retract wāween eo ej serving bwe kwōn kōm̦m̦an oktak.",
+      none: 'Ejjel̦o̦k',
       expertHint:
-        '__TODO_TRANSLATE__ (en: Switch to Expert mode to see raw validation JSON, filter by severity, and override checks.)',
+        'Ukōt ñan wāween Expert bwe kwōn lo JSON kam̦ool eo, kāālet ekkar ñan l̦ap an l̦apier, im jol̦o̦k etale ko.',
       headline: {
-        blockers: '__TODO_TRANSLATE__ (en: {n} blocking issue(s) — fix before publishing)',
-        warnings: '__TODO_TRANSLATE__ (en: {n} thing(s) need your review)',
-        ok: '__TODO_TRANSLATE__ (en: Looks good. Nothing to fix.)'
+        blockers: '{n} men ko reben — kōm̦m̦an bwe ren jim̦we m̦okta jān publish',
+        warnings: '{n} men ko rej aikuj am bar lale',
+        ok: 'Em̦m̦an aolep men. Ejjel̦o̦k men in kōm̦m̦ane.'
       },
-      summary: '__TODO_TRANSLATE__ (en: {clean} clean · {warnings} needs review · {blockers} blocking)',
+      summary: '{clean} erreo · {warnings} aikuj etale · {blockers} kabōjrak',
       formatter: {
-        notReady: '__TODO_TRANSLATE__ (en: Formatter lands in Story 4.2b.)'
+        notReady: 'Ri-kōm̦m̦an enaj itok ilo Bwebwenato 4.2b.'
       },
       run: {
-        notReady: '__TODO_TRANSLATE__ (en: Validation wires in a later story.)'
+        notReady: 'Kam̦ool enaj itok ilo bwebwenato ko tok ālik.'
       }
     },
     pii: {
-      panel: 'Flagged entities',
+      panel: 'Men ko ewōr kakōl̦l̦e ie',
       nFlagged: '{n} found',
       rescan: 'Re-scan',
       scanning: 'Scanning…',
       clean: 'Flagged entities amatta yaode — concept asi clear oire.',
       how: 'Fix: remove nattraga reword tou (e.g. name gi mahutta role), aduga save tou — re-scan na list asi update touba ngamgani.',
       descFallback: 'Personal data detected toure (GDPR Art. 4(1) — relating to an identifiable person).',
-      scanError: 'Scan unavailable',
+      scanError: 'Ban etale',
       type: {
         PERSON: 'Person name',
         LOCATION: 'Location',
         DATE_TIME: 'Date or time',
-        EMAIL_ADDRESS: 'Email address',
+        EMAIL_ADDRESS: 'Jikin email',
         PHONE_NUMBER: 'Phone number',
         IP_ADDRESS: 'IP address',
-        NRP: 'National registration number',
-        BD_NATIONAL_ID: 'National ID number'
+        NRP: 'Nōmba in rejistōr an aelōn̄',
+        BD_NATIONAL_ID: 'Nōmba in ID an aelōn̄'
       },
       desc: {
         PERSON: 'Person gi name detected toure. Names na natural person amabu directly identify touba ngammi.',
@@ -2299,36 +2294,36 @@ export default {
         BD_NATIONAL_ID: 'National ID number detected toure. Masina strongly meeoiba ama identify touri.'
       },
       allClear: 'Clear',
-      redactFile: 'Redact whole file',
-      confirmRedactFile: 'Confirm: redact entire file?',
-      locateTip: 'Show this text in the editor',
+      redactFile: 'Bwōbwe aolepen fail eo',
+      confirmRedactFile: 'Kam̦ool: bwōbwe aolepen fail eo?',
+      locateTip: 'Kwal̦o̦k naan kein ilo jikin jeje',
       file: {
         label: 'Whole file:',
         redact: 'Redact file',
         remove: 'Remove body',
         accept: 'Accept all',
-        confirmRedact: 'Confirm: redact whole file?',
-        confirmRemove: 'Confirm: remove whole body?'
+        confirmRedact: 'Kam̦ool: bwōbwe aolepen fail eo?',
+        confirmRemove: 'Kam̦ool: jol̦o̦k aolep kobban?'
       },
       action: {
         redact: 'Redact',
         replace: 'Replace',
         remove: 'Remove',
         accept: 'Accept',
-        replacement: 'Replacement text',
+        replacement: 'Naan in bōk jikin',
         apply: 'Apply',
         cancel: 'Cancel'
       },
       resolved: {
-        title: 'Processed in this file',
+        title: 'Em̦ōj jerbale ilo fail in',
         redacted: 'Redacted',
         replaced: 'Replaced',
         removed: 'Removed',
         accepted: 'Accepted',
-        fileRedacted: 'File redacted',
-        kept: 'kept in the text',
+        fileRedacted: 'Fail em̦ōj bwōbwe',
+        kept: 'kōjparok ilo jeje eo',
         removedWord: 'removed',
-        wholeFile: 'Entire file body redacted'
+        wholeFile: 'Aolepen kobban fail eo em̦ōj bwōbwe'
       }
     }
   }

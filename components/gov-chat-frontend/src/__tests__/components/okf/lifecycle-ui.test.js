@@ -459,15 +459,33 @@ describe('BUILDING GATE (David, 2026-09-02) — building repos stay In progress'
     expect(text).not.toContain('216 h');
   });
 
-  it('a NON-building card never sprouts the progress popup', async () => {
+  it('EVERY card sprouts the status popup — badges at all stages (David, 2026-09-12)', async () => {
     const store = buildStore();
     const wrapper = mount(OkfStudioDashboard, { global: { mocks: { $store: store }, stubs: STUBS } });
-    await seedRepos(store, [DONE]);
+    const done = {
+      ...DONE,
+      classification: 'heuristics',
+      lifecycle_state: 'publish',
+      domain: 'Education',
+      concept_count: 7,
+      version: 3
+    };
+    await seedRepos(store, [done]);
     await flush();
+    repoOkfService.get.mockResolvedValueOnce({ ...done });
     const card = wrapper.findAll('.okf-dashboard__card-wrap').find((c) => c.text().includes('DoneRepo'));
     await card.find('.okf-dashboard__card').trigger('mouseenter');
     await flush();
-    expect(wrapper.findComponent(OkfBuildProgressCard).exists()).toBe(false);
+    await flush();
+    // The popup exists for a NON-building card now…
+    const pop = wrapper.findComponent(OkfBuildProgressCard);
+    expect(pop.exists()).toBe(true);
+    // …and wears BOTH badges: classification + lifecycle stage.
+    const text = wrapper.text();
+    expect(text).toContain('heuristics');
+    expect(text).toContain('Repository status');
+    expect(text).toContain('Education');
+    expect(text).toContain('7');
   });
 
   it('a published repo mid-ingest shows Ingesting… + the drain popup (David, 2026-09-04)', async () => {

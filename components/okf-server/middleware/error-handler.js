@@ -3,7 +3,17 @@
 const { logger } = require('../shared-lib/logger');
 
 function errorHandler(err, req, res, next) {
-  logger.error('Unhandled OKF error', { error: err.message, path: req.path, method: req.method });
+  // Interpolate into the message — the shared log format drops the meta object,
+  // which hid a live 500's root cause ("db.query(...).all is not a function")
+  // behind a bare "Unhandled OKF error" line for over an hour (2026-09-12).
+  logger.error(
+    'Unhandled OKF error: ' +
+      (err && err.stack ? err.stack : String(err)) +
+      ' path=' +
+      req.path +
+      ' method=' +
+      req.method
+  );
   if (res.headersSent) {
     return next(err);
   }

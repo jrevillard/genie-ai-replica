@@ -963,6 +963,27 @@ describe('GET /api/okf/repos/:repo_id/concepts (Story #978 — editor list)', ()
     const res = await request(createApp()).get('/api/okf/repos/repoA/concepts');
     expect(res.status).toBe(401);
   });
+
+  // NON-BLOCKING LOAD (David, 2026-09-12): ?limit=&offset= pages the list so
+  // the editor can stream chunks with a real progress bar.
+  test('paginated ?limit=&offset= returns { total, offset, limit, concepts }', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    conceptMetaService.listConceptsMeta.mockResolvedValue({
+      total: 997,
+      offset: 200,
+      limit: 200,
+      concepts: [{ concept_id: 'c-201', title: 'Page 2', index_status: 'indexed' }]
+    });
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/concepts?limit=200&offset=200')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(997);
+    expect(res.body.offset).toBe(200);
+    expect(res.body.limit).toBe(200);
+    expect(res.body.concepts).toHaveLength(1);
+    expect(conceptMetaService.listConceptsMeta).toHaveBeenCalledWith('repoA', { limit: '200', offset: '200' });
+  });
 });
 
 describe('GET /api/okf/repos/:repo_id/concepts/:concept_id (Story #978 — editor read)', () => {

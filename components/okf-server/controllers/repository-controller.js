@@ -565,14 +565,24 @@ async function discoverFromManifests(req, res, next) {
  * Lists the repo's concept meta rows for the Studio editor's left rail
  * (read scope). Errors-first sort + no bodies — bodies ride on the
  * per-concept GET below.
+ *
+ * NON-BLOCKING LOAD (David, 2026-09-12): with ?limit=&offset= the response is
+ * { total, offset, limit, concepts } so the editor fetches in chunks and shows
+ * a real progress bar; without them the legacy full-array shape is returned
+ * (backward compatible with every existing consumer).
  */
 async function listConcepts(req, res, next) {
   try {
     const { repo_id } = req.params;
     // getById pre-gate (404 foreign, anti-enumeration — mirrors getRepoManifest).
     await repoService.getById(repo_id, { authz: authzForService(req) });
-    const concepts = await conceptMetaService.listConceptsMeta(repo_id);
-    res.status(200).json(concepts);
+    const { limit, offset } = req.query || {};
+    if (limit === undefined && offset === undefined) {
+      const concepts = await conceptMetaService.listConceptsMeta(repo_id);
+      return res.status(200).json(concepts);
+    }
+    const page = await conceptMetaService.listConceptsMeta(repo_id, { limit, offset });
+    return res.status(200).json(page);
   } catch (err) {
     next(err);
   }

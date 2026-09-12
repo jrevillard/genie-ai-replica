@@ -96,7 +96,9 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(store.state.okf.editor.repoId).toBe('r-1');
       expect(store.state.okf.editor.selectedConceptId).toBeNull();
       expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
-      expect(mockListForRepo).toHaveBeenCalledWith('r-1');
+      // NON-BLOCKING LOAD: the fetch pages the server (legacy array response
+      // is still accepted and committed in one piece).
+      expect(mockListForRepo).toHaveBeenCalledWith('r-1', { limit: 200, offset: 0 });
     });
 
     it('stores an empty list on fetch failure (never throws)', async () => {
@@ -105,6 +107,43 @@ describe('okf store — editor actions (Story #978)', () => {
       const result = await store.dispatch('okf/fetchConcepts', 'r-1');
       expect(result.ok).toBe(false);
       expect(store.getters['okf/conceptsByRepo']('r-1')).toEqual([]);
+    });
+
+    // NON-BLOCKING LOAD (David, 2026-09-12): a large repository streams in
+    // pages — progressive commits, REAL server counts on loadProgress, bar
+    // cleared when the load settles.
+    it('pages a large repo and reports real progress while streaming', async () => {
+      const rows = Array.from({ length: 350 }, (_, i) => ({
+        concept_id: 'c' + i,
+        title: 'T' + i,
+        index_status: 'indexed'
+      }));
+      let midProgress = null;
+      mockListForRepo.mockImplementation(async (_repoId, opts) => {
+        const off = (opts && opts.offset) || 0;
+        if (off > 0) midProgress = store.getters['okf/editorLoadProgress'];
+        return { concepts: rows.slice(off, off + 200), total: 350 };
+      });
+      const store = buildStore();
+      const result = await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(result.ok).toBe(true);
+      expect(mockListForRepo).toHaveBeenCalledTimes(2); // offsets 0 and 200
+      expect(mockListForRepo).toHaveBeenNthCalledWith(2, 'r-1', { limit: 200, offset: 200 });
+      expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(350);
+      // Mid-flight the bar carried REAL counts (done=200 of 350 after page 1).
+      expect(midProgress).toEqual({ repoId: 'r-1', done: 200, total: 350 });
+      // Settled: the bar is gone.
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
+      expect(store.state.okf.editor.loading).toBe(false);
+    });
+
+    it('shows no progress bar for a single-page repo (no flicker)', async () => {
+      mockListForRepo.mockResolvedValue({ concepts: CONCEPTS, total: 2 });
+      const store = buildStore();
+      await store.dispatch('okf/fetchConcepts', 'r-1');
+      expect(mockListForRepo).toHaveBeenCalledTimes(1);
+      expect(store.getters['okf/conceptsByRepo']('r-1')).toHaveLength(2);
+      expect(store.getters['okf/editorLoadProgress']).toBeNull();
     });
   });
 

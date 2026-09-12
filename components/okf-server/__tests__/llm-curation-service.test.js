@@ -180,6 +180,33 @@ describe('curateRepoConcepts (#980)', () => {
 });
 
 describe('proposeFrontmatter (#990 D-L)', () => {
+  test('repo-wide propose declares ONLY the binds its query uses (live 500 regression)', async () => {
+    // Live 2026-09-12: the repo-wide pass bound {r, c: null} while its filter
+    // omitted @c — ArangoDB rejects undeclared binds and the Autocorrect
+    // scan 500'd. The mocks never execute AQL, so assert the CONTRACT here:
+    // every @name in the query text must be present in the bind vars.
+    mockDb = makeDb([metaRow(), metaRow({ concept_id: 'c2' })], []);
+    await service.proposeFrontmatter(REPO, null, { classification: 'heuristics' });
+    const call = mockDb.query.mock.calls.find((c) => String(c[0]).includes('okf_concepts_meta'));
+    expect(call).toBeDefined();
+    const [query, binds] = call;
+    const used = (String(query).match(/@([a-zA-Z_]+)/g) || []).map((s) => s.slice(1));
+    expect(used.length).toBeGreaterThan(0);
+    for (const name of used) {
+      expect(binds).toMatchObject({ [name]: expect.anything() });
+    }
+    expect(used).not.toContain('c'); // repo-wide pass must not reference @c
+  });
+
+  test('single-concept propose declares the @c bind it filters on', async () => {
+    mockDb = makeDb([metaRow()], []);
+    await service.proposeFrontmatter(REPO, 'c1', { classification: 'heuristics' });
+    const call = mockDb.query.mock.calls.find((c) => String(c[0]).includes('okf_concepts_meta'));
+    const [query, binds] = call;
+    expect(String(query)).toContain('@c');
+    expect(binds).toMatchObject({ r: REPO.repo_id, c: 'c1' });
+  });
+
   test('from-empty: blank frontmatter proposes the FULL correct frontmatter', async () => {
     mockDb = makeDb([metaRow({ frontmatter: {} })], []);
     llmReply({ type: 'entity', label: 'Culture', summary: 'Temple summary.' });

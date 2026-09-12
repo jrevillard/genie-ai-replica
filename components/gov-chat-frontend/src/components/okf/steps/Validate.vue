@@ -143,7 +143,7 @@ export default {
       this.frozenAt = frozen ? 'v' + (repo.version || 0) : null;
       const acCall = frozen
         ? Promise.resolve(null)
-        : this.$store.dispatch('okf/autocorrectRepo', { repoId, dryRun: true });
+        : this.$store.dispatch('okf/autocorrectRepo', { repoId, dryRun: true, mode: 'heuristics' });
       const [ac, concepts, metrics] = await Promise.allSettled([
         acCall,
         this.$store.dispatch('okf/fetchConcepts', repoId),

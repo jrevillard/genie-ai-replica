@@ -696,8 +696,8 @@ describe('Crawler', () => {
         .mockResolvedValueOnce({ status: 200, data: '<html>seed</html>' })
         .mockRejectedValueOnce(new Error('killed'));
 
-      // 'killed' includes('killed') so outer catch re-throws
-      await expect(crawler.crawl('http://example.com', null, 2, 1)).rejects.toThrow('killed');
+      // Batch loop normalizes the kill signal to 'Killed' — accept either case
+      await expect(crawler.crawl('http://example.com', null, 2, 1)).rejects.toThrow(/killed/i);
     });
 
     it('should stop when depth reaches maxDepth', async () => {
@@ -818,6 +818,31 @@ describe('Crawler', () => {
     it('should handle download errors gracefully', async () => {
       axios.get.mockRejectedValue(new Error('Network error'));
       await crawler.download('http://example.com/file.pdf', '/tmp/file.pdf');
+    });
+  });
+
+  describe('abort / kill hard-stop', () => {
+    it('abort() flags the crawler and rejects in-flight work as Killed', async () => {
+      axios.get.mockRejectedValue(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }));
+      crawler.abort();
+      expect(crawler.isAborted).toBe(true);
+      await expect(crawler.processWork('http://example.com')).rejects.toThrow('Killed');
+    });
+
+    it('fetch() throws Killed without calling axios once aborted', async () => {
+      crawler.abort();
+      await expect(crawler.fetch('http://example.com')).rejects.toThrow('Killed');
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    it('crawl() unwinds with Killed when a rejected task carries the kill signal', async () => {
+      const seed$ = makeMock$([{ attribs: { href: '/page1' } }]);
+      const depth$ = makeMock$([]);
+      cheerio.load.mockReturnValueOnce(seed$).mockReturnValueOnce(depth$);
+      axios.get
+        .mockResolvedValueOnce({ status: 200, data: '<html>seed</html>' })
+        .mockRejectedValue(new Error('Killed'));
+      await expect(crawler.crawl('http://example.com', null, 1, 1)).rejects.toThrow('Killed');
     });
   });
 });

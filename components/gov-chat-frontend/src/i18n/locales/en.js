@@ -1505,6 +1505,7 @@ export default {
     },
     graph: {
       aria: 'Concept graph',
+      building: 'Preparing graph…',
       card: {
         chunks: "{'{'}n{'}'} chunks",
         failed: 'indexing failed',

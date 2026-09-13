@@ -1884,7 +1884,8 @@ export default {
       link: 'Kenya sehokelo',
       code: 'Inline code',
       table: 'Kenya tafole',
-      split: 'Arola'
+      split: 'Arola',
+      rendering: 'Ho fanaoa…'
     },
     narrative: {
       intro:

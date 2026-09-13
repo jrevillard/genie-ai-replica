@@ -1503,6 +1503,7 @@ export default {
     },
     graph: {
       aria: 'Grafik konsep',
+      building: 'Menyiapkan graf…',
       concepts: 'konsep',
       empty: 'Belum ada konsep - tidak ada yang dapat digambarkan.',
       fit: 'Sesuaikan grafik',

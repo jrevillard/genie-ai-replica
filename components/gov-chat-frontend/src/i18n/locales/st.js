@@ -1508,6 +1508,7 @@ export default {
     },
     graph: {
       aria: 'Kerafo ea mohopolo',
+      building: 'Grafo e lokisoa…',
       concepts: 'maikutlo',
       empty: 'Ha ho mehopolo hajoale — ha ho letho le ka etsoang kerafo.',
       fit: 'Lokisetsa setšoantšo',

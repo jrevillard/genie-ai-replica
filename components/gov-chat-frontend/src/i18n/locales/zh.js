@@ -1476,6 +1476,7 @@ export default {
     },
     graph: {
       aria: '概念图谱',
+      building: '正在准备图…',
       concepts: '概念',
       empty: '暂无概念 — 暂无图谱可供展示。',
       fit: '适应图表',

@@ -1508,6 +1508,7 @@ export default {
     },
     graph: {
       aria: 'Konzept-Graph',
+      building: 'Graph wird vorbereitet…',
       concepts: 'Konzepte',
       empty: 'Noch keine Konzepte vorhanden – Darstellung im Graphen nicht möglich.',
       fit: 'Graph anpassen',

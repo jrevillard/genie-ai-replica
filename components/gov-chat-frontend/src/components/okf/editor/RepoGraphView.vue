@@ -508,10 +508,12 @@ export default {
       const layoutCfg = useFcose
         ? {
             name: 'fcose',
-            // ANIMATED on large repos (2026-09-13): animate:false blocked the
-            // main thread for the whole solve; animated, fcose yields between
-            // iterations and the page stays interactive while it settles.
-            animate: true,
+            // animate:false (REVERTED 2026-09-14): the animated variant never
+            // emitted 'layoutstop' here and wedged the overlay at 99%. The
+            // sync solve is sub-second at crawl scale (live-verified on the
+            // wikipedia re-import), and the element streaming already keeps
+            // the page responsive up to this point.
+            animate: false,
             padding: 40,
             quality: 'default',
             randomize: true,
@@ -673,10 +675,24 @@ export default {
       if (!(await stream(nodeEls, 400))) return;
       if (!(await stream(edgeEls, 800))) return;
       if (stale() || !this.cy) return;
-      // LAYOUT + finish: large repos run the ANIMATED fcose (non-blocking);
-      // small repos settle synchronously. Either way the overlay clears and
-      // the viewport fits once positions are final.
+      // LAYOUT + finish. fcose runs animate:false — the PROVEN sub-second
+      // solve (live-verified on the wikipedia re-import). The animated
+      // variant (2026-09-13) never emitted 'layoutstop' on this stack and
+      // wedged the overlay at 99% (David, 2026-09-14) — REVERTED. With the
+      // elements now streamed in batches the solve is the only synchronous
+      // stretch left, and it is sub-second at crawl scale.
+      //
+      // The overlay can NEVER wedge again: finish is idempotent + stale-seq
+      // guarded, listened on BOTH the layout and cy, run() is wrapped in
+      // try/catch, and a 20s watchdog clears the overlay even if cytoscape
+      // never emits.
+      this.layouting = useFcose;
+      let settled = false;
+      let watchdog = null;
       const finish = () => {
+        if (settled || stale()) return; // a newer build owns the overlay
+        settled = true;
+        clearTimeout(watchdog);
         this.layouting = false;
         this.building = false;
         this.buildPct = null;
@@ -687,13 +703,14 @@ export default {
         // after mount) — attach the resize observer here too, idempotently.
         this.attachStageObserver();
       };
-      this.layouting = useFcose;
-      if (useFcose) {
-        this.cy.one('layoutstop', finish);
-        this.cy.layout(layoutCfg).run();
-      } else {
-        this.cy.layout(layoutCfg).run();
-        finish();
+      watchdog = setTimeout(finish, 20000);
+      const layout = this.cy.layout(layoutCfg);
+      layout.one('layoutstop', finish);
+      this.cy.one('layoutstop', finish);
+      try {
+        layout.run(); // animate:false → 'layoutstop' fires inside run()
+      } catch {
+        finish(); // a failed solve must never wedge the overlay
       }
     },
     attachStageObserver() {

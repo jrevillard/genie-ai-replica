@@ -186,53 +186,23 @@ async function _refreshRagIngestion(db, repoId) {
     if (!repo || !repo.rag_drain_active) return; // disarmed / already settled
     const lifecycleService = require('../services/lifecycle-service');
     await lifecycleService._settleIngest(db, repo, { sub: 'okf-worker' });
+    // _settleIngest OWNS the terminal rag_ingestion record (status, finished_at,
+    // failed_concepts, error — written from live counts). The legacy failed-only
+    // annotation that used to run here re-patched the record from the STALE
+    // pre-settle `repo` snapshot and resurrected status 'draining' over the
+    // settled record (probe-verified 2026-09-13) — removed; the warn + log
+    // mirror below keep the failure VISIBLE without corrupting the record.
     if (failed > 0) {
-      const failedRows = await (
-        await db.query(aql`
-        FOR m IN okf_concepts_meta
-          FILTER m.repo_id == ${repoId} AND m.index_status == 'failed'
-          RETURN KEEP(m, ['concept_id', 'last_error'])
-      `)
-      ).all();
-      // FAILURE CLARITY (David, 2026-09-09: "any fails like that MUST be
-      // communicated to the user with 100% clarity on what went wrong and how
-      // to fix the OKF repo"): the record carries the failed concepts AND a
-      // human reason + the recovery, not a bare count.
-      const friendly = (lastError) => {
-        const e = String(lastError || '');
-        if (/502|503|504|Bad Gateway|InternalServerError|ECONNREFUSED|ECONNRESET|ETIMEDOUT|unreachable/i.test(e)) {
-          return 'the AI model was unreachable during content preparation';
-        }
-        return 'content preparation failed — see the ingestion log for the cause';
-      };
-      const failedConcepts = failedRows.map((r) => ({
-        concept_id: r.concept_id,
-        error: friendly(r.last_error)
-      }));
-      const ids = failedRows.map((r) => r.concept_id).join(', ');
-      const reason = friendly(failedRows[0] && failedRows[0].last_error);
-      const errorText =
-        failedRows.length === 1
-          ? `1 concept failed to index: ${ids} — ${reason}. Re-ingest to retry.`
-          : `${failed} concepts failed to index: ${ids} — ${reason}. Re-ingest to retry.`;
-      await db.collection('okf_repositories').update(repoId, {
-        // Nested merge (see the dotted-key gotcha above) — flat dotted keys
-        // land as literal attributes and the dashboard never sees them.
-        rag_ingestion: Object.assign({}, repo.rag_ingestion || {}, {
-          error: errorText,
-          failed_concepts: failedConcepts
-        })
-      });
       writeBundleIngestionLog(
         repoId,
         'repo',
         'WARN',
         'System',
-        'Drain finished with failures (serving partial): ' + errorText
+        'Drain finished with failures (serving partial): ' + failed + ' concept(s) failed to index — re-ingest them'
       );
       logger.warn('Ingest worker: drain finished with FAILED concepts — settled, serving partial', {
         repo_id: repoId,
-        failed: ids
+        failed
       });
     }
   } catch (err) {
@@ -409,6 +379,19 @@ async function _processOneJob() {
       if (status === 429) {
         // Dataprep single-flight busy (another drain in flight) — back off to
         // the next poll cycle; never hammer, never transition states.
+        // CLAIM CLEAR (reaper-fairness, 2026-09-13): the row was claimed but
+        // never kicked — leaving the claim stamped would age it past the
+        // reaper's grace window during a saturated multi-hour drain and get
+        // the concept dead-lettered as "stuck" while perfectly healthy.
+        try {
+          await conceptMetaService.upsertConceptMeta(
+            job.repo_id,
+            { concept_id: conceptId, repo_id: job.repo_id },
+            { patch: { worker_claimed_at: null } }
+          );
+        } catch {
+          /* best-effort */
+        }
         logger.info('Ingest worker: dataprep busy (429) — backing off', { concept_id: conceptId });
         recordJob('busy');
         return { outcome: 'busy', concept_id: conceptId };
@@ -478,6 +461,25 @@ async function _processOneJob() {
     const durationMs = Date.now() - startedAt;
     span.setAttribute('okf.ingest.worker.outcome', terminal.status);
     span.setAttribute('okf.ingest.worker.duration_ms', durationMs);
+
+    // CLAIM CLEAR on timeout (reaper-fairness, 2026-09-13): a timed-out wait
+    // leaves the row 'parsed' with a claim that would age past the reaper's
+    // grace window and dead-letter it as "stuck" — but the row may simply be
+    // a large document still draining dataprep-side. Clearing the claim
+    // returns it to the unclaimed pool (immediately reclaimable — claims go
+    // stale after JOB_TIMEOUT_MS) so the reaper only ever catches TRUE
+    // mid-drain process deaths.
+    if (terminal.status === 'timeout') {
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          job.repo_id,
+          { concept_id: conceptId, repo_id: job.repo_id },
+          { patch: { worker_claimed_at: null } }
+        );
+      } catch {
+        /* best-effort */
+      }
+    }
 
     // 3. Report (the callback owns the meta transition + the edge write — the
     //    worker only observes the outcome).
@@ -760,6 +762,42 @@ async function _deadLetterOrphanedRows() {
   return { dead: victims.length, victims };
 }
 
+/**
+ * SETTLE RECONCILIATION (live wedge 2026-09-13, David: "31 hours and still
+ * not drained"): the settle check runs ONLY as a side-effect of a job's
+ * terminal state — but the last 'parsed' rows of a drain can be transitioned
+ * by someone else (the sweep's reaper dead-letter, a lost callback, an
+ * okf-server restart). When that happens no job ever completes again, the
+ * empty queue is never re-examined, and an ARMED repo sits 'draining'
+ * forever — ingested_at never set, retract impossible (www-gov-uk-full-crawl:
+ * 922 indexed / 75 reaper-dead-lettered / 0 parsed, stuck 19:55 → 31h+).
+ *
+ * Every sweep (and worker start) re-examines every ARMED repo: zero parsed
+ * rows → run the SAME settle path a finishing job would have run. Idempotent
+ * (_settleIngest honors rag_drain_active, and _refreshRagIngestion returns
+ * for disarmed repos).
+ * @returns {Promise<{reconciled: number, repos: string[]}>}
+ */
+async function _reconcileArmedRepos() {
+  const db = await getDb();
+  const armed = await (
+    await db.query(aql`
+    FOR r IN okf_repositories
+      FILTER r.rag_drain_active == true AND r.deleted_at == null
+      LET parsedCount = LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == r.repo_id AND m.index_status == 'parsed' LIMIT 1 RETURN 1)
+      FILTER parsedCount == 0
+      RETURN KEEP(r, ['repo_id'])
+  `)
+  ).all();
+  for (const r of armed) {
+    logger.info('Ingest worker reconcile: armed repo has an empty queue — running the settle check', {
+      repo_id: r.repo_id
+    });
+    await _refreshRagIngestion(db, r.repo_id);
+  }
+  return { reconciled: armed.length, repos: armed.map((r) => r.repo_id) };
+}
+
 /** One drain cycle for ONE lane — each lane self-serializes (its poll awaits
  * the cycle before re-arming), so lanes never overlap themselves; separate
  * lanes run concurrently by design. */
@@ -851,6 +889,11 @@ function start() {
     if (_sweeping) return;
     _sweeping = true;
     try {
+      // RECONCILE FIRST (2026-09-13 wedge fix): settle any ARMED repo whose
+      // queue reached zero outside a job completion (reaper dead-letter,
+      // lost callback, restart) BEFORE the reaper runs — the reaper must
+      // never be the last writer leaving a repo armed forever.
+      await _reconcileArmedRepos();
       await _sweepOnce();
       await _reapStuckParsed();
       await _deadLetterOrphanedRows();
@@ -862,6 +905,12 @@ function start() {
     }
   };
   _sweepTimer = setTimeout(sweep, sweepIntervalMs());
+  // STARTUP RECONCILE: a restart between the last terminal transition and a
+  // settle (or with the queue emptied by the reaper) must settle on boot, not
+  // wait up to an hour for the first sweep.
+  _reconcileArmedRepos().catch((err) => {
+    logger.warn('Ingest worker startup reconcile failed (non-fatal — the sweep retries)', { error: err.message });
+  });
 }
 
 function stop() {
@@ -878,6 +927,7 @@ module.exports = {
   _sweepOnce,
   _reapStuckParsed,
   _deadLetterOrphanedRows,
+  _reconcileArmedRepos,
   _refreshRagIngestion,
   claimNextJob,
   getBundleFileId,

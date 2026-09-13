@@ -1517,6 +1517,7 @@ export default {
     },
     graph: {
       aria: 'Grafo de conceptos',
+      building: 'Preparando el grafo…',
       concepts: 'conceptos',
       empty: 'Sin conceptos todavía — no hay nada que representar en el grafo.',
       fit: 'Ajustar gráfico',

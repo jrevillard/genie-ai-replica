@@ -1520,6 +1520,7 @@ export default {
     },
     graph: {
       aria: 'Graphe de concepts',
+      building: 'Préparation du graphe…',
       concepts: 'concepts',
       empty: "Aucun concept pour l'instant - rien à représenter sur le graphe.",
       fit: 'Ajuster le graphique',

@@ -58,6 +58,24 @@
             {{ translate('okf.graph.layouting', 'Layouting…') }}
           </p>
         </div>
+        <!-- ASYNC BUILD OVERLAY (David, 2026-09-13 "Page Unresponsive" fix):
+             the graph build + layout no longer block the main thread; while
+             they stream in batches this overlay shows real progress. -->
+        <div v-show="building" class="okf-gv__building" aria-live="polite">
+          <DsSpinner size="md" />
+          <p class="okf-gv__building-label">
+            {{ translate('okf.graph.building', 'Preparing graph…') }}
+            <template v-if="buildPct != null">&#32;{{ buildPct }}%</template>
+          </p>
+          <DsProgress
+            class="okf-gv__building-bar"
+            size="sm"
+            variant="accent"
+            :indeterminate="buildPct == null"
+            :value="buildPct || 0"
+            :aria-label="translate('okf.graph.building', 'Preparing graph…')"
+          />
+        </div>
         <!-- HOVER SUMMARY (David, 2026-09-12): floating summary card for the
              SELECTED node — the concept's OKF data at a glance without
              scrolling to the file viewer. Selection sync is untouched: tap
@@ -102,6 +120,8 @@ import repoOkfService from '../../../services/repoOkfService';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import DsButton from '../../ds/Button.vue';
+import DsProgress from '../../ds/Progress.vue';
+import DsSpinner from '../../ds/Spinner.vue';
 
 // fcose registers ONCE per module (cytoscape.use is global) — tests stay
 // headless (grid layout, no plugin) regardless.
@@ -109,7 +129,7 @@ let fcoseRegistered = false;
 
 export default {
   name: 'OkfRepoGraphView',
-  components: { DsButton },
+  components: { DsButton, DsProgress, DsSpinner },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true },
@@ -127,6 +147,11 @@ export default {
       size: 640,
       showHub: false, // index hub + TOC edges hidden by default (structure, not knowledge)
       layouting: false, // true while the layout engine settles (large repos)
+      // ASYNC BUILD (2026-09-13): true while the chunked graph build runs —
+      // the overlay shows the batch progress; buildPct is null (indeterminate)
+      // once ingestion is done and only the layout is still settling.
+      building: false,
+      buildPct: null,
       links: {}, // concept_id -> [{ to_concept_id, label }]
       // Hover summary card state (selected node only — see template).
       // The hover GATE is `this._neighbourIds` (non-reactive, set by
@@ -245,7 +270,9 @@ export default {
         this.pendingRebuild = true;
         return;
       }
-      this.$nextTick(() => this.rebuild());
+      this.$nextTick(() => {
+        this._buildPromise = this.rebuild(); // tests await this
+      });
     },
     // First reveal of the Graph tab: run the pending build (with the stage
     // now actually sized) and arm the resize observer.
@@ -253,7 +280,9 @@ export default {
       handler(v) {
         if (!v || !this.pendingRebuild) return;
         this.pendingRebuild = false;
-        this.$nextTick(() => this.rebuild());
+        this.$nextTick(() => {
+          this._buildPromise = this.rebuild(); // tests await this
+        });
       }
     },
     selectedId() {
@@ -271,7 +300,7 @@ export default {
       this.pendingRebuild = true;
       return;
     }
-    this.rebuild();
+    this._buildPromise = this.rebuild(); // tests await this
     // The stage has ZERO size at mount (v-show until the Graph tab is
     // chosen), and a canvas sized at 0 stays blank forever (live-caught
     // 2026-09-04 on Kenya). One observer covers tab reveal, panel resize and
@@ -281,6 +310,9 @@ export default {
     this.attachStageObserver();
   },
   beforeUnmount() {
+    // Abort any in-flight async build BEFORE destroying cy — the chunked
+    // stream checks the seq (and this.cy) at every yield.
+    this._buildSeq = (this._buildSeq || 0) + 1;
     if (this._stageObserver) {
       this._stageObserver.disconnect();
       this._stageObserver = null;
@@ -415,13 +447,34 @@ export default {
         edgeHot: this.toCanvasColor(this.token('--brand', '#1f6f54'))
       };
     },
-    rebuild() {
+    // One macrotask yield: lets the browser paint (spinner) between build
+    // chunks — the primitive the markdown editor's chunked renderer uses.
+    _frame() {
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    },
+    async rebuild() {
       if (!this.$refs.stage || this.nodes.length === 0) return;
+      // ASYNC BUILD (David, 2026-09-13 "Page Unresponsive" on the Graph tab):
+      // the constructor + force layout used to run in ONE synchronous task —
+      // on a crawl-sized repo (~1000 nodes / ~5000 edges) that blocked the
+      // main thread for seconds and popped the Page Unresponsive dialog. The
+      // build is now chunked with yields: the spinner paints first, elements
+      // stream in batches with real % progress, and the large-repo layout
+      // runs ANIMATED (frames between iterations keep the page responsive).
+      // Stale-seq guard (the markdown renderer's _renderSeq pattern): a
+      // superseded build aborts at its next yield instead of clobbering the
+      // newer one.
+      const seq = (this._buildSeq = (this._buildSeq || 0) + 1);
+      const stale = () => seq !== this._buildSeq;
+      this.building = true;
+      this.buildPct = 0;
+      await this._frame();
+      await this._frame(); // second yield: the overlay must actually PAINT
+      if (stale()) return;
       const p = this.palette();
       // jsdom (jest) has no canvas — run headless there and use a layout that
       // does not need renderer dimensions ('cose' measures the viewport).
       const headless = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent || '');
-      const layoutName = headless ? 'grid' : 'cose';
       const elements = [
         ...this.nodes.map((n) => ({
           group: 'nodes',
@@ -452,27 +505,31 @@ export default {
         cytoscape.use(fcose);
         fcoseRegistered = true;
       }
-      const layout =
-        layoutName === 'grid'
+      const layoutCfg = useFcose
+        ? {
+            name: 'fcose',
+            // ANIMATED on large repos (2026-09-13): animate:false blocked the
+            // main thread for the whole solve; animated, fcose yields between
+            // iterations and the page stays interactive while it settles.
+            animate: true,
+            padding: 40,
+            quality: 'default',
+            randomize: true,
+            nodeSeparation: 120,
+            idealEdgeLength: 90
+          }
+        : headless
           ? { name: 'grid', animate: false, padding: 40 }
-          : useFcose
-            ? {
-                name: 'fcose',
-                animate: false,
-                padding: 40,
-                quality: 'default',
-                randomize: true,
-                nodeSeparation: 120,
-                idealEdgeLength: 90
-              }
-            : { name: 'cose', animate: false, padding: 40, randomize: true, nodeOverlap: 12, idealEdgeLength: 90 };
+          : { name: 'cose', animate: false, padding: 40, randomize: true, nodeOverlap: 12, idealEdgeLength: 90 };
       this.cy = cytoscape({
         // Headless (jsdom): NO container — a container makes cytoscape measure
         // the element, and jsdom elements have no layout (w/h undefined).
         ...(headless ? { headless: true, styleEnabled: false } : { container: this.$refs.stage }),
         // (the stage div is guaranteed present: rebuild is called after
         // $nextTick from the modelKey watcher and from mounted — see above)
-        elements,
+        // EMPTY (2026-09-13): elements stream in batches below — a cold
+        // constructor with ~5000 elements was the freeze.
+        elements: [],
         // wheelSensitivity: cytoscape DEFAULT — a custom value warns on every
         // rebuild and the default suits mainstream mice (console-log spam fix).
         minZoom: 0.05,
@@ -490,9 +547,12 @@ export default {
               'text-valign': 'bottom',
               'text-margin-y': 4,
               width: 18,
-              height: 18,
-              'transition-property': 'opacity, border-color, background-color',
-              'transition-duration': 120
+              height: 18
+              // NO transition-property here (2026-09-13): focus()/clearFocus()
+              // flip classes on ~5000 elements at once — a 120ms opacity
+              // transition animated them for 7+ full-canvas repaints per
+              // selection (the "selecting nodes" freeze). Instant flip = one
+              // repaint; the fade bought nothing.
             }
           },
           {
@@ -552,9 +612,8 @@ export default {
               'text-background-opacity': 0.85,
               'text-background-padding': 2,
               'text-background-shape': 'roundrectangle',
-              'text-rotation': 'autorotate',
-              'transition-property': 'opacity, line-color',
-              'transition-duration': 120
+              'text-rotation': 'autorotate'
+              // transitions removed with the node style — see above
             }
           },
           { selector: 'node.faded, edge.faded', style: { opacity: 0.12 } },
@@ -563,15 +622,12 @@ export default {
             selector: 'edge.hot',
             style: { 'line-color': p.edgeHot, 'target-arrow-color': p.edgeHot, opacity: 1, width: 2.5 }
           }
-        ],
-        layout
+        ]
+        // NO layout option (2026-09-13): elements stream in batches below,
+        // then cy.layout(layoutCfg) runs explicitly — a constructor layout
+        // would solve against a half-empty graph and block synchronously.
       });
-      // The layout indicator: show "Layouting…" while the engine settles
-      // (large repos take seconds), clear on completion.
-      this.layouting = this.nodes.length > 150;
-      this.cy.one('layoutstop', () => {
-        this.layouting = false;
-      });
+      // Handlers wired NOW — pan/zoom work while the build streams in.
       this.cy.on('tap', 'node', (evt) => {
         const id = evt.target.id();
         this.hideCard(); // a stale card for the previous node must not linger
@@ -597,11 +653,48 @@ export default {
       // than chase it; the card re-appears on the next hover.
       this.cy.on('viewport', () => this.hideCard());
       this.cy.on('grab', 'node', () => this.hideCard());
-      this.cy.fit(undefined, 40);
-      this.applyFocus(); // arms the hover neighborhood from the preset prop
-      // The stage may have been created by THIS update (concepts arriving
-      // after mount) — attach the resize observer here too, idempotently.
-      this.attachStageObserver();
+      // STREAM the elements in batches — each cy.add stays a few ms, and the
+      // yield between batches lets the browser paint the progress overlay.
+      const nodeEls = elements.filter((el) => el.group === 'nodes');
+      const edgeEls = elements.filter((el) => el.group === 'edges');
+      const total = elements.length || 1;
+      let added = 0;
+      const stream = async (items, size) => {
+        for (let i = 0; i < items.length; i += size) {
+          if (stale() || !this.cy) return false;
+          const slice = items.slice(i, i + size);
+          this.cy.add(slice);
+          added += slice.length;
+          this.buildPct = Math.min(99, Math.round((added / total) * 100));
+          await this._frame();
+        }
+        return true;
+      };
+      if (!(await stream(nodeEls, 400))) return;
+      if (!(await stream(edgeEls, 800))) return;
+      if (stale() || !this.cy) return;
+      // LAYOUT + finish: large repos run the ANIMATED fcose (non-blocking);
+      // small repos settle synchronously. Either way the overlay clears and
+      // the viewport fits once positions are final.
+      const finish = () => {
+        this.layouting = false;
+        this.building = false;
+        this.buildPct = null;
+        if (!this.cy) return;
+        this.cy.fit(undefined, 40);
+        this.applyFocus(); // arms the hover neighborhood from the preset prop
+        // The stage may have been created by THIS update (concepts arriving
+        // after mount) — attach the resize observer here too, idempotently.
+        this.attachStageObserver();
+      };
+      this.layouting = useFcose;
+      if (useFcose) {
+        this.cy.one('layoutstop', finish);
+        this.cy.layout(layoutCfg).run();
+      } else {
+        this.cy.layout(layoutCfg).run();
+        finish();
+      }
     },
     attachStageObserver() {
       if (typeof ResizeObserver === 'undefined' || this._stageObserver || !this.$refs.stage) return;
@@ -623,20 +716,28 @@ export default {
       // set the hover summary card arms for, so the user can inspect/
       // validate adjacent data without re-selecting each node.
       this._neighbourIds = new Set(keep.nodes().map((n) => n.id()));
-      this.cy.elements().addClass('faded');
-      keep.removeClass('faded');
-      this.cy.getElementById(id).addClass('hot');
-      // The selected node's edges light up (brand) so its link relationships
-      // read at a glance — the whole point of the neighborhood focus.
-      this.cy.edges().removeClass('hot');
-      keep.filter('edge').addClass('hot');
+      // ONE batched style write (2026-09-13 "selecting nodes" freeze): the
+      // five separate add/removeClass calls each invalidated style and
+      // repainted the whole canvas — on a crawl repo (~5000 elements) that
+      // was seconds of main-thread work per click. One batch = one repaint.
+      this.cy.batch(() => {
+        this.cy.elements().addClass('faded');
+        keep.removeClass('faded');
+        this.cy.getElementById(id).addClass('hot');
+        // The selected node's edges light up (brand) so its link relationships
+        // read at a glance — the whole point of the neighborhood focus.
+        this.cy.edges().removeClass('hot');
+        keep.filter('edge').addClass('hot');
+      });
     },
     clearFocus() {
       if (!this.cy) return;
       this._neighbourIds = null; // nothing highlighted → nothing hoverable
-      this.cy.elements().removeClass('faded');
-      this.cy.nodes().removeClass('hot');
-      this.cy.edges().removeClass('hot');
+      this.cy.batch(() => {
+        this.cy.elements().removeClass('faded');
+        this.cy.nodes().removeClass('hot');
+        this.cy.edges().removeClass('hot');
+      });
     },
     applyFocus() {
       if (!this.cy) return;
@@ -776,6 +877,31 @@ export default {
   color: var(--muted);
   font-size: var(--text-xs);
   pointer-events: none;
+}
+/* ASYNC BUILD OVERLAY (2026-09-13): spinner + real % while the chunked
+   build streams the graph in — the page never blocks, so this is the only
+   feedback surface. Tokens only; fallbacks follow the file's pattern. */
+.okf-gv__building {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  background: var(--surface-muted, rgba(255, 255, 255, 0.85));
+  border-radius: var(--radius-md);
+  pointer-events: none; /* pure overlay — it must never eat graph clicks */
+}
+.okf-gv__building-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.okf-gv__building-bar {
+  width: min(240px, 60%);
 }
 .okf-gv__legend {
   color: var(--muted);

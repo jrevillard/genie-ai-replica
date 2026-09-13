@@ -66,6 +66,19 @@ function mountWith(component, props, store) {
   });
 }
 
+// ASYNC BUILD (2026-09-13): the graph streams in setTimeout-yielded batches —
+// the double-$nextTick that sufficed for the synchronous rebuild no longer
+// guarantees vm.cy. Await the exposed build promise until the graph rests.
+// (On components with no build path — e.g. the modal — this returns at once.)
+async function built(wrapper) {
+  for (let i = 0; i < 50; i++) {
+    await wrapper.vm.$nextTick();
+    if (wrapper.vm._buildPromise) await wrapper.vm._buildPromise;
+    if (!wrapper.vm._buildPromise && !wrapper.vm.cy) return; // not a build path
+    if (wrapper.vm.cy && !wrapper.vm.building) return; // built
+  }
+}
+
 const OkfRepoGraphView = require('@/components/okf/editor/RepoGraphView.vue').default;
 
 describe('OkfRepoGraphView', () => {
@@ -94,7 +107,7 @@ describe('OkfRepoGraphView', () => {
   it('renders from the live links projection and draws only in-repo edges', async () => {
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     // Hub hidden by default (index TOC links are structure, not knowledge).
     expect(wrapper.vm.nodes).toHaveLength(2);
     expect(wrapper.vm.edges).toHaveLength(1);
@@ -109,7 +122,7 @@ describe('OkfRepoGraphView', () => {
   it('emits select when a node is tapped in the browser', async () => {
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick(); // rebuild is post-DOM-patch now (nextTick)
+    await built(wrapper); // rebuild streams in batches (async build)
     wrapper.vm.cy.getElementById('wildlife').emit('tap');
     expect(wrapper.emitted('select')).toEqual([['wildlife']]);
   });
@@ -117,7 +130,7 @@ describe('OkfRepoGraphView', () => {
   it('highlights the link neighborhood on tap and clears on background tap', async () => {
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick(); // rebuild is post-DOM-patch now (nextTick)
+    await built(wrapper); // rebuild streams in batches (async build)
     const cy = wrapper.vm.cy;
     cy.getElementById('wildlife').emit('tap');
     // Hub hidden by default: wildlife + parks stay bright, their shared edge lights up.
@@ -137,7 +150,7 @@ describe('OkfRepoGraphView', () => {
     });
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     // Hub hidden by default: index->wildlife (TOC edge) suppressed.
     expect(wrapper.vm.edges).toHaveLength(1);
     // Toolbar toggle restores the hub AND its TOC edges.
@@ -159,7 +172,7 @@ describe('OkfRepoGraphView', () => {
     mockGetRepoLinks.mockRejectedValue({ status: 404 });
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     expect(wrapper.vm.edges).toHaveLength(1);
     expect(mockGetManifest).toHaveBeenCalledWith('r-1');
   });
@@ -169,7 +182,7 @@ describe('OkfRepoGraphView', () => {
     mockGetManifest.mockRejectedValue({ status: 404 });
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     expect(wrapper.vm.edges).toHaveLength(0);
     // Hub hidden by default → 2; toggle restores the index hub → 3.
     expect(wrapper.vm.nodes).toHaveLength(2);
@@ -193,7 +206,7 @@ describe('OkfRepoGraphView', () => {
     // on Kenya: rebuild ran before the stage existed and never retried).
     await wrapper.setProps({ concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     expect(wrapper.vm.cy && wrapper.vm.cy.nodes()).toHaveLength(2);
   });
 
@@ -232,7 +245,7 @@ describe('OkfRepoGraphView', () => {
     });
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: RICH_CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     const cy = wrapper.vm.cy;
     // Selection behavior UNCHANGED: tap emits 'select' (file-viewer sync).
     cy.getElementById('wildlife').emit('tap');
@@ -253,7 +266,7 @@ describe('OkfRepoGraphView', () => {
   it('does NOT show the card for a node that is not selected', async () => {
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: RICH_CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     wrapper.vm.cy.getElementById('wildlife').emit('mouseover');
     expect(wrapper.vm.card.visible).toBe(false);
   });
@@ -261,7 +274,7 @@ describe('OkfRepoGraphView', () => {
   it('zoom buttons change the zoom level about the viewport centre (cy.center() regression)', async () => {
     const wrapper = mountWith(OkfRepoGraphView, { repoId: 'r-1', concepts: CONCEPTS });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     const cy = wrapper.vm.cy;
     const before = cy.zoom();
     // zoomIn (+): ×1.3. The old zoomBy passed cy.center() (the CORE, not a
@@ -279,7 +292,7 @@ describe('OkfRepoGraphView', () => {
       selectedId: 'wildlife'
     });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     const cy = wrapper.vm.cy;
     // parks is wildlife's drawn neighbor — hovering it shows ITS summary.
     cy.getElementById('parks').emit('mouseover');
@@ -305,7 +318,7 @@ describe('OkfRepoGraphView', () => {
       selectedId: 'wildlife'
     });
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     const cy = wrapper.vm.cy;
     cy.getElementById('wildlife').emit('mouseover');
     await wrapper.vm.$nextTick();
@@ -348,7 +361,7 @@ describe('OkfAddConceptModal', () => {
     expect(createBtn2.element.disabled).toBe(false);
     wrapper.vm.onAction('create');
     await wrapper.vm.$nextTick();
-    await wrapper.vm.$nextTick();
+    await built(wrapper);
     expect(wrapper.emitted('created')).toEqual([['wildlife']]);
     expect(wrapper.emitted('close')).toHaveLength(1);
   });

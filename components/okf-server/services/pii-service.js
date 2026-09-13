@@ -10,6 +10,7 @@
 // type/count summaries. MELT on every method.
 
 const { aql } = require('arangojs');
+const nodeCrypto = require('node:crypto');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -161,28 +162,71 @@ async function scanConcept(repo_id, concept_id, frontmatter = {}, body = '') {
 
 /**
  * PII INSPECT (David, 2026-09-09: every issue must be flagged, categorized
- * and described in clear language): a LIVE Presidio scan of the concept's
- * CURRENT content (frontmatter values + body, scanned as SEPARATE regions so
- * the offsets are editor-aligned), returning per-occurrence
- * {where, type, start, end, score} — the editor locates each finding.
- * NOTHING is persisted (counts-only storage stays NFR-P2) and the flagged
- * VALUES are never returned — the caller renders excerpts from the content
- * it already has. Fail-closed: a transport error surfaces as state 'error'.
+ * and described in clear language) with FINDINGS REUSE (David, 2026-09-13:
+ * "the repo has been scanned already and it was scanned again — this should
+ * not have scanned again; we MUST minimize the scanning").
+ *
+ * The occurrences are PERSISTED on the concept meta doc — SPANS ONLY
+ * ({where,type,start,end,score}); the flagged VALUES themselves are never at
+ * rest (NFR-P2 preserved: the excerpts are re-sliced server-side from the
+ * concept's own stored content on every serve, exactly as the live path does).
+ * The cache key is the content signature (sha1 of the flattened frontmatter +
+ * body): unchanged content → ZERO Presidio work; edited content → one fresh
+ * scan that refreshes the cache; explicit `opts.rescan` bypasses the cache
+ * (the panel's Re-scan button).
  */
-async function inspectConcept(repo_id, concept_id, frontmatter = {}, body = '') {
+function findingsSignature(fmText, body) {
+  return nodeCrypto
+    .createHash('sha1')
+    .update(fmText + ' ' + String(body || ''))
+    .digest('hex');
+}
+
+async function inspectConcept(repo_id, concept_id, frontmatter = {}, body = '', opts = {}) {
   return withSpan('okf.pii.inspect', async (span) => {
     span.setAttribute('okf.repo_id', repo_id);
     span.setAttribute('okf.concept_id', concept_id);
     const fmText = flattenFrontmatter(frontmatter).join('\n');
+    const bodyText = String(body || '');
+    const texts = { frontmatter: fmText, body: bodyText };
+    // FINDINGS CACHE HIT: spans persisted from a previous scan of THIS
+    // content — re-slice excerpts from our own text (microseconds) and
+    // re-apply Accept suppressions recorded since. No sidecar call at all.
+    if (!opts.rescan) {
+      try {
+        const db = await getDb();
+        const meta = await findPiiDoc(db.collection(META), repo_id, concept_id);
+        const f = meta && meta.pii_findings;
+        if (f && f.content_sig === findingsSignature(fmText, bodyText) && Array.isArray(f.occurrences)) {
+          const withExcerpts = f.occurrences.map((o) => {
+            const text = texts[o.where] !== undefined ? texts[o.where] : '';
+            return {
+              ...o,
+              excerpt: {
+                before: text.slice(Math.max(0, o.start - 48), o.start),
+                hit: text.slice(o.start, o.end),
+                after: text.slice(o.end, o.end + 48)
+              }
+            };
+          });
+          const accepted = (await listResolutions(repo_id, concept_id)).filter((r) => r && r.action === 'accept');
+          const unresolved = subtractAccepted(withExcerpts, accepted);
+          recordOp('inspect', 'cache');
+          span.setAttribute('okf.pii_cached', true);
+          return { state: 'ok', occurrences: unresolved, counts_by_type: f.counts_by_type || countByType(unresolved) };
+        }
+      } catch {
+        /* cache read failure must never block a scan — fall through to live */
+      }
+    }
     const out = await piiClient.scan([
       { id: 'frontmatter', text: fmText },
-      { id: 'body', text: String(body || '') }
+      { id: 'body', text: bodyText }
     ]);
     if (out.state === 'error') {
       recordOp('inspect', 'error');
       return { state: 'error', error: out.error, occurrences: [] };
     }
-    const texts = { frontmatter: fmText, body: String(body || '') };
     const occurrences = [];
     for (const r of out.results) {
       // Slice OUR OWN scanned text — the live Presidio sidecar does NOT echo
@@ -213,6 +257,26 @@ async function inspectConcept(repo_id, concept_id, frontmatter = {}, body = '') 
       m[o.type] = (m[o.type] || 0) + 1;
       return m;
     }, {});
+    // PERSIST THE FINDINGS (spans only — no values at rest, NFR-P2). Any
+    // content edit changes the signature and the next inspect re-scans.
+    try {
+      await upsertPiiState(repo_id, concept_id, {
+        pii_findings: {
+          content_sig: findingsSignature(fmText, bodyText),
+          occurrences: occurrences.map((o) => ({
+            where: o.where,
+            type: o.type,
+            start: o.start,
+            end: o.end,
+            score: o.score
+          })),
+          counts_by_type,
+          scanned_at: new Date().toISOString()
+        }
+      });
+    } catch {
+      /* persistence failure degrades to scan-every-time — never blocks */
+    }
     return { state: 'ok', occurrences, counts_by_type };
   });
 }
@@ -793,10 +857,10 @@ async function repoBulkAction(repo_id, payload, actor) {
       throw Object.assign(new Error('Repository ' + repo_id + ' not found'), { code: 'REPO_NOT_FOUND', status: 404 });
     }
     const flagged = await (
-      await db.query(
-        'FOR m IN @@meta FILTER m.repo_id == @r AND m.pii_state == "hit" SORT m.concept_id RETURN m',
-        { '@meta': META, r: repo_id }
-      )
+      await db.query('FOR m IN @@meta FILTER m.repo_id == @r AND m.pii_state == "hit" SORT m.concept_id RETURN m', {
+        '@meta': META,
+        r: repo_id
+      })
     ).all();
     const by = (actor && actor.sub) || 'system';
     const now = new Date().toISOString();

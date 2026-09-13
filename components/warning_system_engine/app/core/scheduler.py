@@ -43,6 +43,7 @@ DISTRICT_LIST = [
     "Chittagong",
     "Sylhet",
     "Rajshahi",
+    "Naogaon",
     "Khulna",
     "Barisal",
     "Rangpur",

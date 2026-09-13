@@ -175,6 +175,7 @@ export default {
 }
 
 .map-back-btn {
+  color:#000
   position: absolute;
   top: 16px;
   left: 16px;

@@ -293,123 +293,6 @@ _FALLBACK_TEXT: dict[str, dict[str, str]] = {
 }
 
 
-_FLOOD_TIER_BN = {0: "স্বাভাবিক", 1: "পরামর্শ", 2: "সতর্কতা", 3: "তীব্র", 4: "জরুরি"}
-_FLOOD_EMOJI = {0: "🟢", 1: "🟡", 2: "🟠", 3: "🔴", 4: "🟣"}
-
-
-def _build_bmd_alerts_answer(
-    district: str | None, alerts: list[dict], lang: str
-) -> str:
-    """Markdown list of active BMD warnings, in the CAP's own English or Bengali text."""
-    bn = lang == "bn"
-    scope = (
-        (_localized_district_name(district, "bn") if bn else district)
-        if district
-        else ("সারা দেশ" if bn else "Bangladesh")
-    )
-    if not alerts:
-        return (
-            f"## আবহাওয়া সতর্কবার্তা — {scope}\n\nএই মুহূর্তে বাংলাদেশ আবহাওয়া অধিদপ্তরের কোনো সক্রিয় সতর্কবার্তা নেই।"
-            if bn
-            else f"## Weather Warnings — {scope}\n\nNo active warnings from the Bangladesh Meteorological Department right now."
-        )
-    lines = [
-        f"## আবহাওয়া সতর্কবার্তা — {scope}" if bn else f"## Weather Warnings — {scope}",
-        "",
-    ]
-    for a in alerts:
-        info = (
-            (a.get("info") or {}).get("bn" if bn else "en")
-            or (a.get("info") or {}).get("en")
-            or {}
-        )
-        head = info.get("headline") or a.get("rss_title") or a.get("event", "")
-        desc = (info.get("description") or "").strip()
-        instr = (info.get("instruction") or "").strip()
-        exp = (a.get("expires") or "")[:16].replace("T", " ")
-        lines.append(f"### {head}")
-        lines.append(
-            f"**{'তীব্রতা' if bn else 'Severity'}:** {a.get('severity', '')} · **{'মেয়াদ' if bn else 'Valid until'}:** {exp} UTC"
-        )
-        if desc:
-            lines.append(desc)
-        if instr:
-            lines.append(("**করণীয়:** " if bn else "**Advice:** ") + instr)
-        lines.append("")
-    lines.append(
-        "*উৎস: বাংলাদেশ আবহাওয়া অধিদপ্তর (BMD CAP)*"
-        if bn
-        else "*Source: Bangladesh Meteorological Department (BMD CAP feed)*"
-    )
-    return "\n".join(lines)
-
-
-def _build_flood_risk_answer(district: str, a: dict, lang: str) -> str:
-    """Markdown flood outlook from a stored FloodEWS assessment (en / bn)."""
-    tier = int(a.get("tier", 0) or 0)
-    comps = a.get("components") or {}
-    rain, river = comps.get("rain") or {}, comps.get("river") or {}
-    if lang == "bn":
-        bn = lambda t: str(t).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
-        lines = [
-            f"## বন্যার পূর্বাভাস — {_localized_district_name(district, 'bn')} (আগামী ১০ দিন)",
-            "",
-            f"**অবস্থা:** {_FLOOD_EMOJI.get(tier, '')} **{_FLOOD_TIER_BN.get(tier, 'স্বাভাবিক')}**",
-        ]
-        if rain:
-            lines.append(
-                f"- বৃষ্টিপাত: ২৪ ঘণ্টায় সর্বোচ্চ {bn(round(rain.get('rain_24_mm', 0)))} মিমি, ৭২ ঘণ্টায় {bn(round(rain.get('rain_72_mm', 0)))} মিমি"
-                + (
-                    " (মাটি ইতিমধ্যে সম্পৃক্ত)"
-                    if rain.get("soil_note") == "saturated"
-                    else ""
-                )
-            )
-        if river:
-            point = river.get("point", "")
-            if point.endswith("(local rivers)"):
-                point = f"{_localized_district_name(district, 'bn')} (স্থানীয় নদী)"
-            lines.append(
-                f"- নদীর প্রবাহ ({point}): {bn(round(river.get('peak_m3s', 0)))} ঘনমিটার/সেকেন্ড, "
-                f"গত ৩০ দিনের মধ্যমার {bn(river.get('ratio', 0))} গুণ, {bn(river.get('peak_date', ''))}"
-            )
-        action = {
-            0: "আগামী ১০ দিনে বন্যার ঝুঁকি দেখা যাচ্ছে না।",
-            1: "নালা-নর্দমা পরিষ্কার রাখুন এবং হালনাগাদ তথ্যে নজর রাখুন।",
-            2: "পানি নিষ্কাশনের ব্যবস্থা নিন; সংরক্ষিত ফসল ও উপকরণ উঁচু স্থানে সরান।",
-            3: "যা কাটা সম্ভব তা কেটে ফেলুন, বীজ ও গবাদিপশু রক্ষা করুন, স্থানীয় নির্দেশনা মেনে চলুন।",
-            4: "জরুরি অবস্থা: স্থানীয় কর্তৃপক্ষের সরিয়ে নেওয়ার নির্দেশনা অনুসরণ করুন।",
-        }[max(0, min(4, tier))]
-        lines += ["", action, "", "*উৎস: বৃষ্টিপাতের পূর্বাভাস ও GloFAS নদী প্রবাহ (কোপার্নিকাস)*"]
-        return "\n".join(lines)
-    lines = [
-        f"## Flood Outlook — {district} (next 10 days)",
-        "",
-        f"**Status:** {_FLOOD_EMOJI.get(tier, '')} **{a.get('tier_label', 'Normal').upper()}**",
-    ]
-    if rain:
-        lines.append(
-            f"- Rainfall: up to {rain.get('rain_24_mm', 0):.0f} mm in 24 h, {rain.get('rain_72_mm', 0):.0f} mm over 72 h"
-            + (
-                " (soil already saturated)"
-                if rain.get("soil_note") == "saturated"
-                else ""
-            )
-        )
-    if river:
-        lines.append(
-            f"- River discharge ({river.get('point', '')}): {river.get('peak_m3s', 0):.0f} m³/s, "
-            f"{river.get('ratio', 0):.1f}× the 30-day median, peaking {river.get('peak_date', '')}"
-        )
-    lines += [
-        "",
-        a.get("message", ""),
-        "",
-        "*Source: rainfall forecast and GloFAS river discharge (Copernicus)*",
-    ]
-    return "\n".join(lines)
-
-
 def _fallback(lang: str, key: str, **fmt) -> tuple[str, str]:
     """Return (text, language) for a user-facing fallback message."""
     lang = (lang or "en").lower()
@@ -436,42 +319,6 @@ def _localized_district_name(english_name: str, language: str) -> str:
     return english_name
 
 
-_BMD_WARNING_KEYWORDS = re.compile(
-    r"\b(weather\s+warnings?|bmd|met\s+office|official\s+warning|warning\s+(?:signal|message|bulletin)|"
-    r"cyclone|storm\s+(?:warning|signal)|signal\s*(?:no\.?|number)?\s*\d|maritime|sea\s+port|"
-    r"heat\s*wave|landslide|lightning\s+warning|fog\s+warning|any\s+(?:active\s+)?(?:warnings?|alerts?))\b|"
-    r"সতর্ক\s*সংকেত|সতর্কবার্তা|ঘূর্ণিঝড়|আবহাওয়া\s*সতর্কতা",
-    re.IGNORECASE,
-)
-
-_FLOOD_RISK_KEYWORDS = re.compile(
-    r"\b(flood(?:ing|s)?\s+(?:risk|forecast|outlook|warning|alert|chance|likely|expected|coming|danger)|"
-    r"(?:risk|chance|danger|possibility)\s+of\s+flood(?:ing|s)?|"
-    r"will\s+(?:it|there\s+be)\s+(?:a\s+)?flood|"
-    r"river\s+(?:level|discharge|rising|rise)|water\s+level)\b",
-    re.IGNORECASE,
-)
-
-_DROUGHT_KEYWORDS = re.compile(
-    r"\b(drought|soil[\s\-]?moisture|dry[\s\-]?season|water[\s\-]?stress|"
-    r"drought[\s\-]?risk|drought[\s\-]?forecast|drought[\s\-]?outlook|seasonal[\s\-]?risk)\b",
-    re.IGNORECASE,
-)
-_SEASONAL_KEYWORDS = re.compile(
-    r"(?:\b[2-6]\s*months?\b|"
-    r"\b(?:(?:next|in|for)\s+)?(?:[8-9]|[1-9]\d)\s*days?\b|"
-    r"\b(?:(?:next|in|for)\s+)?(?:two|three|four|five|six|[2-6])\s*weeks?\b|"
-    r"\bfortnight\b|"
-    r"\bnext\s+month\b|"
-    r"\b(?:next\s+)?30\s*days?\b|"
-    r"\bnext\s+(?:few|couple\s+of?|coming)\s+months?\b|"
-    r"\bcoming\s+months?\b|"
-    r"\bseasonal\s+(?:forecast|outlook|weather|climate)\b|"
-    r"\blong.?term\s+(?:forecast|outlook|weather)\b|"
-    r"\bclimate\s+(?:outlook|forecast)\b|"
-    r"\bmonsoon\s+(?:season|forecast|outlook)\b)",
-    re.IGNORECASE,
-)
 _DELINEATION_KEYWORDS = re.compile(
     r"(?:\bdelineat(?:e|ion)\b|"
     r"\bfield\s+boundar(?:y|ies)\b|"
@@ -596,179 +443,6 @@ def _find_drought_district(query: str) -> tuple[str, float, float] | None:
         if name.lower() in q:
             return name, lat, lon
     return None
-
-
-def _parse_horizon_days(query: str) -> int:
-    """Parse 'next week/2 weeks/3 weeks/month' from query. Default: 30 (seasonal)."""
-    q = query.lower()
-    if re.search(r"\b(month|30\s*days?)\b", q):
-        return 30
-    if re.search(r"\b(three\s*weeks?|3\s*weeks?|21\s*days?)\b", q):
-        return 21
-    if re.search(r"\b(two\s*weeks?|2\s*weeks?|fortnight|14\s*days?)\b", q):
-        return 14
-    if re.search(r"\b(week|7\s*days?)\b", q):
-        return 7
-    return 30
-
-
-def _parse_seasonal_months(query: str) -> int:
-    """Extract requested number of months from a seasonal query. Default: 3."""
-    m = re.search(r"\b([2-6])\s*months?\b", query, re.IGNORECASE)
-    if m:
-        return int(m.group(1))
-    return 3
-
-
-def _build_seasonal_answer(district: str, doc: dict, requested_months: int) -> str:
-    """
-    Format a Copernicus SEAS5 seasonal forecast document into a chatbot-ready
-    markdown summary. Always attributes to Copernicus — never BAMIS/Open-Meteo.
-    """
-    from calendar import month_name as _month_name
-
-    outlook: list[dict] = doc.get("outlook", [])
-    issue_month: str = doc.get("issue_month", "")
-    fetched_at: str = doc.get("fetched_at", "")[:10]
-
-    # Limit to what the user asked for (and what we have)
-    months_to_show = min(requested_months, len(outlook))
-    rows = outlook[:months_to_show]
-
-    if not rows:
-        return (
-            f"## Seasonal Outlook — {district}\n\n"
-            "Copernicus SEAS5 seasonal data has been fetched but contains no monthly records. "
-            "This is unexpected — please check the warning_system_engine logs."
-        )
-
-    # Format issue label
-    issue_label = ""
-    if issue_month:
-        try:
-            y, mo = issue_month.split("-")
-            issue_label = f"{_month_name[int(mo)]} {y}"
-        except Exception:
-            issue_label = issue_month
-
-    # Build the month-by-month table
-    table_rows = []
-    for rec in rows:
-        vm = rec.get("valid_month", "")
-        try:
-            y, mo = vm.split("-")
-            month_label = f"{_month_name[int(mo)]} {y}"
-        except Exception:
-            month_label = vm
-
-        temp = (
-            f"{rec['mean_temp_c']:.1f}°C" if rec.get("mean_temp_c") is not None else "—"
-        )
-        rain = (
-            f"{rec['total_precip_mm']:.0f} mm"
-            if rec.get("total_precip_mm") is not None
-            else "—"
-        )
-        wind = (
-            f"{rec['mean_wind_kmh']:.0f} km/h"
-            if rec.get("mean_wind_kmh") is not None
-            else "—"
-        )
-        humid = (
-            f"{rec['estimated_rh_pct']:.0f}%"
-            if rec.get("estimated_rh_pct") is not None
-            else "—"
-        )
-        table_rows.append(f"| {month_label} | {temp} | {rain} | {wind} | {humid} |")
-
-    table = "\n".join(
-        [
-            "| Month | Avg Temp | Monthly Rain | Wind | Humidity |",
-            "|-------|----------|--------------|------|----------|",
-            *table_rows,
-        ]
-    )
-
-    # Derive a brief narrative from the data
-    temps = [r["mean_temp_c"] for r in rows if r.get("mean_temp_c") is not None]
-    rains = [r["total_precip_mm"] for r in rows if r.get("total_precip_mm") is not None]
-    humids = [
-        r["estimated_rh_pct"] for r in rows if r.get("estimated_rh_pct") is not None
-    ]
-
-    narrative_parts = []
-    if temps:
-        t_min, t_max = round(min(temps), 1), round(max(temps), 1)
-        narrative_parts.append(
-            f"Temperatures will range between **{t_min}°C and {t_max}°C**."
-        )
-    if rains:
-        r_max_idx = rains.index(max(rains))
-        wettest_month = rows[r_max_idx].get("valid_month", "")
-        try:
-            y, mo = wettest_month.split("-")
-            wettest_label = _month_name[int(mo)]
-        except Exception:
-            wettest_label = wettest_month
-        narrative_parts.append(
-            f"The wettest month is expected to be **{wettest_label}** "
-            f"({max(rains):.0f} mm)."
-        )
-    if humids:
-        avg_h = sum(humids) / len(humids)
-        if avg_h >= 80:
-            narrative_parts.append(
-                f"Humidity will be consistently high (~{avg_h:.0f}%) — "
-                "elevated disease pressure on susceptible crops should be expected."
-            )
-
-    narrative = " ".join(narrative_parts)
-
-    # Agricultural notes based on rainfall levels
-    agri_notes = []
-    if rains:
-        heavy_months = [
-            rows[i].get("valid_month", "") for i, r in enumerate(rains) if r >= 200
-        ]
-        if heavy_months:
-            labels = []
-            for vm in heavy_months:
-                try:
-                    y, mo = vm.split("-")
-                    labels.append(_month_name[int(mo)])
-                except Exception:
-                    labels.append(vm)
-            agri_notes.append(
-                f"- Ensure good field drainage during the heavy-rainfall months "
-                f"({', '.join(labels)}) to prevent waterlogging."
-            )
-        if max(rains) < 50:
-            agri_notes.append(
-                "- Low rainfall forecast — plan supplemental irrigation well in advance."
-            )
-    if humids and sum(humids) / len(humids) >= 80:
-        agri_notes.append(
-            "- High humidity throughout — monitor crops for fungal disease and late blight."
-        )
-
-    agri_section = (
-        "\n**Agricultural Advisory**\n" + "\n".join(agri_notes) if agri_notes else ""
-    )
-
-    source_line = (
-        "*Source: Copernicus SEAS5 seasonal forecast (ECMWF)"
-        + (f" — issued {issue_label}" if issue_label else "")
-        + (f", retrieved {fetched_at}" if fetched_at else "")
-        + "*"
-    )
-
-    return (
-        f"## Seasonal Weather Outlook — {district} (next {months_to_show} month{'s' if months_to_show > 1 else ''})\n\n"
-        f"{source_line}\n\n"
-        f"{table}\n\n"
-        f"{narrative}"
-        f"{agri_section}"
-    )
 
 
 def _assess_drought_forecast_logic(
@@ -902,82 +576,6 @@ def _assess_drought_forecast_logic(
         "report_filename": report_filename,
         "message": message,
     }
-
-
-def _build_drought_answer_from_stored(
-    district: str, stored: dict, requested_horizon: int
-) -> str:
-    """Format a stored ArangoDB drought assessment into a chatbot-ready markdown answer."""
-    tier = stored.get("tier", 0)
-    tier_label = stored.get("tier_label", "Normal")
-    drought_level = stored.get("drought_level", "NORMAL")
-    message = stored.get("message", "")
-    trend = stored.get("trend", "STABLE")
-    trend_run_days = stored.get("trend_run_days", 0)
-    triggers = stored.get("triggers", [])
-    report_filename = stored.get("report_filename", "")
-    window_days = stored.get("window_days", 7)
-
-    if requested_horizon <= 7:
-        horizon_label = "next week"
-    elif requested_horizon <= 14:
-        horizon_label = "next 2 weeks"
-    elif requested_horizon <= 21:
-        horizon_label = "next 3 weeks"
-    else:
-        horizon_label = "next month"
-
-    level_icon = {"NORMAL": "🟢", "WATCH": "🟡", "MODERATE": "🟠", "SEVERE": "🔴"}.get(
-        drought_level, "⚪"
-    )
-    trend_icon = {"WORSENING": "📈", "IMPROVING": "📉", "STABLE": "➡️"}.get(trend, "➡️")
-    trend_str = trend + (
-        f" for {trend_run_days} consecutive days" if trend_run_days >= 2 else ""
-    )
-
-    lines = [
-        f"## Drought Outlook — {district} ({horizon_label})",
-        "",
-        f"**Status:** {level_icon} **{drought_level}** ({tier_label})",
-        f"**Trend:** {trend_icon} {trend_str}",
-        "",
-        message,
-    ]
-
-    if triggers:
-        lines += ["", "**Stressed indicators:**"]
-        for t in triggers:
-            lines.append(f"- {t}")
-
-    if tier == 0:
-        lines += [
-            "",
-            "No drought stress detected — soil moisture and vegetation within safe ranges.",
-        ]
-    elif tier == 1:
-        lines += [
-            "",
-            "⚠️ Early watch — conditions are slightly stressed. Continue monitoring.",
-        ]
-    elif tier == 2:
-        lines += [
-            "",
-            "⚠️ **Warning level** — consider water conservation and crop protection.",
-        ]
-    elif tier >= 3:
-        lines += [
-            "",
-            "🚨 **Severe drought** — act immediately. Prioritise irrigation and crop protection.",
-        ]
-
-    if report_filename:
-        lines += [
-            "",
-            f"📄 [View Full Drought Report](/api/weather/drought-report/{report_filename})",
-        ]
-
-    lines += ["", f"*Based on {window_days}-day satellite assessment. Updated daily.*"]
-    return "\n".join(lines)
 
 
 def _build_bulletin_answer() -> str:
@@ -1177,76 +775,6 @@ async def query(request: QueryRequest):
             },
         }
 
-    # ── Official BMD warnings (CAP feed stored by warning_system_engine) ─────
-    if (
-        _BMD_WARNING_KEYWORDS.search(request.query)
-        and storage_layer
-        and not _FLOOD_DETECTION_KEYWORDS.search(request.query)
-    ):
-        district_info = _find_district_64(request.query) or _find_drought_district(
-            request.query
-        )
-        district = district_info[0] if district_info else None
-        lang = (request.language or "en").lower()
-        alerts = storage_layer.get_active_bmd_alerts(district, 10)
-        answer = _build_bmd_alerts_answer(district, alerts, lang)
-        top = max((int(a.get("tier", 0) or 0) for a in alerts), default=0)
-        return {
-            "answer": answer,
-            "language": "bn" if lang == "bn" else "en",
-            "risk_tier": top,
-            "risk_label": {
-                0: "Normal",
-                1: "Advisory",
-                2: "Warning",
-                3: "Severe",
-                4: "Emergency",
-            }[min(4, top)],
-            "advisory": "",
-            "triggers": [a.get("event", "") for a in alerts],
-            "buffer": None,
-            "location": district or "",
-            "forecast": {},
-        }
-
-    # ── Flood risk outlook (warning_system_engine FloodEWS: rain + GloFAS) ────
-    if (
-        _FLOOD_RISK_KEYWORDS.search(request.query)
-        and not _FLOOD_DETECTION_KEYWORDS.search(request.query)
-        and storage_layer
-    ):
-        district_info = _find_district_64(request.query) or _find_drought_district(
-            request.query
-        )
-        district = district_info[0] if district_info else "Dhaka"
-        stored = storage_layer.get_latest_crop_risk(district, "flood")
-        lang = (request.language or "en").lower()
-        if stored:
-            answer = _build_flood_risk_answer(district, stored, lang)
-            return {
-                "answer": answer,
-                "language": "bn" if lang == "bn" else "en",
-                "risk_tier": stored.get("tier", 0),
-                "risk_label": stored.get("tier_label", "Normal"),
-                "advisory": stored.get("message", ""),
-                "triggers": stored.get("triggers", []),
-                "buffer": None,
-                "location": district,
-                "forecast": {},
-            }
-        text, used = _fallback(lang, "flood_unavailable", district=district)
-        return {
-            "answer": text,
-            "language": used,
-            "risk_tier": 0,
-            "risk_label": "Normal",
-            "advisory": "",
-            "triggers": [],
-            "buffer": None,
-            "location": district,
-            "forecast": {},
-        }
-
     # ── Satellite flood detection (geo-inference-worker + Prithvi-EO-2.0) ────
     if _FLOOD_DETECTION_KEYWORDS.search(request.query):
         if not _GEO_INFERENCE_URL:
@@ -1353,72 +881,6 @@ async def query(request: QueryRequest):
             },
         }
 
-    # ── Seasonal long-term outlook (Copernicus SEAS5) ─────────────────────────
-    # Drought questions go to the drought branch below even when they mention a
-    # long horizon ("next two weeks"): the on-demand GEE assessment handles 7-30 days.
-    if (
-        _SEASONAL_KEYWORDS.search(request.query)
-        and storage_layer
-        and not _DROUGHT_KEYWORDS.search(request.query)
-    ):
-        district_info = _find_district_64(request.query) or _find_drought_district(
-            request.query
-        )
-        district = district_info[0] if district_info else "Dhaka"
-        requested_months = _parse_seasonal_months(request.query)
-        doc = storage_layer.get_seasonal_forecast(district)
-        if doc:
-            logger.info(
-                "[QUERY] Serving Copernicus seasonal outlook for %s (%d months)",
-                district,
-                requested_months,
-            )
-            return {
-                "answer": _build_seasonal_answer(district, doc, requested_months),
-                "risk_tier": 0,
-                "risk_label": "Normal",
-                "advisory": "",
-                "triggers": [],
-                "buffer": None,
-                "location": district,
-                "forecast": {},
-            }
-        logger.info(
-            "[QUERY] Seasonal data not yet available for %s (Copernicus SEAS5 not seeded; "
-            "check CDSAPI_KEY / warning_system_engine) — falling back to the short-term forecast",
-            district,
-        )
-        # Give the user something useful: the note plus the 7-day forecast.
-        answer, used = _fallback(
-            request.language, "seasonal_unavailable_plain", district=district
-        )
-        if weather_agent is not None:
-            try:
-                short = await weather_agent.run(
-                    f"What is the weather forecast for {district} this week?",
-                    language=request.language,
-                )
-                note, used = _fallback(
-                    request.language, "seasonal_unavailable", district=district
-                )
-                answer = note + short.get("answer", "")
-                used = short.get("language", used)
-            except (
-                Exception
-            ) as exc:  # pragma: no cover - agent failure is already logged
-                logger.warning("[QUERY] Short-term fallback failed: %s", exc)
-        return {
-            "answer": answer,
-            "language": used,
-            "risk_tier": 0,
-            "risk_label": "Normal",
-            "advisory": "",
-            "triggers": [],
-            "buffer": None,
-            "location": district,
-            "forecast": {},
-        }
-
     if _BULLETIN_KEYWORDS.search(request.query):
         return {
             "answer": _build_bulletin_answer(),
@@ -1428,86 +890,6 @@ async def query(request: QueryRequest):
             "triggers": [],
             "buffer": None,
             "location": "Bangladesh",
-            "forecast": {},
-        }
-
-    if _DROUGHT_KEYWORDS.search(request.query) and (
-        storage_layer or _DROUGHT_MONITORING_URL
-    ):
-        district_info = _find_district_64(request.query) or _find_drought_district(
-            request.query
-        )
-        district, lat, lon = (
-            district_info if district_info else ("Dhaka", 23.8103, 90.4125)
-        )
-        horizon_days = _parse_horizon_days(request.query)
-
-        # Path 1: try on-demand GEE assessment (custom horizon, fresh data)
-        gee_result = None
-        if _DROUGHT_MONITORING_URL:
-            import asyncio as _asyncio
-
-            gee_result = await _asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: _assess_drought_forecast_logic(
-                    district, lat, lon, horizon_days
-                ),
-            )
-            if "error" in gee_result:
-                logger.warning(
-                    "[QUERY] On-demand GEE failed (%s) — trying stored assessment",
-                    gee_result["error"],
-                )
-                gee_result = None
-
-        if gee_result is not None:
-            return {
-                "answer": gee_result["answer"],
-                "risk_tier": gee_result["tier"],
-                "risk_label": gee_result["tier_label"],
-                "advisory": gee_result.get("message", ""),
-                "triggers": gee_result.get("triggers", []),
-                "buffer": None,
-                "location": district,
-                "forecast": {},
-            }
-
-        # Path 2: fall back to stored assessment in ArangoDB (populated by daily scheduler)
-        if storage_layer:
-            stored = storage_layer.get_drought_assessment(district)
-            if stored:
-                logger.info("[QUERY] Using stored drought assessment for %s", district)
-                return {
-                    "answer": _build_drought_answer_from_stored(
-                        district, stored, horizon_days
-                    ),
-                    "risk_tier": stored.get("tier", 0),
-                    "risk_label": stored.get("tier_label", "Normal"),
-                    "advisory": stored.get("message", ""),
-                    "triggers": stored.get("triggers", []),
-                    "buffer": None,
-                    "location": district,
-                    "forecast": {},
-                }
-
-        # Path 3: nothing available — a plain user-facing message (the operator
-        # detail is in the log: daily pipeline at 07:00 UTC needs GEE credentials).
-        logger.warning(
-            "[QUERY] No drought assessment for %s (on-demand GEE and stored both unavailable)",
-            district,
-        )
-        text, used = _fallback(
-            request.language, "drought_unavailable", district=district
-        )
-        return {
-            "answer": text,
-            "language": used,
-            "risk_tier": 0,
-            "risk_label": "Normal",
-            "advisory": "",
-            "triggers": [],
-            "buffer": None,
-            "location": district,
             "forecast": {},
         }
 
@@ -1633,6 +1015,267 @@ async def get_potato_risk(
     for field in ("_key", "_id", "_rev"):
         assessment.pop(field, None)
     return assessment
+
+
+# ── Curated context for the chat LLM ──────────────────────────────────────
+# Everything this service knows about a district, as one plain-text block:
+# today's date and where it falls in the crop season, the short-term forecast,
+# the stored crop risk, the Copernicus seasonal outlook with its per-month crop
+# assessments, the drought and flood assessments and any official BMD warning.
+# The backend prepends it to every knowledge-base question so the chat LLM
+# reasons over real numbers next to the retrieved documents. Nothing here
+# decides what the answer is — that is the model's job.
+
+_DEFAULT_DISTRICT = os.getenv("WEATHER_DEFAULT_DISTRICT", "Dhaka")
+
+
+def _month_label(ym: str) -> str:
+    """'2026-10' -> 'October 2026'; anything unparseable is returned as is."""
+    from calendar import month_name
+
+    try:
+        y, m = ym.split("-")
+        return f"{month_name[int(m)]} {y}"
+    except Exception:
+        return ym
+
+
+def _season_lines(assessments: list[dict], today, crop: str) -> list[str]:
+    """
+    Crop calendar months with their growth stages, plus where today falls.
+
+    The stages come from the stored seasonal assessments (LongTermPotatoEWS
+    maps each forecast month to the crop profile's stages), so this reflects
+    the crop calendar the engine actually uses rather than a fixed date range.
+    """
+    from datetime import date
+
+    if not assessments:
+        return []
+    lines = []
+    for a in assessments:
+        stages = ", ".join(a.get("stages") or []) or "—"
+        risk = a.get("tier_label", "Normal")
+        triggers = "; ".join(str(t) for t in (a.get("triggers") or []))
+        line = f"  {_month_label(a.get('target_month', ''))}: {stages} — seasonal risk {risk}"
+        if triggers:
+            line += f" ({triggers})"
+        lines.append(line)
+
+    months = sorted(
+        a.get("target_month", "") for a in assessments if a.get("target_month")
+    )
+    this_month = f"{today.year}-{today.month:02d}"
+    try:
+        first = months[0]
+        y, m = (int(x) for x in first.split("-"))
+        first_day = date(y, m, 1)
+    except Exception:
+        return lines
+    if this_month in months:
+        current = next(a for a in assessments if a.get("target_month") == this_month)
+        stages = ", ".join(current.get("stages") or []) or "—"
+        lines.append(f"  Today falls inside the {crop} season: stage(s) {stages}.")
+    elif today < first_day:
+        lines.append(
+            f"  The {crop} season has not started: the first calendar month is "
+            f"{_month_label(first)}, in {(first_day - today).days} days."
+        )
+    else:
+        lines.append(
+            f"  The {crop} season's last calendar month was {_month_label(months[-1])}."
+        )
+    return lines
+
+
+def _build_weather_context(district: str, days: int = 7, crop: str = "potato") -> str:
+    """Plain-text context block for ``district``; "" when nothing is stored."""
+    from datetime import datetime, timezone
+
+    if storage_layer is None:
+        return ""
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    sections: list[str] = [
+        f"Today is {now:%A %d %B %Y} (UTC), ISO week {today.isocalendar()[1]}. District: {district}."
+    ]
+
+    # Crop season calendar + seasonal assessments (Copernicus vs crop thresholds)
+    try:
+        assessments = storage_layer.get_seasonal_assessments(district, crop)
+    except Exception:
+        assessments = []
+    season = _season_lines(assessments, today, crop)
+    if season:
+        sections.append(
+            f"{crop.capitalize()} season calendar for {district} (crop profile):\n"
+            + "\n".join(season)
+        )
+
+    # Short-term forecast
+    stored = None
+    try:
+        stored = storage_layer.get_latest_forecast(
+            district, horizon="short", max_age_hours=6
+        )
+    except Exception as exc:
+        logger.warning("[CONTEXT] Forecast lookup failed for %s: %s", district, exc)
+    if stored and stored.forecast:
+        fc = stored.forecast[:days]
+        lines = []
+        for d in fc:
+            # "today"/"tomorrow"/weekday next to the date: the model does not
+            # reliably work out which row "tomorrow" is from the date alone.
+            try:
+                from datetime import date as _date
+
+                offset = (_date.fromisoformat(d.date) - today).days
+                when = {0: "today", 1: "tomorrow"}.get(
+                    offset, _date.fromisoformat(d.date).strftime("%A")
+                )
+                stamp = f"{d.date} ({when})"
+            except ValueError:
+                stamp = d.date
+            line = (
+                f"  {stamp}: {d.temperature.min:.1f}–{d.temperature.max:.1f}°C, "
+                f"rain {d.precipitation.value:.1f} mm ({int(d.precipitation.probability * 100)}% chance), "
+                f"humidity {d.humidity:.0f}%, wind {d.wind.speed:.0f} km/h"
+            )
+            if d.soil_moisture is not None:
+                # Same wet/moist/dry banding the forecast strip shows the user;
+                # without it the LLM guessed 0.34 m³/m³ (field capacity) was "low".
+                band = WeatherAgent._soil_emoji(d.soil_moisture).split()[0]
+                line += f", soil moisture {d.soil_moisture:.2f} m³/m³ ({band})"
+            lines.append(line)
+        total_rain = sum(d.precipitation.value for d in fc)
+        wet_days = sum(1 for d in fc if d.precipitation.value >= 1.0)
+        lines.append(
+            f"  Totals over these {len(fc)} days: rain {total_rain:.1f} mm on {wet_days} day(s) ≥1 mm; "
+            f"max {max(d.temperature.max for d in fc):.1f}°C, min {min(d.temperature.min for d in fc):.1f}°C."
+        )
+        source = (
+            "Open-Meteo" if stored.source == "open_meteo" else stored.source.upper()
+        )
+        check = ""
+        if stored.sense_check_passed is not None:
+            check = ", cross-checked against BAMIS" + (
+                "" if stored.sense_check_passed else " (BAMIS values used)"
+            )
+        sections.append(
+            f"{len(fc)}-day forecast for {district} ({source}{check}; ingested {stored.ingested_at[:16]} UTC):\n"
+            + "\n".join(lines)
+        )
+
+    # Stored crop risk for today (crop thresholds vs the same forecast)
+    try:
+        risk = storage_layer.get_latest_crop_risk(district, crop)
+    except Exception:
+        risk = None
+    if risk:
+        triggers = "; ".join(str(t) for t in (risk.get("triggers") or []))
+        sections.append(
+            f"{crop.capitalize()} risk today for {district} (crop thresholds, assessed {str(risk.get('assessed_at', ''))[:10]}): "
+            f"{risk.get('tier_label', 'Normal')}"
+            + (f" — {triggers}." if triggers else ".")
+        )
+
+    # Seasonal outlook
+    try:
+        seasonal = storage_layer.get_seasonal_forecast(district)
+    except Exception:
+        seasonal = None
+    if seasonal and seasonal.get("outlook"):
+        lines = []
+        for rec in seasonal["outlook"]:
+            line = f"  {_month_label(rec.get('valid_month', ''))}: mean {rec.get('mean_temp_c', '?')}°C, rain {rec.get('total_precip_mm', '?')} mm"
+            if rec.get("estimated_rh_pct") is not None:
+                line += f", humidity ~{rec['estimated_rh_pct']:.0f}%"
+            lines.append(line)
+        sections.append(
+            f"Seasonal outlook for {district} (Copernicus SEAS5, issued {_month_label(seasonal.get('issue_month', ''))}, "
+            f"retrieved {str(seasonal.get('fetched_at', ''))[:10]}):\n"
+            + "\n".join(lines)
+        )
+
+    # Drought
+    try:
+        drought = storage_layer.get_drought_assessment(district)
+    except Exception:
+        drought = None
+    if drought:
+        triggers = "; ".join(str(t) for t in (drought.get("triggers") or []))
+        line = (
+            f"Drought assessment for {district} (satellite soil moisture and vegetation, "
+            f"{str(drought.get('assessed_at', ''))[:10]}): {drought.get('tier_label', 'Normal')}, "
+            f"trend {drought.get('trend', 'STABLE')}. {drought.get('message', '')}"
+        )
+        if triggers:
+            line += f" Stressed indicators: {triggers}."
+        if drought.get("report_filename"):
+            line += f" Full report: {_PUBLIC_DROUGHT_REPORT_BASE}/{drought['report_filename']}"
+        sections.append(line)
+
+    # Flood
+    try:
+        flood = storage_layer.get_latest_crop_risk(district, "flood")
+    except Exception:
+        flood = None
+    if flood:
+        sections.append(
+            f"Flood outlook for {district} (rainfall + GloFAS river discharge, next 10 days): "
+            f"{flood.get('tier_label', 'Normal')}. {flood.get('message', '')}"
+        )
+
+    # Official warnings
+    try:
+        alerts = storage_layer.get_active_bmd_alerts(district, 10)
+    except Exception:
+        alerts = []
+    if alerts:
+        lines = []
+        for a in alerts:
+            line = f"  {a.get('event') or a.get('headline') or 'Warning'}"
+            if a.get("severity"):
+                line += f" — severity {a['severity']}"
+            if a.get("expires"):
+                line += f", until {str(a['expires'])[:16]}"
+            lines.append(line)
+        sections.append(
+            f"Official BMD warnings in force for {district}:\n" + "\n".join(lines)
+        )
+    else:
+        sections.append(f"Official BMD warnings in force for {district}: none.")
+
+    sections.append(
+        "Not available in this system: observed rainfall records for past weeks or months, "
+        "and alert subscriptions (the assistant cannot notify anyone later)."
+    )
+    return "\n\n".join(sections)
+
+
+_PUBLIC_DROUGHT_REPORT_BASE = os.getenv(
+    "PUBLIC_DROUGHT_REPORT_BASE", "/api/weather/drought-report"
+)
+
+
+@app.get("/context")
+async def get_weather_context(
+    location: str = Query(
+        "", description="District name, or the user's whole message to scan for one"
+    ),
+    days: int = Query(7, ge=1, le=7, description="Forecast days to include"),
+    crop: str = Query("potato", description="Crop whose assessments to include"),
+):
+    """
+    Curated plain-text context for the chat LLM (see _build_weather_context).
+
+    ``location`` may be the raw message: it is scanned for a district name the
+    same way the query endpoint does, and falls back to the default district.
+    Returns {"text": ""} when storage is offline so the caller can skip it.
+    """
+    district_info = _find_district_64(location) or _find_drought_district(location)
+    district = district_info[0] if district_info else _DEFAULT_DISTRICT
+    return {"location": district, "text": _build_weather_context(district, days, crop)}
 
 
 @app.get("/drought/risk/latest")

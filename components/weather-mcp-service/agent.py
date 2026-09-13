@@ -42,6 +42,15 @@ _INVALID_LOCATIONS = {
     "not mentioned",
 }
 
+# District used when the farmer names no place at all ("will it rain this week?").
+# The seasonal, drought and flood branches in main.py already default this way;
+# without it the agent path was the only one that refused to answer.
+_DEFAULT_DISTRICT = os.getenv("WEATHER_DEFAULT_DISTRICT", "Dhaka")
+
+# Crop whose stored assessment grounds the agricultural tip. Only crops with a
+# profile in the warning_system_engine produce assessments; the rest return "".
+_ADVISORY_CROP = os.getenv("WEATHER_ADVISORY_CROP", "potato")
+
 
 class WeatherIntent(BaseModel):
     location: str
@@ -456,6 +465,35 @@ class WeatherAgent:
             lines.append(line.translate(ui["digits"]) if ui.get("digits") else line)
         return f"---\n\n**{ui['daily_outlook']}:**\n" + "\n".join(lines)
 
+    def _crop_context(self, district: str) -> str:
+        """
+        The stored crop risk for this district, as prompt context.
+
+        Reuses the assessment the warning_system_engine writes daily (crop
+        thresholds vs the same forecast); returns "" when none is stored, so the
+        prompt is unchanged for districts without a crop profile.
+        """
+        if not self.storage:
+            return ""
+        try:
+            stored = self.storage.get_latest_crop_risk(district, _ADVISORY_CROP)
+        except Exception as exc:
+            logger.warning("[AGENT] Crop risk lookup failed for %s: %s", district, exc)
+            return ""
+        if not stored:
+            return ""
+        triggers = stored.get("triggers") or []
+        if not triggers and int(stored.get("tier", 0) or 0) == 0:
+            return (
+                f"\nCrop assessment ({_ADVISORY_CROP}): conditions are within the "
+                f"{_ADVISORY_CROP} tolerance range.\n"
+            )
+        lines = "; ".join(str(t) for t in triggers)
+        return (
+            f"\nCrop assessment ({_ADVISORY_CROP}): {stored.get('tier_label', 'Normal')}."
+            + (f" Exceeded thresholds: {lines}.\n" if lines else "\n")
+        )
+
     async def _generate_explanation(
         self,
         query: str,
@@ -506,14 +544,26 @@ class WeatherAgent:
                 "Add a short advisory.\n"
             )
 
+        # Ground the agricultural advice in the stored crop assessment rather
+        # than the model's own knowledge. The warning_system_engine already
+        # compared this district's forecast against the crop thresholds.
+        crop_context = self._crop_context(geo.get("district") or location_name)
+
         prompt = (
             f"You are a weather assistant. Describe the weather conditions below for {ctx}.\n"
             f"Location: {location_name}\n"
             f"Data covers {n_days} days:\n"
             f"{day_summary}\n"
-            f"{risk_context}\n"
+            f"{risk_context}"
+            f"{crop_context}\n"
             "Write 2–4 sentences summarising temperatures, rain, and one practical agriculture tip. "
-            "Do NOT mention where the data comes from, do NOT greet the reader, and "
+            + (
+                "Base the agricultural tip ONLY on the crop assessment above; do not invent "
+                "thresholds or crop advice that is not stated there. "
+                if crop_context
+                else ""
+            )
+            + "Do NOT mention where the data comes from, do NOT greet the reader, and "
             "do NOT mention any number of days or time period — just describe the conditions and advice."
         )
         lang_name = _LANGUAGE_NAMES.get(language)
@@ -634,11 +684,13 @@ class WeatherAgent:
             data = json.loads(raw)
             location = (data.get("location") or "").strip()
             if not location or location.lower() in _INVALID_LOCATIONS:
-                raise ValueError(
-                    "Your question doesn't mention a specific location. "
-                    "Please include a Bangladesh district name — for example: "
-                    '"What is the weather in Dhaka tomorrow?"'
+                # No place named: answer for the default district rather than
+                # refusing. A named-but-unresolvable place still errors later,
+                # in _find_district, so a real typo is not silently redirected.
+                logger.info(
+                    "[AGENT] No location in query — defaulting to %s", _DEFAULT_DISTRICT
                 )
+                location = _DEFAULT_DISTRICT
             return WeatherIntent(
                 location=location,
                 user_context=data.get("user_context", "CITIZEN"),

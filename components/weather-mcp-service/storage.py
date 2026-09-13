@@ -377,6 +377,36 @@ class StorageLayer:
             )
             return None
 
+    def get_seasonal_assessments(
+        self, location: str, crop: str = "potato"
+    ) -> list[dict]:
+        """
+        Monthly crop risk assessments for a district, oldest month first.
+
+        Written by LongTermPotatoEWS, which compares the Copernicus outlook
+        against the crop thresholds and growth stages. Returns [] when the
+        seasonal pipeline has not run for this district.
+        """
+        try:
+            cursor = self._db.aql.execute(
+                """
+                FOR d IN seasonal_assessments
+                    FILTER d.location == @location AND d.crop == @crop
+                    SORT d.target_month ASC
+                    RETURN d
+                """,
+                bind_vars={"location": location, "crop": crop},
+            )
+            return [dict(d) for d in cursor]
+        except Exception as exc:
+            logger.warning(
+                "[STORAGE] get_seasonal_assessments failed for %s/%s: %s",
+                location,
+                crop,
+                exc,
+            )
+            return []
+
     # ------------------------------------------------------------------
     # Drought assessments  (read-only — written by drought_monitoring)
     # ------------------------------------------------------------------

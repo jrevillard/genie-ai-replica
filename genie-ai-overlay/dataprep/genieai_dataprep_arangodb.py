@@ -264,10 +264,16 @@ _LIFECYCLE_RE = re.compile(
     r"emergence|transplant|nursery)\b"
 )
 
+# NOTE: "wilt", "termite", "bacterial" and friends are required for Docling
+# markdown tables. The original alternatives miss real entries on word
+# boundaries: "bacteria" does not match "Bacterial wilt" and "mite" does not
+# match "Termite", so 3 of the 6 pest rows in a crop calendar were skipped.
 _ENTITY_RE = re.compile(
     r"(?i)\b(pest|worm|aphid|mite|larva|larvae|nematode|insect|blight|"
-    r"fungus|bacteria|virus|rust|rot|mould|mold|weevil|caterpillar|beetle|"
-    r"fly|moth|bug|thrip|scale|whitefly|leafhopper|disease|pathogen|wire\s*worm)\b"
+    r"fungus|fungal|bacteria|bacterial|virus|viral|rust|rot|mould|mold|weevil|"
+    r"caterpillar|beetle|fly|moth|bug|thrip|scale|whitefly|leafhopper|disease|"
+    r"pathogen|wire\s*worm|wilt|termite|mildew|borer|smut|canker|scab|"
+    r"anthracnose)\b"
 )
 
 
@@ -278,15 +284,158 @@ def _clean_chunk_text(text: str) -> str:
     return _MONTH_WEEK_RE.sub(r"\1 (week \2)", text)
 
 
+# ---------------------------------------------------------------------------
+# Markdown-table-aware chunking
+# ---------------------------------------------------------------------------
+# Docling exports tables as markdown, one row per line. In a crop-calendar PDF a
+# single row runs 280-490 chars, so the plain character splitter emits ONE ROW
+# PER CHUNK: header rows are severed from their data, and a six-row
+# pest/disease table becomes seven fragments, none of which can answer "which
+# pests affect potatoes". These helpers keep a table whole when it fits, and
+# split on row boundaries with the header repeated when it does not.
+# See docs/rag/table-chunking-analysis.md.
+
+# Max chars for one table chunk. The effective budget is the larger of this and
+# the document's own chunk_size, so raising chunk_size never shrinks tables.
+TABLE_CHUNK_SIZE = int(os.getenv("DATAPREP_TABLE_CHUNK_SIZE", "3000"))
+
+_TABLE_ROW_RE = re.compile(r"^\s*\|")
+_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|[\s:|-]+\|?\s*$")
+_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S")
+# Docling pads every cell to the column width, which more than doubles a table:
+# the pest/disease table of a crop calendar measures 6047 chars raw and 2249
+# once padding is collapsed. Squeezing loses no information and is what lets a
+# table stay atomic.
+_TABLE_PAD_RE = re.compile(r" {2,}")
+_TABLE_DASH_RE = re.compile(r"-{2,}")
+# Section heading naming a pest/disease table. Matches singular and plural,
+# unlike _ENTITY_RE whose word boundaries reject "Pests" and "Diseases".
+_PEST_SECTION_RE = re.compile(r"(?i)\b(pest|disease|insect|pathogen)s?\b")
+# Table header cells naming the column rather than an entity: "Pest",
+# "Diseases", "Pest / Disease".
+_TABLE_HEADER_CELL_RE = re.compile(
+    r"(?i)^[\s/&-]*(pest|disease|insect|pathogen)s?([\s/&-]+(pest|disease|insect|pathogen)s?)*[\s/&-]*$"
+)
+
+
+def _squeeze_table_row(row: str) -> str:
+    """Collapse Docling's column padding on one markdown row.
+
+    Cell padding and the long dash runs of the separator row carry no
+    information but dominate the byte count, keeping tables from fitting in a
+    single chunk and wasting embedding tokens.
+    """
+    if _TABLE_SEPARATOR_RE.match(row):
+        return _TABLE_DASH_RE.sub("---", row).strip()
+    return _TABLE_PAD_RE.sub(" ", row).strip()
+
+
+def _compose_table_chunk(head: str, rows: list[str]) -> str:
+    """Join an optional heading/header block with body rows, skipping empties."""
+    parts = [p for p in (head, "\n".join(rows)) if p]
+    return "\n".join(parts)
+
+
+def _chunk_markdown_table(rows: list[str], heading: str, chunk_size: int) -> list[str]:
+    """Chunk a single markdown table, keeping it atomic when it fits.
+
+    Oversized tables are split on row boundaries, never inside a row, and the
+    header rows are repeated on every fragment so each one is self-describing.
+    """
+    if not rows:
+        return []
+
+    rows = [r for r in (_squeeze_table_row(r) for r in rows) if r]
+    if not rows:
+        return []
+
+    budget = max(chunk_size, TABLE_CHUNK_SIZE)
+    prefix = heading.strip() if heading else ""
+
+    whole = _compose_table_chunk(prefix, rows)
+    if len(whole) <= budget:
+        return [whole]
+
+    header = [rows[0]]
+    if len(rows) > 1 and _TABLE_SEPARATOR_RE.match(rows[1]):
+        header.append(rows[1])
+    body = rows[len(header) :]
+    head = _compose_table_chunk(prefix, header)
+
+    out: list[str] = []
+    current: list[str] = []
+    for row in body:
+        if current and len(_compose_table_chunk(head, current + [row])) > budget:
+            out.append(_compose_table_chunk(head, current))
+            current = [row]
+        else:
+            current.append(row)
+    if current:
+        out.append(_compose_table_chunk(head, current))
+    return out
+
+
+def _split_markdown_aware(content: str, text_splitter, chunk_size: int) -> list[str]:
+    """Split markdown without ever cutting through a table row.
+
+    Tables are routed to ``_chunk_markdown_table``; all other text keeps the
+    existing character-splitter behaviour. A heading immediately above a table
+    rides with that table instead of becoming a content-free chunk of its own.
+    """
+    lines = content.splitlines()
+    chunks: list[str] = []
+    pending: list[str] = []
+
+    def flush_text() -> None:
+        block = "\n".join(pending).strip()
+        pending.clear()
+        if not block:
+            return
+        # create_documents (not split_text) keeps the pre-existing contract for
+        # non-table text: same splitter call, same add_start_index behaviour.
+        for part in text_splitter.create_documents([block]):
+            # Splitters return Documents; normalise so no Document leaks
+            # downstream into is_valid_content / embedding / labelling.
+            part = part.page_content if hasattr(part, "page_content") else part
+            if part and part.strip():
+                chunks.append(part)
+
+    i = 0
+    total = len(lines)
+    while i < total:
+        if not _TABLE_ROW_RE.match(lines[i]):
+            pending.append(lines[i])
+            i += 1
+            continue
+
+        while pending and not pending[-1].strip():
+            pending.pop()
+        heading = pending.pop() if pending and _HEADING_RE.match(pending[-1]) else ""
+        flush_text()
+
+        table: list[str] = []
+        while i < total and _TABLE_ROW_RE.match(lines[i]):
+            table.append(lines[i].rstrip())
+            i += 1
+        chunks.extend(_chunk_markdown_table(table, heading, chunk_size))
+
+    flush_text()
+    return chunks
+
+
 def _build_aggregation_chunks(chunks: list[str]) -> list[str]:
     """Return synthetic [AGGREGATED] chunks covering list-type columns.
 
-    Two shapes are handled:
+    Three shapes are handled:
 
     Type A - pure short-line list (no "=" in the chunk): the first line is the
         column header and the rest are values, e.g. "Stages\nSprouting\nSeedling".
     Type B - key=value rows ("EntityName, N = Condition"): multi-word entity
         names (pests, diseases) are collected across all matching entries.
+    Type C - markdown table rows ("| Late Blight | ... |"), which is what
+        Docling produces. The first cell is the entity name. Types A and B were
+        written for the PyMuPDF loader and match nothing in Docling output, so
+        without this the pest aggregation never fired on a Docling-parsed PDF.
     """
     lifecycle_values: list[str] = []
     entity_names: set[str] = set()
@@ -319,6 +468,23 @@ def _build_aggregation_chunks(chunks: list[str]) -> list[str]:
                     continue  # meteorological variable, not an entity name
                 if len(col_name.split()) >= 2:
                     entity_names.add(col_name)
+
+        # Type C: Docling markdown table rows. Every row under a pests/diseases
+        # heading is an entity, even when the name matches no keyword, which is
+        # why the heading is checked as well as the name.
+        if any(_TABLE_ROW_RE.match(ln) for ln in lines):
+            pest_section = any(_PEST_SECTION_RE.search(ln) for ln in lines if _HEADING_RE.match(ln))
+            for line in lines:
+                if not _TABLE_ROW_RE.match(line) or _TABLE_SEPARATOR_RE.match(line):
+                    continue
+                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                name = cells[0] if cells else ""
+                if not name or len(name) > 60:
+                    continue
+                if _TABLE_HEADER_CELL_RE.match(name) or _METEO_COLUMN_RE.match(name):
+                    continue
+                if pest_section or _ENTITY_RE.search(name):
+                    entity_names.add(name)
 
     synthetic: list[str] = []
 
@@ -625,8 +791,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 docs = text_splitter.split_documents(md_docs)
                 plain_chunks = [d.page_content for d in docs]
             else:
-                docs = text_splitter.create_documents([content])
-                plain_chunks = [d.page_content for d in docs]
+                # Docling exports PDF/DOCX/PPTX/XLSX as markdown. Split it
+                # table-aware so a row is never cut in half and header rows stay
+                # attached to their data.
+                plain_chunks = _split_markdown_aware(content, text_splitter, doc_path.chunk_size)
 
             valid_chunks = [_clean_chunk_text(c) for c in plain_chunks if is_valid_content(c)]
             # Synthetic aggregation chunks so "list all stages / pests" queries hit a

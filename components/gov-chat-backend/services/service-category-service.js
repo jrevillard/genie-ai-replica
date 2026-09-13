@@ -437,12 +437,12 @@ class ServiceCategoryService {
                   RETURN trans.translation
               )
               SORT edge.order ASC
-              RETURN serviceTranslation
+              RETURN NOT_NULL(serviceTranslation, service.nameEN)
         )
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
-          name: categoryTranslation,
+          name: NOT_NULL(categoryTranslation, category.nameEN),
           children: services
         }
     `;
@@ -496,13 +496,13 @@ class ServiceCategoryService {
                           // This is the key change: return an object with the key and name
                           RETURN {
                               _key: service._key,
-                              name: serviceTranslation
+                              name: NOT_NULL(serviceTranslation, service.nameEN)
                           }
               )
               RETURN {
                   catKey: category._key,
                   catCode: category.catCode,
-                  name: categoryTranslation,
+                  name: NOT_NULL(categoryTranslation, category.nameEN),
                   children: services
               }
       `;
@@ -553,12 +553,12 @@ class ServiceCategoryService {
                   RETURN trans.translation
               )
               SORT edge.order ASC
-              RETURN serviceTranslation
+              RETURN NOT_NULL(serviceTranslation, service.nameEN)
         )
         RETURN {
           catKey: category._key,
           catCode: category.catCode,
-          name: categoryTranslation,
+          name: NOT_NULL(categoryTranslation, category.nameEN),
           children: services
         }
       `;

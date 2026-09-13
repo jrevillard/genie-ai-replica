@@ -16,7 +16,11 @@ export ARANGO_USER="root"
 
 # The password for the specified user.
 # IMPORTANT: Replace "your-database-password" with your actual password.
-export ARANGO_PASSWORD="test"
+export ARANGO_PASSWORD="arangopwd"
+
+# The ArangoDB graph name. Chunks are stored in the "<name>_SOURCE" collection.
+# Must match ARANGO_GRAPH_NAME in the deployment, which defaults to "GRAPH".
+export ARANGO_GRAPH_NAME="GRAPH"
 
 echo "ArangoDB environment variables set."
 

@@ -2214,3 +2214,149 @@ class TestResolveDoclingDevice:
         )
 
         assert _resolve_docling_device("auto", cuda_available=True) is AcceleratorDevice.CUDA
+
+
+# ---------------------------------------------------------------------------
+# Markdown-table-aware chunking (docs/rag/table-chunking-analysis.md)
+# ---------------------------------------------------------------------------
+
+
+class _FakeSplitter:
+    """Minimal splitter stand-in: one Document per input string."""
+
+    def __init__(self):
+        self.calls = []
+
+    def create_documents(self, texts):
+        self.calls.append(list(texts))
+        return [MagicMock(page_content=t) for t in texts]
+
+
+PEST_NAMES = (
+    "Late Blight",
+    "Bacterial wilt",
+    "Fusarium wilt",
+    "Potato Leaf Roll Virus",
+    "Termite",
+    "Potato Wire Worm",
+)
+
+PEST_TABLE = "\n".join(
+    [
+        "| Late Blight            |     | Temperature 16-20 C, cold humid weather.   |",
+        "|------------------------|-----|--------------------------------------------|",
+        "| Bacterial wilt         |     | High night temperature 28-30 C, RH 80-90%. |",
+        "| Fusarium wilt          |     | High night temperature 28-30 C, RH 80-90%. |",
+        "| Potato Leaf Roll Virus |     | Average temperature 18-20 C, RH 70%.       |",
+        "| Termite                |     | Fog, cloudiness, abnormal high temperature.|",
+        "| Potato Wire Worm       |     | Soil temperature 10-27 C.                  |",
+    ]
+)
+
+
+class TestMarkdownTableChunking:
+    """_split_markdown_aware / _chunk_markdown_table keep tables usable."""
+
+    def test_small_table_stays_atomic_with_its_heading(self):
+        content = "## Favorable Weather Condition for Pests & Diseases\n\n" + PEST_TABLE
+        chunks = dp_module._split_markdown_aware(content, _FakeSplitter(), 500)
+
+        assert len(chunks) == 1, "a table under budget must not be split"
+        for pest in PEST_NAMES:
+            assert pest in chunks[0]
+        assert chunks[0].startswith("## Favorable Weather Condition for Pests & Diseases")
+
+    def test_heading_is_not_emitted_as_its_own_chunk(self):
+        content = "## Pests & Diseases\n\n" + PEST_TABLE
+        chunks = dp_module._split_markdown_aware(content, _FakeSplitter(), 500)
+
+        assert not any(c.strip() == "## Pests & Diseases" for c in chunks)
+
+    def test_cell_padding_is_squeezed(self):
+        row = "| Late Blight            |          | Temperature 16-20 C.        |"
+        assert dp_module._squeeze_table_row(row) == "| Late Blight | | Temperature 16-20 C. |"
+
+    def test_separator_dashes_are_collapsed(self):
+        row = "|------------------------|-----------------|"
+        assert dp_module._squeeze_table_row(row) == "|---|---|"
+
+    def test_oversized_table_splits_on_row_boundaries_repeating_header(self):
+        header = "| Crop | Condition |"
+        separator = "|------|-----------|"
+        body = [f"| Crop{i} | Condition value number {i} |" for i in range(10)]
+        rows = [header, separator] + body
+
+        with patch.object(dp_module, "TABLE_CHUNK_SIZE", 120):
+            chunks = dp_module._chunk_markdown_table(rows, "## Crops", 50)
+
+        assert len(chunks) > 1, "an oversized table must be split"
+        for chunk in chunks:
+            assert chunk.startswith("## Crops\n| Crop | Condition |"), "header must repeat on every fragment"
+            for line in chunk.splitlines():
+                # No row is ever cut: every table line stays a complete row.
+                if line.startswith("|"):
+                    assert line.endswith("|")
+        # Every body row survives exactly once across the fragments.
+        joined = "\n".join(chunks)
+        for i in range(10):
+            assert joined.count(f"| Crop{i} |") == 1
+
+    def test_prose_still_goes_through_the_splitter(self):
+        splitter = _FakeSplitter()
+        chunks = dp_module._split_markdown_aware("Just prose, no table here.", splitter, 500)
+
+        assert splitter.calls == [["Just prose, no table here."]]
+        assert chunks == ["Just prose, no table here."]
+
+    def test_prose_and_table_are_separated(self):
+        content = "Intro paragraph.\n\n" + PEST_TABLE + "\n\nClosing paragraph."
+        chunks = dp_module._split_markdown_aware(content, _FakeSplitter(), 500)
+
+        assert "Intro paragraph." in chunks[0]
+        assert "Late Blight" not in chunks[0], "prose must not absorb table rows"
+        assert any("Closing paragraph." in c for c in chunks)
+
+    def test_empty_table_returns_nothing(self):
+        assert dp_module._chunk_markdown_table([], "## Heading", 500) == []
+
+
+class TestAggregationFromMarkdownRows:
+    """Type C aggregation reads Docling markdown rows (was PyMuPDF-only)."""
+
+    def test_pest_names_extracted_from_markdown_table(self):
+        chunk = "## Favorable Weather Condition for Pests & Diseases\n" + PEST_TABLE
+        agg = dp_module._build_aggregation_chunks([chunk])
+
+        pest_chunks = [a for a in agg if a.startswith("[AGGREGATED] Pests")]
+        assert len(pest_chunks) == 1
+        for pest in PEST_NAMES:
+            assert f"- {pest}" in pest_chunks[0]
+
+    def test_entity_regex_matches_names_missed_by_word_boundaries(self):
+        # "Bacterial wilt" and "Termite" match neither "bacteria" nor "mite"
+        # under \b...\b, which silently dropped them before.
+        assert dp_module._ENTITY_RE.search("Bacterial wilt")
+        assert dp_module._ENTITY_RE.search("Termite")
+        assert dp_module._ENTITY_RE.search("Fusarium wilt")
+
+    def test_meteorological_rows_are_not_entities(self):
+        calendar = "\n".join(
+            [
+                "| Months | October | November |",
+                "|--------|---------|----------|",
+                "| Rainfall (mm) | 40.5 | 26.0 |",
+                "| Max. Temp. (C) | 32.0 | 31.5 |",
+            ]
+        )
+        agg = dp_module._build_aggregation_chunks([calendar])
+
+        assert not any(a.startswith("[AGGREGATED] Pests") for a in agg)
+
+    def test_table_header_cell_is_skipped(self):
+        chunk = "## Pests & Diseases\n| Pest / Disease | Condition |\n|---|---|\n| Late Blight | Cold humid |"
+        agg = dp_module._build_aggregation_chunks([chunk])
+
+        pest_chunks = [a for a in agg if a.startswith("[AGGREGATED] Pests")]
+        assert len(pest_chunks) == 1
+        assert "- Late Blight" in pest_chunks[0]
+        assert "- Pest / Disease" not in pest_chunks[0]

@@ -986,6 +986,7 @@ services:
       ${VLLM_ENFORCE_EAGER:-}
       --enable-auto-tool-choice
       --tool-call-parser ${VLLM_TOOL_PARSER:-granite}
+      ${VLLM_EXTRA_ARGS:-}
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       # Serve the cached model without an online repo check at startup. A restart
@@ -995,6 +996,8 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     volumes:
       - hf_cache:/root/.cache/huggingface
+      # Chat-template overrides (e.g. Qwen3 with thinking off), selected via VLLM_EXTRA_ARGS.
+      - ./configs/vllm:/vllm-templates:ro
     networks:
       - genieai_network
     healthcheck:
@@ -1607,6 +1610,7 @@ services:
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
+      CHATQNA_ABSTENTION_INSTRUCTIONS: ${CHATQNA_ABSTENTION_INSTRUCTIONS:-}
       # Confidence scoring — rank-weighted aggregate of calibrated reranker scores.
       CONFIDENCE_RANK_DECAY: ${CONFIDENCE_RANK_DECAY:-0.5}
       RERANKER_SCORE_CALIBRATION: ${RERANKER_SCORE_CALIBRATION:-none}

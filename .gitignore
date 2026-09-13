@@ -130,3 +130,5 @@ firebase-service-account.json
 # Service-account keys dropped into ./secrets (GEE, Firebase, ...)
 secrets/*.json
 *-firebase-adminsdk-*.json
+genie-ai-overlay/.venv/
+.claude/.headroom_wrap*

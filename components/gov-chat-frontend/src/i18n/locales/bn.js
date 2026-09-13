@@ -508,51 +508,51 @@ export default {
       metadataUpdateSuccess: '{fileId} ফাইলের মেটাডেটা আপডেট করা হয়েছে।'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'অনুসন্ধান',
+      searchPlaceholder: 'কোয়েরি টেক্সট অনুসন্ধান করুন...',
+      minConfidence: 'সর্বনিম্ন আত্মবিশ্বাস',
+      maxConfidence: 'সর্বোচ্চ আত্মবিশ্বাস',
+      from: 'থেকে',
+      to: 'প্রতি',
+      reset: 'রিসেট',
+      colTime: 'সময়',
+      colQuestion: 'ব্যবহারকারীর প্রশ্ন',
+      colConfidence: 'আত্মবিশ্বাস',
+      colResponseTime: 'প্রতিক্রিয়া সময়',
+      colSources: 'উৎস',
+      colFeedback: 'প্রতিক্রিয়া',
+      colActions: 'কার্যকলাপ',
+      inspect: 'পরিদর্শন করুন',
+      noResults: 'আপনার ফিল্টারের সাথে মিলে যাওয়া কোনো কোয়েরি পাওয়া যায়নি।',
+      prev: 'পূর্ববর্তী',
+      pageInfo: '{total} এর মধ্যে {current} পৃষ্ঠা (মোট {count})',
+      next: 'পরবর্তী',
+      backToList: 'তালিকায় ফিরে যান',
+      detailTitle: 'কোয়েরি পরিদর্শক',
+      sectionQuestion: 'ব্যবহারকারীর প্রশ্ন',
+      user: 'ব্যবহারকারী',
+      time: 'সময়',
+      responseTime: 'প্রতিক্রিয়া সময়',
+      mode: 'মোড',
+      sectionContext: 'প্রসঙ্গ (RAG-তে পাঠানো লেবেল)',
+      category: 'বিভাগ',
+      serviceLabels: 'পরিষেবা লেবেল',
+      language: 'ভাষা',
+      sectionMessages: 'পোைப்லைனে পাঠানো বার্তা',
+      sectionDocuments: 'পুনরুদ্ধার করা নথিপত্র (ভেক্টর ডেটাবেস ফলাফল)',
+      score: 'স্কোর',
+      labels: 'লেবেল',
+      viewDoc: 'নথি দেখুন',
+      noDocuments: 'এই কোয়েরির জন্য কোনো উৎস নথিপত্র পুনরুদ্ধার করা হয়নি।',
+      sectionResponse: 'LLM প্রতিক্রিয়া',
+      confidenceScore: 'আত্মবিশ্বাসের স্কোর',
+      retrievalConfidenceScore: 'পুনরুদ্ধারের আত্মবিশ্বাস',
+      selfConfidence: 'আত্মবিশ্বাস (LLM)',
+      sectionFeedback: 'ব্যবহারকারীর প্রতিক্রিয়া',
+      rating: 'রেটিং',
+      comment: 'মন্তব্য',
+      providedAt: 'প্রদান করা হয়েছে',
+      loadError: 'কোয়েরি লোড করতে ব্যর্থ হয়েছে।'
     }
   },
   auth: {
@@ -806,92 +806,57 @@ export default {
   leftPanel: {
     cat1: {
       name: '১. পরিচয় এবং নাগরিক নিবন্ধন',
-      children: ['জন্ম নিবন্ধন', 'জাতীয় পরিচয়পত্র', 'পাসপোর্ট', 'বিবাহ এবং মৃত্যু সনদ', 'ভোটার নিবন্ধন']
+      children: 'জন্ম নিবন্ধন,জাতীয় পরিচয়পত্র,পাসপোর্ট,বিবাহ এবং মৃত্যু সনদ,ভোটার নিবন্ধন'
     },
     cat2: {
       name: '২. স্বাস্থ্যসেবা এবং সামাজিক সেবা',
-      children: [
-        'পাবলিক স্বাস্থ্যসেবা অ্যাক্সেস',
-        'টিকাদান কর্মসূচি',
-        'স্বাস্থ্য বীমা',
-        'প্রতিবন্ধী সুবিধা',
-        'কল্যাণ এবং খাদ্য সহায়তা'
-      ]
+      children:
+        'পাবলিক স্বাস্থ্যসেবা অ্যাক্সেস,টিকাদান কর্মসূচি,স্বাস্থ্য বীমা,প্রতিবন্ধী সুবিধা,কল্যাণ এবং খাদ্য সহায়তা'
     },
     cat3: {
       name: '৩. শিক্ষা এবং শিখন',
-      children: [
-        'পাবলিক স্কুল এবং বিশ্ববিদ্যালয়',
-        'বৃত্তি এবং শিক্ষা ঋণ',
-        'বয়স্ক শিক্ষা কার্যক্রম',
-        'অনলাইন লার্নিং রিসোর্স'
-      ]
+      children: 'পাবলিক স্কুল এবং বিশ্ববিদ্যালয়,বৃত্তি এবং শিক্ষা ঋণ,বয়স্ক শিক্ষা কার্যক্রম,অনলাইন লার্নিং রিসোর্স'
     },
     cat4: {
       name: '৪. কর্মসংস্থান এবং শ্রম পরিষেবা',
-      children: [
-        'চাকরি অনুসন্ধান এবং বেকারত্ব সুবিধা',
-        'শ্রমিক সুরক্ষা এবং শ্রম অধিকার',
-        'কর্মক্ষেত্রে সুরক্ষা প্রবিধান',
-        'দক্ষতা প্রশিক্ষণ এবং শিক্ষানবিশ'
-      ]
+      children:
+        'চাকরি অনুসন্ধান এবং বেকারত্ব সুবিধা,শ্রমিক সুরক্ষা এবং শ্রম অধিকার,কর্মক্ষেত্রে সুরক্ষা প্রবিধান,দক্ষতা প্রশিক্ষণ এবং শিক্ষানবিশ'
     },
     cat5: {
       name: '৫. কর এবং রাজস্ব',
-      children: ['আয়কর রিটার্ন এবং রিফান্ড', 'সম্পত্তি কর প্রদান', 'ব্যবসা কর সম্মতি', 'কাস্টমস এবং আমদানি শুল্ক']
+      children: 'আয়কর রিটার্ন এবং রিফান্ড,সম্পত্তি কর প্রদান,ব্যবসা কর সম্মতি,কাস্টমস এবং আমদানি শুল্ক'
     },
     cat6: {
       name: '৬. জননিরাপত্তা এবং আইন বিচার',
-      children: ['পুলিশ এবং জরুরি সেবা', 'আদালত এবং আইনি সহায়তা পরিষেবা', 'অপরাধ রিপোর্টিং', 'ভোক্তা সুরক্ষা আইন']
+      children: 'পুলিশ এবং জরুরি সেবা,আদালত এবং আইনি সহায়তা পরিষেবা,অপরাধ রিপোর্টিং,ভোক্তা সুরক্ষা আইন'
     },
     cat7: {
       name: '৭. পরিবহন এবং গতিশীলতা',
-      children: [
-        'ড্রাইভিং লাইসেন্স এবং যানবাহন নিবন্ধন',
-        'পাবলিক ট্রানজিট এবং অবকাঠামো',
-        'ট্রাফিক আইন লঙ্ঘন এবং জরিমানা',
-        'সড়ক নিরাপত্তা কর্মসূচি'
-      ]
+      children:
+        'ড্রাইভিং লাইসেন্স এবং যানবাহন নিবন্ধন,পাবলিক ট্রানজিট এবং অবকাঠামো,ট্রাফিক আইন লঙ্ঘন এবং জরিমানা,সড়ক নিরাপত্তা কর্মসূচি'
     },
     cat8: {
       name: '৮. আবাসন এবং নগর উন্নয়ন',
-      children: [
-        'পাবলিক আবাসন সহায়তা',
-        'সম্পত্তি নিবন্ধন এবং ভূমি রেকর্ড',
-        'আবাসন ঋণ এবং ভর্তুকি',
-        'জোনিং এবং বিল্ডিং পারমিট'
-      ]
+      children: 'পাবলিক আবাসন সহায়তা,সম্পত্তি নিবন্ধন এবং ভূমি রেকর্ড,আবাসন ঋণ এবং ভর্তুকি,জোনিং এবং বিল্ডিং পারমিট'
     },
     cat9: {
       name: '৯. ইউটিলিটি এবং পরিবেশ',
-      children: [
-        'জল এবং বিদ্যুৎ পরিষেবা',
-        'বর্জ্য ব্যবস্থাপনা এবং পুনর্ব্যবহার',
-        'পরিবেশগত নিয়মকানুন',
-        'নবায়নযোগ্য শক্তি উদ্যোগ'
-      ]
+      children:
+        'জল এবং বিদ্যুৎ পরিষেবা,বর্জ্য ব্যবস্থাপনা এবং পুনর্ব্যবহার,পরিবেশগত নিয়মকানুন,নবায়নযোগ্য শক্তি উদ্যোগ'
     },
     cat10: {
       name: '১০. ব্যবসা এবং বাণিজ্য',
-      children: [
-        'ব্যবসা নিবন্ধন এবং লাইসেন্সিং',
-        'বাণিজ্য নিয়মকানুন এবং পারমিট',
-        'ছোট ব্যবসা অনুদান এবং প্রণোদনা',
-        'ই-কমার্স এবং ডিজিটাল ব্যবসা সমর্থন'
-      ]
+      children:
+        'ব্যবসা নিবন্ধন এবং লাইসেন্সিং,বাণিজ্য নিয়মকানুন এবং পারমিট,ছোট ব্যবসা অনুদান এবং প্রণোদনা,ই-কমার্স এবং ডিজিটাল ব্যবসা সমর্থন'
     },
     cat11: {
       name: '১১. সামাজিক নিরাপত্তা এবং পেনশন',
-      children: ['অবসর সুবিধা', 'পেনশন তহবিল ব্যবস্থাপনা', 'সারভাইভার বেনিফিট', 'প্রতিবন্ধী পেনশন']
+      children: 'অবসর সুবিধা,পেনশন তহবিল ব্যবস্থাপনা,সারভাইভার বেনিফিট,প্রতিবন্ধী পেনশন'
     },
     cat12: {
       name: '১২. সম্প্রদায় এবং নাগরিক সম্পৃক্ততা',
-      children: [
-        'ভোটদান এবং নির্বাচন',
-        'জনসাধারণের প্রতিক্রিয়া এবং নাগরিক অভিযোগ',
-        'স্বেচ্ছাসেবী এবং সম্প্রদায় কর্মসূচি',
-        'স্থানীয় সরকার অংশগ্রহণ'
-      ]
+      children:
+        'ভোটদান এবং নির্বাচন,জনসাধারণের প্রতিক্রিয়া এবং নাগরিক অভিযোগ,স্বেচ্ছাসেবী এবং সম্প্রদায় কর্মসূচি,স্থানীয় সরকার অংশগ্রহণ'
     }
   },
   settings: {
@@ -1231,137 +1196,10 @@ export default {
     noMatchingCountries: 'কোনো মানানসই দেশ পাওয়া যায়নি',
     noMatchingDisciplines: 'কোনো মানানসই বিভাগ পাওয়া যায়নি',
     noMatchingDegrees: 'কোনো মানানসই ডিগ্রি পাওয়া যায়নি',
-    educationOptions: [
-      'অ্যাকাউন্টিং',
-      'অ্যারোস্পেস ইঞ্জিনিয়ারিং',
-      'কৃষি বিজ্ঞান',
-      'নৃবিজ্ঞান',
-      'স্থাপত্য',
-      'শিল্পকলা ইতিহাস',
-      'কৃত্রিম বুদ্ধিমত্তা',
-      'জ্যোতির্বিদ্যা',
-      'অ্যাস্ট্রোফিজিক্স',
-      'বায়োকেমিস্ট্রি',
-      'বায়োমেডিক্যাল ইঞ্জিনিয়ারিং',
-      'বায়োটেকনোলজি',
-      'ব্যবসায় প্রশাসন',
-      'কেমিক্যাল ইঞ্জিনিয়ারিং',
-      'রসায়ন',
-      'সিভিল ইঞ্জিনিয়ারিং',
-      'যোগাযোগ',
-      'কম্পিউটার ইঞ্জিনিয়ারিং',
-      'কম্পিউটার সায়েন্স',
-      'নির্মাণ ব্যবস্থাপনা',
-      'ক্রিমিনাল জাস্টিস',
-      'সাইবার নিরাপত্তা',
-      'ডেটা সায়েন্স',
-      'দাঁতের চিকিৎসা',
-      'অর্থনীতি',
-      'শিক্ষা',
-      'ইলেকট্রিক্যাল ইঞ্জিনিয়ারিং',
-      'প্রাথমিক শিক্ষা',
-      'ইংরেজি সাহিত্য',
-      'পরিবেশ প্রকৌশল',
-      'পরিবেশ বিজ্ঞান',
-      'ফ্যাশন ডিজাইন',
-      'ফিল্ম স্টাডিজ',
-      'অর্থসংস্থান (Finance)',
-      'চারুকলা',
-      'খাদ্য বিজ্ঞান',
-      'ফরেনসিক সায়েন্স',
-      'গেম ডিজাইন',
-      'ভূগোল',
-      'ভূতত্ত্ব',
-      'গ্রাফিক ডিজাইন',
-      'স্বাস্থ্য প্রশাসন',
-      'ইতিহাস',
-      'হসপিটালিটি ম্যানেজমেন্ট',
-      'হিউম্যান রিসোর্সেস',
-      'ইন্ডাস্ট্রিয়াল ডিজাইন',
-      'ইন্ডাস্ট্রিয়াল ইঞ্জিনিয়ারিং',
-      'ইনফরমেশন সিস্টেমস',
-      'তথ্য প্রযুক্তি',
-      'ইন্টেরিয়র ডিজাইন',
-      'আন্তর্জাতিক ব্যবসা',
-      'আন্তর্জাতিক সম্পর্ক',
-      'সাংবাদিকতা',
-      'আইন',
-      'গ্রন্থাগার বিজ্ঞান',
-      'ভাষাবিজ্ঞান',
-      'ব্যবস্থাপনা',
-      'মার্কেটিং',
-      'মেটেরিয়ালস সায়েন্স',
-      'গণিত',
-      'মেকানিক্যাল ইঞ্জিনিয়ারিং',
-      'মিডিয়া স্টাডিজ',
-      'মেডিসিন',
-      'আবহাওয়াবিদ্যা',
-      'মাইক্রোবায়োলজি',
-      'সংগীত',
-      'ন্যানোটেকনোলজি',
-      'নার্সিং',
-      'পুষ্টিবিজ্ঞান',
-      'অকুপেশনাল থেরাপি',
-      'সমুদ্রবিজ্ঞান',
-      'পেট্রোলিয়াম ইঞ্জিনিয়ারিং',
-      'ফার্মেসি',
-      'দর্শন',
-      'ফটোগ্রাফি',
-      'শারীরিক শিক্ষা',
-      'ফিজিক্যাল থেরাপি',
-      'পদার্থবিদ্যা',
-      'রাষ্ট্রবিজ্ঞান',
-      'মনোবিজ্ঞান',
-      'পাবলিক অ্যাডমিনিস্ট্রেশন',
-      'জনস্বাস্থ্য',
-      'পাবলিক রিলেশনস',
-      'রোবোটিক্স',
-      'মাধ্যমিক শিক্ষা',
-      'সমাজকর্ম',
-      'সমাজবিজ্ঞান',
-      'সফটওয়্যার ইঞ্জিনিয়ারিং',
-      'বিশেষ শিক্ষা',
-      'স্পোর্টস ম্যানেজমেন্ট',
-      'পরিসংখ্যান',
-      'সিস্টেমস ইঞ্জিনিয়ারিং',
-      'থিয়েটার আর্টস',
-      'পর্যটন',
-      'নগর পরিকল্পনা',
-      'ভেটেরিনারি মেডিসিন',
-      'ওয়েব ডেভেলপমেন্ট',
-      'বন্যপ্রাণী জীববিজ্ঞান',
-      'প্রাণিবিদ্যা'
-    ],
-    degreeOptions: [
-      'অ্যাসোসিয়েট ডিগ্রি',
-      'ব্যাচেলর অফ আর্টস (BA)',
-      'ব্যাচেলর অফ সায়েন্স (BS)',
-      'ব্যাচেলর অফ ইঞ্জিনিয়ারিং (BEng)',
-      'ব্যাচেলর অফ বিজনেস অ্যাডমিনিস্ট্রেশন (BBA)',
-      'ব্যাচেলর অফ ফাইন আর্টস (BFA)',
-      'ব্যাচেলর অফ এডুকেশন (BEd)',
-      'ব্যাচেলর অফ মেডিসিন (MBBS)',
-      'ব্যাচেলর অফ লজ (LLB)',
-      'মাস্টার অফ আর্টস (MA)',
-      'মাস্টার অফ সায়েন্স (MS)',
-      'মাস্টার অফ বিজনেস অ্যাডমিনিস্ট্রেশন (MBA)',
-      'মাস্টার অফ ইঞ্জিনিয়ারিং (MEng)',
-      'মাস্টার অফ ফাইন আর্টস (MFA)',
-      'মাস্টার অফ এডুকেশন (MEd)',
-      'মাস্টার অফ লজ (LLM)',
-      'মাস্টার অফ পাবলিক হেলথ (MPH)',
-      'ডক্টর অফ ফিলোসফি (PhD)',
-      'ডক্টর অফ মেডিসিন (MD)',
-      'ডক্টর অফ এডুকেশন (EdD)',
-      'ডক্টর অফ বিজনেস অ্যাডমিনিস্ট্রেশন (DBA)',
-      'ডক্টর অফ জুরিসপ্রুডেন্স (JD)',
-      'প্রফেশনাল ডিপ্লোমা',
-      'টেকনিক্যাল ডিপ্লোমা',
-      'ভোকেশনাল সার্টিফিকেট',
-      'গ্র্যাজুয়েট সার্টিফিকেট',
-      'পোস্ট-গ্র্যাজুয়েট ডিপ্লোমা',
-      'পোস্ট-ডক্টরাল'
-    ],
+    educationOptions:
+      'অ্যাকাউন্টিং,অ্যারোস্পেস ইঞ্জিনিয়ারিং,কৃষি বিজ্ঞান,নৃবিজ্ঞান,স্থাপত্য,শিল্পকলা ইতিহাস,কৃত্রিম বুদ্ধিমত্তা,জ্যোতির্বিদ্যা,অ্যাস্ট্রোফিজিক্স,বায়োকেমিস্ট্রি,বায়োমেডিক্যাল ইঞ্জিনিয়ারিং,বায়োটেকনোলজি,ব্যবসায় প্রশাসন,কেমিক্যাল ইঞ্জিনিয়ারিং,রসায়ন,সিভিল ইঞ্জিনিয়ারিং,যোগাযোগ,কম্পিউটার ইঞ্জিনিয়ারিং,কম্পিউটার সায়েন্স,নির্মাণ ব্যবস্থাপনা,ক্রিমিনাল জাস্টিস,সাইবার নিরাপত্তা,ডেটা সায়েন্স,দাঁতের চিকিৎসা,অর্থনীতি,শিক্ষা,ইলেকট্রিক্যাল ইঞ্জিনিয়ারিং,প্রাথমিক শিক্ষা,ইংরেজি সাহিত্য,পরিবেশ প্রকৌশল,পরিবেশ বিজ্ঞান,ফ্যাশন ডিজাইন,ফিল্ম স্টাডিজ,অর্থসংস্থান (Finance),চারুকলা,খাদ্য বিজ্ঞান,ফরেনসিক সায়েন্স,গেম ডিজাইন,ভূগোল,ভূতত্ত্ব,গ্রাফিক ডিজাইন,স্বাস্থ্য প্রশাসন,ইতিহাস,হসপিটালিটি ম্যানেজমেন্ট,হিউম্যান রিসোর্সেস,ইন্ডাস্ট্রিয়াল ডিজাইন,ইন্ডাস্ট্রিয়াল ইঞ্জিনিয়ারিং,ইনফরমেশন সিস্টেমস,তথ্য প্রযুক্তি,ইন্টেরিয়র ডিজাইন,আন্তর্জাতিক ব্যবসা,আন্তর্জাতিক সম্পর্ক,সাংবাদিকতা,আইন,গ্রন্থাগার বিজ্ঞান,ভাষাবিজ্ঞান,ব্যবস্থাপনা,মার্কেটিং,মেটেরিয়ালস সায়েন্স,গণিত,মেকানিক্যাল ইঞ্জিনিয়ারিং,মিডিয়া স্টাডিজ,মেডিসিন,আবহাওয়াবিদ্যা,মাইক্রোবায়োলজি,সংগীত,ন্যানোটেকনোলজি,নার্সিং,পুষ্টিবিজ্ঞান,অকুপেশনাল থেরাপি,সমুদ্রবিজ্ঞান,পেট্রোলিয়াম ইঞ্জিনিয়ারিং,ফার্মেসি,দর্শন,ফটোগ্রাফি,শারীরিক শিক্ষা,ফিজিক্যাল থেরাপি,পদার্থবিদ্যা,রাষ্ট্রবিজ্ঞান,মনোবিজ্ঞান,পাবলিক অ্যাডমিনিস্ট্রেশন,জনস্বাস্থ্য,পাবলিক রিলেশনস,রোবোটিক্স,মাধ্যমিক শিক্ষা,সমাজকর্ম,সমাজবিজ্ঞান,সফটওয়্যার ইঞ্জিনিয়ারিং,বিশেষ শিক্ষা,স্পোর্টস ম্যানেজমেন্ট,পরিসংখ্যান,সিস্টেমস ইঞ্জিনিয়ারিং,থিয়েটার আর্টস,পর্যটন,নগর পরিকল্পনা,ভেটেরিনারি মেডিসিন,ওয়েব ডেভেলপমেন্ট,বন্যপ্রাণী জীববিজ্ঞান,প্রাণিবিদ্যা',
+    degreeOptions:
+      'অ্যাসোসিয়েট ডিগ্রি,ব্যাচেলর অফ আর্টস (BA),ব্যাচেলর অফ সায়েন্স (BS),ব্যাচেলর অফ ইঞ্জিনিয়ারিং (BEng),ব্যাচেলর অফ বিজনেস অ্যাডমিনিস্ট্রেশন (BBA),ব্যাচেলর অফ ফাইন আর্টস (BFA),ব্যাচেলর অফ এডুকেশন (BEd),ব্যাচেলর অফ মেডিসিন (MBBS),ব্যাচেলর অফ লজ (LLB),মাস্টার অফ আর্টস (MA),মাস্টার অফ সায়েন্স (MS),মাস্টার অফ বিজনেস অ্যাডমিনিস্ট্রেশন (MBA),মাস্টার অফ ইঞ্জিনিয়ারিং (MEng),মাস্টার অফ ফাইন আর্টস (MFA),মাস্টার অফ এডুকেশন (MEd),মাস্টার অফ লজ (LLM),মাস্টার অফ পাবলিক হেলথ (MPH),ডক্টর অফ ফিলোসফি (PhD),ডক্টর অফ মেডিসিন (MD),ডক্টর অফ এডুকেশন (EdD),ডক্টর অফ বিজনেস অ্যাডমিনিস্ট্রেশন (DBA),ডক্টর অফ জুরিসপ্রুডেন্স (JD),প্রফেশনাল ডিপ্লোমা,টেকনিক্যাল ডিপ্লোমা,ভোকেশনাল সার্টিফিকেট,গ্র্যাজুয়েট সার্টিফিকেট,পোস্ট-গ্র্যাজুয়েট ডিপ্লোমা,পোস্ট-ডক্টরাল',
     aria: {
       tabList: 'প্রোফাইল ফর্মের বিভাগগুলি',
       nextButton: 'পরবর্তী বিভাগে যান',
@@ -1588,89 +1426,89 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'বান্ডেল',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'ধারণা',
+        curator: 'কিউরেটর',
+        minted: 'তৈরি করা হয়েছে',
+        tag: 'ট্যাগ',
+        trigger: 'ট্রিগার',
+        version: 'সংস্করণ'
       },
-      current: 'current',
+      current: 'বর্তমান',
       loadFailed: 'সংস্করণ লোড করতে ব্যর্থ হয়েছে',
       none: 'এখনো কোনো সংস্করণ তৈরি হয়নি — publish করলে v1 তৈরি হয়।',
-      notServing: 'Not serving',
+      notServing: 'পরিবেশন করা হচ্ছে না',
       publish: 'নতুন সংস্করণ তৈরি করুন',
       published: "সংস্করণ v{'{'}v{'}'} প্রকাশিত হয়েছে — ডকুমেন্ট রিপোজিটরিতে {'{'}f{'}'} বান্ডিল সংরক্ষিত হয়েছে।",
-      serving: 'Ingested (serving)',
-      title: 'Versions'
+      serving: 'গৃহীত (পরিবেশন করা হচ্ছে)',
+      title: 'সংস্করণ'
     },
     shell: {
       back: 'Studio ড্যাশবোর্ড',
-      building: 'Building…',
+      building: 'তৈরি করা হচ্ছে…',
       buildingHint: 'উৎস ফাইলটি এখনও প্রক্রিয়াজাত হচ্ছে',
       delete: {
         body: 'এটি স্থায়ীভাবে রিপোজিটরি, এর ধারণা, ইনডেক্স করা সামগ্রী, গ্রাফ এবং বান্ডিল উপাদানগুলি সরিয়ে দেয়।',
-        confirm: 'Delete',
+        confirm: 'মুছুন',
         title: 'রিপোজিটরি মুছুন'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: '.zip রপ্তানি করুন',
+      logs: 'লগস',
       pii: {
         ack: 'চিহ্নিত সত্ত্বা স্বীকার করুন এবং প্রকাশ করুন',
         note: 'চিহ্নিত সত্ত্বাগুলি প্রকাশিত সামগ্রীর অংশ। আপনি যদি সেগুলি পর্যালোচনা করে থাকেন (যেমন অফিসিয়াল যোগাযোগের বিবরণ), স্বীকার করুন এবং চালিয়ে যান।'
       },
       publish: {
         body: "Publish করলে v{'{'}n{'}'} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে \"{'{'}file{'}'}\" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী যেকোনো zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'প্রকাশ করুন',
+        title: 'প্রকাশ করুন'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'শুধুমাত্র পঠনযোগ্য',
+      serving: 'পরিবেশন করা হচ্ছে',
       state: {
-        ingested: 'Ingested'
+        ingested: 'গৃহীত'
       },
       tab: {
-        editor: 'Editor',
-        wizard: 'Wizard'
+        editor: 'এডিটর',
+        wizard: 'উইজার্ড'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'সংস্করণ',
+      deleteLabel: 'মুছুন'
     },
     logs: {
       labeled: "লেবেলযুক্ত: {'{'}n{'}'}",
       fallbacks: "LLM ফলব্যাক: {'{'}n{'}'}",
       concepts: "ধারণা: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'কার্যকলাপ',
+        description: 'বিবরণ',
+        user: 'ব্যবহারকারী',
+        when: 'তারিখ ও সময়'
       },
       count: "{'{'}n{'}'}টি এন্ট্রি",
       loadFailed: 'কার্যকলাপ লগ লোড করতে ব্যর্থ হয়েছে।',
       none: 'এখনো কোনো কার্যকলাপ রেকর্ড করা হয়নি — রিপোজিটরির পদক্ষেপগুলি ঘটার সাথে সাথে এখানে উপস্থিত হবে।',
-      title: 'Activity log'
+      title: 'অ্যাক্টিভিটি লগ'
     },
     graph: {
       aria: 'ধারণা গ্রাফ',
-      concepts: 'concepts',
+      concepts: 'ধারণা',
       empty: 'এখনো কোনো ধারণা নেই - গ্রাফ করার কিছু নেই।',
-      fit: 'Fit graph',
+      fit: 'গ্রাফ ফিট করুন',
       hub: 'ইনডেক্স হাব দেখান বা লুকান (এর বিষয়বস্তুর লিঙ্কগুলি কাঠামো, জ্ঞান নয়)',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: 'লেআউট করা হচ্ছে…',
+      legend: 'ইনডেক্স',
+      links: 'লিঙ্ক',
+      zoomIn: 'জুম ইন',
+      zoomOut: 'জুম আউট',
       card: {
         links: "{'{'}n{'}'}টি লিঙ্ক",
         chunks: "{'{'}n{'}'}টি চাঙ্ক",
         failed: 'ইনডেক্সিং ব্যর্থ হয়েছে',
         flagged: 'চিহ্নিত সত্ত্বা',
-        hub: 'Index hub',
+        hub: 'ইনডেক্স হাব',
         pending: 'এখনো ইনডেক্স করা হয়নি'
       }
     },
@@ -1678,42 +1516,42 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (পেস্ট করুন বা খালি রাখুন)',
         bodyPh: '# শিরোনাম\n\nএখানে markdown পেস্ট করুন - frontmatter আপনার জন্য যোগ করা হবে।',
-        create: 'Create file',
+        create: 'ফাইল তৈরি করুন',
         failed: 'ফাইল তৈরি করা যায়নি।',
         title: 'ধারণা ফাইল যোগ করুন',
-        titleLabel: 'Title',
+        titleLabel: 'শিরোনাম',
         titlePh: 'উদাঃ মারার বন্যপ্রাণী',
         updateIndex: 'ইনডেক্স বিষয়বস্তুর তালিকায় যুক্ত করুন'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(ফাঁকা)',
         blankBadge: 'কোনো frontmatter নেই — সম্পূর্ণ প্রস্তাব',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'প্রয়োগ করুন',
+        apply: 'সংশোধন প্রয়োগ করুন',
         body: 'প্রতিটি ধারণাজুড়ে পরিকল্পিত frontmatter সংশোধন। মূল অংশ কখনই পরিবর্তিত হয় না।',
-        button: 'Autocorrect',
+        button: 'অটোকরেক্ট',
         clean: 'ঠিক করার কিছু নেই — সমস্ত frontmatter ইতিমধ্যে সঙ্গতিপূর্ণ।',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'ক্ষেত্র',
+          after: 'পরে',
+          before: 'আগে',
+          concept: 'ধারণা'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'স্ক্যান ব্যর্থ হয়েছে।',
+        scanning: 'স্ক্যান করা হচ্ছে…',
         title: 'স্বয়ংক্রিয় সংশোধন (শুধুমাত্র frontmatter)'
       },
       concepts: {
         originTip: 'কীভাবে এই ধারণাটি কিউরেট করা হয়েছিল',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'ধারণা যোগ করুন',
+        addLabel: 'লেবেল সেট করুন',
+        delete: 'ফাইল মুছুন',
         empty: 'এখনো কোনো ফাইল নেই - একটি ধারণা যোগ করুন বা উৎস থেকে পুনরায় বিভাজন করুন।',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: 'ফাইল ফিল্টার করুন',
+        indexBadge: 'ইনডেক্স',
+        label: 'ধারণা',
+        loading: 'লোড হচ্ছে…',
+        resplit: 'পুনরায় বিভক্ত করুন',
         flagged: 'চিহ্নিত',
         flaggedTip:
           'চিহ্নিত সত্ত্বাসহ ধারণাগুলি — প্রতিটি খুলুন, সত্ত্বাটি সরান বা পরিবর্তন করুন, সংরক্ষণ করুন (এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে); অথবা publish করার সময় সেগুলি স্বীকার করুন।',
@@ -1721,15 +1559,15 @@ export default {
         piiTip:
           'চিহ্নিত সত্ত্বা: {k}। সেগুলি খুলুন, সরান বা পরিবর্তন করুন, তারপর সংরক্ষণ করুন — এটি স্বয়ংক্রিয়ভাবে পুনরায় স্ক্যান করে।',
         piiTipBare: 'চিহ্নিত সত্ত্বা — পুনরায় স্ক্যান করতে খুলুন, পর্যালোচনা করুন, তারপর সংরক্ষণ করুন।',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: 'সব গ্রহণ করুন',
+        bulkRedact: 'সব রিডাক্ট করুন',
+        bulkRemove: 'সব সরান',
         loadProgress: 'ফাইল লোড হচ্ছে {done}/{total}'
       },
       delete: {
         body: 'এটি ফাইল, এর ইনডেক্স করা অংশ এবং এর গ্রাফ লিঙ্কগুলিকে স্থায়ীভাবে সরিয়ে দেয়।',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'মুছুন',
+        title: 'ফাইল মুছুন'
       },
       label: 'রিপোজিটরি সম্পাদক',
       loadFailed: 'এই ধারণাটি লোড করা যায়নি।',
@@ -1737,24 +1575,24 @@ export default {
       meta: {
         label: 'ধারণা মেটাডেটা',
         labelLabel: 'লেবেল (জ্ঞান শ্রেণিবিন্যাস)',
-        noLabel: 'No label',
+        noLabel: 'কোন লেবেল নেই',
         none: 'কোনো ধারণা নির্বাচিত হয়নি',
         saveFailed: 'মেটাডেটা সংরক্ষণ ব্যর্থ হয়েছে',
         saved: 'মেটাডেটা সংরক্ষিত হয়েছে',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'ইনডেক্স অবস্থা',
+        title: 'শিরোনাম',
+        trust: 'বিশ্বাসের স্তর',
+        type: 'ধরন',
+        typePlaceholder: 'ধরন নির্বাচন করুন…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'ফাইল',
+        graph: 'গ্রাফ'
       },
       pickConcept: 'সম্পাদনা শুরু করতে তালিকা থেকে একটি ধারণা নির্বাচন করুন।',
       resplit: {
         body: 'এটি বর্তমানের সমস্ত ধারণা এবং উদ্ভূত গ্রাফ মুছে দেয়, তারপর নতুন বিভাজনের সাথে উৎস ফাইলটি পুনরায় আমদানি করে। ধারণার সম্পাদনা হারিয়ে যাবে।',
-        confirm: 'Re-split',
+        confirm: 'পুনরায় বিভক্ত করুন',
         failed: 'পুনরায় বিভাজন ব্যর্থ হয়েছে — উৎস ফাইল লিঙ্ক পরীক্ষা করুন।',
         modeA: 'পুরো ক্রলের জন্য একটি ধারণা',
         modeAHint: 'মেগা-ধারণা — একক ধারণায় সম্পূর্ণ সামগ্রী',
@@ -1764,16 +1602,16 @@ export default {
         modeCHint: 'গল্প ১০.৬ — শীঘ্রই আসছে',
         title: 'উৎস থেকে পুনরায় বিভক্ত করুন'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'সংরক্ষণ করুন',
+      saved: 'সংরক্ষিত',
+      saving: 'সংরক্ষণ করা হচ্ছে…',
       unsaved: 'অসংরক্ষিত পরিবর্তন',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'রেন্ডার করা',
+        source: 'উৎস'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'এডিটর ভিউ',
+      paneLabel: 'প্যান ভিউ',
       saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে — আবার চেষ্টা করুন',
       piiBulk: {
         title: {
@@ -1789,12 +1627,12 @@ export default {
             'সমস্ত চিহ্নিত সত্ত্বা পর্যালোচিত-এবং-রাখা হয়েছে হিসেবে চিহ্নিত — আপনি পুনরায় স্ক্যান না করা পর্যন্ত সেগুলি আর চিহ্নিত হবে না।'
         },
         scope: "প্রভাবিত ধারণা: {'{'}n{'}'}টি।",
-        confirm: 'Apply',
+        confirm: 'প্রয়োগ করুন',
         failed: 'বাল্ক PII পদক্ষেপ ব্যর্থ হয়েছে — আবার চেষ্টা করুন।'
       },
       actions: {
         bulkPii: 'বাল্ক PII পদক্ষেপ প্রয়োগ করা হচ্ছে',
-        deleting: 'Deleting'
+        deleting: 'মোছা হচ্ছে'
       }
     },
     dashboard: {
@@ -1806,23 +1644,23 @@ export default {
       },
       card: {
         actions: "{'{'}name{'}'}-এর জন্য ক্রিয়া",
-        building: 'Building…',
+        building: 'তৈরি করা হচ্ছে…',
         buildingAria: 'তৈরি হচ্ছে — উৎস ফাইলটি এখনও প্রক্রিয়াজাত হচ্ছে',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'মুছুন',
+        export: 'রপ্তানি করুন',
+        ingesting: 'গ্রহণ করা হচ্ছে…',
+        logs: 'লগস',
+        rename: 'নাম পরিবর্তন করুন',
+        versions: 'সংস্করণ'
       },
       delete: {
         body: 'এটি স্থায়ীভাবে রিপোজিটরি, এর ধারণা, ইনডেক্স করা সামগ্রী, গ্রাফ এবং বান্ডিল উপাদানগুলি সরিয়ে দেয়। এটি পূর্বাবস্থায় ফেরানো যাবে না।',
-        confirm: 'Delete',
+        confirm: 'মুছুন',
         title: 'রিপোজিটরি মুছুন'
       },
       filter: {
         domain: 'বিষয় ক্ষেত্র অনুসারে ফিল্টার করুন',
-        allDomains: 'All subject areas'
+        allDomains: 'সব বিষয় এলাকা'
       },
       new: '+ নতুন রিপোজিটরি',
       pii: {
@@ -1831,37 +1669,37 @@ export default {
       },
       publish: {
         body: "Publish করলে v{'{'}n{'}'} মিন্ট হয় এবং ডকুমেন্ট রিপোজিটরিতে \"{'{'}file{'}'}\" বান্ডিল সংরক্ষণ করে, যা পূর্ববর্তী zip-কে প্রতিস্থাপন করে। আপনি Ingest না করা পর্যন্ত নতুন সংস্করণটি serving করবে না।",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'প্রকাশ করুন',
+        title: 'প্রকাশ করুন'
       },
-      search: 'Search...',
+      search: 'অনুসন্ধান...',
       select: "বাল্ক প্রকাশের জন্য {'{'}name{'}'} নির্বাচন করুন",
       stage: {
         drainFailed: 'Ingest ব্যর্থ হয়েছে',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        redraining: 'পুনরায় ড্রেন করা হচ্ছে…',
+        building: 'তৈরি করা হচ্ছে…',
+        draft: 'খসড়া',
+        inReview: 'পর্যালোচনা চলছে',
+        ingested: "গৃহীত সংস্করণ {'{'}n{'}'}",
+        published: "প্রকাশিত সংস্করণ {'{'}n{'}'}",
+        retracted: 'প্রত্যাহার করা হয়েছে',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'রিপোজিটরি',
+      topics: 'টপিক',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'আমদানি',
+        in_review: 'পর্যালোচনা চলছে',
+        published: 'প্রকাশিত',
+        ingested: 'গৃহীত',
+        retracted: 'প্রত্যাহার করা হয়েছে'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'এখনও কিছু আমদানি করা হয়নি',
+        in_review: 'পর্যালোচনার জন্য কিছু নেই',
+        published: 'এখনও কোনো রিপোজিটরি প্রকাশিত হয়নি',
+        ingested: 'এখনও কিছু গ্রহণ করা হয়নি',
+        retracted: 'কিছু প্রত্যাহার করা হয়নি'
       }
     },
     build: {
@@ -1871,13 +1709,13 @@ export default {
       },
       curation: {
         fallbacks: 'LLM ফলব্যাক',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'কিউরেট করা হয়েছে',
+        typed: 'টাইপ করা হয়েছে',
+        labeled: 'লেবেল করা হয়েছে',
+        described: 'বর্ণনা করা হয়েছে'
       },
       batches: 'ব্যাচ সংরক্ষিত হয়েছে',
-      bytes: 'Source read',
+      bytes: 'উৎস পড়া হয়েছে',
       conceptsIndexed: 'ধারণা ইনডেক্স করা হয়েছে',
       elapsed: {
         hr: "{'{'}n{'}'} ঘণ্টা আগে শুরু হয়েছে",
@@ -1898,9 +1736,9 @@ export default {
         version: 'Serving সংস্করণ'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'ইনডেক্সিং',
+        serving: 'পরিবেশন করা হচ্ছে',
+        label: 'পর্যায়'
       },
       title: {
         import: 'আমদানির অগ্রগতি',
@@ -1911,16 +1749,16 @@ export default {
         idle: 'রিপোজিটরির স্থিতি'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'আমদানি করা হচ্ছে',
+        reviewing: 'পর্যালোচনা করা হচ্ছে',
+        ingesting: 'গ্রহণ করা হচ্ছে',
+        serving: 'পরিবেশন করা হচ্ছে',
+        retracted: 'প্রত্যাহার করা হয়েছে'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'বিষয় এলাকা',
+        topics: 'টপিক',
+        lastVersion: 'সর্বশেষ সংস্করণ'
       }
     },
     create: {
@@ -1935,7 +1773,7 @@ export default {
       failed: 'রিপোজিটরি তৈরি ব্যর্থ হয়েছে',
       duplicateInline: 'এই নামের একটি রিপোজিটরি ইতিমধ্যে বিদ্যমান। এটি খুলুন, অথবা অন্য নাম বেছে নিন।',
       duplicate: 'এই নামের একটি রিপোজিটরি ইতিমধ্যে বিদ্যমান - ড্যাশবোর্ড থেকে এটি খুলুন বা অন্য একটি নাম বেছে নিন।',
-      domain: 'Subject area',
+      domain: 'বিষয় এলাকা',
       create: 'রিপোজিটরি তৈরি করুন',
       title: 'নতুন OKF রিপোজিটরি',
       hint: 'একটি খালি রিপোজিটরি তৈরি করে যাতে একটি index.md থাকে যা আপনি Studio সম্পাদকে সম্পাদনা করতে পারেন।',
@@ -1943,40 +1781,40 @@ export default {
       domainRequired: 'প্রথমে একটি বিষয় ক্ষেত্র বেছে নিন — তৈরির পরে এটি পরিবর্তন করা যাবে না।',
       classLabel: 'ধারণার শ্রেণিবিন্যাস',
       classHeuristics: 'হিউরিস্টিকস (ডিফল্ট)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'LLM-সহায়তাপ্রাপ্ত',
+      classHybrid: 'হাইব্রিড'
     },
     fm: {
       errKeyCurated: 'সংরক্ষিত ফিল্ডের নাম।',
       errKeyDuplicate: 'ফিল্ডের নাম দুবার ব্যবহার করা হয়েছে।',
-      errJson: 'Invalid JSON',
+      errJson: 'অবৈধ JSON',
       errNumber: 'অবশ্যই একটি সংখ্যা হতে হবে',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'তালিকা',
+        boolean: 'সত্য/মিথ্যা',
+        number: 'সংখ্যা',
+        string: 'টেক্সট'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'ক্ষেত্র সরান',
+      kindLabel: 'মান ধরন',
+      keyPh: 'ক্ষেত্রের নাম',
       fullHint: 'প্রতিটি frontmatter ফিল্ড সম্পাদনযোগ্য। অবাধে কী যোগ বা অপসারণ করুন।',
       errRemovalPending: 'ফিল্ড অপসারণের জন্য মার্জ-ডিলিট সার্ভার চুক্তি প্রয়োজন (শীঘ্রই আসছে)।',
       errKeyRequired: 'প্রতিটি ফিল্ডের একটি নাম প্রয়োজন।',
       arrayPh: 'কমা দ্বারা পৃথক করা মান',
-      addKey: 'Add field',
+      addKey: 'ক্ষেত্র যোগ করুন',
       saved: 'Frontmatter সংরক্ষিত হয়েছে',
-      label: 'Frontmatter',
+      label: 'ফ্রন্টম্যাটার',
       tipLabel: 'Frontmatter কী?',
-      edit: 'Edit',
+      edit: 'সম্পাদনা করুন',
       empty: 'এখনো কোনো frontmatter নেই — সম্পাদনা ধরন, শিরোনাম এবং লেবেল যোগ করে।',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'ধরন',
+      noType: 'কোন ধরন নেই',
+      titleLabel: 'শিরোনাম',
       labelsLabel: 'লেবেল (জ্ঞান শ্রেণিবিন্যাস)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'কোন লেবেল নেই',
+      descriptionLabel: 'বিবরণ',
       save: 'Frontmatter সংরক্ষণ করুন',
       saveFailed: 'Frontmatter সংরক্ষণ ব্যর্থ হয়েছে'
     },
@@ -2002,25 +1840,25 @@ export default {
         'আমরা কীভাবে নির্ধারণ করি প্রতিটি ধারণা কী (একটি বিষয়, একটি সত্ত্বা, একটি প্রক্রিয়া…)। হিউরিস্টিকস স্বয়ংক্রিয়ভাবে পৃষ্ঠা পড়ে; LLM বিকল্পটি ধীরগতির হলেও জটিল পৃষ্ঠা পরিচালনা করতে পারে।',
       resplit:
         'উৎসটিকে অন্য উপায়ে ধারণায় পুনরায় কাটা — উদাহরণস্বরূপ সম্পূর্ণ সাইটের জন্য একটির পরিবর্তে প্রতি পৃষ্ঠায় একটি ধারণা।',
-      saveFailed: 'Save failed',
+      saveFailed: 'সংরক্ষণ ব্যর্থ হয়েছে',
       importFailedTitle: 'আমদানি ব্যর্থ হয়েছে — উৎস ফাইল রূপান্তর করা যায়নি।',
       importFailedHint: 'এই রিপোজিটরিটি মুছুন এবং উৎস ফাইলটি আবার আমদানি করুন।',
       frontmatter:
         'প্রতিটি ফাইলের শীর্ষে থাকা কাঠামোগত তথ্য — ধরন, শিরোনাম, লেবেল। প্রতিটি ধারণা কী সম্পর্কে তা জানতে সহকারী এটি ব্যবহার করে।'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: 'ফর্মাটিং',
+      bold: 'বোল্ড',
+      italic: 'ইটালিক',
+      h1: 'হেডিং ১',
+      h2: 'হেডিং ২',
+      h3: 'হেডিং ৩',
+      bullet: 'বুলেট তালিকা',
       numbered: 'সংখ্যাযুক্ত তালিকা',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: 'লিঙ্ক সন্নিবেশ করুন',
+      code: 'ইনলাইন কোড',
+      table: 'টেবিল সন্নিবেশ করুন',
+      split: 'বিভক্ত করুন'
     },
     narrative: {
       intro:
@@ -2089,7 +1927,7 @@ export default {
       stage: {
         inReview: 'Review-তে আছে',
         stepOf: 'ধাপ {n}/১০',
-        draft: 'Draft'
+        draft: 'খসড়া'
       },
       dashboard: {
         title: 'রিপোজিটরিগুলি',
@@ -2102,7 +1940,7 @@ export default {
         stage: {
           inReview: 'Review-তে আছে',
           stepOf: 'ধাপ {n}/১০',
-          draft: 'Draft'
+          draft: 'খসড়া'
         },
         bulk: {
           selected: '{n}টি নির্বাচিত',
@@ -2125,23 +1963,23 @@ export default {
         notReady: 'খসড়া এখনো সার্ভার-সাইডে সংরক্ষণ করা যাবে না; স্থানীয়ভাবে সংরক্ষিত হয়েছে।'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'সাধারণ',
+        expert: 'বিশেষজ্ঞ'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'প্রকাশিত',
+        inReview: 'পর্যালোচনা চলছে',
+        draft: 'চলমান'
       },
       exit: 'ড্যাশবোর্ডে ফিরে যান',
       context: {
         untitled: 'শিরোনামহীন রিপোজিটরি',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'বিশ্বাস',
+        title: 'রিপোজিটরি',
+        stale: 'পুরানো',
+        sources: 'উৎস',
         concepts: 'এখন পর্যন্ত ধারণা'
       },
       label: 'OKF Studio উইজার্ড',
@@ -2258,15 +2096,15 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'বিষয় এলাকা',
       domainPlaceholder: 'একটি বিষয় ক্ষেত্র নির্বাচন করুন…',
       classLabel: 'ধারণার শ্রেণিবিন্যাস',
       classHeuristics: 'হিউরিস্টিকস (ডিফল্ট)',
       classHeuristicsHint: 'দ্রুত নিয়মভিত্তিক শ্রেণিবিন্যাস — কোনো LLM খরচ নেই, সুগঠিত ক্রলের জন্য ভালো।',
-      classLlm: 'LLM-assisted',
+      classLlm: 'LLM-সহায়তাপ্রাপ্ত',
       classLlmHint:
         'LLM প্রতিটি ধারণা কিউরেট করে — ধরন, একটি জ্ঞান-শ্রেণিবিন্যাস লেবেল এবং একটি বিবরণ। হিউরিস্টিকসের চেয়ে অনেক বেশি সঠিক ও সম্পূর্ণ; ধারণা প্রতি অতিরিক্ত সময় লাগতে পারে।',
-      classHybrid: 'Hybrid',
+      classHybrid: 'হাইব্রিড',
       classHybridHint:
         'প্রথমে হিউরিস্টিকস; অনিশ্চিত ক্ষেত্রে LLM পর্যালোচনা করে এবং ফাঁক পূরণ করে। সময় এবং পূর্ণাঙ্গতার ভারসাম্যপূর্ণ।',
       targetLabel: 'এটি কোথায় যাওয়া উচিত?',
@@ -2328,7 +2166,7 @@ export default {
         notReady: 'লেবেল স্থানীয়ভাবে সংরক্ষিত হয়েছে — সার্ভার সিঙ্ক শীঘ্রই আসছে।'
       },
       frontmatter: {
-        label: 'Frontmatter',
+        label: 'ফ্রন্টম্যাটার',
         edit: 'Frontmatter সম্পাদনা করুন',
         dialogTitle: 'Frontmatter সম্পাদনা করুন',
         okfVersion: 'okf_version',
@@ -2428,11 +2266,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'পর্যালোচনার জন্য জমা দিন',
+      approve: 'অনুমোদন করুন',
+      publish: 'প্রকাশ করুন',
+      ingest: 'গ্রহণ করুন',
+      retract: 'প্রত্যাহার করুন'
     }
   }
 };

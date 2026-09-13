@@ -506,51 +506,51 @@ export default {
       metadataUpdateSuccess: '文件 {fileId} 的元数据已更新。'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: '搜索',
+      searchPlaceholder: '搜索查询文本...',
+      minConfidence: '最低置信度',
+      maxConfidence: '最高置信度',
+      from: '从',
+      to: '至',
+      reset: '重置',
+      colTime: '时间',
+      colQuestion: '用户问题',
+      colConfidence: '置信度',
+      colResponseTime: '响应时间',
+      colSources: '来源',
+      colFeedback: '反馈',
+      colActions: '操作',
+      inspect: '检查',
+      noResults: '未找到匹配您的过滤器的查询。',
+      prev: '上一步',
+      pageInfo: '第 {current} 页，共 {total} 页（总计 {count} 条）',
+      next: '下一步',
+      backToList: '返回列表',
+      detailTitle: '查询检查器',
+      sectionQuestion: '用户问题',
+      user: '用户',
+      time: '时间',
+      responseTime: '响应时间',
+      mode: '模式',
+      sectionContext: '上下文（发送给 RAG 的标签）',
+      category: '类别',
+      serviceLabels: '服务标签',
+      language: '语言',
+      sectionMessages: '发送到管道的消息',
+      sectionDocuments: '检索到的文档（Vector DB 结果）',
+      score: '分数',
+      labels: '标签',
+      viewDoc: '查看文档',
+      noDocuments: '未检索到此查询的源文档。',
+      sectionResponse: 'LLM 响应',
+      confidenceScore: '置信度分数',
+      retrievalConfidenceScore: '检索置信度',
+      selfConfidence: '自信度（LLM）',
+      sectionFeedback: '用户反馈',
+      rating: '评分',
+      comment: '评论',
+      providedAt: '提供于',
+      loadError: '加载查询失败。'
     }
   },
   auth: {
@@ -571,7 +571,7 @@ export default {
     },
     day: '日',
     noData: '无数据',
-    notAvailable: 'N/A',
+    notAvailable: '不适用',
     topQueries: '热门查询',
     categoryDistribution: '知识领域使用',
     usageTrend: '使用趋势'
@@ -804,51 +804,51 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. 身份与民事登记',
-      children: ['出生证明', '国民身份证', '护照', '结婚和死亡证明', '选民登记']
+      children: '出生证明,国民身份证,护照,结婚和死亡证明,选民登记'
     },
     cat2: {
       name: '2. 医疗与社会服务',
-      children: ['公共医疗访问', '疫苗接种计划', '医疗保险', '残疾福利', '福利和食品援助']
+      children: '公共医疗访问,疫苗接种计划,医疗保险,残疾福利,福利和食品援助'
     },
     cat3: {
       name: '3. 教育与学习',
-      children: ['公立学校和大学', '奖学金和学生贷款', '成人教育计划', '在线学习资源']
+      children: '公立学校和大学,奖学金和学生贷款,成人教育计划,在线学习资源'
     },
     cat4: {
       name: '4. 就业与劳动服务',
-      children: ['求职和失业福利', '工人保护和劳动权利', '工作场所安全规定', '技能培训和学徒制']
+      children: '求职和失业福利,工人保护和劳动权利,工作场所安全规定,技能培训和学徒制'
     },
     cat5: {
       name: '5. 税收与收入',
-      children: ['所得税申报和退款', '财产税支付', '商业税合规', '海关和进口关税']
+      children: '所得税申报和退款,财产税支付,商业税合规,海关和进口关税'
     },
     cat6: {
       name: '6. 公共安全与司法',
-      children: ['警察和紧急服务', '法院和法律援助服务', '犯罪报告', '消费者保护法']
+      children: '警察和紧急服务,法院和法律援助服务,犯罪报告,消费者保护法'
     },
     cat7: {
       name: '7. 交通与流动性',
-      children: ['驾照和车辆登记', '公共交通和基础设施', '交通违规和罚款', '道路安全计划']
+      children: '驾照和车辆登记,公共交通和基础设施,交通违规和罚款,道路安全计划'
     },
     cat8: {
       name: '8. 住房与城市发展',
-      children: ['公共住房援助', '财产登记和土地记录', '住房贷款和补贴', '分区和建筑许可']
+      children: '公共住房援助,财产登记和土地记录,住房贷款和补贴,分区和建筑许可'
     },
     cat9: {
       name: '9. 公用事业与环境',
-      children: ['水电服务', '废物管理和回收', '环境法规', '可再生能源举措']
+      children: '水电服务,废物管理和回收,环境法规,可再生能源举措'
     },
     cat10: {
       name: '10. 商业与贸易',
-      children: ['商业登记和许可', '贸易法规和许可', '小企业补助和激励', '电子商务和数字商业支持']
+      children: '商业登记和许可,贸易法规和许可,小企业补助和激励,电子商务和数字商业支持'
     },
     cat11: {
       name: '11. 社会保障与养老金',
-      children: ['退休福利', '养老金基金管理', '幸存者福利', '残疾养老金']
+      children: '退休福利,养老金基金管理,幸存者福利,残疾养老金'
     },
     cat12: {
       name: '12. 社区与公民参与',
-      children: ['投票和选举', '公众反馈和公民投诉', '志愿和社区计划', '地方政府参与']
+      children: '投票和选举,公众反馈和公民投诉,志愿和社区计划,地方政府参与'
     }
   },
   settings: {
@@ -1185,137 +1185,10 @@ export default {
     noMatchingCountries: '未找到匹配的国家',
     noMatchingDisciplines: '未找到匹配的学科',
     noMatchingDegrees: '未找到匹配的学位',
-    educationOptions: [
-      '会计',
-      '航空工程',
-      '农业科学',
-      '人类学',
-      '建筑',
-      '艺术史',
-      '人工智能',
-      '天文学',
-      '天体物理学',
-      '生物化学',
-      '生物医学工程',
-      '生物技术',
-      '工商管理',
-      '化学工程',
-      '化学',
-      '土木工程',
-      '通信',
-      '计算机工程',
-      '计算机科学',
-      '建筑管理',
-      '刑事司法',
-      '网络安全',
-      '数据科学',
-      '牙科',
-      '经济学',
-      '教育',
-      '电气工程',
-      '小学教育',
-      '英国文学',
-      '环境工程',
-      '环境科学',
-      '时尚设计',
-      '电影研究',
-      '金融',
-      '美术',
-      '食品科学',
-      '法医学',
-      '游戏设计',
-      '地理',
-      '地质学',
-      '平面设计',
-      '卫生管理',
-      '历史',
-      '酒店管理',
-      '人力资源',
-      '工业设计',
-      '工业工程',
-      '信息系统',
-      '信息技术',
-      '室内设计',
-      '国际商务',
-      '国际关系',
-      '新闻学',
-      '法律',
-      '图书馆学',
-      '语言学',
-      '管理',
-      '营销',
-      '材料科学',
-      '数学',
-      '机械工程',
-      '媒体研究',
-      '医学',
-      '气象学',
-      '微生物学',
-      '音乐',
-      '纳米技术',
-      '护理',
-      '营养',
-      '职业治疗',
-      '海洋学',
-      '石油工程',
-      '药学',
-      '哲学',
-      '摄影',
-      '体育教育',
-      '物理治疗',
-      '物理',
-      '政治学',
-      '心理学',
-      '公共管理',
-      '公共卫生',
-      '公共关系',
-      '机器人',
-      '中学教育',
-      '社会工作',
-      '社会学',
-      '软件工程',
-      '特殊教育',
-      '体育管理',
-      '统计学',
-      '系统工程',
-      '戏剧艺术',
-      '旅游',
-      '城市规划',
-      '兽医学',
-      '网页开发',
-      '野生生物学',
-      '动物学'
-    ],
-    degreeOptions: [
-      '副学士学位',
-      '文学学士 (BA)',
-      '理学学士 (BS)',
-      '工程学学士 (BEng)',
-      '工商管理学士 (BBA)',
-      '美术学士 (BFA)',
-      '教育学学士 (BEd)',
-      '医学学士 (MBBS)',
-      '法学学士 (LLB)',
-      '文学硕士 (MA)',
-      '理学硕士 (MS)',
-      '工商管理硕士 (MBA)',
-      '工程学硕士 (MEng)',
-      '美术硕士 (MFA)',
-      '教育学硕士 (MEd)',
-      '法学硕士 (LLM)',
-      '公共卫生硕士 (MPH)',
-      '哲学博士 (PhD)',
-      '医学博士 (MD)',
-      '教育博士 (EdD)',
-      '工商管理博士 (DBA)',
-      '法学博士 (JD)',
-      '专业文凭',
-      '技术文凭',
-      '职业证书',
-      '研究生证书',
-      '研究生文凭',
-      '博士后'
-    ],
+    educationOptions:
+      '会计,航空工程,农业科学,人类学,建筑,艺术史,人工智能,天文学,天体物理学,生物化学,生物医学工程,生物技术,工商管理,化学工程,化学,土木工程,通信,计算机工程,计算机科学,建筑管理,刑事司法,网络安全,数据科学,牙科,经济学,教育,电气工程,小学教育,英国文学,环境工程,环境科学,时尚设计,电影研究,金融,美术,食品科学,法医学,游戏设计,地理,地质学,平面设计,卫生管理,历史,酒店管理,人力资源,工业设计,工业工程,信息系统,信息技术,室内设计,国际商务,国际关系,新闻学,法律,图书馆学,语言学,管理,营销,材料科学,数学,机械工程,媒体研究,医学,气象学,微生物学,音乐,纳米技术,护理,营养,职业治疗,海洋学,石油工程,药学,哲学,摄影,体育教育,物理治疗,物理,政治学,心理学,公共管理,公共卫生,公共关系,机器人,中学教育,社会工作,社会学,软件工程,特殊教育,体育管理,统计学,系统工程,戏剧艺术,旅游,城市规划,兽医学,网页开发,野生生物学,动物学',
+    degreeOptions:
+      '副学士学位,文学学士 (BA),理学学士 (BS),工程学学士 (BEng),工商管理学士 (BBA),美术学士 (BFA),教育学学士 (BEd),医学学士 (MBBS),法学学士 (LLB),文学硕士 (MA),理学硕士 (MS),工商管理硕士 (MBA),工程学硕士 (MEng),美术硕士 (MFA),教育学硕士 (MEd),法学硕士 (LLM),公共卫生硕士 (MPH),哲学博士 (PhD),医学博士 (MD),教育博士 (EdD),工商管理博士 (DBA),法学博士 (JD),专业文凭,技术文凭,职业证书,研究生证书,研究生文凭,博士后',
     aria: {
       tabList: '资料表单部分',
       nextButton: '转到下一节',
@@ -1535,89 +1408,89 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: '捆绑包',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: '概念',
+        curator: '策展人',
+        minted: '已创建',
+        tag: '标签',
+        trigger: '触发器',
+        version: '版本'
       },
-      current: 'current',
+      current: '当前',
       loadFailed: '加载版本失败',
       none: '尚未铸造任何版本 — 执行 publish 将创建 v1。',
-      notServing: 'Not serving',
+      notServing: '未服务',
       publish: '创建新版本',
       published: "版本 v{'{'}v{'}'} 已发布 — 资产包 {'{'}f{'}'} 已存入文档库。",
       serving: '已完成 ingest（serving）',
-      title: 'Versions'
+      title: '版本'
     },
     shell: {
       back: 'Studio 仪表盘',
-      building: 'Building…',
+      building: '构建中…',
       buildingHint: '源文件仍在处理中',
       delete: {
         body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。',
-        confirm: 'Delete',
+        confirm: '删除',
         title: '删除知识库'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: '导出 .zip',
+      logs: '日志',
       pii: {
         ack: '确认标记的实体并发布',
         note: '标记的实体属于已发布内容的一部分。如果您已完成核对（例如：官方公开联络方式），请确认并继续。'
       },
       publish: {
         body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}\"存储在文档库中，取代以往的任何 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: '发布',
+        title: '发布'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: '只读',
+      serving: '服务中',
       state: {
-        ingested: 'Ingested'
+        ingested: '已摄取'
       },
       tab: {
-        editor: 'Editor',
-        wizard: 'Wizard'
+        editor: '编辑器',
+        wizard: '向导'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: '版本',
+      deleteLabel: '删除'
     },
     logs: {
       labeled: "已标注：{'{'}n{'}'}",
       fallbacks: "LLM 回退：{'{'}n{'}'}",
       concepts: "概念：{'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: '操作',
+        description: '描述',
+        user: '用户',
+        when: '日期和时间'
       },
       count: "{'{'}n{'}'} 条记录",
       loadFailed: '加载活动日志失败。',
       none: '暂无活动记录 — 知识库的操作发生时将实时显示于此处。',
-      title: 'Activity log'
+      title: '活动日志'
     },
     graph: {
       aria: '概念图谱',
-      concepts: 'concepts',
+      concepts: '概念',
       empty: '暂无概念 — 暂无图谱可供展示。',
-      fit: 'Fit graph',
+      fit: '适应图表',
       hub: '显示或隐藏索引中枢（其目录链接仅为结构信息，非知识本身）',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: '布局中…',
+      legend: '索引',
+      links: '链接',
+      zoomIn: '放大',
+      zoomOut: '缩小',
       card: {
         links: "{'{'}n{'}'} 条链接",
         chunks: "{'{'}n{'}'} 个分块",
         failed: '索引失败',
         flagged: '个标记实体',
-        hub: 'Index hub',
+        hub: '索引中心',
         pending: '尚未建立索引'
       }
     },
@@ -1625,57 +1498,57 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown（粘贴或留空）',
         bodyPh: '# 标题\n\n在此粘贴 markdown — frontmatter 将自动为您补齐。',
-        create: 'Create file',
+        create: '创建文件',
         failed: '未能创建文件。',
         title: '添加概念文件',
-        titleLabel: 'Title',
+        titleLabel: '标题',
         titlePh: '例如：马赛马拉的野生动物',
         updateIndex: '追加至索引的目录列表'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '（空白）',
         blankBadge: '无 frontmatter — 完整补全提案',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: '应用',
+        apply: '应用修复',
         body: '计划针对所有概念实施 frontmatter 修复。正文内容绝不会被改动。',
-        button: 'Autocorrect',
+        button: '自动更正',
         clean: '无需修复 — 所有 frontmatter 均已符合规范。',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: '字段',
+          after: '之后',
+          before: '之前',
+          concept: '概念'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: '扫描失败。',
+        scanning: '扫描中…',
         title: '自动更正（仅限 frontmatter）'
       },
       concepts: {
         originTip: '该概念的策展途径',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: '添加概念',
+        addLabel: '设置标签',
+        delete: '删除文件',
         empty: '暂无文件 — 请添加新概念或从源文件重新切分。',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: '筛选文件',
+        indexBadge: '索引',
+        label: '概念',
+        loading: '加载中…',
+        resplit: '重新拆分',
         flagged: '已标记',
         flaggedTip:
           '包含标记实体的概念 — 逐一打开并删除或修改该实体后保存（将自动重新扫描）；或在 publish 时予以确认。',
         piiBadge: 'PII',
         piiTip: '标记的实体：{k}。打开、删除或修改它们并保存 — 系统将自动重新扫描。',
         piiTipBare: '标记的实体 — 打开、核对并保存以重新扫描。',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: '全部接受',
+        bulkRedact: '全部隐去',
+        bulkRemove: '全部移除',
         loadProgress: '正在加载文件 {done}/{total}'
       },
       delete: {
         body: '此操作将永久移除该文件及其已索引分块和图谱链接。',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: '删除',
+        title: '删除文件'
       },
       label: '知识库编辑器',
       loadFailed: '未能加载此概念。',
@@ -1683,24 +1556,24 @@ export default {
       meta: {
         label: '概念元数据',
         labelLabel: '标签（知识层级）',
-        noLabel: 'No label',
+        noLabel: '无标签',
         none: '未选择任何概念',
         saveFailed: '元数据保存失败',
         saved: '元数据已保存',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: '索引状态',
+        title: '标题',
+        trust: '信任层级',
+        type: '类型',
+        typePlaceholder: '选择类型…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: '文件',
+        graph: '图表'
       },
       pickConcept: '从列表中选择一个概念以开始编辑。',
       resplit: {
         body: '此操作将删除当前所有概念及派生的图谱，随后按新的切分方式重新导入源文件。针对概念的手动修改将会丢失。',
-        confirm: 'Re-split',
+        confirm: '重新拆分',
         failed: '重新切分失败 — 请检查源文件链接。',
         modeA: '整个抓取内容合并为一个概念',
         modeAHint: '巨型概念 — 全部内容收纳于单一概念中',
@@ -1710,16 +1583,16 @@ export default {
         modeCHint: '用户故事 10.6 — 即将推出',
         title: '从源文件重新切分'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: '保存',
+      saved: '已保存',
+      saving: '保存中…',
       unsaved: '未保存的更改',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: '已渲染',
+        source: '源码'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: '编辑器视图',
+      paneLabel: '视图窗格',
       saveFailed: '保存失败 — 请重试',
       piiBulk: {
         title: {
@@ -1733,12 +1606,12 @@ export default {
           accept: '所有被标记实体均被设为“已核对并保留” — 除非重新扫描，否则它们将不再被标记。'
         },
         scope: "受影响的概念数：{'{'}n{'}'}。",
-        confirm: 'Apply',
+        confirm: '应用',
         failed: '批量 PII 操作失败 — 请重试。'
       },
       actions: {
         bulkPii: '正在应用批量 PII 处理',
-        deleting: 'Deleting'
+        deleting: '删除中'
       }
     },
     dashboard: {
@@ -1750,23 +1623,23 @@ export default {
       },
       card: {
         actions: "{'{'}name{'}'} 的操作",
-        building: 'Building…',
+        building: '构建中…',
         buildingAria: '正在构建 — 源文件仍在处理中',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: '删除',
+        export: '导出',
+        ingesting: '摄取中…',
+        logs: '日志',
+        rename: '重命名',
+        versions: '版本'
       },
       delete: {
         body: '此操作将永久移除该知识库、其概念、已索引内容、图谱及资产包构件。此操作无法撤销。',
-        confirm: 'Delete',
+        confirm: '删除',
         title: '删除知识库'
       },
       filter: {
         domain: '按主题领域过滤',
-        allDomains: 'All subject areas'
+        allDomains: '所有学科领域'
       },
       new: '+ 新建知识库',
       pii: {
@@ -1775,37 +1648,37 @@ export default {
       },
       publish: {
         body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}”存储在文档库中，取代此前的 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: '发布',
+        title: '发布'
       },
-      search: 'Search...',
+      search: '搜索...',
       select: "选择 {'{'}name{'}'} 进行批量发布",
       stage: {
         drainFailed: 'Ingest 失败',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
+        redraining: '重新排出…',
+        building: '构建中…',
+        draft: '草稿',
+        inReview: '审核中',
         ingested: "已完成 ingest v{'{'}n{'}'}",
         published: "已 publish v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: '已撤回',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: '存储库',
+      topics: '主题',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: '导入',
+        in_review: '审核中',
+        published: '已发布',
+        ingested: '已摄取',
+        retracted: '已撤回'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: '暂未导入任何内容',
+        in_review: '没有正在审核的内容',
+        published: '暂未发布任何存储库',
+        ingested: '暂未摄取任何内容',
+        retracted: '未撤回任何内容'
       }
     },
     build: {
@@ -1815,13 +1688,13 @@ export default {
       },
       curation: {
         fallbacks: '次 LLM 回退',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: '已策划',
+        typed: '已分类',
+        labeled: '已标记',
+        described: '已描述'
       },
       batches: '已存储批次',
-      bytes: 'Source read',
+      bytes: '源读取',
       conceptsIndexed: '个概念已建立索引',
       elapsed: {
         hr: "启动于 {'{'}n{'}'} 小时前",
@@ -1842,9 +1715,9 @@ export default {
         version: 'Serving 版本'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: '索引中',
+        serving: '服务中',
+        label: '阶段'
       },
       title: {
         import: '导入进度',
@@ -1855,16 +1728,16 @@ export default {
         idle: '知识库状态'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: '导入中',
+        reviewing: '审核中',
+        ingesting: '摄取中',
+        serving: '服务中',
+        retracted: '已撤回'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: '学科领域',
+        topics: '主题',
+        lastVersion: '最新版本'
       }
     },
     create: {
@@ -1879,7 +1752,7 @@ export default {
       failed: '知识库创建失败',
       duplicateInline: '同名知识库已存在。请将其打开，或另选一个名称。',
       duplicate: '同名知识库已存在 — 请从仪表盘中打开它，或另选一个名称。',
-      domain: 'Subject area',
+      domain: '学科领域',
       create: '创建知识库',
       title: '新建 OKF 知识库',
       hint: '创建一个带有 index.md 的空知识库，您可在 Studio 编辑器中对其进行编辑。',
@@ -1887,40 +1760,40 @@ export default {
       domainRequired: '请先选择主题领域 — 创建后将无法更改。',
       classLabel: '概念分类',
       classHeuristics: '启发式规则（默认）',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'LLM 辅助',
+      classHybrid: '混合'
     },
     fm: {
       errKeyCurated: '系统保留字段名。',
       errKeyDuplicate: '字段名重复出现。',
-      errJson: 'Invalid JSON',
+      errJson: '无效的 JSON',
       errNumber: '必须为数字',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: '列表',
+        boolean: '真/假',
+        number: '数字',
+        string: '文本'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: '移除字段',
+      kindLabel: '值类型',
+      keyPh: '字段名称',
       fullHint: '所有 frontmatter 字段均支持编辑。可自由增删键值。',
       errRemovalPending: '移除字段需要服务端合并删除协议支持（即将上线）。',
       errKeyRequired: '每个字段都必须有名称。',
       arrayPh: '逗号分隔的数值',
-      addKey: 'Add field',
+      addKey: '添加字段',
       saved: 'Frontmatter 已保存',
-      label: 'Frontmatter',
+      label: 'frontmatter',
       tipLabel: '什么是 Frontmatter？',
-      edit: 'Edit',
+      edit: '编辑',
       empty: '暂无 frontmatter — 编辑可补齐类型、标题和标签。',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: '类型',
+      noType: '无类型',
+      titleLabel: '标题',
       labelsLabel: '标签（知识层级）',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: '无标签',
+      descriptionLabel: '描述',
       save: '保存 frontmatter',
       saveFailed: 'Frontmatter 保存失败'
     },
@@ -1940,24 +1813,24 @@ export default {
       classification:
         '判定每个概念“究竟是什么”（主题、实体、流程…）的逻辑。启发式规则会自动解析页面；LLM 选项耗时稍长，但能处理结构复杂的页面。',
       resplit: '以另一种方式重新切分源文件为概念 — 例如改为每页一个概念，而非整个站点合并为一个概念。',
-      saveFailed: 'Save failed',
+      saveFailed: '保存失败',
       importFailedTitle: '导入失败 — 源文件未能完成转换。',
       importFailedHint: '请删除此知识库并重新导入源文件。',
       frontmatter: '位于每个文件顶部的结构化元数据 — 包含类型、标题与标签。助手依此明确每个概念的主旨内容。'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: '格式化',
+      bold: '粗体',
+      italic: '斜体',
+      h1: '标题 1',
+      h2: '标题 2',
+      h3: '标题 3',
+      bullet: '项目符号列表',
       numbered: '编号列表',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: '插入链接',
+      code: '内联代码',
+      table: '插入表格',
+      split: '拆分'
     },
     narrative: {
       intro:
@@ -2024,7 +1897,7 @@ export default {
       stage: {
         inReview: '处于 review 状态',
         stepOf: '第 {n} 步，共 10 步',
-        draft: 'Draft'
+        draft: '草稿'
       },
       dashboard: {
         title: '知识库列表',
@@ -2037,7 +1910,7 @@ export default {
         stage: {
           inReview: '处于 review 状态',
           stepOf: '第 {n} 步，共 10 步',
-          draft: 'Draft'
+          draft: '草稿'
         },
         bulk: {
           selected: '已选择 {n} 项',
@@ -2060,23 +1933,23 @@ export default {
         notReady: '草稿暂不支持服务端保存；现已保存在本地。'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: '基础',
+        expert: '专家'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: '已发布',
+        inReview: '审核中',
+        draft: '进行中'
       },
       exit: '返回仪表盘',
       context: {
         untitled: '未命名知识库',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: '信任',
+        title: '存储库',
+        stale: '过时',
+        sources: '来源',
         concepts: '当前概念数'
       },
       label: 'OKF Studio 向导',
@@ -2193,15 +2066,15 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: '学科领域',
       domainPlaceholder: '选择主题领域…',
       classLabel: '概念分类',
       classHeuristics: '启发式规则（默认）',
       classHeuristicsHint: '快速基于规则分类 — 无 LLM 成本，适用于结构规范的抓取内容。',
-      classLlm: 'LLM-assisted',
+      classLlm: 'LLM 辅助',
       classLlmHint:
         '由 LLM 策展每个概念 — 包含类型、知识层级标签与描述。相较启发式规则更加精准详尽；每个概念预计耗时更长。',
-      classHybrid: 'Hybrid',
+      classHybrid: '混合',
       classHybridHint: '启发式优先；LLM 介入复核存疑情形并填补空白。兼顾耗时与完整性。',
       targetLabel: '目标保存位置',
       target: {
@@ -2261,7 +2134,7 @@ export default {
         notReady: '标签已保存在本地 — 服务端同步功能即将上线。'
       },
       frontmatter: {
-        label: 'Frontmatter',
+        label: 'frontmatter',
         edit: '编辑 frontmatter',
         dialogTitle: '编辑 frontmatter',
         okfVersion: 'okf_version',
@@ -2358,11 +2231,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: '提交审核',
+      approve: '批准',
+      publish: '发布',
+      ingest: '摄取',
+      retract: '撤回'
     }
   }
 };

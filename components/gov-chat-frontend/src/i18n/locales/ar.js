@@ -509,51 +509,51 @@ export default {
       metadataUpdateSuccess: 'تم تحديث البيانات الوصفية للملف {fileId}.'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'بحث',
+      searchPlaceholder: 'البحث في نص الاستعلام...',
+      minConfidence: 'الحد الأدنى للثقة',
+      maxConfidence: 'الحد الأقصى للثقة',
+      from: 'من',
+      to: 'إلى',
+      reset: 'إعادة تعيين',
+      colTime: 'الوقت',
+      colQuestion: 'سؤال المستخدم',
+      colConfidence: 'الثقة',
+      colResponseTime: 'وقت الاستجابة',
+      colSources: 'المصادر',
+      colFeedback: 'التعليقات',
+      colActions: 'الإجراءات',
+      inspect: 'فحص',
+      noResults: 'لم يتم العثور على استعلامات تطابق عوامل التصفية الخاصة بك.',
+      prev: 'السابق',
+      pageInfo: 'صفحة {current} من {total} (الإجمالي {count})',
+      next: 'التالي',
+      backToList: 'العودة إلى القائمة',
+      detailTitle: 'فاحص الاستعلام',
+      sectionQuestion: 'سؤال المستخدم',
+      user: 'المستخدم',
+      time: 'الوقت',
+      responseTime: 'وقت الاستجابة',
+      mode: 'الوضع',
+      sectionContext: 'السياق (التصنيفات المرسلة إلى RAG)',
+      category: 'الفئة',
+      serviceLabels: 'تصنيفات الخدمة',
+      language: 'اللغة',
+      sectionMessages: 'الرسائل المرسلة إلى خط الأنابيب',
+      sectionDocuments: 'المستندات المستردة (نتائج Vector DB)',
+      score: 'النتيجة',
+      labels: 'التصنيفات',
+      viewDoc: 'عرض المستند',
+      noDocuments: 'لم يتم استرداد مستندات المصدر لهذا الاستعلام.',
+      sectionResponse: 'استجابة LLM',
+      confidenceScore: 'درجة الثقة',
+      retrievalConfidenceScore: 'ثقة الاسترداد',
+      selfConfidence: 'الثقة الذاتية (LLM)',
+      sectionFeedback: 'تعليقات المستخدم',
+      rating: 'التقييم',
+      comment: 'تعليق',
+      providedAt: 'مقدم في',
+      loadError: 'فشل تحميل الاستعلامات.'
     }
   },
   auth: {
@@ -807,97 +807,57 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. الهوية والتسجيل المدني',
-      children: ['شهادات الميلاد', 'بطاقات الهوية الوطنية', 'جوازات السفر', 'شهادات الزواج والوفاة', 'تسجيل الناخبين']
+      children: 'شهادات الميلاد,بطاقات الهوية الوطنية,جوازات السفر,شهادات الزواج والوفاة,تسجيل الناخبين'
     },
     cat2: {
       name: '2. الرعاية الصحية والخدمات الاجتماعية',
-      children: [
-        'الوصول إلى الرعاية الصحية العامة',
-        'برامج التطعيم',
-        'التأمين الصحي',
-        'إعانات الإعاقة',
-        'الرعاية الاجتماعية والمساعدات الغذائية'
-      ]
+      children:
+        'الوصول إلى الرعاية الصحية العامة,برامج التطعيم,التأمين الصحي,إعانات الإعاقة,الرعاية الاجتماعية والمساعدات الغذائية'
     },
     cat3: {
       name: '3. التعليم والتعلم',
-      children: [
-        'المدارس والجامعات العامة',
-        'المنح الدراسية وقروض الطلاب',
-        'برامج تعليم الكبار',
-        'موارد التعلم عبر الإنترنت'
-      ]
+      children: 'المدارس والجامعات العامة,المنح الدراسية وقروض الطلاب,برامج تعليم الكبار,موارد التعلم عبر الإنترنت'
     },
     cat4: {
       name: '4. التوظيف والخدمات العمالية',
-      children: [
-        'البحث عن عمل وإعانات البطالة',
-        'حماية العمال وحقوق العمل',
-        'لوائح سلامة مكان العمل',
-        'التدريب على المهارات والتدريب المهني'
-      ]
+      children:
+        'البحث عن عمل وإعانات البطالة,حماية العمال وحقوق العمل,لوائح سلامة مكان العمل,التدريب على المهارات والتدريب المهني'
     },
     cat5: {
       name: '5. الضرائب والإيرادات',
-      children: [
-        'تقديم الضرائب على الدخل والاستردادات',
-        'مدفوعات ضريبة الأملاك',
-        'الامتثال لضريبة الأعمال',
-        'الجمارك وواجبات الاستيراد'
-      ]
+      children:
+        'تقديم الضرائب على الدخل والاستردادات,مدفوعات ضريبة الأملاك,الامتثال لضريبة الأعمال,الجمارك وواجبات الاستيراد'
     },
     cat6: {
       name: '6. السلامة العامة والعدالة',
-      children: ['الشرطة وخدمات الطوارئ', 'المحاكم والمساعدة القانونية', 'الإبلاغ عن الجرائم', 'قوانين حماية المستهلك']
+      children: 'الشرطة وخدمات الطوارئ,المحاكم والمساعدة القانونية,الإبلاغ عن الجرائم,قوانين حماية المستهلك'
     },
     cat7: {
       name: '7. النقل والتنقل',
-      children: [
-        'رخص القيادة وتسجيل المركبات',
-        'النقل العام والبنية التحتية',
-        'مخالفات المرور والغرامات',
-        'برامج سلامة الطرق'
-      ]
+      children: 'رخص القيادة وتسجيل المركبات,النقل العام والبنية التحتية,مخالفات المرور والغرامات,برامج سلامة الطرق'
     },
     cat8: {
       name: '8. الإسكان والتنمية الحضرية',
-      children: [
-        'المساعدة في الإسكان العام',
-        'تسجيل العقارات وسجلات الأراضي',
-        'قروض وإعانات الإسكان',
-        'التقسيم والتصاريح البنائية'
-      ]
+      children:
+        'المساعدة في الإسكان العام,تسجيل العقارات وسجلات الأراضي,قروض وإعانات الإسكان,التقسيم والتصاريح البنائية'
     },
     cat9: {
       name: '9. المرافق والبيئة',
-      children: [
-        'خدمات المياه والكهرباء',
-        'إدارة النفايات وإعادة التدوير',
-        'اللوائح البيئية',
-        'مبادرات الطاقة المتجددة'
-      ]
+      children: 'خدمات المياه والكهرباء,إدارة النفايات وإعادة التدوير,اللوائح البيئية,مبادرات الطاقة المتجددة'
     },
     cat10: {
       name: '10. الأعمال والتجارة',
-      children: [
-        'تسجيل الأعمال وترخيصها',
-        'لوائح التجارة والتصاريح',
-        'منح وحوافز الأعمال الصغيرة',
-        'دعم التجارة الإلكترونية والأعمال الرقمية'
-      ]
+      children:
+        'تسجيل الأعمال وترخيصها,لوائح التجارة والتصاريح,منح وحوافز الأعمال الصغيرة,دعم التجارة الإلكترونية والأعمال الرقمية'
     },
     cat11: {
       name: '11. الضمان الاجتماعي والمعاشات',
-      children: ['إعانات التقاعد', 'إدارة صناديق المعاشات', 'إعانات الناجين', 'معاشات الإعاقة']
+      children: 'إعانات التقاعد,إدارة صناديق المعاشات,إعانات الناجين,معاشات الإعاقة'
     },
     cat12: {
       name: '12. المجتمع والمشاركة المدنية',
-      children: [
-        'التصويت والانتخابات',
-        'ردود الفعل العامة وشكاوى المواطنين',
-        'التطوع وبرامج المجتمع',
-        'المشاركة في الحكومة المحلية'
-      ]
+      children:
+        'التصويت والانتخابات,ردود الفعل العامة وشكاوى المواطنين,التطوع وبرامج المجتمع,المشاركة في الحكومة المحلية'
     }
   },
   settings: {
@@ -1235,137 +1195,10 @@ export default {
     noMatchingCountries: 'لم يتم العثور على بلدان مطابقة',
     noMatchingDisciplines: 'لم يتم العثور على تخصصات مطابقة',
     noMatchingDegrees: 'لم يتم العثور على درجات مطابقة',
-    educationOptions: [
-      'المحاسبة',
-      'هندسة الفضاء',
-      'علوم الزراعة',
-      'الأنثروبولوجيا',
-      'العمارة',
-      'تاريخ الفن',
-      'الذكاء الاصطناعي',
-      'الفلك',
-      'فيزياء الفلك',
-      'الكيمياء الحيوية',
-      'هندسة الطب الحيوي',
-      'التكنولوجيا الحيوية',
-      'إدارة الأعمال',
-      'هندسة الكيمياء',
-      'الكيمياء',
-      'هندسة المدني',
-      'التواصل',
-      'هندسة الحاسوب',
-      'علوم الحاسوب',
-      'إدارة الإنشاءات',
-      'العدالة الجنائية',
-      'الأمن السيبراني',
-      'علوم البيانات',
-      'طب الأسنان',
-      'الاقتصاد',
-      'التعليم',
-      'هندسة الكهرباء',
-      'التعليم الابتدائي',
-      'الأدب الإنجليزي',
-      'هندسة البيئة',
-      'علوم البيئة',
-      'تصميم الأزياء',
-      'دراسات السينما',
-      'المالية',
-      'الفنون الجميلة',
-      'علوم الغذاء',
-      'العلوم الجنائية',
-      'تصميم الألعاب',
-      'الجغرافيا',
-      'الجيولوجيا',
-      'تصميم الجرافيك',
-      'إدارة الصحة',
-      'التاريخ',
-      'إدارة الفنادق',
-      'الموارد البشرية',
-      'التصميم الصناعي',
-      'الهندسة الصناعية',
-      'نظم المعلومات',
-      'تكنولوجيا المعلومات',
-      'تصميم الداخلي',
-      'الأعمال الدولية',
-      'العلاقات الدولية',
-      'الصحافة',
-      'القانون',
-      'علوم المكتبات',
-      'اللغويات',
-      'الإدارة',
-      'التسويق',
-      'علوم المواد',
-      'الرياضيات',
-      'الهندسة الميكانيكية',
-      'دراسات الإعلام',
-      'الطب',
-      'الأرصاد الجوية',
-      'علم الأحياء الدقيقة',
-      'الموسيقى',
-      'تكنولوجيا النانو',
-      'التمريض',
-      'التغذية',
-      'العلاج المهني',
-      'علوم المحيطات',
-      'هندسة البترول',
-      'الصيدلة',
-      'الفلسفة',
-      'التصوير الفوتوغرافي',
-      'التربية البدنية',
-      'العلاج الطبيعي',
-      'الفيزياء',
-      'العلوم السياسية',
-      'علم النفس',
-      'الإدارة العامة',
-      'الصحة العامة',
-      'العلاقات العامة',
-      'الروبوتات',
-      'التعليم الثانوي',
-      'العمل الاجتماعي',
-      'علم الاجتماع',
-      'هندسة البرمجيات',
-      'التعليم الخاص',
-      'إدارة الرياضة',
-      'الإحصاء',
-      'هندسة النظم',
-      'فنون المسرح',
-      'السياحة',
-      'التخطيط الحضري',
-      'الطب البيطري',
-      'تطوير الويب',
-      'بيولوجيا الحياة البرية',
-      'علم الحيوان'
-    ],
-    degreeOptions: [
-      'درجة مشارك',
-      'بكالوريوس في الآداب (BA)',
-      'بكالوريوس في العلوم (BS)',
-      'بكالوريوس في الهندسة (BEng)',
-      'بكالوريوس في إدارة الأعمال (BBA)',
-      'بكالوريوس في الفنون الجميلة (BFA)',
-      'بكالوريوس في التربية (BEd)',
-      'بكالوريوس في الطب (MBBS)',
-      'بكالوريوس في القانون (LLB)',
-      'ماجستير في الآداب (MA)',
-      'ماجستير في العلوم (MS)',
-      'ماجستير في إدارة الأعمال (MBA)',
-      'ماجستير في الهندسة (MEng)',
-      'ماجستير في الفنون الجميلة (MFA)',
-      'ماجستير في التربية (MEd)',
-      'ماجستير في القانون (LLM)',
-      'ماجستير في الصحة العامة (MPH)',
-      'دكتوراه في الفلسفة (PhD)',
-      'دكتوراه في الطب (MD)',
-      'دكتوراه في التربية (EdD)',
-      'دكتوراه في إدارة الأعمال (DBA)',
-      'دكتوراه في القانون (JD)',
-      'دبلوم مهني',
-      'دبلوم تقني',
-      'شهادة مهنية',
-      'شهادة خريج',
-      'دبلوم خريج',
-      'ما بعد الدكتوراه'
-    ],
+    educationOptions:
+      'المحاسبة,هندسة الفضاء,علوم الزراعة,الأنثروبولوجيا,العمارة,تاريخ الفن,الذكاء الاصطناعي,الفلك,فيزياء الفلك,الكيمياء الحيوية,هندسة الطب الحيوي,التكنولوجيا الحيوية,إدارة الأعمال,هندسة الكيمياء,الكيمياء,هندسة المدني,التواصل,هندسة الحاسوب,علوم الحاسوب,إدارة الإنشاءات,العدالة الجنائية,الأمن السيبراني,علوم البيانات,طب الأسنان,الاقتصاد,التعليم,هندسة الكهرباء,التعليم الابتدائي,الأدب الإنجليزي,هندسة البيئة,علوم البيئة,تصميم الأزياء,دراسات السينما,المالية,الفنون الجميلة,علوم الغذاء,العلوم الجنائية,تصميم الألعاب,الجغرافيا,الجيولوجيا,تصميم الجرافيك,إدارة الصحة,التاريخ,إدارة الفنادق,الموارد البشرية,التصميم الصناعي,الهندسة الصناعية,نظم المعلومات,تكنولوجيا المعلومات,تصميم الداخلي,الأعمال الدولية,العلاقات الدولية,الصحافة,القانون,علوم المكتبات,اللغويات,الإدارة,التسويق,علوم المواد,الرياضيات,الهندسة الميكانيكية,دراسات الإعلام,الطب,الأرصاد الجوية,علم الأحياء الدقيقة,الموسيقى,تكنولوجيا النانو,التمريض,التغذية,العلاج المهني,علوم المحيطات,هندسة البترول,الصيدلة,الفلسفة,التصوير الفوتوغرافي,التربية البدنية,العلاج الطبيعي,الفيزياء,العلوم السياسية,علم النفس,الإدارة العامة,الصحة العامة,العلاقات العامة,الروبوتات,التعليم الثانوي,العمل الاجتماعي,علم الاجتماع,هندسة البرمجيات,التعليم الخاص,إدارة الرياضة,الإحصاء,هندسة النظم,فنون المسرح,السياحة,التخطيط الحضري,الطب البيطري,تطوير الويب,بيولوجيا الحياة البرية,علم الحيوان',
+    degreeOptions:
+      'درجة مشارك,بكالوريوس في الآداب (BA),بكالوريوس في العلوم (BS),بكالوريوس في الهندسة (BEng),بكالوريوس في إدارة الأعمال (BBA),بكالوريوس في الفنون الجميلة (BFA),بكالوريوس في التربية (BEd),بكالوريوس في الطب (MBBS),بكالوريوس في القانون (LLB),ماجستير في الآداب (MA),ماجستير في العلوم (MS),ماجستير في إدارة الأعمال (MBA),ماجستير في الهندسة (MEng),ماجستير في الفنون الجميلة (MFA),ماجستير في التربية (MEd),ماجستير في القانون (LLM),ماجستير في الصحة العامة (MPH),دكتوراه في الفلسفة (PhD),دكتوراه في الطب (MD),دكتوراه في التربية (EdD),دكتوراه في إدارة الأعمال (DBA),دكتوراه في القانون (JD),دبلوم مهني,دبلوم تقني,شهادة مهنية,شهادة خريج,دبلوم خريج,ما بعد الدكتوراه',
     aria: {
       tabList: 'أقسام نموذج الملف الشخصي',
       nextButton: 'الذهاب إلى القسم التالي',
@@ -1590,89 +1423,89 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'حزمة',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'المفاهيم',
+        curator: 'المنسق',
+        minted: 'تم الإنشاء',
+        tag: 'علامة',
+        trigger: 'المشغل',
+        version: 'الإصدار'
       },
-      current: 'current',
+      current: 'الحالي',
       loadFailed: 'فشل تحميل الإصدارات',
       none: 'لم يتم إصدار أي إصدارات حتى الآن — النشر ينشئ الإصدار v1.',
-      notServing: 'Not serving',
+      notServing: 'لا يخدم',
       publish: 'إنشاء إصدار جديد',
       published: "تم نشر الإصدار v{'{'}v{'}'} — تم تخزين الحزمة {'{'}f{'}'} في مستودع المستندات.",
       serving: 'مستوعب (قيد الخدمة)',
-      title: 'Versions'
+      title: 'الإصدارات'
     },
     shell: {
       back: 'لوحة تحكم Studio',
-      building: 'Building…',
+      building: 'يبني…',
       buildingHint: 'لا يزال الملف المصدر قيد المعالجة',
       delete: {
         body: 'يؤدي هذا إلى إزالة المستودع ومفاهيمه والمحتوى المفهرس والرسم البياني ومخرجات الحزمة نهائيًا.',
-        confirm: 'Delete',
+        confirm: 'حذف',
         title: 'حذف المستودع'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: 'تصدير بصيغة .zip',
+      logs: 'السجلات',
       pii: {
         ack: 'الإقرار بالكيانات المميزة بنجمة والنشر',
         note: 'الكيانات المميزة بنجمة هي جزء من المحتوى المنشور. إذا قمت بمراجعتها (مثل تفاصيل الاتصال الرسمية)، فأقر وتابع.'
       },
       publish: {
         body: "يؤدي النشر إلى إنشاء الإصدار v{'{'}n{'}'} وتخزين الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل أي ملف zip سابق. الإصدار الجديد لن يكون متاحًا للخدمة حتى تستوعبه.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'نشر',
+        title: 'نشر'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'للقراءة فقط',
+      serving: 'يخدم',
       state: {
-        ingested: 'Ingested'
+        ingested: 'مستوعب'
       },
       tab: {
-        editor: 'Editor',
-        wizard: 'Wizard'
+        editor: 'المحرر',
+        wizard: 'المعالج'
       },
-      version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      version: "الإصدار {'{'}n{'}'}",
+      versions: 'الإصدارات',
+      deleteLabel: 'حذف'
     },
     logs: {
       labeled: "تمت تسميتها: {'{'}n{'}'}",
       fallbacks: "بدائل LLM الاحتياطية: {'{'}n{'}'}",
       concepts: "المفاهيم: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'الإجراء',
+        description: 'الوصف',
+        user: 'المستخدم',
+        when: 'التاريخ والوقت'
       },
       count: "{'{'}n{'}'} مدخلات",
       loadFailed: 'فشل تحميل سجل النشاط.',
       none: 'لم يتم تسجيل أي نشاط حتى الآن — تظهر إجراءات المستودع هنا فور حدوثها.',
-      title: 'Activity log'
+      title: 'سجل النشاط'
     },
     graph: {
       aria: 'الرسم البياني للمفهوم',
-      concepts: 'concepts',
+      concepts: 'المفاهيم',
       empty: 'لا توجد مفاهيم حتى الآن - لا يوجد شيء لعرضه بيانيًا.',
-      fit: 'Fit graph',
+      fit: 'ملاءمة الرسم',
       hub: 'إظهار أو إخفاء مركز الفهرس (روابط المحتويات هي بنية وليست معرفة)',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: 'تخطيط…',
+      legend: 'فهرس',
+      links: 'روابط',
+      zoomIn: 'تكبير',
+      zoomOut: 'تصغير',
       card: {
         links: "{'{'}n{'}'} روابط",
         chunks: "{'{'}n{'}'} أجزاء",
         failed: 'فشلت الفهرسة',
         flagged: 'كيانات مميزة بنجمة',
-        hub: 'Index hub',
+        hub: 'مركز الفهرس',
         pending: 'لم يُفهرس بعد'
       }
     },
@@ -1680,57 +1513,57 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (الصق أو اتركه فارغًا)',
         bodyPh: '# العنوان\n\nالصق markdown هنا - تتم إضافة frontmatter تلقائيًا.',
-        create: 'Create file',
+        create: 'إنشاء ملف',
         failed: 'تعذر إنشاء الملف.',
         title: 'إضافة ملف مفهوم',
-        titleLabel: 'Title',
+        titleLabel: 'العنوان',
         titlePh: 'مثال: الحياة البرية في مارا',
         updateIndex: 'إلحاق بقائمة المحتويات في الفهرس'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(فارغ)',
         blankBadge: 'لا يوجد frontmatter — اقتراح كامل',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'تطبيق',
+        apply: 'تطبيق الإصلاحات',
         body: 'إصلاحات frontmatter المخطط لها عبر كل مفهوم. لا يتم تعديل المتن أبدًا.',
-        button: 'Autocorrect',
+        button: 'تصحيح تلقائي',
         clean: 'لا يوجد شيء لإصلاحه — جميع بيانات frontmatter متوافقة بالفعل.',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'الحقل',
+          after: 'بعد',
+          before: 'قبل',
+          concept: 'المفهوم'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'فشل الفحص.',
+        scanning: 'يفحص…',
         title: 'تصحيح تلقائي (frontmatter فقط)'
       },
       concepts: {
         originTip: 'كيف تم تنظيم هذا المفهوم',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'إضافة مفهوم',
+        addLabel: 'تعيين تصنيف',
+        delete: 'حذف الملف',
         empty: 'لا توجد ملفات حتى الآن - أضف مفهومًا أو أعد التقسيم من المصدر.',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: 'تصفية الملفات',
+        indexBadge: 'فهرس',
+        label: 'المفاهيم',
+        loading: 'يُحمل…',
+        resplit: 'إعادة تقسيم',
         flagged: 'مميز',
         flaggedTip:
           'مفاهيم تحتوي على كيانات مميزة — افتح كل منها، أو أزل الكيان أو عدّله، ثم احفظ (يُعاد الفحص تلقائيًا)؛ أو أقر بها عند publish.',
         piiBadge: 'PII',
         piiTip: 'الكيانات المميزة: {k}. افتحها أو أزلها أو عدّلها ثم احفظ — يُعاد الفحص تلقائيًا.',
         piiTipBare: 'كيانات مميزة — افتحها، راجعها، ثم احفظ لإعادة الفحص.',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: 'قبول الكل',
+        bulkRedact: 'تنقيح الكل',
+        bulkRemove: 'إزالة الكل',
         loadProgress: 'تحميل الملفات {done}/{total}'
       },
       delete: {
         body: 'يؤدي هذا إلى إزالة الملف وأجزائه المفهرسة وروابط الرسم البياني نهائيًا.',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'حذف',
+        title: 'حذف الملف'
       },
       label: 'محرر المستودع',
       loadFailed: 'تعذر تحميل هذا المفهوم.',
@@ -1738,24 +1571,24 @@ export default {
       meta: {
         label: 'البيانات الوصفية للمفهوم',
         labelLabel: 'التسمية (التسلسل الهرمي للمعرفة)',
-        noLabel: 'No label',
+        noLabel: 'بدون تصنيف',
         none: 'لم يتم تحديد أي مفهوم',
         saveFailed: 'فشل حفظ البيانات الوصفية',
         saved: 'تم حفظ البيانات الوصفية',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'حالة الفهرس',
+        title: 'العنوان',
+        trust: 'مستوى الثقة',
+        type: 'النوع',
+        typePlaceholder: 'اختر النوع…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'الملفات',
+        graph: 'الرسم البياني'
       },
       pickConcept: 'حدد مفهومًا من القائمة لبدء التحرير.',
       resplit: {
         body: 'يؤدي هذا إلى حذف جميع المفاهيم الحالية والرسم البياني المشتق، ثم إعادة استيراد الملف المصدر بالتقسيم الجديد. ستفقد تعديلات المفاهيم.',
-        confirm: 'Re-split',
+        confirm: 'إعادة تقسيم',
         failed: 'فشلت إعادة التقسيم — تحقق من رابط الملف المصدر.',
         modeA: 'مفهوم واحد للزحف بأكمله',
         modeAHint: 'مفهوم ضخم — المحتوى بأكمله في مفهوم واحد',
@@ -1765,16 +1598,16 @@ export default {
         modeCHint: 'المهمة 10.6 — قريبًا',
         title: 'إعادة التقسيم من المصدر'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'حفظ',
+      saved: 'تم الحفظ',
+      saving: 'يحفظ…',
       unsaved: 'تغييرات غير محفوظة',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'مُصيّر',
+        source: 'المصدر'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'عرض المحرر',
+      paneLabel: 'جزء العرض',
       saveFailed: 'فشل الحفظ — أعد المحاولة',
       piiBulk: {
         title: {
@@ -1789,12 +1622,12 @@ export default {
             'تم وضع علامة تمت المراجعة والاحتفاظ على جميع الكيانات المميزة — لن يتم وضع علامة عليها مرة أخرى إلا إذا أعدت الفحص.'
         },
         scope: "المفاهيم المتأثرة: {'{'}n{'}'}.",
-        confirm: 'Apply',
+        confirm: 'تطبيق',
         failed: 'فشل إجراء PII المجمع — حاول مرة أخرى.'
       },
       actions: {
         bulkPii: 'تطبيق إجراء PII المجمع',
-        deleting: 'Deleting'
+        deleting: 'يحذف'
       }
     },
     dashboard: {
@@ -1806,23 +1639,23 @@ export default {
       },
       card: {
         actions: "إجراءات {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'يبني…',
         buildingAria: 'قيد الإنشاء — لا يزال الملف المصدر قيد المعالجة',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'حذف',
+        export: 'تصدير',
+        ingesting: 'يستوعب…',
+        logs: 'السجلات',
+        rename: 'إعادة تسمية',
+        versions: 'الإصدارات'
       },
       delete: {
         body: 'يؤدي هذا إلى إزالة المستودع ومفاهيمه والمحتوى المفهرس والرسم البياني ومخرجات الحزمة نهائيًا. لا يمكن التراجع عن هذا الإجراء.',
-        confirm: 'Delete',
+        confirm: 'حذف',
         title: 'حذف المستودع'
       },
       filter: {
         domain: 'تصفية حسب مجال الموضوع',
-        allDomains: 'All subject areas'
+        allDomains: 'جميع مجالات الموضوع'
       },
       new: '+ مستودع جديد',
       pii: {
@@ -1831,37 +1664,37 @@ export default {
       },
       publish: {
         body: "يُنشئ إجراء publish الإصدار v{'{'}n{'}'} ويخزن الحزمة \"{'{'}file{'}'}\" في مستودع المستندات، ليحل محل ملف zip السابق. الإصدار الجديد لن يكون في حالة serving حتى تقوم بإجراء Ingest له.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'نشر',
+        title: 'نشر'
       },
-      search: 'Search...',
+      search: 'بحث...',
       select: "تحديد {'{'}name{'}'} للنشر المجمع",
       stage: {
         drainFailed: 'فشلت عملية ingest',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
+        redraining: 'إعادة استنزاف…',
+        building: 'يبني…',
+        draft: 'مسودة',
+        inReview: 'قيد المراجعة',
         ingested: "تمت عملية ingest لـ v{'{'}n{'}'}",
         published: "تم publish لـ v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: 'مسحوب',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'المستودعات',
+      topics: 'المواضيع',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'استيراد',
+        in_review: 'قيد المراجعة',
+        published: 'منشور',
+        ingested: 'مستوعب',
+        retracted: 'مسحوب'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'لا يوجد استيراد بعد',
+        in_review: 'لا يوجد شيء قيد المراجعة',
+        published: 'لا توجد مستودعات منشورة بعد',
+        ingested: 'لم يتم استيعاب شيء بعد',
+        retracted: 'لا يوجد شيء مسحوب'
       }
     },
     build: {
@@ -1871,13 +1704,13 @@ export default {
       },
       curation: {
         fallbacks: 'بدائل LLM الاحتياطية',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'منسق',
+        typed: 'مكتوب',
+        labeled: 'مصنف',
+        described: 'موصوف'
       },
       batches: 'الدفعات المخزنة',
-      bytes: 'Source read',
+      bytes: 'قراءة المصدر',
       conceptsIndexed: 'المفاهيم المفهرسة',
       elapsed: {
         hr: "بدأ منذ {'{'}n{'}'} ساعة",
@@ -1898,9 +1731,9 @@ export default {
         version: 'إصدار serving'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'فهرسة',
+        serving: 'يخدم',
+        label: 'المرحلة'
       },
       title: {
         import: 'تقدم الاستيراد',
@@ -1911,16 +1744,16 @@ export default {
         idle: 'حالة المستودع'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'استيراد',
+        reviewing: 'مراجعة',
+        ingesting: 'استيعاب',
+        serving: 'يخدم',
+        retracted: 'مسحوب'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'مجال الموضوع',
+        topics: 'المواضيع',
+        lastVersion: 'الإصدار الأخير'
       }
     },
     create: {
@@ -1935,7 +1768,7 @@ export default {
       failed: 'فشل إنشاء المستودع',
       duplicateInline: 'يوجد مستودع بهذا الاسم بالفعل. افتحه، أو اختر اسمًا آخر.',
       duplicate: 'يوجد مستودع بهذا الاسم بالفعل - افتحه من لوحة التحكم أو اختر اسمًا آخر.',
-      domain: 'Subject area',
+      domain: 'مجال الموضوع',
       create: 'إنشاء مستودع',
       title: 'مستودع OKF جديد',
       hint: 'ينشئ مستودعًا فارغًا يحتوي على index.md تقوم بتحريره في محرر Studio.',
@@ -1943,40 +1776,40 @@ export default {
       domainRequired: 'اختر مجال الموضوع أولاً — لا يمكن تغييره بعد الإنشاء.',
       classLabel: 'تصنيف المفاهيم',
       classHeuristics: 'الاستدلال (افتراضي)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'بمساعدة LLM',
+      classHybrid: 'هجين'
     },
     fm: {
       errKeyCurated: 'اسم حقل محجوز.',
       errKeyDuplicate: 'اسم الحقل مستخدم مرتين.',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON غير صالح',
       errNumber: 'يجب أن يكون رقمًا',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'قائمة',
+        boolean: 'صواب/خطأ',
+        number: 'رقم',
+        string: 'نص'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'إزالة الحقل',
+      kindLabel: 'نوع القيمة',
+      keyPh: 'اسم الحقل',
       fullHint: 'كل حقل في frontmatter قابل للتحرير. أضف المفاتيح أو أزلها بحرية.',
       errRemovalPending: 'تتطلب إزالة الحقول عقد خادم الدمج والحذف (سيتوفر قريبًا).',
       errKeyRequired: 'كل حقل يحتاج إلى اسم.',
       arrayPh: 'قيم مفصولة بفواصل',
-      addKey: 'Add field',
+      addKey: 'إضافة حقل',
       saved: 'تم حفظ frontmatter',
-      label: 'Frontmatter',
+      label: 'المادة الأمامية',
       tipLabel: 'ما هو Frontmatter؟',
-      edit: 'Edit',
+      edit: 'تعديل',
       empty: 'لا يوجد frontmatter حتى الآن — التحرير يضيف النوع والعنوان والتسميات.',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'النوع',
+      noType: 'بدون نوع',
+      titleLabel: 'العنوان',
       labelsLabel: 'التسمية (التسلسل الهرمي للمعرفة)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'بدون تصنيف',
+      descriptionLabel: 'الوصف',
       save: 'حفظ frontmatter',
       saveFailed: 'فشل حفظ frontmatter'
     },
@@ -2001,25 +1834,25 @@ export default {
         'كيف نحدد ماهية كل مفهوم (موضوع، كيان، عملية…). يقرأ الاستدلال الصفحة تلقائيًا؛ بينما خيار LLM أبطأ ولكنه يتعامل مع الصفحات المعقدة.',
       resplit:
         'إعادة تقسيم المصدر إلى مفاهيم بطريقة مختلفة — على سبيل المثال مفهوم واحد لكل صفحة بدلاً من مفهوم واحد للموقع بأكمله.',
-      saveFailed: 'Save failed',
+      saveFailed: 'فشل الحفظ',
       importFailedTitle: 'فشل الاستيراد — تعذر تحويل الملف المصدر.',
       importFailedHint: 'احذف هذا المستودع واستورد الملف المصدر مرة أخرى.',
       frontmatter:
         'المعلومات المنظمة في الجزء العلوي من كل ملف — النوع، العنوان، التسميات. يستخدمها المساعد لمعرفة موضوع كل مفهوم.'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: 'تنسيق',
+      bold: 'عريض',
+      italic: 'مائل',
+      h1: 'عنوان 1',
+      h2: 'عنوان 2',
+      h3: 'عنوان 3',
+      bullet: 'قائمة نقطية',
       numbered: 'قائمة مرقمة',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: 'إدراج رابط',
+      code: 'رمز مضمن',
+      table: 'إدراج جدول',
+      split: 'تقسيم'
     },
     narrative: {
       intro:
@@ -2123,23 +1956,23 @@ export default {
         notReady: 'لا يمكن حفظ المسودات على جانب الخادم حتى الآن؛ تم الحفظ محليًا.'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'أساسي',
+        expert: 'خبير'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'منشور',
+        inReview: 'قيد المراجعة',
+        draft: 'قيد التقدم'
       },
       exit: 'العودة إلى لوحة التحكم',
       context: {
         untitled: 'مستودع بدون عنوان',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'الثقة',
+        title: 'المستودع',
+        stale: 'قديم',
+        sources: 'المصادر',
         concepts: 'المفاهيم حتى الآن'
       },
       label: 'معالج OKF Studio',
@@ -2256,15 +2089,15 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'مجال الموضوع',
       domainPlaceholder: 'حدد مجال الموضوع…',
       classLabel: 'تصنيف المفاهيم',
       classHeuristics: 'الاستدلال (افتراضي)',
       classHeuristicsHint: 'تصنيف سريع قائم على القواعد — لا توجد تكلفة LLM، مناسب لعمليات الزحف جيدة التنظيم.',
-      classLlm: 'LLM-assisted',
+      classLlm: 'بمساعدة LLM',
       classLlmHint:
         'ينسق LLM كل مفهوم — النوع، تسمية التسلسل الهرمي للمعرفة والوصف. أكثر دقة واكتمالاً بكثير من الاستدلال؛ توقع وقتًا إضافيًا لكل مفهوم.',
-      classHybrid: 'Hybrid',
+      classHybrid: 'هجين',
       classHybridHint: 'الاستدلال أولاً؛ يراجع LLM الحالات غير المؤكدة ويسد الفجوات. متوازن بين الوقت والاكتمال.',
       targetLabel: 'أين يجب أن يذهب هذا؟',
       target: {
@@ -2324,7 +2157,7 @@ export default {
         notReady: 'تم حفظ التسميات محليًا — ستتوفر مزامنة الخادم قريبًا.'
       },
       frontmatter: {
-        label: 'Frontmatter',
+        label: 'المادة الأمامية',
         edit: 'تحرير frontmatter',
         dialogTitle: 'تحرير frontmatter',
         okfVersion: 'okf_version',
@@ -2422,11 +2255,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'إرسال للمراجعة',
+      approve: 'موافقة',
+      publish: 'نشر',
+      ingest: 'استيعاب',
+      retract: 'سحب'
     }
   }
 };

@@ -11,10 +11,10 @@ export default {
     AU: 'Ostaraliya',
     AT: 'Ostiriya',
     AZ: 'Azerbayijan',
-    BS: 'Bahamas',
+    BS: 'Bahamasi',
     BH: 'Baharayin',
     BD: 'Bangalades',
-    BB: 'Barbados',
+    BB: 'Barbadosi',
     BY: 'Belaarus',
     BE: 'Beljiyom',
     BZ: 'Beliiz',
@@ -32,7 +32,7 @@ export default {
     KH: 'Kambodiya',
     CM: 'Kamerun',
     CA: 'Kanada',
-    CF: 'Central African Republic',
+    CF: 'Senteral Afrika Republik',
     TD: 'Caad',
     CL: 'Cili',
     CN: 'Siin (China)',
@@ -41,26 +41,26 @@ export default {
     CG: 'Kongo',
     CD: 'Kongo (Repubilik Demokaraatik)',
     CR: 'Kosatarika',
-    CI: "Côte d'Ivoire",
+    CI: 'Kodiwaar',
     HR: 'Korowasiya',
     CU: 'Kuba',
     CY: 'Sipirus',
     CZ: 'Cekiya',
-    DK: 'Denmark',
+    DK: 'Danimarki',
     DJ: 'Jibuti',
     DM: 'Dominika',
-    DO: 'Dominican Republic',
+    DO: 'Dominikan Republik',
     EC: 'Ekuwador',
     EG: 'Misira (Egypt)',
-    SV: 'El Salvador',
-    GQ: 'Equatorial Guinea',
+    SV: 'Salivadori',
+    GQ: 'Ginee Ekuwatoriyal',
     ER: 'Eritereya',
     EE: 'Estoniya',
     ET: 'Etiyopiya',
     FJ: 'Fiji',
-    FI: 'Finland',
+    FI: 'Finilandi',
     FR: 'Faraansi',
-    GA: 'Gabon',
+    GA: 'Gabong',
     GM: 'Gambiya',
     GE: 'Jorjiya',
     DE: 'Alimaañ (Germany)',
@@ -70,9 +70,9 @@ export default {
     GT: 'Guwatemala',
     GN: 'Gini',
     GW: 'Gini-Bisawu',
-    GY: 'Guyana',
+    GY: 'Giyana',
     HT: 'Hayiti',
-    HN: 'Honduras',
+    HN: 'Hondurasi',
     HU: 'Hungari',
     IS: 'Aysiland',
     IN: 'Indiya',
@@ -84,7 +84,7 @@ export default {
     IT: 'Itali',
     JM: 'Jamayika',
     JP: 'Japaan',
-    JO: 'Jordan',
+    JO: 'Jordani',
     KZ: 'Kajakistan',
     KE: 'Keniya',
     KI: 'Kiribati',
@@ -106,7 +106,7 @@ export default {
     MY: 'Maleesiya',
     MV: 'Maldiifs',
     ML: 'Mali',
-    MT: 'Malta',
+    MT: 'Malita',
     MH: 'M̧ajeļ',
     MR: 'Moritani',
     MU: 'Morisiyos',
@@ -127,14 +127,14 @@ export default {
     NI: 'Nikaraguwa',
     NE: 'Nijeyr',
     NG: 'Nijeriya',
-    MK: 'North Macedonia',
+    MK: 'Masedoniya',
     NO: 'Norwey',
-    OM: 'Oman',
+    OM: 'Omani',
     PK: 'Pakistaan',
     PW: 'Palawu',
     PS: 'Falastin',
     PA: 'Panama',
-    PG: 'Papua New Guinea',
+    PG: 'Papuwa Ginee Kuta',
     PY: 'Paraguwey',
     PE: 'Peru',
     PH: 'Filipins',
@@ -158,19 +158,19 @@ export default {
     SG: 'Singapur',
     SK: 'Silovakiya',
     SI: 'Siloveniya',
-    SB: 'Solomon Islands',
+    SB: 'Solomon Jisololu',
     SO: 'Somaliya',
     ZA: 'Safrika',
     SS: 'Sudan Batoo',
     ES: 'Sipeen',
     LK: 'Siri Lanka',
-    SD: 'Sudan',
+    SD: 'Sudani',
     SR: 'Surinam',
-    SZ: 'Eswatini',
+    SZ: 'Esiwatini',
     SE: 'Suwiden',
     CH: 'Suwiselan',
     SY: 'Siriya',
-    TJ: 'Tajikistan',
+    TJ: 'Tajikisitaani',
     TZ: 'Tanjaniya',
     TH: 'Tayiland',
     TL: 'Timor',
@@ -183,8 +183,8 @@ export default {
     TV: 'Tuvalu',
     UG: 'Uganda',
     UA: 'Ukeren',
-    AE: 'United Arab Emirates',
-    GB: 'United Kingdom',
+    AE: 'Imaaraatu Arabu',
+    GB: 'Angiliteer',
     US: 'Amedka',
     UY: 'Uruguwey',
     UZ: 'Ujibekistan',
@@ -192,7 +192,7 @@ export default {
     VA: 'Vatikan Siti',
     VE: 'Venejuwela',
     VN: 'Viyetinam',
-    YE: 'Yemen',
+    YE: 'Yemeni',
     ZM: 'Jambiya',
     ZW: 'Jimbabuwe'
   },
@@ -507,51 +507,51 @@ export default {
       metadataUpdateSuccess: 'Metadeta fayil {fileId} yailamata.'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'A nyining',
+      searchPlaceholder: 'Nyiningo safuo nyining...',
+      minConfidence: 'Laana dooyaa',
+      maxConfidence: 'Laana baa',
+      from: 'Kabo',
+      to: 'Nying ma',
+      reset: 'A kuta-kuta',
+      colTime: 'Waatoo',
+      colQuestion: 'Baaralaa la Nyiningo',
+      colConfidence: 'Laana',
+      colResponseTime: 'Jaabi Waatoo',
+      colSources: 'Asiloolu',
+      colFeedback: 'Jaabiro',
+      colActions: 'Kuuolu',
+      inspect: 'A juube',
+      noResults: 'Nyiningo mang soto i la filtarolu kano.',
+      prev: 'Koma',
+      pageInfo: 'Kufuo {current} kabo {total} ({count} mumewo)',
+      next: 'Nying koo',
+      backToList: 'Sayo safoolu ma',
+      detailTitle: 'Nyiningo Juubelaa',
+      sectionQuestion: 'Baaralaa la Nyiningo',
+      user: 'Baaralaa',
+      time: 'Waatoo',
+      responseTime: 'Jaabi Waatoo',
+      mode: 'Cogo',
+      sectionContext: 'Konoo (Toholu dita RAG ye)',
+      category: 'Bolo',
+      serviceLabels: 'Baara Toholu',
+      language: 'Kango',
+      sectionMessages: 'Kilaa dita Pipeline ye',
+      sectionDocuments: 'Soto Kofoolu (Vector DB Jaa)',
+      score: 'Dan',
+      labels: 'Toholu',
+      viewDoc: 'Kofuo juube',
+      noDocuments: 'Asili kofoolu mang soto nying nyiningo ye.',
+      sectionResponse: 'LLM Jaabiro',
+      confidenceScore: 'Laana Dan',
+      retrievalConfidenceScore: 'Soto Laana',
+      selfConfidence: 'Yere-laana (LLM)',
+      sectionFeedback: 'Baaralaa la Jaabiro',
+      rating: 'Dan',
+      comment: 'Kuma',
+      providedAt: 'A dita',
+      loadError: 'Nyiningo bota.'
     }
   },
   auth: {
@@ -805,67 +805,52 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Jamo ani Moo Lataramoo',
-      children: ['Bulu-lung dokuumalu', 'ID kaardolu', 'Pasport', 'Furung ani Saaya dokuumalu', 'Vote-moo lataramoo']
+      children: 'Bulu-lung dokuumalu,ID kaardolu,Pasport,Furung ani Saaya dokuumalu,Vote-moo lataramoo'
     },
     cat2: {
       name: '2. Kenda-yaa ani Jamaa Baaralu',
-      children: [
-        'Pablik kenda-yaa dulaalu',
-        'Dokotoro dulaalu',
-        'Kenda-yaa insooransi',
-        'Seng-moo la baaralu',
-        'Moolu dulaa ani nimal'
-      ]
+      children:
+        'Pablik kenda-yaa dulaalu,Dokotoro dulaalu,Kenda-yaa insooransi,Seng-moo la baaralu,Moolu dulaa ani nimal'
     },
     cat3: {
       name: '3. Karandiri ani Longo',
-      children: ['Pablik sukuul ani unibersiti', 'Karandiri jooyaa', 'Moo-baa karandiri', 'Onlayin karandiri dulaalu']
+      children: 'Pablik sukuul ani unibersiti,Karandiri jooyaa,Moo-baa karandiri,Onlayin karandiri dulaalu'
     },
     cat4: {
       name: '4. Baara ani Cee-baara Lataramoo',
-      children: [
-        'Baara ñining ani baara-balaa hako',
-        'Baarakilaa kantari',
-        'Baara dulaa kantari',
-        'Karandiri-doo (Skills)'
-      ]
+      children: 'Baara ñining ani baara-balaa hako,Baarakilaa kantari,Baara dulaa kantari,Karandiri-doo (Skills)'
     },
     cat5: {
       name: '5. Jooyaa (Taxes) ani Kodo',
-      children: ['Jooyaa muta ani murung', 'Dulaa jooyaa', 'Bita jooyaa', 'Kastom ani julo jooyaa']
+      children: 'Jooyaa muta ani murung,Dulaa jooyaa,Bita jooyaa,Kastom ani julo jooyaa'
     },
     cat6: {
       name: '6. Jamo Kantari ani Kiti-yaa',
-      children: ['Polisi ani tura-kandaa baaralu', 'Kiti-yaa ani lawu baaralu', 'Kiti-moo kili', 'Moo-kantari lawu']
+      children: 'Polisi ani tura-kandaa baaralu,Kiti-yaa ani lawu baaralu,Kiti-moo kili,Moo-kantari lawu'
     },
     cat7: {
       name: '7. Taa-ani-Naa ani Moto',
-      children: [
-        'Moto Bula-Laisins ani lataramoo',
-        'Jamo moto ani silalu',
-        'Sila-kiti ani kiti-jooyaa',
-        'Sila-kantari baaralu'
-      ]
+      children: 'Moto Bula-Laisins ani lataramoo,Jamo moto ani silalu,Sila-kiti ani kiti-jooyaa,Sila-kantari baaralu'
     },
     cat8: {
       name: '8. Dulaa ani Suw-Lataramoo',
-      children: ['Jamo dulaa baara', 'Suw lataramoo ani dokuumalu', 'Suw kodo-sing ani loo-hako', 'Suw loo permol']
+      children: 'Jamo dulaa baara,Suw lataramoo ani dokuumalu,Suw kodo-sing ani loo-hako,Suw loo permol'
     },
     cat9: {
       name: '9. Dulaa-baara ani Dulaa-Kenda-yaa (Environment)',
-      children: ['Jiyo ani elektrik baaralu', 'Nonsiyo maralaa', 'Dulaa-kantari lawu', 'Kura-kura elektiriki']
+      children: 'Jiyo ani elektrik baaralu,Nonsiyo maralaa,Dulaa-kantari lawu,Kura-kura elektiriki'
     },
     cat10: {
       name: '10. Bita ani Jula-yaa',
-      children: ['Bita lataramoo ani laisins', 'Jula-yaa lawu ani permol', 'Bita-doo kodo', 'E-komaas ani bita intanet']
+      children: 'Bita lataramoo ani laisins,Jula-yaa lawu ani permol,Bita-doo kodo,E-komaas ani bita intanet'
     },
     cat11: {
       name: '11. Pensol ani Moolu Kantari',
-      children: ['Baara-bula kodo', 'Pensol kodo lataramoo', 'Dimba-kodo', 'Seng-moo pensol']
+      children: 'Baara-bula kodo,Pensol kodo lataramoo,Dimba-kodo,Seng-moo pensol'
     },
     cat12: {
       name: '12. Jamo-Baara ani Vote',
-      children: ['Vote ani bota-moo', 'Jamo lauma ani kiti', 'Moo-dimba baara', 'Jamo lataramoo baara']
+      children: 'Vote ani bota-moo,Jamo lauma ani kiti,Moo-dimba baara,Jamo lataramoo baara'
     }
   },
   settings: {
@@ -1205,137 +1190,10 @@ export default {
     noMatchingCountries: 'Bankoo mang ben',
     noMatchingDisciplines: 'Baara-fata mang ben',
     noMatchingDegrees: 'Degri mang ben',
-    educationOptions: [
-      'Accounting (Kodo lataramoo)',
-      'Aerospace (Kulong-santo baara)',
-      'Sene baaralu',
-      'Moo-longo (Anthropology)',
-      'Loo baaralu',
-      'Foto tariiki',
-      'AI',
-      'Salo longoo',
-      'Salo-koo longoo',
-      'Biochemistry',
-      'Kenda-yaa Enginering',
-      'Biyo-baara',
-      'Bita Lataramoo',
-      'Kimikal Enginering',
-      'Kimikal longoo',
-      'Suw Enginering',
-      'Kuma-longo',
-      'Kompuuta Enginering',
-      'Kompuuta longoo',
-      'Loo lataramoo',
-      'Kiti-yaa longoo',
-      'Kompuuta kantari',
-      'Data longoo',
-      'Nyin longoo',
-      'Kodo-longoo',
-      'Karandiri',
-      'Elektrik Enginering',
-      'Sukuul-ding karandiri',
-      'Angalee karandiri',
-      'Dulaa-kenda-yaa Enginering',
-      'Dulaa-kenda-yaa longoo',
-      'Dondiko dada',
-      'Film longoo',
-      'Kodo (Finance)',
-      'Fayn Arts',
-      'Daa-longoo',
-      'Polisi longoo',
-      'Geym dada',
-      'Geografi',
-      'Banko longoo',
-      'Grafik dada',
-      'Kenda-yaa lataramoo',
-      'Tariiki',
-      'Makaamoo lataramoo',
-      'Moo baara',
-      'Fengo dada',
-      'Sati-baa Enginering',
-      'Kibaro lataramoo',
-      'Longo baara (IT)',
-      'Suw-kono dada',
-      'Banko-teema bita',
-      'Banko-teema kuma',
-      'Kibaro-folaa',
-      'Lawu',
-      'Buku longoo',
-      'Kang-longoo',
-      'Lataramoo',
-      'Jula-yaa (Marketing)',
-      'Murumuru longoo',
-      'Matematiki',
-      'Makin Enginering',
-      'Media longoo',
-      'Dokotoro',
-      'Sanoo longoo',
-      'Mikro-longoo',
-      'Muzik',
-      'Nanolongo',
-      'Nasi baara',
-      'Baloo longoo',
-      'Kenda-yaa baara',
-      'Baa-longoo',
-      'Jiyo Enginering',
-      'Farmasi (Basi)',
-      'Filosofi',
-      'Foto-mutalaa',
-      'Fari kenda-yaa',
-      'Fari kenda-yaa baara',
-      'Fisiks',
-      'Politiki longoo',
-      'Hakili longoo',
-      'Jamo Lataramoo',
-      'Jamo kenda-yaa',
-      'Jamo kuma',
-      'Robootik',
-      'Sukuul-teema karandiri',
-      'Moo baara',
-      'Sosioloji',
-      'Softweya Enginering',
-      'Karandiri-doo',
-      'Tolong lataramoo',
-      'Statistika',
-      'Sistem Enginering',
-      'Sinima baara',
-      'Taa-ani-Naa baara',
-      'Sati lataramoo',
-      'Bisi Dokotoro',
-      'Web dada',
-      'Wulo-sugo longoo',
-      'Sugo longoo'
-    ],
-    degreeOptions: [
-      'Associate Degri',
-      'Bachelor of Arts (BA)',
-      'Bachelor of Science (BS)',
-      'Bachelor of Engineering (BEng)',
-      'Bachelor of Business Administration (BBA)',
-      'Bachelor of Fine Arts (BFA)',
-      'Bachelor of Education (BEd)',
-      'Bachelor of Medicine (MBBS)',
-      'Bachelor of Laws (LLB)',
-      'Master of Arts (MA)',
-      'Master of Science (MS)',
-      'Master of Business Administration (MBA)',
-      'Master of Engineering (MEng)',
-      'Master of Fine Arts (MFA)',
-      'Master of Education (MEd)',
-      'Master of Laws (LLM)',
-      'Master of Public Health (MPH)',
-      'Doctor of Philosophy (PhD)',
-      'Doctor of Medicine (MD)',
-      'Doctor of Education (EdD)',
-      'Doctor of Business Administration (DBA)',
-      'Doctor of Jurisprudence (JD)',
-      'Professional Diplom',
-      'Teknikal Diplom',
-      'Vokesonal Diplom',
-      'Graduate Diplom',
-      'Post-Graduate Diplom',
-      'Post-Doctoral'
-    ],
+    educationOptions:
+      'Accounting (Kodo lataramoo),Aerospace (Kulong-santo baara),Sene baaralu,Moo-longo (Anthropology),Loo baaralu,Foto tariiki,AI,Salo longoo,Salo-koo longoo,Biochemistry,Kenda-yaa Enginering,Biyo-baara,Bita Lataramoo,Kimikal Enginering,Kimikal longoo,Suw Enginering,Kuma-longo,Kompuuta Enginering,Kompuuta longoo,Loo lataramoo,Kiti-yaa longoo,Kompuuta kantari,Data longoo,Nyin longoo,Kodo-longoo,Karandiri,Elektrik Enginering,Sukuul-ding karandiri,Angalee karandiri,Dulaa-kenda-yaa Enginering,Dulaa-kenda-yaa longoo,Dondiko dada,Film longoo,Kodo (Finance),Fayn Arts,Daa-longoo,Polisi longoo,Geym dada,Geografi,Banko longoo,Grafik dada,Kenda-yaa lataramoo,Tariiki,Makaamoo lataramoo,Moo baara,Fengo dada,Sati-baa Enginering,Kibaro lataramoo,Longo baara (IT),Suw-kono dada,Banko-teema bita,Banko-teema kuma,Kibaro-folaa,Lawu,Buku longoo,Kang-longoo,Lataramoo,Jula-yaa (Marketing),Murumuru longoo,Matematiki,Makin Enginering,Media longoo,Dokotoro,Sanoo longoo,Mikro-longoo,Muzik,Nanolongo,Nasi baara,Baloo longoo,Kenda-yaa baara,Baa-longoo,Jiyo Enginering,Farmasi (Basi),Filosofi,Foto-mutalaa,Fari kenda-yaa,Fari kenda-yaa baara,Fisiks,Politiki longoo,Hakili longoo,Jamo Lataramoo,Jamo kenda-yaa,Jamo kuma,Robootik,Sukuul-teema karandiri,Moo baara,Sosioloji,Softweya Enginering,Karandiri-doo,Tolong lataramoo,Statistika,Sistem Enginering,Sinima baara,Taa-ani-Naa baara,Sati lataramoo,Bisi Dokotoro,Web dada,Wulo-sugo longoo,Sugo longoo',
+    degreeOptions:
+      'Associate Degri,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diplom,Teknikal Diplom,Vokesonal Diplom,Graduate Diplom,Post-Graduate Diplom,Post-Doctoral',
     aria: {
       tabList: 'Moo-kibaroo fata-fata',
       nextButton: 'Taa dulaa kura to',
@@ -1560,89 +1418,89 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'Bulo',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'Miroolu',
+        curator: 'Juubelaa',
+        minted: 'Daa',
+        tag: 'Toh',
+        trigger: 'Madi',
+        version: 'Bero'
       },
-      current: 'current',
+      current: 'Nying waatoo',
       loadFailed: 'Ban bōktok wāween ko',
       none: 'Ejjan̄in wōr wāween em̦ōj kōm̦m̦an — publishing ej kōm̦m̦an v1.',
-      notServing: 'Not serving',
+      notServing: 'Hani baara nte',
       publish: 'Kōm̦m̦an wāween ekāāl',
       published: "Wāween v{'{'}v{'}'} em̦ōj publish — bundle {'{'}f{'}'} em̦ōj kakkwon ilo jikin kakwōn peba.",
-      serving: 'Ingested (serving)',
-      title: 'Versions'
+      serving: 'A marata (baara)',
+      title: 'Berolu'
     },
     shell: {
       back: 'Dashboard an Studio',
-      building: 'Building…',
+      building: 'A bering loo…',
       buildingHint: 'Peba in jikin eo ej pād ilo wāween jerbal',
       delete: {
         body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo.',
-        confirm: 'Delete',
+        confirm: 'A kuntu',
         title: 'Jol̦o̦k jikin kakwōn'
       },
       export: 'Export .zip',
-      logs: 'Logs',
+      logs: 'Loguolu',
       pii: {
         ack: 'Kwal̦o̦k bwe kwojel̦ā kōn men ko rej kakōl̦l̦e & publish',
         note: 'Men ko rej kakōl̦l̦e rej koba ilo melele ko enaj publish. Ñe kwom̦ōj am lali (āinwōt numba in talboon ko an opij), kam̦ool im wōnm̦aanl̦o̦k.'
       },
       publish: {
         body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin jabdewōt zip m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'A ke',
+        title: 'A ke'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'A KARAN DAMA',
+      serving: 'A bering baara',
       state: {
-        ingested: 'Ingested'
+        ingested: 'A marata'
       },
       tab: {
-        editor: 'Editor',
-        wizard: 'Wizard'
+        editor: 'Safelaa',
+        wizard: 'Madi'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'Berolu',
+      deleteLabel: 'A kuntu'
     },
     logs: {
       labeled: "kakōl̦l̦eiki: {'{'}n{'}'}",
       fallbacks: "jipañ ko an LLM: {'{'}n{'}'}",
       concepts: "kōm̦m̦an ko: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'Kuu',
+        description: 'Kibaru',
+        user: 'Baaralaa',
+        when: 'Lung ani waatoo'
       },
       count: "{'{'}n{'}'} jikin ko",
       loadFailed: 'Ban kōdāl̦o̦k ripot in m̦akūtkūt ko.',
       none: 'Ejjan̄in wōr m̦akūtkūt em̦ōj jeje — jerbal ko an jikin kakwōn renaj wal̦o̦k ijin ilo aer wal̦o̦k.',
-      title: 'Activity log'
+      title: 'Baara safuo'
     },
     graph: {
       aria: 'Graf in kōm̦m̦an',
-      concepts: 'concepts',
+      concepts: 'miroolu',
       empty: 'Ejjan̄in wōr kōm̦m̦an - ejjel̦o̦k men in kōm̦m̦an graf ie.',
-      fit: 'Fit graph',
+      fit: 'Jaa loo',
       hub: 'Kwal̦o̦k ak nooj index hub (kebaake ko an kobban rej ejjaak, ejjab jel̦āl̦o̦kjen̦)',
       layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      legend: 'indeksi',
+      links: 'kofuolu',
+      zoomIn: 'A sutuya',
+      zoomOut: 'A masorong',
       card: {
         links: "{'{'}n{'}'} kebaake ko",
         chunks: "{'{'}n{'}'} kōkōm̧bōļ ko",
         failed: 'laajrak ear l̦apier',
         flagged: 'men ko ewōr kakōl̦l̦e ie',
-        hub: 'Index hub',
+        hub: 'Indeksi bolo',
         pending: 'ejjan̄in pād ilo laajrak'
       }
     },
@@ -1650,57 +1508,57 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (likūt ak kōjparok bwe en ejjel̦o̦k)',
         bodyPh: '# Bōroji\n\nLikūt markdown ijin - frontmatter enaj make koba.',
-        create: 'Create file',
+        create: 'Kofuo daa',
         failed: 'Ban kōm̦m̦ane fail in.',
         title: 'Kobaiki fail in kōm̦m̦an',
-        titleLabel: 'Title',
+        titleLabel: 'Toh',
         titlePh: 'āinwōt Menin mour ilo Mara',
         updateIndex: 'Kobaiki ilo laajrak in Kobban ilo index'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(fende mang soto)',
         blankBadge: 'ejjel̦o̦k frontmatter — aolepen peba',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'A ke',
+        apply: 'A ke',
         body: 'Kōm̦m̦an bwe frontmatter en jim̦we ilo aolep kōm̦m̦an ko. Bōbba ko ban oktak.',
-        button: 'Autocorrect',
+        button: 'Yere-kuta',
         clean: 'Ejjel̦o̦k men in kōm̦m̦ane — aolep frontmatter ejim̦we.',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'Bolo',
+          after: 'Nying koo',
+          before: 'Nyaha',
+          concept: 'Miroo'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'Scan mang si.',
+        scanning: 'Scan…',
         title: 'Make-kōjim̦we (frontmatter wōt)'
       },
       concepts: {
         originTip: 'Ewi wāween kar kōm̦m̦an kōm̦m̦an in',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'Miroo kuta',
+        addLabel: 'Toh kuta',
+        delete: 'Kofuo kuntu',
         empty: 'Ejjan̄in wōr fail - kobaiki juon kōm̦m̦an ak bar ajeje jān jikin eo.',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
-        flagged: 'flagged',
+        filter: 'Kofuo filtar',
+        indexBadge: 'indeksi',
+        label: 'Miroolu',
+        loading: 'A bering soto…',
+        resplit: 'A farra kuta',
+        flagged: 'a juubeta',
         flaggedTip:
           'Kōm̦m̦an ko ewōr kakōl̦l̦e ie — kipel̦o̦k kajojo, jol̦o̦k ak ukōt men eo, kōjparok (ej make bar lale); ak kwal̦o̦k bwe kwojel̦ā ie ilo iien publish.',
         piiBadge: 'PII',
         piiTip: 'Men ko ewōr kakōl̦l̦e ie: {k}. Kipel̦o̦k, jol̦o̦k ak ukōti, innem kōjparok — ej make bar lale.',
         piiTipBare: 'Men ko ewōr kakōl̦l̦e ie — kipel̦o̦k, etale, innem kōjparok bwe en bar lale.',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: 'Abee song',
+        bulkRedact: 'Abee nuun',
+        bulkRemove: 'Abee kuntu',
         loadProgress: 'Kōdāl̦o̦k fail ko {done}/{total}'
       },
       delete: {
         body: 'Men in enaj jol̦o̦k fail eo, kōkōm̧bōļ ko em̦ōj laajraki, im kebaake ko an graf indreo.',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'A kuntu',
+        title: 'Kofuo kuntu'
       },
       label: 'Jikin jeje an jikin kakwōn',
       loadFailed: 'Ban bōktok kōm̦m̦an in.',
@@ -1708,24 +1566,24 @@ export default {
       meta: {
         label: 'Melele kōn kōm̦m̦an',
         labelLabel: 'Kakōl̦l̦e (Laajrak in Jel̦āl̦o̦kjen̦)',
-        noLabel: 'No label',
+        noLabel: 'Toh nte',
         none: 'Ejjel̦o̦k kōm̦m̦an em̦ōj kāālete',
         saveFailed: 'Kōjparok melele ear l̦apier',
         saved: 'Melele ko em̦ōj kōjparoki',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'Indeksi cogo',
+        title: 'Toh',
+        trust: 'Laana',
+        type: 'Sifa',
+        typePlaceholder: 'Sifa sugu…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'Kofuolu',
+        graph: 'Jaa'
       },
       pickConcept: 'Kāālet juon kōm̦m̦an jān laajrak eo bwe kwōn jino jeje.',
       resplit: {
         body: 'Men in enaj jol̦o̦k aolep kōm̦m̦an kiiō im graf eo, innem bar bōktok fail eo kōn ajeje ekāāl. Jeje ko am ilo kōm̦m̦an ko renaj joko.',
-        confirm: 'Re-split',
+        confirm: 'A farra kuta',
         failed: 'Ajeje bar juon alen ear l̦apier — lale toor eo an fail eo.',
         modeA: 'Juon wōt kōm̦m̦an ñan aolepen crawl eo',
         modeAHint: 'Kōm̦m̦an ekanooj l̦ap — aolep kobban ilo juon wōt kōm̦m̦an',
@@ -1735,16 +1593,16 @@ export default {
         modeCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
         title: 'Bar ajeje jān jikin eo'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'A mara',
+      saved: 'A marata',
+      saving: 'A bering mara…',
       unsaved: 'Oktak ko rejan̄in kōjparok',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'A keta',
+        source: 'Asili'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'Safelaa juube',
+      paneLabel: 'Juube-dulaa',
       saveFailed: 'Kōjparok ear l̦apier — bar kajjieon̦',
       piiBulk: {
         title: {
@@ -1758,40 +1616,40 @@ export default {
           accept: 'Aolep men ko ewōr kakōl̦l̦e ie rej etale-im-kōjparok — ban bar kakōl̦l̦e m̦ae iien kwobar lale.'
         },
         scope: "Kōm̦m̦an ko ear jelōti: {'{'}n{'}'}.",
-        confirm: 'Apply',
+        confirm: 'A ke',
         failed: 'Jerbal an PII l̦apier — bar kajjieon̦.'
       },
       actions: {
         bulkPii: 'Jerbale kōm̦m̦an ko l̦ap an PII',
-        deleting: 'Deleting'
+        deleting: 'A bering kuntu'
       }
     },
     dashboard: {
       bulk: {
         body: 'Kajojo jikin kakwōn ej publish kōn aolep etale ko (PII etale, kakoba ilo laajrak, jim̦we). Jem̦l̦o̦k an kajojo:',
         pending: 'Kam̦ool ñan publish jikin kakwōn ko em̦ōj kāāleti.',
-        publishConfirm: "Publish {'{'}n{'}'}",
+        publishConfirm: "{'{'}n{'}'} Kwalok",
         title: 'Publish jikin kakwōn ko em̦ōj kāāleti'
       },
       card: {
         actions: "Kōm̦m̦an ko ñan {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'A bering loo…',
         buildingAria: 'Ej kōm̦m̦an — peba in jikin eo ej pād ilo wāween jerbal',
-        delete: 'Delete',
+        delete: 'A kuntu',
         export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        ingesting: 'A bering mara…',
+        logs: 'Loguolu',
+        rename: 'Toh kuta dii',
+        versions: 'Berolu'
       },
       delete: {
         body: 'Men in enaj jol̦o̦k jikin kakwōn eo, kōm̦m̦an ko ie, melele ko ilo laajrak, graf im bundle ko indreo. Ban maron̦ bar kōjepel̦o̦ke.',
-        confirm: 'Delete',
+        confirm: 'A kuntu',
         title: 'Jol̦o̦k jikin kakwōn'
       },
       filter: {
         domain: 'Kāālet ekkar ñan un ko',
-        allDomains: 'All subject areas'
+        allDomains: 'Kuu dulaa bee'
       },
       new: '+ Jikin kakwōn ekāāl',
       pii: {
@@ -1800,37 +1658,37 @@ export default {
       },
       publish: {
         body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin zip eo m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'A ke',
+        title: 'A ke'
       },
-      search: 'Search...',
+      search: 'A nyining...',
       select: "Kāālet {'{'}name{'}'} ñan l̦ap an publish",
       stage: {
         drainFailed: 'Ingest ear l̦apier',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
-        ingested: "Ingested v{'{'}n{'}'}",
-        published: "Published v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        redraining: 'A bering bo-kuta…',
+        building: 'A bering loo…',
+        draft: 'Binoo',
+        inReview: 'A bering juube',
+        ingested: "A marata v{'{'}n{'}'}",
+        published: "A keta v{'{'}n{'}'}",
+        retracted: 'A sayita',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'Kafuolu',
+      topics: 'kuuolu',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'A sambataa',
+        in_review: 'A bering juube',
+        published: 'A keta',
+        ingested: 'A marata',
+        retracted: 'A sayita'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'Hani fengo mang samba folo',
+        in_review: 'Hani fengo mang juube folo',
+        published: 'Kofuo mang ke folo',
+        ingested: 'Hani fengo mang mara folo',
+        retracted: 'Hani fengo mang sayi folo'
       }
     },
     build: {
@@ -1840,13 +1698,13 @@ export default {
       },
       curation: {
         fallbacks: 'jipañ ko an LLM',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'A pareta',
+        typed: 'Sifa dita',
+        labeled: 'Toh dita',
+        described: 'A fota'
       },
       batches: 'Bōrokraam̦ ko em̦ōj kakkwon',
-      bytes: 'Source read',
+      bytes: 'Asili karan',
       conceptsIndexed: 'kōm̦m̦an ko em̦ōj laajraki',
       elapsed: {
         hr: "Jinoe ilo {'{'}n{'}'} awa jim̦m̦a",
@@ -1867,9 +1725,9 @@ export default {
         version: 'Wāween in serving'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'Indeksi',
+        serving: 'A bering baara',
+        label: 'Waatoo'
       },
       title: {
         import: 'Wōnm̦aanl̦o̦k an kōdāl̦o̦k',
@@ -1880,16 +1738,16 @@ export default {
         idle: 'Ejjāliklik eo an jikin kakwōn'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'A bering nata',
+        reviewing: 'A bering juube',
+        ingesting: 'A bering mara',
+        serving: 'A bering baara',
+        retracted: 'A sayita'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'Kuu dulaa',
+        topics: 'Kuuolu',
+        lastVersion: 'Bero laba'
       }
     },
     create: {
@@ -1904,7 +1762,7 @@ export default {
       failed: 'Kōm̦m̦an jikin kakwōn eo ear l̦apier',
       duplicateInline: 'Ewōr juon jikin kakwōn kōn āt in. Kipel̦o̦k, ak kāālet bar juon āt.',
       duplicate: 'Ewōr juon jikin kakwōn kōn āt in — kipel̦o̦k jān dashboard ak kāālet bar juon āt.',
-      domain: 'Subject area',
+      domain: 'Kuu dulaa',
       create: 'Kōm̦m̦an jikin kakwōn',
       title: 'Jikin kakwōn OKF ekāāl',
       hint: 'Ej kōm̦m̦an juon jikin kakwōn ejjel̦o̦k kobban kōn index.md eo kwonañin jeje ilo Studio.',
@@ -1912,40 +1770,40 @@ export default {
       domainRequired: 'Kāālet un ko m̦oktata — ban ukōte ālikin an kōm̦m̦an.',
       classLabel: 'Kalikkar kōm̦m̦an eo',
       classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'LLM-demba',
+      classHybrid: 'Hybird'
     },
     fm: {
       errKeyCurated: 'Āt in jikin kōjparok.',
       errKeyDuplicate: 'Āt in jikin kōjerbal ruo alen.',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON baata',
       errNumber: 'Aikuj juon nōmba',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'Safuo',
+        boolean: 'Tonya/Faniya',
+        number: 'Kendo',
+        string: 'Kuma'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'Bolo kuntu',
+      kindLabel: 'Sifa',
+      keyPh: 'bolo toh',
       fullHint: 'Aolep jikin ilo frontmatter kwomaron̦ jeje ie. Kobaik ak jol̦o̦k ki ko ilo anan.',
       errRemovalPending: 'Jol̦o̦k jikin ko aikuj kalimur an merge-delete server (etok wōt).',
       errKeyRequired: 'Aolep jikin aikuj juon āt.',
       arrayPh: 'uwaak ko kōkōm̧a eie',
-      addKey: 'Add field',
+      addKey: 'Bolo kafu',
       saved: 'Frontmatter em̦ōj kōjparoke',
       label: 'Frontmatter',
       tipLabel: 'Ta in Frontmatter?',
-      edit: 'Edit',
+      edit: 'Yelema',
       empty: 'Ejjan̄in wōr frontmatter — Jeje ej kobaiki kain, āt im kakōl̦l̦e.',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'Sifa',
+      noType: 'Sifa nte',
+      titleLabel: 'Toh',
       labelsLabel: 'Kakōl̦l̦e (Laajrak in Jel̦āl̦o̦kjen̦)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'Toh nte',
+      descriptionLabel: 'Kibaru',
       save: 'Kōjparok frontmatter',
       saveFailed: 'Kōjparok frontmatter ear l̦apier'
     },
@@ -1971,24 +1829,24 @@ export default {
         'Ewi wāween ad kalikkar ta in kōm̦m̦an eo (un, m̦ōttan, wāween…). Heuristics ej riiti peij eo ilo make; LLM ej etto l̦o̦k ak emaron̦ jerbale peij ko rekanooj ben.',
       resplit:
         'Bar ajeje melele ko ilo bar juon wāween — āinwōt juon kōm̦m̦an ilo kajojo peij ijellokin juon wōt ñan aolep jikin.',
-      saveFailed: 'Save failed',
+      saveFailed: 'A mara baata',
       importFailedTitle: 'Bōktok ear l̦apier — ban ukōt fail eo.',
       importFailedHint: 'Jol̦o̦k jikin kakwōn in innem bar bōktok fail eo jān jikin eo.',
       frontmatter: 'Melele ko ioon aolep fail — kain, āt, kakōl̦l̦e. Jipañ eo ej kōjerbale bwe en jel̦ā ta in kōm̦m̦an eo.'
     },
     md: {
-      toolbar: 'Formatting',
+      toolbar: 'Cogo kuta',
       bold: 'Bold',
       italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      h1: 'Kuntigi 1',
+      h2: 'Kuntigi 2',
+      h3: 'Kuntigi 3',
+      bullet: 'Safuo',
       numbered: 'Laajrak kōn nōmba',
-      link: 'Insert link',
+      link: 'Link kafu',
       code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      table: 'Table kafu',
+      split: 'A farra'
     },
     narrative: {
       intro:
@@ -2037,8 +1895,8 @@ export default {
       helpBody:
         'Jikin kakwōn OKF ej juon buñtōn kōm̦m̦an me — kakōl̦l̦e ko rej kwal̦o̦k laajrak, un ko rej kwal̦o̦k men ko, jikin ko rej kwal̦o̦k ia eo ear itok jān e. Ñe em̦ōj publish, uwaak ko ilo chat rej kwal̦o̦k un ko kōn ID im kwal̦o̦k ia eo ear itok jān e.',
       view: {
-        dashboard: 'Dashboard',
-        wizard: 'Wizard'
+        dashboard: 'Dajiboodi',
+        wizard: 'Madi'
       },
       clonedFrom: 'Kopi jān {name} · wāween {version}',
       context: {
@@ -2057,7 +1915,7 @@ export default {
       stage: {
         inReview: 'Pād ilo review',
         stepOf: 'Buñtōn {n} jān 10',
-        draft: 'Draft'
+        draft: 'Binoo'
       },
       dashboard: {
         title: 'Jikin kakwōn ko',
@@ -2070,7 +1928,7 @@ export default {
         stage: {
           inReview: 'Pād ilo review',
           stepOf: 'Buñtōn {n} jān 10',
-          draft: 'Draft'
+          draft: 'Binoo'
         },
         bulk: {
           selected: '{n} em̦ōj kāāleti',
@@ -2078,7 +1936,7 @@ export default {
           title: 'Publish jikin kakwōn ko em̦ōj kāāleti',
           body: 'Ñe em̦ōj publish, uwaak ko ilo chat remaron̦ kōjerbali. Kajojo jikin kakwōn ilal̦ ej kwal̦o̦k jem̦l̦o̦k eo an.',
           results: 'Jem̦l̦o̦k ko',
-          publishConfirm: 'Publish {n}',
+          publishConfirm: 'A ke {n}',
           col: {
             name: 'Āt',
             status: 'Ejjāliklik',
@@ -2093,23 +1951,23 @@ export default {
         notReady: 'Ban kōjparok draft ko ilo server kiiō; em̦ōj kōjparok ijin.'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'Sabu',
+        expert: 'Ekspert'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'A keta',
+        inReview: 'A bering juube',
+        draft: 'A bering sabu'
       },
       exit: 'Jeblak ñan dashboard',
       context: {
         untitled: 'Jikin kakwōn ejjel̦o̦k etan',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'Laana',
+        title: 'Kafuolu',
+        stale: 'a korita',
+        sources: 'Asiloolu',
         concepts: 'Kōm̦m̦an ko kiiō'
       },
       label: 'Wizard an OKF Studio',
@@ -2226,15 +2084,15 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'Kuu dulaa',
       domainPlaceholder: 'Kāālet un ko…',
       classLabel: 'Kalikkar kōm̦m̦an eo',
       classHeuristics: 'Heuristics (kakōl̦l̦e kajjien)',
       classHeuristicsHint: 'Laajrak m̦ōkaj kōn kien ko — ejjel̦o̦k on̦ean LLM, em̦m̦an ñan crawl ko reim̦m̦an am karōki.',
-      classLlm: 'LLM-assisted',
+      classLlm: 'LLM-demba',
       classLlmHint:
         'LLM ej kōm̦m̦an aolep kōm̦m̦an — kajejjet, kakōl̦l̦e in laajrak in jel̦āl̦o̦kjen̦ im melele. Ekanooj l̦ap an jim̦we im bwe jān heuristics; kōttar bwe en bōk iien ñan kōm̦m̦an ko.',
-      classHybrid: 'Hybrid',
+      classHybrid: 'Hybird',
       classHybridHint:
         'Heuristics m̦oktata; LLM ej bar etale men ko rejjab alikkar im kobikobi jikin ko rebwāt. Em̦m̦an aolepen kōn iien im kadede.',
       targetLabel: 'Eaikuj etal ñan ia?',
@@ -2332,20 +2190,20 @@ export default {
     },
     pii: {
       panel: 'Men ko ewōr kakōl̦l̦e ie',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
-      scanning: 'Scanning…',
+      nFlagged: '{n} soto',
+      rescan: 'Scan kuta',
+      scanning: 'Scan…',
       clean: 'Flagged entities amatta yaode — concept asi clear oire.',
       how: 'Fix: remove nattraga reword tou (e.g. name gi mahutta role), aduga save tou — re-scan na list asi update touba ngamgani.',
       descFallback: 'Personal data detected toure (GDPR Art. 4(1) — relating to an identifiable person).',
       scanError: 'Ban etale',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
-        DATE_TIME: 'Date or time',
+        PERSON: 'Mooko toh',
+        LOCATION: 'Dulaa',
+        DATE_TIME: 'Lung ani Waatoo',
         EMAIL_ADDRESS: 'Jikin email',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
+        PHONE_NUMBER: 'Telifon nombo',
+        IP_ADDRESS: 'IP dulaa',
         NRP: 'Nōmba in rejistōr an aelōn̄',
         BD_NATIONAL_ID: 'Nōmba in ID an aelōn̄'
       },
@@ -2359,45 +2217,45 @@ export default {
         NRP: 'National registration number detected toure. Masina strongly meeoiba ama identify touri.',
         BD_NATIONAL_ID: 'National ID number detected toure. Masina strongly meeoiba ama identify touri.'
       },
-      allClear: 'Clear',
+      allClear: 'A fiyendee',
       redactFile: 'Bwōbwe aolepen fail eo',
       confirmRedactFile: 'Kam̦ool: bwōbwe aolepen fail eo?',
       locateTip: 'Kwal̦o̦k naan kein ilo jikin jeje',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
+        label: 'Kofuo bee:',
+        redact: 'Kofuo nuun',
+        remove: 'Kofuo kono kuntu',
+        accept: 'Abee song',
         confirmRedact: 'Kam̦ool: bwōbwe aolepen fail eo?',
         confirmRemove: 'Kam̦ool: jol̦o̦k aolep kobban?'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
+        redact: 'Nuun',
+        replace: 'A falin',
+        remove: 'A kuntu',
+        accept: 'A song',
         replacement: 'Naan in bōk jikin',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        apply: 'A ke',
+        cancel: 'A bula'
       },
       resolved: {
         title: 'Em̦ōj jerbale ilo fail in',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
+        redacted: 'A nuunta',
+        replaced: 'A falinta',
+        removed: 'A kuntuta',
+        accepted: 'A songta',
         fileRedacted: 'Fail em̦ōj bwōbwe',
         kept: 'kōjparok ilo jeje eo',
-        removedWord: 'removed',
+        removedWord: 'kuntuta',
         wholeFile: 'Aolepen kobban fail eo em̦ōj bwōbwe'
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'A dii juube ma',
+      approve: 'Song',
+      publish: 'A ke',
+      ingest: 'A mara',
+      retract: 'A sayi'
     }
   }
 };

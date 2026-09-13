@@ -41,7 +41,7 @@ export default {
     CG: 'Congo',
     CD: 'Congo, República Democrática del',
     CR: 'Costa Rica',
-    CI: "Côte d'Ivoire",
+    CI: 'Costa de Marfil',
     HR: 'Croacia',
     CU: 'Cuba',
     CY: 'Chipre',
@@ -511,51 +511,51 @@ export default {
       metadataUpdateSuccess: 'Los metadatos del archivo {fileId} se actualizaron.'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'Buscar',
+      searchPlaceholder: 'Buscar texto de consulta...',
+      minConfidence: 'Confianza mínima',
+      maxConfidence: 'Confianza máxima',
+      from: 'Desde',
+      to: 'Hasta',
+      reset: 'Restablecer',
+      colTime: 'Tiempo',
+      colQuestion: 'Pregunta del usuario',
+      colConfidence: 'Confianza',
+      colResponseTime: 'Tiempo de respuesta',
+      colSources: 'Fuentes',
+      colFeedback: 'Comentarios',
+      colActions: 'Acciones',
+      inspect: 'Inspeccionar',
+      noResults: 'No se encontraron consultas que coincidan con sus filtros.',
+      prev: 'Anterior',
+      pageInfo: 'Página {current} de {total} ({count} en total)',
+      next: 'Siguiente',
+      backToList: 'Volver a la lista',
+      detailTitle: 'Inspector de consultas',
+      sectionQuestion: 'Pregunta del usuario',
+      user: 'Usuario',
+      time: 'Tiempo',
+      responseTime: 'Tiempo de respuesta',
+      mode: 'Modo',
+      sectionContext: 'Contexto (Etiquetas enviadas a RAG)',
+      category: 'Categoría',
+      serviceLabels: 'Etiquetas de servicio',
+      language: 'Idioma',
+      sectionMessages: 'Mensajes enviados al pipeline',
+      sectionDocuments: 'Documentos recuperados (Resultados de Vector DB)',
+      score: 'Puntuación',
+      labels: 'Etiquetas',
+      viewDoc: 'Ver documento',
+      noDocuments: 'No se recuperaron documentos de origen para esta consulta.',
+      sectionResponse: 'Respuesta LLM',
+      confidenceScore: 'Puntuación de confianza',
+      retrievalConfidenceScore: 'Confianza de recuperación',
+      selfConfidence: 'Autoconfianza (LLM)',
+      sectionFeedback: 'Comentarios del usuario',
+      rating: 'Calificación',
+      comment: 'Comentario',
+      providedAt: 'Proporcionado el',
+      loadError: 'Error al cargar las consultas.'
     }
   },
   auth: {
@@ -810,113 +810,63 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Identidad y Registro Civil',
-      children: [
-        'Certificados de nacimiento',
-        'Tarjetas de ID nacional',
-        'Pasaportes',
-        'Certificados de matrimonio y defunción',
-        'Registro de votantes'
-      ]
+      children:
+        'Certificados de nacimiento,Tarjetas de ID nacional,Pasaportes,Certificados de matrimonio y defunción,Registro de votantes'
     },
     cat2: {
       name: '2. Salud y Servicios Sociales',
-      children: [
-        'Acceso a salud pública',
-        'Programas de vacunación',
-        'Seguro de salud',
-        'Beneficios por discapacidad',
-        'Asistencia social y alimentaria'
-      ]
+      children:
+        'Acceso a salud pública,Programas de vacunación,Seguro de salud,Beneficios por discapacidad,Asistencia social y alimentaria'
     },
     cat3: {
       name: '3. Educación y Aprendizaje',
-      children: [
-        'Escuelas públicas y universidades',
-        'Becas y préstamos estudiantiles',
-        'Programas de educación para adultos',
-        'Recursos de aprendizaje en línea'
-      ]
+      children:
+        'Escuelas públicas y universidades,Becas y préstamos estudiantiles,Programas de educación para adultos,Recursos de aprendizaje en línea'
     },
     cat4: {
       name: '4. Empleo y Servicios Laborales',
-      children: [
-        'Búsqueda de empleo y beneficios por desempleo',
-        'Protecciones laborales y derechos de los trabajadores',
-        'Regulaciones de seguridad en el trabajo',
-        'Entrenamiento de habilidades y aprendizajes'
-      ]
+      children:
+        'Búsqueda de empleo y beneficios por desempleo,Protecciones laborales y derechos de los trabajadores,Regulaciones de seguridad en el trabajo,Entrenamiento de habilidades y aprendizajes'
     },
     cat5: {
       name: '5. Impuestos y Ingresos',
-      children: [
-        'Presentación de impuestos sobre la renta y reembolsos',
-        'Pagos de impuestos sobre la propiedad',
-        'Cumplimiento fiscal empresarial',
-        'Aduanas y derechos de importación'
-      ]
+      children:
+        'Presentación de impuestos sobre la renta y reembolsos,Pagos de impuestos sobre la propiedad,Cumplimiento fiscal empresarial,Aduanas y derechos de importación'
     },
     cat6: {
       name: '6. Seguridad Pública y Justicia',
-      children: [
-        'Policía y servicios de emergencia',
-        'Tribunales y servicios de ayuda legal',
-        'Reporte de crímenes',
-        'Leyes de protección al consumidor'
-      ]
+      children:
+        'Policía y servicios de emergencia,Tribunales y servicios de ayuda legal,Reporte de crímenes,Leyes de protección al consumidor'
     },
     cat7: {
       name: '7. Transporte y Movilidad',
-      children: [
-        'Licencias de conducir y registro de vehículos',
-        'Transporte público e infraestructura',
-        'Violaciones de tráfico y multas',
-        'Programas de seguridad vial'
-      ]
+      children:
+        'Licencias de conducir y registro de vehículos,Transporte público e infraestructura,Violaciones de tráfico y multas,Programas de seguridad vial'
     },
     cat8: {
       name: '8. Vivienda y Desarrollo Urbano',
-      children: [
-        'Asistencia para vivienda pública',
-        'Registro de propiedades y registros de tierras',
-        'Préstamos y subsidios para vivienda',
-        'Zonificación y permisos de construcción'
-      ]
+      children:
+        'Asistencia para vivienda pública,Registro de propiedades y registros de tierras,Préstamos y subsidios para vivienda,Zonificación y permisos de construcción'
     },
     cat9: {
       name: '9. Servicios Públicos y Medio Ambiente',
-      children: [
-        'Servicios de agua y electricidad',
-        'Gestión de residuos y reciclaje',
-        'Regulaciones ambientales',
-        'Iniciativas de energía renovable'
-      ]
+      children:
+        'Servicios de agua y electricidad,Gestión de residuos y reciclaje,Regulaciones ambientales,Iniciativas de energía renovable'
     },
     cat10: {
       name: '10. Negocios y Comercio',
-      children: [
-        'Registro y licencias de negocios',
-        'Regulaciones y permisos comerciales',
-        'Subvenciones e incentivos para pequeñas empresas',
-        'Soporte para e-commerce y negocios digitales'
-      ]
+      children:
+        'Registro y licencias de negocios,Regulaciones y permisos comerciales,Subvenciones e incentivos para pequeñas empresas,Soporte para e-commerce y negocios digitales'
     },
     cat11: {
       name: '11. Seguridad Social y Pensiones',
-      children: [
-        'Beneficios de jubilación',
-        'Gestión de fondos de pensiones',
-        'Beneficios para sobrevivientes',
-        'Pensiones por discapacidad'
-      ]
+      children:
+        'Beneficios de jubilación,Gestión de fondos de pensiones,Beneficios para sobrevivientes,Pensiones por discapacidad'
     },
     cat12: {
       name: '12. Comunidad y Participación Cívica',
-      children: [
-        'Votación y elecciones',
-        'Retroalimentación pública y quejas ciudadanas',
-        'Voluntariado y programas comunitarios',
-        'Participación en gobierno local'
-      ]
+      children:
+        'Votación y elecciones,Retroalimentación pública y quejas ciudadanas,Voluntariado y programas comunitarios,Participación en gobierno local'
     }
   },
   settings: {
@@ -1256,137 +1206,10 @@ export default {
     noMatchingCountries: 'No se encontraron países coincidentes',
     noMatchingDisciplines: 'No se encontraron disciplinas coincidentes',
     noMatchingDegrees: 'No se encontraron grados coincidentes',
-    educationOptions: [
-      'Contabilidad',
-      'Ingeniería Aeroespacial',
-      'Ciencia Agrícola',
-      'Antropología',
-      'Arquitectura',
-      'Historia del Arte',
-      'Inteligencia Artificial',
-      'Astronomía',
-      'Astrofísica',
-      'Bioquímica',
-      'Ingeniería Biomédica',
-      'Biotecnología',
-      'Administración de Empresas',
-      'Ingeniería Química',
-      'Química',
-      'Ingeniería Civil',
-      'Comunicaciones',
-      'Ingeniería Informática',
-      'Ciencia de la Computación',
-      'Gestión de Construcción',
-      'Justicia Criminal',
-      'Ciberseguridad',
-      'Ciencia de Datos',
-      'Odontología',
-      'Economía',
-      'Educación',
-      'Ingeniería Eléctrica',
-      'Educación Primaria',
-      'Literatura Inglesa',
-      'Ingeniería Ambiental',
-      'Ciencia Ambiental',
-      'Diseño de Moda',
-      'Estudios Cinematográficos',
-      'Finanzas',
-      'Bellas Artes',
-      'Ciencia de los Alimentos',
-      'Ciencia Forense',
-      'Diseño de Juegos',
-      'Geografía',
-      'Geología',
-      'Diseño Gráfico',
-      'Administración de Salud',
-      'Historia',
-      'Gestión Hotelera',
-      'Recursos Humanos',
-      'Diseño Industrial',
-      'Ingeniería Industrial',
-      'Sistemas de Información',
-      'Tecnología de la Información',
-      'Diseño de Interiores',
-      'Negocios Internacionales',
-      'Relaciones Internacionales',
-      'Periodismo',
-      'Derecho',
-      'Biblioteconomía',
-      'Lingüística',
-      'Gestión',
-      'Marketing',
-      'Ciencia de Materiales',
-      'Matemáticas',
-      'Ingeniería Mecánica',
-      'Estudios de Medios',
-      'Medicina',
-      'Meteorología',
-      'Microbiología',
-      'Música',
-      'Nanotecnología',
-      'Enfermería',
-      'Nutrición',
-      'Terapia Ocupacional',
-      'Oceanografía',
-      'Ingeniería Petrolera',
-      'Farmacia',
-      'Filosofía',
-      'Fotografía',
-      'Educación Física',
-      'Terapia Física',
-      'Física',
-      'Ciencia Política',
-      'Psicología',
-      'Administración Pública',
-      'Salud Pública',
-      'Relaciones Públicas',
-      'Robótica',
-      'Educación Secundaria',
-      'Trabajo Social',
-      'Sociología',
-      'Ingeniería de Software',
-      'Educación Especial',
-      'Gestión Deportiva',
-      'Estadística',
-      'Ingeniería de Sistemas',
-      'Artes Teatrales',
-      'Turismo',
-      'Planificación Urbana',
-      'Medicina Veterinaria',
-      'Desarrollo Web',
-      'Biología de la Fauna',
-      'Zoología'
-    ],
-    degreeOptions: [
-      'Grado Asociado',
-      'Licenciatura en Artes (BA)',
-      'Licenciatura en Ciencias (BS)',
-      'Licenciatura en Ingeniería (BEng)',
-      'Licenciatura en Administración de Empresas (BBA)',
-      'Licenciatura en Bellas Artes (BFA)',
-      'Licenciatura en Educación (BEd)',
-      'Licenciatura en Medicina (MBBS)',
-      'Licenciatura en Derecho (LLB)',
-      'Maestría en Artes (MA)',
-      'Maestría en Ciencias (MS)',
-      'Maestría en Administración de Empresas (MBA)',
-      'Maestría en Ingeniería (MEng)',
-      'Maestría en Bellas Artes (MFA)',
-      'Maestría en Educación (MEd)',
-      'Maestría en Derecho (LLM)',
-      'Maestría en Salud Pública (MPH)',
-      'Doctorado en Filosofía (PhD)',
-      'Doctorado en Medicina (MD)',
-      'Doctorado en Educación (EdD)',
-      'Doctorado en Administración de Empresas (DBA)',
-      'Doctorado en Jurisprudencia (JD)',
-      'Diploma Profesional',
-      'Diploma Técnico',
-      'Certificado Vocacional',
-      'Certificado de Posgrado',
-      'Diploma de Posgrado',
-      'Posdoctorado'
-    ],
+    educationOptions:
+      'Contabilidad,Ingeniería Aeroespacial,Ciencia Agrícola,Antropología,Arquitectura,Historia del Arte,Inteligencia Artificial,Astronomía,Astrofísica,Bioquímica,Ingeniería Biomédica,Biotecnología,Administración de Empresas,Ingeniería Química,Química,Ingeniería Civil,Comunicaciones,Ingeniería Informática,Ciencia de la Computación,Gestión de Construcción,Justicia Criminal,Ciberseguridad,Ciencia de Datos,Odontología,Economía,Educación,Ingeniería Eléctrica,Educación Primaria,Literatura Inglesa,Ingeniería Ambiental,Ciencia Ambiental,Diseño de Moda,Estudios Cinematográficos,Finanzas,Bellas Artes,Ciencia de los Alimentos,Ciencia Forense,Diseño de Juegos,Geografía,Geología,Diseño Gráfico,Administración de Salud,Historia,Gestión Hotelera,Recursos Humanos,Diseño Industrial,Ingeniería Industrial,Sistemas de Información,Tecnología de la Información,Diseño de Interiores,Negocios Internacionales,Relaciones Internacionales,Periodismo,Derecho,Biblioteconomía,Lingüística,Gestión,Marketing,Ciencia de Materiales,Matemáticas,Ingeniería Mecánica,Estudios de Medios,Medicina,Meteorología,Microbiología,Música,Nanotecnología,Enfermería,Nutrición,Terapia Ocupacional,Oceanografía,Ingeniería Petrolera,Farmacia,Filosofía,Fotografía,Educación Física,Terapia Física,Física,Ciencia Política,Psicología,Administración Pública,Salud Pública,Relaciones Públicas,Robótica,Educación Secundaria,Trabajo Social,Sociología,Ingeniería de Software,Educación Especial,Gestión Deportiva,Estadística,Ingeniería de Sistemas,Artes Teatrales,Turismo,Planificación Urbana,Medicina Veterinaria,Desarrollo Web,Biología de la Fauna,Zoología',
+    degreeOptions:
+      'Grado Asociado,Licenciatura en Artes (BA),Licenciatura en Ciencias (BS),Licenciatura en Ingeniería (BEng),Licenciatura en Administración de Empresas (BBA),Licenciatura en Bellas Artes (BFA),Licenciatura en Educación (BEd),Licenciatura en Medicina (MBBS),Licenciatura en Derecho (LLB),Maestría en Artes (MA),Maestría en Ciencias (MS),Maestría en Administración de Empresas (MBA),Maestría en Ingeniería (MEng),Maestría en Bellas Artes (MFA),Maestría en Educación (MEd),Maestría en Derecho (LLM),Maestría en Salud Pública (MPH),Doctorado en Filosofía (PhD),Doctorado en Medicina (MD),Doctorado en Educación (EdD),Doctorado en Administración de Empresas (DBA),Doctorado en Jurisprudencia (JD),Diploma Profesional,Diploma Técnico,Certificado Vocacional,Certificado de Posgrado,Diploma de Posgrado,Posdoctorado',
     aria: {
       tabList: 'Secciones del formulario de perfil',
       nextButton: 'Ir a la siguiente sección',
@@ -1615,83 +1438,83 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'Paquete',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'Conceptos',
+        curator: 'Curador',
+        minted: 'Creado',
+        tag: 'Etiqueta',
+        trigger: 'Desencadenador',
+        version: 'Versión'
       },
-      current: 'current',
+      current: 'actual',
       loadFailed: 'Error al cargar las versiones',
       none: 'Aún no se han emitido versiones — ejecutar publish crea v1.',
-      notServing: 'Not serving',
+      notServing: 'No está sirviendo',
       publish: 'Crear nueva versión',
       published: "Versión v{'{'}v{'}'} publicada — paquete {'{'}f{'}'} guardado en el repositorio de documentos.",
-      serving: 'Ingested (serving)',
-      title: 'Versions'
+      serving: 'Ingestado (sirviendo)',
+      title: 'Versiones'
     },
     shell: {
       back: 'Panel de Studio',
-      building: 'Building…',
+      building: 'Construyendo…',
       buildingHint: 'El archivo fuente aún se está procesando',
       delete: {
         body: 'Esto elimina de forma permanente el repositorio, sus conceptos, el contenido indexado, el grafo y los artefactos del paquete.',
-        confirm: 'Delete',
+        confirm: 'Eliminar',
         title: 'Eliminar repositorio'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: 'Exportar .zip',
+      logs: 'Registros',
       pii: {
         ack: 'Confirmar entidades marcadas y publicar',
         note: 'Las entidades marcadas forman parte del contenido publicado. Si las ha revisado (por ejemplo, datos de contacto oficiales), confirme y continúe.'
       },
       publish: {
         body: "Al ejecutar publish se acuña v{'{'}n{'}'} y se almacena el paquete \"{'{'}file{'}'}\" en el repositorio de documentos, reemplazando cualquier zip anterior. La nueva versión no estará en serving hasta que ejecute Ingest.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Publicar',
+        title: 'Publicar'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'SOLO LECTURA',
+      serving: 'Sirviendo',
       state: {
-        ingested: 'Ingested'
+        ingested: 'Ingestado'
       },
       tab: {
         editor: 'Editor',
-        wizard: 'Wizard'
+        wizard: 'Asistente'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'Versiones',
+      deleteLabel: 'Eliminar'
     },
     logs: {
       labeled: "etiquetados: {'{'}n{'}'}",
       fallbacks: "alternativas de LLM: {'{'}n{'}'}",
       concepts: "conceptos: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'Acción',
+        description: 'Descripción',
+        user: 'Usuario',
+        when: 'Fecha y hora'
       },
       count: "{'{'}n{'}'} entradas",
       loadFailed: 'Error al cargar el registro de actividad.',
       none: 'No hay actividad registrada todavía — las acciones del repositorio aparecerán aquí a medida que ocurran.',
-      title: 'Activity log'
+      title: 'Registro de actividad'
     },
     graph: {
       aria: 'Grafo de conceptos',
-      concepts: 'concepts',
+      concepts: 'conceptos',
       empty: 'Sin conceptos todavía — no hay nada que representar en el grafo.',
-      fit: 'Fit graph',
+      fit: 'Ajustar gráfico',
       hub: 'Mostrar u ocultar el nodo central de índice (sus enlaces de contenido son estructura, no conocimiento)',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: 'Diseñando…',
+      legend: 'índice',
+      links: 'enlaces',
+      zoomIn: 'Acercar',
+      zoomOut: 'Alejar',
       card: {
         links: "{'{'}n{'}'} enlaces",
         chunks: "{'{'}n{'}'} fragmentos",
@@ -1705,42 +1528,42 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (pegar o dejar vacío)',
         bodyPh: '# Encabezado\n\nPegue markdown aquí; el frontmatter se añadirá automáticamente.',
-        create: 'Create file',
+        create: 'Crear archivo',
         failed: 'No se pudo crear el archivo.',
         title: 'Añadir archivo de concepto',
-        titleLabel: 'Title',
+        titleLabel: 'Título',
         titlePh: 'ej. Fauna salvaje en el Mara',
         updateIndex: 'Añadir a la lista de contenido del índice'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(vacío)',
         blankBadge: 'sin frontmatter — propuesta completa',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'Aplicar',
+        apply: 'Aplicar correcciones',
         body: 'Correcciones de frontmatter planificadas en todos los conceptos. Los cuerpos nunca se modifican.',
-        button: 'Autocorrect',
+        button: 'Autocorrección',
         clean: 'Nada que corregir — todo el frontmatter cumple con la norma.',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'Campo',
+          after: 'Después',
+          before: 'Antes',
+          concept: 'Concepto'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'Escaneo fallido.',
+        scanning: 'Escaneando…',
         title: 'Autocorrección (solo frontmatter)'
       },
       concepts: {
         originTip: 'Cómo se curó este concepto',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'Añadir concepto',
+        addLabel: 'Establecer etiqueta',
+        delete: 'Eliminar archivo',
         empty: 'Sin archivos todavía: añada un concepto o vuelva a dividir desde el origen.',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: 'Filtrar archivos',
+        indexBadge: 'índice',
+        label: 'Conceptos',
+        loading: 'Cargando…',
+        resplit: 'Re-dividir',
         flagged: 'marcado',
         flaggedTip:
           'Conceptos con entidades marcadas — abra cada uno, elimine o modifique la entidad y guarde (se vuelve a analizar automáticamente); o acéptelas al hacer publish.',
@@ -1755,8 +1578,8 @@ export default {
       },
       delete: {
         body: 'Esto elimina permanentemente el archivo, sus fragmentos indexados y sus enlaces del grafo.',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'Eliminar',
+        title: 'Eliminar archivo'
       },
       label: 'Editor del repositorio',
       loadFailed: 'No se pudo cargar este concepto.',
@@ -1764,24 +1587,24 @@ export default {
       meta: {
         label: 'Metadatos del concepto',
         labelLabel: 'Etiqueta (Jerarquía de conocimiento)',
-        noLabel: 'No label',
+        noLabel: 'Sin etiqueta',
         none: 'Ningún concepto seleccionado',
         saveFailed: 'Error al guardar los metadatos',
         saved: 'Metadatos guardados',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'Estado del índice',
+        title: 'Título',
+        trust: 'Nivel de confianza',
+        type: 'Tipo',
+        typePlaceholder: 'Seleccionar tipo…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'Archivos',
+        graph: 'Gráfico'
       },
       pickConcept: 'Seleccione un concepto de la lista para comenzar a editar.',
       resplit: {
         body: 'Esto elimina todos los conceptos actuales y el grafo derivado, y luego vuelve a importar el archivo fuente con la nueva división. Las ediciones de conceptos se perderán.',
-        confirm: 'Re-split',
+        confirm: 'Re-dividir',
         failed: 'Error en la nueva división — compruebe el enlace del archivo fuente.',
         modeA: 'Un concepto para todo el rastreo',
         modeAHint: 'Megaconcepto — todo el contenido en un solo concepto',
@@ -1791,16 +1614,16 @@ export default {
         modeCHint: 'Historia 10.6 — próximamente',
         title: 'Volver a dividir desde el origen'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'Guardar',
+      saved: 'Guardado',
+      saving: 'Guardando…',
       unsaved: 'Cambios sin guardar',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'Renderizado',
+        source: 'Fuente'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'Vista de editor',
+      paneLabel: 'Panel de vista',
       saveFailed: 'Error al guardar — reintentar',
       piiBulk: {
         title: {
@@ -1821,7 +1644,7 @@ export default {
       },
       actions: {
         bulkPii: 'Aplicando acción masiva de PII',
-        deleting: 'Deleting'
+        deleting: 'Eliminando'
       }
     },
     dashboard: {
@@ -1833,23 +1656,23 @@ export default {
       },
       card: {
         actions: "Acciones para {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'Construyendo…',
         buildingAria: 'En construcción — el archivo fuente aún se está procesando',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'Eliminar',
+        export: 'Exportar',
+        ingesting: 'Ingestando…',
+        logs: 'Registros',
+        rename: 'Renombrar',
+        versions: 'Versiones'
       },
       delete: {
         body: 'Esto elimina permanentemente el repositorio, sus conceptos, contenido indexado, grafo y artefactos de paquete. No se puede deshacer.',
-        confirm: 'Delete',
+        confirm: 'Eliminar',
         title: 'Eliminar repositorio'
       },
       filter: {
         domain: 'Filtrar por área temática',
-        allDomains: 'All subject areas'
+        allDomains: 'Todas las áreas temáticas'
       },
       new: '+ Nuevo repositorio',
       pii: {
@@ -1858,37 +1681,37 @@ export default {
       },
       publish: {
         body: "Al ejecutar publish se acuña v{'{'}n{'}'} y se almacena el paquete \"{'{'}file{'}'}\" en el repositorio de documentos, reemplazando el zip anterior. La nueva versión no estará en serving hasta que ejecute Ingest.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Publicar',
+        title: 'Publicar'
       },
-      search: 'Search...',
+      search: 'Buscar...',
       select: "Seleccionar {'{'}name{'}'} para publicación masiva",
       stage: {
         drainFailed: 'Error en ingest',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
+        redraining: 'Re-drenando…',
+        building: 'Construyendo…',
+        draft: 'Borrador',
+        inReview: 'En revisión',
         ingested: "Ingest completado en v{'{'}n{'}'}",
         published: "Publicado v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: 'Retirado',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'Repositorios',
+      topics: 'temas',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'Importar',
+        in_review: 'En revisión',
+        published: 'Publicado',
+        ingested: 'Ingestado',
+        retracted: 'Retirado'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'Aún no se ha importado nada',
+        in_review: 'Nada en revisión',
+        published: 'Aún no hay repositorios publicados',
+        ingested: 'Aún no se ha ingestado nada',
+        retracted: 'Nada retirado'
       }
     },
     build: {
@@ -1898,13 +1721,13 @@ export default {
       },
       curation: {
         fallbacks: 'alternativas de LLM',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'Curado',
+        typed: 'Clasificado',
+        labeled: 'Etiquetado',
+        described: 'Descrito'
       },
       batches: 'Lotes almacenados',
-      bytes: 'Source read',
+      bytes: 'Fuente leída',
       conceptsIndexed: 'conceptos indexados',
       elapsed: {
         hr: "Iniciado hace {'{'}n{'}'} h",
@@ -1925,9 +1748,9 @@ export default {
         version: 'Versión en serving'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'Indexando',
+        serving: 'Sirviendo',
+        label: 'Etapa'
       },
       title: {
         import: 'Progreso de importación',
@@ -1938,16 +1761,16 @@ export default {
         idle: 'Estado del repositorio'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'Importando',
+        reviewing: 'En revisión',
+        ingesting: 'Ingestando',
+        serving: 'Sirviendo',
+        retracted: 'Retirado'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'Área temática',
+        topics: 'Temas',
+        lastVersion: 'Última versión'
       }
     },
     create: {
@@ -1962,7 +1785,7 @@ export default {
       failed: 'Error al crear el repositorio',
       duplicateInline: 'Ya existe un repositorio con este nombre. Ábralo o elija otro nombre.',
       duplicate: 'Ya existe un repositorio con este nombre — ábralo desde el panel o elija otro nombre.',
-      domain: 'Subject area',
+      domain: 'Área temática',
       create: 'Crear repositorio',
       title: 'Nuevo repositorio OKF',
       hint: 'Crea un repositorio vacío con un index.md que puede editar en el editor de Studio.',
@@ -1970,41 +1793,41 @@ export default {
       domainRequired: 'Elija un área temática primero — no se puede cambiar tras la creación.',
       classLabel: 'Clasificación de conceptos',
       classHeuristics: 'Heurística (predeterminado)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'Asistido por LLM',
+      classHybrid: 'Híbrido'
     },
     fm: {
       errKeyCurated: 'Nombre de campo reservado.',
       errKeyDuplicate: 'El nombre de campo se utiliza dos veces.',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON no válido',
       errNumber: 'Debe ser un número',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'Lista',
+        boolean: 'Verdadero/Falso',
+        number: 'Número',
+        string: 'Texto'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'Eliminar campo',
+      kindLabel: 'Tipo de valor',
+      keyPh: 'nombre del campo',
       fullHint: 'Cada campo de frontmatter es editable. Añada o elimine claves libremente.',
       errRemovalPending:
         'La eliminación de campos requiere el contrato de servidor merge-delete (disponible en breve).',
       errKeyRequired: 'Cada campo requiere un nombre.',
       arrayPh: 'valores separados por comas',
-      addKey: 'Add field',
+      addKey: 'Añadir campo',
       saved: 'Frontmatter guardado',
-      label: 'Frontmatter',
+      label: 'Metadatos',
       tipLabel: '¿Qué es Frontmatter?',
-      edit: 'Edit',
+      edit: 'Editar',
       empty: 'Sin frontmatter todavía — Editar añade tipo, título y etiquetas.',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'Tipo',
+      noType: 'Sin tipo',
+      titleLabel: 'Título',
       labelsLabel: 'Etiqueta (Jerarquía de conocimiento)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'Sin etiqueta',
+      descriptionLabel: 'Descripción',
       save: 'Guardar frontmatter',
       saveFailed: 'Error al guardar frontmatter'
     },
@@ -2032,25 +1855,25 @@ export default {
         'Cómo determinamos qué ES cada concepto (un tema, una entidad, un proceso…). La heurística lee la página automáticamente; la opción LLM es más lenta pero gestiona páginas complejas.',
       resplit:
         'Volver a seccionar el origen en conceptos de otra forma — por ejemplo, un concepto por página en lugar de uno para todo el sitio.',
-      saveFailed: 'Save failed',
+      saveFailed: 'Fallo al guardar',
       importFailedTitle: 'Falló la importación — no se pudo convertir el archivo fuente.',
       importFailedHint: 'Elimine este repositorio e importe el archivo fuente de nuevo.',
       frontmatter:
         'La información estructurada en la parte superior de cada archivo — tipo, título, etiquetas. El asistente la utiliza para saber de qué trata cada concepto.'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: 'Formato',
+      bold: 'Negrita',
+      italic: 'Cursiva',
+      h1: 'Encabezado 1',
+      h2: 'Encabezado 2',
+      h3: 'Encabezado 3',
+      bullet: 'Lista de viñetas',
       numbered: 'Lista numerada',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: 'Insertar enlace',
+      code: 'Código en línea',
+      table: 'Insertar tabla',
+      split: 'Dividir'
     },
     narrative: {
       intro:
@@ -2120,7 +1943,7 @@ export default {
       stage: {
         inReview: 'En review',
         stepOf: 'Paso {n} de 10',
-        draft: 'Draft'
+        draft: 'Borrador'
       },
       dashboard: {
         title: 'Repositorios',
@@ -2133,7 +1956,7 @@ export default {
         stage: {
           inReview: 'En review',
           stepOf: 'Paso {n} de 10',
-          draft: 'Draft'
+          draft: 'Borrador'
         },
         bulk: {
           selected: '{n} seleccionados',
@@ -2156,23 +1979,23 @@ export default {
         notReady: 'Los borradores aún no pueden guardarse en el servidor; guardados localmente.'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'Básico',
+        expert: 'Experto'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'publicado',
+        inReview: 'en revisión',
+        draft: 'en progreso'
       },
       exit: 'Volver al panel',
       context: {
         untitled: 'Repositorio sin título',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'Confianza',
+        title: 'Repositorio',
+        stale: 'obsoleto',
+        sources: 'Fuentes',
         concepts: 'Conceptos hasta ahora'
       },
       label: 'Asistente de OKF Studio',
@@ -2289,16 +2112,16 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'Área temática',
       domainPlaceholder: 'Seleccione un área temática…',
       classLabel: 'Clasificación de conceptos',
       classHeuristics: 'Heurística (predeterminado)',
       classHeuristicsHint:
         'Clasificación rápida basada en reglas — sin coste de LLM, ideal para rastreos bien estructurados.',
-      classLlm: 'LLM-assisted',
+      classLlm: 'Asistido por LLM',
       classLlmHint:
         'El LLM cura cada concepto — tipo, etiqueta de jerarquía de conocimiento y descripción. Mucho más preciso y completo que la heurística; requiere tiempo adicional por concepto.',
-      classHybrid: 'Hybrid',
+      classHybrid: 'Híbrido',
       classHybridHint:
         'Heurística primero; el LLM revisa los casos inciertos y cubre lagunas. Equilibrio entre tiempo y exhaustividad.',
       targetLabel: '¿Adónde debe ir esto?',
@@ -2360,7 +2183,7 @@ export default {
         notReady: 'Etiquetas guardadas localmente — sincronización con el servidor próximamente.'
       },
       frontmatter: {
-        label: 'Frontmatter',
+        label: 'Metadatos (Frontmatter)',
         edit: 'Editar frontmatter',
         dialogTitle: 'Editar frontmatter',
         okfVersion: 'okf_version',
@@ -2462,11 +2285,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'Enviar para revisión',
+      approve: 'Aprobar',
+      publish: 'Publicar',
+      ingest: 'Ingestar',
+      retract: 'Retirar'
     }
   }
 };

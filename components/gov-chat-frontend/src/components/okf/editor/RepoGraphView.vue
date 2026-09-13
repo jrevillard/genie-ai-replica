@@ -64,7 +64,11 @@
         <div v-show="building" class="okf-gv__building" aria-live="polite">
           <DsSpinner size="md" />
           <p class="okf-gv__building-label">
-            {{ translate('okf.graph.building', 'Preparing graph…') }}
+            {{
+              layouting
+                ? translate('okf.graph.layouting', 'Layouting…')
+                : translate('okf.graph.building', 'Preparing graph…')
+            }}
             <template v-if="buildPct != null">&#32;{{ buildPct }}%</template>
           </p>
           <DsProgress
@@ -667,7 +671,10 @@ export default {
           const slice = items.slice(i, i + size);
           this.cy.add(slice);
           added += slice.length;
-          this.buildPct = Math.min(99, Math.round((added / total) * 100));
+          // Cap at 88%: ingestion is the FAST phase — the last stretch belongs
+          // to the layout, which runs as an indeterminate "Layouting…" bar
+          // (a bar parked at 99% reads as a hang; David, 2026-09-14).
+          this.buildPct = Math.min(88, Math.round((added / total) * 88));
           await this._frame();
         }
         return true;
@@ -675,6 +682,10 @@ export default {
       if (!(await stream(nodeEls, 400))) return;
       if (!(await stream(edgeEls, 800))) return;
       if (stale() || !this.cy) return;
+      // Ingestion done → the bar goes INDETERMINATE ("Layouting…") for the
+      // solve: the honest phase boundary instead of a bar parked at 99%.
+      this.layouting = true;
+      this.buildPct = null;
       // LAYOUT + finish. fcose runs animate:false — the PROVEN sub-second
       // solve (live-verified on the wikipedia re-import). The animated
       // variant (2026-09-13) never emitted 'layoutstop' on this stack and

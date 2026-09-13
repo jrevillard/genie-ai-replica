@@ -805,108 +805,59 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Identity & Civil Registration',
-      children: [
-        'Birth certificates',
-        'National ID cards',
-        'Passports',
-        'Marriage and death certificates',
-        'Voter registration'
-      ]
+      children: 'Birth certificates,National ID cards,Passports,Marriage and death certificates,Voter registration'
     },
     cat2: {
       name: '2. Healthcare & Social Services',
-      children: [
-        'Public healthcare access',
-        'Vaccination programs',
-        'Health insurance',
-        'Disability benefits',
-        'Welfare and food assistance'
-      ]
+      children:
+        'Public healthcare access,Vaccination programs,Health insurance,Disability benefits,Welfare and food assistance'
     },
     cat3: {
       name: '3. Education & Learning',
-      children: [
-        'Public schools and universities',
-        'Scholarships and student loans',
-        'Adult education programs',
-        'Online learning resources'
-      ]
+      children:
+        'Public schools and universities,Scholarships and student loans,Adult education programs,Online learning resources'
     },
     cat4: {
       name: '4. Employment & Labor Services',
-      children: [
-        'Job search and unemployment benefits',
-        'Worker protections and labor rights',
-        'Workplace safety regulations',
-        'Skills training and apprenticeships'
-      ]
+      children:
+        'Job search and unemployment benefits,Worker protections and labor rights,Workplace safety regulations,Skills training and apprenticeships'
     },
     cat5: {
       name: '5. Taxes & Revenue',
-      children: [
-        'Income tax filing and refunds',
-        'Property tax payments',
-        'Business tax compliance',
-        'Customs and import duties'
-      ]
+      children: 'Income tax filing and refunds,Property tax payments,Business tax compliance,Customs and import duties'
     },
     cat6: {
       name: '6. Public Safety & Justice',
-      children: [
-        'Police and emergency services',
-        'Court and legal aid services',
-        'Crime reporting',
-        'Consumer protection laws'
-      ]
+      children: 'Police and emergency services,Court and legal aid services,Crime reporting,Consumer protection laws'
     },
     cat7: {
       name: '7. Transportation & Mobility',
-      children: [
-        "Driver's licenses and vehicle registration",
-        'Public transit and infrastructure',
-        'Traffic violations and fines',
-        'Road safety programs'
-      ]
+      children:
+        "Driver's licenses and vehicle registration,Public transit and infrastructure,Traffic violations and fines,Road safety programs"
     },
     cat8: {
       name: '8. Housing & Urban Development',
-      children: [
-        'Public housing assistance',
-        'Property registration and land records',
-        'Housing loans and subsidies',
-        'Zoning and building permits'
-      ]
+      children:
+        'Public housing assistance,Property registration and land records,Housing loans and subsidies,Zoning and building permits'
     },
     cat9: {
       name: '9. Utilities & Environment',
-      children: [
-        'Water and electricity services',
-        'Waste management and recycling',
-        'Environmental regulations',
-        'Renewable energy initiatives'
-      ]
+      children:
+        'Water and electricity services,Waste management and recycling,Environmental regulations,Renewable energy initiatives'
     },
     cat10: {
       name: '10. Business & Trade',
-      children: [
-        'Business registration and licensing',
-        'Trade regulations and permits',
-        'Small business grants and incentives',
-        'E-commerce and digital business support'
-      ]
+      children:
+        'Business registration and licensing,Trade regulations and permits,Small business grants and incentives,E-commerce and digital business support'
     },
     cat11: {
       name: '11. Social Security & Pensions',
-      children: ['Retirement benefits', 'Pension fund management', 'Survivor benefits', 'Disability pensions']
+      children: 'Retirement benefits,Pension fund management,Survivor benefits,Disability pensions'
     },
     cat12: {
       name: '12. Community & Civic Engagement',
-      children: [
-        'Voting and elections',
-        'Public feedback and citizen complaints',
-        'Volunteering and community programs',
-        'Local government participation'
-      ]
+      children:
+        'Voting and elections,Public feedback and citizen complaints,Volunteering and community programs,Local government participation'
     }
   },
   settings: {
@@ -1246,137 +1197,10 @@ export default {
     noMatchingCountries: 'No matching countries found',
     noMatchingDisciplines: 'No matching disciplines found',
     noMatchingDegrees: 'No matching degrees found',
-    educationOptions: [
-      'Accounting',
-      'Aerospace Engineering',
-      'Agricultural Science',
-      'Anthropology',
-      'Architecture',
-      'Art History',
-      'Artificial Intelligence',
-      'Astronomy',
-      'Astrophysics',
-      'Biochemistry',
-      'Biomedical Engineering',
-      'Biotechnology',
-      'Business Administration',
-      'Chemical Engineering',
-      'Chemistry',
-      'Civil Engineering',
-      'Communications',
-      'Computer Engineering',
-      'Computer Science',
-      'Construction Management',
-      'Criminal Justice',
-      'Cybersecurity',
-      'Data Science',
-      'Dentistry',
-      'Economics',
-      'Education',
-      'Electrical Engineering',
-      'Elementary Education',
-      'English Literature',
-      'Environmental Engineering',
-      'Environmental Science',
-      'Fashion Design',
-      'Film Studies',
-      'Finance',
-      'Fine Arts',
-      'Food Science',
-      'Forensic Science',
-      'Game Design',
-      'Geography',
-      'Geology',
-      'Graphic Design',
-      'Health Administration',
-      'History',
-      'Hospitality Management',
-      'Human Resources',
-      'Industrial Design',
-      'Industrial Engineering',
-      'Information Systems',
-      'Information Technology',
-      'Interior Design',
-      'International Business',
-      'International Relations',
-      'Journalism',
-      'Law',
-      'Library Science',
-      'Linguistics',
-      'Management',
-      'Marketing',
-      'Materials Science',
-      'Mathematics',
-      'Mechanical Engineering',
-      'Media Studies',
-      'Medicine',
-      'Meteorology',
-      'Microbiology',
-      'Music',
-      'Nanotechnology',
-      'Nursing',
-      'Nutrition',
-      'Occupational Therapy',
-      'Oceanography',
-      'Petroleum Engineering',
-      'Pharmacy',
-      'Philosophy',
-      'Photography',
-      'Physical Education',
-      'Physical Therapy',
-      'Physics',
-      'Political Science',
-      'Psychology',
-      'Public Administration',
-      'Public Health',
-      'Public Relations',
-      'Robotics',
-      'Secondary Education',
-      'Social Work',
-      'Sociology',
-      'Software Engineering',
-      'Special Education',
-      'Sports Management',
-      'Statistics',
-      'Systems Engineering',
-      'Theatre Arts',
-      'Tourism',
-      'Urban Planning',
-      'Veterinary Medicine',
-      'Web Development',
-      'Wildlife Biology',
-      'Zoology'
-    ],
-    degreeOptions: [
-      'Associate Degree',
-      'Bachelor of Arts (BA)',
-      'Bachelor of Science (BS)',
-      'Bachelor of Engineering (BEng)',
-      'Bachelor of Business Administration (BBA)',
-      'Bachelor of Fine Arts (BFA)',
-      'Bachelor of Education (BEd)',
-      'Bachelor of Medicine (MBBS)',
-      'Bachelor of Laws (LLB)',
-      'Master of Arts (MA)',
-      'Master of Science (MS)',
-      'Master of Business Administration (MBA)',
-      'Master of Engineering (MEng)',
-      'Master of Fine Arts (MFA)',
-      'Master of Education (MEd)',
-      'Master of Laws (LLM)',
-      'Master of Public Health (MPH)',
-      'Doctor of Philosophy (PhD)',
-      'Doctor of Medicine (MD)',
-      'Doctor of Education (EdD)',
-      'Doctor of Business Administration (DBA)',
-      'Doctor of Jurisprudence (JD)',
-      'Professional Diploma',
-      'Technical Diploma',
-      'Vocational Certificate',
-      'Graduate Certificate',
-      'Post-Graduate Diploma',
-      'Post-Doctoral'
-    ],
+    educationOptions:
+      'Accounting,Aerospace Engineering,Agricultural Science,Anthropology,Architecture,Art History,Artificial Intelligence,Astronomy,Astrophysics,Biochemistry,Biomedical Engineering,Biotechnology,Business Administration,Chemical Engineering,Chemistry,Civil Engineering,Communications,Computer Engineering,Computer Science,Construction Management,Criminal Justice,Cybersecurity,Data Science,Dentistry,Economics,Education,Electrical Engineering,Elementary Education,English Literature,Environmental Engineering,Environmental Science,Fashion Design,Film Studies,Finance,Fine Arts,Food Science,Forensic Science,Game Design,Geography,Geology,Graphic Design,Health Administration,History,Hospitality Management,Human Resources,Industrial Design,Industrial Engineering,Information Systems,Information Technology,Interior Design,International Business,International Relations,Journalism,Law,Library Science,Linguistics,Management,Marketing,Materials Science,Mathematics,Mechanical Engineering,Media Studies,Medicine,Meteorology,Microbiology,Music,Nanotechnology,Nursing,Nutrition,Occupational Therapy,Oceanography,Petroleum Engineering,Pharmacy,Philosophy,Photography,Physical Education,Physical Therapy,Physics,Political Science,Psychology,Public Administration,Public Health,Public Relations,Robotics,Secondary Education,Social Work,Sociology,Software Engineering,Special Education,Sports Management,Statistics,Systems Engineering,Theatre Arts,Tourism,Urban Planning,Veterinary Medicine,Web Development,Wildlife Biology,Zoology',
+    degreeOptions:
+      'Associate Degree,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diploma,Technical Diploma,Vocational Certificate,Graduate Certificate,Post-Graduate Diploma,Post-Doctoral',
     aria: {
       tabList: 'Profile form sections',
       nextButton: 'Go to next section',
@@ -2095,7 +1919,8 @@ export default {
       link: 'Insert link',
       code: 'Inline code',
       table: 'Insert table',
-      split: 'Split'
+      split: 'Split',
+      rendering: 'Rendering…'
     },
     narrative: {
       intro:

@@ -1867,7 +1867,8 @@ export default {
       link: 'Sisipkan tautan',
       code: 'Kode sebaris',
       table: 'Sisipkan tabel',
-      split: 'Pisahkan'
+      split: 'Pisahkan',
+      rendering: 'Merender…'
     },
     narrative: {
       intro:

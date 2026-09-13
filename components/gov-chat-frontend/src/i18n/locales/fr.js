@@ -1878,7 +1878,8 @@ export default {
       link: 'Insérer un lien',
       code: 'Code en ligne',
       table: 'Insérer un tableau',
-      split: 'Diviser'
+      split: 'Diviser',
+      rendering: 'Rendu en cours…'
     },
     narrative: {
       intro:

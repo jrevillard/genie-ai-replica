@@ -1854,7 +1854,8 @@ export default {
       link: 'แทรกลิงก์',
       code: 'โค้ดในบรรทัด',
       table: 'แทรกตาราง',
-      split: 'แยก'
+      split: 'แยก',
+      rendering: 'กำลังเรนเดอร์…'
     },
     narrative: {
       intro:

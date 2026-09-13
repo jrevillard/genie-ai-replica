@@ -1858,7 +1858,8 @@ export default {
       link: 'লিঙ্ক সন্নিবেশ করুন',
       code: 'ইনলাইন কোড',
       table: 'টেবিল সন্নিবেশ করুন',
-      split: 'বিভক্ত করুন'
+      split: 'বিভক্ত করুন',
+      rendering: 'রেন্ডার হচ্ছে…'
     },
     narrative: {
       intro:

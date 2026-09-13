@@ -1830,7 +1830,8 @@ export default {
       link: '插入链接',
       code: '内联代码',
       table: '插入表格',
-      split: '拆分'
+      split: '拆分',
+      rendering: '渲染中…'
     },
     narrative: {
       intro:

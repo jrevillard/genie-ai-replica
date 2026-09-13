@@ -42,7 +42,20 @@
       }}</DsButton>
     </p>
     <div v-else-if="!markdownLoaded" class="okf-ce__loading">
-      <DsSpinner size="md" /> {{ translate('okf.editor.loadingConcept', 'Loading concept…') }}
+      <div class="okf-ce__loading-row">
+        <DsSpinner size="sm" /> {{ translate('okf.editor.loadingConcept', 'Loading concept…') }}
+      </div>
+      <!-- LOAD PROGRESS (David, 2026-09-13): real stage feedback while the
+           concept loads — the user sees movement instead of a silent wait. -->
+      <DsProgress
+        :value="loadPct"
+        size="xs"
+        variant="accent"
+        show-label
+        :label="loadPct + '%'"
+        :aria-label="translate('okf.editor.loadingConcept', 'Loading concept…')"
+        class="okf-ce__loadbar"
+      />
     </div>
     <template v-else>
       <!-- FRONTMATTER BAR: display is the PRIMARY job (parsed fields at a
@@ -211,6 +224,7 @@
 import translateMixin from '../../../mixins/translateMixin';
 import DsButton from '../../ds/Button.vue';
 import DsSpinner from '../../ds/Spinner.vue';
+import DsProgress from '../../ds/Progress.vue';
 import DsOkfMarkdownEditor from '../../ds/OkfMarkdownEditor.vue';
 import DsInfoTip from '../../ds/InfoTip.vue';
 import DsSelect from '../../ds/Select.vue';
@@ -220,6 +234,13 @@ import conceptService from '../../../services/conceptService';
 import OkfPiiOccurrences from './PiiOccurrences.vue';
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
+// PERSISTENT PII FINDINGS (David, 2026-09-13): scan results survive reloads
+// and sessions, keyed by a content fingerprint — a concept whose text has
+// NOT changed reuses the stored findings instead of re-queuing a live
+// Presidio scan. Bounded; private-mode/quota failures degrade to the old
+// in-memory behavior silently.
+const PII_STORE_KEY = 'okf.pii.findings.v1';
+const PII_STORE_MAX = 40;
 const FM_TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'];
 // D-F: the generic typed rows. 'json' covers nested shapes (objects,
 // arrays-of-objects) via a JSON textarea.
@@ -234,6 +255,7 @@ export default {
   components: {
     DsButton,
     DsSpinner,
+    DsProgress,
     DsOkfMarkdownEditor,
     DsInfoTip,
     DsSelect,
@@ -257,6 +279,9 @@ export default {
       view: 'source', // Source default per the UX design
       markdown: '',
       markdownLoaded: false,
+      // LOAD PROGRESS (David, 2026-09-13): staged real progress while the
+      // concept loads — fetch → compose → ready.
+      loadPct: 0,
       savedMarkdown: '',
       // The conceptId the current markdown was LOADED for. Saves always
       // target this id — the conceptId watcher fires AFTER props have been
@@ -396,6 +421,7 @@ export default {
       this._loadSeq = (this._loadSeq || 0) + 1;
       const seq = this._loadSeq;
       this.markdownLoaded = false;
+      this.loadPct = 15; // fetch dispatched
       this.loadError = '';
       this.saveError = false;
       this.loadedConceptId = null;
@@ -414,6 +440,7 @@ export default {
         this.loadError = this.translate('okf.editor.loadFailed', 'Could not load this concept.');
         return;
       }
+      this.loadPct = 60; // row arrived — composing markdown next
       const row = result.concept;
       this.piiState = row.pii_state || null;
       // The persisted remediation ledger rides the meta row — a PROCESSED
@@ -435,7 +462,52 @@ export default {
       this.markdown = md;
       this.savedMarkdown = md;
       this.loadedConceptId = conceptId;
+      this.loadPct = 85;
+      // PERSISTENT PII FINDINGS: hydrate the in-memory cache from the
+      // fingerprinted store — unchanged content reuses the previous scan and
+      // the panel adopts it instantly (piiInitial) with ZERO Presidio work.
+      this.hydratePiiStore(conceptId);
+      this.loadPct = 100;
       this.markdownLoaded = true;
+    },
+    // ── PERSISTENT PII FINDINGS STORE (David, 2026-09-13) ─────────────────
+    // Content fingerprint (FNV-1a + length) — cheap, collision-safe enough
+    // for a UI cache whose worst case is one redundant scan.
+    contentHash(s) {
+      const str = String(s || '');
+      let h = 0x811c9dc5;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+      }
+      return (h >>> 0).toString(16) + ':' + str.length;
+    },
+    loadPiiStore() {
+      try {
+        const raw = window.localStorage.getItem(PII_STORE_KEY);
+        const o = raw ? JSON.parse(raw) : {};
+        return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+      } catch {
+        return {}; // private mode / cleared data — in-memory cache still works
+      }
+    },
+    savePiiStore(map) {
+      try {
+        window.localStorage.setItem(PII_STORE_KEY, JSON.stringify(map));
+      } catch {
+        /* quota or storage blocked — degrade to memory-only */
+      }
+    },
+    hydratePiiStore(conceptId) {
+      const stored = this.loadPiiStore()[conceptId];
+      if (!stored || !Array.isArray(stored.occurrences)) return;
+      if (stored.hash !== this.contentHash(this.markdown)) return; // content changed → live scan
+      if (stored.pii_state !== this.piiState) return; // stale lifecycle state
+      this.updatePiiCache(conceptId, {
+        pii_state: stored.pii_state,
+        occurrences: stored.occurrences,
+        resolutions: Array.isArray(stored.resolutions) ? stored.resolutions : []
+      });
     },
     stringifyMarkdown(body, frontmatter) {
       // gray-matter round-trip — same serializer the PATCH endpoint parses
@@ -521,6 +593,22 @@ export default {
       const ids = Object.keys(next);
       if (ids.length > 40) delete next[ids[0]]; // bounded — oldest drops
       this.piiCache = next;
+      // WRITE-THROUGH (David, 2026-09-13): persist the findings fingerprinted
+      // against the CURRENT content so a revisit after reload skips the scan.
+      if (patch.pii_state && this.loadedConceptId === conceptId) {
+        const store = this.loadPiiStore();
+        const prev = store[conceptId] || {};
+        store[conceptId] = {
+          hash: this.contentHash(this.markdown),
+          pii_state: patch.pii_state,
+          occurrences: patch.occurrences !== undefined ? patch.occurrences : prev.occurrences || [],
+          resolutions: patch.resolutions !== undefined ? patch.resolutions : prev.resolutions || [],
+          at: Date.now()
+        };
+        const sids = Object.keys(store);
+        if (sids.length > PII_STORE_MAX) delete store[sids[0]];
+        this.savePiiStore(store);
+      }
     },
     onPiiScanned(e) {
       const id = this.loadedConceptId;
@@ -945,6 +1033,17 @@ export default {
   color: var(--muted);
   padding: var(--space-lg) 0;
   margin: 0;
+}
+/* LOAD PROGRESS (2026-09-13): staged bar under the loading label */
+.okf-ce__loading {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-sm);
+}
+.okf-ce__loading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 .okf-ce__error {
   color: var(--danger);

@@ -1863,7 +1863,8 @@ export default {
       link: 'Ingiza kiungo',
       code: 'Msimbo wa ndani',
       table: 'Ingiza jedwali',
-      split: 'Gawanya'
+      split: 'Gawanya',
+      rendering: 'Inatolewa…'
     },
     narrative: {
       intro:

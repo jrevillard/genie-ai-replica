@@ -83,6 +83,7 @@
       </template>
       <OkfRepoGraphView
         v-show="centerView === 'graph'"
+        :active="centerView === 'graph'"
         :repo-id="repoId"
         :concepts="graphConcepts"
         :selected-id="selectedId"

@@ -11,10 +11,10 @@ export default {
     AU: 'Australia',
     AT: 'Austria',
     AZ: 'Azerbaijani',
-    BS: 'Bahamas',
+    BS: 'Bahama',
     BH: 'Bahareni',
     BD: 'Bangladeshi',
-    BB: 'Barbados',
+    BB: 'Babadosi',
     BY: 'Belarusi',
     BE: 'Ubelgiji',
     BZ: 'Belize',
@@ -26,7 +26,7 @@ export default {
     BR: 'Brazili',
     BN: 'Brunei',
     BG: 'Bulgaria',
-    BF: 'Burkina Faso',
+    BF: 'Bukinafaso',
     BI: 'Burundi',
     CV: 'Cape Verde',
     KH: 'Kambodia',
@@ -35,13 +35,13 @@ export default {
     CF: 'Jamhuri ya Afrika ya Kati',
     TD: 'Chadi',
     CL: 'Chile',
-    CN: 'China',
+    CN: 'Uchina',
     CO: 'Kolombia',
     KM: 'Komoro',
     CG: 'Kongo',
     CD: 'Jamhuri ya Kidemokrasia ya Kongo',
     CR: 'Kosta Rika',
-    CI: "Côte d'Ivoire",
+    CI: "Cote d'Ivoire",
     HR: 'Kroeshia',
     CU: 'Kuba',
     CY: 'Kupro',
@@ -52,11 +52,11 @@ export default {
     DO: 'Jamhuri ya Dominika',
     EC: 'Ekwado',
     EG: 'Misri',
-    SV: 'El Salvador',
+    SV: 'Elsalvado',
     GQ: 'Guinea ya Ikweta',
     ER: 'Eritrea',
     EE: 'Estonia',
-    ET: 'Ethiopia',
+    ET: 'Uhabeshi',
     FJ: 'Fiji',
     FI: 'Ufini',
     FR: 'Ufaransa',
@@ -67,7 +67,7 @@ export default {
     GH: 'Ghana',
     GR: 'Ugiriki',
     GD: 'Grenada',
-    GT: 'Guatemala',
+    GT: 'Gwatemala',
     GN: 'Gine',
     GW: 'Gine-Bisau',
     GY: 'Guyana',
@@ -93,22 +93,22 @@ export default {
     KW: 'Kuwaiti',
     KG: 'Kirigizistani',
     LA: 'Laosi',
-    LV: 'Latvia',
+    LV: 'Lativia',
     LB: 'Lebanoni',
-    LS: 'Lesotho',
+    LS: 'Lesoto',
     LR: 'Liberia',
     LY: 'Libya',
     LI: 'Liechtensteini',
-    LT: 'Lithuania',
+    LT: 'Litwania',
     LU: 'Luxemburgi',
     MG: 'Madagaska',
     MW: 'Malawi',
-    MY: 'Malaysia',
+    MY: 'Malesia',
     MV: 'Maldivi',
     ML: 'Mali',
     MT: 'Malta',
     MH: 'Visiwa vya Marshall',
-    MR: 'Mauritania',
+    MR: 'Moritania',
     MU: 'Morisi',
     MX: 'Meksiko',
     FM: 'Mikronesia',
@@ -163,7 +163,7 @@ export default {
     ZA: 'Afrika Kusini',
     SS: 'Sudan Kusini',
     ES: 'Hispania',
-    LK: 'Sri Lanka',
+    LK: 'Sirilanka',
     SD: 'Sudani',
     SR: 'Surinamu',
     SZ: 'Eswatini',
@@ -182,7 +182,7 @@ export default {
     TM: 'Turkmenistani',
     TV: 'Tuvalu',
     UG: 'Uganda',
-    UA: 'Ukraine',
+    UA: 'Ukraini',
     AE: 'Falme za Kiarabu',
     GB: 'Uingereza',
     US: 'Marekani',
@@ -509,51 +509,51 @@ export default {
       metadataUpdateSuccess: 'Metadata ya faili {fileId} imesasishwa.'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'Tafuta',
+      searchPlaceholder: 'Tafuta maandishi ya hoja...',
+      minConfidence: 'Uhakika wa Chini',
+      maxConfidence: 'Uhakika wa Juu',
+      from: 'Kutoka',
+      to: 'Hadi',
+      reset: 'Weka upya',
+      colTime: 'Muda',
+      colQuestion: 'Swali la Mtumiaji',
+      colConfidence: 'Uhakika',
+      colResponseTime: 'Muda wa Majibu',
+      colSources: 'Vyanzo',
+      colFeedback: 'Maoni',
+      colActions: 'Vitendo',
+      inspect: 'Kagua',
+      noResults: 'Hakuna hoja zinazolingana na vichujio vyako zilizopatikana.',
+      prev: 'Iliyopita',
+      pageInfo: 'Ukurasa {current} wa {total} (jumla {count})',
+      next: 'Inayofuata',
+      backToList: 'Rudi kwenye orodha',
+      detailTitle: 'Mkaguzi wa Hoja',
+      sectionQuestion: 'Swali la Mtumiaji',
+      user: 'Mtumiaji',
+      time: 'Muda',
+      responseTime: 'Muda wa Majibu',
+      mode: 'Hali',
+      sectionContext: 'Muktadha (Lebo zilizotumwa kwa RAG)',
+      category: 'Kitengo',
+      serviceLabels: 'Lebo za Huduma',
+      language: 'Lugha',
+      sectionMessages: 'Ujumbe Uliotumwa kwa Bomba',
+      sectionDocuments: 'Hati Zilizorejeshwa (Matokeo ya Vector DB)',
+      score: 'Alama',
+      labels: 'Lebo',
+      viewDoc: 'Tazama Hati',
+      noDocuments: 'Hakuna hati za chanzo zilizopatikana kwa hoja hii.',
+      sectionResponse: 'Jibu la LLM',
+      confidenceScore: 'Alama ya Uhakika',
+      retrievalConfidenceScore: 'Uhakika wa Urejeshaji',
+      selfConfidence: 'Kujiamini (LLM)',
+      sectionFeedback: 'Maoni ya Mtumiaji',
+      rating: 'Ukadiriaji',
+      comment: 'Maoni',
+      providedAt: 'Imetolewa mnamo',
+      loadError: 'Imeshindwa kupakia hoja.'
     }
   },
   auth: {
@@ -807,108 +807,61 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Utambulisho & Usajili wa Kiraia',
-      children: [
-        'Vyeti vya kuzaliwa',
-        'Vitambulisho vya Taifa',
-        'Pasi za kusafiria',
-        'Vyeti vya ndoa na vifo',
-        'Usajili wa wapiga kura'
-      ]
+      children:
+        'Vyeti vya kuzaliwa,Vitambulisho vya Taifa,Pasi za kusafiria,Vyeti vya ndoa na vifo,Usajili wa wapiga kura'
     },
     cat2: {
       name: '2. Huduma za Afya & Ustawi wa Jamii',
-      children: [
-        'Upatikanaji wa huduma za afya',
-        'Mikakati ya chanjo',
-        'Bima ya afya',
-        'Huduma za walemavu',
-        'Msaada wa ustawi na chakula'
-      ]
+      children:
+        'Upatikanaji wa huduma za afya,Mikakati ya chanjo,Bima ya afya,Huduma za walemavu,Msaada wa ustawi na chakula'
     },
     cat3: {
       name: '3. Elimu & Kujifunza',
-      children: [
-        'Shule za umma na vyuo vikuu',
-        'Mikopo na ufadhili wa wanafunzi',
-        'Programu za elimu ya watu wazima',
-        'Rasilimali za kujifunza mtandaoni'
-      ]
+      children:
+        'Shule za umma na vyuo vikuu,Mikopo na ufadhili wa wanafunzi,Programu za elimu ya watu wazima,Rasilimali za kujifunza mtandaoni'
     },
     cat4: {
       name: '4. Ajira & Huduma za Kazi',
-      children: [
-        'Utafutaji wa kazi na malipo ya ukosefu wa ajira',
-        'Haki na ulinzi wa wafanyakazi',
-        'Kanuni za usalama kazini',
-        'Mafunzo ya stadi na uanagenzi'
-      ]
+      children:
+        'Utafutaji wa kazi na malipo ya ukosefu wa ajira,Haki na ulinzi wa wafanyakazi,Kanuni za usalama kazini,Mafunzo ya stadi na uanagenzi'
     },
     cat5: {
       name: '5. Ushuru & Mapato',
-      children: [
-        'Kuwasilisha kodi ya mapato na marejesho',
-        'Malipo ya kodi ya mali',
-        'Uzingatiaji kodi za biashara',
-        'Ushuru wa forodha na uingizaji'
-      ]
+      children:
+        'Kuwasilisha kodi ya mapato na marejesho,Malipo ya kodi ya mali,Uzingatiaji kodi za biashara,Ushuru wa forodha na uingizaji'
     },
     cat6: {
       name: '6. Usalama wa Umma & Sheria',
-      children: [
-        'Polisi na huduma za dharura',
-        'Mahakama na msaada wa kisheria',
-        'Kuripoti uhalifu',
-        'Sheria za ulinzi wa watumiaji'
-      ]
+      children:
+        'Polisi na huduma za dharura,Mahakama na msaada wa kisheria,Kuripoti uhalifu,Sheria za ulinzi wa watumiaji'
     },
     cat7: {
       name: '7. Usafiri & Uhamaji',
-      children: [
-        'Leseni za udereva na usajili wa magari',
-        'Usafiri wa umma na miundombinu',
-        'Makosa ya trafiki na faini',
-        'Programu za usalama barabarani'
-      ]
+      children:
+        'Leseni za udereva na usajili wa magari,Usafiri wa umma na miundombinu,Makosa ya trafiki na faini,Programu za usalama barabarani'
     },
     cat8: {
       name: '8. Makazi & Maendeleo ya Miji',
-      children: [
-        'Msaada wa makazi ya umma',
-        'Usajili wa ardhi na mali',
-        'Mikopo na ruzuku za makazi',
-        'Vibali vya ujenzi na upangaji'
-      ]
+      children:
+        'Msaada wa makazi ya umma,Usajili wa ardhi na mali,Mikopo na ruzuku za makazi,Vibali vya ujenzi na upangaji'
     },
     cat9: {
       name: '9. Huduma za Umma & Mazingira',
-      children: [
-        'Huduma za maji na umeme',
-        'Usimamizi wa taka na urejelezaji',
-        'Kanuni za mazingira',
-        'Miradi ya nishati mbadala'
-      ]
+      children: 'Huduma za maji na umeme,Usimamizi wa taka na urejelezaji,Kanuni za mazingira,Miradi ya nishati mbadala'
     },
     cat10: {
       name: '10. Biashara & Biashara',
-      children: [
-        'Usajili wa biashara na leseni',
-        'Kanuni na vibali vya biashara',
-        'Misaada na motisha kwa biashara ndogo',
-        'Msaada wa biashara za mtandaoni'
-      ]
+      children:
+        'Usajili wa biashara na leseni,Kanuni na vibali vya biashara,Misaada na motisha kwa biashara ndogo,Msaada wa biashara za mtandaoni'
     },
     cat11: {
       name: '11. Hifadhi ya Jamii & Pensheni',
-      children: ['Manufaa ya kustaafu', 'Usimamizi wa mfuko wa pensheni', 'Manufaa ya warithi', 'Pensheni za ulemavu']
+      children: 'Manufaa ya kustaafu,Usimamizi wa mfuko wa pensheni,Manufaa ya warithi,Pensheni za ulemavu'
     },
     cat12: {
       name: '12. Jamii & Ushiriki wa Kiraia',
-      children: [
-        'Kupiga kura na uchaguzi',
-        'Maoni ya umma na malalamiko ya raia',
-        'Kujitolea na programu za jamii',
-        'Ushiriki katika serikali za mitaa'
-      ]
+      children:
+        'Kupiga kura na uchaguzi,Maoni ya umma na malalamiko ya raia,Kujitolea na programu za jamii,Ushiriki katika serikali za mitaa'
     }
   },
   settings: {
@@ -1246,137 +1199,10 @@ export default {
     noMatchingCountries: 'Hakuna nchi zinazofanana zilizopatikana',
     noMatchingDisciplines: 'Hakuna fani zinazofanana zilizopatikana',
     noMatchingDegrees: 'Hakuna shahada zinazofanana zilizopatikana',
-    educationOptions: [
-      'Uhasibu',
-      'Uhandisi wa Anga',
-      'Sayansi ya Kilimo',
-      'Anthropolojia',
-      'Ujenzi',
-      'Historia ya Sanaa',
-      'Akili Bandia',
-      'Astronomia',
-      'Astrofizikia',
-      'Biokemia',
-      'Uhandisi wa Biomedikal',
-      'Bioteknolojia',
-      'Utawala wa Biashara',
-      'Uhandisi wa Kemikali',
-      'Kemia',
-      'Uhandisi wa Ujenzi',
-      'Mawasiliano',
-      'Uhandisi wa Kompyuta',
-      'Sayansi ya Kompyuta',
-      'Usimamizi wa Ujenzi',
-      'Haki za Jinai',
-      'Usalama wa Mtandao',
-      'Sayansi ya Data',
-      'Udaktari wa Meno',
-      'Uchumi',
-      'Elimu',
-      'Uhandisi wa Umeme',
-      'Elimu ya Msingi',
-      'Fasihi ya Kiingereza',
-      'Uhandisi wa Mazingira',
-      'Sayansi ya Mazingira',
-      'Ubunifu wa Mitindo',
-      'Masomo ya Filamu',
-      'Fedha',
-      'Sanaa',
-      'Sayansi ya Chakula',
-      'Sayansi ya Uchunguzi',
-      'Ubunifu wa Michezo',
-      'Jiografia',
-      'Jiolojia',
-      'Ubunifu wa Grafiki',
-      'Utawala wa Afya',
-      'Historia',
-      'Usimamizi wa Ukarimu',
-      'Rasilimali Watu',
-      'Ubunifu wa Viwanda',
-      'Uhandisi wa Viwanda',
-      'Mifumo ya Habari',
-      'Teknolojia ya Habari',
-      'Ubunifu wa Ndani',
-      'Biashara ya Kimataifa',
-      'Mahusiano ya Kimataifa',
-      'Uandishi wa Habari',
-      'Sheria',
-      'Sayansi ya Maktaba',
-      'Isimu',
-      'Usimamizi',
-      'Masoko',
-      'Sayansi ya Vifaa',
-      'Hisabati',
-      'Uhandisi wa Mitambo',
-      'Masomo ya Vyombo vya Habari',
-      'Tiba',
-      'Meteorolojia',
-      'Mikrobaiolojia',
-      'Muziki',
-      'Nanoteknolojia',
-      'Uuguzi',
-      'Lishe',
-      'Tiba ya Kazi',
-      'Oseanografia',
-      'Uhandisi wa Mafuta',
-      'Famasia',
-      'Falsafa',
-      'Upigaji Picha',
-      'Elimu ya Mazoezi',
-      'Tiba ya Viungo',
-      'Fizikia',
-      'Sayansi ya Siasa',
-      'Saikolojia',
-      'Utawala wa Umma',
-      'Afya ya Umma',
-      'Uhusiano wa Umma',
-      'Robotiki',
-      'Elimu ya Sekondari',
-      'Kazi ya Jamii',
-      'Sosiolojia',
-      'Uhandisi wa Programu',
-      'Elimu Maalum',
-      'Usimamizi wa Michezo',
-      'Takwimu',
-      'Uhandisi wa Mifumo',
-      'Sanaa za Maigizo',
-      'Utalii',
-      'Mipango ya Miji',
-      'Udaktari wa Mifugo',
-      'Utengenezaji wa Tovuti',
-      'Biolojia ya Wanyama Pori',
-      'Zoolojia'
-    ],
-    degreeOptions: [
-      'Stashahada ya Uhusiano',
-      'Shahada ya Sanaa (BA)',
-      'Shahada ya Sayansi (BS)',
-      'Shahada ya Uhandisi (BEng)',
-      'Shahada ya Utawala wa Biashara (BBA)',
-      'Shahada ya Sanaa Nzuri (BFA)',
-      'Shahada ya Elimu (BEd)',
-      'Shahada ya Udaktari (MBBS)',
-      'Shahada ya Sheria (LLB)',
-      'Uzamili wa Sanaa (MA)',
-      'Uzamili wa Sayansi (MS)',
-      'Uzamili wa Utawala wa Biashara (MBA)',
-      'Uzamili wa Uhandisi (MEng)',
-      'Uzamili wa Sanaa Nzuri (MFA)',
-      'Uzamili wa Elimu (MEd)',
-      'Uzamili wa Sheria (LLM)',
-      'Uzamili wa Afya ya Umma (MPH)',
-      'Uzamivu wa Falsafa (PhD)',
-      'Uzamivu wa Udaktari (MD)',
-      'Uzamivu wa Elimu (EdD)',
-      'Uzamivu wa Utawala wa Biashara (DBA)',
-      'Uzamivu wa Sheria (JD)',
-      'Diploma ya Kitaaluma',
-      'Diploma ya Kiufundi',
-      'Cheti cha Ufundi',
-      'Cheti cha Uzamili',
-      'Diploma ya Baada ya Shahada',
-      'Baada ya Uzamivu'
-    ],
+    educationOptions:
+      'Uhasibu,Uhandisi wa Anga,Sayansi ya Kilimo,Anthropolojia,Ujenzi,Historia ya Sanaa,Akili Bandia,Astronomia,Astrofizikia,Biokemia,Uhandisi wa Biomedikal,Bioteknolojia,Utawala wa Biashara,Uhandisi wa Kemikali,Kemia,Uhandisi wa Ujenzi,Mawasiliano,Uhandisi wa Kompyuta,Sayansi ya Kompyuta,Usimamizi wa Ujenzi,Haki za Jinai,Usalama wa Mtandao,Sayansi ya Data,Udaktari wa Meno,Uchumi,Elimu,Uhandisi wa Umeme,Elimu ya Msingi,Fasihi ya Kiingereza,Uhandisi wa Mazingira,Sayansi ya Mazingira,Ubunifu wa Mitindo,Masomo ya Filamu,Fedha,Sanaa,Sayansi ya Chakula,Sayansi ya Uchunguzi,Ubunifu wa Michezo,Jiografia,Jiolojia,Ubunifu wa Grafiki,Utawala wa Afya,Historia,Usimamizi wa Ukarimu,Rasilimali Watu,Ubunifu wa Viwanda,Uhandisi wa Viwanda,Mifumo ya Habari,Teknolojia ya Habari,Ubunifu wa Ndani,Biashara ya Kimataifa,Mahusiano ya Kimataifa,Uandishi wa Habari,Sheria,Sayansi ya Maktaba,Isimu,Usimamizi,Masoko,Sayansi ya Vifaa,Hisabati,Uhandisi wa Mitambo,Masomo ya Vyombo vya Habari,Tiba,Meteorolojia,Mikrobaiolojia,Muziki,Nanoteknolojia,Uuguzi,Lishe,Tiba ya Kazi,Oseanografia,Uhandisi wa Mafuta,Famasia,Falsafa,Upigaji Picha,Elimu ya Mazoezi,Tiba ya Viungo,Fizikia,Sayansi ya Siasa,Saikolojia,Utawala wa Umma,Afya ya Umma,Uhusiano wa Umma,Robotiki,Elimu ya Sekondari,Kazi ya Jamii,Sosiolojia,Uhandisi wa Programu,Elimu Maalum,Usimamizi wa Michezo,Takwimu,Uhandisi wa Mifumo,Sanaa za Maigizo,Utalii,Mipango ya Miji,Udaktari wa Mifugo,Utengenezaji wa Tovuti,Biolojia ya Wanyama Pori,Zoolojia',
+    degreeOptions:
+      'Stashahada ya Uhusiano,Shahada ya Sanaa (BA),Shahada ya Sayansi (BS),Shahada ya Uhandisi (BEng),Shahada ya Utawala wa Biashara (BBA),Shahada ya Sanaa Nzuri (BFA),Shahada ya Elimu (BEd),Shahada ya Udaktari (MBBS),Shahada ya Sheria (LLB),Uzamili wa Sanaa (MA),Uzamili wa Sayansi (MS),Uzamili wa Utawala wa Biashara (MBA),Uzamili wa Uhandisi (MEng),Uzamili wa Sanaa Nzuri (MFA),Uzamili wa Elimu (MEd),Uzamili wa Sheria (LLM),Uzamili wa Afya ya Umma (MPH),Uzamivu wa Falsafa (PhD),Uzamivu wa Udaktari (MD),Uzamivu wa Elimu (EdD),Uzamivu wa Utawala wa Biashara (DBA),Uzamivu wa Sheria (JD),Diploma ya Kitaaluma,Diploma ya Kiufundi,Cheti cha Ufundi,Cheti cha Uzamili,Diploma ya Baada ya Shahada,Baada ya Uzamivu',
     aria: {
       tabList: 'Sehemu za fomu ya wasifu',
       nextButton: 'Nenda kwenye sehemu inayofuata',
@@ -1603,89 +1429,89 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'Kifurushi',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'Dhana',
+        curator: 'Mratibu',
+        minted: 'Imeundwa',
+        tag: 'Lebo',
+        trigger: 'Kichochezi',
+        version: 'Toleo'
       },
-      current: 'current',
+      current: 'sasa',
       loadFailed: 'Imeshindwa kupakia matoleo',
       none: 'Bado hakuna matoleo yaliyotolewa — kufanya publish kunaunda v1.',
-      notServing: 'Not serving',
+      notServing: 'Haitoi huduma',
       publish: 'Unda toleo jipya',
       published: "Toleo la v{'{'}v{'}'} limechapishwa — kifurushi {'{'}f{'}'} kimehifadhiwa katika ghala la nyaraka.",
       serving: 'Imeingizwa kupitia ingest (serving)',
-      title: 'Versions'
+      title: 'Matoleo'
     },
     shell: {
       back: 'Dashibodi ya Studio',
-      building: 'Building…',
+      building: 'Inajenga…',
       buildingHint: 'Faili chanzo bado inachakatwa',
       delete: {
         body: 'Hii inaondoa kabisa ghala, dhana zake, maudhui yaliyoorodheshwa, grafu na vifurushi vyake.',
-        confirm: 'Delete',
+        confirm: 'Futa',
         title: 'Futa ghala'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: 'Hamisha .zip',
+      logs: 'Kumbukumbu',
       pii: {
         ack: 'Kubali vitambulisho vilivyowekewa alama & chapisha',
         note: 'Vitambulisho vilivyowekewa alama ni sehemu ya maudhui yaliyochapishwa. Ikiwa umeyakagua (mf. mawasiliano rasmi), yakubali na uendelee.'
       },
       publish: {
         body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Chapisha',
+        title: 'Chapisha'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'SOMA TU',
+      serving: 'Inahudumia',
       state: {
-        ingested: 'Ingested'
+        ingested: 'Imemezwa'
       },
       tab: {
-        editor: 'Editor',
-        wizard: 'Wizard'
+        editor: 'Mhariri',
+        wizard: 'Mchawi'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'Matoleo',
+      deleteLabel: 'Futa'
     },
     logs: {
       labeled: "zilizowekewa lebo: {'{'}n{'}'}",
       fallbacks: "mikakati mbadala ya LLM: {'{'}n{'}'}",
       concepts: "dhana: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'Kitendo',
+        description: 'Maelezo',
+        user: 'Mtumiaji',
+        when: 'Tarehe na saa'
       },
       count: "maingizo {'{'}n{'}'}",
       loadFailed: 'Imeshindwa kupakia kumbukumbu ya shughuli.',
       none: 'Bado hakuna shughuli iliyorekodiwa — vitendo vya ghala vitaonekana hapa vinapotokea.',
-      title: 'Activity log'
+      title: 'Kumbukumbu ya shughuli'
     },
     graph: {
       aria: 'Grafu ya dhana',
-      concepts: 'concepts',
+      concepts: 'dhana',
       empty: 'Bado hakuna dhana - hakuna cha kuonyesha kwenye grafu.',
-      fit: 'Fit graph',
+      fit: 'Kutosheleza grafu',
       hub: 'Onyesha au ficha kitovu cha faharasa (viungo vyake vya Yaliyomo ni muundo tu, si maarifa)',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: 'Inapanga…',
+      legend: 'ielezo',
+      links: 'viungo',
+      zoomIn: 'Kuza',
+      zoomOut: 'Punguza',
       card: {
         links: "viungo {'{'}n{'}'}",
         chunks: "vipande {'{'}n{'}'}",
         failed: 'uorodheshaji umeshindwa',
         flagged: 'vitambulisho vilivyowekewa alama',
-        hub: 'Index hub',
+        hub: 'Kitovu cha ielezo',
         pending: 'bado haijafanyiwa uorodheshaji'
       }
     },
@@ -1693,42 +1519,42 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (bandika au acha tupu)',
         bodyPh: '# Kichwa cha Habari\n\nBandika markdown hapa - frontmatter inaongezwa kiotomatiki kwa ajili yako.',
-        create: 'Create file',
+        create: 'Unda faili',
         failed: 'Haikuweza kuunda faili.',
         title: 'Ongeza faili ya dhana',
-        titleLabel: 'Title',
+        titleLabel: 'Kichwa',
         titlePh: 'mf. Wanyamapori katika Mara',
         updateIndex: 'Ambatisha kwenye orodha ya Yaliyomo katika faharasa'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(tupu)',
         blankBadge: 'hakuna frontmatter — pendekezo kamili',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'Tumia',
+        apply: 'Tumia masahihisho',
         body: 'Marekebisho ya frontmatter yaliyopangwa katika kila dhana. Sehemu kuu za matini hazibadilishwi kamwe.',
-        button: 'Autocorrect',
+        button: 'Usahihishaji otomatiki',
         clean: 'Hakuna cha kurekebisha — frontmatter zote tayari zinakidhi vigezo.',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'Nyanja',
+          after: 'Baada ya',
+          before: 'Kabla',
+          concept: 'Dhana'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'Kutambaza kumeshindwa.',
+        scanning: 'Inatambaza…',
         title: 'Sahihisha kiotomatiki (frontmatter pekee)'
       },
       concepts: {
         originTip: 'Jinsi dhana hii ilivyoundwa na kuratibiwa',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'Ongeza dhana',
+        addLabel: 'Weka lebo',
+        delete: 'Futa faili',
         empty: 'Bado hakuna faili - ongeza dhana au ugawanye upya kutoka chanzo.',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: 'Chuja faili',
+        indexBadge: 'ielezo',
+        label: 'Dhana',
+        loading: 'Inapakia…',
+        resplit: 'Gawanya tena',
         flagged: 'imetiwa alama',
         flaggedTip:
           'Dhana zenye vitambulisho vilivyowekewa alama — fungua kila moja, ondoa au rekebisha kitambulisho, kisha hifadhi (huchanganua tena kiotomatiki); au zikubali wakati wa kufanya publish.',
@@ -1736,15 +1562,15 @@ export default {
         piiTip:
           'Vitambulisho vilivyowekewa alama: {k}. Vifungue, viondoe au virekebishe, kisha uhifadhi — huchanganua tena kiotomatiki.',
         piiTipBare: 'Vitambulisho vilivyowekewa alama — fungua, kagua, kisha uhifadhi ili kuchanganua upya.',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: 'Kubali zote',
+        bulkRedact: 'Ficha zote',
+        bulkRemove: 'Ondoa zote',
         loadProgress: 'Inapakia faili {done}/{total}'
       },
       delete: {
         body: 'Hii inaondoa kabisa faili, vipande vyake vilivyoorodheshwa na viungo vyake vya grafu.',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'Futa',
+        title: 'Futa faili'
       },
       label: 'Kihariri cha ghala',
       loadFailed: 'Haikuweza kupakia dhana hii.',
@@ -1752,24 +1578,24 @@ export default {
       meta: {
         label: 'Data ya maelezo ya dhana',
         labelLabel: 'Lebo (Muundo wa Maarifa)',
-        noLabel: 'No label',
+        noLabel: 'Hakuna lebo',
         none: 'Hakuna dhana iliyochaguliwa',
         saveFailed: 'Uhifadhi wa data ya maelezo umeshindwa',
         saved: 'Data ya maelezo imehifadhiwa',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'Hali ya ielezo',
+        title: 'Kichwa',
+        trust: 'Kiwango cha uaminifu',
+        type: 'Aina',
+        typePlaceholder: 'Chagua aina…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'Faili',
+        graph: 'Grafu'
       },
       pickConcept: 'Chagua dhana kutoka kwenye orodha ili kuanza kuhariri.',
       resplit: {
         body: 'Hii inafuta dhana zote za sasa na grafu inayotokana nazo, kisha inaingiza tena faili chanzo kwa mgawanyo mpya. Uhariri wa dhana utapotea.',
-        confirm: 'Re-split',
+        confirm: 'Gawanya tena',
         failed: 'Ugawanyaji upya umeshindwa — kagua kiungo cha faili chanzo.',
         modeA: 'Dhana moja kwa ukusanyaji wote',
         modeAHint: 'Dhana kuu moja — maudhui yote katika dhana moja',
@@ -1779,16 +1605,16 @@ export default {
         modeCHint: 'Kisa cha 10.6 — kinakuja hivi karibuni',
         title: 'Gawanya upya kutoka chanzo'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'Hifadhi',
+      saved: 'Imehifadhiwa',
+      saving: 'Inahifadhi…',
       unsaved: 'Mabadiliko ambayo hayajahifadhiwa',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'Imetolewa',
+        source: 'Chanzo'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'Mwonekano wa mhariri',
+      paneLabel: 'Kidirisha cha mwonekano',
       saveFailed: 'Uhifadhi umeshindwa — jaribu tena',
       piiBulk: {
         title: {
@@ -1804,12 +1630,12 @@ export default {
             'Vitambulisho vyote vilivyowekewa alama vinatiwa alama ya kukaguliwa na kuhifadhiwa — havitawekewa alama tena isipokuwa ukichanganua upya.'
         },
         scope: "Dhana zilizoathirika: {'{'}n{'}'}.",
-        confirm: 'Apply',
+        confirm: 'Tumia',
         failed: 'Kitendo cha pamoja cha PII kimeshindwa — jaribu tena.'
       },
       actions: {
         bulkPii: 'Inatumia kitendo cha PII kwa pamoja',
-        deleting: 'Deleting'
+        deleting: 'Inafuta'
       }
     },
     dashboard: {
@@ -1821,23 +1647,23 @@ export default {
       },
       card: {
         actions: "Vitendo vya {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'Inajenga…',
         buildingAria: 'Inajengwa — faili chanzo bado inachakatwa',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'Futa',
+        export: 'Hamisha',
+        ingesting: 'Inameza…',
+        logs: 'Kumbukumbu',
+        rename: 'Badilisha jina',
+        versions: 'Matoleo'
       },
       delete: {
         body: 'Hii inaondoa kabisa ghala, dhana zake, maudhui yaliyoorodheshwa, grafu na vifurushi vyake. Hatua hii haiwezi kutenduliwa.',
-        confirm: 'Delete',
+        confirm: 'Futa',
         title: 'Futa ghala'
       },
       filter: {
         domain: 'Chuja kwa eneo la mada',
-        allDomains: 'All subject areas'
+        allDomains: 'Maeneo yote ya somo'
       },
       new: '+ Ghala jipya',
       pii: {
@@ -1846,37 +1672,37 @@ export default {
       },
       publish: {
         body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Chapisha',
+        title: 'Chapisha'
       },
-      search: 'Search...',
+      search: 'Tafuta...',
       select: "Chagua {'{'}name{'}'} kwa uchapishaji wa pamoja",
       stage: {
         drainFailed: 'Ingest imeshindwa',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
+        redraining: 'Inakamua tena…',
+        building: 'Inajenga…',
+        draft: 'Rasimu',
+        inReview: 'Inakaguliwa',
         ingested: "Imeingizwa kupitia ingest v{'{'}n{'}'}",
         published: "Imechapishwa v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: 'Imebatilishwa',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'Hazina',
+      topics: 'mada',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'Ingiza',
+        in_review: 'Inakaguliwa',
+        published: 'Imechapishwa',
+        ingested: 'Imemezwa',
+        retracted: 'Imebatilishwa'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'Hakuna kilichoingizwa bado',
+        in_review: 'Hakuna kinachokaguliwa',
+        published: 'Hakuna hazina zilizochapishwa bado',
+        ingested: 'Hakuna kilichomezwa bado',
+        retracted: 'Hakuna kilichobatilishwa'
       }
     },
     build: {
@@ -1886,13 +1712,13 @@ export default {
       },
       curation: {
         fallbacks: 'mikakati mbadala ya LLM',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'Imeratibiwa',
+        typed: 'Imeandikwa',
+        labeled: 'Imewekewa lebo',
+        described: 'Imefafanuliwa'
       },
       batches: 'Makundi yaliyohifadhiwa',
-      bytes: 'Source read',
+      bytes: 'Chanzo kimesomwa',
       conceptsIndexed: 'dhana zilizoorodheshwa',
       elapsed: {
         hr: "Ilianza saa {'{'}n{'}'} zilizopita",
@@ -1913,9 +1739,9 @@ export default {
         version: 'Toleo linalofanya serving'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'Inaorodhesha',
+        serving: 'Inahudumia',
+        label: 'Hatua'
       },
       title: {
         import: 'Maendeleo ya uingizaji',
@@ -1926,16 +1752,16 @@ export default {
         idle: 'Hali ya ghala'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'Inaingiza',
+        reviewing: 'Inakaguliwa',
+        ingesting: 'Inameza',
+        serving: 'Inahudumia',
+        retracted: 'Imebatilishwa'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'Eneo la somo',
+        topics: 'Mada',
+        lastVersion: 'Toleo la mwisho'
       }
     },
     create: {
@@ -1950,7 +1776,7 @@ export default {
       failed: 'Uundaji wa ghala umeshindwa',
       duplicateInline: 'Ghala lenye jina hili tayari lipo. Lifungue, au chagua jina lingine.',
       duplicate: 'Ghala lenye jina hili tayari lipo - lifungue kutoka kwenye dashibodi au chagua jina lingine.',
-      domain: 'Subject area',
+      domain: 'Eneo la somo',
       create: 'Unda ghala',
       title: 'Ghala jipya la OKF',
       hint: 'Inaunda ghala tupu lenye index.md unayoweza kuihariri katika kihariri cha Studio.',
@@ -1958,41 +1784,41 @@ export default {
       domainRequired: 'Chagua eneo la mada kwanza — haliwezi kubadilishwa baada ya kuundwa.',
       classLabel: 'Uainishaji wa dhana',
       classHeuristics: 'Mbinu za uzoefu (chaguomsingi)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'Ikisaidiwa na LLM',
+      classHybrid: 'Mseto'
     },
     fm: {
       errKeyCurated: 'Jina la uwanja limetengwa maalum.',
       errKeyDuplicate: 'Jina la uwanja limetumika mara mbili.',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON batili',
       errNumber: 'Lazima liwe nambari',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'Orodha',
+        boolean: 'Kweli/Si kweli',
+        number: 'Nambari',
+        string: 'Maandishi'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'Ondoa nyanja',
+      kindLabel: 'Aina ya thamani',
+      keyPh: 'jina la nyanja',
       fullHint: 'Kila uwanja wa frontmatter unaweza kuhaririwa. Ongeza au ondoa funguo kwa hiari.',
       errRemovalPending:
         'Kuondoa nyanja kunahitaji makubaliano ya seva ya kuunganisha na kufuta (inakuja hivi karibuni).',
       errKeyRequired: 'Kila uwanja unahitaji jina.',
       arrayPh: 'maadili yaliyotenganishwa kwa koma',
-      addKey: 'Add field',
+      addKey: 'Ongeza nyanja',
       saved: 'Frontmatter imehifadhiwa',
-      label: 'Frontmatter',
+      label: 'frontmatter',
       tipLabel: 'Frontmatter ni nini?',
-      edit: 'Edit',
+      edit: 'Hariri',
       empty: 'Bado hakuna frontmatter — Hariri ili kuongeza aina, kichwa na lebo.',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'Aina',
+      noType: 'Hakuna aina',
+      titleLabel: 'Kichwa',
       labelsLabel: 'Lebo (Muundo wa Maarifa)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'Hakuna lebo',
+      descriptionLabel: 'Maelezo',
       save: 'Hifadhi frontmatter',
       saveFailed: 'Uhifadhi wa frontmatter umeshindwa'
     },
@@ -2019,25 +1845,25 @@ export default {
         'Jinsi tunavyoamua kila dhana NI nini (mada, kitambulisho, mchakato…). Mbinu za uzoefu husoma ukurasa kiotomatiki; chaguo la LLM linachukua muda mrefu zaidi lakini linashughulikia kurasa ngumu vizuri.',
       resplit:
         'Kukata upya chanzo kuwa dhana kwa njia tofauti — kwa mfano dhana moja kwa kila ukurasa badala ya dhana moja kwa tovuti nzima.',
-      saveFailed: 'Save failed',
+      saveFailed: 'Imeshindwa kuhifadhi',
       importFailedTitle: 'Uingizaji umeshindwa — faili chanzo haikuweza kubadilishwa.',
       importFailedHint: 'Futa ghala hili na uingize faili chanzo tena.',
       frontmatter:
         'Taarifa zilizoundwa kimpangilio zilizo juu ya kila faili — aina, kichwa, lebo. Msaidizi huzitumia kujua mada ya kila dhana inahusu nini.'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: 'Uumbizaji',
+      bold: 'Koza',
+      italic: 'Italiki',
+      h1: 'Kichwa 1',
+      h2: 'Kichwa 2',
+      h3: 'Kichwa 3',
+      bullet: 'Orodha ya vitone',
       numbered: 'Orodha yenye nambari',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: 'Ingiza kiungo',
+      code: 'Msimbo wa ndani',
+      table: 'Ingiza jedwali',
+      split: 'Gawanya'
     },
     narrative: {
       intro:
@@ -2106,7 +1932,7 @@ export default {
       stage: {
         inReview: 'Iko kwenye review',
         stepOf: 'Hatua ya {n} kati ya 10',
-        draft: 'Draft'
+        draft: 'Rasimu'
       },
       dashboard: {
         title: 'Maghala',
@@ -2119,7 +1945,7 @@ export default {
         stage: {
           inReview: 'Iko kwenye review',
           stepOf: 'Hatua ya {n} kati ya 10',
-          draft: 'Draft'
+          draft: 'Rasimu'
         },
         bulk: {
           selected: '{n} zimechaguliwa',
@@ -2142,23 +1968,23 @@ export default {
         notReady: 'Rasimu bado haziwezi kuhifadhiwa kwenye seva; zimehifadhiwa hapa ndani.'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'Msingi',
+        expert: 'Mtaalamu'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'imechapishwa',
+        inReview: 'inakaguliwa',
+        draft: 'inaendelea'
       },
       exit: 'Rudi kwenye dashibodi',
       context: {
         untitled: 'Ghala lisilo na jina',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'Uaminifu',
+        title: 'Hazina',
+        stale: 'imepitwa na wakati',
+        sources: 'Vyanzo',
         concepts: 'Dhana zilizopo hadi sasa'
       },
       label: 'Kielekezi cha OKF Studio',
@@ -2275,16 +2101,16 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'Eneo la somo',
       domainPlaceholder: 'Chagua eneo la mada…',
       classLabel: 'Uainishaji wa dhana',
       classHeuristics: 'Mbinu za uzoefu (chaguomsingi)',
       classHeuristicsHint:
         'Uainishaji wa haraka unaozingatia kanuni — hakuna gharama ya LLM, inafaa kwa ukusanyaji uliopangwa vizuri.',
-      classLlm: 'LLM-assisted',
+      classLlm: 'Ikisaidiwa na LLM',
       classLlmHint:
         'LLM inaratibu kila dhana — aina, lebo ya Muundo wa Maarifa na maelezo. Ni sahihi na kamili zaidi kuliko mbinu za uzoefu; tegemea muda wa ziada kwa kila dhana.',
-      classHybrid: 'Hybrid',
+      classHybrid: 'Mseto',
       classHybridHint:
         'Mbinu za uzoefu kwanza; kisha LLM hukagua kesi zisizo na uhakika na kujaza mapengo. Inasawazisha muda na ukamilifu.',
       targetLabel: 'Hii inapaswa kuelekezwa wapi?',
@@ -2346,7 +2172,7 @@ export default {
         notReady: 'Lebo zimehifadhiwa hapa ndani — ulandanishaji wa seva unakuja hivi karibuni.'
       },
       frontmatter: {
-        label: 'Frontmatter',
+        label: 'frontmatter',
         edit: 'Hariri frontmatter',
         dialogTitle: 'Hariri frontmatter',
         okfVersion: 'okf_version',
@@ -2445,11 +2271,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'Wasilisha kwa ukaguzi',
+      approve: 'Idhinisha',
+      publish: 'Chapisha',
+      ingest: 'Meza',
+      retract: 'Batilisha'
     }
   }
 };

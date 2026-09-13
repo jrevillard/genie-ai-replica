@@ -41,7 +41,7 @@ export default {
     CG: 'Kongo',
     CD: 'Republik Demokratik Kongo',
     CR: 'Kosta Rika',
-    CI: "Côte d'Ivoire",
+    CI: 'Pantai Gading',
     HR: 'Kroasia',
     CU: 'Kuba',
     CY: 'Siprus',
@@ -156,7 +156,7 @@ export default {
     SC: 'Seychelles',
     SL: 'Sierra Leone',
     SG: 'Singapura',
-    SK: 'Slovakia',
+    SK: 'Slowakia',
     SI: 'Slovenia',
     SB: 'Kepulauan Solomon',
     SO: 'Somalia',
@@ -173,7 +173,7 @@ export default {
     TJ: 'Tajikistan',
     TZ: 'Tanzania',
     TH: 'Thailand',
-    TL: 'Timor-Leste',
+    TL: 'Timor Leste',
     TG: 'Togo',
     TO: 'Tonga',
     TT: 'Trinidad dan Tobago',
@@ -202,7 +202,7 @@ export default {
     system: 'Sistem',
     settings: 'Pengaturan',
     overview: 'Ikhtisar',
-    database: 'Database',
+    database: 'Basis Data',
     logs: 'Log',
     userManagement: 'Manajemen Pengguna',
     systemAdministration: 'Administrasi Sistem',
@@ -221,7 +221,7 @@ export default {
       overview: 'Kesehatan Sistem',
       hierarchy: 'Hierarki Pengetahuan',
       documents: 'Manajemen Dokumen',
-      database: 'Database',
+      database: 'Basis Data',
       logs: 'Log',
       security: 'Keamanan',
       users: 'Pengguna'
@@ -247,7 +247,7 @@ export default {
     resourceUsage: 'Penggunaan Sumber Daya',
     services: {
       apiServices: 'Layanan API',
-      database: 'Database',
+      database: 'Basis Data',
       cache: 'Cache',
       storage: 'Penyimpanan',
       messageQueue: 'Antrian Pesan',
@@ -266,7 +266,7 @@ export default {
     rolloverLogs: 'Rollover Log',
     searchLogs: 'Cari Log',
     logTime: 'Waktu',
-    logLevel: 'Level',
+    logLevel: 'Tingkat',
     logService: 'Layanan',
     logMessage: 'Pesan',
     showingEntries: 'Menampilkan {start}-{end} dari {total} entri',
@@ -512,51 +512,51 @@ export default {
       metadataUpdateSuccess: 'Metadata untuk file {fileId} telah diperbarui.'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
+      search: 'Cari',
+      searchPlaceholder: 'Cari teks kueri...',
+      minConfidence: 'Keyakinan Minimal',
+      maxConfidence: 'Keyakinan Maksimal',
+      from: 'Dari',
+      to: 'Kepada',
+      reset: 'Atur Ulang',
+      colTime: 'Waktu',
+      colQuestion: 'Pertanyaan Pengguna',
+      colConfidence: 'Keyakinan',
+      colResponseTime: 'Waktu Respons',
+      colSources: 'Sumber',
+      colFeedback: 'Umpan Balik',
+      colActions: 'Tindakan',
+      inspect: 'Periksa',
+      noResults: 'Tidak ada kueri yang cocok dengan filter Anda.',
+      prev: 'Sebelumnya',
+      pageInfo: 'Halaman {current} dari {total} (total {count})',
+      next: 'Berikutnya',
+      backToList: 'Kembali ke daftar',
+      detailTitle: 'Pemeriksa Kueri',
+      sectionQuestion: 'Pertanyaan Pengguna',
+      user: 'Pengguna',
+      time: 'Waktu',
+      responseTime: 'Waktu Respons',
       mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      sectionContext: 'Konteks (Label yang dikirim ke RAG)',
+      category: 'Kategori',
+      serviceLabels: 'Label Layanan',
+      language: 'Bahasa',
+      sectionMessages: 'Pesan yang Dikirim ke Pipeline',
+      sectionDocuments: 'Dokumen yang Diambil (Hasil Vector DB)',
+      score: 'Skor',
+      labels: 'Label',
+      viewDoc: 'Lihat Dokumen',
+      noDocuments: 'Tidak ada dokumen sumber yang diambil untuk kueri ini.',
+      sectionResponse: 'Respons LLM',
+      confidenceScore: 'Skor Keyakinan',
+      retrievalConfidenceScore: 'Keyakinan Pengambilan',
+      selfConfidence: 'Keyakinan Diri (LLM)',
+      sectionFeedback: 'Umpan Balik Pengguna',
+      rating: 'Peringkat',
+      comment: 'Komentar',
+      providedAt: 'Disediakan pada',
+      loadError: 'Gagal memuat kueri.'
     }
   },
   auth: {
@@ -810,102 +810,61 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Identitas & Registrasi Sipil',
-      children: ['Akta kelahiran', 'KTP', 'Paspor', 'Akta nikah dan kematian', 'Registrasi pemilih']
+      children: 'Akta kelahiran,KTP,Paspor,Akta nikah dan kematian,Registrasi pemilih'
     },
     cat2: {
       name: '2. Layanan Kesehatan & Sosial',
-      children: [
-        'Akses layanan kesehatan publik',
-        'Program vaksinasi',
-        'Asuransi kesehatan',
-        'Tunjangan disabilitas',
-        'Bantuan sosial dan pangan'
-      ]
+      children:
+        'Akses layanan kesehatan publik,Program vaksinasi,Asuransi kesehatan,Tunjangan disabilitas,Bantuan sosial dan pangan'
     },
     cat3: {
       name: '3. Pendidikan & Pembelajaran',
-      children: [
-        'Sekolah dan universitas negeri',
-        'Beasiswa dan pinjaman mahasiswa',
-        'Program pendidikan orang dewasa',
-        'Sumber belajar online'
-      ]
+      children:
+        'Sekolah dan universitas negeri,Beasiswa dan pinjaman mahasiswa,Program pendidikan orang dewasa,Sumber belajar online'
     },
     cat4: {
       name: '4. Ketenagakerjaan & Layanan Buruh',
-      children: [
-        'Pencarian kerja dan tunjangan pengangguran',
-        'Perlindungan dan hak pekerja',
-        'Peraturan keselamatan kerja',
-        'Pelatihan keterampilan dan magang'
-      ]
+      children:
+        'Pencarian kerja dan tunjangan pengangguran,Perlindungan dan hak pekerja,Peraturan keselamatan kerja,Pelatihan keterampilan dan magang'
     },
     cat5: {
       name: '5. Pajak & Pendapatan',
-      children: [
-        'Pelaporan pajak penghasilan dan restitusi',
-        'Pembayaran pajak properti',
-        'Kepatuhan pajak bisnis',
-        'Bea cukai dan impor'
-      ]
+      children:
+        'Pelaporan pajak penghasilan dan restitusi,Pembayaran pajak properti,Kepatuhan pajak bisnis,Bea cukai dan impor'
     },
     cat6: {
       name: '6. Keamanan & Keadilan Publik',
-      children: [
-        'Polisi dan layanan darurat',
-        'Pengadilan dan layanan bantuan hukum',
-        'Pelaporan kejahatan',
-        'Hukum perlindungan konsumen'
-      ]
+      children:
+        'Polisi dan layanan darurat,Pengadilan dan layanan bantuan hukum,Pelaporan kejahatan,Hukum perlindungan konsumen'
     },
     cat7: {
       name: '7. Transportasi & Mobilitas',
-      children: [
-        'SIM dan registrasi kendaraan',
-        'Transportasi umum dan infrastruktur',
-        'Pelanggaran lalu lintas dan denda',
-        'Program keselamatan jalan'
-      ]
+      children:
+        'SIM dan registrasi kendaraan,Transportasi umum dan infrastruktur,Pelanggaran lalu lintas dan denda,Program keselamatan jalan'
     },
     cat8: {
       name: '8. Perumahan & Pembangunan Kota',
-      children: [
-        'Bantuan perumahan rakyat',
-        'Pendaftaran properti dan catatan tanah',
-        'Pinjaman dan subsidi perumahan',
-        'Izin zonasi dan bangunan'
-      ]
+      children:
+        'Bantuan perumahan rakyat,Pendaftaran properti dan catatan tanah,Pinjaman dan subsidi perumahan,Izin zonasi dan bangunan'
     },
     cat9: {
       name: '9. Utilitas & Lingkungan',
-      children: [
-        'Layanan air dan listrik',
-        'Pengelolaan limbah dan daur ulang',
-        'Peraturan lingkungan',
-        'Inisiatif energi terbarukan'
-      ]
+      children:
+        'Layanan air dan listrik,Pengelolaan limbah dan daur ulang,Peraturan lingkungan,Inisiatif energi terbarukan'
     },
     cat10: {
       name: '10. Bisnis & Perdagangan',
-      children: [
-        'Pendaftaran dan perizinan usaha',
-        'Peraturan dan izin perdagangan',
-        'Hibah dan insentif UKM',
-        'Dukungan e-commerce dan bisnis digital'
-      ]
+      children:
+        'Pendaftaran dan perizinan usaha,Peraturan dan izin perdagangan,Hibah dan insentif UKM,Dukungan e-commerce dan bisnis digital'
     },
     cat11: {
       name: '11. Jaminan Sosial & Pensiun',
-      children: ['Manfaat pensiun', 'Manajemen dana pensiun', 'Manfaat ahli waris', 'Pensiun cacat']
+      children: 'Manfaat pensiun,Manajemen dana pensiun,Manfaat ahli waris,Pensiun cacat'
     },
     cat12: {
       name: '12. Keterlibatan Masyarakat & Sipil',
-      children: [
-        'Pemungutan suara dan pemilu',
-        'Umpan balik publik dan keluhan warga',
-        'Program sukarela dan komunitas',
-        'Partisipasi pemerintah daerah'
-      ]
+      children:
+        'Pemungutan suara dan pemilu,Umpan balik publik dan keluhan warga,Program sukarela dan komunitas,Partisipasi pemerintah daerah'
     }
   },
   settings: {
@@ -1245,137 +1204,10 @@ export default {
     noMatchingCountries: 'Tidak ada negara yang cocok',
     noMatchingDisciplines: 'Tidak ada disiplin ilmu yang cocok',
     noMatchingDegrees: 'Tidak ada gelar yang cocok',
-    educationOptions: [
-      'Akuntansi',
-      'Teknik Dirgantara',
-      'Ilmu Pertanian',
-      'Antropologi',
-      'Arsitektur',
-      'Sejarah Seni',
-      'Kecerdasan Buatan',
-      'Astronomi',
-      'Astrofisika',
-      'Biokimia',
-      'Teknik Biomedis',
-      'Bioteknologi',
-      'Administrasi Bisnis',
-      'Teknik Kimia',
-      'Kimia',
-      'Teknik Sipil',
-      'Komunikasi',
-      'Teknik Komputer',
-      'Ilmu Komputer',
-      'Manajemen Konstruksi',
-      'Peradilan Pidana',
-      'Keamanan Siber',
-      'Ilmu Data',
-      'Kedokteran Gigi',
-      'Ekonomi',
-      'Pendidikan',
-      'Teknik Elektro',
-      'Pendidikan Dasar',
-      'Sastra Inggris',
-      'Teknik Lingkungan',
-      'Ilmu Lingkungan',
-      'Desain Mode',
-      'Studi Film',
-      'Keuangan',
-      'Seni Rupa',
-      'Ilmu Pangan',
-      'Ilmu Forensik',
-      'Desain Game',
-      'Geografi',
-      'Geologi',
-      'Desain Grafis',
-      'Administrasi Kesehatan',
-      'Sejarah',
-      'Manajemen Perhotelan',
-      'Sumber Daya Manusia',
-      'Desain Industri',
-      'Teknik Industri',
-      'Sistem Informasi',
-      'Teknologi Informasi',
-      'Desain Interior',
-      'Bisnis Internasional',
-      'Hubungan Internasional',
-      'Jurnalisme',
-      'Hukum',
-      'Ilmu Perpustakaan',
-      'Linguistik',
-      'Manajemen',
-      'Pemasaran',
-      'Ilmu Material',
-      'Matematika',
-      'Teknik Mesin',
-      'Studi Media',
-      'Kedokteran',
-      'Meteorologi',
-      'Mikrobiologi',
-      'Musik',
-      'Nanoteknologi',
-      'Keperawatan',
-      'Gizi',
-      'Terapi Okupasi',
-      'Oseanografi',
-      'Teknik Perminyakan',
-      'Farmasi',
-      'Filsafat',
-      'Fotografi',
-      'Pendidikan Jasmani',
-      'Fisioterapi',
-      'Fisika',
-      'Ilmu Politik',
-      'Psikologi',
-      'Administrasi Publik',
-      'Kesehatan Masyarakat',
-      'Hubungan Masyarakat',
-      'Robotika',
-      'Pendidikan Menengah',
-      'Pekerjaan Sosial',
-      'Sosiologi',
-      'Rekayasa Perangkat Lunak',
-      'Pendidikan Khusus',
-      'Manajemen Olahraga',
-      'Statistik',
-      'Teknik Sistem',
-      'Seni Teater',
-      'Pariwisata',
-      'Perencanaan Kota',
-      'Kedokteran Hewan',
-      'Pengembangan Web',
-      'Biologi Satwa Liar',
-      'Zoologi'
-    ],
-    degreeOptions: [
-      'Diploma',
-      'Sarjana Seni (B.A.)',
-      'Sarjana Sains (B.S.)',
-      'Sarjana Teknik (B.Eng.)',
-      'Sarjana Administrasi Bisnis (B.B.A.)',
-      'Sarjana Seni Rupa (B.F.A.)',
-      'Sarjana Pendidikan (B.Ed.)',
-      'Sarjana Kedokteran (MBBS)',
-      'Sarjana Hukum (LL.B.)',
-      'Magister Seni (M.A.)',
-      'Magister Sains (M.S.)',
-      'Magister Administrasi Bisnis (M.B.A.)',
-      'Magister Teknik (M.Eng.)',
-      'Magister Seni Rupa (M.F.A.)',
-      'Magister Pendidikan (M.Ed.)',
-      'Magister Hukum (LL.M.)',
-      'Magister Kesehatan Masyarakat (M.P.H.)',
-      'Doktor Filsafat (Ph.D.)',
-      'Doktor Kedokteran (M.D.)',
-      'Doktor Pendidikan (Ed.D.)',
-      'Doktor Administrasi Bisnis (D.B.A.)',
-      'Doktor Yurisprudensi (J.D.)',
-      'Diploma Profesional',
-      'Diploma Teknis',
-      'Sertifikat Kejuruan',
-      'Sertifikat Pascasarjana',
-      'Diploma Pascasarjana',
-      'Pascadoktoral'
-    ],
+    educationOptions:
+      'Akuntansi,Teknik Dirgantara,Ilmu Pertanian,Antropologi,Arsitektur,Sejarah Seni,Kecerdasan Buatan,Astronomi,Astrofisika,Biokimia,Teknik Biomedis,Bioteknologi,Administrasi Bisnis,Teknik Kimia,Kimia,Teknik Sipil,Komunikasi,Teknik Komputer,Ilmu Komputer,Manajemen Konstruksi,Peradilan Pidana,Keamanan Siber,Ilmu Data,Kedokteran Gigi,Ekonomi,Pendidikan,Teknik Elektro,Pendidikan Dasar,Sastra Inggris,Teknik Lingkungan,Ilmu Lingkungan,Desain Mode,Studi Film,Keuangan,Seni Rupa,Ilmu Pangan,Ilmu Forensik,Desain Game,Geografi,Geologi,Desain Grafis,Administrasi Kesehatan,Sejarah,Manajemen Perhotelan,Sumber Daya Manusia,Desain Industri,Teknik Industri,Sistem Informasi,Teknologi Informasi,Desain Interior,Bisnis Internasional,Hubungan Internasional,Jurnalisme,Hukum,Ilmu Perpustakaan,Linguistik,Manajemen,Pemasaran,Ilmu Material,Matematika,Teknik Mesin,Studi Media,Kedokteran,Meteorologi,Mikrobiologi,Musik,Nanoteknologi,Keperawatan,Gizi,Terapi Okupasi,Oseanografi,Teknik Perminyakan,Farmasi,Filsafat,Fotografi,Pendidikan Jasmani,Fisioterapi,Fisika,Ilmu Politik,Psikologi,Administrasi Publik,Kesehatan Masyarakat,Hubungan Masyarakat,Robotika,Pendidikan Menengah,Pekerjaan Sosial,Sosiologi,Rekayasa Perangkat Lunak,Pendidikan Khusus,Manajemen Olahraga,Statistik,Teknik Sistem,Seni Teater,Pariwisata,Perencanaan Kota,Kedokteran Hewan,Pengembangan Web,Biologi Satwa Liar,Zoologi',
+    degreeOptions:
+      'Diploma,Sarjana Seni (B.A.),Sarjana Sains (B.S.),Sarjana Teknik (B.Eng.),Sarjana Administrasi Bisnis (B.B.A.),Sarjana Seni Rupa (B.F.A.),Sarjana Pendidikan (B.Ed.),Sarjana Kedokteran (MBBS),Sarjana Hukum (LL.B.),Magister Seni (M.A.),Magister Sains (M.S.),Magister Administrasi Bisnis (M.B.A.),Magister Teknik (M.Eng.),Magister Seni Rupa (M.F.A.),Magister Pendidikan (M.Ed.),Magister Hukum (LL.M.),Magister Kesehatan Masyarakat (M.P.H.),Doktor Filsafat (Ph.D.),Doktor Kedokteran (M.D.),Doktor Pendidikan (Ed.D.),Doktor Administrasi Bisnis (D.B.A.),Doktor Yurisprudensi (J.D.),Diploma Profesional,Diploma Teknis,Sertifikat Kejuruan,Sertifikat Pascasarjana,Diploma Pascasarjana,Pascadoktoral',
     aria: {
       tabList: 'Bagian formulir profil',
       nextButton: 'Lanjut ke bagian berikutnya',
@@ -1465,7 +1297,7 @@ export default {
     save: 'Simpan',
     move: 'Pindahkan',
     delete: 'Hapus',
-    ok: 'OK',
+    ok: 'Oke',
     ingest: 'Proses',
     retract: 'Tarik Kembali',
     loading: 'Memuat...',
@@ -1538,7 +1370,7 @@ export default {
       killDocument: 'Hentikan Dokumen Ini',
       killProcess: 'Hentikan Proses Pemrosesan',
       timestamp: 'Cap Waktu',
-      level: 'Level',
+      level: 'Tingkat',
       stage: 'Tahap',
       message: 'Pesan',
       loadingLogs: 'Memuat log...',
@@ -1603,83 +1435,83 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'Bundel',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'Konsep',
+        curator: 'Kurator',
+        minted: 'Dicetak',
+        tag: 'Tanda',
+        trigger: 'Pemicu',
+        version: 'Versi'
       },
-      current: 'current',
+      current: 'saat ini',
       loadFailed: 'Gagal memuat versi',
       none: 'Belum ada versi yang dicetak — melakukan publish akan membuat v1.',
-      notServing: 'Not serving',
+      notServing: 'Tidak melayani',
       publish: 'Buat versi baru',
       published: "Versi v{'{'}v{'}'} dipublikasikan — bundel {'{'}f{'}'} disimpan di repositori dokumen.",
       serving: 'Di-ingest (serving)',
-      title: 'Versions'
+      title: 'Versi'
     },
     shell: {
       back: 'Dasbor Studio',
-      building: 'Building…',
+      building: 'Membangun…',
       buildingHint: 'Berkas sumber masih diproses',
       delete: {
         body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen.',
-        confirm: 'Delete',
+        confirm: 'Hapus',
         title: 'Hapus repositori'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: 'Ekspor .zip',
+      logs: 'Log',
       pii: {
         ack: 'Konfirmasikan entitas yang ditandai & publikasikan',
         note: 'Entitas yang ditandai adalah bagian dari konten yang dipublikasikan. Jika Anda telah meninjaunya (mis. rincian kontak resmi), konfirmasikan dan lanjutkan.'
       },
       publish: {
         body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Publikasikan',
+        title: 'Publikasikan'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'BACA SAJA',
+      serving: 'Melayani',
       state: {
-        ingested: 'Ingested'
+        ingested: 'Diserap'
       },
       tab: {
         editor: 'Editor',
-        wizard: 'Wizard'
+        wizard: 'Wisaya'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'Versi',
+      deleteLabel: 'Hapus'
     },
     logs: {
       labeled: "diberi label: {'{'}n{'}'}",
       fallbacks: "fallback LLM: {'{'}n{'}'}",
       concepts: "konsep: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'Tindakan',
+        description: 'Deskripsi',
+        user: 'Pengguna',
+        when: 'Tanggal & waktu'
       },
       count: "{'{'}n{'}'} entri",
       loadFailed: 'Gagal memuat log aktivitas.',
       none: 'Belum ada aktivitas yang dicatat — tindakan repositori muncul di sini saat terjadi.',
-      title: 'Activity log'
+      title: 'Log aktivitas'
     },
     graph: {
       aria: 'Grafik konsep',
-      concepts: 'concepts',
+      concepts: 'konsep',
       empty: 'Belum ada konsep - tidak ada yang dapat digambarkan.',
-      fit: 'Fit graph',
+      fit: 'Sesuaikan grafik',
       hub: 'Tampilkan atau sembunyikan hub indeks (tautan Isinya adalah struktur, bukan pengetahuan)',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: 'Menata letak…',
+      legend: 'indeks',
+      links: 'tautan',
+      zoomIn: 'Perbesar',
+      zoomOut: 'Perkecil',
       card: {
         links: "{'{'}n{'}'} tautan",
         chunks: "{'{'}n{'}'} potongan",
@@ -1693,42 +1525,42 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (tempel atau biarkan kosong)',
         bodyPh: '# Judul\n\nTempel markdown di sini - frontmatter ditambahkan secara otomatis.',
-        create: 'Create file',
+        create: 'Buat file',
         failed: 'Tidak dapat membuat berkas.',
         title: 'Tambah berkas konsep',
-        titleLabel: 'Title',
+        titleLabel: 'Judul',
         titlePh: 'mis. Satwa liar di Mara',
         updateIndex: 'Tambahkan ke daftar Isi indeks'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(kosong)',
         blankBadge: 'tanpa frontmatter — proposal lengkap',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'Terapkan',
+        apply: 'Terapkan perbaikan',
         body: 'Perbaikan frontmatter yang direncanakan di setiap konsep. Batang tubuh tidak pernah dimodifikasi.',
-        button: 'Autocorrect',
+        button: 'Koreksi otomatis',
         clean: 'Tidak ada yang perlu diperbaiki — semua frontmatter sudah sesuai.',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'Bidang',
+          after: 'Sesudah',
+          before: 'Sebelum',
+          concept: 'Konsep'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'Pemindaian gagal.',
+        scanning: 'Memindai…',
         title: 'Koreksi otomatis (khusus frontmatter)'
       },
       concepts: {
         originTip: 'Bagaimana konsep ini dikurasi',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'Tambah konsep',
+        addLabel: 'Tetapkan label',
+        delete: 'Hapus file',
         empty: 'Belum ada berkas - tambah konsep atau bagi ulang dari sumber.',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: 'Saring file',
+        indexBadge: 'indeks',
+        label: 'Konsep',
+        loading: 'Memuat…',
+        resplit: 'Pisahkan ulang',
         flagged: 'ditandai',
         flaggedTip:
           'Konsep dengan entitas yang ditandai — buka masing-masing, hapus atau ubah entitas, simpan (memindai ulang secara otomatis); atau konfirmasikan saat publish.',
@@ -1742,8 +1574,8 @@ export default {
       },
       delete: {
         body: 'Tindakan ini menghapus berkas, potongan yang diindeks, dan tautan grafiknya secara permanen.',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'Hapus',
+        title: 'Hapus file'
       },
       label: 'Editor repositori',
       loadFailed: 'Tidak dapat memuat konsep ini.',
@@ -1751,24 +1583,24 @@ export default {
       meta: {
         label: 'Metadata konsep',
         labelLabel: 'Label (Hierarki Pengetahuan)',
-        noLabel: 'No label',
+        noLabel: 'Tidak ada label',
         none: 'Tidak ada konsep yang dipilih',
         saveFailed: 'Penyimpanan metadata gagal',
         saved: 'Metadata disimpan',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'Status indeks',
+        title: 'Judul',
+        trust: 'Tingkat kepercayaan',
+        type: 'Tipe',
+        typePlaceholder: 'Pilih tipe…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'File',
+        graph: 'Grafik'
       },
       pickConcept: 'Pilih konsep dari daftar untuk mulai mengedit.',
       resplit: {
         body: 'Tindakan ini menghapus semua konsep saat ini dan grafik turunannya, lalu mengimpor ulang berkas sumber dengan pemisahan baru. Pengeditan konsep akan hilang.',
-        confirm: 'Re-split',
+        confirm: 'Pisahkan ulang',
         failed: 'Pemisahan ulang gagal — periksa tautan berkas sumber.',
         modeA: 'Satu konsep untuk seluruh perayapan',
         modeAHint: 'Mega-konsep — seluruh konten dalam satu konsep tunggal',
@@ -1778,16 +1610,16 @@ export default {
         modeCHint: 'Story 10.6 — segera hadir',
         title: 'Bagi ulang dari sumber'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'Simpan',
+      saved: 'Tersimpan',
+      saving: 'Menyimpan…',
       unsaved: 'Perubahan belum disimpan',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'Dirender',
+        source: 'Sumber'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'Tampilan editor',
+      paneLabel: 'Panel tampilan',
       saveFailed: 'Penyimpanan gagal — coba lagi',
       piiBulk: {
         title: {
@@ -1808,7 +1640,7 @@ export default {
       },
       actions: {
         bulkPii: 'Menerapkan tindakan PII massal',
-        deleting: 'Deleting'
+        deleting: 'Menghapus'
       }
     },
     dashboard: {
@@ -1820,23 +1652,23 @@ export default {
       },
       card: {
         actions: "Tindakan untuk {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'Membangun…',
         buildingAria: 'Membangun — berkas sumber masih diproses',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'Hapus',
+        export: 'Ekspor',
+        ingesting: 'Menyerap…',
+        logs: 'Log',
+        rename: 'Ganti Nama',
+        versions: 'Versi'
       },
       delete: {
         body: 'Tindakan ini menghapus repositori, konsepnya, konten terindeks, grafik, dan artefak bundel secara permanen. Tindakan ini tidak dapat dibatalkan.',
-        confirm: 'Delete',
+        confirm: 'Hapus',
         title: 'Hapus repositori'
       },
       filter: {
         domain: 'Filter berdasarkan bidang subjek',
-        allDomains: 'All subject areas'
+        allDomains: 'Semua area subjek'
       },
       new: '+ Repositori baru',
       pii: {
@@ -1845,37 +1677,37 @@ export default {
       },
       publish: {
         body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Publikasikan',
+        title: 'Publikasikan'
       },
-      search: 'Search...',
+      search: 'Cari...',
       select: "Pilih {'{'}name{'}'} untuk publikasi massal",
       stage: {
         drainFailed: 'Proses ingest gagal',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
+        redraining: 'Mengosongkan ulang…',
+        building: 'Membangun…',
+        draft: 'Draf',
+        inReview: 'Dalam tinjauan',
         ingested: "Di-ingest v{'{'}n{'}'}",
         published: "Dipublikasikan v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: 'Ditarik',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'Repositori',
+      topics: 'topik',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'Impor',
+        in_review: 'Dalam tinjauan',
+        published: 'Dipublikasikan',
+        ingested: 'Diserap',
+        retracted: 'Ditarik'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'Belum ada yang diimpor',
+        in_review: 'Tidak ada yang dalam tinjauan',
+        published: 'Belum ada repositori yang dipublikasikan',
+        ingested: 'Belum ada yang diserap',
+        retracted: 'Tidak ada yang ditarik'
       }
     },
     build: {
@@ -1885,13 +1717,13 @@ export default {
       },
       curation: {
         fallbacks: 'fallback LLM',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'Dikurasi',
+        typed: 'Diberi tipe',
+        labeled: 'Diberi label',
+        described: 'Dideskripsikan'
       },
       batches: 'Batch disimpan',
-      bytes: 'Source read',
+      bytes: 'Sumber dibaca',
       conceptsIndexed: 'konsep diindeks',
       elapsed: {
         hr: "Dimulai {'{'}n{'}'} jam lalu",
@@ -1912,9 +1744,9 @@ export default {
         version: 'Versi serving'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'Mengindeks',
+        serving: 'Melayani',
+        label: 'Tahap'
       },
       title: {
         import: 'Kemajuan impor',
@@ -1925,16 +1757,16 @@ export default {
         idle: 'Status repositori'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'Mengimpor',
+        reviewing: 'Meninjau',
+        ingesting: 'Menyerap',
+        serving: 'Melayani',
+        retracted: 'Ditarik'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'Area subjek',
+        topics: 'Topik',
+        lastVersion: 'Versi terakhir'
       }
     },
     create: {
@@ -1949,7 +1781,7 @@ export default {
       failed: 'Pembuatan repositori gagal',
       duplicateInline: 'Repositori dengan nama ini sudah ada. Buka, atau pilih nama lain.',
       duplicate: 'Repositori dengan nama ini sudah ada - buka dari dasbor atau pilih nama lain.',
-      domain: 'Subject area',
+      domain: 'Area subjek',
       create: 'Buat repositori',
       title: 'Repositori OKF baru',
       hint: 'Membuat repositori kosong dengan index.md yang dapat Anda edit di editor Studio.',
@@ -1957,40 +1789,40 @@ export default {
       domainRequired: 'Pilih bidang subjek terlebih dahulu — tidak dapat diubah setelah pembuatan.',
       classLabel: 'Klasifikasi konsep',
       classHeuristics: 'Heuristik (default)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'Berbantuan LLM',
+      classHybrid: 'Hibrida'
     },
     fm: {
       errKeyCurated: 'Nama bidang khusus yang dipesan.',
       errKeyDuplicate: 'Nama bidang digunakan dua kali.',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON tidak valid',
       errNumber: 'Harus berupa angka',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'Daftar',
+        boolean: 'Benar/salah',
+        number: 'Angka',
+        string: 'Teks'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'Hapus bidang',
+      kindLabel: 'Tipe nilai',
+      keyPh: 'nama bidang',
       fullHint: 'Setiap bidang frontmatter dapat diedit. Tambah atau hapus kunci secara bebas.',
       errRemovalPending: 'Menghapus bidang membutuhkan kontrak server merge-delete (segera hadir).',
       errKeyRequired: 'Setiap bidang membutuhkan nama.',
       arrayPh: 'nilai yang dipisahkan koma',
-      addKey: 'Add field',
+      addKey: 'Tambah bidang',
       saved: 'Frontmatter disimpan',
       label: 'Frontmatter',
       tipLabel: 'Apa itu Frontmatter?',
       edit: 'Edit',
       empty: 'Belum ada frontmatter — Edit untuk menambahkan jenis, judul, dan label.',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'Tipe',
+      noType: 'Tidak ada tipe',
+      titleLabel: 'Judul',
       labelsLabel: 'Label (Hierarki Pengetahuan)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'Tidak ada label',
+      descriptionLabel: 'Deskripsi',
       save: 'Simpan frontmatter',
       saveFailed: 'Penyimpanan frontmatter gagal'
     },
@@ -2017,25 +1849,25 @@ export default {
         'Bagaimana kami menentukan entitas apa dari setiap konsep (topik, entitas, proses…). Heuristik membaca halaman secara otomatis; opsi LLM lebih lambat tetapi dapat menangani halaman yang rumit.',
       resplit:
         'Memotong ulang sumber menjadi konsep dengan cara berbeda — misalnya satu konsep per halaman alih-alih satu untuk seluruh situs.',
-      saveFailed: 'Save failed',
+      saveFailed: 'Gagal menyimpan',
       importFailedTitle: 'Impor gagal — berkas sumber tidak dapat dikonversi.',
       importFailedHint: 'Hapus repositori ini dan impor kembali berkas sumber.',
       frontmatter:
         'Informasi terstruktur di bagian atas setiap berkas — jenis, judul, label. Asisten menggunakannya untuk mengetahui tentang apa konsep tersebut.'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: 'Pemformatan',
+      bold: 'Tebal',
+      italic: 'Miring',
+      h1: 'Judul 1',
+      h2: 'Judul 2',
+      h3: 'Judul 3',
+      bullet: 'Daftar berpoin',
       numbered: 'Daftar bernomor',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: 'Sisipkan tautan',
+      code: 'Kode sebaris',
+      table: 'Sisipkan tabel',
+      split: 'Pisahkan'
     },
     narrative: {
       intro:
@@ -2085,7 +1917,7 @@ export default {
         'Repositori OKF adalah lapisan ontologis ringan — label menentukan kategori, topik menentukan entitas, sumber menentukan asal-usul. Setelah dipublikasikan, jawaban obrolan mengutip topik berdasarkan id dan memunculkan asal-usulnya.',
       view: {
         dashboard: 'Dasbor',
-        wizard: 'Wizard'
+        wizard: 'Wisaya'
       },
       clonedFrom: 'Dikloning dari {name} · versi {version}',
       context: {
@@ -2104,7 +1936,7 @@ export default {
       stage: {
         inReview: 'Dalam status review',
         stepOf: 'Langkah {n} dari 10',
-        draft: 'Draft'
+        draft: 'Draf'
       },
       dashboard: {
         title: 'Repositori',
@@ -2117,7 +1949,7 @@ export default {
         stage: {
           inReview: 'Dalam status review',
           stepOf: 'Langkah {n} dari 10',
-          draft: 'Draft'
+          draft: 'Draf'
         },
         bulk: {
           selected: '{n} dipilih',
@@ -2140,23 +1972,23 @@ export default {
         notReady: 'Draf belum dapat disimpan di sisi server; disimpan secara lokal.'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'Dasar',
+        expert: 'Ahli'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'dipublikasikan',
+        inReview: 'dalam tinjauan',
+        draft: 'sedang berlangsung'
       },
       exit: 'Kembali ke dasbor',
       context: {
         untitled: 'Repositori tanpa judul',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'Kepercayaan',
+        title: 'Repositori',
+        stale: 'usang',
+        sources: 'Sumber',
         concepts: 'Konsep sejauh ini'
       },
       label: 'Wizard OKF Studio',
@@ -2273,16 +2105,16 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'Area subjek',
       domainPlaceholder: 'Pilih bidang subjek…',
       classLabel: 'Klasifikasi konsep',
       classHeuristics: 'Heuristik (default)',
       classHeuristicsHint:
         'Klasifikasi berbasis aturan yang cepat — tanpa biaya LLM, baik untuk perayapan yang terstruktur rapi.',
-      classLlm: 'LLM-assisted',
+      classLlm: 'Berbantuan LLM',
       classLlmHint:
         'LLM mengurasi setiap konsep — jenis, label Hierarki Pengetahuan, dan deskripsi. Jauh lebih akurat dan lengkap daripada heuristik; memerlukan waktu tambahan per konsep.',
-      classHybrid: 'Hybrid',
+      classHybrid: 'Hibrida',
       classHybridHint:
         'Heuristik terlebih dahulu; LLM meninjau kasus yang belum pasti dan melengkapi celah. Seimbang antara waktu dan kelengkapan.',
       targetLabel: 'Ke mana ini harus disimpan?',
@@ -2443,11 +2275,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'Kirim untuk ditinjau',
+      approve: 'Setujui',
+      publish: 'Publikasikan',
+      ingest: 'Serap',
+      retract: 'Tarik'
     }
   }
 };

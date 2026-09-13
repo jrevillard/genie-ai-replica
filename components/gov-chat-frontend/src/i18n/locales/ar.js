@@ -1863,7 +1863,8 @@ export default {
       link: 'إدراج رابط',
       code: 'رمز مضمن',
       table: 'إدراج جدول',
-      split: 'تقسيم'
+      split: 'تقسيم',
+      rendering: 'جارٍ العرض…'
     },
     narrative: {
       intro:

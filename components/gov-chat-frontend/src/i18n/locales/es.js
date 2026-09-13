@@ -1884,7 +1884,8 @@ export default {
       link: 'Insertar enlace',
       code: 'Código en línea',
       table: 'Insertar tabla',
-      split: 'Dividir'
+      split: 'Dividir',
+      rendering: 'Renderizando…'
     },
     narrative: {
       intro:

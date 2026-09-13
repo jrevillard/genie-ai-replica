@@ -1883,7 +1883,8 @@ export default {
       link: 'Inserir link',
       code: 'Código em linha',
       table: 'Inserir tabela',
-      split: 'Dividir'
+      split: 'Dividir',
+      rendering: 'Renderizando…'
     },
     narrative: {
       intro:

@@ -22,7 +22,7 @@
             : translate('okf.pii.scanError', 'Scan unavailable')
         }}
       </DsPill>
-      <DsButton small variant="secondary" :disabled="loading || busy !== null" @click="load">
+      <DsButton small variant="secondary" :disabled="loading || busy !== null" @click="load(true)">
         {{ translate('okf.pii.rescan', 'Re-scan') }}
       </DsButton>
     </header>
@@ -255,11 +255,13 @@ export default {
       if (Array.isArray(payload.occurrences)) this.occurrences = payload.occurrences;
       if (Array.isArray(payload.resolutions)) this.resolutions = payload.resolutions;
     },
-    async load() {
+    // force (David, 2026-09-13): the Re-scan button passes force=true — the
+    // server bypasses its findings cache and runs a live Presidio scan.
+    async load(force) {
       this.loading = true;
       this.error = '';
       try {
-        const out = await repoOkfService.inspectPii(this.repoId, this.conceptId);
+        const out = await repoOkfService.inspectPii(this.repoId, this.conceptId, { rescan: Boolean(force) });
         this.ok = Boolean(out.ok);
         this.occurrences = Array.isArray(out.occurrences) ? out.occurrences : [];
         this.resolutions = Array.isArray(out.resolutions) ? out.resolutions : [];

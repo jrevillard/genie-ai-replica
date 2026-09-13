@@ -28,9 +28,19 @@
     </header>
 
     <p v-if="error" class="okf-pii__error">{{ error }}</p>
-    <p v-if="loading" class="okf-pii__empty">
-      <DsSpinner size="sm" /> {{ translate('okf.pii.scanning', 'Scanning…') }}
-    </p>
+    <!-- SCAN PROGRESS (David, 2026-09-13): a moving bar (not just a spinner)
+         while the live Presidio scan runs — visible feedback that something
+         is happening during the wait. -->
+    <div v-if="loading" class="okf-pii__scanning">
+      <DsProgress
+        indeterminate
+        size="sm"
+        variant="warning"
+        show-label
+        :label="translate('okf.pii.scanning', 'Scanning…')"
+        :aria-label="translate('okf.pii.scanning', 'Scanning…')"
+      />
+    </div>
     <p v-else-if="!ok" class="okf-pii__empty">
       {{
         translate(
@@ -167,12 +177,13 @@ import translateMixin from '../../../mixins/translateMixin';
 import DsButton from '../../ds/Button.vue';
 import DsInput from '../../ds/Input.vue';
 import DsPill from '../../ds/Pill.vue';
+import DsProgress from '../../ds/Progress.vue';
 import DsSpinner from '../../ds/Spinner.vue';
 import repoOkfService from '../../../services/repoOkfService';
 
 export default {
   name: 'OkfPiiOccurrences',
-  components: { DsButton, DsInput, DsPill, DsSpinner },
+  components: { DsButton, DsInput, DsPill, DsProgress, DsSpinner },
   mixins: [translateMixin],
   props: {
     repoId: { type: String, required: true },
@@ -450,6 +461,9 @@ export default {
   color: var(--text-muted, inherit);
   margin: 0;
   font-size: var(--text-sm);
+}
+.okf-pii__scanning {
+  padding: 2px 0;
 }
 .okf-pii__list {
   margin: 0;

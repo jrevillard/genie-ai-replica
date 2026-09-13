@@ -1877,7 +1877,8 @@ export default {
       link: 'Link einfügen',
       code: 'Inline-Code',
       table: 'Tabelle einfügen',
-      split: 'Teilen'
+      split: 'Teilen',
+      rendering: 'Wird gerendert…'
     },
     narrative: {
       intro:

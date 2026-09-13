@@ -1,6 +1,16 @@
 <!--
   DsOkfMarkdownEditor.vue — markdown-it + DOMPurify + highlight.js wrapper.
 
+  MAIN-THREAD SAFETY (David, 2026-09-13, "Page Unresponsive" fix): large
+  crawled concepts froze the whole page — the old renderedHtml computed ran
+  gray-matter over the FULL document plus markdown-it render + DOMPurify
+  sanitize synchronously, on every keystroke and every load. Now:
+    - frontmatter is split out by a bounded regex and only the fm BLOCK is
+      parsed (O(frontmatter), not O(document));
+    - the preview renders ASYNC in fence-aware chunks that yield to the event
+      loop between chunks, debounced after edits, with a DsProgress strip —
+      the page stays responsive and shows progress instead of freezing.
+
   Behaviour:
     - mode prop: 'split' (default), 'preview' (rendered only), 'source' (raw only)
     - expert prop: when true, exposes an [Edit frontmatter] dialog with the v0.2 schema
@@ -60,7 +70,22 @@
     </div>
 
     <div class="ds-okf-md__panes" :class="panesClass">
-      <div v-if="showPreviewPane" class="ds-okf-md__preview" @click="onPreviewClick" v-html="renderedHtml" />
+      <div v-if="showPreviewPane" class="ds-okf-md__previewwrap">
+        <!-- CHUNKED-RENDER PROGRESS (2026-09-13): visible feedback while large
+             bodies render — the UI thread is yielding between chunks, so this
+             stays animated instead of the old page-wide freeze. -->
+        <div v-if="rendering" class="ds-okf-md__renderbar">
+          <DsProgress
+            :value="renderDone"
+            :max="renderTotal || 1"
+            size="xs"
+            show-label
+            :label="renderLabel"
+            :aria-label="renderLabel"
+          />
+        </div>
+        <div class="ds-okf-md__preview" @click="onPreviewClick" v-html="renderedHtml" />
+      </div>
       <div v-if="showSourcePane" class="ds-okf-md__source">
         <!-- MARKDOWN FORMATTING TOOLBAR (David, 2026-09-06): OKF bodies ARE
              markdown, but users unfamiliar with the syntax need the buttons.
@@ -140,6 +165,7 @@ import json from 'highlight.js/lib/languages/json';
 import yaml from 'highlight.js/lib/languages/yaml';
 import matter from 'gray-matter';
 import taskLists from 'markdown-it-task-lists';
+import DsProgress from './Progress.vue';
 import DsInput from './Input.vue';
 import DsSelect from './Select.vue';
 import DsFormGroup from './FormGroup.vue';
@@ -258,7 +284,7 @@ const STATUS_OPTIONS = [
 
 export default {
   name: 'DsOkfMarkdownEditor',
-  components: { DsInput, DsSelect, DsFormGroup, DsTable, DsDialog },
+  components: { DsInput, DsSelect, DsFormGroup, DsTable, DsDialog, DsProgress },
   props: {
     value: { type: String, default: '' },
     mode: { type: String, default: 'split', validator: (v) => MODES.includes(v) },
@@ -282,13 +308,25 @@ export default {
       sourceShown: false,
       frontmatterDialog: false,
       draftFrontmatter: this.deriveFrontmatter(this.value || ''),
-      statusOptions: STATUS_OPTIONS
+      statusOptions: STATUS_OPTIONS,
+      // ASYNC CHUNKED RENDER (2026-09-13): renderedHtml is filled by the
+      // debounced chunked pipeline below — never a whole-document synchronous
+      // computed again.
+      renderedHtml: '',
+      rendering: false,
+      renderDone: 0,
+      renderTotal: 0
     };
   },
   computed: {
     parsed() {
+      // CHEAP SPLIT (2026-09-13): parse ONLY the frontmatter block — the old
+      // full gray-matter parse of the whole document ran on every keystroke.
       try {
-        return matter(this.localValue || '');
+        const s = String(this.localValue || '');
+        const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(s);
+        if (!m) return { data: {}, content: s };
+        return { data: matter('---\n' + m[1] + '\n---').data || {}, content: s.slice(m[0].length) };
       } catch {
         return { data: {}, content: this.localValue || '' };
       }
@@ -302,14 +340,10 @@ export default {
     frontmatterPresent() {
       return this.enableFrontmatter && Object.keys(this.parsedData).length > 0;
     },
-    renderedHtml() {
-      if (!this.md) return '';
-      const raw = this.md.render(this.contentBody || '');
-      // Decorate matched lines: scan issues, find ones tied to a line range, wrap
-      // the next <p>/<li>/<h*> block with data attrs. Conservative — only
-      // marker on matching line if a line range is provided.
-      const html = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
-      return html;
+    renderLabel() {
+      const base = this.$t ? this.$t('okf.md.rendering', 'Rendering…') : 'Rendering…';
+      const pct = Math.round((this.renderDone / (this.renderTotal || 1)) * 100);
+      return base + ' ' + pct + '%';
     },
     panesClass() {
       return `ds-okf-md__panes--${this.currentMode}`;
@@ -390,7 +424,21 @@ export default {
         this.localValue = v || '';
         this.draftFrontmatter = this.deriveFrontmatter(this.localValue);
       }
+    },
+    // ASYNC CHUNKED RENDER triggers: body edits re-render debounced; a mode
+    // switch that reveals the preview pane renders immediately.
+    contentBody() {
+      this.scheduleRender();
+    },
+    currentMode() {
+      if (this.showPreviewPane) this.scheduleRender(true);
     }
+  },
+  mounted() {
+    if (this.showPreviewPane) this.scheduleRender(true);
+  },
+  beforeUnmount() {
+    if (this._renderTimer) clearTimeout(this._renderTimer);
   },
   created() {
     // markdown-it v14 REMOVED MarkdownIt.prototype.utils — the old
@@ -421,6 +469,73 @@ export default {
     }).use(taskLists, { enabled: true, label: true });
   },
   methods: {
+    // ── ASYNC CHUNKED RENDER (2026-09-13 "Page Unresponsive" fix) ─────────
+    // Fence-aware splitter: chunks break ONLY at line boundaries outside a
+    // ``` / ~~~ fence, so no code block is ever split across renders.
+    splitRenderChunks(body) {
+      if (body.length <= 48000) return [body];
+      const chunks = [];
+      let start = 0;
+      let fence = false;
+      let i = 0;
+      while (i < body.length) {
+        const nl = body.indexOf('\n', i);
+        const lineEnd = nl === -1 ? body.length : nl + 1;
+        const line = body.slice(i, lineEnd);
+        if (/^\s*(```|~~~)/.test(line)) fence = !fence;
+        if (!fence && lineEnd - start >= 48000) {
+          chunks.push(body.slice(start, lineEnd));
+          start = lineEnd;
+        }
+        i = lineEnd;
+      }
+      if (start < body.length) chunks.push(body.slice(start));
+      return chunks.length ? chunks : [body];
+    },
+    // Debounced scheduler — rapid typing never queues a render per keystroke.
+    scheduleRender(immediate) {
+      if (this._renderTimer) {
+        clearTimeout(this._renderTimer);
+        this._renderTimer = null;
+      }
+      if (!this.showPreviewPane) return; // never render a hidden pane
+      if (immediate) {
+        this.renderNow();
+        return;
+      }
+      this._renderTimer = setTimeout(() => {
+        this._renderTimer = null;
+        this.renderNow();
+      }, 250);
+    },
+    // Chunked pipeline: render + sanitize one bounded chunk at a time,
+    // yielding to the event loop between chunks (macrotask) so scroll, input
+    // and buttons stay LIVE — the old synchronous whole-document render is
+    // what froze the page and summoned the browser's "Page Unresponsive".
+    async renderNow() {
+      if (!this.md) return;
+      const seq = (this._renderSeq = (this._renderSeq || 0) + 1);
+      const body = this.contentBody || '';
+      if (!body) {
+        this.renderedHtml = '';
+        this.rendering = false;
+        return;
+      }
+      const chunks = this.splitRenderChunks(body);
+      this.rendering = chunks.length > 1;
+      this.renderDone = 0;
+      this.renderTotal = chunks.length;
+      let html = '';
+      for (let i = 0; i < chunks.length; i++) {
+        if (seq !== this._renderSeq) return; // superseded by a newer edit
+        html += DOMPurify.sanitize(this.md.render(chunks[i]), { USE_PROFILES: { html: true } });
+        this.renderDone = i + 1;
+        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 0));
+      }
+      if (seq !== this._renderSeq) return;
+      this.renderedHtml = html;
+      this.rendering = false;
+    },
     setMode(m) {
       if (!MODES.includes(m) || m === this.currentMode) return;
       this.currentMode = m;
@@ -479,7 +594,10 @@ export default {
     },
     deriveFrontmatter(raw) {
       try {
-        const parsed = matter(raw || '');
+        // Cheap fm-only split — same rationale as the parsed computed.
+        const s = String(raw || '');
+        const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(s);
+        const parsed = m ? matter('---\n' + m[1] + '\n---') : { data: {} };
         return {
           okf_version: parsed.data?.okf_version || '',
           lifecycle: {
@@ -612,6 +730,14 @@ export default {
   grid-template-columns: 1fr;
 }
 
+.ds-okf-md__previewwrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ds-okf-md__renderbar {
+  padding: var(--space-xs) var(--space-md) 0;
+}
 .ds-okf-md__preview {
   padding: var(--space-md);
   overflow-y: auto;

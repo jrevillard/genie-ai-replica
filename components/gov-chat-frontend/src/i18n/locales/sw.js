@@ -1497,6 +1497,7 @@ export default {
     },
     graph: {
       aria: 'Grafu ya dhana',
+      building: 'Inaandaa grafu…',
       concepts: 'dhana',
       empty: 'Bado hakuna dhana - hakuna cha kuonyesha kwenye grafu.',
       fit: 'Kutosheleza grafu',

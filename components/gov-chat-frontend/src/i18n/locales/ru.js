@@ -1877,7 +1877,8 @@ export default {
       link: 'Вставить ссылку',
       code: 'Встроенный код',
       table: 'Вставить таблицу',
-      split: 'Разделить'
+      split: 'Разделить',
+      rendering: 'Отрисовка…'
     },
     narrative: {
       intro:

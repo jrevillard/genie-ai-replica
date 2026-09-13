@@ -1856,7 +1856,8 @@ export default {
       link: 'Link kafu',
       code: 'Inline code',
       table: 'Table kafu',
-      split: 'A farra'
+      split: 'A farra',
+      rendering: 'A bering keta…'
     },
     narrative: {
       intro:

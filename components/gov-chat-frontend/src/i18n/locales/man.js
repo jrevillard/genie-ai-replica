@@ -1486,6 +1486,7 @@ export default {
     },
     graph: {
       aria: 'Graf in kōm̦m̦an',
+      building: 'Preparing graph…',
       concepts: 'miroolu',
       empty: 'Ejjan̄in wōr kōm̦m̦an - ejjel̦o̦k men in kōm̦m̦an graf ie.',
       fit: 'Jaa loo',

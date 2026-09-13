@@ -509,51 +509,51 @@ export default {
       metadataUpdateSuccess: 'อัปเดตข้อมูลเมตาสำหรับไฟล์ {fileId} แล้ว'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'ค้นหา',
+      searchPlaceholder: 'ค้นหาข้อความคำค้นหา...',
+      minConfidence: 'ความมั่นใจต่ำสุด',
+      maxConfidence: 'ความมั่นใจสูงสุด',
+      from: 'จาก',
+      to: 'ถึง',
+      reset: 'รีเซ็ต',
+      colTime: 'เวลา',
+      colQuestion: 'คำถามของผู้ใช้',
+      colConfidence: 'ความมั่นใจ',
+      colResponseTime: 'เวลาตอบสนอง',
+      colSources: 'แหล่งที่มา',
+      colFeedback: 'ความคิดเห็น',
+      colActions: 'การดำเนินการ',
+      inspect: 'ตรวจสอบ',
+      noResults: 'ไม่พบคำค้นหาที่ตรงกับตัวกรองของคุณ',
+      prev: 'ก่อนหน้า',
+      pageInfo: 'หน้า {current} จาก {total} (ทั้งหมด {count})',
+      next: 'ถัดไป',
+      backToList: 'กลับไปที่รายการ',
+      detailTitle: 'ตัวตรวจสอบคำค้นหา',
+      sectionQuestion: 'คำถามของผู้ใช้',
+      user: 'ผู้ใช้',
+      time: 'เวลา',
+      responseTime: 'เวลาตอบสนอง',
+      mode: 'โหมด',
+      sectionContext: 'บริบท (ป้ายกำกับที่ส่งไปยัง RAG)',
+      category: 'หมวดหมู่',
+      serviceLabels: 'ป้ายกำกับบริการ',
+      language: 'ภาษา',
+      sectionMessages: 'ข้อความที่ส่งไปยังไปป์ไลน์',
+      sectionDocuments: 'เอกสารที่ดึงมา (ผลลัพธ์ Vector DB)',
+      score: 'คะแนน',
+      labels: 'ป้ายกำกับ',
+      viewDoc: 'ดูเอกสาร',
+      noDocuments: 'ไม่พบเอกสารต้นฉบับสำหรับคำค้นหานี้',
+      sectionResponse: 'การตอบกลับของ LLM',
+      confidenceScore: 'คะแนนความมั่นใจ',
+      retrievalConfidenceScore: 'ความมั่นใจในการดึงข้อมูล',
+      selfConfidence: 'ความมั่นใจในตนเอง (LLM)',
+      sectionFeedback: 'ความคิดเห็นของผู้ใช้',
+      rating: 'คะแนน',
+      comment: 'ความคิดเห็น',
+      providedAt: 'ให้ไว้เมื่อ',
+      loadError: 'ไม่สามารถโหลดคำค้นหาได้'
     }
   },
   auth: {
@@ -799,7 +799,7 @@ export default {
     errorDeletingFolder: 'ล้มเหลวในการลบโฟลเดอร์',
     chatRemovedFromFolders: 'ลบการสนทนาออกจากโฟลเดอร์',
     errorRemovingChat: 'ล้มเหลวในการลบการสนทนาจากโฟลเดอร์',
-    id: 'ID',
+    id: 'ไอดี',
     labels: 'ป้ายกำกับ',
     confidence: 'ความมั่นใจ',
     unknown: 'ไม่ทราบ'
@@ -807,103 +807,58 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. เอกลักษณ์และการทะเบียนพลเรือน',
-      children: [
-        'สูติบัตร',
-        'บัตรประชาชนแห่งชาติ',
-        'หนังสือเดินทาง',
-        'ทะเบียนสมรสและมรณบัตร',
-        'การลงทะเบียนผู้มีสิทธิเลือกตั้ง'
-      ]
+      children: 'สูติบัตร,บัตรประชาชนแห่งชาติ,หนังสือเดินทาง,ทะเบียนสมรสและมรณบัตร,การลงทะเบียนผู้มีสิทธิเลือกตั้ง'
     },
     cat2: {
       name: '2. การดูแลสุขภาพและบริการสังคม',
-      children: [
-        'การเข้าถึงการดูแลสุขภาพสาธารณะ',
-        'โปรแกรมการฉีดวัคซีน',
-        'ประกันสุขภาพ',
-        'ผลประโยชน์คนพิการ',
-        'สวัสดิการและความช่วยเหลือด้านอาหาร'
-      ]
+      children:
+        'การเข้าถึงการดูแลสุขภาพสาธารณะ,โปรแกรมการฉีดวัคซีน,ประกันสุขภาพ,ผลประโยชน์คนพิการ,สวัสดิการและความช่วยเหลือด้านอาหาร'
     },
     cat3: {
       name: '3. การศึกษาและการเรียนรู้',
-      children: [
-        'โรงเรียนรัฐและมหาวิทยาลัย',
-        'ทุนการศึกษาและเงินกู้ยืมนักศึกษา',
-        'โปรแกรมการศึกษาผู้ใหญ่',
-        'ทรัพยากรการเรียนรู้ออนไลน์'
-      ]
+      children:
+        'โรงเรียนรัฐและมหาวิทยาลัย,ทุนการศึกษาและเงินกู้ยืมนักศึกษา,โปรแกรมการศึกษาผู้ใหญ่,ทรัพยากรการเรียนรู้ออนไลน์'
     },
     cat4: {
       name: '4. การจ้างงานและบริการแรงงาน',
-      children: [
-        'การค้นหางานและผลประโยชน์การว่างงาน',
-        'การคุ้มครองแรงงานและสิทธิแรงงาน',
-        'กฎระเบียบความปลอดภัยในที่ทำงาน',
-        'การฝึกทักษะและการฝึกงาน'
-      ]
+      children:
+        'การค้นหางานและผลประโยชน์การว่างงาน,การคุ้มครองแรงงานและสิทธิแรงงาน,กฎระเบียบความปลอดภัยในที่ทำงาน,การฝึกทักษะและการฝึกงาน'
     },
     cat5: {
       name: '5. ภาษีและรายได้',
-      children: [
-        'การยื่นภาษีเงินได้และการคืนเงิน',
-        'การชำระภาษีทรัพย์สิน',
-        'การปฏิบัติตามภาษีธุรกิจ',
-        'ศุลกากรและอากรนำเข้า'
-      ]
+      children: 'การยื่นภาษีเงินได้และการคืนเงิน,การชำระภาษีทรัพย์สิน,การปฏิบัติตามภาษีธุรกิจ,ศุลกากรและอากรนำเข้า'
     },
     cat6: {
       name: '6. ความปลอดภัยสาธารณะและความยุติธรรม',
-      children: [
-        'ตำรวจและบริการฉุกเฉิน',
-        'ศาลและบริการช่วยเหลือทางกฎหมาย',
-        'การรายงานอาชญากรรม',
-        'กฎหมายคุ้มครองผู้บริโภค'
-      ]
+      children: 'ตำรวจและบริการฉุกเฉิน,ศาลและบริการช่วยเหลือทางกฎหมาย,การรายงานอาชญากรรม,กฎหมายคุ้มครองผู้บริโภค'
     },
     cat7: {
       name: '7. การขนส่งและการเคลื่อนไหว',
-      children: [
-        'ใบขับขี่และการจดทะเบียนยานพาหนะ',
-        'การขนส่งสาธารณะและโครงสร้างพื้นฐาน',
-        'การละเมิดกฎจราจรและค่าปรับ',
-        'โปรแกรมความปลอดภัยทางถนน'
-      ]
+      children:
+        'ใบขับขี่และการจดทะเบียนยานพาหนะ,การขนส่งสาธารณะและโครงสร้างพื้นฐาน,การละเมิดกฎจราจรและค่าปรับ,โปรแกรมความปลอดภัยทางถนน'
     },
     cat8: {
       name: '8. ที่อยู่อาศัยและการพัฒนาเมือง',
-      children: [
-        'ความช่วยเหลือที่อยู่อาศัยสาธารณะ',
-        'การจดทะเบียนทรัพย์สินและบันทึกที่ดิน',
-        'เงินกู้และเงินอุดหนุนที่อยู่อาศัย',
-        'การแบ่งเขตและใบอนุญาตก่อสร้าง'
-      ]
+      children:
+        'ความช่วยเหลือที่อยู่อาศัยสาธารณะ,การจดทะเบียนทรัพย์สินและบันทึกที่ดิน,เงินกู้และเงินอุดหนุนที่อยู่อาศัย,การแบ่งเขตและใบอนุญาตก่อสร้าง'
     },
     cat9: {
       name: '9. สาธารณูปโภคและสิ่งแวดล้อม',
-      children: ['บริการน้ำและไฟฟ้า', 'การจัดการขยะและรีไซเคิล', 'กฎระเบียบสิ่งแวดล้อม', 'โครงการพลังงานหมุนเวียน']
+      children: 'บริการน้ำและไฟฟ้า,การจัดการขยะและรีไซเคิล,กฎระเบียบสิ่งแวดล้อม,โครงการพลังงานหมุนเวียน'
     },
     cat10: {
       name: '10. ธุรกิจและการค้า',
-      children: [
-        'การจดทะเบียนและใบอนุญาตธุรกิจ',
-        'กฎระเบียบและใบอนุญาตการค้า',
-        'ทุนและสิ่งจูงใจธุรกิจขนาดเล็ก',
-        'การสนับสนุนอีคอมเมิร์ซและธุรกิจดิจิทัล'
-      ]
+      children:
+        'การจดทะเบียนและใบอนุญาตธุรกิจ,กฎระเบียบและใบอนุญาตการค้า,ทุนและสิ่งจูงใจธุรกิจขนาดเล็ก,การสนับสนุนอีคอมเมิร์ซและธุรกิจดิจิทัล'
     },
     cat11: {
       name: '11. ประกันสังคมและบำนาญ',
-      children: ['ผลประโยชน์การเกษียณอายุ', 'การจัดการกองทุนบำนาญ', 'ผลประโยชน์ผู้รอดชีวิต', 'บำนาญคนพิการ']
+      children: 'ผลประโยชน์การเกษียณอายุ,การจัดการกองทุนบำนาญ,ผลประโยชน์ผู้รอดชีวิต,บำนาญคนพิการ'
     },
     cat12: {
       name: '12. ชุมชนและการมีส่วนร่วมพลเมือง',
-      children: [
-        'การลงคะแนนและการเลือกตั้ง',
-        'ความคิดเห็นสาธารณะและข้อร้องเรียนพลเมือง',
-        'อาสาสมัครและโปรแกรมชุมชน',
-        'การมีส่วนร่วมในรัฐบาลท้องถิ่น'
-      ]
+      children:
+        'การลงคะแนนและการเลือกตั้ง,ความคิดเห็นสาธารณะและข้อร้องเรียนพลเมือง,อาสาสมัครและโปรแกรมชุมชน,การมีส่วนร่วมในรัฐบาลท้องถิ่น'
     }
   },
   settings: {
@@ -1241,137 +1196,10 @@ export default {
     noMatchingCountries: 'ไม่พบประเทศที่ตรงกัน',
     noMatchingDisciplines: 'ไม่พบสาขาที่ตรงกัน',
     noMatchingDegrees: 'ไม่พบปริญญาที่ตรงกัน',
-    educationOptions: [
-      'บัญชี',
-      'วิศวกรรมการบินและอวกาศ',
-      'วิทยาศาสตร์การเกษตร',
-      'มานุษยวิทยา',
-      'สถาปัตยกรรม',
-      'ประวัติศาสตร์ศิลปะ',
-      'ปัญญาประดิษฐ์',
-      'ดาราศาสตร์',
-      'ฟิสิกส์ดาราศาสตร์',
-      'ชีวเคมี',
-      'วิศวกรรมชีวการแพทย์',
-      'เทคโนโลยีชีวภาพ',
-      'บริหารธุรกิจ',
-      'วิศวกรรมเคมี',
-      'เคมี',
-      'วิศวกรรมโยธา',
-      'การสื่อสาร',
-      'วิศวกรรมคอมพิวเตอร์',
-      'วิทยาการคอมพิวเตอร์',
-      'การจัดการก่อสร้าง',
-      'กระบวนการยุติธรรมอาญา',
-      'ความปลอดภัยทางไซเบอร์',
-      'วิทยาศาสตร์ข้อมูล',
-      'ทันตกรรม',
-      'เศรษฐศาสตร์',
-      'การศึกษา',
-      'วิศวกรรมไฟฟ้า',
-      'การศึกษาปฐมวัย',
-      'วรรณคดีอังกฤษ',
-      'วิศวกรรมสิ่งแวดล้อม',
-      'วิทยาศาสตร์สิ่งแวดล้อม',
-      'การออกแบบแฟชั่น',
-      'การศึกษาภาพยนตร์',
-      'การเงิน',
-      'ศิลปกรรม',
-      'วิทยาศาสตร์อาหาร',
-      'วิทยาศาสตร์นิติวิทยาศาสตร์',
-      'การออกแบบเกม',
-      'ภูมิศาสตร์',
-      'ธรณีวิทยา',
-      'การออกแบบกราฟิก',
-      'การบริหารสุขภาพ',
-      'ประวัติศาสตร์',
-      'การจัดการการโรงแรม',
-      'ทรัพยากรมนุษย์',
-      'การออกแบบอุตสาหกรรม',
-      'วิศวกรรมอุตสาหกรรม',
-      'ระบบสารสนเทศ',
-      'เทคโนโลยีสารสนเทศ',
-      'การออกแบบภายใน',
-      'ธุรกิจระหว่างประเทศ',
-      'ความสัมพันธ์ระหว่างประเทศ',
-      'วารสารศาสตร์',
-      'กฎหมาย',
-      'บรรณารักษศาสตร์',
-      'ภาษาศาสตร์',
-      'การจัดการ',
-      'การตลาด',
-      'วิทยาศาสตร์วัสดุ',
-      'คณิตศาสตร์',
-      'วิศวกรรมเครื่องกล',
-      'การศึกษาสื่อ',
-      'แพทยศาสตร์',
-      'อุตุนิยมวิทยา',
-      'จุลชีววิทยา',
-      'ดนตรี',
-      'เทคโนโลยีนาโน',
-      'พยาบาล',
-      'โภชนาการ',
-      'อาชีวบำบัด',
-      'สมุทรศาสตร์',
-      'วิศวกรรมปิโตรเลียม',
-      'เภสัชศาสตร์',
-      'ปรัชญา',
-      'การถ่ายภาพ',
-      'พลศึกษา',
-      'กายภาพบำบัด',
-      'ฟิสิกส์',
-      'รัฐศาสตร์',
-      'จิตวิทยา',
-      'การบริหารรัฐกิจ',
-      'สาธารณสุข',
-      'ประชาสัมพันธ์',
-      'หุ่นยนต์',
-      'การศึกษามัธยม',
-      'งานสังคมสงเคราะห์',
-      'สังคมวิทยา',
-      'วิศวกรรมซอฟต์แวร์',
-      'การศึกษาพิเศษ',
-      'การจัดการกีฬา',
-      'สถิติ',
-      'วิศวกรรมระบบ',
-      'ศิลปะการละคร',
-      'การท่องเที่ยว',
-      'การวางผังเมือง',
-      'สัตวแพทยศาสตร์',
-      'การพัฒนาเว็บ',
-      'ชีววิทยาสัตว์ป่า',
-      'สัตววิทยา'
-    ],
-    degreeOptions: [
-      'อนุปริญญา',
-      'ศิลปศาสตรบัณฑิต (BA)',
-      'วิทยาศาสตรบัณฑิต (BS)',
-      'วิศวกรรมศาสตรบัณฑิต (BEng)',
-      'บริหารธุรกิจบัณฑิต (BBA)',
-      'ศิลปกรรมศาสตรบัณฑิต (BFA)',
-      'ศึกษาศาสตรบัณฑิต (BEd)',
-      'แพทยศาสตรบัณฑิต (MBBS)',
-      'นิติศาสตรบัณฑิต (LLB)',
-      'ศิลปศาสตรมหาบัณฑิต (MA)',
-      'วิทยาศาสตรมหาบัณฑิต (MS)',
-      'บริหารธุรกิจมหาบัณฑิต (MBA)',
-      'วิศวกรรมศาสตรมหาบัณฑิต (MEng)',
-      'ศิลปกรรมศาสตรมหาบัณฑิต (MFA)',
-      'ศึกษาศาสตรมหาบัณฑิต (MEd)',
-      'นิติศาสตรมหาบัณฑิต (LLM)',
-      'สาธารณสุขศาสตรมหาบัณฑิต (MPH)',
-      'ปรัชญาดุษฎีบัณฑิต (PhD)',
-      'แพทยศาสตรดุษฎีบัณฑิต (MD)',
-      'ศึกษาศาสตร์ดุษฎีบัณฑิต (EdD)',
-      'บริหารธุรกิจดุษฎีบัณฑิต (DBA)',
-      'นิติศาสตร์ดุษฎีบัณฑิต (JD)',
-      'ประกาศนียบัตรวิชาชีพ',
-      'ประกาศนียบัตรเทคนิค',
-      'ประกาศนียบัตรอาชีวะ',
-      'ประกาศนียบัตรบัณฑิต',
-      'อนุปริญญาบัณฑิต',
-      'หลังปริญญาเอก'
-    ],
+    educationOptions:
+      'บัญชี,วิศวกรรมการบินและอวกาศ,วิทยาศาสตร์การเกษตร,มานุษยวิทยา,สถาปัตยกรรม,ประวัติศาสตร์ศิลปะ,ปัญญาประดิษฐ์,ดาราศาสตร์,ฟิสิกส์ดาราศาสตร์,ชีวเคมี,วิศวกรรมชีวการแพทย์,เทคโนโลยีชีวภาพ,บริหารธุรกิจ,วิศวกรรมเคมี,เคมี,วิศวกรรมโยธา,การสื่อสาร,วิศวกรรมคอมพิวเตอร์,วิทยาการคอมพิวเตอร์,การจัดการก่อสร้าง,กระบวนการยุติธรรมอาญา,ความปลอดภัยทางไซเบอร์,วิทยาศาสตร์ข้อมูล,ทันตกรรม,เศรษฐศาสตร์,การศึกษา,วิศวกรรมไฟฟ้า,การศึกษาปฐมวัย,วรรณคดีอังกฤษ,วิศวกรรมสิ่งแวดล้อม,วิทยาศาสตร์สิ่งแวดล้อม,การออกแบบแฟชั่น,การศึกษาภาพยนตร์,การเงิน,ศิลปกรรม,วิทยาศาสตร์อาหาร,วิทยาศาสตร์นิติวิทยาศาสตร์,การออกแบบเกม,ภูมิศาสตร์,ธรณีวิทยา,การออกแบบกราฟิก,การบริหารสุขภาพ,ประวัติศาสตร์,การจัดการการโรงแรม,ทรัพยากรมนุษย์,การออกแบบอุตสาหกรรม,วิศวกรรมอุตสาหกรรม,ระบบสารสนเทศ,เทคโนโลยีสารสนเทศ,การออกแบบภายใน,ธุรกิจระหว่างประเทศ,ความสัมพันธ์ระหว่างประเทศ,วารสารศาสตร์,กฎหมาย,บรรณารักษศาสตร์,ภาษาศาสตร์,การจัดการ,การตลาด,วิทยาศาสตร์วัสดุ,คณิตศาสตร์,วิศวกรรมเครื่องกล,การศึกษาสื่อ,แพทยศาสตร์,อุตุนิยมวิทยา,จุลชีววิทยา,ดนตรี,เทคโนโลยีนาโน,พยาบาล,โภชนาการ,อาชีวบำบัด,สมุทรศาสตร์,วิศวกรรมปิโตรเลียม,เภสัชศาสตร์,ปรัชญา,การถ่ายภาพ,พลศึกษา,กายภาพบำบัด,ฟิสิกส์,รัฐศาสตร์,จิตวิทยา,การบริหารรัฐกิจ,สาธารณสุข,ประชาสัมพันธ์,หุ่นยนต์,การศึกษามัธยม,งานสังคมสงเคราะห์,สังคมวิทยา,วิศวกรรมซอฟต์แวร์,การศึกษาพิเศษ,การจัดการกีฬา,สถิติ,วิศวกรรมระบบ,ศิลปะการละคร,การท่องเที่ยว,การวางผังเมือง,สัตวแพทยศาสตร์,การพัฒนาเว็บ,ชีววิทยาสัตว์ป่า,สัตววิทยา',
+    degreeOptions:
+      'อนุปริญญา,ศิลปศาสตรบัณฑิต (BA),วิทยาศาสตรบัณฑิต (BS),วิศวกรรมศาสตรบัณฑิต (BEng),บริหารธุรกิจบัณฑิต (BBA),ศิลปกรรมศาสตรบัณฑิต (BFA),ศึกษาศาสตรบัณฑิต (BEd),แพทยศาสตรบัณฑิต (MBBS),นิติศาสตรบัณฑิต (LLB),ศิลปศาสตรมหาบัณฑิต (MA),วิทยาศาสตรมหาบัณฑิต (MS),บริหารธุรกิจมหาบัณฑิต (MBA),วิศวกรรมศาสตรมหาบัณฑิต (MEng),ศิลปกรรมศาสตรมหาบัณฑิต (MFA),ศึกษาศาสตรมหาบัณฑิต (MEd),นิติศาสตรมหาบัณฑิต (LLM),สาธารณสุขศาสตรมหาบัณฑิต (MPH),ปรัชญาดุษฎีบัณฑิต (PhD),แพทยศาสตรดุษฎีบัณฑิต (MD),ศึกษาศาสตร์ดุษฎีบัณฑิต (EdD),บริหารธุรกิจดุษฎีบัณฑิต (DBA),นิติศาสตร์ดุษฎีบัณฑิต (JD),ประกาศนียบัตรวิชาชีพ,ประกาศนียบัตรเทคนิค,ประกาศนียบัตรอาชีวะ,ประกาศนียบัตรบัณฑิต,อนุปริญญาบัณฑิต,หลังปริญญาเอก',
     aria: {
       tabList: 'ส่วนฟอร์มโปรไฟล์',
       nextButton: 'ไปยังส่วนถัดไป',
@@ -1595,89 +1423,89 @@ export default {
   },
   okf: {
     versions: {
-      bundle: 'Bundle',
+      bundle: 'กลุ่ม',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
-        tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        concepts: 'แนวคิด',
+        curator: 'ผู้ดูแล',
+        minted: 'สร้างแล้ว',
+        tag: 'แท็ก',
+        trigger: 'ทริกเกอร์',
+        version: 'เวอร์ชัน'
       },
-      current: 'current',
+      current: 'ปัจจุบัน',
       loadFailed: 'โหลดเวอร์ชันไม่สำเร็จ',
       none: 'ยังไม่มีการสร้างเวอร์ชัน — การ publish จะสร้าง v1',
-      notServing: 'Not serving',
+      notServing: 'ไม่ได้ให้บริการ',
       publish: 'สร้างเวอร์ชันใหม่',
       published: "เผยแพร่เวอร์ชัน v{'{'}v{'}'} แล้ว — จัดเก็บชุดไฟล์ {'{'}f{'}'} ไว้ในที่เก็บเอกสารเรียบร้อยแล้ว",
       serving: 'ทำ ingest แล้ว (serving)',
-      title: 'Versions'
+      title: 'เวอร์ชัน'
     },
     shell: {
       back: 'แดชบอร์ด Studio',
-      building: 'Building…',
+      building: 'กำลังสร้าง…',
       buildingHint: 'ไฟล์ต้นฉบับยังอยู่ระหว่างการประมวลผล',
       delete: {
         body: 'การดำเนินการนี้จะลบที่เก็บ แนวคิด เนื้อหาที่จัดทำดัชนี กราฟ และชุดไฟล์อาร์ติแฟกต์อย่างถาวร',
-        confirm: 'Delete',
+        confirm: 'ลบ',
         title: 'ลบที่เก็บ'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: 'ส่งออก .zip',
+      logs: 'บันทึก',
       pii: {
         ack: 'รับทราบเอนทิตีที่ถูกแจ้งเตือนและเผยแพร่',
         note: 'เอนทิตีที่ถูกแจ้งเตือนเป็นส่วนหนึ่งของเนื้อหาที่เผยแพร่ หากคุณได้ตรวจสอบแล้ว (เช่น รายละเอียดการติดต่ออย่างเป็นทางการ) ให้รับทราบและดำเนินการต่อ'
       },
       publish: {
         body: "การ publish จะสร้าง v{'{'}n{'}'} และจัดเก็บชุดไฟล์ \"{'{'}file{'}'}\" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'เผยแพร่',
+        title: 'เผยแพร่'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'อ่านอย่างเดียว',
+      serving: 'กำลังให้บริการ',
       state: {
-        ingested: 'Ingested'
+        ingested: 'นำเข้าข้อมูลแล้ว'
       },
       tab: {
-        editor: 'Editor',
-        wizard: 'Wizard'
+        editor: 'บรรณาธิการ',
+        wizard: 'วิซาร์ด'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'เวอร์ชัน',
+      deleteLabel: 'ลบ'
     },
     logs: {
       labeled: "ติดป้ายกำกับแล้ว: {'{'}n{'}'}",
       fallbacks: "การสำรองข้อมูล LLM: {'{'}n{'}'}",
       concepts: "แนวคิด: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'การดำเนินการ',
+        description: 'คำอธิบาย',
+        user: 'ผู้ใช้',
+        when: 'วันที่และเวลา'
       },
       count: "{'{'}n{'}'} รายการ",
       loadFailed: 'โหลดบันทึกกิจกรรมไม่สำเร็จ',
       none: 'ยังไม่มีกิจกรรมที่บันทึกไว้ — การดำเนินการของที่เก็บจะปรากฏที่นี่เมื่อเกิดขึ้น',
-      title: 'Activity log'
+      title: 'บันทึกกิจกรรม'
     },
     graph: {
       aria: 'กราฟแนวคิด',
-      concepts: 'concepts',
+      concepts: 'แนวคิด',
       empty: 'ยังไม่มีแนวคิด — ไม่มีข้อมูลสำหรับแสดงกราฟ',
-      fit: 'Fit graph',
+      fit: 'พอดีกับกราฟ',
       hub: 'แสดงหรือซ่อนฮับดัชนี (ลิงก์สารบัญคือโครงสร้าง ไม่ใช่ความรู้)',
-      layouting: 'Layouting…',
-      legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      layouting: 'กำลังจัดวาง…',
+      legend: 'ดัชนี',
+      links: 'ลิงก์',
+      zoomIn: 'ซูมเข้า',
+      zoomOut: 'ซูมออก',
       card: {
         links: "{'{'}n{'}'} ลิงก์",
         chunks: "{'{'}n{'}'} ชิ้นส่วน",
         failed: 'การสร้างดัชนีล้มเหลว',
         flagged: 'เอนทิตีที่ถูกแจ้งเตือน',
-        hub: 'Index hub',
+        hub: 'ศูนย์กลางดัชนี',
         pending: 'ยังไม่ได้สร้างดัชนี'
       }
     },
@@ -1685,57 +1513,57 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (วางหรือปล่อยว่างไว้)',
         bodyPh: '# หัวข้อ\n\nวาง markdown ที่นี่ — frontmatter จะถูกเพิ่มให้คุณโดยอัตโนมัติ',
-        create: 'Create file',
+        create: 'สร้างไฟล์',
         failed: 'ไม่สามารถสร้างไฟล์ได้',
         title: 'เพิ่มไฟล์แนวคิด',
-        titleLabel: 'Title',
+        titleLabel: 'ชื่อเรื่อง',
         titlePh: 'เช่น สัตว์ป่าในมาไซมารา',
         updateIndex: 'ต่อท้ายรายการสารบัญของดัชนี'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(ว่างเปล่า)',
         blankBadge: 'ไม่มี frontmatter — ข้อเสนอแนะฉบับเต็ม',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'นำไปใช้',
+        apply: 'ใช้การแก้ไข',
         body: 'แผนการแก้ไข frontmatter ในทุกแนวคิด ส่วนเนื้อหาหลักจะไม่ได้รับการแก้ไข',
-        button: 'Autocorrect',
+        button: 'แก้ไขอัตโนมัติ',
         clean: 'ไม่มีส่วนที่ต้องแก้ไข — frontmatter ทั้งหมดเป็นไปตามข้อกำหนดแล้ว',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'ฟิลด์',
+          after: 'หลังจาก',
+          before: 'ก่อนหน้า',
+          concept: 'แนวคิด'
         },
-        failed: 'Scan failed.',
-        scanning: 'Scanning…',
+        failed: 'การสแกนล้มเหลว',
+        scanning: 'กำลังสแกน…',
         title: 'แก้ไขอัตโนมัติ (เฉพาะ frontmatter)'
       },
       concepts: {
         originTip: 'แนวคิดนี้ได้รับการดูแลจัดการอย่างไร',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'เพิ่มแนวคิด',
+        addLabel: 'ตั้งป้ายกำกับ',
+        delete: 'ลบไฟล์',
         empty: 'ยังไม่มีไฟล์ — เพิ่มแนวคิดหรือแบ่งส่วนใหม่จากแหล่งที่มา',
-        filter: 'Filter files',
-        indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
+        filter: 'กรองไฟล์',
+        indexBadge: 'ดัชนี',
+        label: 'แนวคิด',
+        loading: 'กำลังโหลด…',
+        resplit: 'แยกใหม่',
         flagged: 'ถูกตั้งค่าสถานะ',
         flaggedTip:
           'แนวคิดที่มีเอนทิตีที่ถูกแจ้งเตือน — เปิดแต่ละรายการ ลบหรือแก้ไขเอนทิตี บันทึก (จะสแกนใหม่โดยอัตโนมัติ) หรือรับทราบเมื่อทำการ publish',
         piiBadge: 'PII',
         piiTip: 'เอนทิตีที่ถูกแจ้งเตือน: {k} เปิด ลบ หรือแก้ไข จากนั้นบันทึก — ระบบจะสแกนใหม่โดยอัตโนมัติ',
         piiTipBare: 'เอนทิตีที่ถูกแจ้งเตือน — เปิด ตรวจทาน แล้วบันทึกเพื่อสแกนใหม่',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: 'ยอมรับทั้งหมด',
+        bulkRedact: 'ปกปิดทั้งหมด',
+        bulkRemove: 'ลบทั้งหมด',
         loadProgress: 'กำลังโหลดไฟล์ {done}/{total}'
       },
       delete: {
         body: 'การดำเนินการนี้จะลบไฟล์ ชิ้นส่วนดัชนี และลิงก์กราฟอย่างถาวร',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'ลบ',
+        title: 'ลบไฟล์'
       },
       label: 'ตัวแก้ไขที่เก็บ',
       loadFailed: 'ไม่สามารถโหลดแนวคิดนี้ได้',
@@ -1743,24 +1571,24 @@ export default {
       meta: {
         label: 'ข้อมูลเมตาของแนวคิด',
         labelLabel: 'ป้ายกำกับ (ลำดับชั้นความรู้)',
-        noLabel: 'No label',
+        noLabel: 'ไม่มีป้ายกำกับ',
         none: 'ไม่ได้เลือกแนวคิด',
         saveFailed: 'การบันทึกข้อมูลเมตาล้มเหลว',
         saved: 'บันทึกข้อมูลเมตาแล้ว',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'สถานะดัชนี',
+        title: 'ชื่อเรื่อง',
+        trust: 'ระดับความน่าเชื่อถือ',
+        type: 'ประเภท',
+        typePlaceholder: 'เลือกประเภท…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'ไฟล์',
+        graph: 'กราฟ'
       },
       pickConcept: 'เลือกแนวคิดจากรายการเพื่อเริ่มแก้ไข',
       resplit: {
         body: 'การดำเนินการนี้จะลบแนวคิดปัจจุบันและกราฟที่ได้รับมาทั้งหมด จากนั้นนำเข้าไฟล์ต้นฉบับใหม่ด้วยการแบ่งส่วนใหม่ การแก้ไขแนวคิดจะสูญหาย',
-        confirm: 'Re-split',
+        confirm: 'แยกใหม่',
         failed: 'การแบ่งส่วนใหม่ล้มเหลว — ตรวจสอบลิงก์ไฟล์ต้นฉบับ',
         modeA: 'หนึ่งแนวคิดสำหรับการรวบรวมข้อมูลทั้งหมด',
         modeAHint: 'แนวคิดขนาดใหญ่ — รวมเนื้อหาทั้งหมดไว้ในแนวคิดเดียว',
@@ -1770,16 +1598,16 @@ export default {
         modeCHint: 'เรื่องราว 10.6 — เร็วๆ นี้',
         title: 'แบ่งส่วนใหม่จากแหล่งที่มา'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'บันทึก',
+      saved: 'บันทึกแล้ว',
+      saving: 'กำลังบันทึก…',
       unsaved: 'การเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'เรนเดอร์แล้ว',
+        source: 'ต้นฉบับ'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'มุมมองบรรณาธิการ',
+      paneLabel: 'บานหน้าต่างมุมมอง',
       saveFailed: 'การบันทึกล้มเหลว — ลองใหม่',
       piiBulk: {
         title: {
@@ -1794,12 +1622,12 @@ export default {
             'เอนทิตีที่ถูกแจ้งเตือนทั้งหมดจะถูกทำเครื่องหมายว่าตรวจสอบแล้วและเก็บไว้ — จะไม่ถูกแจ้งเตือนอีกเว้นแต่คุณจะสแกนใหม่'
         },
         scope: "แนวคิดที่ได้รับผลกระทบ: {'{'}n{'}'} รายการ",
-        confirm: 'Apply',
+        confirm: 'นำไปใช้',
         failed: 'การดำเนินการ PII แบบกลุ่มล้มเหลว — โปรดลองอีกครั้ง'
       },
       actions: {
         bulkPii: 'กำลังใช้การดำเนินการ PII แบบกลุ่ม',
-        deleting: 'Deleting'
+        deleting: 'กำลังลบ'
       }
     },
     dashboard: {
@@ -1811,23 +1639,23 @@ export default {
       },
       card: {
         actions: "การดำเนินการสำหรับ {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'กำลังสร้าง…',
         buildingAria: 'กำลังสร้าง — ไฟล์ต้นฉบับยังอยู่ระหว่างการประมวลผล',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'ลบ',
+        export: 'ส่งออก',
+        ingesting: 'กำลังนำเข้าข้อมูล…',
+        logs: 'บันทึก',
+        rename: 'เปลี่ยนชื่อ',
+        versions: 'เวอร์ชัน'
       },
       delete: {
         body: 'การดำเนินการนี้จะลบที่เก็บ แนวคิด เนื้อหาที่จัดทำดัชนี กราฟ และชุดไฟล์อาร์ติแฟกต์อย่างถาวร ไม่สามารถยกเลิกได้',
-        confirm: 'Delete',
+        confirm: 'ลบ',
         title: 'ลบที่เก็บ'
       },
       filter: {
         domain: 'กรองตามสาขาวิชา',
-        allDomains: 'All subject areas'
+        allDomains: 'พื้นที่เรื่องทั้งหมด'
       },
       new: '+ ที่เก็บใหม่',
       pii: {
@@ -1836,37 +1664,37 @@ export default {
       },
       publish: {
         body: "การ publish จะสร้าง v{'{'}n{'}'} และจัดเก็บชุดไฟล์ \"{'{'}file{'}'}\" ไว้ในที่เก็บเอกสาร โดยแทนที่ไฟล์ zip ก่อนหน้า เวอร์ชันใหม่นี้จะยังไม่ serving จนกว่าคุณจะทำ Ingest",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'เผยแพร่',
+        title: 'เผยแพร่'
       },
-      search: 'Search...',
+      search: 'ค้นหา...',
       select: "เลือก {'{'}name{'}'} สำหรับการเผยแพร่จำนวนมาก",
       stage: {
         drainFailed: 'การ ingest ล้มเหลว',
-        redraining: 'Re-draining…',
-        building: 'Building…',
-        draft: 'Draft',
-        inReview: 'In review',
+        redraining: 'กำลังระบายใหม่…',
+        building: 'กำลังสร้าง…',
+        draft: 'ฉบับร่าง',
+        inReview: 'กำลังตรวจสอบ',
         ingested: "ทำ ingest แล้ว v{'{'}n{'}'}",
         published: "เผยแพร่แล้ว v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: 'เพิกถอนแล้ว',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'ที่เก็บข้อมูล',
+      topics: 'หัวข้อ',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
-        ingested: 'Ingested',
-        retracted: 'Retracted'
+        draft: 'นำเข้า',
+        in_review: 'กำลังตรวจสอบ',
+        published: 'เผยแพร่แล้ว',
+        ingested: 'นำเข้าข้อมูลแล้ว',
+        retracted: 'เพิกถอนแล้ว'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'ยังไม่ได้นำเข้าอะไร',
+        in_review: 'ไม่มีอะไรที่กำลังตรวจสอบ',
+        published: 'ยังไม่มีที่เก็บข้อมูลที่เผยแพร่',
+        ingested: 'ยังไม่ได้นำเข้าข้อมูลอะไร',
+        retracted: 'ไม่มีอะไรเพิกถอน'
       }
     },
     build: {
@@ -1876,13 +1704,13 @@ export default {
       },
       curation: {
         fallbacks: 'การสำรองข้อมูล LLM',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'ดูแลจัดการแล้ว',
+        typed: 'พิมพ์แล้ว',
+        labeled: 'ติดป้ายกำกับแล้ว',
+        described: 'อธิบายแล้ว'
       },
       batches: 'ชุดข้อมูลที่จัดเก็บแล้ว',
-      bytes: 'Source read',
+      bytes: 'อ่านแหล่งที่มา',
       conceptsIndexed: 'แนวคิดที่สร้างดัชนีแล้ว',
       elapsed: {
         hr: "เริ่มต้นเมื่อ {'{'}n{'}'} ชม. ที่แล้ว",
@@ -1903,9 +1731,9 @@ export default {
         version: 'เวอร์ชันที่ serving'
       },
       stage: {
-        indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        indexing: 'กำลังจัดทำดัชนี',
+        serving: 'กำลังให้บริการ',
+        label: 'ขั้นตอน'
       },
       title: {
         import: 'ความคืบหน้าในการนำเข้า',
@@ -1916,16 +1744,16 @@ export default {
         idle: 'สถานะที่เก็บ'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'กำลังนำเข้า',
+        reviewing: 'กำลังตรวจสอบ',
+        ingesting: 'กำลังนำเข้าข้อมูล',
+        serving: 'กำลังให้บริการ',
+        retracted: 'เพิกถอนแล้ว'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'พื้นที่เรื่อง',
+        topics: 'หัวข้อ',
+        lastVersion: 'เวอร์ชันล่าสุด'
       }
     },
     create: {
@@ -1940,7 +1768,7 @@ export default {
       failed: 'การสร้างที่เก็บล้มเหลว',
       duplicateInline: 'มีที่เก็บที่ใช้ชื่อนี้อยู่แล้ว เปิดที่เก็บนี้ หรือเลือกชื่ออื่น',
       duplicate: 'มีที่เก็บที่ใช้ชื่อนี้อยู่แล้ว - เปิดจากแดชบอร์ดหรือเลือกชื่ออื่น',
-      domain: 'Subject area',
+      domain: 'พื้นที่เรื่อง',
       create: 'สร้างที่เก็บ',
       title: 'ที่เก็บ OKF ใหม่',
       hint: 'สร้างที่เก็บว่างเปล่าพร้อม index.md ที่คุณแก้ไขได้ในตัวแก้ไข Studio',
@@ -1948,40 +1776,40 @@ export default {
       domainRequired: 'เลือกสาขาวิชาก่อน — ไม่สามารถเปลี่ยนแปลงได้หลังจากการสร้าง',
       classLabel: 'การจำแนกแนวคิด',
       classHeuristics: 'ฮิวริสติกส์ (ค่าเริ่มต้น)',
-      classLlm: 'LLM-assisted',
-      classHybrid: 'Hybrid'
+      classLlm: 'ใช้ LLM ช่วย',
+      classHybrid: 'ไฮบริด'
     },
     fm: {
       errKeyCurated: 'ชื่อฟิลด์นี้สงวนไว้',
       errKeyDuplicate: 'ชื่อฟิลด์ถูกใช้ซ้ำสองครั้ง',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON ไม่ถูกต้อง',
       errNumber: 'ต้องเป็นตัวเลข',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'รายการ',
+        boolean: 'จริง/เท็จ',
+        number: 'ตัวเลข',
+        string: 'ข้อความ'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'ลบฟิลด์',
+      kindLabel: 'ประเภทค่า',
+      keyPh: 'ชื่อฟิลด์',
       fullHint: 'ทุกฟิลด์ของ frontmatter สามารถแก้ไขได้ เพิ่มหรือลบคีย์ได้อย่างอิสระ',
       errRemovalPending: 'การลบฟิลด์จำเป็นต้องใช้สัญญาเซิร์ฟเวอร์แบบผสานและลบ (จะพร้อมใช้งานเร็วๆ นี้)',
       errKeyRequired: 'ทุกฟิลด์ต้องมีชื่อ',
       arrayPh: 'ค่าที่คั่นด้วยเครื่องหมายจุลภาค',
-      addKey: 'Add field',
+      addKey: 'เพิ่มฟิลด์',
       saved: 'บันทึก frontmatter แล้ว',
-      label: 'Frontmatter',
+      label: 'frontmatter',
       tipLabel: 'Frontmatter คืออะไร?',
-      edit: 'Edit',
+      edit: 'แก้ไข',
       empty: 'ยังไม่มี frontmatter — การแก้ไขจะเพิ่มประเภท ชื่อ และป้ายกำกับ',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'ประเภท',
+      noType: 'ไม่มีประเภท',
+      titleLabel: 'ชื่อเรื่อง',
       labelsLabel: 'ป้ายกำกับ (ลำดับชั้นความรู้)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'ไม่มีป้ายกำกับ',
+      descriptionLabel: 'คำอธิบาย',
       save: 'บันทึก frontmatter',
       saveFailed: 'การบันทึก frontmatter ล้มเหลว'
     },
@@ -2008,25 +1836,25 @@ export default {
         'วิธีที่เราใช้กำหนดว่าแต่ละแนวคิดคืออะไร (หัวข้อ เอนทิตี กระบวนการ…) ฮิวริสติกส์จะอ่านหน้าเว็บโดยอัตโนมัติ ตัวเลือก LLM จะช้ากว่าแต่สามารถจัดการกับหน้าที่ซับซ้อนได้ดี',
       resplit:
         'การตัดแบ่งแหล่งที่มาออกเป็นแนวคิดใหม่อีกวิธีหนึ่ง — เช่น แนวคิดละหนึ่งหน้า แทนที่จะเป็นแนวคิดเดียวสำหรับทั้งไซต์',
-      saveFailed: 'Save failed',
+      saveFailed: 'บันทึกล้มเหลว',
       importFailedTitle: 'การนำเข้าล้มเหลว — ไม่สามารถแปลงไฟล์ต้นฉบับได้',
       importFailedHint: 'ลบที่เก็บนี้และนำเข้าไฟล์ต้นฉบับอีกครั้ง',
       frontmatter:
         'ข้อมูลที่มีโครงสร้างที่ด้านบนของแต่ละไฟล์ — ประเภท ชื่อ ป้ายกำกับ ผู้ช่วยใช้ข้อมูลนี้เพื่อให้ทราบว่าแต่ละแนวคิดเกี่ยวกับอะไร'
     },
     md: {
-      toolbar: 'Formatting',
-      bold: 'Bold',
-      italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      toolbar: 'การจัดรูปแบบ',
+      bold: 'ตัวหนา',
+      italic: 'ตัวเอียง',
+      h1: 'หัวเรื่อง 1',
+      h2: 'หัวเรื่อง 2',
+      h3: 'หัวเรื่อง 3',
+      bullet: 'รายการสัญลักษณ์แสดงหัวข้อย่อย',
       numbered: 'รายการแบบมีลำดับเลข',
-      link: 'Insert link',
-      code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      link: 'แทรกลิงก์',
+      code: 'โค้ดในบรรทัด',
+      table: 'แทรกตาราง',
+      split: 'แยก'
     },
     narrative: {
       intro:
@@ -2095,7 +1923,7 @@ export default {
       stage: {
         inReview: 'อยู่ระหว่าง review',
         stepOf: 'ขั้นตอนที่ {n} จาก 10',
-        draft: 'Draft'
+        draft: 'ฉบับร่าง'
       },
       dashboard: {
         title: 'ที่เก็บทั้งหมด',
@@ -2108,7 +1936,7 @@ export default {
         stage: {
           inReview: 'อยู่ระหว่าง review',
           stepOf: 'ขั้นตอนที่ {n} จาก 10',
-          draft: 'Draft'
+          draft: 'ฉบับร่าง'
         },
         bulk: {
           selected: 'เลือกแล้ว {n} รายการ',
@@ -2131,23 +1959,23 @@ export default {
         notReady: 'ฉบับร่างยังไม่สามารถบันทึกบนฝั่งเซิร์ฟเวอร์ได้ บันทึกไว้ในเครื่องแล้ว'
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'พื้นฐาน',
+        expert: 'ขั้นสูง'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'เผยแพร่แล้ว',
+        inReview: 'กำลังตรวจสอบ',
+        draft: 'กำลังดำเนินการ'
       },
       exit: 'กลับสู่แดชบอร์ด',
       context: {
         untitled: 'ที่เก็บที่ไม่มีชื่อ',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'ความน่าเชื่อถือ',
+        title: 'ที่เก็บข้อมูล',
+        stale: 'เก่า',
+        sources: 'แหล่งที่มา',
         concepts: 'แนวคิดทั้งหมดในขณะนี้'
       },
       label: 'วิซาร์ด OKF Studio',
@@ -2264,15 +2092,15 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'พื้นที่เรื่อง',
       domainPlaceholder: 'เลือกสาขาวิชา…',
       classLabel: 'การจำแนกแนวคิด',
       classHeuristics: 'ฮิวริสติกส์ (ค่าเริ่มต้น)',
       classHeuristicsHint: 'การจำแนกตามกฎอย่างรวดเร็ว — ไม่มีค่าใช้จ่าย LLM เหมาะสำหรับการรวบรวมข้อมูลที่มีโครงสร้างดี',
-      classLlm: 'LLM-assisted',
+      classLlm: 'ใช้ LLM ช่วย',
       classLlmHint:
         'LLM ดูแลจัดการทุกแนวคิด — ประเภท ป้ายกำกับลำดับชั้นความรู้ และคำอธิบาย แม่นยำและสมบูรณ์กว่าฮิวริสติกส์มาก แต่อาจต้องใช้เวลาเพิ่มเติมต่อแนวคิด',
-      classHybrid: 'Hybrid',
+      classHybrid: 'ไฮบริด',
       classHybridHint:
         'ฮิวริสติกส์ก่อน LLM จะตรวจสอบกรณีที่ไม่แน่นอนและเติมเต็มช่องว่าง เพื่อสมดุลระหว่างเวลาและความสมบูรณ์',
       targetLabel: 'สิ่งนี้ควรบันทึกไว้ที่ใด?',
@@ -2333,7 +2161,7 @@ export default {
         notReady: 'บันทึกป้ายกำกับในเครื่องแล้ว — การซิงค์กับเซิร์ฟเวอร์จะพร้อมใช้งานเร็วๆ นี้'
       },
       frontmatter: {
-        label: 'Frontmatter',
+        label: 'frontmatter',
         edit: 'แก้ไข frontmatter',
         dialogTitle: 'แก้ไข frontmatter',
         okfVersion: 'okf_version',
@@ -2431,11 +2259,11 @@ export default {
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'ส่งเพื่อตรวจสอบ',
+      approve: 'อนุมัติ',
+      publish: 'เผยแพร่',
+      ingest: 'นำเข้าข้อมูล',
+      retract: 'เพิกถอน'
     }
   }
 };

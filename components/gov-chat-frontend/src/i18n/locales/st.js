@@ -35,7 +35,7 @@ export default {
     CF: 'Central African Republic',
     TD: 'Chad',
     CL: 'Chile',
-    CN: 'China',
+    CN: 'Chaena',
     CO: 'Colombia',
     KM: 'Comoros',
     CG: 'Congo',
@@ -185,7 +185,7 @@ export default {
     UA: 'Ukraine',
     AE: 'United Arab Emirates',
     GB: 'United Kingdom',
-    US: 'United States',
+    US: 'Amerika',
     UY: 'Uruguay',
     UZ: 'Uzbekistan',
     VU: 'Vanuatu',
@@ -512,51 +512,51 @@ export default {
       metadataUpdateSuccess: 'Metadata ya faele ya {fileId} e ntlafaditswe.'
     },
     queryInspector: {
-      search: 'Search',
-      searchPlaceholder: 'Search query text...',
-      minConfidence: 'Min Confidence',
-      maxConfidence: 'Max Confidence',
-      from: 'From',
-      to: 'To',
-      reset: 'Reset',
-      colTime: 'Time',
-      colQuestion: 'User Question',
-      colConfidence: 'Confidence',
-      colResponseTime: 'Response Time',
-      colSources: 'Sources',
-      colFeedback: 'Feedback',
-      colActions: 'Actions',
-      inspect: 'Inspect',
-      noResults: 'No queries found matching your filters.',
-      prev: 'Prev',
-      pageInfo: 'Page {current} of {total} ({count} total)',
-      next: 'Next',
-      backToList: 'Back to list',
-      detailTitle: 'Query Inspector',
-      sectionQuestion: 'User Question',
-      user: 'User',
-      time: 'Time',
-      responseTime: 'Response Time',
-      mode: 'Mode',
-      sectionContext: 'Context (Labels sent to RAG)',
-      category: 'Category',
-      serviceLabels: 'Service Labels',
-      language: 'Language',
-      sectionMessages: 'Messages Sent to Pipeline',
-      sectionDocuments: 'Retrieved Documents (Vector DB Results)',
-      score: 'Score',
-      labels: 'Labels',
-      viewDoc: 'View Document',
-      noDocuments: 'No source documents were retrieved for this query.',
-      sectionResponse: 'LLM Response',
-      confidenceScore: 'Confidence Score',
-      retrievalConfidenceScore: 'Retrieval Confidence',
-      selfConfidence: 'Self-Confidence (LLM)',
-      sectionFeedback: 'User Feedback',
-      rating: 'Rating',
-      comment: 'Comment',
-      providedAt: 'Provided at',
-      loadError: 'Failed to load queries.'
+      search: 'Batla',
+      searchPlaceholder: 'Batla mongolo oa potso...',
+      minConfidence: 'Tšepo e Tlaase',
+      maxConfidence: 'Tšepo e Phahameng',
+      from: 'Ho tloha ho',
+      to: 'Ho',
+      reset: 'Seta bocha',
+      colTime: 'Nako',
+      colQuestion: 'Potso ea Mosebelisi',
+      colConfidence: 'Tšepo',
+      colResponseTime: 'Nako ea Karabo',
+      colSources: 'Mehloli',
+      colFeedback: 'Maikutlo',
+      colActions: 'Liketso',
+      inspect: 'Hlahloba',
+      noResults: 'Ha ho lipotso tse fumanoeng tse tšoanang le li-filter tsa hau.',
+      prev: 'E fetileng',
+      pageInfo: 'Leqephe {current} ho {total} ({count} kaofela)',
+      next: 'E latelang',
+      backToList: 'Khutlela lenaneng',
+      detailTitle: 'Mohlahlami oa Lipotso',
+      sectionQuestion: 'Potso ea Mosebelisi',
+      user: 'Mosebelisi',
+      time: 'Nako',
+      responseTime: 'Nako ea Karabo',
+      mode: 'Mokhoa',
+      sectionContext: 'Moelelo (Li-label tse rometsoeng ho RAG)',
+      category: 'Sehlopha',
+      serviceLabels: 'Li-label tsa Tšebeletso',
+      language: 'Puo',
+      sectionMessages: 'Melaetsa e Rometsoeng ho Pipeline',
+      sectionDocuments: 'Litokomane tse Fumanoeng (Liphetho tsa Vector DB)',
+      score: 'Lintlha',
+      labels: 'Li-label',
+      viewDoc: 'Sheba Tokomane',
+      noDocuments: 'Ha ho litokomane tse fumanoeng bakeng sa potso ena.',
+      sectionResponse: 'Karabo ea LLM',
+      confidenceScore: 'Lintlha tsa Tšepo',
+      retrievalConfidenceScore: 'Tšepo ea ho Fumana',
+      selfConfidence: 'Boitšepo (LLM)',
+      sectionFeedback: 'Maikutlo a Mosebelisi',
+      rating: 'Lintlha',
+      comment: 'Maikutlo',
+      providedAt: 'E fanoe ka',
+      loadError: 'Ho hlolehile ho kenya lipotso.'
     }
   },
   auth: {
@@ -810,113 +810,63 @@ export default {
   leftPanel: {
     cat1: {
       name: '1. Boitsebiso & Ngwadisong ya Baahi',
-      children: [
-        'Difiketi tsa tswalo',
-        'Dikarata tsa naha tsa ID',
-        'Dipasporoto',
-        'Difiketi tsa lenyalo le lefu',
-        'Ngwadisong ya bakgethi'
-      ]
+      children:
+        'Difiketi tsa tswalo,Dikarata tsa naha tsa ID,Dipasporoto,Difiketi tsa lenyalo le lefu,Ngwadisong ya bakgethi'
     },
     cat2: {
       name: '2. Bophelo bo Botle & Ditshebeletso tsa Setjhaba',
-      children: [
-        'Ho fihlella tlhokomelo ya bophelo ya setjhaba',
-        'Mananeo a ho enta',
-        'Inshorense ya bophelo bo botle',
-        'Melemo ya ho holofala',
-        'Thuso ya thepa le dijo'
-      ]
+      children:
+        'Ho fihlella tlhokomelo ya bophelo ya setjhaba,Mananeo a ho enta,Inshorense ya bophelo bo botle,Melemo ya ho holofala,Thuso ya thepa le dijo'
     },
     cat3: {
       name: '3. Thuto & Ho Ithuta',
-      children: [
-        'Dikolo tsa setjhaba le diyunivesithi',
-        'Dikhau tsa thuto le dikadimo tsa baithuti',
-        'Mananeo a thuto ya batho ba baholo',
-        'Dihlolwa tsa ho ithuta inthaneteng'
-      ]
+      children:
+        'Dikolo tsa setjhaba le diyunivesithi,Dikhau tsa thuto le dikadimo tsa baithuti,Mananeo a thuto ya batho ba baholo,Dihlolwa tsa ho ithuta inthaneteng'
     },
     cat4: {
       name: '4. Mesebetsi & Ditshebeletso tsa Basebetsi',
-      children: [
-        'Patlo ya mosebetsi le melemo ya ho hloka mosebetsi',
-        'Tshireletso ya basebetsi le ditokelo tsa basebetsi',
-        'Melawana ya tshireletso ya mosebetsing',
-        'Koetliso ya tsebo le mananeo a koetliso'
-      ]
+      children:
+        'Patlo ya mosebetsi le melemo ya ho hloka mosebetsi,Tshireletso ya basebetsi le ditokelo tsa basebetsi,Melawana ya tshireletso ya mosebetsing,Koetliso ya tsebo le mananeo a koetliso'
     },
     cat5: {
       name: '5. Lekgetho & Lekeno',
-      children: [
-        'Puseletso le faele ya lekgetho la lekeno',
-        'Ditefello tsa lekgetho la thepa',
-        'Ho ipapisa le lekgetho la kgwebo',
-        'Mekgwa ya mesebetsi le mesebetsi ya ho reka thepa kantle'
-      ]
+      children:
+        'Puseletso le faele ya lekgetho la lekeno,Ditefello tsa lekgetho la thepa,Ho ipapisa le lekgetho la kgwebo,Mekgwa ya mesebetsi le mesebetsi ya ho reka thepa kantle'
     },
     cat6: {
       name: '6. Tshireletso ya Setjhaba & Toka',
-      children: [
-        'Maponesa le ditshebeletso tsa tshohanyetso',
-        'Makgotla le ditshebeletso tsa thuso ya molao',
-        'Ho tlaleha botlokotsebe',
-        'Melao ya tshireletso ya bareki'
-      ]
+      children:
+        'Maponesa le ditshebeletso tsa tshohanyetso,Makgotla le ditshebeletso tsa thuso ya molao,Ho tlaleha botlokotsebe,Melao ya tshireletso ya bareki'
     },
     cat7: {
       name: '7. Dipalangwang & Tsela',
-      children: [
-        'Dilaesense tsa bakhanni le ngwadisong ya makoloi',
-        'Lipalangwa tsa setjhaba le mehaho',
-        'Ditlolo tsa molao wa sephethephethe le ditefiso',
-        'Mananeo a tshireletso ya tsela'
-      ]
+      children:
+        'Dilaesense tsa bakhanni le ngwadisong ya makoloi,Lipalangwa tsa setjhaba le mehaho,Ditlolo tsa molao wa sephethephethe le ditefiso,Mananeo a tshireletso ya tsela'
     },
     cat8: {
       name: '8. Matlo & Ntshetsopele ya Ditoropo',
-      children: [
-        'Thuso ya matlo a setjhaba',
-        'Ngwadisong ya thepa le ditlaleho tsa mobu',
-        'Dikadimo tsa matlo le dithuso',
-        'Diforomo tsa meaho le dilaesense'
-      ]
+      children:
+        'Thuso ya matlo a setjhaba,Ngwadisong ya thepa le ditlaleho tsa mobu,Dikadimo tsa matlo le dithuso,Diforomo tsa meaho le dilaesense'
     },
     cat9: {
       name: '9. Ditshebeletso tse Sebetsang & Tikoloho',
-      children: [
-        'Ditshebeletso tsa metsi le motlakase',
-        'Tsamaiso ya ditshila le ho sebetsa botjha',
-        'Melawana ya tikoloho',
-        'Mehato ya eneji e ntjhafatsoang'
-      ]
+      children:
+        'Ditshebeletso tsa metsi le motlakase,Tsamaiso ya ditshila le ho sebetsa botjha,Melawana ya tikoloho,Mehato ya eneji e ntjhafatsoang'
     },
     cat10: {
       name: '10. Kgwebo & Kgwebo e Bohareng',
-      children: [
-        'Ngwadisong ya kgwebo le laesense',
-        'Melawana ya kgwebo le diforomo',
-        'Dikhau tsa kgwebo e nyane le dithuso',
-        'Tshetsopele ya e-commerce le theknoloji ya kgwebo'
-      ]
+      children:
+        'Ngwadisong ya kgwebo le laesense,Melawana ya kgwebo le diforomo,Dikhau tsa kgwebo e nyane le dithuso,Tshetsopele ya e-commerce le theknoloji ya kgwebo'
     },
     cat11: {
       name: '11. Tshireletso ya Setjhaba & Dipenshene',
-      children: [
-        'Melemo ya ho tlohela mosebetsi',
-        'Tsamaiso ya letlole la penshene',
-        'Melemo ya baphonyohi',
-        'Dipenshene tsa ho holofala'
-      ]
+      children:
+        'Melemo ya ho tlohela mosebetsi,Tsamaiso ya letlole la penshene,Melemo ya baphonyohi,Dipenshene tsa ho holofala'
     },
     cat12: {
       name: '12. Setjhaba & Ho Nka Karolo ha Setjhaba',
-      children: [
-        'Dikgetho le ho vouta',
-        'Maikutlo a setjhaba le ditletlebo tsa baahi',
-        'Ho ithaopa le mananeo a setjhaba',
-        'Ho nka karolo mmusong wa lehae'
-      ]
+      children:
+        'Dikgetho le ho vouta,Maikutlo a setjhaba le ditletlebo tsa baahi,Ho ithaopa le mananeo a setjhaba,Ho nka karolo mmusong wa lehae'
     }
   },
   settings: {
@@ -1259,137 +1209,10 @@ export default {
     noMatchingCountries: 'Ha ho dinaha tse fumanweng',
     noMatchingDisciplines: 'Ha ho dithuto tse fumanweng',
     noMatchingDegrees: 'Ha ho didigrii tse fumanweng',
-    educationOptions: [
-      'Accounting',
-      'Aerospace Engineering',
-      'Agricultural Science',
-      'Anthropology',
-      'Architecture',
-      'Art History',
-      'Artificial Intelligence',
-      'Astronomy',
-      'Astrophysics',
-      'Biochemistry',
-      'Biomedical Engineering',
-      'Biotechnology',
-      'Business Administration',
-      'Chemical Engineering',
-      'Chemistry',
-      'Civil Engineering',
-      'Communications',
-      'Computer Engineering',
-      'Computer Science',
-      'Construction Management',
-      'Criminal Justice',
-      'Cybersecurity',
-      'Data Science',
-      'Dentistry',
-      'Economics',
-      'Education',
-      'Electrical Engineering',
-      'Elementary Education',
-      'English Literature',
-      'Environmental Engineering',
-      'Environmental Science',
-      'Fashion Design',
-      'Film Studies',
-      'Finance',
-      'Fine Arts',
-      'Food Science',
-      'Forensic Science',
-      'Game Design',
-      'Geography',
-      'Geology',
-      'Graphic Design',
-      'Health Administration',
-      'History',
-      'Hospitality Management',
-      'Human Resources',
-      'Industrial Design',
-      'Industrial Engineering',
-      'Information Systems',
-      'Information Technology',
-      'Interior Design',
-      'International Business',
-      'International Relations',
-      'Journalism',
-      'Law',
-      'Library Science',
-      'Linguistics',
-      'Management',
-      'Marketing',
-      'Materials Science',
-      'Mathematics',
-      'Mechanical Engineering',
-      'Media Studies',
-      'Medicine',
-      'Meteorology',
-      'Microbiology',
-      'Music',
-      'Nanotechnology',
-      'Nursing',
-      'Nutrition',
-      'Occupational Therapy',
-      'Oceanography',
-      'Petroleum Engineering',
-      'Pharmacy',
-      'Philosophy',
-      'Photography',
-      'Physical Education',
-      'Physical Therapy',
-      'Physics',
-      'Political Science',
-      'Psychology',
-      'Public Administration',
-      'Public Health',
-      'Public Relations',
-      'Robotics',
-      'Secondary Education',
-      'Social Work',
-      'Sociology',
-      'Software Engineering',
-      'Special Education',
-      'Sports Management',
-      'Statistics',
-      'Systems Engineering',
-      'Theatre Arts',
-      'Tourism',
-      'Urban Planning',
-      'Veterinary Medicine',
-      'Web Development',
-      'Wildlife Biology',
-      'Zoology'
-    ],
-    degreeOptions: [
-      'Associate Degree',
-      'Bachelor of Arts (BA)',
-      'Bachelor of Science (BS)',
-      'Bachelor of Engineering (BEng)',
-      'Bachelor of Business Administration (BBA)',
-      'Bachelor of Fine Arts (BFA)',
-      'Bachelor of Education (BEd)',
-      'Bachelor of Medicine (MBBS)',
-      'Bachelor of Laws (LLB)',
-      'Master of Arts (MA)',
-      'Master of Science (MS)',
-      'Master of Business Administration (MBA)',
-      'Master of Engineering (MEng)',
-      'Master of Fine Arts (MFA)',
-      'Master of Education (MEd)',
-      'Master of Laws (LLM)',
-      'Master of Public Health (MPH)',
-      'Doctor of Philosophy (PhD)',
-      'Doctor of Medicine (MD)',
-      'Doctor of Education (EdD)',
-      'Doctor of Business Administration (DBA)',
-      'Doctor of Jurisprudence (JD)',
-      'Professional Diploma',
-      'Technical Diploma',
-      'Vocational Certificate',
-      'Graduate Certificate',
-      'Post-Graduate Diploma',
-      'Post-Doctoral'
-    ],
+    educationOptions:
+      'Accounting,Aerospace Engineering,Agricultural Science,Anthropology,Architecture,Art History,Artificial Intelligence,Astronomy,Astrophysics,Biochemistry,Biomedical Engineering,Biotechnology,Business Administration,Chemical Engineering,Chemistry,Civil Engineering,Communications,Computer Engineering,Computer Science,Construction Management,Criminal Justice,Cybersecurity,Data Science,Dentistry,Economics,Education,Electrical Engineering,Elementary Education,English Literature,Environmental Engineering,Environmental Science,Fashion Design,Film Studies,Finance,Fine Arts,Food Science,Forensic Science,Game Design,Geography,Geology,Graphic Design,Health Administration,History,Hospitality Management,Human Resources,Industrial Design,Industrial Engineering,Information Systems,Information Technology,Interior Design,International Business,International Relations,Journalism,Law,Library Science,Linguistics,Management,Marketing,Materials Science,Mathematics,Mechanical Engineering,Media Studies,Medicine,Meteorology,Microbiology,Music,Nanotechnology,Nursing,Nutrition,Occupational Therapy,Oceanography,Petroleum Engineering,Pharmacy,Philosophy,Photography,Physical Education,Physical Therapy,Physics,Political Science,Psychology,Public Administration,Public Health,Public Relations,Robotics,Secondary Education,Social Work,Sociology,Software Engineering,Special Education,Sports Management,Statistics,Systems Engineering,Theatre Arts,Tourism,Urban Planning,Veterinary Medicine,Web Development,Wildlife Biology,Zoology',
+    degreeOptions:
+      'Associate Degree,Bachelor of Arts (BA),Bachelor of Science (BS),Bachelor of Engineering (BEng),Bachelor of Business Administration (BBA),Bachelor of Fine Arts (BFA),Bachelor of Education (BEd),Bachelor of Medicine (MBBS),Bachelor of Laws (LLB),Master of Arts (MA),Master of Science (MS),Master of Business Administration (MBA),Master of Engineering (MEng),Master of Fine Arts (MFA),Master of Education (MEd),Master of Laws (LLM),Master of Public Health (MPH),Doctor of Philosophy (PhD),Doctor of Medicine (MD),Doctor of Education (EdD),Doctor of Business Administration (DBA),Doctor of Jurisprudence (JD),Professional Diploma,Technical Diploma,Vocational Certificate,Graduate Certificate,Post-Graduate Diploma,Post-Doctoral',
     aria: {
       tabList: 'Dikarolo tsa foromo ya profaele',
       nextButton: 'Eya karolong e latelang',
@@ -1619,81 +1442,81 @@ export default {
     versions: {
       bundle: 'Bundle',
       col: {
-        concepts: 'Concepts',
-        curator: 'Curator',
-        minted: 'Minted',
+        concepts: 'Maikutlo',
+        curator: 'Mohlophisi',
+        minted: 'E Thehiloe',
         tag: 'Tag',
-        trigger: 'Trigger',
-        version: 'Version'
+        trigger: 'Tšitiso',
+        version: 'Mofuta'
       },
-      current: 'current',
+      current: 'hona joale',
       loadFailed: 'E hlolehile ho jarolla mefuta',
       none: 'Ha ho mefuta e entsoeng hajoale — ho phatlalatsa ho theha v1.',
-      notServing: 'Not serving',
+      notServing: 'Ha e sebetse',
       publish: 'Theha mofuta o mocha',
       published: "Mofuta oa v{'{'}v{'}'} o phatlalalitsoe — ngata ea {'{'}f{'}'} e bolokiloe polokelong ea litokomane.",
       serving: 'E entsoe ingest (serving)',
-      title: 'Versions'
+      title: 'Liphetolelo'
     },
     shell: {
       back: 'Dashboard ea Studio',
-      building: 'Building…',
+      building: 'Kaho…',
       buildingHint: 'Faele ea mohloli e ntse e sebetsoa',
       delete: {
         body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri.',
-        confirm: 'Delete',
+        confirm: 'Hlakola',
         title: 'Hlakola polokelo ruri'
       },
-      export: 'Export .zip',
-      logs: 'Logs',
+      export: 'Romela ntle .zip',
+      logs: 'Litlaleho',
       pii: {
         ack: 'Hlokomela mekhatlo e tšoailoeng & phatlalatsa',
         note: "Mekhatlo e tšoailoeng ke karolo ea litaba tse phatlalalitsoeng. Haeba u li hlahlobile (mohlala, lintlha tsa molao tsa puisano), hlokomela 'me u tsoele pele."
       },
       publish: {
         body: "Ho etsa publish ho theha v{'{'}n{'}'} le ho boloka ngata ea \"{'{'}file{'}'}\" polokelong ea litokomane, ho nka sebaka sa zip efe kapa efe e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Phatlalatsa',
+        title: 'Phatlalatsa'
       },
-      readonly: 'READ ONLY',
-      serving: 'Serving',
+      readonly: 'PALA FELA',
+      serving: 'E sebeletsa',
       state: {
         ingested: 'Ingested'
       },
       tab: {
-        editor: 'Editor',
+        editor: 'Sengoli',
         wizard: 'Wizard'
       },
       version: "v{'{'}n{'}'}",
-      versions: 'Versions',
-      deleteLabel: 'Delete'
+      versions: 'Liphetolelo',
+      deleteLabel: 'Hlakola'
     },
     logs: {
       labeled: "tse leibotsoeng: {'{'}n{'}'}",
       fallbacks: "mekhoa ea tšehetso ea LLM: {'{'}n{'}'}",
       concepts: "mehopolo: {'{'}n{'}'}",
       col: {
-        action: 'Action',
-        description: 'Description',
-        user: 'User',
-        when: 'Date & time'
+        action: 'Ketso',
+        description: 'Tlhaloso',
+        user: 'Mosebelisi',
+        when: 'Letsatsi le nako'
       },
       count: "lingoliloeng tse {'{'}n{'}'}",
       loadFailed: 'E hlolehile ho jarolla tlaleho ea mesebetsi.',
       none: 'Ha ho mesebetsi e rekotiloeng hajoale — liketso tsa polokelo li hlaha mona ha li ntse li etsahala.',
-      title: 'Activity log'
+      title: 'Tlaleho ea tšebetso'
     },
     graph: {
       aria: 'Kerafo ea mohopolo',
-      concepts: 'concepts',
+      concepts: 'maikutlo',
       empty: 'Ha ho mehopolo hajoale — ha ho letho le ka etsoang kerafo.',
-      fit: 'Fit graph',
+      fit: 'Lokisetsa setšoantšo',
       hub: 'Bontša kapa u pate setsi sa index (likhokahano tsa litaba tsa eona ke sebopeho, hase tsebo)',
-      layouting: 'Layouting…',
+      layouting: 'Tlhophiso…',
       legend: 'index',
-      links: 'links',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
+      links: 'lihokelo',
+      zoomIn: 'Atsa',
+      zoomOut: 'Sututsa',
       card: {
         links: "likhokahano tse {'{'}n{'}'}",
         chunks: "likaroloana tse {'{'}n{'}'}",
@@ -1707,57 +1530,57 @@ export default {
       addConcept: {
         bodyLabel: 'Markdown (mamaretsa kapa u siee e se na letho)',
         bodyPh: '# Sehlooho\n\nMamaretsa markdown mona — frontmatter e eketsetsoa uena.',
-        create: 'Create file',
+        create: 'Etsa faele',
         failed: 'Ha ea khona ho theha faele.',
         title: 'Eketsa faele ea mohopolo',
-        titleLabel: 'Title',
+        titleLabel: 'Sehlooho',
         titlePh: 'mohlala: Liphoofolo tse hlaha Mara',
         updateIndex: 'Eketsa lethathamong la Tse ka Hare ho index'
       },
       autocorrect: {
-        blankBefore: '(blank)',
+        blankBefore: '(e se nang letho)',
         blankBadge: 'ha ho frontmatter — tlhahiso e felletseng',
-        applyField: 'Apply',
-        apply: 'Apply fixes',
+        applyField: 'Sebelisa',
+        apply: 'Sebelisa lintlafatso',
         body: 'Litokiso tse reriloeng tsa frontmatter mehopolong eohle. Litaba tsa mantlha ha li so ka li fetoloa.',
-        button: 'Autocorrect',
+        button: 'Tokiso e iketsang',
         clean: 'Ha ho letho le lokelang ho lokisoa — frontmatter eohle e se e ntse e lumellana.',
         col: {
-          field: 'Field',
-          after: 'After',
-          before: 'Before',
-          concept: 'Concept'
+          field: 'Lebala',
+          after: 'Kamora',
+          before: 'Pele',
+          concept: 'Maikutlo'
         },
-        failed: 'Scan failed.',
+        failed: 'Scan e hlotsoe.',
         scanning: 'Scanning…',
         title: 'Tokiso e iketsang (frontmatter feela)'
       },
       concepts: {
         originTip: 'Kamoo mohopolo ona o hlophisitsoeng kateng',
-        add: 'Add concept',
-        addLabel: 'Set label',
-        delete: 'Delete file',
+        add: 'Kenya maikutlo',
+        addLabel: 'Beha label',
+        delete: 'Hlakola faele',
         empty: 'Ha ho lifaele hajoale — eketsa mohopolo kapa u arole hape ho tsoa mohloling.',
-        filter: 'Filter files',
+        filter: 'Filtara lifaele',
         indexBadge: 'index',
-        label: 'Concepts',
-        loading: 'Loading…',
-        resplit: 'Re-split',
-        flagged: 'flagged',
+        label: 'Maikutlo',
+        loading: 'Ho kenya…',
+        resplit: 'Khaola hape',
+        flagged: 'E tšoailoeng',
         flaggedTip:
           "Mehopolo e nang le mekhatlo e tšoailoeng — bula e 'ngoe le e 'ngoe, tlosa kapa u fetole mokhatlo, boloka (e hlahloba hape ka bo eona); kapa u li hlokomele ha u etsa publish.",
         piiBadge: 'PII',
         piiTip: 'Mekhatlo e tšoailoeng: {k}. Bula, tlosa kapa u li fetole, ebe u boloka — e hlahloba hape ka bo eona.',
         piiTipBare: 'Mekhatlo e tšoailoeng — bula, hlahloba, ebe u boloka ho hlahloba hape.',
-        bulkAccept: 'Accept all',
-        bulkRedact: 'Redact all',
-        bulkRemove: 'Remove all',
+        bulkAccept: 'Amohela tsohle',
+        bulkRedact: 'Hlakola tsohle',
+        bulkRemove: 'Tlosa tsohle',
         loadProgress: 'Ho jarolla lifaele {done}/{total}'
       },
       delete: {
         body: 'Sena se tlosa faele, likaroloana tsa eona tse indexiloeng le likhokahano tsa eona tsa kerafo ruri.',
-        confirm: 'Delete',
-        title: 'Delete file'
+        confirm: 'Hlakola',
+        title: 'Hlakola faele'
       },
       label: 'Morulaganyi oa polokelo',
       loadFailed: 'Ha ea khona ho jarolla mohopolo ona.',
@@ -1765,24 +1588,24 @@ export default {
       meta: {
         label: 'Metadata ea mohopolo',
         labelLabel: 'Leibole (Thulaganyo ea Tsebo)',
-        noLabel: 'No label',
+        noLabel: 'Ha ho label',
         none: 'Ha ho mohopolo o khethiloeng',
         saveFailed: 'Ho boloka metadata ho hlolehile',
         saved: 'Metadata e bolokiloe',
-        status: 'Index status',
-        title: 'Title',
-        trust: 'Trust tier',
-        type: 'Type',
-        typePlaceholder: 'Select type…'
+        status: 'Boemo ba index',
+        title: 'Sehlooho',
+        trust: 'Khanya',
+        type: 'Mofuta',
+        typePlaceholder: 'Kgetha mofuta…'
       },
       pane: {
-        files: 'Files',
-        graph: 'Graph'
+        files: 'Lifaele',
+        graph: 'Setšoantšo'
       },
       pickConcept: 'Khetha mohopolo lethathamong ho qala ho hlophisa.',
       resplit: {
         body: 'Sena se hlakola mehopolo eohle ea hajoale le kerafo e thehiloeng, ebe se kenya faele ea mohloli hape ka karohano e ncha. Liphetoho tsa mehopolo li tla lahleha.',
-        confirm: 'Re-split',
+        confirm: 'Khaola hape',
         failed: 'Ho arola hape ho hlolehile — hlahloba sehokelo sa faele ea mohloli.',
         modeA: 'Mohopolo o le mong bakeng sa crawl eohle',
         modeAHint: 'Mohopolo o moholohali — litaba tsohle mohopolong o le mong',
@@ -1792,16 +1615,16 @@ export default {
         modeCHint: 'Pale ea 10.6 — e tla haufinyane',
         title: 'Arola hape ho tsoa mohloling'
       },
-      save: 'Save',
-      saved: 'Saved',
-      saving: 'Saving…',
+      save: 'Boloka',
+      saved: 'Bolokiloe',
+      saving: 'Ho boloka…',
       unsaved: 'Liphetoho tse sa bolokoang',
       view: {
-        rendered: 'Rendered',
-        source: 'Source'
+        rendered: 'E fanoe',
+        source: 'Mohloli'
       },
-      viewToggle: 'Editor view',
-      paneLabel: 'View pane',
+      viewToggle: 'Pono ea mohophotsi',
+      paneLabel: 'Sefate se bontšang',
       saveFailed: 'Ho boloka ho hlolehile — leka hape',
       piiBulk: {
         title: {
@@ -1818,12 +1641,12 @@ export default {
             'Mekhatlo eohle e tšoailoeng e tšoauoa e le e hlahlobiloeng-le-ho-bolokoa — e ke ke ea tšoauoa hape ntle le ha u ka hlahloba hape.'
         },
         scope: "Mehopolo e amehileng: {'{'}n{'}'}.",
-        confirm: 'Apply',
+        confirm: 'Sebelisa',
         failed: 'Ketso ea bongata ea PII e hlolehile — leka hape.'
       },
       actions: {
         bulkPii: 'Ho sebelisa ketso ea bongata ea PII',
-        deleting: 'Deleting'
+        deleting: 'Ho hlakola'
       }
     },
     dashboard: {
@@ -1835,23 +1658,23 @@ export default {
       },
       card: {
         actions: "Liketso bakeng sa {'{'}name{'}'}",
-        building: 'Building…',
+        building: 'Kaho…',
         buildingAria: 'E ntse e hahoa — faele ea mohloli e ntse e sebetsoa',
-        delete: 'Delete',
-        export: 'Export',
-        ingesting: 'Ingesting…',
-        logs: 'Logs',
-        rename: 'Rename',
-        versions: 'Versions'
+        delete: 'Hlakola',
+        export: 'Romela ka ntle',
+        ingesting: 'Ho ja…',
+        logs: 'Litlaleho',
+        rename: 'Nchafatsa lebitso',
+        versions: 'Liphetolelo'
       },
       delete: {
         body: 'Sena se tlosa polokelo, mehopolo ea eona, litaba tse indexiloeng, kerafo le lintho tsa ngata ruri. Ha se khone ho etsolloa.',
-        confirm: 'Delete',
+        confirm: 'Hlakola',
         title: 'Hlakola polokelo ruri'
       },
       filter: {
         domain: 'Sefa ka sebaka sa taba',
-        allDomains: 'All subject areas'
+        allDomains: 'Libaka tsohle tsa litaba'
       },
       new: '+ Polokelo e ncha',
       pii: {
@@ -1860,37 +1683,37 @@ export default {
       },
       publish: {
         body: "Ho etsa publish ho theha v{'{'}n{'}'} le ho boloka ngata ea \"{'{'}file{'}'}\" polokelong ea litokomane, ho nka sebaka sa zip e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.",
-        confirm: 'Publish',
-        title: 'Publish'
+        confirm: 'Phatlalatsa',
+        title: 'Phatlalatsa'
       },
-      search: 'Search...',
+      search: 'Batla...',
       select: "Khetha {'{'}name{'}'} bakeng sa phatlalatso e kholo",
       stage: {
         drainFailed: 'Ingest e hlolehile',
         redraining: 'Re-draining…',
-        building: 'Building…',
+        building: 'Kaho…',
         draft: 'Draft',
-        inReview: 'In review',
+        inReview: 'Ho hlahloba',
         ingested: "E entsoe ingest v{'{'}n{'}'}",
         published: "E phatlalalitsoe v{'{'}n{'}'}",
-        retracted: 'Retracted',
+        retracted: 'E khutlisitsoe',
         stepOf: 'Step '
       },
-      title: 'Repositories',
-      topics: 'topics',
+      title: 'Lipolokelo',
+      topics: 'lihlooho',
       lane: {
-        draft: 'Import',
-        in_review: 'In review',
-        published: 'Published',
+        draft: 'Kenya',
+        in_review: 'Ho hlahloba',
+        published: 'E hatisitsoe',
         ingested: 'Ingested',
-        retracted: 'Retracted'
+        retracted: 'E khutlisitsoe'
       },
       laneEmpty: {
-        draft: 'Nothing importing yet',
-        in_review: 'Nothing in review',
-        published: 'No published repositories yet',
-        ingested: 'Nothing ingested yet',
-        retracted: 'Nothing retracted'
+        draft: 'Ha ho letho le kentseng',
+        in_review: 'Ha ho letho le hlahlobang',
+        published: 'Ha ho lipolokelo tse hatisitsoeng',
+        ingested: 'Ha ho letho le ingested',
+        retracted: 'Ha ho letho le khutlisitsoeng'
       }
     },
     build: {
@@ -1900,13 +1723,13 @@ export default {
       },
       curation: {
         fallbacks: 'mekhoa ea tšehetso ea LLM',
-        curated: 'Curated',
-        typed: 'Typed',
-        labeled: 'Labeled',
-        described: 'Described'
+        curated: 'E hlophisitsoeng',
+        typed: 'E theiloeng',
+        labeled: 'E nang le li-label',
+        described: 'E hlalositsoeng'
       },
       batches: 'Lihlopha tse bolokiloeng',
-      bytes: 'Source read',
+      bytes: 'Mohloli o baliloe',
       conceptsIndexed: 'mehopolo e indexiloeng',
       elapsed: {
         hr: "E qalile lihora tse {'{'}n{'}'} tse fetileng",
@@ -1928,8 +1751,8 @@ export default {
       },
       stage: {
         indexing: 'Indexing',
-        serving: 'Serving',
-        label: 'Stage'
+        serving: 'E sebeletsa',
+        label: 'Mokhahlelo'
       },
       title: {
         import: 'Tsoelo-pele ea ho kenya',
@@ -1940,16 +1763,16 @@ export default {
         idle: 'Boemo ba polokelo'
       },
       lifecycle: {
-        importing: 'Importing',
-        reviewing: 'Reviewing',
-        ingesting: 'Ingesting',
-        serving: 'Serving',
-        retracted: 'Retracted'
+        importing: 'E kenya',
+        reviewing: 'Ho hlahloba',
+        ingesting: 'Ho ja',
+        serving: 'E sebeletsa',
+        retracted: 'E khutlisitsoe'
       },
       row: {
-        subject: 'Subject area',
-        topics: 'Topics',
-        lastVersion: 'Last version'
+        subject: 'Sebaka sa taba',
+        topics: 'Lihlooho',
+        lastVersion: 'Mofuta oa ho qetela'
       }
     },
     create: {
@@ -1965,7 +1788,7 @@ export default {
       duplicateInline: 'Polokelo e nang le lebitso lena e se e ntse e le teng. E bule, kapa u khethe lebitso le leng.',
       duplicate:
         'Polokelo e nang le lebitso lena e se e ntse e le teng — e bule ho tsoa ho dashboard kapa u khethe lebitso le leng.',
-      domain: 'Subject area',
+      domain: 'Sebaka sa taba',
       create: 'Theha polokelo',
       title: 'Polokelo e ncha ea OKF',
       hint: 'E theha polokelo e se nang letho e nang le index.md eo u e hlophisang ho morulaganyi oa Studio.',
@@ -1979,34 +1802,34 @@ export default {
     fm: {
       errKeyCurated: 'Lebitso la lebala le boloketsoeng morero o khethehileng.',
       errKeyDuplicate: 'Lebitso la lebala le sebelisitsoe habeli.',
-      errJson: 'Invalid JSON',
+      errJson: 'JSON e fosahetseng',
       errNumber: 'E tlameha ho ba palo',
       kind: {
         json: 'JSON',
-        array: 'List',
-        boolean: 'True/false',
-        number: 'Number',
-        string: 'Text'
+        array: 'Lenane',
+        boolean: 'Nnete/Leshano',
+        number: 'Palo',
+        string: 'Sengoliloeng'
       },
-      removeKey: 'Remove field',
-      kindLabel: 'Value type',
-      keyPh: 'field name',
+      removeKey: 'Tlosa tšimo',
+      kindLabel: 'Mofuta oa theko',
+      keyPh: 'lebitso la tšimo',
       fullHint: 'Lebala ka leng la frontmatter le ka hlophisoa. Eketsa kapa u tlose linotlolo ka bolokolohi.',
       errRemovalPending: 'Ho tlosa mabala ho hloka konteraka ea seva ea merge-delete (e tla fihla haufinyane).',
       errKeyRequired: 'Lebala le leng le le leng le hloka lebitso.',
       arrayPh: 'boleng bo arohantsoeng ka likhefana',
-      addKey: 'Add field',
+      addKey: 'Kenya tšimo',
       saved: 'Frontmatter e bolokiloe',
       label: 'Frontmatter',
       tipLabel: 'Frontmatter ke eng?',
-      edit: 'Edit',
+      edit: 'Fetola',
       empty: 'Ha ho frontmatter hajoale — Hlophisa e eketsa mofuta, sehlooho le lileibole.',
-      type: 'Type',
-      noType: 'No type',
-      titleLabel: 'Title',
+      type: 'Mofuta',
+      noType: 'Ha ho mofuta',
+      titleLabel: 'Sehlooho',
       labelsLabel: 'Leibole (Thulaganyo ea Tsebo)',
-      noLabel: 'No label',
-      descriptionLabel: 'Description',
+      noLabel: 'Ha ho label',
+      descriptionLabel: 'Tlhaloso',
       save: 'Boloka frontmatter',
       saveFailed: 'Ho boloka frontmatter ho hlolehile'
     },
@@ -2033,25 +1856,25 @@ export default {
         'Kamoo re etsang qeto ea hore na mohopolo ka mong KE eng (sehlooho, mokhatlo, tshebetso…). Li-heuristics li bala leqephe ka bo tsona; khetho ea LLM e lieha haholo empa e ka khona ho sebetsana le maqephe a thata.',
       resplit:
         'Ho arola mohloli hape ka mehopolo ka tsela e fapaneng — mohlala, mohopolo o le mong leqepheng ka leng ho fapana le o le mong bakeng sa sebaka sohle sa marang-rang.',
-      saveFailed: 'Save failed',
+      saveFailed: 'Ho boloka ho hlotsoe',
       importFailedTitle: 'Ho kenya ho hlolehile — faele ea mohloli ha ea khona ho fetoloa.',
       importFailedHint: "Hlakola polokelo ena 'me u kenye faele ea mohloli hape.",
       frontmatter:
         "Tlhahisoleseling e hlophisitsoeng holimo ho faele ka 'ngoe — mofuta, sehlooho, lileibole. Mothusi o e sebelisa ho tseba hore na mohopolo ka mong o bua ka eng."
     },
     md: {
-      toolbar: 'Formatting',
+      toolbar: 'Fomati',
       bold: 'Bold',
       italic: 'Italic',
-      h1: 'Heading 1',
-      h2: 'Heading 2',
-      h3: 'Heading 3',
-      bullet: 'Bullet list',
+      h1: 'Sehlooho 1',
+      h2: 'Sehlooho 2',
+      h3: 'Sehlooho 3',
+      bullet: 'Lenane la litlhaku',
       numbered: 'Lethathamo le nang le linomoro',
-      link: 'Insert link',
+      link: 'Kenya sehokelo',
       code: 'Inline code',
-      table: 'Insert table',
-      split: 'Split'
+      table: 'Kenya tafole',
+      split: 'Arola'
     },
     narrative: {
       intro:
@@ -2101,7 +1924,7 @@ export default {
       helpBody:
         "Lipolokelo tsa OKF ke mokhoa o bobebe oa thuto ea sebopeho sa tsebo — lileibole li hlalosa lihlopha, lihlooho li hlalosa mekhatlo, mehloli e hlalosa tšimoloho. Hang ha li phatlalalitsoe, likarabo tsa moqoqo li qotsa lihlooho ka ID 'me li senola tšimoloho ea tsona.",
       view: {
-        dashboard: 'Dashboard',
+        dashboard: 'Letlapa la taolo',
         wizard: 'Wizard'
       },
       clonedFrom: 'E kopitsitsoe ho tsoa ho {name} · mofuta oa {version}',
@@ -2157,23 +1980,23 @@ export default {
         notReady: "Li-draft ha li e-s'o khone ho bolokoa lehlakoreng la seva; li bolokiloe mona sebakeng."
       },
       mode: {
-        basic: 'Basic',
-        expert: 'Expert'
+        basic: 'Pele',
+        expert: 'Setsebi'
       }
     },
     wizard: {
       status: {
-        published: 'published',
-        inReview: 'in review',
-        draft: 'in progress'
+        published: 'e hatisitsoe',
+        inReview: 'ho hlahloba',
+        draft: 'ho ntseng ho tsoela pele'
       },
       exit: 'Khutlela ho dashboard',
       context: {
         untitled: 'Polokelo e se nang lebitso',
-        trust: 'Trust',
-        title: 'Repository',
-        stale: 'stale',
-        sources: 'Sources',
+        trust: 'Tšepo',
+        title: 'Lefapha',
+        stale: 'e theohileng',
+        sources: 'Mehloli',
         concepts: 'Mehopolo ho fihlela joale'
       },
       label: 'Wizard ea OKF Studio',
@@ -2290,7 +2113,7 @@ export default {
       }
     },
     crawl: {
-      domainLabel: 'Subject area',
+      domainLabel: 'Sebaka sa taba',
       domainPlaceholder: 'Khetha sebaka sa taba…',
       classLabel: 'Kemiso ea mohopolo',
       classHeuristics: 'Li-heuristics (ea kamehla)',
@@ -2399,20 +2222,20 @@ export default {
     },
     pii: {
       panel: 'Mekhatlo e tšoailoeng',
-      nFlagged: '{n} found',
-      rescan: 'Re-scan',
+      nFlagged: '{n} e fumanoeng',
+      rescan: 'Scan hape',
       scanning: 'Scanning…',
       clean: 'No flagged entities — concept ena e hloekile.',
       how: 'Lokisa: tlosa kapa fetola mantsoe (mohlala, the role ho e-na le lebitso), ebe u-save — the re-scan e tlisa sena nakong.',
       descFallback: 'Personal data e fumanwe mona (GDPR Art. 4(1) — relating to an identifiable person).',
       scanError: 'Ho hlahloba ha ho fumanehe',
       type: {
-        PERSON: 'Person name',
-        LOCATION: 'Location',
+        PERSON: 'Lebitso la motho',
+        LOCATION: 'Sebaka',
         DATE_TIME: 'Date kapa time',
         EMAIL_ADDRESS: 'Aterese ea imeile',
-        PHONE_NUMBER: 'Phone number',
-        IP_ADDRESS: 'IP address',
+        PHONE_NUMBER: 'Nomoro ea mohala',
+        IP_ADDRESS: 'Aterese ea IP',
         NRP: 'Nomoro ea ngoliso ea naha',
         BD_NATIONAL_ID: 'Nomoro ea boitsebiso ea naha'
       },
@@ -2426,45 +2249,45 @@ export default {
         NRP: 'National registration number e fumanwe. It strongly identifies a person.',
         BD_NATIONAL_ID: 'National ID number e fumanwe. It strongly identifies a person.'
       },
-      allClear: 'Clear',
+      allClear: 'Hlakola',
       redactFile: 'Sireletsa boitsebiso faeleng eohle',
       confirmRedactFile: 'Netefatsa: sireletsa boitsebiso faeleng eohle?',
       locateTip: 'Bontša mongolo ona ho morulaganyi',
       file: {
-        label: 'Whole file:',
-        redact: 'Redact file',
-        remove: 'Remove body',
-        accept: 'Accept all',
+        label: 'Faele eohle:',
+        redact: 'Hlakola faele',
+        remove: 'Tlosa mmele',
+        accept: 'Amohela tsohle',
         confirmRedact: 'Netefatsa: sireletsa boitsebiso faeleng eohle?',
         confirmRemove: 'Netefatsa: tlosa litaba tsohle tsa mantlha?'
       },
       action: {
-        redact: 'Redact',
-        replace: 'Replace',
-        remove: 'Remove',
-        accept: 'Accept',
+        redact: 'Hlakola',
+        replace: 'Fetola',
+        remove: 'Tlosa',
+        accept: 'Amohela',
         replacement: 'Mongolo o nkelang sebaka',
-        apply: 'Apply',
-        cancel: 'Cancel'
+        apply: 'Sebelisa',
+        cancel: 'Hlakola'
       },
       resolved: {
         title: 'E sebelitsoe faeleng ena',
-        redacted: 'Redacted',
-        replaced: 'Replaced',
-        removed: 'Removed',
-        accepted: 'Accepted',
+        redacted: 'Hlakotsoe',
+        replaced: 'Fetotsoe',
+        removed: 'Tlositsoe',
+        accepted: 'Amohetsoe',
         fileRedacted: 'Faele e sirelelitsoe boitsebiso',
         kept: 'e bolokiloe mongolong',
-        removedWord: 'removed',
+        removedWord: 'tlositsoe',
         wholeFile: 'Litaba tsohle tsa mantlha tsa faele li sirelelitsoe boitsebiso'
       }
     },
     lifecycle: {
-      submit: 'Submit for review',
-      approve: 'Approve',
-      publish: 'Publish',
-      ingest: 'Ingest',
-      retract: 'Retract'
+      submit: 'Tlhahisong',
+      approve: 'Lumeletsana',
+      publish: 'Phatlalatsa',
+      ingest: 'Ho ja',
+      retract: 'Khutlisetsa morao'
     }
   }
 };

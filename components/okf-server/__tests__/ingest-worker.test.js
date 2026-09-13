@@ -13,6 +13,18 @@ jest.mock('../shared-lib/tracing', () => ({
 jest.mock('../shared-lib/metrics', () => ({
   getMeter: () => ({ createCounter: () => ({ add: jest.fn() }) })
 }));
+// LIVE-COUNT reader (settle reconciliation tests): counts the mock db store
+// exactly like the real service counts rows. Declared `mock`-prefixed so the
+// jest.mock factory below may reference it — the wedge-contract describe
+// REPLACES the property with a positional stub, and the settle-reconciliation
+// describe restores this in its beforeEach.
+const mockCountByIndexStatusFromStore = async (repoId, status) => {
+  const db = require('../shared-lib/db-connection-service').__mockDb;
+  return Object.values((db._stores && db._stores.okf_concepts_meta) || {}).filter(
+    (m) => m.repo_id === repoId && m.index_status === status
+  ).length;
+};
+
 jest.mock('../shared-lib/db-connection-service', () => {
   const mockDb = require('./mocks/arango-mock').createMockDb();
   return { getConnection: jest.fn(() => Promise.resolve(mockDb)), __mockDb: mockDb };
@@ -21,7 +33,11 @@ jest.mock('../services/concept-meta-service', () => ({
   upsertConceptMeta: jest.fn(async (repo_id, parsed, opts) => ({
     action: 'updated',
     doc: { repo_id, ...parsed, ...opts }
-  }))
+  })),
+  countByIndexStatus: jest.fn(mockCountByIndexStatusFromStore)
+}));
+jest.mock('../services/graph-lifecycle-service', () => ({
+  promoteGraph: jest.fn(async (repo) => 'OKF_' + (repo.repo_id || 'test') + '_v1')
 }));
 jest.mock('../services/audit-service', () => ({
   writeAudit: jest.fn().mockResolvedValue(null)
@@ -161,7 +177,16 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     authedAxios.post.mockRejectedValue(busy);
     const res = await worker._processOneJob();
     expect(res).toEqual({ outcome: 'busy', concept_id: 'a' });
-    expect(conceptMeta.upsertConceptMeta).not.toHaveBeenCalled();
+    // NO index_status transition — but the claim IS cleared (reaper-fairness,
+    // 2026-09-13): the row was claimed yet never kicked, and a stamped claim
+    // left to age past the reaper's grace window during a saturated drain
+    // gets a healthy concept dead-lettered as "stuck".
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledTimes(1);
+    expect(conceptMeta.upsertConceptMeta).toHaveBeenCalledWith(
+      REPO,
+      { concept_id: 'a', repo_id: REPO },
+      { patch: { worker_claimed_at: null } }
+    );
   });
 
   test('dataprep transport error → outcome error; row TOUCHED (queue advances) but NOT transitioned', async () => {
@@ -398,18 +423,21 @@ describe('ingestWorker._refreshRagIngestion — the wedge contract', () => {
     await worker._refreshRagIngestion(mockDb, RW);
     const { _settleIngest } = require('../services/lifecycle-service');
     expect(_settleIngest).toHaveBeenCalledTimes(1);
-    // Failure clarity (David, 2026-09-09): the record names the concept, the
-    // human reason, and the recovery — plus the machine-readable list for the UI.
-    expect(mockDb.collection('okf_repositories').update).toHaveBeenCalledWith(
-      RW,
-      expect.objectContaining({
-        rag_ingestion: expect.objectContaining({
-          error: expect.stringContaining('1 concept failed to index: alpha'),
-          failed_concepts: [{ concept_id: 'alpha', error: 'the AI model was unreachable during content preparation' }],
-          requested_at: expect.any(String) // preserved from the live record
-        })
-      })
+    // Failure clarity (David, 2026-09-09), contract moved 2026-09-13: the
+    // TERMINAL rag_ingestion record (failed_concepts, human error, recovery)
+    // is owned by _settleIngest (lifecycle-service) — the worker no longer
+    // re-patches the record after it (that re-patch resurrected 'draining'
+    // over the settled record — probe-verified stale merge). The worker's
+    // remaining contract on this path: keep the failure VISIBLE — a warn and
+    // a bundle ingestion-log mirror naming the recovery.
+    const { logger } = require('../shared-lib/logger');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Ingest worker: drain finished with FAILED concepts — settled, serving partial',
+      expect.objectContaining({ repo_id: RW, failed: 2 })
     );
+    // (The bundle ingestion-log mirror is fire-and-forget — its POST/warn
+    // lands after this function resolves, so it is asserted in the
+    // _processOneJob transport-error test, not here.)
   });
 });
 
@@ -454,5 +482,124 @@ describe('ingestWorker._refreshRagIngestion — nested-record contract (0/997 ca
     );
     // THE REGRESSION: the patch carries NO flat dotted attribute names.
     expect(Object.keys(patch).some((k) => k.includes('.'))).toBe(false);
+  });
+});
+
+describe('settle reconciliation (2026-09-13 wedge fix: www-gov-uk-full-crawl 31h "not drained")', () => {
+  const RID_A = 'aaaaaaa1-0000-4000-8000-000000000001';
+  const RID_B = 'aaaaaaa2-0000-4000-8000-000000000002';
+
+  beforeEach(() => {
+    // The file-scope jest.mock (the wedge-contract describe above) stubs
+    // _settleIngest as a no-op spy — these tests exercise the REAL
+    // reconcile → settle flow, so delegate the stub to the actual
+    // implementation (its own deps stay the file's mocks: promoteGraph,
+    // audit, concept-meta live counts). clearAllMocks never strips a
+    // mockImplementation, so set it here where it only affects THIS describe.
+    require('../services/lifecycle-service')._settleIngest.mockImplementation(
+      jest.requireActual('../services/lifecycle-service')._settleIngest
+    );
+    // The wedge-contract test reassigns countByIndexStatus to a positional
+    // stub — restore the store reader so these tests count LIVE rows.
+    conceptMeta.countByIndexStatus = jest.fn(mockCountByIndexStatusFromStore);
+  });
+
+  test('an ARMED repo with an EMPTY queue settles even though no job wrote the last terminal state', async () => {
+    // The live wedge: 922 indexed + 75 reaper-dead-lettered + 0 parsed — the
+    // reaper (not a job) wrote the final transitions, so the settle check
+    // never ran. The reconcile must settle it: serving flags + honest record.
+    await mockDb.collection('okf_repositories').save({
+      repo_id: RID_A,
+      lifecycle_state: 'publish',
+      version: 1,
+      rag_drain_active: true,
+      deleted_at: null,
+      rag_ingestion: {
+        status: 'draining',
+        requested_at: '2026-09-12T06:23:05.841Z',
+        concepts_done: 3,
+        concepts_total: 4
+      }
+    });
+    const meta = mockDb.collection('okf_concepts_meta');
+    // Explicit _keys: the mock keys a _key-less save on repo_id, which would
+    // clobber all four rows into one (real rows are auto-keyed + found by
+    // firstExample, so only the unit fixture needs this).
+    await meta.save({ _key: RID_A + ':c0', repo_id: RID_A, concept_id: 'c0', index_status: 'indexed' });
+    await meta.save({ _key: RID_A + ':c1', repo_id: RID_A, concept_id: 'c1', index_status: 'indexed' });
+    await meta.save({ _key: RID_A + ':c2', repo_id: RID_A, concept_id: 'c2', index_status: 'indexed' });
+    await meta.save({
+      _key: RID_A + ':f1',
+      repo_id: RID_A,
+      concept_id: 'f1',
+      index_status: 'failed',
+      last_error: 'ingest drain stuck — no terminal callback within the grace window (reaper dead-letter)'
+    });
+
+    // 1st positional query = the reconcile's armed-with-empty-queue read;
+    // 2nd = _settleIngest's failed-rows read.
+    programQueries([{ repo_id: RID_A }], [{ concept_id: 'f1', error: 'reaper dead-letter' }]);
+    const out = await worker._reconcileArmedRepos();
+    expect(out.repos).toContain(RID_A);
+
+    const doc = await mockDb.collection('okf_repositories').document(RID_A);
+    expect(doc.ingested_at).toBeTruthy(); // THE settle — the repo is no longer stuck
+    expect(doc.rag_drain_active).toBe(false); // disarmed → retract/re-ingest possible again
+    expect(doc.ingested_graph_name).toBe('OKF_' + RID_A + '_v1');
+    expect(doc.rag_ingestion.status).toBe('failed'); // failed>0 → honest, not 'completed'
+    expect(doc.rag_ingestion.finished_at).toBeTruthy();
+    expect(doc.rag_ingestion.concepts_done).toBe(3);
+    expect(doc.rag_ingestion.failed_concepts).toHaveLength(1);
+    expect(doc.rag_ingestion.failed_concepts[0].concept_id).toBe('f1');
+  });
+
+  test('a repo STILL DRAINING (parsed rows remain) is not settled and stays armed', async () => {
+    await mockDb.collection('okf_repositories').save({
+      repo_id: RID_B,
+      lifecycle_state: 'publish',
+      version: 1,
+      rag_drain_active: true,
+      deleted_at: null,
+      rag_ingestion: { status: 'draining', concepts_done: 1, concepts_total: 2 }
+    });
+    await mockDb
+      .collection('okf_concepts_meta')
+      .save({ _key: RID_B + ':p1', repo_id: RID_B, concept_id: 'p1', index_status: 'parsed' });
+    await mockDb
+      .collection('okf_concepts_meta')
+      .save({ _key: RID_B + ':d1', repo_id: RID_B, concept_id: 'd1', index_status: 'indexed' });
+
+    programQueries([]); // the reconcile finds no armed repo with an empty queue
+    const out = await worker._reconcileArmedRepos();
+    expect(out.repos).not.toContain(RID_B);
+
+    const doc = await mockDb.collection('okf_repositories').document(RID_B);
+    expect(doc.ingested_at).toBeFalsy();
+    expect(doc.rag_drain_active).toBe(true);
+    expect(doc.rag_ingestion.status).toBe('draining');
+  });
+
+  test('a TIMED-OUT wait clears the row claim so the reaper never dead-letters a healthy backlog row', async () => {
+    process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '30';
+    const job = {
+      repo_id: 'r-timeout',
+      concept_id: 'concepts/slow-one',
+      graph_name: 'OKF_r-timeout_v1',
+      frontmatter: {},
+      body: 'slow content',
+      ingest_labels: [],
+      bundle_version: null,
+      updated_at: '2026-09-12T00:00:00Z',
+      last_good_index_at: null,
+      reindex_retry: null
+    };
+    // claim read → the job; every terminal poll → still 'parsed' → deadline → timeout.
+    programQueries(job, { index_status: 'parsed', last_error: null, chunk_count: 0 });
+    const out = await worker._processOneJob();
+    expect(out.outcome).toBe('timeout');
+    const calls = conceptMeta.upsertConceptMeta.mock.calls;
+    const cleared = calls.find((c) => c[2] && c[2].patch && 'worker_claimed_at' in c[2].patch);
+    expect(cleared).toBeTruthy(); // the claim was returned to the unclaimed pool
+    delete process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS;
   });
 });

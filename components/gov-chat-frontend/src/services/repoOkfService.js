@@ -248,10 +248,13 @@ const repoOkfService = {
    * so the editor can locate each flagged entity. Nothing persisted; flagged
    * VALUES never returned — the editor renders excerpts from content it has.
    */
-  async inspectPii(repoId, conceptId) {
+  async inspectPii(repoId, conceptId, opts = {}) {
+    // rescan (David, 2026-09-13): the explicit Re-scan button forces a live
+    // Presidio scan; plain opens are served from the server's persisted
+    // span cache when the content is unchanged.
     const res = await httpService.post(
       `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/pii-inspect`,
-      {},
+      { rescan: Boolean(opts.rescan) },
       { timeout: 120000 }
     );
     return res && res.data ? res.data : { ok: false, occurrences: [] };

@@ -114,7 +114,12 @@ export default {
   props: {
     repoId: { type: String, required: true },
     concepts: { type: Array, default: () => [] },
-    selectedId: { type: String, default: null }
+    selectedId: { type: String, default: null },
+    // LAZY BUILD (2026-09-13): false while the Graph tab is hidden — the
+    // (synchronous) force layout then waits for the first reveal instead of
+    // freezing repo-open. Default true keeps direct mounts (tests, embeds)
+    // building immediately.
+    active: { type: Boolean, default: true }
   },
   emits: ['select'],
   data() {
@@ -234,7 +239,22 @@ export default {
     // the DOM patch finds no $refs.stage and the browser never builds
     // (live-broken on Kenya 2026-09-05: zero graph on reopen).
     modelKey() {
+      // LAZY BUILD: data changes while the pane is hidden only mark the build
+      // pending — never a hidden synchronous layout.
+      if (!this.active) {
+        this.pendingRebuild = true;
+        return;
+      }
       this.$nextTick(() => this.rebuild());
+    },
+    // First reveal of the Graph tab: run the pending build (with the stage
+    // now actually sized) and arm the resize observer.
+    active: {
+      handler(v) {
+        if (!v || !this.pendingRebuild) return;
+        this.pendingRebuild = false;
+        this.$nextTick(() => this.rebuild());
+      }
     },
     selectedId() {
       this.applyFocus(); // re-arms the highlight + the hover neighborhood
@@ -242,13 +262,22 @@ export default {
     }
   },
   mounted() {
+    // LAZY BUILD (David, 2026-09-13 "Page Unresponsive" fix): the parent
+    // mounts this view hidden (v-show) and the cytoscape constructor runs its
+    // force layout SYNCHRONOUSLY — on a crawl-sized repo that froze the page
+    // at repo open EVEN WITH THE GRAPH TAB NEVER OPENED. When inactive, mark
+    // the build pending; it runs the moment the Graph tab is first revealed.
+    if (!this.active) {
+      this.pendingRebuild = true;
+      return;
+    }
     this.rebuild();
-    // The parent mounts this view with v-show (hidden until the Graph tab is
-    // chosen) — the stage has ZERO size at mount, and a canvas sized at 0
-    // stays blank forever (live-caught 2026-09-04 on Kenya). One observer
-    // covers tab reveal, panel resize and window resize; attachStageObserver
-    // is also re-run from rebuild() for a stage created by a LATER update
-    // (concepts arriving after mount — the zero-graph regression).
+    // The stage has ZERO size at mount (v-show until the Graph tab is
+    // chosen), and a canvas sized at 0 stays blank forever (live-caught
+    // 2026-09-04 on Kenya). One observer covers tab reveal, panel resize and
+    // window resize; attachStageObserver is also re-run from rebuild() for a
+    // stage created by a LATER update (concepts arriving after mount — the
+    // zero-graph regression).
     this.attachStageObserver();
   },
   beforeUnmount() {

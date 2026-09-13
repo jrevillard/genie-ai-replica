@@ -309,6 +309,64 @@ describe('pii remediation', () => {
     expect(insp.occurrences[0].excerpt.after).toContain('here');
   });
 
+  test('findings REUSE: unchanged content never re-scans; rescan/changed content do (2026-09-13)', async () => {
+    await seedConcept({ title: 'T' }, 'Call John Smith at 555');
+    mockSidecarPost.mockResolvedValueOnce({
+      data: {
+        results: [
+          { id: 'frontmatter', hits: [], counts_by_type: {} },
+          { id: 'body', hits: [{ type: 'PERSON', start: 5, end: 15, score: 0.9 }], counts_by_type: {} }
+        ]
+      }
+    });
+    const first = await piiService.inspectConcept('repoA', 'c1', { title: 'T' }, 'Call John Smith at 555');
+    expect(first.state).toBe('ok');
+    expect(first.occurrences).toHaveLength(1);
+    expect(first.occurrences[0].excerpt.hit).toBe('John Smith');
+    expect(mockSidecarPost).toHaveBeenCalledTimes(1);
+    // Findings persisted SPANS-ONLY (no excerpt at rest — NFR-P2 preserved).
+    const doc = Object.values(mockDb._stores.okf_concepts_meta)[0];
+    expect(doc.pii_findings.occurrences[0]).toEqual({
+      where: 'body',
+      type: 'PERSON',
+      start: 5,
+      end: 15,
+      score: 0.9
+    });
+    // SECOND inspect of UNCHANGED content: served from the cache — the
+    // sidecar is NOT called again, and the excerpt is re-sliced exactly.
+    const second = await piiService.inspectConcept('repoA', 'c1', { title: 'T' }, 'Call John Smith at 555');
+    expect(mockSidecarPost).toHaveBeenCalledTimes(1); // still one
+    expect(second.occurrences).toHaveLength(1);
+    expect(second.occurrences[0].excerpt.hit).toBe('John Smith');
+    // EXPLICIT rescan bypasses the cache (panel Re-scan button).
+    mockSidecarPost.mockResolvedValueOnce({
+      data: {
+        results: [
+          { id: 'frontmatter', hits: [], counts_by_type: {} },
+          { id: 'body', hits: [], counts_by_type: {} }
+        ]
+      }
+    });
+    const third = await piiService.inspectConcept('repoA', 'c1', { title: 'T' }, 'Call John Smith at 555', {
+      rescan: true
+    });
+    expect(mockSidecarPost).toHaveBeenCalledTimes(2);
+    expect(third.occurrences).toHaveLength(0);
+    // CHANGED content → fresh scan (the cache key is the content signature).
+    mockSidecarPost.mockResolvedValueOnce({
+      data: {
+        results: [
+          { id: 'frontmatter', hits: [], counts_by_type: {} },
+          { id: 'body', hits: [], counts_by_type: {} }
+        ]
+      }
+    });
+    const fourth = await piiService.inspectConcept('repoA', 'c1', { title: 'T' }, 'Changed content');
+    expect(mockSidecarPost).toHaveBeenCalledTimes(3);
+    expect(fourth.occurrences).toHaveLength(0);
+  });
+
   test('unknown concept → 404 CONCEPT_NOT_FOUND (no scan)', async () => {
     await expect(
       piiService.remediatePii('repoA', 'ghost', { action: 'redact', where: 'body', start: 0, end: 1, hit: 'x' }, ACTOR)

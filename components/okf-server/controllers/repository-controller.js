@@ -647,7 +647,12 @@ async function inspectPii(req, res, next) {
     if (!concept) {
       return res.status(404).json({ error: 'CONCEPT_NOT_FOUND', message: `Concept '${concept_id}' not found` });
     }
-    const out = await piiService.inspectConcept(repo_id, concept_id, concept.frontmatter || {}, concept.body || '');
+    // FINDINGS REUSE (David, 2026-09-13): unchanged content is served from
+    // the persisted span cache (no Presidio call). The panel's explicit
+    // Re-scan button sends {rescan:true} to force a live scan.
+    const out = await piiService.inspectConcept(repo_id, concept_id, concept.frontmatter || {}, concept.body || '', {
+      rescan: Boolean(req.body && req.body.rescan)
+    });
     res.status(200).json({
       ok: out.state !== 'error',
       state: out.state,

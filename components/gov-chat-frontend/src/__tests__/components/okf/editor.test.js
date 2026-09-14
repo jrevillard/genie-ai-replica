@@ -100,6 +100,36 @@ describe('OkfConceptList', () => {
     expect(wrapper.emitted('select')[1]).toEqual(['c-1']);
   });
 
+  it('floats the ingest-failure card on hover of a RED row — exact error + fix (David, 2026-09-14)', async () => {
+    const rows = [
+      { concept_id: 'c-1', title: 'Healthy', index_status: 'indexed' },
+      {
+        concept_id: 'c-2',
+        title: 'Bona vacantia',
+        index_status: 'failed',
+        last_error:
+          'ingest drain stuck — no terminal callback within the grace window (reaper dead-letter; recovery = re-ingest)',
+        ingest_attempts: 3,
+        updated_at: '2026-09-12T19:55:00.000Z'
+      }
+    ];
+    const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: rows });
+    expect(wrapper.find('.okf-cl__failcard').exists()).toBe(false); // nothing hovered yet
+    // Hover the HEALTHY row → no card (only RED rows speak).
+    await wrapper.findAll('.okf-cl__row')[0].trigger('mouseenter');
+    expect(wrapper.find('.okf-cl__failcard').exists()).toBe(false);
+    // Hover the RED row → the card floats with the VERBATIM error + the fix.
+    await wrapper.findAll('.okf-cl__row')[1].trigger('mouseenter');
+    const card = wrapper.find('.okf-cl__failcard');
+    expect(card.exists()).toBe(true);
+    expect(card.text()).toContain('reaper dead-letter; recovery = re-ingest'); // the exact error
+    expect(card.text()).toContain('grace window'); // the mapped recovery
+    expect(card.text()).toContain('Attempts: 3');
+    // Leaving the row hides it again.
+    await wrapper.findAll('.okf-cl__row')[1].trigger('mouseleave');
+    expect(wrapper.find('.okf-cl__failcard').exists()).toBe(false);
+  });
+
   it('emits add from the footer and delete per row action', async () => {
     const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: base });
     const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add concept'));

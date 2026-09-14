@@ -1531,6 +1531,21 @@ export default {
         delete: '删除文件',
         empty: '暂无文件 — 请添加新概念或从源文件重新切分。',
         filter: '筛选文件',
+        failedCard: {
+          title: '摄取失败',
+          problem: '问题',
+          noError: '被标记为失败，但没有记录原因。',
+          fixLabel: '如何修复',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              '摄取工作进程在宽限期内停止等待（排空已饱和）——内容完好无损。修复方法：对此文件稍作修改并保存即可重新入队；或撤回整个仓库并重新摄取。',
+            dataprep:
+              '内容准备服务未能处理此次摄取。修复方法：编辑并保存以重新入队；若反复失败，请检查 dataprep 服务的健康状态。',
+            generic: '索引失败。修复方法：编辑内容并保存以重新入队，或撤回整个仓库并重新摄取。'
+          }
+        },
         indexBadge: '索引',
         label: '概念',
         loading: '加载中…',

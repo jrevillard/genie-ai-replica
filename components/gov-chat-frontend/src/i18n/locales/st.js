@@ -1563,6 +1563,22 @@ export default {
         delete: 'Hlakola faele',
         empty: 'Ha ho lifaele hajoale — eketsa mohopolo kapa u arole hape ho tsoa mohloling.',
         filter: 'Filtara lifaele',
+        failedCard: {
+          title: 'Ho kenya ho hlolehile',
+          problem: 'Bothata',
+          noError: 'E hlahliloe e hlolehile ntle le lebaka la ngoliso.',
+          fixLabel: 'Mokhoa oa ho lokisa',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'Mosebetsi oa ho kenya o emetse nako eohle hobane mela e ne e tletseng — litaba li lokile. Ho lokisa: fetola faele ena hanyane obe o boloke, kapa busetsa morao repo obe o kenya hape tsohle.',
+            dataprep:
+              'Tshebeletso ea ho lokisa litaba e hlotlehile. Ho lokisa: fetola obe o boloke; ha e etsa hape, hlahloba tshebeletso ea dataprep.',
+            generic:
+              'Ho beha-index ho hlolehile. Ho lokisa: fetola litaba obe o boloke, kapa busetsa morao repo obe o kenya hape tsohle.'
+          }
+        },
         indexBadge: 'index',
         label: 'Maikutlo',
         loading: 'Ho kenya…',

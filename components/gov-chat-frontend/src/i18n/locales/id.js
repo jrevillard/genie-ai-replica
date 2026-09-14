@@ -1558,6 +1558,22 @@ export default {
         delete: 'Hapus file',
         empty: 'Belum ada berkas - tambah konsep atau bagi ulang dari sumber.',
         filter: 'Saring file',
+        failedCard: {
+          title: 'Ingest gagal',
+          problem: 'Masalahnya',
+          noError: 'Ditandai gagal tanpa alasan tercatat.',
+          fixLabel: 'Cara memperbaiki',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'Worker ingest berhenti menunggu dalam batas waktunya (drain penuh) — konten tetap utuh. Perbaikan: edit sedikit file ini lalu simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.',
+            dataprep:
+              'Layanan persiapan konten gagal memproses ingest ini. Perbaikan: edit dan simpan untuk mengantri ulang; jika berulang, periksa kesehatan layanan dataprep.',
+            generic:
+              'Pengindeksan gagal. Perbaikan: edit konten dan simpan untuk mengantri ulang, atau retract dan ingest ulang seluruh repo.'
+          }
+        },
         indexBadge: 'indeks',
         label: 'Konsep',
         loading: 'Memuat…',

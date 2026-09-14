@@ -1561,6 +1561,22 @@ export default {
         delete: 'Eliminar archivo',
         empty: 'Sin archivos todavía: añada un concepto o vuelva a dividir desde el origen.',
         filter: 'Filtrar archivos',
+        failedCard: {
+          title: 'Fallo al ingestar',
+          problem: 'El problema',
+          noError: 'Marcado como fallido sin motivo registrado.',
+          fixLabel: 'Cómo corregirlo',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'El trabajador de ingest dejó de esperar dentro de su ventana de gracia (el drenaje estaba saturado) — el contenido está intacto. Solución: edita ligeramente este archivo y guarda para re-encolarlo, o retira y re-ingesta el repositorio completo.',
+            dataprep:
+              'El servicio de preparación de contenido falló en este ingest. Solución: edita y guarda para re-encolarlo; si se repite, revisa la salud del servicio dataprep.',
+            generic:
+              'Falló la indexación. Solución: edita el contenido y guarda para re-encolarlo, o retira y re-ingesta el repositorio completo.'
+          }
+        },
         indexBadge: 'índice',
         label: 'Conceptos',
         loading: 'Cargando…',

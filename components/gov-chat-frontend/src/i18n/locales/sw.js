@@ -1552,6 +1552,22 @@ export default {
         delete: 'Futa faili',
         empty: 'Bado hakuna faili - ongeza dhana au ugawanye upya kutoka chanzo.',
         filter: 'Chuja faili',
+        failedCard: {
+          title: 'Ingest imeshindikana',
+          problem: 'Tatizo',
+          noError: 'Imeashiriwa kushindwa bila sababu iliyorekodiwa.',
+          fixLabel: 'Jinsi ya kurekebisha',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'Mfanyakazi wa ingest aliacha kusubiri ndani ya dirisha la rehema (mfuo ulikuwa umejaa) — maudhui yako salama. Kurekebisha: hariri faili hii kidogo kisha hifadhi ili iingizwe tena kwenye safu, au futa na ingiza upya hazina yote.',
+            dataprep:
+              'Huduma ya maandalizi ya maudhui imeshindwa na ingest hii. Kurekebisha: hariri na hifadhi; ikirudia, angalia hali ya huduma ya dataprep.',
+            generic:
+              'Ufaharisi umeshindwa. Kurekebisha: hariri maudhui kisha hifadhi, au futa na ingiza upya hazina yote.'
+          }
+        },
         indexBadge: 'ielezo',
         label: 'Dhana',
         loading: 'Inapakia…',

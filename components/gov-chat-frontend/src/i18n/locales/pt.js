@@ -1561,6 +1561,22 @@ export default {
         delete: 'Excluir arquivo',
         empty: 'Nenhum arquivo ainda — adicione um conceito ou divida novamente a partir da origem.',
         filter: 'Filtrar arquivos',
+        failedCard: {
+          title: 'Falha no ingest',
+          problem: 'O problema',
+          noError: 'Marcado como falho sem motivo registrado.',
+          fixLabel: 'Como corrigir',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'O worker de ingest parou de esperar dentro da sua janela de carência (a drenagem estava saturada) — o conteúdo está intacto. Correção: edite levemente este arquivo e salve para reenfileirá-lo, ou faça retract e re-ingest do repositório inteiro.',
+            dataprep:
+              'O serviço de preparação de conteúdo falhou neste ingest. Correção: edite e salve para reenfileirar; se repetir, verifique a saúde do serviço dataprep.',
+            generic:
+              'A indexação falhou. Correção: edite o conteúdo e salve para reenfileirar, ou faça retract e re-ingest do repositório inteiro.'
+          }
+        },
         indexBadge: 'índice',
         label: 'Conceitos',
         loading: 'Carregando…',

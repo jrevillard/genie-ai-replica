@@ -1565,6 +1565,22 @@ export default {
         delete: 'Supprimer le fichier',
         empty: "Aucun fichier pour l'instant - ajoutez un concept ou re-divisez depuis la source.",
         filter: 'Filtrer les fichiers',
+        failedCard: {
+          title: 'Échec de l’ingest',
+          problem: 'Le problème',
+          noError: 'Marqué échoué sans raison enregistrée.',
+          fixLabel: 'Comment corriger',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'Le worker d’ingest a cessé d’attendre dans sa fenêtre de grâce (le drainage était saturé) — le contenu est intact. Correction : modifiez légèrement ce fichier et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt.',
+            dataprep:
+              'Le service de préparation de contenu a fait échouer cet ingest. Correction : modifiez et enregistrez pour le remettre en file ; si cela se répète, vérifiez l’état du service dataprep.',
+            generic:
+              'L’indexation a échoué. Correction : modifiez le contenu et enregistrez pour le remettre en file, ou retirez et re-ingestez tout le dépôt.'
+          }
+        },
         indexBadge: 'index',
         label: 'Concepts',
         loading: 'Chargement…',

@@ -372,6 +372,26 @@ describe('OkfAddConceptModal', () => {
     const withIdx = mountWith(OkfAddConceptModal, { visible: true, repoId: 'r-1', hasIndex: true });
     expect(withIdx.find('select').html()).not.toContain('value="index"');
   });
+
+  it('edits the body in the shared markdown editor — Source/Preview modes, value reaches create', async () => {
+    const store = modalStore();
+    const wrapper = mountWith(OkfAddConceptModal, { visible: true, repoId: 'r-1', hasIndex: true }, store);
+    // The SAME DsOkfMarkdownEditor mode bar (Source | Split | Preview)…
+    const modeButtons = wrapper.findAll('.ds-okf-md__mode').map((b) => b.text());
+    expect(modeButtons).toEqual(expect.arrayContaining(['Preview', 'Split', 'Source only']));
+    // …with the source pane usable immediately (expert) and NO frontmatter banner.
+    expect(wrapper.find('.ds-okf-md__textarea').exists()).toBe(true);
+    expect(wrapper.find('.ds-okf-md__frontmatter').exists()).toBe(false);
+    // Typing in the editor reaches the modal body that createConcept dispatches.
+    await wrapper.find('.ds-okf-md__textarea').setValue('# Wildlife\n\nReal body text');
+    expect(wrapper.vm.body).toBe('# Wildlife\n\nReal body text');
+    wrapper.vm.title = 'Wildlife';
+    await wrapper.vm.$nextTick();
+    wrapper.vm.onAction('create');
+    await wrapper.vm.$nextTick();
+    await built(wrapper);
+    expect(wrapper.emitted('created')).toEqual([['wildlife']]);
+  });
 });
 
 const OkfStepValidate = require('@/components/okf/steps/Validate.vue').default;

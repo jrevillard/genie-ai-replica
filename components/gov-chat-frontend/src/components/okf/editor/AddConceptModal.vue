@@ -32,19 +32,19 @@
       </DsFormGroup>
     </div>
 
-    <DsFormGroup
-      :label="translate('okf.editor.addConcept.bodyLabel', 'Markdown (paste or leave empty)')"
-      input-id="okf-acn-body"
-    >
-      <DsInput
-        id="okf-acn-body"
-        v-model="body"
-        type="textarea"
-        :rows="10"
-        size="sm"
-        :placeholder="
-          translate('okf.editor.addConcept.bodyPh', '# Heading\n\nPaste markdown here - frontmatter is added for you.')
-        "
+    <DsFormGroup :label="translate('okf.editor.addConcept.bodyLabel', 'Markdown (paste or leave empty)')">
+      <!-- Story 7.7 follow-up (David, 2026-09-14): the plain textarea is now the
+           SAME DsOkfMarkdownEditor the concept editor uses — Source | Split |
+           Preview modes, format toolbar, async chunked preview. Frontmatter
+           machinery stays off (enable-frontmatter=false): the store normalizes
+           frontmatter on create, exactly as the dialog text promises. -->
+      <DsOkfMarkdownEditor
+        :value="body"
+        mode="split"
+        :expert="true"
+        :enable-frontmatter="false"
+        :aria-label="translate('okf.editor.addConcept.bodyLabel', 'Markdown (paste or leave empty)')"
+        @update:value="body = $event"
       />
     </DsFormGroup>
 
@@ -63,12 +63,13 @@ import DsDialog from '../../ds/Dialog.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsInput from '../../ds/Input.vue';
 import DsSelect from '../../ds/Select.vue';
+import DsOkfMarkdownEditor from '../../ds/OkfMarkdownEditor.vue';
 
 const TYPES = ['topic', 'entity', 'process', 'event', 'source'];
 
 export default {
   name: 'OkfAddConceptModal',
-  components: { DsDialog, DsFormGroup, DsInput, DsSelect },
+  components: { DsDialog, DsFormGroup, DsInput, DsSelect, DsOkfMarkdownEditor },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false },

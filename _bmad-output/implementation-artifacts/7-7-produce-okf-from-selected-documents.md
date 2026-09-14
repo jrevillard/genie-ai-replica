@@ -5,7 +5,7 @@ baseline_commit: a84ca779
 
 Status: ready-for-dev (NEXT WORK ITEM — David, 2026-09-14)
 
-Story key: `7-7-produce-okf-from-selected-documents` | Epic: 7 (AI-Driven OKF Producer) / rides Epic 11's Source Adapter Framework as the **Class-0 flagship adapter** | Branch: `feat/okf-server`
+Story key: `7-7-produce-okf-from-selected-documents` | GitLab: #997 | Epic: 7 (AI-Driven OKF Producer) / rides Epic 11's Source Adapter Framework as the **Class-0 flagship adapter** | Branch: `feat/okf-server`
 FRs: FR-37 (amended), FR-39 (Class 0), FR-42 (xlsx semantics) | Design: [documents-to-okf-import-design-2026-09-14](../planning-artifacts/documents-to-okf-import-design-2026-09-14.md) (anchors verified against live code 2026-09-14)
 
 > **The gap (amended 2026-09-14):** the original 7.7 text gated IMPORT on "not yet ingested". David's
@@ -20,6 +20,17 @@ FRs: FR-37 (amended), FR-39 (Class 0), FR-42 (xlsx semantics) | Design: [documen
 As a **steward**,
 I want **to multi-select uploaded documents (pdf, docx, xlsx, md, html, txt) in Document Management and import them into a single OKF repository — including documents already ingested free-form**,
 So that **existing document batches become one governed, cross-linked, coherently labeled OKF knowledge base — without double-serving content that is already live in RAG**.
+
+## Story readiness checklist (BMAD forward workflow — create-story → checklist, done 2026-09-14)
+
+- [x] ACs are implementable and testable (each maps to tasks T1–T7; every gate/report has a named assertion)
+- [x] Anchors verified against LIVE code (file:line table in Design §2; re-verified 2026-09-14)
+- [x] Decided-semantics dependencies resolved (FR-42 xlsx, Class 0, DP-9 defaults-only — no open questions blocking dev)
+- [x] Anti-trap analysis done (bundle-Ingested gate trip; xlsx no-extraction; naming rule; okf_repo_id re-import semantics)
+- [x] Non-breaking contract explicit (free-form ingest, crawl path, six-step workflow untouched; regression tests named)
+- [x] Scope boundary written (do-NOT-build list)
+- [x] i18n + smoke-harness extension planned (×14; T7 round-trip)
+- [x] GitLab issue created (#997, type::story, prd::okf-server, okf-server::epic-7)
 
 ## Acceptance Criteria
 

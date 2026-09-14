@@ -24,6 +24,7 @@ const bundleExportService = require('../services/bundle-export-service');
 const conformanceService = require('../services/conformance-service');
 const typeInference = require('../services/type-inference-service');
 const crawlConversionService = require('../services/crawl-conversion-service');
+const producerService = require('../services/producer-service'); // Story 7.7 documents import
 
 // Story #978 — metrics helpers (fail-soft if OTel collector is unavailable).
 // Lazy + try/catch because getMeter() may throw at module-load when the SDK
@@ -186,6 +187,57 @@ async function convertFromCrawl(req, res, next) {
       split_mode: body.split_mode,
       requested_name: body.name || null,
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
+      actor
+    });
+    res.status(202).json({ ...repo, name_adjusted: repo.name !== baseName });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Story 7.7 (David, 2026-09-14): convert-from-documents — multi-select
+ * document-repository files into ONE OKF repository. Mirrors convertFromCrawl:
+ * create the repo (duplicate-suffix loop, born-right ACL slug), resolve the
+ * classification strategy (unknown/absent = heuristics, never a 400), then
+ * hand to producer-service (which stamps source_documents[] + okf_repo_id on
+ * each source doc and runs the whole-corpus conversion under the SHARED
+ * conversion slot). Ingested documents are ALLOWED here — the repo's own
+ * ingest transition is gated downstream (SOURCES_NOT_RETRACTED).
+ */
+async function convertFromDocuments(req, res, next) {
+  try {
+    const body = req.body || {};
+    const fileIds = Array.isArray(body.file_ids) ? body.file_ids.filter((f) => typeof f === 'string' && f.trim()) : [];
+    if (fileIds.length === 0) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'file_ids (non-empty array) is required' });
+    }
+    const actor = actorFrom(req);
+    const repoDomain = body.domain || 'general';
+    const classification =
+      body.classification !== undefined ? typeInference.resolveStrategy(body.classification).strategy : undefined;
+    const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
+    const baseName = typeof body.name === 'string' && body.name ? body.name : 'imported-repository';
+    let repo = null;
+    for (let attempt = 1; attempt <= 10 && !repo; attempt++) {
+      const candidate = attempt === 1 ? baseName : `${baseName}-${attempt}`;
+      try {
+        repo = await repoService.create({ name: candidate, domain: repoDomain, acl }, actor, {});
+      } catch (err) {
+        if (!(err && err.code === 'DUPLICATE_REPO')) throw err;
+      }
+    }
+    if (!repo) {
+      return res.status(409).json({
+        error: 'DUPLICATE_REPO',
+        message: `Repository name "${baseName}" (and suffixed variants) already exists in domain "${repoDomain}"`
+      });
+    }
+    await producerService.startDocumentsConversion({
+      repo_id: repo.repo_id,
+      file_ids: fileIds,
+      requested_name: body.name || null,
+      classification,
       actor
     });
     res.status(202).json({ ...repo, name_adjusted: repo.name !== baseName });
@@ -1187,6 +1239,7 @@ module.exports = {
   getRepoVersion,
   getRepoManifest,
   getRepoLinks,
+  convertFromDocuments,
   discoverFromManifests,
   patchConcept,
   resplitRepo,

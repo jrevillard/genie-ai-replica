@@ -141,6 +141,59 @@ async function buildingBlocker(repo) {
   return null;
 }
 
+/**
+ * SOURCES-BUSY GATE (Story 7.7, David, 2026-09-14): an OKF repository built
+ * from document-repository files cannot be INGESTED while any of its source
+ * documents still serve the free-form RAG corpus — the same content must
+ * never be retrievable through two channels. Documents that are still
+ * ingested were ALLOWED at import time by design; this gate is the
+ * prevention. Fail-closed LIVE re-check of each source doc's dataprep.status
+ * in doc-repo (import-time snapshots go stale). Returns the blocking error
+ * or null.
+ *   - SOURCES_NOT_RETRACTED: ≥1 source doc's status ∈ {Ingesting, Ingested,
+ *     Ingested with Warnings}. Pass states: Retracted / Pending / Ingestion
+ *     Error / doc gone.
+ * GATE SCOPE (the trap): the repo's OWN bundle zip is itself a doc-repo file
+ * reporting 'Ingested' + is_bundle=true — the gate reads the repo's
+ * source_documents[] list EXCLUSIVELY (never okf_repo_id scans), so crawl
+ * repos (no source_documents) are structurally unaffected.
+ */
+async function sourcesBusyBlocker(repo) {
+  const sources = (repo && Array.isArray(repo.source_documents) && repo.source_documents) || [];
+  if (sources.length === 0) return null;
+  const { authedAxios } = require('./service-token');
+  const docRepoConfig = require('../config');
+  const serving = [];
+  for (const s of sources) {
+    if (!s || !s.file_id) continue;
+    try {
+      const res = await authedAxios.get(
+        `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`,
+        { timeout: 10000 }
+      );
+      const f = (res.data && (res.data.file || res.data)) || {};
+      if (f.is_bundle === true) continue; // defensive: a bundle is never a source doc
+      const status = String((f.dataprep && f.dataprep.status) || '')
+        .toLowerCase()
+        .trim();
+      if (status === 'ingesting' || status === 'ingested' || status === 'ingested with warnings') {
+        serving.push(f.file_name || s.file_name || s.file_id);
+      }
+    } catch (err) {
+      // FAIL-CLOSED: if doc-repo cannot tell us the status, treat the source
+      // as still serving (a transient outage must not double-serve content).
+      logger.warn('SOURCES-BUSY re-check failed (fail-closed)', { file_id: s.file_id, error: err.message });
+      serving.push(s.file_name || s.file_id);
+    }
+  }
+  if (serving.length === 0) return null;
+  return new LifecycleError(
+    'SOURCES_NOT_RETRACTED',
+    'source documents still serve the free-form corpus — retract them to enable ingest: ' + serving.join(', '),
+    409
+  );
+}
+
 const ACTIONS = Object.keys(TRANSITIONS);
 
 function nowIso() {
@@ -289,6 +342,19 @@ async function transition(repoId, action, actor) {
       if (blocker) {
         span.setAttribute('okf.lifecycle.blocked', blocker.code);
         throw blocker;
+      }
+    }
+
+    // SOURCES-BUSY GATE (Story 7.7, David 2026-09-14) — ingest-only: a repo
+    // built from document-repository files cannot drain while its source
+    // documents still serve the free-form corpus. Before the transition
+    // table so the caller hears "retract your sources", never "invalid
+    // transition". (Structurally inert for crawl repos: no source_documents[].)
+    if (action === 'ingest') {
+      const sourcesBlocker = await sourcesBusyBlocker(repo);
+      if (sourcesBlocker) {
+        span.setAttribute('okf.lifecycle.blocked', sourcesBlocker.code);
+        throw sourcesBlocker;
       }
     }
 
@@ -586,6 +652,8 @@ module.exports = {
   transition,
   _settleIngest,
   assertWritable,
+  buildingBlocker, // unit-tested directly (gate contract)
+  sourcesBusyBlocker, // Story 7.7 — unit-tested directly (gate contract)
   TRANSITIONS,
   ACTIONS,
   LifecycleError

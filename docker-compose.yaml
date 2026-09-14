@@ -1653,8 +1653,12 @@ services:
   # restart policy handles the race condition until init completes.
   otel-collector-init:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
+    # Exception: cap_add CHOWN — the init's only job is chown 10001 on /var/lib/otelcol;
+    # cap_drop ALL strips CAP_CHOWN, so we add it back scoped to this one-shot init.
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
     security_opt:
       - no-new-privileges:true
     image: busybox:1.38.0

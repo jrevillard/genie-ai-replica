@@ -1541,6 +1541,22 @@ export default {
         delete: 'Kofuo kuntu',
         empty: 'Ejjan̄in wōr fail - kobaiki juon kōm̦m̦an ak bar ajeje jān jikin eo.',
         filter: 'Kofuo filtar',
+        failedCard: {
+          title: 'Failed to ingest',
+          problem: 'The problem',
+          noError: 'Marked failed without a recorded reason.',
+          fixLabel: 'How to fix',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
+            dataprep:
+              'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
+            generic:
+              'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
+          }
+        },
         indexBadge: 'indeksi',
         label: 'Miroolu',
         loading: 'A bering soto…',

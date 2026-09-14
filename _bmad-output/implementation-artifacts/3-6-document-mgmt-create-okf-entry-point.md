@@ -5,6 +5,14 @@ baseline_commit: 14205ae
 
 Status: ready-for-dev
 
+> **AMENDED 2026-09-14 (David's directive — folded into Story 7.7):** the AC-1 gate condition
+> "none are `dataprep.status == 'ingested'`" is DROPPED. Ingested documents CAN be imported; the
+> prevention moves downstream to a lifecycle gate — the OKF repo's `ingest` transition returns
+> `409 SOURCES_NOT_RETRACTED` while any source document still serves the free-form corpus
+> (reaper-style live re-check, fail-closed). The button shows an amber warning tooltip for ingested
+> selections instead of disabling. See [7.7](7-7-produce-okf-from-selected-documents.md) +
+> [design](../planning-artifacts/documents-to-okf-import-design-2026-09-14.md) §6.
+
 Story key: `3-6-document-mgmt-create-okf-entry-point` | GitLab: #968
 Epic: 3 (Admin UI) / **Epic 10** (OKF Studio capstone) | Branch: `feat/okf-server`
 FRs: FR-38, FR-26 | Spec: [okf-studio-ux-design-2026-08-13](../planning-artifacts/okf-studio-ux-design-2026-08-13.md) §1.3a, §5.2

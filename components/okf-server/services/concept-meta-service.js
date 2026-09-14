@@ -400,7 +400,8 @@ async function listConceptsMeta(repo_id, opts = {}) {
   const KEEP = `RETURN KEEP(m, ["repo_id", "concept_id", "path", "title", "type", "labels", "tags", "summary",
          "is_index", "index_status", "content_hash", "trust_tier", "sources", "chunk_count",
          "lifecycle_status", "pii_state", "pii_hits_summary", "pii_scanned_at",
-         "conformance_issues", "created_at", "updated_at"])`;
+         "conformance_issues", "created_at", "updated_at",
+         "last_error", "last_worker_error", "ingest_attempts"])`;
   const SORT = `SORT (m.index_status == 'failed' ? 0 : (m.index_status == 'parsed' ? 1 : 2)), m.title`;
   if (!limit) {
     return await (

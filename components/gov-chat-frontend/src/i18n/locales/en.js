@@ -1617,6 +1617,22 @@ export default {
         flagged: 'flagged',
         flaggedTip:
           'Concepts with flagged entities — open each, remove or alter the entity, save (it re-scans automatically); or acknowledge them at publish.',
+        failedCard: {
+          title: 'Failed to ingest',
+          problem: 'The problem',
+          noError: 'Marked failed without a recorded reason.',
+          fixLabel: 'How to fix',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'The ingest worker gave up waiting within its grace window (the drain was saturated) — the content is intact. Fix: edit this file slightly and save to re-queue it, or retract and re-ingest the whole repo.',
+            dataprep:
+              'The content-preparation service failed this ingest. Fix: edit and save to re-queue it; if it repeats, check the dataprep service health.',
+            generic:
+              'Indexing failed. Fix: edit the content and save to re-queue it, or retract and re-ingest the whole repo.'
+          }
+        },
         indexBadge: 'index',
         label: 'Concepts',
         loadProgress: 'Loading files {done}/{total}',

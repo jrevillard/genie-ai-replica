@@ -1563,6 +1563,22 @@ export default {
         delete: 'Datei löschen',
         empty: 'Noch keine Dateien vorhanden – Konzept hinzufügen oder aus der Quelle neu aufteilen.',
         filter: 'Dateien filtern',
+        failedCard: {
+          title: 'Ingest fehlgeschlagen',
+          problem: 'Das Problem',
+          noError: 'Als fehlgeschlagen markiert — ohne aufgezeichneten Grund.',
+          fixLabel: 'So wird es behoben',
+          attempts: "Attempts: {'{'}n{'}'}",
+          when: "Last attempt {'{'}when{'}'}",
+          fix: {
+            reaper:
+              'Der Ingest-Worker hat innerhalb des Gnadenfensters aufgehört zu warten (die Dränage war ausgelastet) — der Inhalt ist intakt. Behebung: Datei leicht bearbeiten und speichern, um sie neu einzureihen; oder das Repo zurückziehen und komplett neu ingestieren.',
+            dataprep:
+              'Der Content-Aufbereitungsdienst hat diesen Ingest fehlschlagen lassen. Behebung: bearbeiten und speichern, um neu einzureihen; bei Wiederholung die Gesundheit des Dataprep-Dienstes prüfen.',
+            generic:
+              'Indizierung fehlgeschlagen. Behebung: Inhalt bearbeiten und speichern, um neu einzureihen — oder das Repo zurückziehen und komplett neu ingestieren.'
+          }
+        },
         indexBadge: 'Index',
         label: 'Konzepte',
         loading: 'Wird geladen…',

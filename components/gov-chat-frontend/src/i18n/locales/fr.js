@@ -1529,6 +1529,30 @@ export default {
         pending: 'pas encore indexé'
       }
     },
+    import: {
+      title: 'Importer des documents dans un nouveau dépôt OKF',
+      hint: 'Les documents deviennent UN dépôt — segmentés, liés et étiquetés ensemble. Rien n’est publié ; le flux habituel revue → publication → ingest s’applique.',
+      name: 'Nom du dépôt',
+      namePh: 'ex. Dossier de politiques',
+      domain: 'Domaine thématique',
+      strategy: 'Stratégie de classification',
+      stratHeuristics: 'Heuristique (rapide, sans LLM)',
+      stratLlm: 'Classification LLM',
+      stratHybrid: 'Hybride',
+      files: 'Documents sélectionnés',
+      servingBadge: 'sert le RAG libre',
+      alreadyBadge: 'déjà dans un dépôt OKF',
+      servingTip:
+        'Ce document sert actuellement le corpus libre — le nouveau dépôt ne peut être ingesté tant qu’il n’est pas retiré.',
+      alreadyTip: 'Ce document est déjà la source d’un autre dépôt OKF.',
+      servingWarn:
+        '{n} document(s) servent encore le corpus libre. L’import réussit, mais ce dépôt ne peut être ingesté tant qu’ils ne sont pas retirés.',
+      cancel: 'Annuler',
+      importing: 'Import…',
+      go: 'Importer',
+      dupRepo: 'Ce nom de dépôt existe déjà — choisissez-en un autre.',
+      failed: 'L’import n’a pas pu être lancé. Vérifiez les documents et réessayez.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (coller ou laisser vide)',
@@ -1592,6 +1616,8 @@ export default {
         piiTip:
           "Entités signalées : {k}. Ouvrez, supprimez ou modifiez-les, puis enregistrez — l'analyse se relance automatiquement.",
         piiTipBare: 'Entités signalées — ouvrir, réviser, puis enregistrer pour réanalyser.',
+        sourceLabel: 'Document source',
+        sourceView: 'Ouvrir le document source',
         bulkAccept: 'Tout accepter',
         bulkRedact: 'Tout expurger',
         bulkRemove: 'Tout supprimer',
@@ -2128,7 +2154,9 @@ export default {
       gate: {
         emptySelection: 'Sélectionnez au moins un document',
         alreadyInOkf: 'Retirer les documents qui se trouvent déjà dans un référentiel OKF',
-        alreadyIngested: 'Retirer les documents déjà traités par ingest'
+        alreadyIngested: 'Retirer les documents déjà traités par ingest',
+        servingWarn:
+          '{n} document(s) sélectionné(s) servent encore le corpus libre — le nouveau dépôt ne peut être ingesté tant qu’ils ne sont pas retirés.'
       },
       produce: {
         notReady: 'Le module producteur sera raccordé dans une story ultérieure.'

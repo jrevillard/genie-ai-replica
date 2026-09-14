@@ -41,6 +41,19 @@ const repoOkfService = {
     return res && res.data ? res.data : null;
   },
 
+  // Story 7.7 (David, 2026-09-14): multi-select doc-repo documents into ONE
+  // OKF repository — whole-corpus linking/labeling; ingested sources allowed
+  // (the repo's own ingest is gated downstream: SOURCES_NOT_RETRACTED).
+  async importDocuments({ file_ids, name, domain, classification }) {
+    // silent: the import dialog owns the outcome display.
+    const res = await httpService.post(
+      '/okf/repos/convert-from-documents',
+      { file_ids, name, domain, classification },
+      { silent: true }
+    );
+    return res && res.data ? res.data : null;
+  },
+
   async update(repoId, patch) {
     const res = await httpService.patch(`/okf/repos/${encodeURIComponent(repoId)}`, patch);
     return res && res.data ? res.data : { ok: true };

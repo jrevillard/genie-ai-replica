@@ -1513,6 +1513,30 @@ export default {
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out'
     },
+    import: {
+      title: 'Import documents into a new OKF repository',
+      hint: 'The documents become one repository — segmented, cross-linked and labeled together. Nothing is published; the normal review → publish → ingest workflow follows.',
+      name: 'Repository name',
+      namePh: 'e.g. Abattoir policy pack',
+      domain: 'Subject Area (domain)',
+      strategy: 'Classification strategy',
+      stratHeuristics: 'Heuristics (fast, no LLM)',
+      stratLlm: 'LLM classification',
+      stratHybrid: 'Hybrid',
+      files: 'Selected documents',
+      servingBadge: 'serving free-form RAG',
+      alreadyBadge: 'already in an OKF repo',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
+      alreadyTip: 'This document is already the source of another OKF repository.',
+      servingWarn:
+        '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
+      cancel: 'Cancel',
+      importing: 'Importing…',
+      go: 'Import',
+      dupRepo: 'That repository name already exists — pick another.',
+      failed: 'The import could not be started. Check the documents and try again.'
+    },
     pii: {
       panel: 'Flagged entities',
       nFlagged: '{n} found',
@@ -1640,6 +1664,8 @@ export default {
         piiBadge: 'PII',
         piiTip: 'Flagged entities: {k}. Open, remove or alter them, then save — it re-scans automatically.',
         piiTipBare: 'Flagged entities — open, review, then save to re-scan.',
+        sourceLabel: 'Source document',
+        sourceView: 'Open the source document',
         resplit: 'Re-split'
       },
       actions: {
@@ -2167,7 +2193,9 @@ export default {
       gate: {
         emptySelection: 'Select at least one document',
         alreadyInOkf: 'Remove documents already in an OKF repository',
-        alreadyIngested: 'Remove documents already ingested'
+        alreadyIngested: 'Remove documents already ingested',
+        servingWarn:
+          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
       },
       produce: {
         notReady: 'Producer wires in a later story.'

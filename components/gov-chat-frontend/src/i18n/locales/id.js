@@ -1522,6 +1522,29 @@ export default {
         pending: 'belum diindeks'
       }
     },
+    import: {
+      title: 'Impor dokumen ke repositori OKF baru',
+      hint: 'Dokumen menjadi SATU repositori — disegmentasi, ditautkan, dan dilabeli bersama. Tidak ada yang dipublikasikan; alur normal review → publish → ingest mengikuti.',
+      name: 'Nama repositori',
+      namePh: 'mis. paket kebijakan',
+      domain: 'Area subjek (domain)',
+      strategy: 'Strategi klasifikasi',
+      stratHeuristics: 'Heuristik (cepat, tanpa LLM)',
+      stratLlm: 'Klasifikasi LLM',
+      stratHybrid: 'Hibrida',
+      files: 'Dokumen terpilih',
+      servingBadge: 'melayani RAG bebas',
+      alreadyBadge: 'sudah di repositori OKF lain',
+      servingTip: 'Dokumen ini saat ini melayani korpus bebas — repositori baru tidak dapat di-ingest sampai ditarik.',
+      alreadyTip: 'Dokumen ini sudah menjadi sumber repositori OKF lain.',
+      servingWarn:
+        '{n} dokumen masih melayani korpus bebas. Impor berhasil, tetapi repositori ini tidak dapat di-ingest sampai dokumen tersebut ditarik.',
+      cancel: 'Batal',
+      importing: 'Mengimpor…',
+      go: 'Impor',
+      dupRepo: 'Nama repositori sudah ada — pilih yang lain.',
+      failed: 'Impor tidak dapat dimulai. Periksa dokumen dan coba lagi.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (tempel atau biarkan kosong)',
@@ -1584,6 +1607,8 @@ export default {
         piiBadge: 'PII',
         piiTip: 'Entitas yang ditandai: {k}. Buka, hapus atau ubah, lalu simpan — memindai ulang secara otomatis.',
         piiTipBare: 'Entitas yang ditandai — buka, tinjau, lalu simpan untuk memindai ulang.',
+        sourceLabel: 'Dokumen sumber',
+        sourceView: 'Buka dokumen sumber',
         bulkAccept: 'Terima semua',
         bulkRedact: 'Redak semua',
         bulkRemove: 'Hapus semua',
@@ -2116,7 +2141,9 @@ export default {
       gate: {
         emptySelection: 'Pilih setidaknya satu dokumen',
         alreadyInOkf: 'Hapus dokumen yang sudah ada di repositori OKF',
-        alreadyIngested: 'Hapus dokumen yang sudah di-ingest'
+        alreadyIngested: 'Hapus dokumen yang sudah di-ingest',
+        servingWarn:
+          '{n} dokumen terpilih masih melayani korpus bebas — repositori baru tidak dapat di-ingest sampai dokumen tersebut ditarik.'
       },
       produce: {
         notReady: 'Produser dihubungkan dalam story berikutnya.'

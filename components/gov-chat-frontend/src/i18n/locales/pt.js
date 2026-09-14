@@ -1525,6 +1525,30 @@ export default {
         pending: 'ainda não indexado'
       }
     },
+    import: {
+      title: 'Importar documentos para um novo repositório OKF',
+      hint: 'Os documentos tornam-se UM repositório — segmentados, vinculados e etiquetados em conjunto. Nada é publicado; segue o fluxo normal: revisão → publicar → ingest.',
+      name: 'Nome do repositório',
+      namePh: 'ex.: pacote de políticas',
+      domain: 'Área temática (domínio)',
+      strategy: 'Estratégia de classificação',
+      stratHeuristics: 'Heurística (rápida, sem LLM)',
+      stratLlm: 'Classificação LLM',
+      stratHybrid: 'Híbrida',
+      files: 'Documentos selecionados',
+      servingBadge: 'serve o RAG livre',
+      alreadyBadge: 'já em um repositório OKF',
+      servingTip:
+        'Este documento atualmente serve o corpus livre — o novo repositório não pode sofrer ingest até ser retirado.',
+      alreadyTip: 'Este documento já é origem de outro repositório OKF.',
+      servingWarn:
+        '{n} documento(s) ainda servem o corpus livre. A importação tem sucesso, mas este repositório não pode sofrer ingest até que sejam retirados.',
+      cancel: 'Cancelar',
+      importing: 'Importando…',
+      go: 'Importar',
+      dupRepo: 'Esse nome de repositório já existe — escolha outro.',
+      failed: 'Não foi possível iniciar a importação. Verifique os documentos e tente novamente.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (cole ou deixe em branco)',
@@ -1588,6 +1612,8 @@ export default {
         piiTip:
           'Entidades sinalizadas: {k}. Abra, remova ou altere-as e salve — a nova verificação ocorre automaticamente.',
         piiTipBare: 'Entidades sinalizadas — abra, revise e salve para verificar novamente.',
+        sourceLabel: 'Documento de origem',
+        sourceView: 'Abrir o documento de origem',
         bulkAccept: 'Aceitar tudo',
         bulkRedact: 'Redigir tudo',
         bulkRemove: 'Remover tudo',
@@ -2122,7 +2148,9 @@ export default {
       gate: {
         emptySelection: 'Selecione pelo menos um documento',
         alreadyInOkf: 'Remover documentos que já estão em um repositório OKF',
-        alreadyIngested: 'Remover documentos que já passaram por ingest'
+        alreadyIngested: 'Remover documentos que já passaram por ingest',
+        servingWarn:
+          '{n} documento(s) selecionado(s) ainda servem o corpus livre — o novo repositório não pode sofrer ingest até que sejam retirados.'
       },
       produce: {
         notReady: 'A integração com o produtor virá em uma história posterior.'

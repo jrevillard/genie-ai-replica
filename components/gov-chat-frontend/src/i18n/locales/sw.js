@@ -1516,6 +1516,29 @@ export default {
         pending: 'bado haijafanyiwa uorodheshaji'
       }
     },
+    import: {
+      title: 'Ingiza hati kwenye hazina mpya ya OKF',
+      hint: 'Hati zinakuwa hazina MOJA — zinagawanywa, kuunganishwa na kuwekwa lebo pamoja. Hakuna kilichochapishwa; mtiririko wa kawaida ukaguzi → chapisha → ingest unafuata.',
+      name: 'Jina la hazina',
+      namePh: 'mf. kifurushi cha sera',
+      domain: 'Eneo la mada (domain)',
+      strategy: 'Mkakati wa uainishaji',
+      stratHeuristics: 'Heuristics (haraka, bila LLM)',
+      stratLlm: 'Uainishaji wa LLM',
+      stratHybrid: 'Mchanganyiko',
+      files: 'Hati zilizochaguliwa',
+      servingBadge: 'inahudumia RAG huru',
+      alreadyBadge: 'tayari iko kwenye hazina ya OKF',
+      servingTip: 'Hati hii kwa sasa inahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi itakapotolewa.',
+      alreadyTip: 'Hati hii ni tayari ni chanzo cha hazina nyingine ya OKF.',
+      servingWarn:
+        '{n} hati bado zinahudumia korpus huru. Uingizaji unafanikiwa, lakini hazina hii haiwezi kuingizwa hadi zitakapotolewa.',
+      cancel: 'Ghairi',
+      importing: 'Inaingiza…',
+      go: 'Ingiza',
+      dupRepo: 'Jina hilo la hazina lipo tayari — chagua lingine.',
+      failed: 'Uingizaji haukuweza kuanzishwa. Angalia hati kisha ujaribu tena.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (bandika au acha tupu)',
@@ -1579,6 +1602,8 @@ export default {
         piiTip:
           'Vitambulisho vilivyowekewa alama: {k}. Vifungue, viondoe au virekebishe, kisha uhifadhi — huchanganua tena kiotomatiki.',
         piiTipBare: 'Vitambulisho vilivyowekewa alama — fungua, kagua, kisha uhifadhi ili kuchanganua upya.',
+        sourceLabel: 'Hati ya chanzo',
+        sourceView: 'Fungua hati ya chanzo',
         bulkAccept: 'Kubali zote',
         bulkRedact: 'Ficha zote',
         bulkRemove: 'Ondoa zote',
@@ -2112,7 +2137,9 @@ export default {
       gate: {
         emptySelection: 'Chagua angalau waraka mmoja',
         alreadyInOkf: 'Ondoa nyaraka ambazo tayari zimo katika ghala la OKF',
-        alreadyIngested: 'Ondoa nyaraka ambazo tayari zimefanyiwa ingest'
+        alreadyIngested: 'Ondoa nyaraka ambazo tayari zimefanyiwa ingest',
+        servingWarn:
+          '{n} hati zilizochaguliwa bado zinahudumia korpus huru — hazina mpya haiwezi kuingizwa hadi zitakapotolewa.'
       },
       produce: {
         notReady: 'Mzalishaji ataunganishwa katika kisa cha baadaye.'

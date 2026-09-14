@@ -1527,6 +1527,30 @@ export default {
         pending: "ha e e-s'o indexoe"
       }
     },
+    import: {
+      title: 'Kenya litokomane repositoring e ncha ea OKF',
+      hint: 'Litokomane li ba repositori e le nngoe — li arola, li hokahane le ho ngolisoa hammoho. Ha ho seo e se phatlalatsa; mokhoa o tloaelehileng oa tekolo → phatlalatsa → kenya o latela.',
+      name: 'Lebitso la repositori',
+      namePh: 'mohl.: sephutheloana sa melao',
+      domain: 'Sebaka sa taba (domain)',
+      strategy: 'Leano la ho kahlola',
+      stratHeuristics: 'Heuristics (potlako, ntle le LLM)',
+      stratLlm: 'Kahlolo ea LLM',
+      stratHybrid: 'Tsoakane',
+      files: 'Litokomane tse kgethileng',
+      servingBadge: 'e fana ka RAG ea mahala',
+      alreadyBadge: 'se repositoring e nngoe ea OKF',
+      servingTip:
+        'Tokomane ena ha joale e fana ka corpus ea mahala — repositori e ncha e ke ke ea kenngoa pele e tlosoa.',
+      alreadyTip: 'Tokomane ena e se e le mohlogolosi oa repositori e nngoe ea OKF.',
+      servingWarn:
+        '{n} tokomane li sa ntse li fana ka corpus ea mahala. Kenya e atleha, empa repositori ena e ke ke ea kenngoa pele li tlosoa.',
+      cancel: 'Khutla',
+      importing: 'E kenya…',
+      go: 'Kenya',
+      dupRepo: 'Lebitso lena la repositori le se le teng — khetha le leng.',
+      failed: 'Kenya e ke ke ea qaloa. Hlahloba litokomane o leke hape.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (mamaretsa kapa u siee e se na letho)',
@@ -1589,6 +1613,8 @@ export default {
         piiBadge: 'PII',
         piiTip: 'Mekhatlo e tšoailoeng: {k}. Bula, tlosa kapa u li fetole, ebe u boloka — e hlahloba hape ka bo eona.',
         piiTipBare: 'Mekhatlo e tšoailoeng — bula, hlahloba, ebe u boloka ho hlahloba hape.',
+        sourceLabel: 'Tokomane ea mohlogolosi',
+        sourceView: 'Bula tokomane ea mohlogolosi',
         bulkAccept: 'Amohela tsohle',
         bulkRedact: 'Hlakola tsohle',
         bulkRemove: 'Tlosa tsohle',
@@ -2124,7 +2150,9 @@ export default {
       gate: {
         emptySelection: "Khetha bonyane tokomane e le 'ngoe",
         alreadyInOkf: "Tlosa litokomane tse seng li ntse li le ka har'a polokelo ea OKF",
-        alreadyIngested: 'Tlosa litokomane tse seng li kile tsa etsoa ingest'
+        alreadyIngested: 'Tlosa litokomane tse seng li kile tsa etsoa ingest',
+        servingWarn:
+          '{n} litokomane tse kgethileng li sebeleleta corpus ea mahala — repo e ncha e ke ke ea kenyelletsoa pele li tlosoa.'
       },
       produce: {
         notReady: 'Moetsi o tla hokahanngoa paleng e tlang.'

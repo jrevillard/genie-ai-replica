@@ -1495,6 +1495,28 @@ export default {
         pending: '尚未建立索引'
       }
     },
+    import: {
+      title: '将文档导入新的 OKF 仓库',
+      hint: '这些文档将成为一个仓库——一起分段、链接和标注。不会发布任何内容；随后走正常的审查 → 发布 → 摄取流程。',
+      name: '仓库名称',
+      namePh: '例如：政策文件包',
+      domain: '主题领域（域）',
+      strategy: '分类策略',
+      stratHeuristics: '启发式（快速，无 LLM）',
+      stratLlm: 'LLM 分类',
+      stratHybrid: '混合',
+      files: '所选文档',
+      servingBadge: '正在服务自由 RAG',
+      alreadyBadge: '已属于某个 OKF 仓库',
+      servingTip: '该文档当前正在服务自由语料库——在撤回之前，新仓库无法被摄取。',
+      alreadyTip: '该文档已经是另一个 OKF 仓库的来源。',
+      servingWarn: '{n} 个文档仍在服务自由语料库。导入会成功，但在撤回它们之前，此仓库无法被摄取。',
+      cancel: '取消',
+      importing: '导入中…',
+      go: '导入',
+      dupRepo: '该仓库名称已存在——请换一个。',
+      failed: '无法开始导入。请检查文档后重试。'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown（粘贴或留空）',
@@ -1556,6 +1578,8 @@ export default {
         piiBadge: 'PII',
         piiTip: '标记的实体：{k}。打开、删除或修改它们并保存 — 系统将自动重新扫描。',
         piiTipBare: '标记的实体 — 打开、核对并保存以重新扫描。',
+        sourceLabel: '来源文档',
+        sourceView: '打开来源文档',
         bulkAccept: '全部接受',
         bulkRedact: '全部隐去',
         bulkRemove: '全部移除',
@@ -2076,7 +2100,8 @@ export default {
       gate: {
         emptySelection: '请至少选择一份文档',
         alreadyInOkf: '移除已存在于 OKF 知识库中的文档',
-        alreadyIngested: '移除已完成 ingest 的文档'
+        alreadyIngested: '移除已完成 ingest 的文档',
+        servingWarn: '{n} 个所选文档仍在服务自由语料库——在撤回它们之前，新仓库无法被摄取。'
       },
       produce: {
         notReady: '生产模块将在后续故事中接入。'

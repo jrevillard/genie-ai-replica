@@ -782,7 +782,9 @@ So that **a repository draft can be assembled from several authoritative sources
 **When** the operator creates an OKF-target crawl,
 **Then** `scheduleSiteCrawl` + `crawl_job` carry a seed-URL **list** (threaded to `crawler.crawl([...])`), `AddFromLinkDialog` collects multiple seeds for an OKF-target crawl, and per-source provenance is preserved into each draft's `sources`. *(FR-33.)*
 
-### Story 7.7: Produce OKF repository from selected/uploaded documents — document entry points *(NEW 2026-08-13; ungated)*
+### Story 7.7: Produce OKF repository from selected/uploaded documents — document entry points *(NEW 2026-08-13; ungated; AMENDED 2026-09-14 — see story file + design)*
+> **2026-09-14 amendment (David's directive; [design](../../../planning-artifacts/documents-to-okf-import-design-2026-09-14.md)):** the import-time "not yet ingested" refusal is REPLACED by a lifecycle gate — ingested documents CAN be imported; the OKF repository's `ingest` transition returns `409 SOURCES_NOT_RETRACTED` while any source document still serves the free-form corpus (live fail-closed re-check; keyed on the repo's `source_documents[]`, never okf_repo_id scans — the repo's own bundle zip is itself an 'Ingested' doc-repo file). Route renamed `POST /api/okf/repos/convert-from-documents` (sibling of convert-from-crawl). Whole-corpus contract explicit: cross-file link resolution + ONE classification pass + index.md TOC from the file set; xlsx via a dedicated sheetjs converter (FR-42 semantics — doc-repo does not extract xlsx). Provenance: concept `sources[]` render as "Source document" links on BOTH hover cards (tree + graph) opening the SAME FileDetailsDialog via `?tab=documents&file=<id>`. Story file: `7-7-produce-okf-from-selected-documents.md` (ready-for-dev, NEXT WORK ITEM).
+
 As a **steward**,
 I want **to create an OKF repository from documents we already hold or upload (docx/pdf/xlsx/txt/md) — from the document-management UI or the creation wizard — without a crawl**,
 So that **existing policy PDFs, reports, and spreadsheets become a governed, retrievable knowledge base**.

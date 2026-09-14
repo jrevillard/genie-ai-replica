@@ -6,7 +6,7 @@ const appConfig = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
 
-// AD-20 — cached ClamAV signature version.
+// Cached ClamAV signature version.
 // Query `clamdscan --version` once at module load and cache the trimmed
 // stdout. The daemon is co-located in the doc-repo container so the call
 // is cheap, but emitting one process spawn per file scan would still
@@ -131,7 +131,7 @@ class SecurityService {
   }
 
   /**
-   * Scans a buffer for viruses and emits AD-20 ClamAV observability events.
+   * Scans a buffer for viruses and emits ClamAV observability events.
    *
    * Emits exactly one terminal event per call: `clamav.scan.complete` on
    * success, `clamav.scan.timeout` when the underlying scanner rejects
@@ -139,10 +139,10 @@ class SecurityService {
    * other failure. The `clamav.scan.start` event is emitted before the
    * scan begins so latency can be measured end-to-end.
    *
-   * Emitted `clamav_result` values are the AD-20 4-value enum
-   * (`OK` / `FOUND` / `ERROR` / `TIMEOUT`) — supersedes the story AC's
-   * 3-value enum (`clean` / `infected` / `error`) which AD-20 explicitly
-   * replaces (binding architecture decision).
+   * Emitted `clamav_result` values are the 4-value enum
+   * (`OK` / `FOUND` / `ERROR` / `TIMEOUT`) — supersedes the prior
+   * 3-value enum (`clean` / `infected` / `error`) which the binding
+   * architecture decision explicitly replaces.
    *
    * @param {string} fileId - Opaque file ID for correlation with admin dashboard
    * @param {Buffer} buffer - File buffer to scan
@@ -154,7 +154,7 @@ class SecurityService {
     // No `clamav_result` / `clamav_duration_ms` on start: outcome is unknown
     // at this point. Stamping `OK` would double-count clean scans and skew
     // VL aggregations (the same defect as logging `ERROR` before the scan
-    // runs). Per AD-20 the start event is a latency marker only.
+    // runs). The start event is a latency marker only.
     logger.info('clamav.scan.start', {
       file_id: fileId,
       file_size_bytes: fileSizeBytes,
@@ -191,7 +191,7 @@ class SecurityService {
       };
       // Failure paths use warn/error so Grafana alert rules (error-rate,
       // timeout-rate) can fire. info-level silent failures would never
-      // trigger an alert and would defeat the AD-20 latency-drift
+      // trigger an alert and would defeat the latency-drift
       // / silent-failure surface the event exists to provide.
       if (isTimeout) {
         logger.warn('clamav.scan.timeout', fields);

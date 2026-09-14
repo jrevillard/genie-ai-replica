@@ -1,7 +1,7 @@
 // PII redaction utilities for OTel span processors
 // PARALLEL COPY of components/gov-chat-backend/tracing-pii.js.
 //
-// AD-18 forbids require()-ing into gov-chat-backend. This file must be kept in
+// require() into gov-chat-backend is forbidden — this file must be kept in
 // lockstep with the backend copy — drift risk is the price of avoiding the
 // cross-component require. When backend's tracing-pii.js changes, mirror the
 // diff here.
@@ -40,15 +40,15 @@ function redactAttributes(attributes) {
 }
 
 // PII scrubbing for the OTel LogRecord body field.
-// Required by Story 2-9 + AD-4: PII scrubbing applies to BOTH OTel span
-// attributes (covered by `redactAttributes`) AND the log record body field,
+// PII scrubbing applies to both OTel span attributes and log record bodies,
 // which may be a nested object holding the actual user input
 // (`body.user.email`, `body.request.headers.authorization`, etc.).
-// `redactAttributes` is shallow — it only walks the top-level keys. The body
-// field is frequently a deeply-nested payload, so we need a separate walker
-// that recurses into plain objects and arrays while preserving primitives,
-// null, undefined, and special objects (Date, Buffer, Error, Map, Set, etc.)
-// verbatim. This intentionally avoids any cloning of non-plain values.
+// The body field is frequently a deeply-nested payload that
+// `redactAttributes` cannot walk (it is shallow and only visits top-level
+// keys), so we need a separate walker that recurses into plain objects and
+// arrays while preserving primitives, null, undefined, and special objects
+// (Date, Buffer, Error, Map, Set, etc.) verbatim. This intentionally avoids
+// any cloning of non-plain values.
 function redactLogRecordBody(body) {
   if (body === null || body === undefined) return body;
   if (typeof body !== 'object') {

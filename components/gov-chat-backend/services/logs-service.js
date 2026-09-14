@@ -1,11 +1,11 @@
 // components/gov-chat-backend/services/logs-service.js
 //
-// Story 5.3 — VictoriaLogs migration: rewrite public methods (`getLogsInRange`,
+// VictoriaLogs migration: rewrite public methods (`getLogsInRange`,
 // `getLogsSummary`, `searchLogs`, `getDebugYesterday`) using
-// `VictoriaLogsClient`. Per-call `ADMIN_LOGS_SOURCE` env read (AD-6) routes
+// `VictoriaLogsClient`. Per-call `ADMIN_LOGS_SOURCE` env read routes
 // the call to VL (default) or the file path (escape hatch). VL outages are
 // surfaced by default; `VL_FAIL_OPEN=true` returns empty results + a
-// `degraded: true` flag. File-path reads pick up AD-10 hardenings (ENOENT
+// `degraded: true` flag. File-path reads pick up the hardenings (ENOENT
 // tolerance between stat/open, O_EXCL PID lock via `fs.open(path, 'wx')`,
 // NDJSON parse with N=4096 re-parse window, `vl_files_disabled` 503 when
 // file source requested without `LOG_TO_FILE=1`).
@@ -20,8 +20,7 @@ const util = require('util');
 const { logger } = require('../shared-lib');
 const { isValidDateStr } = require('./path-sanitizer');
 
-// AD-14 mandates `components/shared/lib/boolean-env.js` as the canonical
-// boolean gate helper (`1`/`true`/`TRUE`/`yes` accept set). Inlined here
+// Boolean gate helper (`1`/`true`/`TRUE`/`yes` accept set). Inlined here
 // to keep the test `__mocks__/shared-lib.js` virtual mock self-contained
 // without forking the Jest moduleNameMapper; both call sites resolve to
 // the same regex.
@@ -37,16 +36,16 @@ const gunzip = util.promisify(zlib.gunzip);
 const MAX_LOG_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 // Set maximum number of lines to process at once
 const MAX_LINES_TO_PROCESS = 200000;
-// AD-10: NDJSON re-parse window after a `SyntaxError` (truncated line from
+// NDJSON re-parse window after a `SyntaxError` (truncated line from
 // `kill -9` mid-write). Read the next N bytes, append, attempt re-parse.
 const RE_PARSE_WINDOW_BYTES = 4096;
 // Hard cap on the date span served by `getLogFilesInRange` (one descriptor
 // per UTC day; prevents memory blow-up on a wide admin range). 366 covers
 // a full year + leap day.
 const MAX_LOG_FILES_RANGE_DAYS = 366;
-// Lock-file directory for the AD-10 / AD-11 O_EXCL claim primitives.
+// Lock-file directory for the O_EXCL claim primitives.
 const LOCK_DIR = '/tmp';
-// Rate-limit state file for VL-unreachable logging (AD-11). Unix ms on a
+// Rate-limit state file for VL-unreachable logging. Unix ms on a
 // single line. Persisted so backend restarts do not reset the cadence.
 const VL_FAIL_OPEN_TS_FILE = path.join(LOCK_DIR, 'vl-fail-open-ts');
 // Cap on VL-unreachable error log lines: one per minute, persisted.
@@ -55,7 +54,7 @@ const VL_FAIL_OPEN_LOG_COOLDOWN_MS = 60_000;
 /**
  * Typed error raised when `ADMIN_LOGS_SOURCE=file` is requested while
  * `LOG_TO_FILE !== '1'`. Carries the recovery hint body the route layer
- * renders as a 503 response (Story 5.5, AD-6).
+ * renders as a 503 response.
  */
 class VlFilesDisabledError extends Error {
   constructor() {
@@ -72,11 +71,11 @@ class VlFilesDisabledError extends Error {
 /**
  * Service for managing system logs.
  *
- * Two source modes (selected per call, AD-6):
+ * Two source modes (selected per call):
  *   - `victorialogs` (default) — issues LogSQL queries via the MELT
  *     port (`shared/lib/melt`).  Outages are surfaced unless
- *     `VL_FAIL_OPEN=true` (CAP-5).
- *   - `file` — reads the on-disk Winston NDJSON archives (AD-9).  Only
+ *     `VL_FAIL_OPEN=true`.
+ *   - `file` — reads the on-disk Winston NDJSON archives. Only
  *     active when `ADMIN_LOGS_SOURCE=file` AND `LOG_TO_FILE=1`; the
  *     former without the latter returns `VlFilesDisabledError`.
  */
@@ -87,7 +86,7 @@ class LogsService {
     }
     this.initialized = false;
     // Lazy VL client (constructed on first VL-path call). Tests may inject
-    // a stub via `setVictoriaLogsClient()` (see Story 4.3 setter pattern).
+    // a stub via `setVictoriaLogsClient()`.
     this._vlClient = null;
     logger.info('LogsService constructor called');
     LogsService.instance = this;
@@ -126,12 +125,12 @@ class LogsService {
   }
 
   // ------------------------------------------------------------------
-  // Source routing — AD-6 per-call env read
+  // Source routing — per-call env read
   // ------------------------------------------------------------------
 
   /**
    * Resolve the source mode for THIS call (never cached at module load —
-   * AD-6 requires a fresh env read so the D2 escape hatch works without
+   * requires a fresh env read so the D2 escape hatch works without
    * a backend restart).
    *
    * @returns {'victorialogs'|'file'}
@@ -156,7 +155,7 @@ class LogsService {
 
   /**
    * Lazy constructor for the MELT adapter. Production code skips the
-   * startup health probe (AD-16) — the probe is triggered on the first
+   * startup health probe — the probe is triggered on the first
    * request anyway, and constructor-time probing in Jest hangs the suite.
    */
   _getVlClient() {
@@ -166,7 +165,7 @@ class LogsService {
       throw new Error('VictoriaLogsClient is not available on the MELT seam');
     }
     this._vlClient = new melt.VictoriaLogsClient({
-      // Honour AD-16: tests pass `{skipHealthProbe: true}` via the
+      // Tests pass `{skipHealthProbe: true}` via the
       // option; production skips the flag and the adapter probes lazily.
       skipHealthProbe: process.env.NODE_ENV === 'test'
     });
@@ -208,8 +207,8 @@ class LogsService {
 
   /**
    * Log a VL-unreachable incident at most once per minute, persisted to
-   * `/tmp/vl-fail-open-ts` so backend restarts do not reset the cadence
-   * (AD-11). Uses `fs.openSync(path, 'wx')` for an atomic O_EXCL claim
+   * `/tmp/vl-fail-open-ts` so backend restarts do not reset the cadence.
+   * Uses `fs.openSync(path, 'wx')` for an atomic O_EXCL claim
    * (loser backs off silently).
    *
    * @param {string} opName
@@ -287,16 +286,15 @@ class LogsService {
   /**
    * Fetch logs for a time window, returning the canonical envelope.
    *
-   * Routes per AD-6 (per-call env read):
+   * Routes per per-call env read:
    *   - `ADMIN_LOGS_SOURCE !== 'file'` (default) → VL via
    *     `VictoriaLogsClient.query`. Subject to `VL_FAIL_OPEN` graceful
-   *     degradation (CAP-5).
+   *     degradation.
    *   - `ADMIN_LOGS_SOURCE=file` → on-disk NDJSON archive via the file
    *     path; throws `VlFilesDisabledError` (503) when `LOG_TO_FILE`
    *     is not `'1'`.
    *
-   * Envelope shape (AD-3 + Story 5.3 review note — reviewers will reject
-   * future drift from this contract):
+   * Envelope shape — reviewers will reject future drift from this contract:
    * ```
    * {
    *   logs:  VictoriaLogsRow[],
@@ -388,9 +386,9 @@ class LogsService {
   }
 
   /**
-   * Apply AD-5 dual-emit dedup filter while the P1a → P1c window is open.
-   * Once P1c lands the production fluentd logging driver for backend +
-   * document-repository is removed and the filter becomes a no-op.
+   * Apply dual-emit dedup filter while the dual-emit window is open.
+   * Once the production fluentd logging driver for backend +
+   * document-repository is removed, the filter becomes a no-op.
    *
    * @param {string} q
    * @returns {string}
@@ -542,7 +540,7 @@ class LogsService {
    * `{errors[], warnings[], date}` envelope so the Vue UI keeps working
    * without changes.
    *
-   * File path: legacy NDJSON parser with AD-10 hardening.  Throws
+   * File path: legacy NDJSON parser.  Throws
    * `VlFilesDisabledError` when `LOG_TO_FILE !== '1'`.
    *
    * @param {Object} options
@@ -705,7 +703,7 @@ class LogsService {
    * `{logs, total, limit, offset}` envelope.
    *
    * File path: legacy NDJSON reader (printf regex parser retained for
-   * backward compatibility with tests and pre-AD-9 archives).
+   * backward compatibility with tests and pre-migration archives).
    *
    * @param {Object} options
    * @returns {Promise<{logs: Array, total: number, limit: number, offset: number, degraded?: true}>}
@@ -1043,7 +1041,7 @@ class LogsService {
   }
 
   // ------------------------------------------------------------------
-  // Public API — synthetic file descriptors (AD-3 envelope)
+  // Public API — synthetic file descriptors
   // ------------------------------------------------------------------
 
   /**
@@ -1117,7 +1115,7 @@ class LogsService {
       return [];
     }
 
-    // AD-10: re-read directory listing before each scan to tolerate a
+    // Re-read directory listing before each scan to tolerate a
     // concurrent rotation removing/renaming files mid-walk.
     let files;
     try {
@@ -1174,11 +1172,11 @@ class LogsService {
   }
 
   // ------------------------------------------------------------------
-  // File-path helpers — AD-10 hardening
+  // File-path helpers
   // ------------------------------------------------------------------
 
   /**
-   * Acquire an AD-10 O_EXCL read lock for `filePath`. Returns the lock
+   * Acquire an O_EXCL read lock for `filePath`. Returns the lock
    * descriptor (or `null` if another holder has the lock); callers MUST
    * invoke `_releaseReadLock` once the read finishes so the sentinel
    * disappears and subsequent readers do not see a stale EEXIST.
@@ -1197,7 +1195,7 @@ class LogsService {
       return { handle, lockPath };
     } catch (err) {
       if (err.code === 'EEXIST') {
-        logger.warn(`Concurrent read lock held for ${filePath}; skipping (AD-10).`);
+        logger.warn(`Concurrent read lock held for ${filePath}; skipping.`);
         return null;
       }
       throw err;
@@ -1227,7 +1225,7 @@ class LogsService {
   }
 
   /**
-   * Read a log file with AD-10 ENOENT tolerance between stat() and
+   * Read a log file with ENOENT tolerance between stat() and
    * open(). Handles `.gz` (existing behaviour) and the 20 MB truncation
    * cap (existing behaviour).
    *
@@ -1272,7 +1270,7 @@ class LogsService {
   }
 
   /**
-   * NDJSON line parser for AD-9 file content. Wraps `JSON.parse` in a
+   * NDJSON line parser for the on-disk archive content. Wraps `JSON.parse` in a
    * try/catch and, on `SyntaxError` (truncated line from `kill -9`
    * mid-write), reads the next `RE_PARSE_WINDOW_BYTES` bytes, appends
    * them, and retries once before skipping with a `parse_error`

@@ -575,6 +575,11 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # VictoriaLogs transport default-on. Pin to 1 in compose so
+      # deployments that forget to set the env var still ship structured logs
+      # to VL with proper OTel trace_id/span_id fields (not buried in _msg).
+      # Escape hatch: set LOG_TO_VICTORIALOGS=0 in .env.
+      - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     networks:
       - genieai_network
     deploy:
@@ -622,6 +627,8 @@ services:
       # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
+      # VictoriaLogs transport default-on — see backend block for rationale.
+      - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the
     # Docker host, so OIDC discovery and JWKS fetches reach NGINX for JWT validation.
     extra_hosts:
@@ -876,7 +883,7 @@ services:
     logging: *fluent-logging
     profiles: [opea]
     restart: unless-stopped
-    image: opea/translation:1.5
+    image: opea/translation:1.3
     environment:
       - LLM_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
       - LLM_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}

@@ -1,12 +1,13 @@
 // components/shared/lib/victorialogs-transport.js
 // Winston TransportStream → OTel LoggerProvider (VictoriaLogs via Collector).
-// Per ARCHITECTURE-SPINE.md AD-1, AD-2, AD-4, AD-9, AD-18. Lazy: this transport
-// only consumes via `logs.getLogger`; the LoggerProvider is set by tracing.js.
+// Lazy transport: consumes via `logs.getLogger`; the LoggerProvider is set by tracing.js.
+// Module-load guard ensures the OTel SDK being absent never breaks the require; failed
+// emits are swallowed as designed.
 'use strict';
 
 const TransportStream = require('winston-transport');
 const { logs, SeverityNumber } = require('@opentelemetry/api-logs');
-// AD-18: shared/lib cannot require backend metrics.js — define the meter
+// shared/lib cannot require backend metrics.js — define the meter
 // directly against the OTel global MeterProvider. The meter scope
 // (SERVICE_NAME + SERVICE_VERSION) matches `components/gov-chat-backend/metrics.js`
 // so all call-sites converge on the same counter instrument.
@@ -15,8 +16,8 @@ const { metrics: otelMetrics } = require('@opentelemetry/api');
 const ZERO_TRACE_ID = '00000000000000000000000000000000';
 const ZERO_SPAN_ID = '0000000000000000';
 
-// Local mirror of metrics.js's LOG_DROPPED_REASON (AD-18 forbids a shared
-// helper that crosses `shared/lib → backend`). Canonical source of truth:
+// Local mirror of metrics.js's LOG_DROPPED_REASON (no shared helper crosses
+// `shared/lib → backend`). Canonical source of truth:
 // components/gov-chat-backend/metrics.js. Keep in sync via review — a
 // review-time check rejects any `.add()` call that passes a raw string.
 const LOG_DROPPED_REASON = Object.freeze({
@@ -31,7 +32,7 @@ const LOG_DROPPED_REASON = Object.freeze({
 // at require-time) never breaks module loading — every consumer of this
 // module depends on the require succeeding. A throw leaves `_droppedCounter`
 // as the no-op stub below: subsequent `.add()` calls become absorbed and the
-// transport keeps swallowing dropped emits as designed (CAP-1).
+// transport keeps swallowing dropped emits as designed.
 const _droppedCounter = (() => {
   try {
     return otelMetrics
@@ -60,7 +61,7 @@ class VictoriaLogsTransport extends TransportStream {
   constructor(opts = {}) {
     super(opts);
     this.name = opts.name || 'victorialogs';
-    // `service` is reported as an attribute (AD-2); downstream maps to stream
+    // `service` is reported as an attribute; downstream maps to stream
     // field. Decoupled from `this.name` so callers can override service identity
     // without renaming the transport instance.
     this._service = opts.service || process.env.SERVICE_NAME || 'genie-backend';
@@ -96,20 +97,24 @@ class VictoriaLogsTransport extends TransportStream {
         attributes[key] = value;
       }
 
-      const timestampNs = toNanoseconds(info.timestamp);
+      const timestampMs = toMilliseconds(info.timestamp);
 
       const logger = logs.getLogger(this._loggerName);
       logger.emit({
-        timestamp: timestampNs,
-        observedTimestamp: Date.now() * 1e6,
+        // OTel SDK TimeInput is UNIX EPOCH MILLISECONDS (NOT nanoseconds) —
+        // passing nanoseconds overflows the SDK's hrTime conversion (1.789e18
+        // ms is misinterpreted and produces a pre-1970 timestamp that VL then
+        // drops as out-of-retention). See toMilliseconds() for the contract.
+        timestamp: timestampMs,
+        observedTimestamp: Date.now(),
         severityNumber,
         severityText,
         body,
         attributes
       });
     } catch {
-      // CAP-1: killing VL must not block any Node service. Drop counter lives
-      // Mirror the canonical enum from `components/gov-chat-backend/metrics.js` (AD-18);
+      // Killing VL must not block any Node service. Drop counter lives
+      // Mirror the canonical enum from `components/gov-chat-backend/metrics.js`;
       // increment the bounded `queue_full` reason so
       // the swallowed failure is observable in Prometheus. The metric call is
       // wrapped in its own try/catch because a counter failure MUST NOT
@@ -126,9 +131,19 @@ class VictoriaLogsTransport extends TransportStream {
   }
 }
 
-function toNanoseconds(value) {
+// Returns UNIX EPOCH MILLISECONDS (NOT nanoseconds). The OTel JS SDK's
+// `TimeInput` is epoch ms — passing nanoseconds overflows the SDK's
+// `millisToHrTime` conversion (1.789e18 ms is mis-read and produces a
+// pre-1970 timestamp that VL then drops as out-of-retention).
+//
+// Accepts:
+//   - undefined / null  → Date.now() (current epoch ms)
+//   - number            → treated as epoch ms already (Date.now() shape)
+//   - string            → Date.parse (ISO 8601, or YYYY-MM-DD HH:mm:ss from
+//                         Winston's format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }))
+function toMilliseconds(value) {
   if (value === undefined || value === null) {
-    return Date.now() * 1e6;
+    return Date.now();
   }
   let ms;
   if (typeof value === 'number') {
@@ -137,13 +152,13 @@ function toNanoseconds(value) {
     const parsed = Date.parse(String(value));
     ms = Number.isFinite(parsed) ? parsed : NaN;
   }
-  return Number.isFinite(ms) ? ms * 1e6 : Date.now() * 1e6;
+  return Number.isFinite(ms) ? ms : Date.now();
 }
 
 module.exports = {
   VictoriaLogsTransport,
   // Exposed for parity assertions in tests; canonical source of truth lives
-  // in components/gov-chat-backend/metrics.js (AD-18 forbids a shared
+  // in components/gov-chat-backend/metrics.js (no shared
   // helper crossing shared/lib → backend).
   LOG_DROPPED_REASON
 };

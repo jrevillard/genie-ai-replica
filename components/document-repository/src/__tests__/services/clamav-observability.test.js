@@ -1,13 +1,13 @@
 'use strict';
 
-// AD-20 ClamAV observability contract test (Story 3.4).
+// ClamAV observability contract test.
 //
 // Asserts the producer-side contract that downstream VictoriaLogs queries
 // rely on (`service:genie-document-repository AND _msg:clamav.scan.*`):
 //   - each scan emits exactly one `start` event (info) and exactly one
 //     terminal event (`complete` info / `failed` error / `timeout` warn),
 //   - `clamav_duration_ms` and `file_size_bytes` are integer-valued,
-//   - `clamav_result` is one of the AD-20 enum values
+//   - `clamav_result` is one of the 4-value enum values
 //     (`OK` / `FOUND` / `ERROR` / `TIMEOUT`),
 //   - `clamav_signature_version` is the cached `clamdscan --version` output.
 //
@@ -18,9 +18,10 @@
 // because it requires reloading the module under a different `child_process`
 // stub — covered manually via runtime smoke (see `tests/melt-correlation/`).
 
-// AD-20 signature cache — stub `child_process` BEFORE securityService.js
-// is required so the IIFE picks up the deterministic return value rather
-// than the host's (missing) `clamdscan` binary.
+// The signature cache is populated by an IIFE at module load. Stub
+// `child_process` BEFORE securityService.js is required so the IIFE picks up
+// the deterministic return value rather than the host's (missing)
+// `clamdscan` binary.
 jest.mock('child_process', () => ({
   execFileSync: jest.fn()
 }));
@@ -86,7 +87,7 @@ function metaOf(callArgs) {
   return undefined;
 }
 
-describe('securityService.scanFile — AD-20 ClamAV observability events', () => {
+describe('securityService.scanFile — ClamAV observability events', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset module-level scan state so scanBuffer's ensureInitialized

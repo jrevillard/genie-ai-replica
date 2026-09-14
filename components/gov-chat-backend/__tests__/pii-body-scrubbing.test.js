@@ -1,6 +1,6 @@
-// Story 2.9 — PII scrubbing covers the OTel LogRecord body field (not just attributes).
+// PII scrubbing covers the OTel LogRecord body field (not just attributes).
 //
-// Background (AD-4, constraint C-5):
+// Background:
 //   PII scrubbing applies to BOTH OTel span attributes AND the OTel log record
 //   body field. `redactAttributes` in tracing-pii.js is shallow: it only walks
 //   the top-level keys of an object. The body field, however, is frequently a
@@ -10,12 +10,12 @@
 //   the same key- and value-based redaction rules as `redactAttributes`.
 //
 // Surface: tracing-pii.js — the body redaction entry point used by the
-// `PIIRedactingLogRecordProcessor` shipped in Story 2.6. These tests exercise
+// `PIIRedactingLogRecordProcessor`. These tests exercise
 // the function on real OTel LogRecord body shapes (string message, plain
 // object payload, array payload, deeply-nested payload) and assert that PII
 // never reaches the OTel collector in the clear.
 //
-// Naming: `pii-body-scrubbing.test.js` for grep-ability per Epic 2 review
+// Naming: `pii-body-scrubbing.test.js` for grep-ability
 // (previously `p-l-lig-pii-scrubbing.test.js` — that file never existed in the
 // tree; this is the original artifact).
 
@@ -38,7 +38,7 @@ function buildLogRecord(body) {
   };
 }
 
-describe('tracing-pii.js — redactLogRecordBody (Story 2.9 / AD-4)', () => {
+describe('tracing-pii.js — redactLogRecordBody', () => {
   describe('null / undefined / primitives', () => {
     it('Given a null body, when redacted, then returns null unchanged', () => {
       // Given
@@ -177,7 +177,7 @@ describe('tracing-pii.js — redactLogRecordBody (Story 2.9 / AD-4)', () => {
     });
   });
 
-  describe('nested body fields (the Story 2.9 acceptance focus)', () => {
+  describe('nested body fields (the acceptance focus)', () => {
     it('Given body.user.email, when redacted, then the email is redacted at the nested path', () => {
       // Given — chat-message-style payload from a real route handler
       const record = buildLogRecord({
@@ -418,7 +418,7 @@ describe('tracing-pii.js — redactLogRecordBody (Story 2.9 / AD-4)', () => {
         }
       });
       // Cross-check: no raw email pattern or Bearer substring survives in the
-      // redacted body. This is the contract AD-4 + C-5 promise.
+      // redacted body. This is the contract promise.
       const json = JSON.stringify(out);
       expect(json).not.toMatch(/jane\.doe@example\.com/);
       expect(json).not.toMatch(/admin@corp\.io/);

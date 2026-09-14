@@ -1,18 +1,18 @@
 'use strict';
 
-// Story 5.3 — VictoriaLogs migration tests for `LogsService`.
+// VictoriaLogs migration tests for `LogsService`.
 //
-// Covers the new behaviour pinned by the Story 5.3 acceptance:
+// Covers the new behaviour pinned by the acceptance criteria:
 //   - `getLogsInRange` JSDoc envelope `{logs, total, limit, offset}`
 //     (file + VL paths).
-//   - Per-call `ADMIN_LOGS_SOURCE` env read (AD-6) — toggle mid-suite.
+//   - Per-call `ADMIN_LOGS_SOURCE` env read — toggle mid-suite.
 //   - `VL_FAIL_OPEN=true` returns `{degraded: true, ...fallback}` on
 //     ECONNREFUSED / 5xx / timeout, surfaces the error otherwise.
 //   - 503 `vl_files_disabled` body when `ADMIN_LOGS_SOURCE=file` is
 //     requested but `LOG_TO_FILE !== '1'`.
 //   - ENOENT tolerance between `stat()` and `open()` on file reads.
 //   - `fs.open(path, 'wx')` O_EXCL concurrent-reader lock; EEXIST → skip
-//     gracefully (AD-10).
+//     gracefully.
 //   - NDJSON parse with N=4096 re-parse window on `SyntaxError`.
 //   - `getLogFilesInRange` returns synthetic `{date, service, source:
 //     'victorialogs', query}` descriptors in VL mode.
@@ -104,8 +104,8 @@ beforeEach(() => {
   });
 });
 
-describe('Story 5.3 — LogsService VL rewrite', () => {
-  describe('source routing (AD-6 per-call env read)', () => {
+describe('LogsService VictoriaLogs rewrite', () => {
+  describe('source routing (per-call env read)', () => {
     it('defaults to victorialogs when ADMIN_LOGS_SOURCE is unset', () => {
       delete process.env.ADMIN_LOGS_SOURCE;
       expect(logsService._sourceMode()).toBe('victorialogs');
@@ -370,7 +370,7 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
     });
   });
 
-  describe('file path — VlFilesDisabledError 503 (Story 5.5)', () => {
+  describe('file path — VlFilesDisabledError 503', () => {
     it('throws VlFilesDisabledError when ADMIN_LOGS_SOURCE=file but LOG_TO_FILE != "1"', async () => {
       process.env.ADMIN_LOGS_SOURCE = 'file';
       delete process.env.LOG_TO_FILE;
@@ -420,7 +420,7 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
     });
   });
 
-  describe('file path — AD-10 hardening', () => {
+  describe('file path — hardening', () => {
     beforeEach(() => {
       process.env.ADMIN_LOGS_SOURCE = 'file';
       process.env.LOG_TO_FILE = '1';
@@ -444,14 +444,14 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
         endDate: '2026-09-01',
         limit: 10
       });
-      // AD-10: stat() ENOENT → empty string → empty envelope, no throw.
+      // stat() ENOENT → empty string → empty envelope, no throw.
       expect(result.logs).toEqual([]);
       expect(result.total).toBe(0);
       expect(mockFs.open).toHaveBeenCalledWith(expect.stringMatching(/\.logs-read-lock-/), 'wx');
       expect(mockFs.stat).toHaveBeenCalled();
     });
 
-    it('skips file gracefully when fs.open(lockPath, "wx") throws EEXIST (AD-10)', async () => {
+    it('skips file gracefully when fs.open(lockPath, "wx") throws EEXIST', async () => {
       // `custom` range so today is NOT in range — only the archived file.
       mockFs.access.mockResolvedValue(undefined);
       mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log']);
@@ -616,7 +616,7 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
       expect(logsService._vlFilter('   ')).toBe('*');
     });
 
-    it('_vlFilter appends AD-5 dual-emit dedup when LOG_TO_VICTORIALOGS=true and LOG_TO_FILE unset', () => {
+    it('_vlFilter appends dual-emit dedup when LOG_TO_VICTORIALOGS=true and LOG_TO_FILE unset', () => {
       process.env.LOG_TO_VICTORIALOGS = '1';
       delete process.env.LOG_TO_FILE;
       expect(logsService._vlFilter('level:INFO')).toBe(
@@ -1013,7 +1013,7 @@ describe('Story 5.3 — LogsService VL rewrite', () => {
           return Promise.resolve({ bytesRead: padded.length });
         });
         fh.close.mockResolvedValue(undefined);
-        // AD-10 lock acquire ('wx') returns the lock handle; file open ('r')
+        // Lock acquire ('wx') returns the lock handle; file open ('r')
         // returns the file handle — distinguished by the lock suffix.
         mockFs.open.mockImplementation((p, _mode) => {
           if (typeof p === 'string' && p.includes('.logs-read-lock-')) {

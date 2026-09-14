@@ -1,7 +1,7 @@
 // queue_full call-site: VictoriaLogsTransport.log() emits via OTel
 // `@opentelemetry/api-logs` `logs.getLogger(...).emit(...)`. When that emit
 // throws (e.g. the BatchLogRecordProcessor queue is full), the catch block
-// swallows the failure (CAP-1: must not block the Node service) and
+// swallows the failure (must not block the Node service) and
 // increments the bounded `log_record_dropped_total{reason=queue_full}`
 // counter so the drop is observable in Prometheus.
 //
@@ -25,8 +25,7 @@
 // increment are all wired in the source. The runtime increment path is
 // covered indirectly by the `log-record-dropped-mirrors` parity test
 // (LOG_DROPPED_REASON.QUEUE_FULL must equal canonical 'queue_full') and
-// validated end-to-end against a live VictoriaLogs instance during the
-// broader admin-logs-victorialogs PRD epic.
+// validated end-to-end against a live VictoriaLogs instance.
 
 const fs = require('fs');
 const path = require('path');

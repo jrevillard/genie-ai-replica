@@ -16,8 +16,8 @@ const MAX_NEEDLE_LEN = 80;
 
 /**
  * Strict JSON Schema covering the full `vulnerabilities.{critical,medium,low}[]`
- * shape written by `saveScanResults()` (AD-12 — no hand-rolled `typeof`
- * checks; AJV 8.17+ is the canonical validator). Any deviation (missing
+ * shape written by `saveScanResults()` — no hand-rolled `typeof`
+ * checks; AJV 8.17+ is the canonical validator. Any deviation (missing
  * keys, wrong severity values, malformed `details[]`) classifies the
  * cache as a miss and triggers a fresh scan.
  */
@@ -206,16 +206,16 @@ const VULNERABILITY_PATTERNS = [
 ];
 
 /**
- * Security-scan service built on the MELT port (AD-3, AD-12, AD-19, AD-6).
+ * Security-scan service built on the MELT port.
  *
  * The pipeline runs a single VictoriaLogs LogSQL query that OR-joins
  * the 14 vulnerability needles and classifies every returned row in
  * process via each pattern's canonical `regex`. Each row is bucketed
- * by sha1(timestamp + '|' + service + '|' + message) per AD-19 so a
+ * by sha1(timestamp + '|' + service + '|' + message) so a
  * single record contributes to at most one vulnerability bucket.
  *
  * Cache read (`/app/data/security/last-scan-results.json`) is
- * schema-validated by AJV 8.17+ (AD-12) — invalid shape is treated as
+ * schema-validated by AJV 8.17+; invalid shape is treated as
  * cache miss.
  */
 class SecurityScanService {
@@ -241,7 +241,7 @@ class SecurityScanService {
 
   /**
    * Lazy constructor for the MELT adapter. Production callers skip the
-   * startup health probe (AD-16); test fixtures inject a mock via
+   * startup health probe; test fixtures inject a mock via
    * `setVictoriaLogsClient()` (test isolation is required by Jest).
    */
   _getVlClient() {
@@ -257,7 +257,7 @@ class SecurityScanService {
   }
 
   /**
-   * Lazy AJV 8.17+ validator (AD-12). Compiles the `SCAN_CACHE_SCHEMA`
+   * Lazy AJV 8.17+ validator. Compiles the `SCAN_CACHE_SCHEMA`
    * strict schema on first access and reuses it on subsequent calls.
    * Returning `null` from `checkCachedResults` on validation failure is
    * the canonical "treat as cache miss" path.
@@ -282,7 +282,7 @@ class SecurityScanService {
   /**
    * Parse a VL/OTLP retention string (`"30d"`, `"24h"`, `"60m"`,
    * `"90s"`) to milliseconds. Returns `null` for unparseable input
-   * (AD-19 keeps the original `30d` format and forbids the legacy
+   * (keeps the original `30d` format and forbids the legacy
    * `_DAYS` suffix).
    *
    * @param {string|undefined|null} retentionStr
@@ -300,7 +300,7 @@ class SecurityScanService {
   }
 
   /**
-   * AD-6: a single env `true|1|TRUE|yes` check, used for VL escape
+   * Single env `true|1|TRUE|yes` check, used for VL escape
    * hatches (mirrors `components/shared/lib/boolean-env.js` future
    * shared helper — local fallback to avoid coupling until the helper
    * lands in this worktree).
@@ -315,7 +315,7 @@ class SecurityScanService {
   }
 
   /**
-   * Classify a thrown error as a VL outage: matches AD-16's full list
+   * Classify a thrown error as a VL outage: matches the full list
    * (`ECONNREFUSED` / `ENOTFOUND` / `ETIMEDOUT` / `ECONNABORTED` /
    * `ECONNRESET` / 5xx). Used to gate `VL_FAIL_OPEN`.
    *
@@ -345,7 +345,7 @@ class SecurityScanService {
   /**
    * Build the LogSQL `q` parameter for the bulk scan: one
    * `_msg:"needle"` per pattern, OR-joined, with a leading `service:*`
-   * filter (AD-19). Needles longer than `MAX_NEEDLE_LEN` are skipped to
+   * filter. Needles longer than `MAX_NEEDLE_LEN` are skipped to
    * avoid surprising LogSQL tokenisation; backslashes and double-quotes
    * inside needles are escaped.
    *
@@ -370,7 +370,7 @@ class SecurityScanService {
   /**
    * Read the message string from a VL row, accepting both the wire shape
    * (`{_msg: "..."}`) and the adapter-normalized shape (`{message: "..."}`,
-   * `VictoriaLogsRow` per AD-3). Returns `''` when no message is present.
+   * `VictoriaLogsRow`). Returns `''` when no message is present.
    *
    * @param {object} row
    * @returns {string}
@@ -450,7 +450,7 @@ class SecurityScanService {
   }
 
   /**
-   * AD-19 dedupe key: 16 hex chars of sha1(timestamp + '|' + service +
+   * Dedupe key: 16 hex chars of sha1(timestamp + '|' + service +
    * '|' + message). Accepts both wire (`_time` / `_stream.service` /
    * `_msg`) and normalized (`timestamp` / `stream.service` /
    * `message`) row shapes via the row-helper getters. The `|`
@@ -537,7 +537,7 @@ class SecurityScanService {
         const ajv = this._getAjv();
         const ok = ajv.validateCache(parsed);
         if (!ok) {
-          logger.warn('Security-scan cache failed AJV schema validation (AD-12); treating as cache miss', {
+          logger.warn('Security-scan cache failed AJV schema validation; treating as cache miss', {
             errors: ajv.errors()
           });
           return null;
@@ -591,8 +591,8 @@ class SecurityScanService {
     }
   }
 
-  // VL bulk query, sha1 bucketing, truncation guard, retention check
-  // (AD-19). The 14 patterns' needles are OR-joined into a single
+  // VL bulk query, sha1 bucketing, truncation guard, retention check.
+  // The 14 patterns' needles are OR-joined into a single
   // LogSQL `_msg:(needle1 OR needle2 OR ...) AND service:*` query; VL
   // returns at most `VL_QUERY_LIMIT` (100 000) rows; truncated response
   // sets `degraded:true`. The 10-day window is capped to
@@ -607,7 +607,7 @@ class SecurityScanService {
     if (!logsService) {
       throw new Error('LogsService is required for security scan');
     }
-    // AD-6 escape hatch: SECURITY_SCAN_BACKEND=file returns a result that
+    // Escape hatch: SECURITY_SCAN_BACKEND=file returns a result that
     // does NOT touch VictoriaLogs (no scan-window, retention, or VL query).
     // Read per-call (not at module load) so the rollback matrix works
     // without a restart.

@@ -467,7 +467,7 @@ class AdminDashboardService {
     logger.info(`Getting system logs with options: ${JSON.stringify(options)}`);
 
     try {
-      // Story 5.4: delegate the log read + parse to LogsService. The old
+      // Delegate the log read + parse to LogsService. The old
       // triple-bracket regex parser (F4) was live-broken because the
       // NDJSON producer no longer emits that format, so the endpoint
       // always returned an empty `logs[]`. The producer is now NDJSON

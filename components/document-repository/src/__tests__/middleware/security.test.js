@@ -61,7 +61,7 @@ describe('Security Middleware Tests', () => {
     it('should detect EICAR test signature as infected', async () => {
       const eicarBuffer = Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*');
 
-      // Use Story 5.1 mock factory for infected ClamAV
+      // Use mock factory for infected ClamAV
       securityService.clamscan = infectedClamAV;
       securityService.isInitialized = true;
 
@@ -74,7 +74,7 @@ describe('Security Middleware Tests', () => {
     it('should return clean result for safe file content', async () => {
       const safeBuffer = Buffer.from('This is a safe document with normal content');
 
-      // Use Story 5.1 mock factory for clean ClamAV
+      // Use mock factory for clean ClamAV
       securityService.clamscan = cleanClamAV;
       securityService.isInitialized = true;
 
@@ -99,7 +99,7 @@ describe('Security Middleware Tests', () => {
         eicarContent = EICAR_STRING;
       }
 
-      // Use Story 5.1 mock factory for infected ClamAV
+      // Use mock factory for infected ClamAV
       securityService.clamscan = infectedClamAV;
       securityService.isInitialized = true;
 

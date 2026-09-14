@@ -66,8 +66,8 @@ jest.mock('@opentelemetry/sdk-metrics', () => ({
   PeriodicExportingMetricReader: jest.fn().mockImplementation(() => ({}))
 }));
 
-// Story 2-6 added 3 OTel logs deps; the LoggerProvider block in tracing.js
-// requires them at module load. Mock here to keep the non-test-branch tests
+// The OTel logs deps require the LoggerProvider block in tracing.js
+// at module load. Mock here to keep the non-test-branch tests
 // hermetic — the dedicated 2-10 test file (victorialogs-transport.test.js)
 // exercises the transport; this file only asserts sdk + tracer + signals.
 jest.mock('@opentelemetry/api-logs', () => ({

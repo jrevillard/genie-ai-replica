@@ -3,21 +3,20 @@
 
 /**
  * Co-located unit test for `components/shared/lib/melt/victorialogs-client.js`
- * (Story 4.5). Pins the AD-3 normalize contract, AD-15 AccountID/ProjectID
- * tenant headers, AD-16 axios timeout + lazy health probe (3×5 s) +
- * memoization, and the edge-case behaviour documented in the spec.
+ * Pins the normalize contract (8 sub-shapes), AccountID/ProjectID tenant
+ * headers, axios timeout + lazy health probe (3×5 s) + memoization, and
+ * the edge-case behaviour documented in the spec.
  *
  * Scope:
  *  - `axios` is fully mocked via `jest.mock('axios')`. No real HTTP traffic.
  *  - Pure unit tests; no jest is installed in `components/shared/lib/node_modules`
- *    (CI gate for this code lives downstream at Story 5.8
- *    `logs-vl-contract.test.js`). Humans run this file locally for fast
- *    feedback on adapter regressions.
- *  - AD-3 row shape (8 sub-shapes), AD-15 tenant headers, AD-16 timeout
- *    + health probe, edge cases (empty / null rows, malformed _time,
- *    empty-string trace_id preserved verbatim, reserved-char escape).
+ *    (CI gate for this code lives downstream in the cross-path parity suite).
+ *    Humans run this file locally for fast feedback on adapter regressions.
+ *  - Row shape (8 sub-shapes), tenant headers, timeout + health probe,
+ *    edge cases (empty / null rows, malformed _time, empty-string trace_id
+ *    preserved verbatim, reserved-char escape).
  *
- * CommonJS only (C-1 / project-context.md). Uses the existing project test
+ * CommonJS only (per project-context conventions). Uses the existing project test
  * style: 2-space indent, single quotes, mandatory semicolons, no trailing
  * commas (matches root `.prettierrc`).
  */
@@ -252,9 +251,9 @@ describe('VictoriaLogsAdapter — AD-16 lazy health probe', () => {
   });
 });
 
-// ----- AD-3 — _normalizeRows 8 sub-shapes -----------------------------------
+// ----- _normalizeRows 8 sub-shapes ------------------------------------------
 
-describe('VictoriaLogsAdapter — AD-3 _normalizeRows 8 sub-shapes', () => {
+describe('VictoriaLogsAdapter — _normalizeRows 8 sub-shapes', () => {
   function adapter() {
     return makeAdapter({ baseURL: 'http://vl.local', skipHealthProbe: true }).adapter;
   }

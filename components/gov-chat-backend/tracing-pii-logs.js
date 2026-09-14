@@ -25,7 +25,7 @@ class PIIRedactingLogRecordProcessor {
     try {
       // SECURITY: redact the body (free-form log message) BEFORE attribute
       // redaction. Without this, `logger.info('User ' + email + ' logged in')`
-      // writes the email verbatim into VictoriaLogs. Per AD-4 / C-5: every
+      // writes the email verbatim into VictoriaLogs. Every
       // emitted record must pass through redactLogRecordBody.
       if (logRecord.body !== undefined && logRecord.body !== null) {
         logRecord.body = redactLogRecordBody(logRecord.body);

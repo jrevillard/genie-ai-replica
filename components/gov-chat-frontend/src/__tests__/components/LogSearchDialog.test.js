@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * LogSearchDialog tests — Story 5 requirements.
+ * LogSearchDialog tests — requirements.
  *
  * Covers: mock infrastructure, performSearch with preset/custom ranges,
  * resetSearch, exportLogs CSV generation, conditional rendering, and emit events.
@@ -91,9 +91,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5a: Setup mock infrastructure
+  // Setup mock infrastructure
   // -------------------------------------------------------------------------
-  describe('Story 5a — setup mock infrastructure', () => {
+  describe('setup mock infrastructure', () => {
     it('mounts successfully with NO props', () => {
       const wrapper = createLogSearchDialogWrapper();
       expect(wrapper.exists()).toBe(true);
@@ -131,9 +131,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5b: performSearch() — preset vs custom date range
+  // performSearch() — preset vs custom date range
   // -------------------------------------------------------------------------
-  describe('Story 5b — performSearch() with date ranges', () => {
+  describe('performSearch() with date ranges', () => {
     it('performs search with preset date range (today)', async () => {
       const mockLogs = createMockLogs(2);
       mockSearchLogs.mockResolvedValueOnce({
@@ -296,9 +296,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5c: resetSearch() — verify form reset to defaults
+  // resetSearch() — verify form reset to defaults
   // -------------------------------------------------------------------------
-  describe('Story 5c — resetSearch() resets form to defaults', () => {
+  describe('resetSearch() resets form to defaults', () => {
     it('resets searchParams to default values', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchParams = {
@@ -364,9 +364,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5d: exportLogs() — CSV generation, field escaping
+  // exportLogs() — CSV generation, field escaping
   // -------------------------------------------------------------------------
-  describe('Story 5d — exportLogs() CSV generation', () => {
+  describe('exportLogs() CSV generation', () => {
     let originalCreateObjectURL;
     let originalRevokeObjectURL;
 
@@ -527,9 +527,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5e: Conditional rendering
+  // Conditional rendering
   // -------------------------------------------------------------------------
-  describe('Story 5e — conditional rendering', () => {
+  describe('conditional rendering', () => {
     it('shows custom date fields when dateRange is "custom"', async () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.searchParams.dateRange = 'today';
@@ -652,9 +652,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5.7 — degraded banner from response.data.degraded
+  // Degraded banner from response.data.degraded
   // -------------------------------------------------------------------------
-  describe('Story 5.7 — degraded banner (response.data.degraded)', () => {
+  describe('degraded banner (response.data.degraded)', () => {
     it('does not render the degraded banner by default', () => {
       const wrapper = createLogSearchDialogWrapper();
       wrapper.vm.hasSearched = true;
@@ -760,9 +760,9 @@ describe('LogSearchDialog', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Story 5f: Emit events
+  // Emit events
   // -------------------------------------------------------------------------
-  describe('Story 5f — emit events', () => {
+  describe('emit events', () => {
     it('emits "close" event when close method is called', () => {
       const wrapper = createLogSearchDialogWrapper();
 

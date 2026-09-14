@@ -81,7 +81,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_BRANCH =~ /^release\//
 
-# --- Hidden job templates (DRY, reusable by Story 1.3 test stage) ---
+# --- Hidden job templates (DRY, reusable by the test stage) ---
 
 .node_base:
   image: node:20-alpine
@@ -2968,7 +2968,7 @@ scheduled:cleanup:
 # --- Manual jobs (on-demand via Run Pipeline → click play) ---
 
 # RAG quality regression — requires GPU runner
-# Enhanced by Epic 8 (RAG Quality)
+# Enhanced for RAG Quality tests
 manual:rag-quality:
   image: python:3.11-slim
   stage: manual
@@ -2991,7 +2991,7 @@ manual:rag-quality:
         exit 0
       fi
     - |
-      pytest -m rag-quality --junitxml=reports/rag-quality.xml || echo "WARNING: No rag-quality tests found (Epic 8 placeholder)"
+      pytest -m rag-quality --junitxml=reports/rag-quality.xml || echo "WARNING: No rag-quality tests found"
   artifacts:
     when: always
     expire_in: 30 days

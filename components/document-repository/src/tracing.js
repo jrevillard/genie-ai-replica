@@ -1,7 +1,7 @@
 // tracing.js — OpenTelemetry SDK initialization (LOGS-ONLY path) for document-repository.
-// PARALLEL of components/gov-chat-backend/tracing.js with these differences per AD-18:
+// PARALLEL of components/gov-chat-backend/tracing.js with these differences:
 //
-// - Resource `service.name` = 'genie-document-repository' (pinned per AD-2).
+// - Resource `service.name` = 'genie-document-repository' (pinned).
 // - Logs-only: NO OTLPTraceExporter, NO OTLPMetricExporter,
 //   NO PeriodicExportingMetricReader. Only OTLPLogExporter.
 // - No NodeSDK / no auto-instrumentations / no span processor — doc-repo ships
@@ -9,7 +9,7 @@
 // - LoggerProvider processor order: PIIRedactingLogRecordProcessor (which
 //   wraps an inner BatchLogRecordProcessor). The PII processor wraps the
 //   batch processor internally, so `processors: [new PIIRedactingLogRecordProcessor({ exporter, ...sharedBatchConfig })]`
-//   preserves the "PII first, batching second" AD-4 invariant in a single
+//   preserves the "PII first, batching second" invariant in a single
 //   registration.
 //
 // Test environment guard OR observability disabled — no-op (must be before any
@@ -27,7 +27,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     loggerProvider: null
   };
 } else {
-  // AD-2: stream field pinning — `service.name` is a hardcoded literal
+  // stream field pinning — `service.name` is a hardcoded literal
   // ('genie-backend' / 'genie-document-repository'). No env-var indirection.
   // ATTR_DEPLOYMENT_ENVIRONMENT is undefined in some semantic-conventions
   // versions (it was moved between stable and experimental); the spread below
@@ -41,13 +41,13 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { OTLPLogExporter } = require('@opentelemetry/exporter-logs-otlp-http');
   const { LoggerProvider } = require('@opentelemetry/sdk-logs');
   const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
-  // AD-14: single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
+  // single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
   const { booleanEnv } = require('./shared-lib/boolean-env');
-  // AD-18: shared batch tuning — both backend and document-repository require this file
+  // shared batch tuning — both backend and document-repository require this file
   // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
   const sharedBatchConfig = require('./shared-lib/otel-batch-config');
 
-  // Resource attributes (pinned literal per AD-2).
+  // Resource attributes (pinned literal).
   const serviceName = 'genie-document-repository';
   const serviceVersion = process.env.npm_package_version || '1.0.0';
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
@@ -56,8 +56,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // (aligned with OPEA tracing.py + backend tracing.js).
   const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS (CAP-1) AND
-  // ENABLE_OBSERVABILITY (AD-7). Already inside the ENABLE_OBSERVABILITY gate
+  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS AND
+  // ENABLE_OBSERVABILITY. Already inside the ENABLE_OBSERVABILITY gate
   // above (the whole else branch is skipped when observability is disabled),
   // so the inner gate reduces to `LOG_TO_VICTORIALOGS`.
   //
@@ -65,11 +65,11 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // BatchLogRecordProcessor constructed with the sdk-logs 0.221.x single-options
   // signature { exporter, ...sharedBatchConfig } (NOT positional `(exporter, config)`).
   // sharedBatchConfig (otel-batch-config.js) pins maxExportBatchSize /
-  // scheduledDelayMillis / maxQueueSize for both backend + document-repository
-  // (AD-18). PII first, batching second (AD-4) is preserved by the wrapper
+  // scheduledDelayMillis / maxQueueSize for both backend + document-repository.
+  // PII first, batching second is preserved by the wrapper
   // composition — onEmit redacts before delegating to the inner batch.
   let loggerProvider = null;
-  if (booleanEnv('LOG_TO_VICTORIALOGS')) {
+  if (booleanEnv('LOG_TO_VICTORIALOGS', true)) {
     const logExporter = new OTLPLogExporter({
       url: `${endpointBase}/v1/logs`
     });

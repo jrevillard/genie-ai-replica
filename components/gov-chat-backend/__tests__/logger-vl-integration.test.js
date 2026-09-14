@@ -1,6 +1,6 @@
-// Story 2.11 — `logger-vl-integration.test.js` (fake OTLPLogExporter).
+// `logger-vl-integration.test.js` — fake OTLPLogExporter integration test.
 //
-// Background (CAP-1, AD-1, AD-2):
+// Background:
 //   The Winston → VictoriaLogs producer chain ships as four cooperating
 //   surfaces:
 //
@@ -10,16 +10,16 @@
 //                 └─ LoggerProvider + BatchLogRecordProcessor
 //                      └─ OTLPLogExporter  (POST :4318/v1/logs → Collector → VL)
 //
-//   Story 2.6 wires this in production (`tracing.js` calls
+//   The production code wires this in (`tracing.js` calls
 //   `logs.setGlobalLoggerProvider(new LoggerProvider({ processors: [new
-//   BatchLogRecordProcessor(new OTLPLogExporter({ url }))] }))`). This story
+//   BatchLogRecordProcessor(new OTLPLogExporter({ url }))] }))`). This file
 //   tests the same chain end-to-end, with the only swap being the network
 //   exporter replaced by a `FakeOTLPLogExporter` that records everything it
 //   would have shipped. The real SDK code path (transport → Logger →
 //   BatchLogRecordProcessor) executes unmodified.
 //
-// Surface: the Winston → LoggerProvider integration surface that Story 2.6
-// will wire in production. These tests prove the chain reaches the exporter
+// Surface: the Winston → LoggerProvider integration surface that the
+// production code wires. These tests prove the chain reaches the exporter
 // with the right severity, body, trace_id, span_id, and attribute folding,
 // and that the EXCLUDED attrs (`level`, `message`, `timestamp`, `splat`,
 // `trace_id`, `span_id`, `service`) are not double-promoted into the
@@ -27,10 +27,11 @@
 //
 // Deferred:
 //   - PII redaction on the body field is exercised through the helper
-//     `redactLogRecordBody` (Story 2.9); end-to-end wiring through
-//     `PIIRedactingLogRecordProcessor` is a Story 2.6 surface and out of
-//     scope here. The body-redaction contract is asserted by importing the
-//     helper and asserting its behaviour on representative body shapes.
+//     `redactLogRecordBody`; end-to-end wiring through
+//     `PIIRedactingLogRecordProcessor` is owned by the production code path
+//     and out of scope here. The body-redaction contract is asserted by
+//     importing the helper and asserting its behaviour on representative
+//     body shapes.
 
 'use strict';
 
@@ -179,7 +180,7 @@ async function withFakeExporter(processorKind, fn) {
   }
 }
 
-describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end (Story 2.11 / CAP-1)', () => {
+describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end', () => {
   describe('Given a single emit, when the BatchLogRecordProcessor flushes, then the fake exporter receives one LogRecord (round-trip)', () => {
     it('Given a LoggerProvider backed by a fake exporter, when the global logger emits one record, then the fake captures exactly one record', async () => {
       // Given
@@ -205,7 +206,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
     });
   });
 
-  describe('VictoriaLogsTransport (Story 2.4) wired to the global LoggerProvider', () => {
+  describe('VictoriaLogsTransport wired to the global LoggerProvider', () => {
     it('Given a Winston info object, when the transport logs it, then the fake exporter receives a record with the right severityNumber, severityText, body, and service attribute', async () => {
       // Given
       await withFakeExporter('simple', async (fake) => {
@@ -224,7 +225,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
       });
     });
 
-    it('Given a transport with enabled=false, when the transport logs it, then the fake exporter receives nothing (CAP-1: kill-switch)', async () => {
+    it('Given a transport with enabled=false, when the transport logs it, then the fake exporter receives nothing (kill-switch)', async () => {
       // Given
       await withFakeExporter('simple', async (fake) => {
         const transport = new VictoriaLogsTransport({ enabled: false });
@@ -277,7 +278,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
       });
     });
 
-    it('Given the transport logs a record, when the fake receives it, then the record carries a populated resource (AD-2 service.name)', async () => {
+    it('Given the transport logs a record, when the fake receives it, then the record carries a populated resource (service.name)', async () => {
       // Given — `resource` is the OTel carrier for service-level identity;
       // the SDK auto-populates it from `LoggerProvider` resource.
       await withFakeExporter('simple', async (fake) => {
@@ -290,7 +291,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
         expect(fake.exportedRecords).toHaveLength(1);
         expect(fake.exportedRecords[0].resource).toBeDefined();
         // Resource attributes are SDK-internal — at minimum the record must
-        // carry one. The exact set is owned by the SDK + 2.6 wiring.
+        // carry one. The exact set is owned by the SDK + production wiring.
         expect(Object.keys(fake.exportedRecords[0].resource.attributes || {}).length).toBeGreaterThan(0);
       });
     });
@@ -339,7 +340,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
       });
     });
 
-    it('Given a winston info with a circular message value, when the transport logs it, then the transport swallows the cycle and still emits (CAP-1: must not block the Node service)', async () => {
+    it('Given a winston info with a circular message value, when the transport logs it, then the transport swallows the cycle and still emits (must not block the Node service)', async () => {
       // Given — the transport stringifies via `String(info.message)` so a
       // cycle in a non-string body yields the engine's "[object Object]"
       // default, never a hang.
@@ -410,7 +411,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
         const transport = new VictoriaLogsTransport({ enabled: true });
 
         // When — Winston normally guarantees a level, but the transport must
-        // never crash on a stray value (CAP-1 kill-VL-does-not-block-service)
+        // never crash on a stray value (kill-VL-does-not-block-service)
         transport.log(buildWinstonInfo({ level: 'mystery-level' }), () => {});
 
         // Then
@@ -462,7 +463,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
         const transport = new VictoriaLogsTransport({ enabled: true });
 
         // When — zero IDs mean "no active span"; they must not pollute the
-        // record (Cardinality control — AD-4 stream-field rules).
+        // record (Cardinality control — stream-field rules).
         transport.log(buildWinstonInfo({ trace_id: ZERO_TRACE_ID, span_id: ZERO_SPAN_ID }), () => {});
 
         // Then
@@ -490,7 +491,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
     });
   });
 
-  describe('EXCLUDED attrs are NOT promoted to LogRecord attributes (AD-2 attribute folding)', () => {
+  describe('EXCLUDED attrs are NOT promoted to LogRecord attributes (attribute folding)', () => {
     // The transport folds `level`/`message`/`timestamp` into dedicated fields
     // (severity*, body, hrTime) and intentionally drops them from the
     // attribute bag. `trace_id`/`span_id`/`service` are promoted only when
@@ -694,7 +695,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
       }
     });
 
-    it('Given no global LoggerProvider is set (OTel uninitialised), when a transport.log call happens, then the call still completes without throwing (CAP-1: never block the Node service)', async () => {
+    it('Given no global LoggerProvider is set (OTel uninitialised), when a transport.log call happens, then the call still completes without throwing (never block the Node service)', async () => {
       // Given — fresh process, no SDK init; the OTel noop logger takes over.
       logs.disable();
       const transport = new VictoriaLogsTransport({ enabled: true });
@@ -755,10 +756,10 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
     });
   });
 
-  describe('PII body redaction (Story 2.9 helper, integration with the transport body field)', () => {
+  describe('PII body redaction, transport body field integration', () => {
     it('Given a string body containing an email, when the helper is applied, then the email is replaced with [REDACTED] before the record reaches the collector', () => {
       // Given — the helper is the production redaction entry point; the
-      // wiring into the LogRecord pipeline is owned by Story 2.6.
+      // wiring into the LogRecord pipeline is owned by production code.
       const body = 'Login failed for user john.doe@example.com at 10:00 UTC';
 
       // When
@@ -779,7 +780,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
       expect(redacted).toBe('Authorization: [REDACTED]');
     });
 
-    it('Given an object body with a nested PII field, when the helper is applied, then PII at depth is scrubbed (the Story 2.9 contract)', () => {
+    it('Given an object body with a nested PII field, when the helper is applied, then PII at depth is scrubbed (PII scrubbing at depth contract)', () => {
       // Given
       const body = {
         user: { id: 'u-1', email: 'alice@example.com' },
@@ -808,11 +809,11 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
       expect(redacted).toBe(body);
     });
 
-    it('Given a PII-bearing body fed to transport.log, when the chain reaches the exporter, then the body in the exporter is the unredacted raw value (helper is wired by Story 2.6, not here)', () => {
+    it('Given a PII-bearing body fed to transport.log, when the chain reaches the exporter, then the body in the exporter is the unredacted raw value (helper wired elsewhere, not here)', () => {
       // Given — this documents the current scope honestly: the transport
-      // emits the raw body. PII scrubbing on `POST /v1/logs` is a 2.6
-      // surface (`PIIRedactingLogRecordProcessor.onEmit` calls
-      // `redactLogRecordBody`); this test pins the pre-2.6 behavior so a
+      // emits the raw body. PII scrubbing on `POST /v1/logs` is owned by
+      // production code (`PIIRedactingLogRecordProcessor.onEmit` calls
+      // `redactLogRecordBody`); this test pins the pre-production behavior so a
       // future regression to the helper wiring is caught.
       return withFakeExporter('simple', async (fake) => {
         const transport = new VictoriaLogsTransport({ enabled: true });
@@ -821,7 +822,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end 
         // When
         transport.log(buildWinstonInfo({ message: piiBody }), () => {});
 
-        // Then — raw PII reaches the exporter today; redaction is owned by 2.6
+        // Then — raw PII reaches the exporter today; redaction is owned by production code
         expect(fake.exportedRecords).toHaveLength(1);
         expect(fake.exportedRecords[0].body).toBe(piiBody);
         // Cross-check via the helper: the redactor DOES scrub this string

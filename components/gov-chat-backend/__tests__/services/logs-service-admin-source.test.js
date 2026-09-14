@@ -1,9 +1,9 @@
 'use strict';
 
-// Story 5.10 — admin-source test: toggle env mid-suite assert no-restart path switch.
+// admin-source test: toggle env mid-suite assert no-restart path switch.
 //
-// AD-6 (per-call `ADMIN_LOGS_SOURCE` env read) is the production guarantee
-// that operators can flip the source between `file` (escape hatch, D2) and
+// The production guarantee is the per-call `ADMIN_LOGS_SOURCE` env read,
+// so operators can flip the source between `file` (escape hatch, D2) and
 // `victorialogs` (default) without a backend restart. These tests assert
 // that guarantee from the admin-source perspective: the same `LogsService`
 // singleton + `AdminDashboardService` instance must route successive calls
@@ -64,7 +64,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.resetModules();
 
-  // The whole point of Story 5.10 is that the env var is re-read per call;
+  // The env var must be re-read per call;
   // tests reset to a known baseline before each case so the per-call read
   // is observable.
   delete process.env.ADMIN_LOGS_SOURCE;
@@ -91,8 +91,8 @@ beforeEach(() => {
   });
 });
 
-describe('Story 5.10 — admin-source no-restart path switch', () => {
-  describe('_sourceMode — per-call env re-read (AD-6)', () => {
+describe('admin-source no-restart path switch', () => {
+  describe('_sourceMode — per-call env re-read', () => {
     it('defaults to victorialogs when ADMIN_LOGS_SOURCE is unset', () => {
       delete process.env.ADMIN_LOGS_SOURCE;
       expect(logsService._sourceMode()).toBe('victorialogs');
@@ -159,7 +159,7 @@ describe('Story 5.10 — admin-source no-restart path switch', () => {
 
       // Toggle — no jest.resetModules / jest.isolateModules between calls.
       process.env.ADMIN_LOGS_SOURCE = 'file';
-      // File path also requires LOG_TO_FILE for the AD-10 / Story 5.5
+      // File path also requires LOG_TO_FILE for the
       // gate; the dispatch must still pick the file path BEFORE that
       // gate is exercised (it throws VlFilesDisabledError if LOG_TO_FILE
       // is unset, which itself is the "we routed to file" proof).
@@ -314,7 +314,7 @@ describe('Story 5.10 — admin-source no-restart path switch', () => {
       // The first three `_sourceMode()` reads must each reflect the
       // current `process.env.ADMIN_LOGS_SOURCE`, NOT a frozen value
       // captured at module-load. If they all returned the same value,
-      // that would be the bug Story 5.10 exists to prevent.
+      // that would be the bug the per-call env re-read prevents.
       expect(logsService._sourceMode()).toBe('victorialogs');
 
       process.env.ADMIN_LOGS_SOURCE = 'file';

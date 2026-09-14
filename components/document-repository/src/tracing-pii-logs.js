@@ -1,7 +1,7 @@
 // tracing-pii-logs.js — PII redaction LogRecordProcessor for the OTel logs SDK.
 // PARALLEL COPY of components/gov-chat-backend/tracing-pii-logs.js.
 //
-// AD-18 forbids require()-ing into gov-chat-backend. This file must be kept in
+// require() into gov-chat-backend is forbidden — this file must be kept in
 // lockstep with the backend copy — drift risk is the price of avoiding the
 // cross-component require. When backend's tracing-pii-logs.js changes, mirror
 // the diff here.
@@ -32,7 +32,7 @@ class PIIRedactingLogRecordProcessor {
     try {
       // SECURITY: redact the body (free-form log message) BEFORE attribute
       // redaction. Without this, `logger.info('User ' + email + ' logged in')`
-      // writes the email verbatim into VictoriaLogs. Per AD-4 / C-5: every
+      // writes the email verbatim into VictoriaLogs. Every
       // emitted record must pass through redactLogRecordBody.
       if (logRecord.body !== undefined && logRecord.body !== null) {
         logRecord.body = redactLogRecordBody(logRecord.body);

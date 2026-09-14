@@ -1,8 +1,8 @@
 'use strict';
 
-// Story 5.8 — File-path vs VL-path deep-equal contract on the same fixture.
+// File-path vs VL-path deep-equal contract on the same fixture.
 //
-// Pinned by CAP-3 (SPEC.md): "LogsService and admin-dashboard-service.js
+// Pinned by SPEC.md: "LogsService and admin-dashboard-service.js
 // use VictoriaLogsClient for GET /api/admin/logs, /summary, /search,
 // /debug-yesterday. F4 regex at admin-dashboard-service.js:525 removed.
 // Success: logs-vl-contract.test.js captures responses from the legacy
@@ -19,11 +19,11 @@
 // paths must produce (file path via `_parseNdjsonContent`, VL path via the
 // `_normalizeRows` mapping inside VictoriaLogsClient).
 //
-// This file REPLACES the prior Story 5.4 NDJSON parser contract (which
+// Replaces the prior NDJSON parser contract (which
 // lived under the same path); that contract is now covered by the new
-// Story 5.8 cross-path parity test below AND by the canonical
+// cross-path parity test below AND by the canonical
 // `_parseNdjsonContent` cases in `logs-service-vl.test.js` (file path
-// AD-10 hardening).
+// hardening).
 
 const fsReal = jest.requireActual('fs');
 const pathReal = jest.requireActual('path');
@@ -112,7 +112,7 @@ const FIXTURE_FILENAME = `combined-${FIXTURE_DATE}.log`;
 // would silently produce 0 rows and the deep-equal would PASS vacuously.
 if (!FIXTURE_CONTENT || FIXTURE_CONTENT.length === 0) {
   throw new Error(
-    `Story 5.8 fixture is empty or unreadable at ${FIXTURE_PATH}. ` + 'Cannot exercise the file-vs-VL parity contract.'
+    `Fixture is empty or unreadable at ${FIXTURE_PATH}. ` + 'Cannot exercise the file-vs-VL parity contract.'
   );
 }
 
@@ -123,16 +123,19 @@ beforeEach(() => {
   jest.resetModules();
   // Default env: VL mode (no file fallback yet). Each test that exercises
   // the file path flips ADMIN_LOGS_SOURCE=file + LOG_TO_FILE=1 inside
-  // its own setup so the per-call AD-6 env read picks it up.
+  // its own setup so the per-call env read picks it up.
   process.env.ADMIN_LOGS_SOURCE = 'victorialogs';
   delete process.env.LOG_TO_FILE;
   delete process.env.VL_FAIL_OPEN;
   delete process.env.VL_QUERY_TIMEOUT_MS;
-  // Avoid the AD-5 dual-emit dedup filter mutating the VL query (the
+  // Avoid the dual-emit dedup filter mutating the VL query (the
   // fixture is from 2026-08-15; the filter would inject an
   // `AND NOT (_stream:genie.backend OR _stream:genie.document-repository)`
   // clause that the contract test does not care about).
-  delete process.env.LOG_TO_VICTORIALOGS;
+  // Production default is now "VL transport on when unset" (see
+  // booleanEnv defaultValue=true) — pin explicitly to '0' so this test
+  // stays isolated from the production default.
+  process.env.LOG_TO_VICTORIALOGS = '0';
 
   const { isValidDateStr } = require('../../services/path-sanitizer');
   isValidDateStr.mockReturnValue(true);
@@ -305,7 +308,7 @@ function commonKeys(a, b) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Story 5.8 — file path vs VL path deep-equal on the same fixture', () => {
+describe('file path vs VL path deep-equal on the same fixture', () => {
   test('fixture is non-empty and parses to > 100 canonical rows', () => {
     const rows = parseFixtureAsRows(logsService);
     expect(rows.length).toBeGreaterThan(100);

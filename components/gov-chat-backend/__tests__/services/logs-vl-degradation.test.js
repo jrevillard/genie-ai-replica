@@ -1,9 +1,9 @@
 'use strict';
 
-// Story 5.9 — degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling +
+// degradation test: 5xx / ECONNREFUSED / ENOTFOUND handling +
 // rate-limit persistence.
 //
-// Four CAP-5 properties pinned by phases.md:73 + AD-11:
+// Four properties pinned by phases.md:73:
 //   1. Rate-limit 1/min — error log fires AT MOST once per minute.
 //   2. Rate-limit state persists across restart — /tmp/vl-fail-open-ts
 //      stores Unix milliseconds; re-read on subsequent call and the
@@ -117,9 +117,9 @@ afterEach(() => {
   }
 });
 
-describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
+describe('VL degradation', () => {
   // ====================================================================
-  // CAP-5 Property 1: rate-limit 1/min via clock-mocked Date.now()
+  // Property 1: rate-limit 1/min via clock-mocked Date.now()
   // ====================================================================
   describe('Property 1 — rate-limit 1/min (clock-mocked Date.now)', () => {
     it('emits logger.warn ONCE within the 60s window, suppresses subsequent incidents, then re-arms after the cooldown elapses', async () => {
@@ -174,7 +174,7 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
   });
 
   // ====================================================================
-  // CAP-5 Property 2: rate-limit state persists across restart
+  // Property 2: rate-limit state persists across restart
   // ====================================================================
   describe('Property 2 — rate-limit state persists across restart', () => {
     it('writes /tmp/vl-fail-open-ts as Unix ms; the next service instance re-reads it and respects the suppression window', async () => {
@@ -254,26 +254,26 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
   });
 
   // ====================================================================
-  // CAP-5 Property 3: 5s latency with VL_FAIL_OPEN=true
+  // Property 3: 5s latency with VL_FAIL_OPEN=true
   // ====================================================================
   describe('Property 3 — VL_FAIL_OPEN=true returns the degraded envelope within 5s', () => {
-    it('getLogsInRange resolves the degraded envelope on VL outage AND fires the operator-facing warn (AD-11 wiring)', async () => {
+    it('getLogsInRange resolves the degraded envelope on VL outage AND fires the operator-facing warn', async () => {
       process.env.VL_FAIL_OPEN = 'true';
       const { service, sharedLogger } = mountService();
 
       // The VL client rejects synchronously-as-Promise — no delay, no hang.
-      // CAP-5: VL_FAIL_OPEN bypasses waiting for VL; on outage the
+      // VL_FAIL_OPEN bypasses waiting for VL; on outage the
       // envelope must be returned promptly. The < 200ms wall-clock
       // assertion is a defensive regression-catcher for an accidental
       // `await` on the success path (which would push the rejection
       // into the microtask queue — still fast, but not the synchronous-
-      // bail behavior CAP-5 expects). The CAP-5 5s SLO stated in the AC
+      // bail behavior expected). The 5s SLO stated in the AC
       // is not separately asserted at the HTTP boundary in this repo
       // (routes/admin.test.js mocks the logs-service layer and does not
       // exercise the VL outage path), so the < 200ms guard is the only
       // numeric budget pinned here. The service-layer test also pins
       // the integration: the catch-branch in `_withVlFailOpen` MUST
-      // invoke `_logVlUnavailableOnce` so the AD-11 operator-facing
+      // invoke `_logVlUnavailableOnce` so the operator-facing
       // warn fires on every outage — without that wiring, the
       // rate-limit cooldown file is never written and the
       // warn-once-per-minute contract is silently broken.
@@ -300,7 +300,7 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
         })
       );
 
-      // AD-11 wiring: the fail-open catch branch must invoke
+      // The fail-open catch branch must invoke
       // `_logVlUnavailableOnce`, which fires the operator-facing warn
       // and writes the cooldown timestamp. A regression that drops
       // that call (silently eats the signal) would still pass every
@@ -310,7 +310,7 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
       expect(String(warnArgs[0])).toMatch(/getLogsInRange.*VictoriaLogs unreachable/);
       expect(warnArgs[1]).toEqual(expect.objectContaining({ code: 'ECONNREFUSED' }));
 
-      // AD-11 wiring (file side): the integration call MUST also write
+      // Wiring (file side): the integration call MUST also write
       // the rate-limit cooldown timestamp — without the write, the
       // warn-once-per-minute contract is silently broken (the warn
       // would re-fire on every subsequent outage). Mirrors Property 2's
@@ -323,7 +323,7 @@ describe('Story 5.9 — VL degradation (CAP-5 / AD-11)', () => {
   });
 
   // ====================================================================
-  // CAP-5 Property 4: VL_FAIL_OPEN=false (default) surfaces error to admin
+  // Property 4: VL_FAIL_OPEN=false (default) surfaces error to admin
   // ====================================================================
   describe('Property 4 — VL_FAIL_OPEN=false surfaces the error (NOT the degraded envelope)', () => {
     it('re-throws ECONNREFUSED from getLogsInRange when VL_FAIL_OPEN is unset', async () => {

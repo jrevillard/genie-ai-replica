@@ -273,7 +273,7 @@ describe('logger OTel trace correlation', () => {
     });
   });
 
-  describe('consistent log schema (AC #4, #8)', () => {
+  describe('consistent log schema', () => {
     it('log entry contains all required schema fields', () => {
       const fakeTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';
       const fakeSpanId = '00f067aa0ba902b7';
@@ -510,8 +510,7 @@ describe('logger OTel trace correlation', () => {
   // `mockGetSpan.mockReturnValue(...)`. The static source checks below
   // verify the wiring is present in the source; the runtime increment path
   // is exercised in production by the OTel-disabled deployment mode and
-  // was validated end-to-end against a live VictoriaLogs instance during
-  // the broader admin-logs-victorialogs PRD epic.
+  // was validated end-to-end against a live VictoriaLogs instance.
   describe('observability_disabled dropped counter increment (static check)', () => {
     const fs = require('fs');
     const path = require('path');

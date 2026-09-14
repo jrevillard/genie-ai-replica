@@ -55,14 +55,14 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { OTLPLogExporter } = require('@opentelemetry/exporter-logs-otlp-http');
   const { LoggerProvider } = require('@opentelemetry/sdk-logs');
   const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
-  // AD-14: single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
+  // Single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
   const { booleanEnv } = require('./shared-lib/boolean-env');
-  // AD-18: shared batch tuning — both backend and document-repository require this file
+  // Shared batch tuning — both backend and document-repository require this file
   // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
   const sharedBatchConfig = require('./shared-lib/otel-batch-config');
   // otlp_unreachable call-site: module-load dropped counter.
   // Backed by the canonical enum exported from metrics.js — never pass raw
-  // strings to `.add()` (cardinality-bounded set per Epic 2 review).
+  // strings to `.add()` (cardinality-bounded set).
   // Module-load counter creation is guarded so the OTel SDK being absent (or
   // `getMeter` throwing at require-time) never breaks tracing.js load —
   // every other backend module depends on tracing.js requiring successfully.
@@ -211,17 +211,17 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     throw err;
   }
 
-  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS (CAP-1) AND
-  // ENABLE_OBSERVABILITY (AD-7). NodeSDK owns traces/metrics; log export sits
+  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS AND
+  // ENABLE_OBSERVABILITY. NodeSDK owns traces/metrics; log export sits
   // outside the SDK config so the gate stays local to this module.
   // logRecordProcessors redact PII on every emitted record via the span-side
-  // redactAttributes contract (C-5, AD-4).
+  // redactAttributes contract.
   //
   // PIIRedactingLogRecordProcessor (tracing-pii-logs.js) wraps an inner
   // BatchLogRecordProcessor constructed with the sdk-logs 0.221.x positional
   // (exporter, config) signature. sharedBatchConfig (otel-batch-config.js)
   // pins maxExportBatchSize / scheduledDelayMillis / maxQueueSize for both
-  // backend + document-repository (AD-18).
+  // backend + document-repository.
   let loggerProvider = null;
   if (booleanEnv('LOG_TO_VICTORIALOGS') && booleanEnv('ENABLE_OBSERVABILITY')) {
     try {

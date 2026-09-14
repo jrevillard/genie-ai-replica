@@ -10,7 +10,7 @@
 //   - `info.trace_id` / `info.span_id` surface as attributes on the emitted
 //     `LogRecord`, but the all-zero sentinels (`0000...`) are dropped to avoid
 //     noise in the VL `_stream_fields` cardinality.
-//   - The transport swallows errors from the OTel `logs` API (CAP-1) so a
+//   - The transport swallows errors from the OTel `logs` API so a
 //     down/disabled VictoriaLogs never blocks a Node service.
 
 // Helper: clear call history ONLY on the two mocks we care about, without
@@ -338,7 +338,7 @@ describe('VictoriaLogsTransport — body and timestamp', () => {
     expect(record.body).toMatch(/boom/);
   });
 
-  it('converts a numeric timestamp (ms since epoch) to nanoseconds', () => {
+  it('passes a numeric timestamp (ms since epoch) to OTel SDK as-is (OTel TimeInput is ms, NOT nanoseconds)', () => {
     const transport = makeTransport();
     const record = emitRecord(transport, {
       level: 'info',
@@ -348,10 +348,15 @@ describe('VictoriaLogsTransport — body and timestamp', () => {
       span_id: REAL_SPAN_ID
     });
 
-    expect(record.timestamp).toBe(FIXED_TS_MS * 1e6);
+    // The OTel SDK's `TimeInput` is UNIX EPOCH MILLISECONDS. Passing
+    // nanoseconds overflows the SDK's hrTime conversion (1.789e18 ms is
+    // misinterpreted and produces a pre-1970 timestamp that VL then drops
+    // as out-of-retention). The transport must therefore hand the SDK the
+    // ms value unchanged.
+    expect(record.timestamp).toBe(FIXED_TS_MS);
   });
 
-  it('parses an ISO-8601 string timestamp into nanoseconds', () => {
+  it('parses an ISO-8601 string timestamp into milliseconds (OTel TimeInput)', () => {
     const transport = makeTransport();
     const record = emitRecord(transport, {
       level: 'info',
@@ -361,17 +366,17 @@ describe('VictoriaLogsTransport — body and timestamp', () => {
       span_id: REAL_SPAN_ID
     });
 
-    expect(record.timestamp).toBe(FIXED_TS_MS * 1e6);
+    expect(record.timestamp).toBe(FIXED_TS_MS);
   });
 
-  it('falls back to "now" (in nanoseconds) when timestamp is missing or unparseable', () => {
+  it('falls back to "now" (in milliseconds) when timestamp is missing or unparseable', () => {
     const transport = makeTransport();
-    // Anchor "now" to a generous lower bound — `Date.now() * 1e6` represents
-    // nanoseconds since epoch for the test wall clock; any "now" implementation
+    // Anchor "now" to a generous lower bound — `Date.now()` represents
+    // milliseconds since epoch for the test wall clock; any "now" implementation
     // should produce a number at or above this magnitude. The upper bound catches
     // a hypothetical microseconds-since-epoch bug (would produce ~1e15, well
-    // below 1e18).
-    const nowNanos = Date.now() * 1e6;
+    // below 1e12 for ms).
+    const nowMs = Date.now();
 
     const noTs = emitRecord(transport, {
       level: 'info',
@@ -379,8 +384,8 @@ describe('VictoriaLogsTransport — body and timestamp', () => {
       trace_id: REAL_TRACE_ID,
       span_id: REAL_SPAN_ID
     });
-    expect(noTs.timestamp).toBeGreaterThanOrEqual(nowNanos - 5e12); // ±5s tolerance
-    expect(noTs.timestamp).toBeGreaterThan(1e18); // must be nanoseconds, not µs/ms
+    expect(noTs.timestamp).toBeGreaterThanOrEqual(nowMs - 5000); // ±5s tolerance
+    expect(noTs.timestamp).toBeGreaterThan(1e12); // must be milliseconds, not µs
 
     const junkTs = emitRecord(transport, {
       level: 'info',
@@ -389,7 +394,7 @@ describe('VictoriaLogsTransport — body and timestamp', () => {
       trace_id: REAL_TRACE_ID,
       span_id: REAL_SPAN_ID
     });
-    expect(junkTs.timestamp).toBeGreaterThan(1e18);
+    expect(junkTs.timestamp).toBeGreaterThan(1e12);
   });
 });
 
@@ -480,7 +485,7 @@ describe('VictoriaLogsTransport — resilience', () => {
     expect(mockEmit).toHaveBeenCalledTimes(1);
   });
 
-  it('swallows errors thrown by `logs.getLogger` so the Node service stays up (CAP-1)', () => {
+  it('swallows errors thrown by `logs.getLogger` so the Node service stays up', () => {
     // Always-throw impl (not once): the swallow contract must hold for every
     // downstream call, not only the first one.
     mockGetLogger.mockImplementation(() => {

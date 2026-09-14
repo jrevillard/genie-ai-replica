@@ -2,15 +2,15 @@
 'use strict';
 
 /**
- * MELT hexagonal layer — domain core (AD-3).
+ * MELT hexagonal layer — domain core.
  *
  * Pure type definitions for the VictoriaLogs read-side port. Zero runtime
  * dependencies: this module loads under `require()` with no other modules
  * required. JSDoc `@typedef` blocks are the authoritative shape contract;
  * the stub `module.exports` below exists only so Node CommonJS consumers
  * receive a defined symbol (not `undefined`) when they reference these
- * names — and so downstream port / adapter code (Stories 4.2, 4.3) can
- * inherit the contract via `require('./types').VictoriaLogsRow` etc.
+ * names — and so downstream port / adapter code can inherit the contract via
+ * `require('./types').VictoriaLogsRow` etc.
  *
  * @module shared/lib/melt/types
  */
@@ -18,7 +18,7 @@
 /**
  * Query input shape consumed by `LogQueryRepository.query()`.
  *
- * Mirrors the VL LogSQL `query?` endpoint parameters (AD-3):
+ * Mirrors the VL LogSQL `query?` endpoint parameters:
  *  - `q`      : LogSQL query string (already escape-safe; the adapter
  *              passes it through verbatim).
  *  - `start`  : ISO 8601 lower bound (inclusive). String form keeps
@@ -40,8 +40,8 @@
  * Canonical VictoriaLogs row shape — the contract every consumer
  * (LogsService, securityScanService) reads from the port.
  *
- * Produced by `VictoriaLogsAdapter._normalizeRows` (Story 4.3) from VL
- * wire format `{_msg, _stream, _time, ...rest}`.
+ * Produced by `VictoriaLogsAdapter._normalizeRows` from VL wire format
+ * `{_msg, _stream, _time, ...rest}`.
  *
  *  - `timestamp`: ISO 8601 string derived from `_time`.
  *  - `message`  : `_msg` content as a string.
@@ -68,10 +68,9 @@
  */
 
 /**
- * Envelope returned to application consumers (e.g. Story 5.3
- * `LogsService.getLogsInRange` JSDoc). Matches the pre-migration file
- * path shape so contract tests (CAP-3 gate) can deep-equal between
- * the file path and the VL path.
+ * Envelope returned to application consumers (e.g. `LogsService.getLogsInRange`
+ * JSDoc). Matches the pre-migration file path shape so contract tests can
+ * deep-equal between the file path and the VL path.
  *
  *  - `logs`  : rows normalized to {@link VictoriaLogsRow}.
  *  - `total` : total matching rows (server-side count, may exceed

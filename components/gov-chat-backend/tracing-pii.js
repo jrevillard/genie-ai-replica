@@ -33,7 +33,7 @@ function redactAttributes(attributes) {
 }
 
 // PII scrubbing for the OTel LogRecord body field.
-// Required by Story 2-9 + AD-4: PII scrubbing applies to BOTH OTel span
+// PII scrubbing applies to BOTH OTel span
 // attributes (covered by `redactAttributes`) AND the log record body field,
 // which may be a nested object holding the actual user input
 // (`body.user.email`, `body.request.headers.authorization`, etc.).

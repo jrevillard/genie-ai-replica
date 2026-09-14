@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * MELT adapter — VictoriaLogs HTTP wire implementation (AD-3, AD-15, AD-16).
+ * MELT adapter — VictoriaLogs HTTP wire implementation.
  *
  * Concrete adapter for {@link LogQueryRepository} (the abstract MELT
  * port defined in `./index.js`). Translates the vendor-neutral port
@@ -17,23 +17,23 @@
  * the legacy `VL-Tenant`) are derived from the constructor `tenantId`
  * (or the `VICTORIALOGS_TENANT_ID` env, default `0:0`) by splitting on
  * `:`. Multi-tenant deployment is out of scope for this rollout; the
- * seam exists for future extension (spine §AD-15).
+ * seam exists for future extension.
  *
- * Health probe is **lazy**, NOT constructor-blocking (spine §AD-16):
+ * Health probe is **lazy**, NOT constructor-blocking:
  * triggered on the first `query` / `hits` call, retries 3×5 s against
  * `${baseURL}/health`. Test fixtures pass `{ skipHealthProbe: true }`
  * to bypass the probe entirely. On probe failure (after retries), a
- * typed `VictoriaLogsHealthError` is thrown — `VL_FAIL_OPEN` (CAP-5)
+ * typed `VictoriaLogsHealthError` is thrown — `VL_FAIL_OPEN`
  * recognises `ECONNREFUSED` / `ENOTFOUND` / timeout / 5xx uniformly
  * and degrades gracefully.
  *
  * `_normalizeRows` (private) maps the VL wire shape
  * `{_msg, _stream, _time, ...rest}` to the canonical
- * {@link VictoriaLogsRow} 8-sub-shape per AD-3. `level` defaults to
+ * {@link VictoriaLogsRow} 8-sub-shape. `level` defaults to
  * `INFO` (uppercase), `service` to `unknown`, and `fields` excludes
  * the three reserved VL keys (`_msg`, `_stream`, `_time`).
  *
- * CommonJS only (C-1 / project-context.md): `require`/`module.exports`
+ * CommonJS only: `require`/`module.exports`
  * — NO ES `import`/`export`. `axios` is a runtime dependency declared
  * in `components/shared/lib/package.json`.
  *
@@ -43,16 +43,16 @@
 const axios = require('axios');
 const { LogQueryRepository } = require('./index');
 
-/** VL reserved field names stripped from the `fields` projection (AD-3). */
+/** VL reserved field names stripped from the `fields` projection. */
 const RESERVED_FIELDS = new Set(['_msg', '_stream', '_time']);
 
-/** Default tenant when `VICTORIALOGS_TENANT_ID` is unset (spine §AD-15). */
+/** Default tenant when `VICTORIALOGS_TENANT_ID` is unset. */
 const DEFAULT_TENANT_ID = '0:0';
 
-/** Default axios query timeout in ms (spine §AD-16 / env-vars.md). */
+/** Default axios query timeout in ms. */
 const DEFAULT_QUERY_TIMEOUT_MS = 30000;
 
-/** Health probe retry policy (spine §AD-16). */
+/** Health probe retry policy. */
 const HEALTH_PROBE_ATTEMPTS = 3;
 const HEALTH_PROBE_BACKOFF_MS = 5000;
 
@@ -65,9 +65,9 @@ const DEFAULT_SERVICE = 'unknown';
 /**
  * Typed error thrown by `_ensureHealth()` after the retry budget is
  * exhausted. Carries the last axios error (if any) so callers
- * (`VL_FAIL_OPEN`, CAP-5) can pattern-match on `code` /
+ * (`VL_FAIL_OPEN`) can pattern-match on `code` /
  * `response.status` / `cause` for `ECONNREFUSED` / `ENOTFOUND` /
- * timeout / 5xx — exactly the signals AD-16 enumerates.
+ * timeout / 5xx.
  */
 class VictoriaLogsHealthError extends Error {
   constructor(message, { cause } = {}) {
@@ -83,11 +83,11 @@ class VictoriaLogsHealthError extends Error {
  *
  * Constructs an axios HTTP client bound to a single VL endpoint +
  * tenant. Tenant headers are baked in at construction time so every
- * outbound request carries `AccountID` / `ProjectID` (AD-15).
+ * outbound request carries `AccountID` / `ProjectID`.
  *
  * The lazy health probe (`_ensureHealth`) gates the first `query` /
  * `hits` call only; subsequent calls short-circuit on the cached
- * `_healthProbed` flag. This satisfies AD-16's "NOT constructor-blocking"
+ * `_healthProbed` flag. This satisfies the "NOT constructor-blocking"
  * invariant (test fixtures must be able to construct without an
  * endpoint reachable).
  */
@@ -96,7 +96,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
    * @param {object} [options]
    * @param {string} [options.baseURL]            Base URL for the VL HTTP API.
    * @param {string} [options.tenantId]           Tenant id (e.g. `"0:0"`); defaults to `VICTORIALOGS_TENANT_ID` env.
-   * @param {boolean} [options.skipHealthProbe]   Test-fixture escape hatch (AD-16).
+   * @param {boolean} [options.skipHealthProbe]   Test-fixture escape hatch.
    * @param {number} [options.timeout]            axios timeout in ms (overrides `VL_QUERY_TIMEOUT_MS`).
    */
   constructor({ baseURL, tenantId, skipHealthProbe, timeout } = {}) {
@@ -179,7 +179,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   }
 
   /**
-   * Lazily run the VL health probe (AD-16).
+   * Lazily run the VL health probe.
    *
    * First-call-only: subsequent calls short-circuit on `_healthProbed`.
    * No-op when `_skipHealthProbe` is true (test fixtures). Retries 3×5 s;
@@ -218,8 +218,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   }
 
   /**
-   * Map VL wire format to the canonical `VictoriaLogsRow` 8-sub-shape
-   * per AD-3.
+   * Map VL wire format to the canonical `VictoriaLogsRow` 8-sub-shape.
    *
    * Mapping:
    *  - `timestamp` : ISO 8601 string from `_time` (via `new Date`).

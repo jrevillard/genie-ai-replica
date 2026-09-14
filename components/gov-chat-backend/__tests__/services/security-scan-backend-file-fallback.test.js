@@ -51,7 +51,7 @@ jest.mock('luxon', () => ({
 
 const securityScanService = require('../../services/security-scan-service');
 
-describe('SecurityScanService SECURITY_SCAN_BACKEND=file fallback (Story 6.4)', () => {
+describe('SecurityScanService SECURITY_SCAN_BACKEND=file fallback', () => {
   const prevBackend = process.env.SECURITY_SCAN_BACKEND;
 
   beforeEach(() => {

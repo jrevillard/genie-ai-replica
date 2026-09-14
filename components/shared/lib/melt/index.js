@@ -2,16 +2,16 @@
 'use strict';
 
 /**
- * MELT hexagonal layer — port + application seam (AD-3, AD-15).
+ * MELT hexagonal layer — port + application seam.
  *
  * Exports:
  *   - `LogQueryRepository`  — port (abstract base class). Defines the
  *     read-side contract every MELT adapter must satisfy.
  *   - `VictoriaLogsAdapter` — concrete adapter (axios HTTP wire +
  *     `_normalizeRows` + AccountID/ProjectID headers + lazy health
- *     probe + `VL_QUERY_TIMEOUT_MS`). Defined in `./victorialogs-client`
- *     (Story 4.3); re-exported here so consumers reach it through the
- *     hexagonal seam rather than importing the internal file directly.
+ *     probe + `VL_QUERY_TIMEOUT_MS`). Defined in `./victorialogs-client`;
+ *     re-exported here so consumers reach it through the hexagonal seam
+ *     rather than importing the internal file directly.
  *   - `VictoriaLogsClient`  — application service. Thin wrapper around
  *     the adapter exposing the consumer-facing seam. Adds the
  *     `MELT_PROVIDER` discriminator (today: `'victorialogs'` only).
@@ -19,16 +19,14 @@
  *
  * Application consumers (`LogsService`, `securityScanService`) MUST go
  * through `require('shared/lib/melt').VictoriaLogsClient` — NOT through
- * raw axios. Any change to `VictoriaLogsRow` breaks the CAP-3 / CAP-4
- * contract-test gates.
+ * raw axios. Any change to `VictoriaLogsRow` breaks the contract-test gates.
  *
- * Depends on Story 4.3 (`./victorialogs-client`): the require below is
+ * Depends on `./victorialogs-client`: the require below is
  * intentionally unconditional so a missing adapter fails LOUDLY at
  * module load with `Error: Cannot find module './victorialogs-client'`
- * (code `MODULE_NOT_FOUND`) — Epic 5 imports that bypass this seam
- * crash the same way, surfacing the dependency on 4.3 immediately
- * rather than silently re-exporting `undefined` from a deferred
- * lookup.
+ * (code `MODULE_NOT_FOUND`). Required to keep the require working
+ * when this barrel is consumed — a deferred lookup would silently
+ * re-export `undefined`.
  *
  * @module shared/lib/melt
  */
@@ -103,9 +101,9 @@ module.exports.LogQueryRepository = LogQueryRepository;
 // adapter can extend it. The require is intentionally unconditional so
 // a missing adapter fails LOUDLY at module load with
 // `Error: Cannot find module './victorialogs-client'` (code
-// `MODULE_NOT_FOUND`) — Epic 5 imports that bypass this seam crash the
-// same way, surfacing the dependency on 4.3 immediately rather than
-// silently re-exporting `undefined` from a deferred lookup.
+// `MODULE_NOT_FOUND`). Required to keep the require working
+// when this barrel is consumed — a deferred lookup would silently
+// re-export `undefined`.
 const { VictoriaLogsAdapter } = require('./victorialogs-client');
 
 /**
@@ -114,8 +112,8 @@ const { VictoriaLogsAdapter } = require('./victorialogs-client');
  * Thin wrapper around `VictoriaLogsAdapter`. Construction is
  * pass-through: `new VictoriaLogsClient(options)` forwards `{baseURL,
  * tenantId, skipHealthProbe, timeout, ...}` to the underlying adapter
- * (AD-16 lazy health probe + `VL_QUERY_TIMEOUT_MS` are adapter
- * concerns, re-exported as-is here).
+ * (the lazy health probe + `VL_QUERY_TIMEOUT_MS` are adapter concerns,
+ * re-exported as-is here).
  *
  * Adds:
  *   - `provider` field carrying the active `MELT_PROVIDER` value, so

@@ -385,6 +385,13 @@ describe('logger.js utility functions', () => {
 
     const withLogToFile = (value, extras = {}) => {
       for (const k of ENV_KEYS) delete process.env[k];
+      // Pin LOG_TO_VICTORIALOGS to '0' explicitly — the production default
+      // is now "VL transport on when unset" (booleanEnv defaultValue=true).
+      // Tests in this block are about LOG_TO_FILE behavior and expect VL to
+      // stay off unless explicitly opted in via `extras`. The pin is
+      // skipped when the caller passes LOG_TO_VICTORIALOGS in `extras` so
+      // the default-on test can exercise the production default.
+      if (!('LOG_TO_VICTORIALOGS' in extras)) process.env.LOG_TO_VICTORIALOGS = '0';
       if (value !== undefined) process.env.LOG_TO_FILE = value;
       for (const [k, v] of Object.entries(extras)) process.env[k] = v;
       jest.resetModules();
@@ -393,6 +400,9 @@ describe('logger.js utility functions', () => {
 
     afterEach(() => {
       for (const k of ENV_KEYS) delete process.env[k];
+      // Pin LOG_TO_VICTORIALOGS to '0' to prevent bleed into sibling suites
+      // when the production default is "on when unset".
+      process.env.LOG_TO_VICTORIALOGS = '0';
     });
 
     it('omits file transports when LOG_TO_FILE is unset (default)', () => {
@@ -446,7 +456,7 @@ describe('logger.js utility functions', () => {
     });
 
     it('combines LOG_TO_FILE=1 with LOG_TO_VICTORIALOGS=1 (production target)', () => {
-      // Epic 7 production target: file + VL fans out simultaneously when
+      // file + VL fans out simultaneously when
       // both gates are truthy. Pin the combination so a future refactor that
       // couples the two gates by mistake (e.g. an early-return on the VL
       // check) is caught.
@@ -455,6 +465,30 @@ describe('logger.js utility functions', () => {
       expect(logger.transports.some(isCombinedRotate)).toBe(true);
       expect(hasTailableFile(logger)).toBe(true);
       expect(hasVictoriaLogs(logger)).toBe(true);
+    });
+
+    it('adds VictoriaLogs by default when LOG_TO_VICTORIALOGS is unset (production target)', () => {
+      // Production default: VL transport is on when env is unset
+      // (booleanEnv defaultValue=true) AND ENABLE_OBSERVABILITY=1. The
+      // escape hatch is LOG_TO_VICTORIALOGS=0 (explicit opt-out). Pin the
+      // default so a future refactor that flips the default back to
+      // "unset=off" (a regression to the pre-merge state) is caught here,
+      // not in production. Bypasses `withLogToFile` so we can keep the
+      // env truly unset (the helper pins LOG_TO_VICTORIALOGS='0' to keep
+      // LOG_TO_FILE-focused tests isolated).
+      for (const k of ENV_KEYS) delete process.env[k];
+      process.env.ENABLE_OBSERVABILITY = '1';
+      jest.resetModules();
+      const { logger } = require('../../shared/lib/logger');
+      expect(hasVictoriaLogs(logger)).toBe(true);
+    });
+
+    it('omits VictoriaLogs when LOG_TO_VICTORIALOGS=0 (explicit opt-out)', () => {
+      // Symmetric to the default-on test: the explicit opt-out path stays
+      // valid. Pin it so a future refactor that removes the `false`
+      // short-circuit in `victoriaLogsEnabled()` is caught.
+      const { logger } = withLogToFile(undefined, { LOG_TO_VICTORIALOGS: '0', ENABLE_OBSERVABILITY: '1' });
+      expect(hasVictoriaLogs(logger)).toBe(false);
     });
 
     it('reconfigureLogger rebuild honours the gate when LOG_TO_FILE=1', () => {

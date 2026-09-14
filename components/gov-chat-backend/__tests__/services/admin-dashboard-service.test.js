@@ -306,7 +306,7 @@ describe('AdminDashboardService', () => {
     ];
 
     beforeEach(() => {
-      // Story 5.4: getLogs delegates to LogsService.getLogsInRange; the
+      // getLogs delegates to LogsService.getLogsInRange; the
       // old fs.readFile + regex path is gone. Inject a stub here so each
       // test can program its return value (the legacy tests asserted on
       // a triple-bracket string fixture that no longer matches the
@@ -382,7 +382,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('should return empty for invalid custom dates', async () => {
-      // Story 5.4: the validation moved into LogsService, which returns an
+      // The validation moved into LogsService, which returns an
       // empty envelope on invalid dates. AdminDashboardService just
       // forwards the call, so the mock is consulted.
       mockLogsService.getLogsInRange.mockResolvedValueOnce({
@@ -830,7 +830,7 @@ describe('AdminDashboardService', () => {
     let errorMockLogsService;
 
     beforeEach(() => {
-      // Story 5.4: getLogs delegates to LogsService. The legacy error-path
+      // getLogs delegates to LogsService. The legacy error-path
       // tests for malformed lines / missing files / empty content are now
       // expressed as the corresponding LogsService failure modes; the
       // admin-dashboard error envelope is whatever LogsService returns.

@@ -63,7 +63,7 @@ RUN chmod +x /docker-entrypoint.sh
 # treatment because named volumes inherit the ownership of the image directory
 # they are first mounted on.
 RUN mkdir -p /app/node_modules/@xenova/transformers/.cache /app/logs /app/Uploads /app/data && \
-    chown -R node:node /app/node_modules/@xenova/transformers/.cache /app/logs /app/Uploads /app/data
+    chown -R node:node /app/node_modules/@xenova /app/logs /app/Uploads /app/data
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "index.js"]

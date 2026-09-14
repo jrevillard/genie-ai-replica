@@ -27,7 +27,12 @@
     "moduleNameMapper": {
       "^winston$": "<rootDir>/node_modules/winston",
       "^winston-daily-rotate-file$": "<rootDir>/node_modules/winston-daily-rotate-file",
-      "^@opentelemetry/api$": "<rootDir>/node_modules/@opentelemetry/api"
+      "^@opentelemetry/api$": "<rootDir>/node_modules/@opentelemetry/api",
+      "^./shared/lib/boolean-env$": "<rootDir>/../shared/lib/boolean-env.js",
+      "^./shared/lib/otel-batch-config$": "<rootDir>/../shared/lib/otel-batch-config.js",
+      "^./shared-lib/boolean-env$": "<rootDir>/../shared/lib/boolean-env.js",
+      "^./shared-lib/otel-batch-config$": "<rootDir>/../shared/lib/otel-batch-config.js",
+      "^./shared-lib$": "<rootDir>/../shared/lib/index.js"
     },
     "collectCoverageFrom": [
       "routes/**/*.js",
@@ -56,7 +61,7 @@
           "outputName": "jest-backend.xml",
           "classNameTemplate": "{classname}",
           "titleTemplate": "{title}",
-          "ancestorSeparator": " › ",
+          "ancestorSeparator": " \u203a ",
           "usePathForSuiteName": true
         }
       ]

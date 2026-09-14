@@ -938,6 +938,17 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # Must match NOTIFICATION_BROADCAST_SECRET in warning_system_engine's env.
 NOTIFICATION_BROADCAST_SECRET=
 
+# Fallback location shared by every climate/weather service (backend weather
+# fallback, web alert banner, weather-mcp-service, drought-monitoring,
+# warning_system_engine, geo-inference-worker). Used whenever a request names
+# no place and browser/IP geolocation is unavailable or refused. Defaults are
+# baked into each service (Dhaka), so these are only needed to relocate a
+# deployment. DEFAULT_LOCATION must match a district name known to the
+# services when possible; otherwise DEFAULT_LAT/DEFAULT_LON register it.
+# DEFAULT_LOCATION=Dhaka
+# DEFAULT_LAT=23.8103
+# DEFAULT_LON=90.4125
+
 # Google Earth Engine (drought-monitoring, geo-inference-worker). Place the GEE
 # service-account key at ./secrets/credentials.json; it is mounted read-only at
 # /app/secrets/credentials.json. GEE_PROJECT is the GEE cloud project id.

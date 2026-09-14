@@ -311,8 +311,8 @@
                 "bn": "আমার জেলায় এই সপ্তাহের আবহাওয়ার পূর্বাভাস কী?"
               },
               "hiddenPrompt": {
-                "en": "What is the weather forecast for this week in Dhaka? Interpret it for my potato crop.",
-                "bn": "What is the weather forecast for this week in Dhaka? Interpret it for my potato crop."
+                "en": "What is the weather forecast for this week in {{location}}? Interpret it for my potato crop.",
+                "bn": "What is the weather forecast for this week in {{location}}? Interpret it for my potato crop."
               }
             }
           },
@@ -333,8 +333,8 @@
                 "bn": "আমার এলাকায় খরার অবস্থা কেমন?"
               },
               "hiddenPrompt": {
-                "en": "What are the current drought conditions in Dhaka?",
-                "bn": "What are the current drought conditions in Dhaka?"
+                "en": "What are the current drought conditions in {{location}}?",
+                "bn": "What are the current drought conditions in {{location}}?"
               }
             }
           },
@@ -355,8 +355,8 @@
                 "bn": "মানচিত্রে আমার জমির সীমানা দেখান"
               },
               "hiddenPrompt": {
-                "en": "Delineate field boundaries around Dhaka",
-                "bn": "Delineate field boundaries around Dhaka"
+                "en": "Delineate field boundaries around {{location}}",
+                "bn": "Delineate field boundaries around {{location}}"
               }
             }
           },
@@ -377,8 +377,8 @@
                 "bn": "আমার এলাকায় বন্যার বিস্তার দেখান"
               },
               "hiddenPrompt": {
-                "en": "Show the satellite flood map for Dhaka",
-                "bn": "Show the satellite flood map for Dhaka"
+                "en": "Show the satellite flood map for {{location}}",
+                "bn": "Show the satellite flood map for {{location}}"
               }
             }
           },
@@ -399,8 +399,8 @@
                 "bn": "এই মৌসুমে কখন রোপণ করব এবং কী আশা করব?"
               },
               "hiddenPrompt": {
-                "en": "When should I plant potatoes this season in Dhaka? What weather should I expect at each growth stage?",
-                "bn": "When should I plant potatoes this season in Dhaka? What weather should I expect at each growth stage?"
+                "en": "When should I plant potatoes this season in {{location}}? What weather should I expect at each growth stage?",
+                "bn": "When should I plant potatoes this season in {{location}}? What weather should I expect at each growth stage?"
               }
             }
           }

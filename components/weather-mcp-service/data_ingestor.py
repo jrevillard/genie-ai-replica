@@ -14,13 +14,19 @@ Sources:
   1. Open-Meteo  — free, no API key, 1 km grid, daily aggregated (primary)
   2. BMD BAMIS   — official Bangladesh scraper (sense_check reference + fallback)
 """
+
 import json
 import logging
 from datetime import datetime, timezone
 
 import requests
 from bs4 import BeautifulSoup
-
+from defaults import ensure_default_district as _ensure_default_district
+from mcp_weather.tools.weather_forecast import (
+    BAMIS_URL,
+    BENGALI_TO_ENGLISH,
+    fetch_forecast_logic,
+)
 from models import (
     DayForecast,
     ExtremeFlags,
@@ -28,11 +34,6 @@ from models import (
     TemperatureData,
     UnifiedForecast,
     WindData,
-)
-from mcp_weather.tools.weather_forecast import (
-    fetch_forecast_logic,
-    BAMIS_URL,
-    BENGALI_TO_ENGLISH,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,79 +44,83 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 DISTRICT_COORDS: dict[str, tuple[float, float]] = {
     # Dhaka Division
-    "Dhaka":        (23.8103,  90.4125),
-    "Gazipur":      (23.9999,  90.4272),
-    "Narayanganj":  (23.6238,  90.5000),
-    "Tangail":      (24.2513,  89.9167),
-    "Kishoreganj":  (24.4449,  90.7766),
-    "Mymensingh":   (24.7471,  90.4203),
-    "Netrokona":    (24.8703,  90.7271),
-    "Jamalpur":     (24.9375,  89.9375),
-    "Sherpur":      (25.0204,  90.0190),
-    "Manikganj":    (23.8613,  89.9917),
-    "Munshiganj":   (23.5420,  90.5313),
-    "Narsingdi":    (23.9310,  90.7152),
-    "Faridpur":     (23.6070,  89.8429),
-    "Madaripur":    (23.1640,  90.2007),
-    "Gopalganj":    (23.0050,  89.8268),
-    "Rajbari":      (23.7574,  89.6437),
-    "Shariatpur":   (23.2427,  90.4352),
+    "Dhaka": (23.8103, 90.4125),
+    "Gazipur": (23.9999, 90.4272),
+    "Narayanganj": (23.6238, 90.5000),
+    "Tangail": (24.2513, 89.9167),
+    "Kishoreganj": (24.4449, 90.7766),
+    "Mymensingh": (24.7471, 90.4203),
+    "Netrokona": (24.8703, 90.7271),
+    "Jamalpur": (24.9375, 89.9375),
+    "Sherpur": (25.0204, 90.0190),
+    "Manikganj": (23.8613, 89.9917),
+    "Munshiganj": (23.5420, 90.5313),
+    "Narsingdi": (23.9310, 90.7152),
+    "Faridpur": (23.6070, 89.8429),
+    "Madaripur": (23.1640, 90.2007),
+    "Gopalganj": (23.0050, 89.8268),
+    "Rajbari": (23.7574, 89.6437),
+    "Shariatpur": (23.2427, 90.4352),
     # Chittagong Division
-    "Chittagong":   (22.3569,  91.7832),
-    "Cox's Bazar":  (21.4272,  92.0058),
-    "Comilla":      (23.4607,  91.1809),
-    "Brahmanbaria": (23.9608,  91.1116),
-    "Chandpur":     (23.2333,  90.6699),
-    "Feni":         (23.0233,  91.3979),
-    "Lakshmipur":   (22.9449,  90.8412),
-    "Noakhali":     (22.8696,  91.0993),
-    "Khagrachhari": (23.1193,  91.9847),
-    "Rangamati":    (22.7324,  92.2985),
-    "Bandarban":    (22.1953,  92.2184),
+    "Chittagong": (22.3569, 91.7832),
+    "Cox's Bazar": (21.4272, 92.0058),
+    "Comilla": (23.4607, 91.1809),
+    "Brahmanbaria": (23.9608, 91.1116),
+    "Chandpur": (23.2333, 90.6699),
+    "Feni": (23.0233, 91.3979),
+    "Lakshmipur": (22.9449, 90.8412),
+    "Noakhali": (22.8696, 91.0993),
+    "Khagrachhari": (23.1193, 91.9847),
+    "Rangamati": (22.7324, 92.2985),
+    "Bandarban": (22.1953, 92.2184),
     # Rajshahi Division
-    "Rajshahi":     (24.3636,  88.6241),
+    "Rajshahi": (24.3636, 88.6241),
     "Chapainawabganj": (24.5953, 88.2760),
-    "Naogaon":      (24.8033,  88.9347),
-    "Natore":       (24.4203,  89.0000),
-    "Pabna":        (24.0064,  89.2372),
-    "Sirajganj":    (24.4535,  89.7001),
-    "Bogura":       (24.8510,  89.3697),
-    "Joypurhat":    (25.1031,  89.0225),
+    "Naogaon": (24.8033, 88.9347),
+    "Natore": (24.4203, 89.0000),
+    "Pabna": (24.0064, 89.2372),
+    "Sirajganj": (24.4535, 89.7001),
+    "Bogura": (24.8510, 89.3697),
+    "Joypurhat": (25.1031, 89.0225),
     # Khulna Division
-    "Khulna":       (22.8456,  89.5403),
-    "Bagerhat":     (22.6602,  89.7895),
-    "Satkhira":     (22.7185,  89.0705),
-    "Jashore":      (23.1664,  89.2082),
-    "Narail":       (23.1724,  89.5118),
-    "Magura":       (23.4878,  89.4193),
-    "Jhenaidah":    (23.5448,  89.1527),
-    "Kushtia":      (23.9013,  89.1190),
-    "Chuadanga":    (23.6401,  88.8418),
-    "Meherpur":     (23.7625,  88.6318),
+    "Khulna": (22.8456, 89.5403),
+    "Bagerhat": (22.6602, 89.7895),
+    "Satkhira": (22.7185, 89.0705),
+    "Jashore": (23.1664, 89.2082),
+    "Narail": (23.1724, 89.5118),
+    "Magura": (23.4878, 89.4193),
+    "Jhenaidah": (23.5448, 89.1527),
+    "Kushtia": (23.9013, 89.1190),
+    "Chuadanga": (23.6401, 88.8418),
+    "Meherpur": (23.7625, 88.6318),
     # Barishal Division
-    "Barisal":      (22.7010,  90.3535),
-    "Bhola":        (22.1780,  90.7174),
-    "Patuakhali":   (22.3596,  90.3296),
-    "Barguna":      (22.0904,  90.1120),
-    "Pirojpur":     (22.5793,  89.9740),
-    "Jhalokathi":   (22.6402,  90.1878),
+    "Barisal": (22.7010, 90.3535),
+    "Bhola": (22.1780, 90.7174),
+    "Patuakhali": (22.3596, 90.3296),
+    "Barguna": (22.0904, 90.1120),
+    "Pirojpur": (22.5793, 89.9740),
+    "Jhalokathi": (22.6402, 90.1878),
     # Sylhet Division
-    "Sylhet":       (24.8949,  91.8687),
-    "Moulvibazar":  (24.4829,  91.7774),
-    "Habiganj":     (24.3745,  91.4152),
-    "Sunamganj":    (25.0667,  91.3990),
+    "Sylhet": (24.8949, 91.8687),
+    "Moulvibazar": (24.4829, 91.7774),
+    "Habiganj": (24.3745, 91.4152),
+    "Sunamganj": (25.0667, 91.3990),
     # Rangpur Division
-    "Rangpur":      (25.7439,  89.2752),
-    "Dinajpur":     (25.6279,  88.6337),
-    "Thakurgaon":   (26.0336,  88.4616),
-    "Panchagarh":   (26.3411,  88.5548),
-    "Nilphamari":   (25.9308,  88.8563),
-    "Lalmonirhat":  (25.9217,  89.2849),
-    "Kurigram":     (25.8057,  89.6367),
-    "Gaibandha":    (25.3283,  89.5288),
+    "Rangpur": (25.7439, 89.2752),
+    "Dinajpur": (25.6279, 88.6337),
+    "Thakurgaon": (26.0336, 88.4616),
+    "Panchagarh": (26.3411, 88.5548),
+    "Nilphamari": (25.9308, 88.8563),
+    "Lalmonirhat": (25.9217, 89.2849),
+    "Kurigram": (25.8057, 89.6367),
+    "Gaibandha": (25.3283, 89.5288),
     # Mymensingh Division
     # (Mymensingh, Jamalpur, Netrokona, Sherpur already listed above)
 }
+
+# The deployment fallback district (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON)
+# is always ingested so the no-place-named answer path has data.
+_ensure_default_district(DISTRICT_COORDS)
 
 # Open-Meteo daily variables we request
 _OM_VARS = (
@@ -185,7 +190,9 @@ class DataIngestor:
                     om_forecast = self._from_open_meteo(district, coords, forecast_days)
                 except Exception as exc:
                     logger.warning(
-                        "[INGESTOR] Open-Meteo failed for %s: %s", district, exc,
+                        "[INGESTOR] Open-Meteo failed for %s: %s",
+                        district,
+                        exc,
                     )
 
             # --- Step 2: sense_check if OM succeeded ---
@@ -193,7 +200,9 @@ class DataIngestor:
                 bmd_bounds = bmd_daily.get(district)
 
                 if bmd_bounds and om_forecast.forecast:
-                    reliable, metrics = self._sense_check(om_forecast.forecast[0], bmd_bounds)
+                    reliable, metrics = self._sense_check(
+                        om_forecast.forecast[0], bmd_bounds
+                    )
                     om_forecast.sense_check_passed = reliable
 
                     if not reliable:
@@ -216,7 +225,8 @@ class DataIngestor:
                             logger.error(
                                 "[INGESTOR] BMD fallback failed for %s after failed sense_check: %s"
                                 " — keeping OM data",
-                                district, exc,
+                                district,
+                                exc,
                             )
                     else:
                         logger.debug(
@@ -239,7 +249,9 @@ class DataIngestor:
 
         logger.info(
             "[INGESTOR] Short-term ingestion complete: %d / %d districts (sense_check_failed=%d)",
-            len(results), len(targets), sense_check_failed,
+            len(results),
+            len(targets),
+            sense_check_failed,
         )
         return results
 
@@ -250,12 +262,12 @@ class DataIngestor:
     # BAMIS uses its own English transliterations which differ from our canonical names.
     # This table maps BAMIS page names → DISTRICT_COORDS keys so sense_check lookups work.
     _BAMIS_NAME_MAP: dict[str, str] = {
-        "Chattogram":      "Chittagong",       # official new spelling vs colonial name
-        "Cumilla":         "Comilla",           # Bengali romanisation vs old spelling
-        "Khagrachari":     "Khagrachhari",      # missing 'h'
-        "Chapai Nawabganj":"Chapainawabganj",   # space + different romanisation
-        "Barishal":        "Barisal",           # official new spelling vs old spelling
-        "Jhalokati":       "Jhalokathi",        # missing 'h'
+        "Chattogram": "Chittagong",  # official new spelling vs colonial name
+        "Cumilla": "Comilla",  # Bengali romanisation vs old spelling
+        "Khagrachari": "Khagrachhari",  # missing 'h'
+        "Chapai Nawabganj": "Chapainawabganj",  # space + different romanisation
+        "Barishal": "Barisal",  # official new spelling vs old spelling
+        "Jhalokati": "Jhalokathi",  # missing 'h'
     }
 
     def _fetch_bmd_sense_data(self) -> dict[str, dict]:
@@ -299,18 +311,22 @@ class DataIngestor:
                 # Normalise to our canonical DISTRICT_COORDS key
                 canonical = self._BAMIS_NAME_MAP.get(bamis_name, bamis_name)
                 result[canonical] = {
-                    "t_min":    _sf(cells, 1),
-                    "t_max":    _sf(cells, 3),
+                    "t_min": _sf(cells, 1),
+                    "t_max": _sf(cells, 3),
                     "humidity": _sf(cells, 5),
-                    "rain":     _sf(cells, 10),  # total mm for the period (days=1 → daily)
+                    "rain": _sf(cells, 10),  # total mm for the period (days=1 → daily)
                 }
 
-            logger.info("[INGESTOR] BAMIS sense_check reference loaded: %d districts", len(result))
+            logger.info(
+                "[INGESTOR] BAMIS sense_check reference loaded: %d districts",
+                len(result),
+            )
             return result
 
         except Exception as exc:
             logger.warning(
-                "[INGESTOR] BAMIS sense_check fetch failed: %s — sense_check will be skipped", exc,
+                "[INGESTOR] BAMIS sense_check fetch failed: %s — sense_check will be skipped",
+                exc,
             )
             return {}
 
@@ -344,7 +360,8 @@ class DataIngestor:
             if violated:
                 violations += 1
             details["temperature"] = {
-                "om_max": om_val, "bmd_bounds": [round(lower, 1), round(upper, 1)],
+                "om_max": om_val,
+                "bmd_bounds": [round(lower, 1), round(upper, 1)],
                 "violation": violated,
             }
 
@@ -359,7 +376,9 @@ class DataIngestor:
         if violated:
             violations += 1
         details["precipitation"] = {
-            "om_value": om_rain, "bmd_upper": round(upper_rain, 1), "violation": violated,
+            "om_value": om_rain,
+            "bmd_upper": round(upper_rain, 1),
+            "violation": violated,
         }
 
         # Humidity: OM max vs BAMIS single value ± tolerance
@@ -373,7 +392,8 @@ class DataIngestor:
             if violated:
                 violations += 1
             details["humidity"] = {
-                "om_value": om_hum, "bmd_bounds": [round(lower_hum, 1), round(upper_hum, 1)],
+                "om_value": om_hum,
+                "bmd_bounds": [round(lower_hum, 1), round(upper_hum, 1)],
                 "violation": violated,
             }
 
@@ -400,14 +420,17 @@ class DataIngestor:
     ) -> UnifiedForecast:
         lat, lon = coords
         url = _OM_URL.format(
-            lat=lat, lon=lon, vars=_OM_VARS,
-            hourly_vars=_OM_HOURLY_VARS, days=forecast_days,
+            lat=lat,
+            lon=lon,
+            vars=_OM_VARS,
+            hourly_vars=_OM_HOURLY_VARS,
+            days=forecast_days,
         )
 
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        daily  = data["daily"]
+        daily = data["daily"]
         hourly = data.get("hourly", {})
 
         # Pre-compute daily average soil moisture from 24 hourly values per day
@@ -415,35 +438,37 @@ class DataIngestor:
 
         def _daily_soil_moisture(day_index: int) -> float | None:
             start = day_index * 24
-            vals = [v for v in sm_hourly[start:start + 24] if v is not None]
+            vals = [v for v in sm_hourly[start : start + 24] if v is not None]
             return round(sum(vals) / len(vals), 4) if vals else None
 
         now_utc = datetime.now(timezone.utc).isoformat()
         days_list: list[DayForecast] = []
 
         for i, date in enumerate(daily["time"]):
-            max_t   = _safe(daily, "temperature_2m_max",           i, 30.0)
-            min_t   = _safe(daily, "temperature_2m_min",           i, 22.0)
-            rain    = _safe(daily, "precipitation_sum",            i, 0.0)
-            rain_p  = _safe(daily, "precipitation_probability_max",i, 0.0) / 100.0
-            wind    = _safe(daily, "windspeed_10m_max",            i, 0.0)
-            wdir    = _safe(daily, "winddirection_10m_dominant",   i, None)
-            humidity= _safe(daily, "relative_humidity_2m_max",     i, 70.0)
-            soil_m  = _daily_soil_moisture(i)
+            max_t = _safe(daily, "temperature_2m_max", i, 30.0)
+            min_t = _safe(daily, "temperature_2m_min", i, 22.0)
+            rain = _safe(daily, "precipitation_sum", i, 0.0)
+            rain_p = _safe(daily, "precipitation_probability_max", i, 0.0) / 100.0
+            wind = _safe(daily, "windspeed_10m_max", i, 0.0)
+            wdir = _safe(daily, "winddirection_10m_dominant", i, None)
+            humidity = _safe(daily, "relative_humidity_2m_max", i, 70.0)
+            soil_m = _daily_soil_moisture(i)
 
-            days_list.append(DayForecast(
-                date=date,
-                temperature=TemperatureData(min=min_t, max=max_t),
-                precipitation=PrecipitationData(value=rain, probability=rain_p),
-                wind=WindData(speed=wind, direction=wdir),
-                humidity=humidity,
-                soil_moisture=soil_m,
-                extreme_flags=ExtremeFlags(
-                    heavy_rain=rain  >= 50.0,
-                    heatwave=max_t   >= 40.0,
-                    cyclone_risk=wind >= 88.0,
-                ),
-            ))
+            days_list.append(
+                DayForecast(
+                    date=date,
+                    temperature=TemperatureData(min=min_t, max=max_t),
+                    precipitation=PrecipitationData(value=rain, probability=rain_p),
+                    wind=WindData(speed=wind, direction=wdir),
+                    humidity=humidity,
+                    soil_moisture=soil_m,
+                    extreme_flags=ExtremeFlags(
+                        heavy_rain=rain >= 50.0,
+                        heatwave=max_t >= 40.0,
+                        cyclone_risk=wind >= 88.0,
+                    ),
+                )
+            )
 
         return UnifiedForecast(
             location=district,
@@ -473,21 +498,23 @@ class DataIngestor:
             p = day["parameters"]
             temp = p["temperature"]
             rain = p["precipitation"]
-            hum  = p["humidity"]["value"]
+            hum = p["humidity"]["value"]
 
-            days_list.append(DayForecast(
-                date=day["date"],
-                temperature=TemperatureData(min=temp["min"], max=temp["max"]),
-                precipitation=PrecipitationData(
-                    value=rain["value"], probability=rain["probability"]
-                ),
-                wind=WindData(speed=0.0),   # BMD table does not include wind speed
-                humidity=hum,
-                extreme_flags=ExtremeFlags(
-                    heavy_rain=rain["value"] >= 50.0,
-                    heatwave=temp["max"]     >= 40.0,
-                ),
-            ))
+            days_list.append(
+                DayForecast(
+                    date=day["date"],
+                    temperature=TemperatureData(min=temp["min"], max=temp["max"]),
+                    precipitation=PrecipitationData(
+                        value=rain["value"], probability=rain["probability"]
+                    ),
+                    wind=WindData(speed=0.0),  # BMD table does not include wind speed
+                    humidity=hum,
+                    extreme_flags=ExtremeFlags(
+                        heavy_rain=rain["value"] >= 50.0,
+                        heatwave=temp["max"] >= 40.0,
+                    ),
+                )
+            )
 
         return UnifiedForecast(
             location=district,
@@ -498,10 +525,10 @@ class DataIngestor:
         )
 
 
-
 # ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
+
 
 def _safe(
     daily: dict,

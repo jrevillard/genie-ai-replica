@@ -3,7 +3,7 @@
  * */
 
 const axios = require('axios');
-const { logger } = require('../shared-lib');
+// const { logger } = require('../shared-lib');
 const PYTHON_SERVICE_URL = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
 
 const definition = {
@@ -14,7 +14,11 @@ const definition = {
     parameters: {
       type: 'object',
       properties: {
-        district_name: { type: 'string', description: 'Bangladesh district name (e.g. "Dhaka", "Pabna")' },
+        district_name: {
+          type: 'string',
+          description:
+            'Bangladesh district name (e.g. "Dhaka", "Pabna"). Empty = the deployment default district (DEFAULT_LOCATION).'
+        },
         forecast_days: { type: 'integer', description: 'Number of forecast days (1-7)', default: 3 }
       },
       required: ['district_name']

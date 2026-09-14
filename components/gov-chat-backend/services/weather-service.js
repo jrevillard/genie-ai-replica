@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { logger, dbService } = require('../shared-lib');
+const { getDefaultLocation } = require('./default-location');
 
 class WeatherService {
   constructor() {
@@ -30,9 +31,10 @@ class WeatherService {
       this.db = await this.dbService.getConnection('default');
       this.weatherRequests = this.db.collection('weatherRequests');
 
-      // Server location is a fallback for requests with no coordinates. Default
-      // to Dhaka (this deployment's region) and upgrade from ipapi.co if it answers.
-      this.serverLocation = { latitude: 23.8103, longitude: 90.4125, city: 'Dhaka, Bangladesh' };
+      // Server location is a fallback for requests with no coordinates. Start from
+      // the configured deployment default (DEFAULT_LOCATION/DEFAULT_LAT/DEFAULT_LON,
+      // built-in Dhaka) and upgrade from ipapi.co if it answers.
+      this.serverLocation = getDefaultLocation();
       try {
         logger.debug('WeatherService.fetching_server_location');
         const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
@@ -117,9 +119,9 @@ class WeatherService {
     try {
       logger.info('WeatherService.get_weather_start', { locationData });
 
-      // Fallback if ipapi.co rate-limited us at startup
+      // Fallback if init() never ran or ipapi.co rate-limited us at startup
       if (!this.serverLocation) {
-        this.serverLocation = { latitude: 0, longitude: 0, city: 'Unknown' };
+        this.serverLocation = getDefaultLocation();
       }
 
       // Validate and format coordinates

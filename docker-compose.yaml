@@ -387,6 +387,10 @@ services:
       - VUE_APP_AVAILABLE_LOCALES=${VUE_APP_AVAILABLE_LOCALES:-}
       # Mapbox public token (pk.*) for MapView; public by design, client-side only
       - VUE_APP_MAPBOX_TOKEN=${MAPBOX_ACCESS_TOKEN:-}
+      # Fallback location for the alert banner / weather when geolocation is refused
+      - VUE_APP_DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
+      - VUE_APP_DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
+      - VUE_APP_DEFAULT_LON=${DEFAULT_LON:-90.4125}
     # Port 8090 is internal only - outer nginx on 80/443 is the public entry point
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"
@@ -559,6 +563,10 @@ services:
       # Weather / geo-inference query router (PolisenseAI). Off unless WEATHER_ENABLED=true.
       - WEATHER_ENABLED=${WEATHER_ENABLED:-false}
       - WEATHER_MCP_URL=${WEATHER_MCP_URL:-http://weather-mcp-service:8000}
+      # Fallback location for requests without coordinates (shared, see env Section 15)
+      - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
+      - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
+      - DEFAULT_LON=${DEFAULT_LON:-90.4125}
       # Translation backend: cpu (local NLLB), gpu (vLLM), auto (GPU then CPU fallback)
       - TRANSLATION_BACKEND=${TRANSLATION_BACKEND:-auto}
       - TRANSLATION_CPU_MODEL_ID=${TRANSLATION_CPU_MODEL_ID:-Xenova/nllb-200-distilled-600M}
@@ -720,6 +728,10 @@ services:
       # Same GEE project as drought-monitoring (the worker reads GEE_PROJECT_ID).
       - GEE_PROJECT_ID=${GEE_PROJECT:-}
       - GPU_INFERENCE=${GEO_GPU_INFERENCE:-true}
+      # Fallback point when a request omits latitude/longitude
+      - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
+      - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
+      - DEFAULT_LON=${DEFAULT_LON:-90.4125}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}
@@ -756,6 +768,10 @@ services:
     environment:
       - GEE_PROJECT=${GEE_PROJECT:-}
       - DROUGHT_REPORTS_DIR=/app/reports
+      # Fallback district (always assessed, used by /run/district when body omits it)
+      - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
+      - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
+      - DEFAULT_LON=${DEFAULT_LON:-90.4125}
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_USER=${ARANGO_USER:-root}
@@ -794,6 +810,10 @@ services:
       dockerfile: Dockerfile
     environment:
       - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
+      # Fallback district, always included in the district tables/loops
+      - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
+      - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
+      - DEFAULT_LON=${DEFAULT_LON:-90.4125}
       - ARANGO_URL=http://arango-vector-db:8529
       - ARANGO_DB=${ARANGO_DB:-genie-ai}
       - ARANGO_USER=${ARANGO_USER:-root}
@@ -854,6 +874,10 @@ services:
       - GEO_INFERENCE_URL=${GEO_INFERENCE_URL:-}
       # drought-monitoring on-demand GEE assessment (chat: "drought risk in X over the next N days")
       - DROUGHT_MONITORING_URL=${DROUGHT_MONITORING_URL:-http://drought-monitoring:8001}
+      # Fallback district when the user names no place
+      - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
+      - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
+      - DEFAULT_LON=${DEFAULT_LON:-90.4125}
       # ArangoDB: the MCP reads risk/drought/forecast assessments written by the
       # engine. Its code defaults ARANGO_PASSWORD to 'test' - must be passed explicitly.
       - ARANGO_URL=http://arango-vector-db:8529

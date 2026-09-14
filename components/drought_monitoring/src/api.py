@@ -4,11 +4,13 @@ FastAPI entrypoint for the drought_monitoring microservice.
 Endpoints:
   GET  /health        — liveness check
   POST /run/all       — run drought pipeline for all Bangladesh districts
-  POST /run/district  — run for a single district (body: {location, lat, lon, days})
+  POST /run/district  — run for a single district (body: {location, lat, lon, days};
+                        omitted fields fall back to DEFAULT_LOCATION/DEFAULT_LAT/DEFAULT_LON)
 
 Called by warning_system_engine on its cron schedule.
 This service does NOT run its own scheduler.
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,6 +42,7 @@ def _get_storage():
     global _storage
     if _storage is None:
         from storage import DroughtStorage
+
         _storage = DroughtStorage()
     return _storage
 
@@ -48,24 +51,39 @@ def _get_storage():
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class DistrictRunRequest(BaseModel):
-    location: str
-    lat: float
-    lon: float
+    """Omitted location/lat/lon fall back to the deployment default (runner.DEFAULT_*)."""
+
+    location: str | None = None
+    lat: float | None = None
+    lon: float | None = None
     days: int = 7
+
+    def resolved(self) -> tuple[str, float, float]:
+        from runner import DEFAULT_LAT, DEFAULT_LOCATION, DEFAULT_LON, DISTRICT_COORDS
+
+        location = (self.location or "").strip() or DEFAULT_LOCATION
+        lat, lon = self.lat, self.lon
+        if lat is None or lon is None:
+            # Known district name -> its centroid; otherwise the deployment default point.
+            lat, lon = DISTRICT_COORDS.get(location, (DEFAULT_LAT, DEFAULT_LON))
+        return location, lat, lon
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 def health():
     from runner import gee_configured
+
     return {
-        "status":         "healthy",
+        "status": "healthy",
         "gee_configured": gee_configured(),
-        "reports_dir":    _REPORTS_DIR,
+        "reports_dir": _REPORTS_DIR,
     }
 
 
@@ -77,6 +95,7 @@ def run_all():
     Called by warning_system_engine scheduler.
     """
     from runner import run_all_districts
+
     try:
         storage = _get_storage()
     except Exception as exc:
@@ -94,8 +113,7 @@ def run_district(req: DistrictRunRequest):
     Run drought assessment for a single district.
     Useful for on-demand queries or testing.
     """
-    from runner import _run_one_district, gee_configured, DISTRICT_COORDS
-    import ee  # type: ignore
+    from runner import _run_one_district, gee_configured
 
     if not gee_configured():
         raise HTTPException(
@@ -108,13 +126,15 @@ def run_district(req: DistrictRunRequest):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"ArangoDB unavailable: {exc}")
 
+    location, lat, lon = req.resolved()
     try:
         from utils.gee_auth import initialize_gee
+
         initialize_gee()
         assessment = _run_one_district(
-            storage, req.location, req.lat, req.lon, req.days, _REPORTS_DIR
+            storage, location, lat, lon, req.days, _REPORTS_DIR
         )
-        return assessment or {"location": req.location, "error": "no_data"}
+        return assessment or {"location": location, "error": "no_data"}
     except Exception as exc:
-        logger.error("[API] District run failed for %s: %s", req.location, exc)
+        logger.error("[API] District run failed for %s: %s", location, exc)
         raise HTTPException(status_code=500, detail=str(exc))

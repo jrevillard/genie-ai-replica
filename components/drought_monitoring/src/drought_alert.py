@@ -1,6 +1,6 @@
 import argparse
-import ee
 
+import ee
 from drought_report.generate_report import (
     generate_pdf_report,
     get_daily_trend_message,
@@ -10,9 +10,21 @@ from utils.helper_functions import get_district_info
 
 
 def main() -> None:
+    from runner import DEFAULT_LAT, DEFAULT_LON
+
     parser = argparse.ArgumentParser(description="Drought point-query monitor")
-    parser.add_argument("--lat", type=float, required=True, help="Latitude")
-    parser.add_argument("--lon", type=float, required=True, help="Longitude")
+    parser.add_argument(
+        "--lat",
+        type=float,
+        default=DEFAULT_LAT,
+        help=f"Latitude (default: DEFAULT_LAT env or {DEFAULT_LAT})",
+    )
+    parser.add_argument(
+        "--lon",
+        type=float,
+        default=DEFAULT_LON,
+        help=f"Longitude (default: DEFAULT_LON env or {DEFAULT_LON})",
+    )
     parser.add_argument(
         "--days", type=int, default=7, help="Look-back window in days (default: 7)"
     )

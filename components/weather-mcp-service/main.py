@@ -24,6 +24,16 @@ import re
 from contextlib import asynccontextmanager
 
 from agent import WeatherAgent
+
+# Shared deployment fallback (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON).
+# Same values as drought-monitoring,
+# warning_system_engine, geo-inference-worker and the backend.
+from defaults import (
+    DEFAULT_LOCATION as _DEFAULT_DISTRICT,
+)
+from defaults import (
+    ensure_default_district as _ensure_default_district,
+)
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from mcp_client import MCPClientManager
@@ -403,6 +413,7 @@ _DROUGHT_DISTRICT_COORDS: dict[str, tuple[float, float]] = {
     "Chandpur": (23.2333, 90.6500),
     "Narsingdi": (23.9174, 90.7150),
 }
+_ensure_default_district(_DROUGHT_DISTRICT_COORDS)
 
 
 def _find_district_64(query: str) -> tuple[str, float, float] | None:
@@ -1026,7 +1037,7 @@ async def get_potato_risk(
 # reasons over real numbers next to the retrieved documents. Nothing here
 # decides what the answer is — that is the model's job.
 
-_DEFAULT_DISTRICT = os.getenv("WEATHER_DEFAULT_DISTRICT", "Dhaka")
+# _DEFAULT_DISTRICT is imported from defaults (shared DEFAULT_LOCATION).
 
 
 def _month_label(ym: str) -> str:
@@ -1417,14 +1428,15 @@ async def mcp_tools_call(request: Request):
 
     if name == "retrieve_weather_forecast":
         result_str = fetch_forecast_logic(
-            district_name=args.get("district_name", ""),
+            district_name=(args.get("district_name") or "").strip()
+            or _DEFAULT_DISTRICT,
             forecast_days=args.get("forecast_days", 3),
             parameters=args.get("parameters", []),
         )
         return {"content": [{"type": "text", "text": result_str}]}
 
     if name == "assess_drought_forecast":
-        district_name = args.get("district_name", "Dhaka")
+        district_name = (args.get("district_name") or "").strip() or _DEFAULT_DISTRICT
         horizon_days = int(args.get("horizon_days", 30))
 
         district_info = _find_drought_district(district_name)

@@ -688,7 +688,7 @@ Net: **code shrank**. Two services lost more lines than the whole change added.
 | `DATAPREP_CHUNK_SIZE_PDF`         | `2500`                           | Docling table rows are 330–491 chars          |
 | `RERANKER_TOP_N`                  | `5`                              | keep every relevant row for list questions    |
 | `WEATHER_ENABLED`                 | `true`                           | gates the whole advisor path                  |
-| `WEATHER_DEFAULT_DISTRICT`        | unset → `Dhaka`                  | used when no place is named                   |
+| `DEFAULT_LOCATION` / `DEFAULT_LAT` / `DEFAULT_LON` | unset → `Naogaon` | shared fallback for every climate service and the web banner |
 | `CDSAPI_KEY`                      | token                            | **requires both dataset licences accepted**   |
 | `COPERNICUS_SYSTEM`               | unset → `51`                     | SEAS5.1                                       |
 

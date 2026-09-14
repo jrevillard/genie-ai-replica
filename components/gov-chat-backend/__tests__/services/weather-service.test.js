@@ -133,6 +133,44 @@ describe('WeatherService', () => {
       expect(service.serverLocation.longitude).toBeCloseTo(90.4125);
       expect(service.initialized).toBe(true);
     });
+
+    it('should use DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON as the fallback when set', async () => {
+      const saved = { ...process.env };
+      process.env.DEFAULT_LOCATION = 'Rangpur';
+      process.env.DEFAULT_LAT = '25.7439';
+      process.env.DEFAULT_LON = '89.2752';
+      try {
+        axios.get.mockRejectedValueOnce(new Error('Network error'));
+        const { service } = setupService();
+        await initService(service);
+
+        expect(service.serverLocation).toEqual({
+          latitude: 25.7439,
+          longitude: 89.2752,
+          city: 'Rangpur',
+          name: 'Rangpur'
+        });
+      } finally {
+        process.env = saved;
+      }
+    });
+
+    it('should ignore malformed DEFAULT_LAT / DEFAULT_LON and keep the built-in default', async () => {
+      const saved = { ...process.env };
+      process.env.DEFAULT_LAT = 'north';
+      process.env.DEFAULT_LON = '999';
+      try {
+        axios.get.mockRejectedValueOnce(new Error('Network error'));
+        const { service } = setupService();
+        await initService(service);
+
+        expect(service.serverLocation.latitude).toBeCloseTo(23.8103);
+        expect(service.serverLocation.longitude).toBeCloseTo(90.4125);
+        expect(service.serverLocation.city).toBe('Dhaka, Bangladesh');
+      } finally {
+        process.env = saved;
+      }
+    });
   });
 
   describe('setAnalyticsService', () => {

@@ -9,6 +9,7 @@ const { nearestDistrict } = require('../data/bd-districts');
 // Weather MCP service (PolisenseAI). Serves /geocode for the chat map command;
 // resolves Bangladesh district names locally, falls back to Mapbox Geocoding.
 const WEATHER_MCP_URL = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
+const { getDefaultLocation } = require('../services/default-location');
 
 module.exports = (weatherService) => {
   // Apply authentication middleware
@@ -77,9 +78,19 @@ module.exports = (weatherService) => {
   router.get('/flood-risk', proxyLatestRisk('/flood/risk/latest'));
 
   /**
+   * Deployment fallback location (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON).
+   * Clients without runtime config injection (e.g. mobile) read it from here so
+   * every surface falls back to the same place as the services.
+   */
+  router.get('/default-location', (_req, res) => {
+    const { name, latitude, longitude } = getDefaultLocation();
+    return res.json({ location: name, lat: latitude, lon: longitude });
+  });
+
+  /**
    * Browser geolocation -> district whose alerts the web banner should show.
-   * Falls back to null (client defaults to Dhaka) when the point is outside
-   * Bangladesh.
+   * Falls back to null (client falls back to the configured default location,
+   * see GET /default-location) when the point is outside Bangladesh.
    */
   router.get('/nearest-district', (req, res) => {
     const lat = parseFloat(req.query.lat);

@@ -20,6 +20,7 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+from app.core.defaults import ensure_default_in_list
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -61,6 +62,8 @@ DISTRICT_LIST = [
     "Chandpur",
     "Narsingdi",
 ]
+# The deployment fallback district (DEFAULT_LOCATION) is always evaluated.
+ensure_default_in_list(DISTRICT_LIST)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:

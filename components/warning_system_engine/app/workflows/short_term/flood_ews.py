@@ -29,6 +29,7 @@ import statistics
 from datetime import datetime, timezone
 
 import requests
+from app.core.defaults import ensure_default_district
 from app.core.storage import StorageLayer
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,9 @@ DISTRICT_COORDS: dict[str, tuple[float, float]] = {
     "Kurigram": (25.8057, 89.6367),
     "Gaibandha": (25.3283, 89.5288),
 }
+# The deployment fallback district (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON)
+# is always part of the flood assessment set.
+ensure_default_district(DISTRICT_COORDS)
 
 # Key FFWC river stations -> districts they affect. Used as extra sampling points
 # because a district centroid rarely sits on the main channel.

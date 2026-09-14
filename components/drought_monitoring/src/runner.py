@@ -10,11 +10,36 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _env_coord(name: str, fallback: float, limit: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return fallback
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("[RUNNER] %s=%r is not a number - using %s", name, raw, fallback)
+        return fallback
+    if abs(value) > limit:
+        logger.warning("[RUNNER] %s=%r out of range - using %s", name, raw, fallback)
+        return fallback
+    return value
+
+
+# Deployment fallback location, shared with the backend, weather-mcp-service,
+# warning_system_engine and geo-inference-worker via DEFAULT_LOCATION /
+# DEFAULT_LAT / DEFAULT_LON (root .env, Section 15). Unset = Dhaka. It is always
+# part of the assessed district set so the fallback district has data.
+DEFAULT_LOCATION: str = os.getenv("DEFAULT_LOCATION", "").strip() or "Dhaka"
+DEFAULT_LAT: float = _env_coord("DEFAULT_LAT", 23.8103, 90.0)
+DEFAULT_LON: float = _env_coord("DEFAULT_LON", 90.4125, 180.0)
 
 # Bangladesh district centroids — mirrors copernicus_fetcher.py
 DISTRICT_COORDS: dict[str, tuple[float, float]] = {
@@ -40,6 +65,7 @@ DISTRICT_COORDS: dict[str, tuple[float, float]] = {
     "Chandpur": (23.2333, 90.6500),
     "Narsingdi": (23.9174, 90.7150),
 }
+DISTRICT_COORDS.setdefault(DEFAULT_LOCATION, (DEFAULT_LAT, DEFAULT_LON))
 
 DROUGHT_LEVEL_TO_TIER: dict[str, int] = {
     "NORMAL": 0,

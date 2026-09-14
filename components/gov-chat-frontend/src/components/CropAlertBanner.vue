@@ -85,11 +85,11 @@
 
 <script>
 import httpService from '@/services/httpService';
+import { DISTRICT_CACHE_KEY, DISTRICT_CACHE_MS, getDefaultLocation } from '@/config/defaultLocation';
 
 const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
-const DEFAULT_DISTRICT = 'Dhaka';
-const DISTRICT_CACHE_KEY = 'mewa_alert_district';
-const DISTRICT_CACHE_MS = 24 * 60 * 60 * 1000; // re-resolve location once a day
+// Deployment fallback district (DEFAULT_LOCATION via window.APP_CONFIG; Dhaka when unset).
+const DEFAULT_DISTRICT = getDefaultLocation().name;
 const NOTICE_DISMISSED_KEY = 'mewa_notices_dismissed';
 const NOTICE_WINDOW_HOURS = 48;
 // Engine alert broadcasts (weather / potato / drought / flood) already appear as the
@@ -129,7 +129,7 @@ export default {
       alertType: 'potato', // 'potato' | 'drought'
       pollTimer: null,
       // District whose alerts this browser shows: nearest to the geolocation,
-      // cached for a day; Dhaka until the location is known or when refused.
+      // cached for a day; the configured default until the location is known or when refused.
       district: DEFAULT_DISTRICT,
       notices: [],
       dismissedNotices: readDismissedNotices()

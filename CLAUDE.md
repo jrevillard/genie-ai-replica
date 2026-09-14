@@ -265,6 +265,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VUE_APP_AVAILABLE_LOCALES` - Whitelist of active UI locales (comma-separated codes, e.g. `en,es`; unset = all locales)
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
 - `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
+- `DEFAULT_LOCATION` / `DEFAULT_LAT` / `DEFAULT_LON` - Shared fallback place for every climate service (backend weather, web alert banner, weather-mcp-service, drought-monitoring, warning_system_engine, geo-inference-worker) when a request names no place and geolocation is unavailable. Unset = `Dhaka` / `23.8103` / `90.4125`.
 
 **API Keys:**
 - `HUGGING_FACE_HUB_TOKEN` - Required for pulling models

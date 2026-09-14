@@ -120,7 +120,7 @@ components/drought_monitoring/
 |---|---|---|
 | `GET` | `/health` | Returns service health, GEE credential status, and reports directory |
 | `POST` | `/run/all` | Runs all supported districts; blocking and may take several minutes |
-| `POST` | `/run/district` | Runs one district on demand with `{location, lat, lon, days}` |
+| `POST` | `/run/district` | Runs one district on demand with `{location, lat, lon, days}`; omitted fields fall back to `DEFAULT_LOCATION` / `DEFAULT_LAT` / `DEFAULT_LON` |
 
 Example on-demand request:
 
@@ -233,6 +233,15 @@ GEE_PROJECT=mewa-493916
 
 Override it in the root `.env` if you use another GEE-enabled project.
 
+### Fallback location
+
+`DEFAULT_LOCATION`, `DEFAULT_LAT` and `DEFAULT_LON` (root `.env`, Section 15)
+define the deployment fallback district. It is always added to the assessed
+district set, `/run/district` uses it for omitted fields, and the `drought-alert`
+CLI uses it as the default `--lat/--lon`. The same variables are read by the
+backend, weather-mcp-service, warning_system_engine and geo-inference-worker.
+Unset = Dhaka (23.8103, 90.4125).
+
 ### Local CLI Authentication
 
 The `drought-alert` command-line entrypoint uses normal Earth Engine local
@@ -271,8 +280,8 @@ Arguments:
 
 | Argument | Required | Default | Description |
 |---|---|---|---|
-| `--lat` | Yes | - | Target latitude |
-| `--lon` | Yes | - | Target longitude |
+| `--lat` | No | `DEFAULT_LAT` (23.8103) | Target latitude |
+| `--lon` | No | `DEFAULT_LON` (90.4125) | Target longitude |
 | `--days` | No | `7` | Number of recent days to analyze |
 | `--project` | Yes | - | Google Earth Engine project ID |
 

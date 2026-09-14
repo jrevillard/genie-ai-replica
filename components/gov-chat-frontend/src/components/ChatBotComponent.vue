@@ -282,6 +282,7 @@
 
 <script>
 import { Brain, Loader2, Plus, Save, FileText, Sparkles } from '@lucide/vue';
+import { fillLocationPlaceholder } from '@/config/defaultLocation';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -935,7 +936,9 @@ export default {
       }
 
       // For dual-prompt mechanism: use hidden prompt for backend, visible text for display
-      const messageForBackend = this.hiddenPromptForNextMessage || content;
+      // {{location}} in a config prompt becomes the user's resolved district (or the
+      // deployment default) so "my area" is never a hard-coded place.
+      const messageForBackend = fillLocationPlaceholder(this.hiddenPromptForNextMessage) || content;
       const messageForDisplay = content;
 
       this.chatMessages.push({

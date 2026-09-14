@@ -23,6 +23,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.core.defaults import ensure_default_district
+
 if TYPE_CHECKING:
     from app.core.storage import StorageLayer
 
@@ -51,6 +53,9 @@ DISTRICT_COORDS: dict[str, tuple[float, float]] = {
     "Chandpur": (23.2333, 90.6500),
     "Narsingdi": (23.9174, 90.7150),
 }
+# The deployment fallback district (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON)
+# always gets a seasonal outlook.
+ensure_default_district(DISTRICT_COORDS)
 
 # Bangladesh bounding box [N, W, S, E] for CDS area filter
 _BBOX = [26.5, 88.0, 20.5, 92.7]

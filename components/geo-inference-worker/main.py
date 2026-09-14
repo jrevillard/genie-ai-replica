@@ -40,14 +40,39 @@ app = FastAPI(title="Geo Inference Worker")
 # ---------------------------------------------------------------------------
 
 
+def _env_coord(name: str, fallback: float, limit: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return fallback
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "[DEFAULTS] %s=%r is not a number - using %s", name, raw, fallback
+        )
+        return fallback
+    if abs(value) > limit:
+        logger.warning("[DEFAULTS] %s=%r out of range - using %s", name, raw, fallback)
+        return fallback
+    return value
+
+
+# Deployment fallback point (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON, root .env
+# Section 15) shared with the backend, weather-mcp-service, drought-monitoring and
+# warning_system_engine. Requests that omit latitude/longitude use it. Unset = Dhaka.
+DEFAULT_LOCATION: str = os.getenv("DEFAULT_LOCATION", "").strip() or "Dhaka"
+DEFAULT_LAT: float = _env_coord("DEFAULT_LAT", 23.8103, 90.0)
+DEFAULT_LON: float = _env_coord("DEFAULT_LON", 90.4125, 180.0)
+
+
 class DelineateRequest(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = DEFAULT_LAT
+    longitude: float = DEFAULT_LON
 
 
 class FloodSegmentRequest(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = DEFAULT_LAT
+    longitude: float = DEFAULT_LON
     lookback_days: int = 30
 
 

@@ -13,6 +13,7 @@ import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Literal, Optional
 
+from defaults import DEFAULT_LOCATION as _DEFAULT_DISTRICT
 from mcp_client import MCPClientManager
 from models import (
     DayForecast,
@@ -42,10 +43,42 @@ _INVALID_LOCATIONS = {
     "not mentioned",
 }
 
+# Spelling variants the LLM may canonicalise, so "Chattogram" in the query still
+# counts as a mention of the canonical "Chittagong".
+_DISTRICT_ALIASES: dict[str, str] = {
+    "chattogram": "Chittagong",
+    "cumilla": "Comilla",
+    "barishal": "Barisal",
+    "bogra": "Bogura",
+    "jessore": "Jashore",
+    "coxs bazar": "Cox's Bazar",
+}
+
+
+def _district_in_text(text: str) -> str | None:
+    """
+    Canonical district named anywhere in ``text`` (English, alias or Bengali),
+    longest match first so "Cox's Bazar" wins over shorter fragments. None when
+    the text names no district - the caller then uses the deployment default.
+    """
+    from mcp_weather.tools.weather_forecast import BENGALI_TO_ENGLISH
+
+    q = text.lower()
+    candidates: list[tuple[str, str]] = [
+        (name.lower(), name) for name in BENGALI_TO_ENGLISH.values()
+    ]
+    candidates += list(BENGALI_TO_ENGLISH.items())
+    candidates += list(_DISTRICT_ALIASES.items())
+    for needle, canon in sorted(candidates, key=lambda kv: -len(kv[0])):
+        if needle and needle in q:
+            return canon
+    return None
+
+
 # District used when the farmer names no place at all ("will it rain this week?").
 # The seasonal, drought and flood branches in main.py already default this way;
 # without it the agent path was the only one that refused to answer.
-_DEFAULT_DISTRICT = os.getenv("WEATHER_DEFAULT_DISTRICT", "Dhaka")
+# Shared deployment default: _DEFAULT_DISTRICT (DEFAULT_LOCATION, see defaults.py).
 
 # Crop whose stored assessment grounds the agricultural tip. Only crops with a
 # profile in the warning_system_engine produce assessments; the rest return "".
@@ -683,12 +716,23 @@ class WeatherAgent:
             logger.debug("[AGENT] Intent raw response: %s", raw[:120])
             data = json.loads(raw)
             location = (data.get("location") or "").strip()
-            if not location or location.lower() in _INVALID_LOCATIONS:
-                # No place named: answer for the default district rather than
-                # refusing. A named-but-unresolvable place still errors later,
-                # in _find_district, so a real typo is not silently redirected.
+            # The query text is the source of truth for the place. The LLM is
+            # only trusted for a location it copied from the message (a typo it
+            # echoed still errors later in _find_district); "my area" style
+            # questions used to come back as a guessed capital instead of the
+            # deployment default.
+            mentioned = _district_in_text(query)
+            if mentioned:
+                location = mentioned
+            elif (
+                not location
+                or location.lower() in _INVALID_LOCATIONS
+                or location.lower() not in query.lower()
+            ):
                 logger.info(
-                    "[AGENT] No location in query — defaulting to %s", _DEFAULT_DISTRICT
+                    "[AGENT] No district in query (LLM said %r) — defaulting to %s",
+                    location,
+                    _DEFAULT_DISTRICT,
                 )
                 location = _DEFAULT_DISTRICT
             return WeatherIntent(
@@ -699,14 +743,15 @@ class WeatherAgent:
         except ValueError:
             raise
         except Exception as exc:
+            location = _district_in_text(query) or _DEFAULT_DISTRICT
             logger.warning(
-                "[AGENT] Intent extraction failed (%s: %s) — falling back to raw query as location",
+                "[AGENT] Intent extraction failed (%s: %s) — using district %r",
                 type(exc).__name__,
                 exc,
+                location,
             )
-            # Fallback: treat entire query as location attempt; _find_district will gate it
             return WeatherIntent(
-                location=query[:100], user_context="CITIZEN", forecast_days=3
+                location=location, user_context="CITIZEN", forecast_days=3
             )
 
     # ------------------------------------------------------------------

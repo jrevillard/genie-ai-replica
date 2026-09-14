@@ -703,6 +703,7 @@ All settings are environment variables. Set them in `.env` or in the Docker Comp
 | `ARANGO_PASSWORD` | `test` | ArangoDB password |
 | `VLLM_TRANSLATION_ENDPOINT` | `http://vllm-translation-guardrail:9031` | vLLM base URL (OpenAI-compat) |
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | Model for intent extraction + explanation |
+| `DEFAULT_LOCATION` / `DEFAULT_LAT` / `DEFAULT_LON` | `Dhaka` / `23.8103` / `90.4125` | Shared fallback district (root `.env` Section 15) used when the user names no place; always ingested |
 | `MAPBOX_ACCESS_TOKEN` | _(empty)_ | Required for Mapbox MCP delineation tools |
 | `DROUGHT_MONITORING_URL` | _(empty)_ | Base URL of drought_monitoring service |
 | `GEO_INFERENCE_URL` | _(empty)_ | Prithvi-EO model URL for flood detection |

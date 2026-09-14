@@ -24,6 +24,11 @@ router.post('/', requireRole('tools-admin'), ctrl.createRepo);
 // streaming job — NO long-running request through Kong. Registered BEFORE
 // the :repo_id routes so 'convert-from-crawl' is never parsed as an id.
 router.post('/convert-from-crawl', requireRole('tools-admin'), ctrl.convertFromCrawl);
+// Story 7.7 (David, 2026-09-14): multi-select document-repository files into
+// ONE OKF repository — whole-corpus linking/labeling; ingested sources allowed
+// (the SOURCES_NOT_RETRACTED lifecycle gate guards the repo's own ingest).
+// MUST stay above the :repo_id routes (same comment as convert-from-crawl).
+router.post('/convert-from-documents', requireRole('tools-admin'), ctrl.convertFromDocuments);
 router.patch('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.updateRepo);
 router.delete('/:repo_id', requireRepoScope('repo_id', 'admin'), ctrl.deleteRepo);
 

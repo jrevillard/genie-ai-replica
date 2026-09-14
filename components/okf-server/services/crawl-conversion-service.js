@@ -861,5 +861,10 @@ module.exports = {
   deriveTitleFromUrl,
   deriveTitleFromBody,
   cleanTitle, // title ruling tests (David 2026-09-06)
-  live // in-process registry — tests await in-flight conversions before resetting mocks
+  live, // in-process registry — tests await in-flight conversions before resetting mocks
+  // SHARED CONVERSION SLOT (Story 7.7, 2026-09-14): the documents producer
+  // joins the SAME FIFO semaphore — one heavy conversion at a time across
+  // BOTH source kinds. Additive export; crawl behavior unchanged.
+  acquireSlot,
+  releaseSlot
 };

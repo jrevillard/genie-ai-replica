@@ -497,6 +497,41 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     throw Object.assign(new Error('file_ids contains duplicates'), { code: 'VALIDATION_ERROR', status: 400 });
   }
 
+  // Idempotency contract (story 7.7): a document stamped by a DIFFERENT,
+  // still-existing OKF repository is a 409 — the UI badge is advisory only.
+  // A stamp whose repo no longer exists is STALE and self-heals (restamped
+  // by stampSources below), so a deleted repo never bricks its documents.
+  const db = await getDb();
+  for (const file_id of file_ids) {
+    let meta;
+    try {
+      const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`, {
+        timeout: 10000
+      });
+      meta = docRepoFileOf(res);
+    } catch (err) {
+      throw Object.assign(
+        new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),
+        { code: 'SOURCE_UNVERIFIABLE', status: 502 }
+      );
+    }
+    const stamped = meta && meta.okf_repo_id;
+    if (stamped && stamped !== repo_id) {
+      let exists;
+      try {
+        exists = !!(await db.collection(COLLECTION).document(stamped));
+      } catch {
+        exists = false; // tombstoned/gone → stale stamp, import proceeds
+      }
+      if (exists) {
+        throw Object.assign(
+          new Error(`document "${meta.file_name || file_id}" is already the source of OKF repository ${stamped}`),
+          { code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 }
+        );
+      }
+    }
+  }
+
   await crawlConversion.sweepInterruptedOnce();
   if (live.has(repo_id)) {
     throw Object.assign(new Error('a conversion is already running for this repository — wait for it to finish'), {

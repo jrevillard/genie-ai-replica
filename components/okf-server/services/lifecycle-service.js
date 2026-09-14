@@ -169,7 +169,7 @@ async function sourcesBusyBlocker(repo) {
     try {
       const res = await authedAxios.get(
         `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`,
-        { timeout: 10000 }
+        { timeout: 5000 }
       );
       // doc-repo envelopes vary ({file}, {data: {file}}, {data}) — unwrap all
       // shapes so the gate sees the REAL dataprep.status (a misread would
@@ -182,12 +182,14 @@ async function sourcesBusyBlocker(repo) {
         .trim();
       if (status === 'ingesting' || status === 'ingested' || status === 'ingested with warnings') {
         serving.push(f.file_name || s.file_name || s.file_id);
+        if (serving.length > 0) break; // one serving source blocks — don't pay N×timeout on the rest
       }
     } catch (err) {
       // FAIL-CLOSED: if doc-repo cannot tell us the status, treat the source
       // as still serving (a transient outage must not double-serve content).
       logger.warn('SOURCES-BUSY re-check failed (fail-closed)', { file_id: s.file_id, error: err.message });
       serving.push(s.file_name || s.file_id);
+      break; // fail-closed already decided the outcome — cap the transition latency
     }
   }
   if (serving.length === 0) return null;

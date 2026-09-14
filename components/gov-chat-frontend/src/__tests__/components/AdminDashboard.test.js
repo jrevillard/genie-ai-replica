@@ -1345,4 +1345,67 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.confirmDialogState.visible).toBe(true);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // okfRepoGate — Story 7.7 amendment: documents still serving the free-form
+  // corpus are ALLOWED into a new OKF repository (import succeeds; the new
+  // repo's own ingest is gated until they are retracted). Only empty
+  // selections and documents already sourced by ANOTHER OKF repo refuse.
+  // -----------------------------------------------------------------------
+  describe('okfRepoGate (Story 7.7 amendment)', () => {
+    const doc = (_key, status, okf_repo_id = null) => ({
+      _key,
+      okf_repo_id,
+      dataprep: { status }
+    });
+
+    async function gateWith(docs, selected) {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({ documents: docs, selectedDocuments: selected });
+      return wrapper.vm.okfRepoGate;
+    }
+
+    it('refuses an empty selection', async () => {
+      const gate = await gateWith([doc('f1', 'Pending')], []);
+      expect(gate).toMatchObject({ visible: false, reasonKey: 'okf.docs.gate.emptySelection', warnKey: null });
+    });
+
+    it('refuses documents already sourced by another OKF repository', async () => {
+      const gate = await gateWith([doc('f1', 'Pending', 'r-other')], ['f1']);
+      expect(gate).toMatchObject({ visible: false, reasonKey: 'okf.docs.gate.alreadyInOkf', warnKey: null });
+    });
+
+    it('ALLOWS ingested documents — visible with servingWarn and the count', async () => {
+      const gate = await gateWith(
+        [doc('f1', 'Ingested'), doc('f2', 'Ingested with Warnings'), doc('f3', 'Ingesting')],
+        ['f1', 'f2', 'f3']
+      );
+      expect(gate).toMatchObject({
+        visible: true,
+        reasonKey: null,
+        warnKey: 'okf.docs.gate.servingWarn',
+        servingCount: 3
+      });
+    });
+
+    it('clean (not serving) selection → visible without a warning', async () => {
+      const gate = await gateWith(
+        [doc('f1', 'Pending'), doc('f2', 'Retracted'), doc('f3', 'Ingestion Error')],
+        ['f1', 'f2', 'f3']
+      );
+      expect(gate).toMatchObject({ visible: true, reasonKey: null, warnKey: null, servingCount: 0 });
+    });
+
+    it('gate title renders the servingWarn text with the count substituted', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      await wrapper.setData({
+        documents: [doc('f1', 'Ingested')],
+        selectedDocuments: ['f1']
+      });
+      // The factory mocks $t as identity; shadow translate so the {n} template
+      // survives to the .replace the computed applies.
+      wrapper.vm.translate = (key) => (key === 'okf.docs.gate.servingWarn' ? '{n} docs still serve' : key);
+      expect(wrapper.vm.okfGateTitle).toBe('1 docs still serve');
+    });
+  });
 });

@@ -1527,6 +1527,30 @@ export default {
         pending: 'noch nicht indexiert'
       }
     },
+    import: {
+      title: 'Dokumente in ein neues OKF-Repository importieren',
+      hint: 'Die Dokumente werden EIN Repository — gemeinsam segmentiert, verlinkt und gelabelt. Nichts wird veröffentlicht; der normale Ablauf Review → Publish → Ingest folgt.',
+      name: 'Repository-Name',
+      namePh: 'z. B. Politikpaket',
+      domain: 'Themenbereich (Domain)',
+      strategy: 'Klassifizierungsstrategie',
+      stratHeuristics: 'Heuristik (schnell, ohne LLM)',
+      stratLlm: 'LLM-Klassifizierung',
+      stratHybrid: 'Hybrid',
+      files: 'Ausgewählte Dokumente',
+      servingBadge: 'dient dem freien RAG',
+      alreadyBadge: 'schon in einem OKF-Repo',
+      servingTip:
+        'Dieses Dokument dient derzeit dem freien Korpus — das neue Repository kann erst nach dessen Rückzug ingestiert werden.',
+      alreadyTip: 'Dieses Dokument ist bereits Quelle eines anderen OKF-Repositorys.',
+      servingWarn:
+        '{n} Dokument(e) dienen noch dem freien Korpus. Der Import gelingt, aber dieses Repository kann erst ingestiert werden, nachdem sie zurückgezogen wurden.',
+      cancel: 'Abbrechen',
+      importing: 'Importiere…',
+      go: 'Importieren',
+      dupRepo: 'Dieser Repository-Name existiert bereits — wähle einen anderen.',
+      failed: 'Der Import konnte nicht gestartet werden. Dokumente prüfen und erneut versuchen.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (einfügen oder leer lassen)',
@@ -1590,6 +1614,8 @@ export default {
         piiTip:
           'Markierte Entitäten: {k}. Öffnen, entfernen oder anpassen, dann speichern — Scan erfolgt automatisch erneut.',
         piiTipBare: 'Markierte Entitäten — öffnen, prüfen, dann zum erneuten Scannen speichern.',
+        sourceLabel: 'Quelldokument',
+        sourceView: 'Quelldokument öffnen',
         bulkAccept: 'Alle akzeptieren',
         bulkRedact: 'Alle schwärzen',
         bulkRemove: 'Alle entfernen',
@@ -2127,7 +2153,9 @@ export default {
       gate: {
         emptySelection: 'Mindestens ein Dokument auswählen',
         alreadyInOkf: 'Bereits in einem OKF-Repository enthaltene Dokumente entfernen',
-        alreadyIngested: 'Bereits ingestierte Dokumente entfernen'
+        alreadyIngested: 'Bereits ingestierte Dokumente entfernen',
+        servingWarn:
+          '{n} ausgewählte Dokumente dienen noch dem freien Korpus — das neue Repository kann erst nach deren Rückzug ingestiert werden.'
       },
       produce: {
         notReady: 'Producer-Anbindung folgt in einer späteren Story.'

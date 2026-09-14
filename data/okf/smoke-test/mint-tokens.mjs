@@ -88,9 +88,15 @@ const uuid = (await j(`${AUTH}/admin/realms/genie/clients?clientId=genie-app`, {
 await fetch(`${AUTH}/admin/realms/genie/clients/${uuid}`, { method: 'PUT', headers: H, body: JSON.stringify({ directAccessGrantsEnabled: true }) });
 const mint = async (u, p) =>
   (await j(`${AUTH}/realms/genie/protocol/openid-connect/token`, form({ grant_type: 'password', client_id: 'genie-app', username: u, password: p }))).access_token;
+const mintFull = async (u, p) =>
+  await j(`${AUTH}/realms/genie/protocol/openid-connect/token`, form({ grant_type: 'password', client_id: 'genie-app', username: u, password: p }));
 out.scoped = await mint('smoke-scoped', SCOPE_PASSWORD);
 out.scopeless = await mint('smoke-scopeless', SCOPE_PASSWORD);
-out.admin = await mint(ENV.GENIE_ADMIN_USERNAME, ENV.GENIE_ADMIN_PASSWORD);
+const adminGrant = await mintFull(ENV.GENIE_ADMIN_USERNAME, ENV.GENIE_ADMIN_PASSWORD);
+out.admin = adminGrant.access_token;
+// Refresh token lets long smokes renew past the ~5 min access-token TTL
+// (refresh grants work even with directAccessGrants disabled).
+out.admin_refresh = adminGrant.refresh_token || null;
 await fetch(`${AUTH}/admin/realms/genie/clients/${uuid}`, { method: 'PUT', headers: H, body: JSON.stringify({ directAccessGrantsEnabled: false }) });
 const verify = await j(`${AUTH}/admin/realms/genie/clients/${uuid}`, { headers: H });
 if (verify.directAccessGrantsEnabled !== false) throw new Error('ROPC NOT reverted — aborting');

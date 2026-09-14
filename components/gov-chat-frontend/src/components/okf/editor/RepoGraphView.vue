@@ -100,6 +100,23 @@
               <span v-for="chip in card.chips" :key="chip" class="okf-gv__card-chip">{{ chip }}</span>
             </p>
             <p v-if="card.summary" class="okf-gv__card-summary">{{ card.summary }}</p>
+            <!-- Story 7.7 provenance: the concept's source documents — the link
+                 opens the doc-repo FileDetailsDialog (deep link, same details
+                 view as Document Management). -->
+            <template v-if="card.sources.length">
+              <p class="okf-gv__card-meta">
+                {{ translate('okf.editor.concepts.sourceLabel', 'Source document') }}
+              </p>
+              <p v-for="s in card.sources" :key="s.file_id" class="okf-gv__card-src">
+                <span
+                  role="link"
+                  tabindex="-1"
+                  :title="translate('okf.editor.concepts.sourceView', 'Open the source document')"
+                  @click.stop="openSource(s)"
+                  >{{ s.file_name || s.file_id }} ↗</span
+                >
+              </p>
+            </template>
             <p v-if="card.meta.length" class="okf-gv__card-meta">
               <template v-for="(m, i) in card.meta" :key="m">
                 <span v-if="i" class="okf-gv__card-sep" aria-hidden="true">·</span>
@@ -171,7 +188,8 @@ export default {
         title: '',
         chips: [],
         summary: '',
-        meta: []
+        meta: [],
+        sources: [] // Story 7.7 provenance — source documents (file links)
       }
     };
   },
@@ -795,6 +813,13 @@ export default {
     hideCard() {
       if (this.card.visible) this.card.visible = false;
     },
+    // Story 7.7: a source-document link in the card deep-links to the
+    // doc-repo details view (?tab=documents&file= — AdminDashboard watcher).
+    openSource(s) {
+      const fileId = s && s.file_id;
+      if (!fileId || !this.$router) return;
+      this.$router.push({ query: { ...(this.$route.query || {}), tab: 'documents', file: fileId } }).catch(() => {});
+    },
     // Build the summary from the concept meta the graph ALREADY holds (the
     // listing projection carries title/type/labels/summary/trust_tier/
     // chunk_count/index_status/pii_state — no extra API call) plus the link
@@ -831,6 +856,8 @@ export default {
       this.card.chips = chips;
       this.card.meta = meta;
       this.card.kind = kind;
+      // Story 7.7 provenance: source documents render as links in the card.
+      this.card.sources = ((c.sources && Array.isArray(c.sources) && c.sources) || []).filter((s) => s && s.file_id);
       this.card.visible = true;
       const p = node.renderedPosition();
       const half = (node.renderedOuterWidth() || 24) / 2;
@@ -1042,6 +1069,20 @@ export default {
 }
 .okf-gv__card-sep {
   color: var(--border);
+}
+/* Story 7.7: source-document links inside the hover card. */
+.okf-gv__card-src {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+}
+.okf-gv__card-src span {
+  color: var(--info);
+  cursor: pointer;
+  text-decoration: underline;
+  word-break: break-all;
+}
+.okf-gv__card-src span:hover {
+  color: var(--brand);
 }
 .okf-gv-card-enter-active,
 .okf-gv-card-leave-active {

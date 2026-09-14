@@ -1505,6 +1505,30 @@ export default {
         pending: 'ejjan̄in pād ilo laajrak'
       }
     },
+    import: {
+      title: 'Import documents into a new OKF repository',
+      hint: 'The documents become one repository — segmented, cross-linked and labeled together. Nothing is published; the normal review → publish → ingest workflow follows.',
+      name: 'Repository name',
+      namePh: 'e.g. Abattoir policy pack',
+      domain: 'Subject Area (domain)',
+      strategy: 'Classification strategy',
+      stratHeuristics: 'Heuristics (fast, no LLM)',
+      stratLlm: 'LLM classification',
+      stratHybrid: 'Hybrid',
+      files: 'Selected documents',
+      servingBadge: 'serving free-form RAG',
+      alreadyBadge: 'already in an OKF repo',
+      servingTip:
+        'This document currently serves the free-form RAG corpus — the new repository cannot be ingested until it is retracted.',
+      alreadyTip: 'This document is already the source of another OKF repository.',
+      servingWarn:
+        '{n} document(s) still serve the free-form corpus. The import succeeds, but this repository cannot be ingested until they are retracted.',
+      cancel: 'Cancel',
+      importing: 'Importing…',
+      go: 'Import',
+      dupRepo: 'That repository name already exists — pick another.',
+      failed: 'The import could not be started. Check the documents and try again.'
+    },
     editor: {
       addConcept: {
         bodyLabel: 'Markdown (likūt ak kōjparok bwe en ejjel̦o̦k)',
@@ -1567,6 +1591,8 @@ export default {
         piiBadge: 'PII',
         piiTip: 'Men ko ewōr kakōl̦l̦e ie: {k}. Kipel̦o̦k, jol̦o̦k ak ukōti, innem kōjparok — ej make bar lale.',
         piiTipBare: 'Men ko ewōr kakōl̦l̦e ie — kipel̦o̦k, etale, innem kōjparok bwe en bar lale.',
+        sourceLabel: 'Source document',
+        sourceView: 'Open the source document',
         bulkAccept: 'Abee song',
         bulkRedact: 'Abee nuun',
         bulkRemove: 'Abee kuntu',
@@ -2095,7 +2121,9 @@ export default {
       gate: {
         emptySelection: 'Kāālet juon peba ak el̦ap l̦o̦k',
         alreadyInOkf: 'Jol̦o̦k peba ko epād m̦okta ilo jikin kakwōn OKF',
-        alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest'
+        alreadyIngested: 'Jol̦o̦k peba ko em̦ōj an ingest',
+        servingWarn:
+          '{n} selected document(s) still serve the free-form corpus — the new repository cannot be ingested until they are retracted.'
       },
       produce: {
         notReady: 'Kōm̦m̦an in ej pād ilo bwebwenato ko tok ālik.'

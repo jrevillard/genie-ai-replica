@@ -107,7 +107,15 @@
                   translate('okf.editor.concepts.piiBadge', 'PII')
                 }}</DsPill>
               </span>
-              <span v-if="node.sourceUrl" class="okf-cl__row-source">{{ node.sourceUrl }}</span>
+              <span
+                v-if="node.sourceUrl"
+                class="okf-cl__row-source"
+                role="link"
+                tabindex="-1"
+                :title="translate('okf.editor.concepts.sourceView', 'Open the source document')"
+                @click.stop="openSource(node)"
+                >{{ node.sourceUrl }}</span
+              >
             </span>
             <span v-if="!readOnly" class="okf-cl__actions" @click.stop>
               <button
@@ -169,7 +177,15 @@
                       translate('okf.editor.concepts.piiBadge', 'PII')
                     }}</DsPill>
                   </span>
-                  <span v-if="child.sourceUrl" class="okf-cl__row-source">{{ child.sourceUrl }}</span>
+                  <span
+                    v-if="child.sourceUrl"
+                    class="okf-cl__row-source"
+                    role="link"
+                    tabindex="-1"
+                    :title="translate('okf.editor.concepts.sourceView', 'Open the source document')"
+                    @click.stop="openSource(child)"
+                    >{{ child.sourceUrl }}</span
+                  >
                 </span>
                 <span v-if="!readOnly" class="okf-cl__actions" @click.stop>
                   <button
@@ -238,6 +254,18 @@
       </p>
       <p class="okf-cl__failcard-sec">{{ translate('okf.editor.concepts.failedCard.fixLabel', 'How to fix') }}</p>
       <p class="okf-cl__failcard-fix">{{ fixFor(failCard.row) }}</p>
+      <template v-if="sourceFiles(failCard.row).length">
+        <p class="okf-cl__failcard-sec">{{ translate('okf.editor.concepts.sourceLabel', 'Source document') }}</p>
+        <p v-for="s in sourceFiles(failCard.row)" :key="s.file_id" class="okf-cl__failcard-src">
+          <span
+            role="link"
+            tabindex="-1"
+            :title="translate('okf.editor.concepts.sourceView', 'Open the source document')"
+            @click.stop="openSource(s)"
+            >{{ s.file_name || s.file_id }} ↗</span
+          >
+        </p>
+      </template>
       <p v-if="failCard.row.ingest_attempts > 1 || failCard.row.updated_at" class="okf-cl__failcard-meta">
         <template v-if="failCard.row.ingest_attempts > 1">{{
           translate('okf.editor.concepts.failedCard.attempts', 'Attempts: {n}').replace(
@@ -275,7 +303,7 @@ export default {
     // READ ONLY (serving repo): add/delete/re-split/label writes are hidden.
     readOnly: { type: Boolean, default: false }
   },
-  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk'],
+  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source'],
   data() {
     return {
       filter: '',
@@ -429,6 +457,29 @@ export default {
         '{when}',
         d.toLocaleString()
       );
+    },
+    // ---- provenance links (Story 7.7): open the doc-repo details dialog ----
+    sourceFiles(c) {
+      return ((c && Array.isArray(c.sources) && c.sources) || []).filter((s) => s && s.file_id);
+    },
+    openSource(s) {
+      // Accepts a source ({file_id}), a bare id, OR a row/child node (whose
+      // file_id rides sources[] — the first document source wins).
+      let fileId = null;
+      if (typeof s === 'string') fileId = s;
+      else if (s && s.file_id) fileId = s.file_id;
+      else if (s && Array.isArray(s.sources)) {
+        const hit = s.sources.find((x) => x && x.file_id);
+        if (hit) fileId = hit.file_id;
+      }
+      if (!fileId) return;
+      // Deep link: AdminDashboard watches $route.query (?tab=documents&file=)
+      // and opens the SAME FileDetailsDialog the documents list uses.
+      if (this.$router) {
+        this.$router.push({ query: { ...(this.$route.query || {}), tab: 'documents', file: fileId } }).catch(() => {});
+      } else {
+        this.$emit('open-source', fileId);
+      }
     }
   }
 };

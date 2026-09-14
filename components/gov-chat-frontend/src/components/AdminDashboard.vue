@@ -451,11 +451,18 @@
                       <DsButton
                         variant="secondary"
                         :disabled="!okfRepoGate.visible"
-                        :title="okfRepoGate.reasonKey ? translate(okfRepoGate.reasonKey, '') : ''"
+                        :title="okfGateTitle"
                         @click="onCreateOkfRepoFromSelection"
                       >
                         {{ translate('okf.docs.createRepo', 'Create OKF repository') }}
                       </DsButton>
+                      <!-- Story 7.7: documents → OKF repository import dialog -->
+                      <ImportDocumentsDialog
+                        :visible="showImportDialog"
+                        :documents="importDocsSelection"
+                        @close="showImportDialog = false"
+                        @imported="onImportDocsImported"
+                      />
                     </div>
                   </div>
 
@@ -1565,6 +1572,7 @@ import LogSearchDialog from './LogSearchDialog.vue';
 import UploadFilesDialog from './UploadFilesDialog.vue';
 import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
+import ImportDocumentsDialog from './okf/editor/ImportDocumentsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
 import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
 import DsButton from './ds/Button.vue';
@@ -1591,6 +1599,7 @@ export default {
     UploadFilesDialog,
     AddFromLinkDialog,
     FileDetailsDialog,
+    ImportDocumentsDialog,
     ConfirmDialog, // REGISTER ConfirmDialog
     QueryInspector,
     DsButton,
@@ -1633,6 +1642,8 @@ export default {
 
       // Tab navigation
       activeTab: 'overview',
+      showImportDialog: false,
+      importDocsSelection: [],
       tabs: [
         { id: 'overview', label: 'System Health' },
         { id: 'hierarchy', label: 'Knowledge Hierarchy' },
@@ -1876,33 +1887,51 @@ export default {
       return !hasIngestedFile;
     },
 
-    // Gate for the "Create OKF repository" button (Story 3-6). Mirrors
-    // showIngestButton's logic: needs ≥1 selected, none already in an OKF
-    // repo, none already ingested. Returns the reason key so the disabled
-    // button can show a translated tooltip.
+    // Gate for the "Create OKF repository" button. AMENDED (Story 7.7,
+    // David 2026-09-14): INGESTED documents are now IMPORTABLE — the old
+    // alreadyIngested refusal is dropped. The prevention moved downstream to
+    // the OKF lifecycle: the new repo's `ingest` transition is refused
+    // (SOURCES_NOT_RETRACTED) while any source doc still serves the
+    // free-form corpus. The enabled-with-warning state surfaces that here.
+    // Remaining refusals: empty selection; a doc already sourced by ANOTHER
+    // OKF repo (okf_repo_id).
     okfRepoGate() {
       if (this.selectedDocuments.length === 0) {
-        return { visible: false, reasonKey: 'okf.docs.gate.emptySelection' };
+        return { visible: false, reasonKey: 'okf.docs.gate.emptySelection', warnKey: null };
       }
       const selectedKeys = new Set(this.selectedDocuments);
       const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
       const alreadyOkf = selectedDocObjects.filter((doc) => doc.okf_repo_id);
       if (alreadyOkf.length > 0) {
-        return {
-          visible: false,
-          reasonKey: 'okf.docs.gate.alreadyInOkf'
-        };
+        return { visible: false, reasonKey: 'okf.docs.gate.alreadyInOkf', warnKey: null };
       }
-      const ingested = selectedDocObjects.filter(
-        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === 'ingested'
-      );
-      if (ingested.length > 0) {
-        return { visible: false, reasonKey: 'okf.docs.gate.alreadyIngested' };
-      }
-      return { visible: true, reasonKey: null };
+      const serving = selectedDocObjects.filter((doc) => {
+        const s = doc.dataprep && String(doc.dataprep.status).toLowerCase().trim();
+        return s === 'ingesting' || s === 'ingested' || s === 'ingested with warnings';
+      });
+      return {
+        visible: true,
+        reasonKey: null,
+        warnKey: serving.length > 0 ? 'okf.docs.gate.servingWarn' : null,
+        servingCount: serving.length
+      };
+    },
+    okfGateTitle() {
+      if (this.okfRepoGate.reasonKey) return this.translate(this.okfRepoGate.reasonKey, '');
+      if (this.okfRepoGate.warnKey)
+        return this.translate(this.okfRepoGate.warnKey, '').replace('{n}', String(this.okfRepoGate.servingCount));
+      return '';
     }
   },
   watch: {
+    // Story 7.7 deep links: popup-card source links push ?tab=documents&file=
+    // — the watcher opens the SAME FileDetailsDialog the documents list uses.
+    '$route.query': {
+      handler(q) {
+        this.applyRouteQuery(q);
+      },
+      immediate: true
+    },
     '$i18n.locale'(newLocale) {
       this.currentLocale = newLocale;
       this.$forceUpdate();
@@ -3064,11 +3093,36 @@ export default {
      */
     async onCreateOkfRepoFromSelection() {
       if (!this.okfRepoGate.visible) return;
-      const ids = (this.selectedDocuments || []).slice();
-      await this.$store.dispatch('okf/setSelection', { documents: ids });
+      // Story 7.7: the selected doc objects drive the import dialog
+      // (preflight list + serving warnings), then POST convert-from-documents.
+      const keys = new Set(this.selectedDocuments);
+      this.importDocsSelection = this.documents.filter((doc) => keys.has(doc._key));
+      this.showImportDialog = true;
+    },
+    async onImportDocsImported(repo) {
+      this.showImportDialog = false;
+      this.selectedDocuments = [];
+      try {
+        await this.$store.dispatch('okf/fetchRepos', { stage: 'all' });
+      } catch {
+        /* the dashboard refreshes on next poll anyway */
+      }
       this.activeTab = 'studio';
-      const evt = new CustomEvent('okf:create-from-documents', { detail: { repo_id: null, documents: ids } });
-      window.dispatchEvent(evt);
+      if (repo && repo.repo_id) {
+        const evt = new CustomEvent('okf:import-created', { detail: { repo_id: repo.repo_id } });
+        window.dispatchEvent(evt);
+      }
+    },
+    /** Deep link (Story 7.7 provenance popup cards): ?tab=documents&file=<id>
+     * opens the Document Management tab with the FileDetailsDialog — the SAME
+     * details view used from the documents list. */
+    applyRouteQuery(q) {
+      if (!q) return;
+      if (q.tab) this.activeTab = q.tab;
+      if (q.tab === 'documents' && q.file) {
+        this.selectedFileId = q.file;
+        this.showDetailsDialog = true;
+      }
     },
     // --- END: DOCUMENT METHODS ---
 

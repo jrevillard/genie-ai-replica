@@ -171,7 +171,11 @@ async function sourcesBusyBlocker(repo) {
         `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(s.file_id)}`,
         { timeout: 10000 }
       );
-      const f = (res.data && (res.data.file || res.data)) || {};
+      // doc-repo envelopes vary ({file}, {data: {file}}, {data}) — unwrap all
+      // shapes so the gate sees the REAL dataprep.status (a misread would
+      // silently fail-open the SOURCES_NOT_RETRACTED gate).
+      const rd = res.data || {};
+      const f = rd.file || (rd.data && rd.data.file) || rd.data || rd || {};
       if (f.is_bundle === true) continue; // defensive: a bundle is never a source doc
       const status = String((f.dataprep && f.dataprep.status) || '')
         .toLowerCase()

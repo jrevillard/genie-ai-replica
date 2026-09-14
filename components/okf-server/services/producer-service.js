@@ -74,7 +74,7 @@ async function stampSources(repoId, fileIds) {
       const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`, {
         timeout: 10000
       });
-      const f = (res.data && (res.data.file || res.data)) || {};
+      const f = docRepoFileOf(res);
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -129,11 +129,18 @@ async function stampSources(repoId, fileIds) {
 
 // ── fetch + convert ─────────────────────────────────────────────────────────
 
+/** doc-repo GET /api/files/:id response envelopes have varied across versions
+ * ({file}, {data: {file}}, {data}) — unwrap every shape the fleet ships. */
+function docRepoFileOf(res) {
+  const d = (res && res.data) || {};
+  return d.file || (d.data && d.data.file) || d.data || d || {};
+}
+
 async function fetchDocMeta(fileId) {
   const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}`, {
     timeout: 10000
   });
-  return (res.data && (res.data.file || res.data)) || {};
+  return docRepoFileOf(res);
 }
 
 /** Stream /download into a Buffer with a hard byte cap (crawl-parity: the

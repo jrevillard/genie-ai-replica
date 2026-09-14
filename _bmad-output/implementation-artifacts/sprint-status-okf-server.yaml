@@ -5,7 +5,7 @@
 # GitLab sync is driven directly via glab against the OKF epics.md.
 
 generated: 2026-08-11
-last_updated: 2026-08-19
+last_updated: 2026-09-14
 project: GENIE.AI OKF Server
 project_key: okf-server
 tracking_system: gitlab
@@ -142,3 +142,25 @@ development_status:
   # bundle state machine Pending→Ingesting→Ingested|Error; re-index retract; is_index merge-preserve.
   # Smoke v10 70/0 baseline; v11 71/2; v12 73/1; v13b 72/2; v14 73/1 (stale-manifest purge gap); v15 FULL PASS 74/0. 3-layer code review: 11 patches (5523da6) + 4 decisions + 2 defers. Course-corrected 2026-08-24 (PRD/architecture/epics/ADR-024 note).
   bce-bundle-manifest-author-graph-discovery: done   # code complete + CI green through 504b1af; awaiting v12 full-pass + PRD/ADR course-correction
+
+  # ── Steward-directive P0 work (2026-09-13/14, feat/okf-server, all pipelines green, MR !278 documents each) ──
+  # 9e18fa1  Repo-open freeze fix (markdown preview chunked render + lazy graph build) + PII findings
+  #          REUSE (server-side span persistence keyed by content signature — unchanged content never
+  #          re-scans; Re-scan forces live). David's "Page Unresponsive" + "scanned again" directives.
+  # eb45ab1e4 Drain settle reconciliation (the www-gov-uk-full-crawl 31h "not drained" wedge): settle only
+  #          ran as a job side-effect; the reaper wrote the last transitions. _reconcileArmedRepos settles
+  #          armed+empty-queue repos at startup + hourly; 429/timeout claim clears; stale-merge removed
+  #          (_settleIngest owns the terminal rag_ingestion record). LIVE-VERIFIED: wedged repo settled 12s
+  #          after worker restart (922/997 + honest failed record; retract→re-ingest possible again).
+  # b39477692 + 99f95deef + 935105ba7 Graph tab never blocks: async chunked build (400n/800e batches, real %,
+  #          stale-seq guard), fcose animate:false (animated variant never emits layoutstop — wedged at 99%),
+  #          completion guaranteed (dual listener + try/catch + 20s watchdog), selection in one cy.batch,
+  #          bulk opacity transitions removed; honest progress 0→88% ingest + indeterminate Layouting phase.
+  # 773f4536d scripts/check-okf-repo.js — per-repo 4-step health/graph/RAG check (lifecycle, author layer with
+  #          EXACT frontend projection math in AQL, serving graph, chunk/RAG layer), PASS/WARN/FAIL + --json;
+  #          live-verified on 5 repos (David: "turn the graph comparison into a test").
+  # a84ca7793 Ingest-failure hover card: RED failed rows in the concept tree float the VERBATIM last_error +
+  #          mapped recovery (reaper/dataprep/generic) + attempts; listConcepts projection now carries
+  #          last_error/last_worker_error/ingest_attempts. i18n ×14.
+  # c5b6876f9 Documents→OKF import DESIGN + Story 7.7 ready-for-dev (next work item); 3.6 gate amended.
+  # Frontend 1463/1463 · okf-server 618/618 · overlay pytest 107/107 baseline untouched.

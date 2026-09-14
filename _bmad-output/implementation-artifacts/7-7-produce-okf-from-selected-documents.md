@@ -119,12 +119,27 @@ renewal for runs longer than the 5-min access-token TTL).
 
 ## Code-review verdict (BMAD close-out, 2026-09-14)
 
-R1–R4 (above) found, fixed and re-verified: suites green after each fix (okf-server 628/628, frontend
-1474/1474); the live smoke re-ran clean end-to-end after the envelope fix. Slot-semaphore pairing,
-terminal-only conversion states, fail-closed gate semantics, DS/i18n compliance and the do-NOT-build
-boundary all reviewed clean. Residual for Epic 11 (not this story): docling-backed conversion adapter
-(dataprep owns docling in-process at ingest; exposing a parse endpoint is a dataprep change) and the
-wizard documents entry point (b).
+**Adversarial pass (David-directed, post-smoke) — 3 findings, all FIXED and re-verified (630/630):**
+
+- **F1 (HIGH — story-contract gap):** the idempotency rule "a doc stamped with a DIFFERENT okf_repo_id
+  is a 409 at the route" existed only in the UI badge — the server accepted the import and silently
+  OVERWROTE the stamp, so two repos could claim one source and the first lost its linkage. Now enforced
+  in `startDocumentsConversion` validation: `409 DOCUMENT_IN_ANOTHER_REPO` when the stamp points at a
+  repo that still exists. Pinned by 2 new tests (live-stamp 409 + stale-stamp self-heal).
+- **F2 (MEDIUM, folded into F1):** repo DELETE never clears sources' `okf_repo_id` → stale stamps would
+  permanently block re-import. Resolution: a stamp whose repo no longer exists is treated as absent
+  (self-heals on next import — restamped by `stampSources`), so deletion cannot brick documents.
+- **F3 (LOW-MED):** `sourcesBusyBlocker` on a total doc-repo outage paid N×10 s sequential timeouts
+  inside a synchronous transition. Now: 5 s per-source timeout + early-exit as soon as one serving
+  (or one fail-closed) source decides the outcome.
+
+Previously (R1–R4, dev-story + live smoke): all fixed and re-verified. Slot-semaphore pairing,
+terminal-only conversion states, fail-closed gate semantics, sweep wiring, deep-link watcher tolerance
+(bogus file id → dialog's own error state), DS/i18n compliance and the do-NOT-build boundary reviewed
+clean. **Accepted lows (not fixed):** the dialog maps only DUPLICATE_REPO to a specific message —
+TOO_MANY_FILES shows the generic failure text (server still enforces the cap); a deleted import repo
+leaves its documents showing the red "already in an OKF repo" badge until re-imported (self-heals
+server-side; cosmetic). Residual for Epic 11: docling-backed conversion adapter, wizard entry point (b).
 
 ## Dev Notes
 

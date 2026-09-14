@@ -172,6 +172,49 @@ describe('producer-service — startDocumentsConversion + run', () => {
     });
   });
 
+  it('409s a document stamped by ANOTHER EXISTING OKF repository (server-enforced badge)', async () => {
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await mockDb
+      .collection('okf_repositories')
+      .save({ _key: 'r-other', repo_id: 'r-other', name: 'Other', domain: 'general' });
+    authedAxios.get.mockImplementationOnce((url) => {
+      const fid = String(url).split('/api/files/')[1];
+      return Promise.resolve({
+        data: {
+          file: { file_id: fid, file_name: 'alpha.md', okf_repo_id: 'r-other', dataprep: { status: 'Pending' } }
+        }
+      });
+    });
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toMatchObject({ code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 });
+  });
+
+  it('self-heals a STALE stamp (stamped repo deleted) — import proceeds and re-stamps', async () => {
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    authedAxios.get.mockImplementationOnce((url) => {
+      const fid = String(url).split('/api/files/')[1];
+      return Promise.resolve({
+        data: {
+          file: { file_id: fid, file_name: 'alpha.md', okf_repo_id: 'r-gone', dataprep: { status: 'Pending' } }
+        }
+      });
+    });
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    expect(repoDoc.conversion.status).toBe('done');
+    expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
+  });
+
   it('imports the corpus: per-file drafts, cross-links, index LAST, one curation pass, done record', async () => {
     mockDocs({ f1: 'alpha.md', f2: 'beta.md' });
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Imported', domain: 'general' });

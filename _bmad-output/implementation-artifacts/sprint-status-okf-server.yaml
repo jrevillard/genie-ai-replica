@@ -63,7 +63,7 @@ development_status:
   3-3-ingestion-progress-i18n: backlog
   3-4-okf-studio-wizard-shell-stepper-tab: ready-for-dev          # NEW 2026-08-13 (Epic 10 Studio frontend)
   3-5-okf-studio-dashboard-multi-repo-kanban: ready-for-dev        # NEW 2026-08-13
-  3-6-document-mgmt-create-okf-entry-point: ready-for-dev          # NEW 2026-08-13 (sibling to Ingest Selected)
+  3-6-document-mgmt-create-okf-entry-point: ready-for-dev          # NEW 2026-08-13 (sibling to Ingest Selected); AMENDED 2026-09-14 — gate drops the ingested-doc refusal (amber warning instead); prevention moved to 7.7's SOURCES_NOT_RETRACTED lifecycle gate
   3-7-crawler-ui-create-okf-entry-point: ready-for-dev             # NEW 2026-08-13 (AddFromLinkDialog + FileDetailsDialog)
   3-8-okf-concept-curator-validation-panel: ready-for-dev          # NEW 2026-08-13 (Step 5/6; composes conformance-service)
   3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — Clone action: repos-tab toolbar/row + details dialog + Studio Step-1 source card; consumes 4.8 clone API
@@ -107,7 +107,7 @@ development_status:
   7-4-crawl-integrated-producer-ui: backlog               # depends epic-3; crawl→OKF repo in AddFromLinkDialog + FileDetailsDialog
   7-5-producer-hardening-injection-eval-cost: backlog
   7-6-multi-source-crawl-seeding: backlog
-  7-7-produce-okf-from-selected-documents: backlog   # NEW 2026-08-13 — 3rd curation path (FR-37); doc-mgmt + wizard entry points
+  7-7-produce-okf-from-selected-documents: ready-for-dev   # NEXT WORK ITEM (David, 2026-09-14): multi-select doc-mgmt import into ONE OKF repo; AMENDED — ingested docs importable, SOURCES_NOT_RETRACTED ingest gate replaces the import-time ingested-doc refusal, whole-corpus linking + labeling, provenance links on popup cards → FileDetailsDialog. Class-0 flagship adapter (Epic 11 framework). Design: planning-artifacts/documents-to-okf-import-design-2026-09-14.md. Formats v1 = the six doc-repo-accepted (pdf/docx/xlsx/md/html/txt); xlsx via dedicated sheetjs converter (FR-42).
   epic-7-retrospective: optional
 
   epic-8: backlog            # NEW 2026-08-13 — Test Infrastructure & Evaluation (cross-cutting; unblocks launch gates)

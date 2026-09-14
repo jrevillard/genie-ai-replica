@@ -68,7 +68,7 @@
     </p>
 
     <template v-else>
-      <ul class="okf-cl__list">
+      <ul class="okf-cl__list" @scroll.passive="hideFailCard">
         <li v-for="node in tree" :key="node.key">
           <div
             class="okf-cl__row"
@@ -77,6 +77,10 @@
             tabindex="0"
             @click="$emit('select', node.concept_id)"
             @keydown.enter="$emit('select', node.concept_id)"
+            @mouseenter="showFailCard(node, $event)"
+            @mouseleave="hideFailCard"
+            @focus="showFailCard(node, $event)"
+            @blur="hideFailCard"
           >
             <span class="okf-cl__twist" :class="{ 'okf-cl__twist--open': expanded }" @click.stop="expanded = !expanded"
               >▸</span
@@ -131,7 +135,11 @@
               <option v-for="opt in labelOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </DsSelect>
           </div>
-          <ul v-if="expanded && node.children && node.children.length" class="okf-cl__children">
+          <ul
+            v-if="expanded && node.children && node.children.length"
+            class="okf-cl__children"
+            @scroll.passive="hideFailCard"
+          >
             <li v-for="child in node.children" :key="child.concept_id">
               <div
                 class="okf-cl__row okf-cl__row--child"
@@ -140,6 +148,10 @@
                 tabindex="0"
                 @click="$emit('select', child.concept_id)"
                 @keydown.enter="$emit('select', child.concept_id)"
+                @mouseenter="showFailCard(child, $event)"
+                @mouseleave="hideFailCard"
+                @focus="showFailCard(child, $event)"
+                @blur="hideFailCard"
               >
                 <span
                   class="okf-cl__status"
@@ -199,6 +211,44 @@
         translate('okf.editor.concepts.resplit', 'Re-split')
       }}</DsButton>
     </footer>
+
+    <!-- INGEST-FAILURE CARD (David, 2026-09-14): hovering a RED (failed) row
+         floats the EXACT error plus the recovery for THIS failure kind — the
+         steward sees what went wrong and how to fix it without leaving the
+         tree. Read-only overlay (pointer-events: none), fixed-position and
+         clamped to the viewport, hidden on leave/scroll/blur. -->
+    <div
+      v-if="failCard.visible"
+      class="okf-cl__failcard"
+      :class="{ 'okf-cl__failcard--above': failCard.above }"
+      role="tooltip"
+      :style="{ left: failCard.x + 'px', top: failCard.y + 'px' }"
+    >
+      <p class="okf-cl__failcard-head">
+        <span class="okf-cl__failcard-title">{{ failCard.row.title || failCard.row.concept_id }}</span>
+        <DsPill variant="danger">{{ translate('okf.editor.concepts.failedCard.title', 'Failed to ingest') }}</DsPill>
+      </p>
+      <p class="okf-cl__failcard-sec">{{ translate('okf.editor.concepts.failedCard.problem', 'The problem') }}</p>
+      <p class="okf-cl__failcard-err">
+        {{
+          failCard.row.last_error ||
+          failCard.row.last_worker_error ||
+          translate('okf.editor.concepts.failedCard.noError', 'Marked failed without a recorded reason.')
+        }}
+      </p>
+      <p class="okf-cl__failcard-sec">{{ translate('okf.editor.concepts.failedCard.fixLabel', 'How to fix') }}</p>
+      <p class="okf-cl__failcard-fix">{{ fixFor(failCard.row) }}</p>
+      <p v-if="failCard.row.ingest_attempts > 1 || failCard.row.updated_at" class="okf-cl__failcard-meta">
+        <template v-if="failCard.row.ingest_attempts > 1">{{
+          translate('okf.editor.concepts.failedCard.attempts', 'Attempts: {n}').replace(
+            '{n}',
+            String(failCard.row.ingest_attempts)
+          )
+        }}</template>
+        <template v-if="failCard.row.ingest_attempts > 1 && failCard.row.updated_at">&#32;·&#32;</template>
+        <template v-if="failCard.row.updated_at">{{ shortWhen(failCard.row.updated_at) }}</template>
+      </p>
+    </div>
   </div>
 </template>
 
@@ -230,7 +280,17 @@ export default {
     return {
       filter: '',
       expanded: true,
-      labelEditing: null
+      labelEditing: null,
+      // INGEST-FAILURE CARD state: the hovered FAILED row + viewport-anchored
+      // placement. Fixed position (viewport coords) so the list's scroll
+      // container can never clip it; hidden on leave/scroll/blur.
+      failCard: {
+        visible: false,
+        above: false,
+        x: 0,
+        y: 0,
+        row: null
+      }
     };
   },
   computed: {
@@ -316,6 +376,59 @@ export default {
     onLabelPicked(node, value) {
       this.labelEditing = null;
       this.$emit('label', { conceptId: node.concept_id, label: value || '' });
+    },
+    // ---- ingest-failure card (David, 2026-09-14) ---------------------------
+    showFailCard(row, evt) {
+      if (!row || row.index_status !== 'failed') return; // only RED rows speak
+      const el = evt && evt.currentTarget;
+      if (!el || !el.getBoundingClientRect) return;
+      const r = el.getBoundingClientRect();
+      // Fixed viewport coords, clamped so the card never leaves the screen.
+      // Below the row when it fits, flipped above near the viewport bottom.
+      const CARD_W = 340;
+      const CARD_H = 220; // estimate; refined visually by the clamp below
+      const x = Math.max(8, Math.min(r.left, window.innerWidth - CARD_W - 8));
+      const below = r.bottom + CARD_H + 12 < window.innerHeight;
+      this.failCard = {
+        visible: true,
+        above: !below,
+        row,
+        x,
+        y: below ? r.bottom + 6 : Math.max(8, r.top - 6)
+      };
+    },
+    hideFailCard() {
+      if (this.failCard.visible) this.failCard.visible = false;
+    },
+    // The recovery for THIS failure kind. The reaper dead-letter is the
+    // saturated-drain signature (www-gov-uk: 75 identical messages) — the
+    // content is intact, only the indexing callback never arrived.
+    fixFor(row) {
+      const err = String((row && (row.last_error || row.last_worker_error)) || '');
+      if (err.includes('reaper dead-letter')) {
+        return this.translate(
+          'okf.editor.concepts.failedCard.fix.reaper',
+          'The ingest worker stopped waiting inside its grace window — the drain was saturated, so the indexing callback never arrived. Your content is intact. To retry: open this file, make a small edit and save — saving re-queues it for ingest; or retract and re-ingest the repo to retry every failed file at once.'
+        );
+      }
+      if (err.includes('dataprep')) {
+        return this.translate(
+          'okf.editor.concepts.failedCard.fix.dataprep',
+          'The content-preparation service rejected or dropped this ingest. To retry: open this file, make a small edit and save — saving re-queues it. If it fails again, check the dataprep service health before retrying the whole repo.'
+        );
+      }
+      return this.translate(
+        'okf.editor.concepts.failedCard.fix.generic',
+        'Indexing failed. To retry: open this file, make a small edit to the content and save — saving re-queues it for ingest; or retract and re-ingest the repo to retry every failed file.'
+      );
+    },
+    shortWhen(iso) {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      return this.translate('okf.editor.concepts.failedCard.when', 'Last attempt {when}').replace(
+        '{when}',
+        d.toLocaleString()
+      );
     }
   }
 };
@@ -523,5 +636,65 @@ export default {
   gap: var(--space-sm);
   border-top: 1px solid var(--border);
   padding-top: var(--space-sm);
+}
+/* INGEST-FAILURE CARD (2026-09-14): fixed-position tooltip next to the
+   hovered RED row. Tokens only; pointer-events none — pure overlay. */
+.okf-cl__failcard {
+  position: fixed;
+  z-index: 20;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--danger);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(9, 14, 20, 0.16));
+  color: var(--fg);
+  pointer-events: none;
+  transform: translateY(0);
+}
+.okf-cl__failcard--above {
+  transform: translateY(-100%);
+}
+.okf-cl__failcard-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  justify-content: space-between;
+  margin: 0 0 var(--space-xs);
+}
+.okf-cl__failcard-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.okf-cl__failcard-sec {
+  margin: var(--space-xs) 0 2px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.okf-cl__failcard-err {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--danger);
+  word-break: break-word;
+}
+.okf-cl__failcard-fix {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--fg);
+}
+.okf-cl__failcard-meta {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 </style>

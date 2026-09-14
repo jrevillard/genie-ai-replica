@@ -171,3 +171,6 @@ development_status:
   #          Close-out: doc-repo {data:} envelope unwrap fix (R2 fail-open gate catch), pdf-parse pin
   #          ^1.1.4 (R3), smoke run-smoke-import-documents.js + real-PDF fixture + refresh tokens.
   #          Live smoke ALL PASS 24/24 (double-serving scenario E2E). okf-server 628/628 · frontend 1474/1474.
+  # 6da43f705 Add-concept dialog body now the shared DsOkfMarkdownEditor (David directive 2026-09-14):
+  #          Source | Split | Preview modes + format toolbar + async preview; frontmatter machinery off
+  #          (store normalizes on create). Frontend 1475/1475. UI smoke plan handed to David (Phase 0-7).

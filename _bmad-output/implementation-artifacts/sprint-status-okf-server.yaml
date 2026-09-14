@@ -107,7 +107,7 @@ development_status:
   7-4-crawl-integrated-producer-ui: backlog               # depends epic-3; crawl→OKF repo in AddFromLinkDialog + FileDetailsDialog
   7-5-producer-hardening-injection-eval-cost: backlog
   7-6-multi-source-crawl-seeding: backlog
-  7-7-produce-okf-from-selected-documents: ready-for-dev   # NEXT WORK ITEM (David, 2026-09-14): multi-select doc-mgmt import into ONE OKF repo; AMENDED — ingested docs importable, SOURCES_NOT_RETRACTED ingest gate replaces the import-time ingested-doc refusal, whole-corpus linking + labeling, provenance links on popup cards → FileDetailsDialog. Class-0 flagship adapter (Epic 11 framework). Design: planning-artifacts/documents-to-okf-import-design-2026-09-14.md. Formats v1 = the six doc-repo-accepted (pdf/docx/xlsx/md/html/txt); xlsx via dedicated sheetjs converter (FR-42).
+  7-7-produce-okf-from-selected-documents: done            # DONE 2026-09-14 (bd4c9df81 + close-out; #997): multi-select doc-mgmt import into ONE OKF repo; ingest gate = SOURCES_NOT_RETRACTED (live fail-closed re-check on source_documents[], is_bundle immune); ImportDocumentsDialog (heuristics|llm|hybrid); provenance deep links ?tab=documents&file= on cards; i18n ×14; okf-server 628/628 + frontend 1474/1474; live smoke ALL PASS 24/24 (md free-form-ingested → import → publish → 409 gate → retract → drain → v1 serving). Two live defects caught by harness: row deep-link no-op (R1), doc-repo {data:} envelope unwrap → gate would have failed open (R2 — memory reference_doc-repo-api-envelope); pdf-parse pinned ^1.1.4 (R3). Residual → Epic 11: docling-backed adapter, wizard entry point (b).
   epic-7-retrospective: optional
 
   epic-8: backlog            # NEW 2026-08-13 — Test Infrastructure & Evaluation (cross-cutting; unblocks launch gates)
@@ -164,3 +164,10 @@ development_status:
   #          last_error/last_worker_error/ingest_attempts. i18n ×14.
   # c5b6876f9 Documents→OKF import DESIGN + Story 7.7 ready-for-dev (next work item); 3.6 gate amended.
   # Frontend 1463/1463 · okf-server 618/618 · overlay pytest 107/107 baseline untouched.
+  # bd4c9df81 Story 7.7 IMPLEMENTED: producer-service documents conversion (per-format converters,
+  #          whole-corpus cross-links, index.md last, one curation pass, per-file isolation), xlsx
+  #          sheetjs converter (FR-42), convert-from-documents route, SOURCES_NOT_RETRACTED ingest
+  #          gate, ImportDocumentsDialog + gate amendment + provenance deep links, i18n ×14.
+  #          Close-out: doc-repo {data:} envelope unwrap fix (R2 fail-open gate catch), pdf-parse pin
+  #          ^1.1.4 (R3), smoke run-smoke-import-documents.js + real-PDF fixture + refresh tokens.
+  #          Live smoke ALL PASS 24/24 (double-serving scenario E2E). okf-server 628/628 · frontend 1474/1474.

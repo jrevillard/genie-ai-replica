@@ -1,0 +1,4 @@
+# ftw-tools 2.0.0b5 pins lightning<2.6 while terratorch 1.2 requires >=2.6.
+# The flood model already runs on lightning 2.6.x in production, and ftw-tools
+# only uses the stable Lightning inference API, so the pin is overridden here.
+lightning>=2.6,<2.7

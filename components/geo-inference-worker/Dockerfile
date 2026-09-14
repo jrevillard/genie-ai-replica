@@ -1,6 +1,6 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
-# System: GDAL, GEOS, PROJ (rasterio/geopandas), build tools
+# System: GDAL, GEOS, PROJ (rasterio/geopandas), build tools, git (ftw-tools from git)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin libgdal-dev libgeos-dev libproj-dev \
     gcc g++ git wget curl \
@@ -11,46 +11,50 @@ ENV C_INCLUDE_PATH=/usr/include/gdal
 
 WORKDIR /app
 
-# Layer 1: PyTorch CPU wheels (large — cached unless torch version changes)
+# uv resolves the ML stack far faster than pip and supports dependency overrides
+RUN pip install --no-cache-dir "uv>=0.5"
+ENV UV_HTTP_TIMEOUT=1200
+
+# Layer 1: PyTorch CUDA wheels (large; cached unless the pins change)
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 COPY requirements-torch.txt .
-RUN pip install --no-cache-dir --prefer-binary --timeout 1200 --retries 5 \
-    --index-url ${TORCH_INDEX_URL} \
-    -r requirements-torch.txt
+RUN uv pip install --system --no-cache --index-url ${TORCH_INDEX_URL} -r requirements-torch.txt
 
-# Layer 2: Geospatial stack (earthengine, geemap, agribound, segment-geospatial)
+# Layer 2: Geospatial stack (earthengine, geemap, geopandas, rasterio)
 COPY requirements-geo.txt .
-RUN pip install --no-cache-dir --prefer-binary --timeout 1200 --retries 5 -r requirements-geo.txt
-# Force headless OpenCV — segment-geospatial pulls in opencv-python (GUI)
-RUN pip install --no-cache-dir --force-reinstall opencv-python-headless
+RUN uv pip install --system --no-cache -r requirements-geo.txt
 
-# Layer 3: Prithvi-EO-2.0 inference stack
-# mmcv 1.7.2 requires --no-build-isolation due to non-standard setup.py
-COPY requirements-inference.txt .
-RUN pip install --no-cache-dir --timeout 1200 --retries 5 \
-        "setuptools<70" wheel addict packaging yapf Pillow \
-    && pip install --no-cache-dir --timeout 1200 --retries 5 --no-build-isolation \
-        mmcv==1.7.2 mmsegmentation==0.30.0 \
-    && pip install --no-cache-dir --prefer-binary --timeout 1200 --retries 5 \
-        -r requirements-inference.txt
+# Layer 3: Fields of The World (ftw-tools + DelineateAnything) and the Prithvi
+# flood stack (terratorch), resolved together so torchgeo/lightning agree.
+COPY requirements-ftw.txt requirements-inference.txt overrides.txt ./
+RUN uv pip install --system --no-cache --override overrides.txt \
+        -r requirements-ftw.txt -r requirements-inference.txt \
+    # ultralytics pulls the GUI OpenCV build; the server only needs headless.
+    # Uninstall first: both wheels own the same cv2/ directory, so removing
+    # opencv-python after installing headless deletes the module.
+    && (uv pip uninstall --system opencv-python opencv-python-headless || true) \
+    && uv pip install --system --no-cache opencv-python-headless
 
 # Layer 4: App dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 1200 -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Application code
 COPY agri_engine/ ./agri_engine/
 COPY flood_engine/ ./flood_engine/
 COPY main.py .
 
-# Models and secrets are mounted as volumes at runtime — not baked in.
-# First inference will download SAM (~2.5 GB) and Prithvi-EO (~1.3 GB)
-# to the mounted model volume and cache them there for subsequent runs.
+# Models and secrets are mounted as volumes at runtime, not baked in.
+# First requests download the FTW checkpoint (~0.3-0.5 GB), the crop calendar
+# rasters, and the Prithvi-EO model (~1.3 GB) into the mounted model volume.
 RUN mkdir -p /app/secrets /app/models
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 ENV LOG_LEVEL=INFO
-ENV SAM_CHECKPOINT=/app/models/sam_vit_h_4b8939.pth
+# ftw-tools caches checkpoints under TORCH_HOME and crop calendars under FTW_CACHE_DIR
+ENV TORCH_HOME=/app/models/torch
+ENV FTW_CACHE_DIR=/app/models/ftw-tools
 ENV HF_HOME=/app/models/huggingface
 ENV HF_HUB_CACHE=/app/models/huggingface/hub
 ENV PRITHVI2_MODEL_REPO=ibm-nasa-geospatial/Prithvi-EO-2.0-300M-TL-Sen1Floods11

@@ -1,10 +1,10 @@
+# Google Earth Engine stack (flood detection imagery) + vector/raster IO
 earthengine-api>=0.1.390
 geemap>=0.30.0
-geopandas>=0.14.0
+geedim>=1.7.0  # geemap.download_ee_image backend
+geopandas>=1.0.0
 rasterio>=1.3.0
 shapely>=2.0.0
 pyproj>=3.6.0
 numpy>=1.26.0
-opencv-python-headless
-agribound[gee,samgeo,ftw]
-segment-geospatial>=0.10.0
+pyarrow>=15.0.0

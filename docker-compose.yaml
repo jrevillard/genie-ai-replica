@@ -719,6 +719,9 @@ services:
     logging: *fluent-logging
     profiles: [climate]
     restart: unless-stopped
+    # PyTorch DataLoader workers share tensors through /dev/shm; the 64 MB default
+    # kills them with "Bus error" on a 5 km delineation tile.
+    shm_size: "1gb"
     build:
       context: ./components/geo-inference-worker
       dockerfile: Dockerfile
@@ -732,6 +735,28 @@ services:
       - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
       - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
       - DEFAULT_LON=${DEFAULT_LON:-90.4125}
+      # Field delineation (Fields of The World via ftw-tools). Square of half-width
+      # DELINEATION_RADIUS_KM around the user, never more than DELINEATION_MAX_RADIUS_KM.
+      # Sentinel-2 scenes come from Planetary Computer (mspc) or Earth Search, no key needed.
+      - DELINEATION_ENGINE=${DELINEATION_ENGINE:-ftw}
+      - DELINEATION_MODEL=${DELINEATION_MODEL:-}
+      - DELINEATION_RADIUS_KM=${DELINEATION_RADIUS_KM:-2.5}
+      - DELINEATION_MAX_RADIUS_KM=${DELINEATION_MAX_RADIUS_KM:-5}
+      - DELINEATION_YEAR=${DELINEATION_YEAR:-}
+      # latest = newest cloud-free pass within MAX_AGE_DAYS (map is weeks old at most);
+      # crop-calendar = ftw-tools planting/harvest pick for DELINEATION_YEAR
+      - DELINEATION_SCENE_MODE=${DELINEATION_SCENE_MODE:-latest}
+      - DELINEATION_MAX_AGE_DAYS=${DELINEATION_MAX_AGE_DAYS:-42}
+      - DELINEATION_MAX_AGE_FALLBACK_DAYS=${DELINEATION_MAX_AGE_FALLBACK_DAYS:-240}
+      - DELINEATION_TILE_CLOUD_MAX=${DELINEATION_TILE_CLOUD_MAX:-15}
+      - DELINEATION_WINDOW_GAP_DAYS=${DELINEATION_WINDOW_GAP_DAYS:-120}
+      - DELINEATION_MIN_FIELD_M2=${DELINEATION_MIN_FIELD_M2:-100}
+      - DELINEATION_THIN_BOUNDARIES=${DELINEATION_THIN_BOUNDARIES:-true}
+      # ESA OpenSR SEN2SR 10 m -> 2.5 m before FTW inference (smoother, finer plots)
+      - DELINEATION_SUPER_RESOLUTION=${DELINEATION_SUPER_RESOLUTION:-true}
+      - DELINEATION_STAC_HOST=${DELINEATION_STAC_HOST:-mspc}
+      - DELINEATION_CLOUD_COVER_MAX=${DELINEATION_CLOUD_COVER_MAX:-20}
+      - DELINEATION_SIMPLIFY_M=${DELINEATION_SIMPLIFY_M:-2}
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN:-}

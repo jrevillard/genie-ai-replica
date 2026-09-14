@@ -29,6 +29,9 @@ from agent import WeatherAgent
 # Same values as drought-monitoring,
 # warning_system_engine, geo-inference-worker and the backend.
 from defaults import (
+    DEFAULT_COORDS as _DEFAULT_COORDS,
+)
+from defaults import (
     DEFAULT_LOCATION as _DEFAULT_DISTRICT,
 )
 from defaults import (
@@ -201,6 +204,17 @@ class QueryRequest(BaseModel):
     # UI language code (ISO 639-1, e.g. "en", "bn"). The agent writes its
     # explanation in this language when the LLM supports it.
     language: str = "en"
+    # The user's own text when `query` is a translation of it (Bengali input):
+    # command keywords and district names are also looked up in it.
+    original_query: str | None = None
+
+    def scan_text(self) -> str:
+        """Query plus original text, for keyword and district matching."""
+        return (
+            f"{self.query}\n{self.original_query}"
+            if self.original_query
+            else self.query
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +246,9 @@ _MAPBOX_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
 _BULLETIN_PATH = _DATA_DIR / "bulletin.md"
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _BULLETIN_KEYWORDS = re.compile(
-    r"\b(bulletin|advisory bulletin|agro.?met|agromet|agrometeorological|agri.*advisory|national bulletin)\b",
+    r"\b(bulletin|advisory bulletin|agro.?met|agromet|agrometeorological|agri.*advisory|national bulletin)\b"
+    r"|বুলেটিন"  # Bengali
+    r"|\b(?:abohawa|krishi)\s+bulletin\b",  # Banglish
     re.IGNORECASE,
 )
 _PUBLIC_IMAGE_BASE = os.getenv("PUBLIC_API_BASE", "/api/weather/bulletin-image")
@@ -264,6 +280,12 @@ _FALLBACK_TEXT: dict[str, dict[str, str]] = {
             "## Flood Outlook — {district}\n\n"
             "No flood assessment is available for {district} yet. Please ask again later."
         ),
+        "flood_no_imagery": (
+            "## Satellite Flood Map — {district}\n\n"
+            "No cloud-free Sentinel-2 image of {district} is available from the last "
+            "{days} days, so the satellite flood map cannot be produced right now. "
+            "Heavy monsoon cloud is the usual cause; please try again after a few clear days."
+        ),
         "delineation_disabled": (
             "Field boundary mapping is not available right now. Please try again later."
         ),
@@ -291,6 +313,11 @@ _FALLBACK_TEXT: dict[str, dict[str, str]] = {
         "flood_unavailable": (
             "## বন্যার পূর্বাভাস — {district}\n\n"
             "{district}-এর জন্য এখনও কোনো বন্যা মূল্যায়ন পাওয়া যায়নি। অনুগ্রহ করে পরে আবার জিজ্ঞাসা করুন।"
+        ),
+        "flood_no_imagery": (
+            "## স্যাটেলাইট বন্যা মানচিত্র — {district}\n\n"
+            "গত {days} দিনে {district}-এর মেঘমুক্ত কোনো স্যাটেলাইট ছবি পাওয়া যায়নি, তাই এখন বন্যার মানচিত্র তৈরি করা সম্ভব নয়। "
+            "বর্ষার মেঘই সাধারণত এর কারণ; অনুগ্রহ করে কয়েকটি পরিষ্কার দিনের পর আবার চেষ্টা করুন।"
         ),
         "delineation_disabled": (
             "জমির সীমানা মানচিত্র সেবা এই মুহূর্তে পাওয়া যাচ্ছে না। অনুগ্রহ করে পরে আবার চেষ্টা করুন।"
@@ -336,7 +363,16 @@ _DELINEATION_KEYWORDS = re.compile(
     r"\bplot\s+boundar(?:y|ies)\b|"
     r"\bshow\s+(?:field|farm)\s+boundar(?:y|ies)\b|"
     r"\bmap\s+(?:my\s+)?(?:field|farm|land)\b|"
-    r"\bsegment\s+(?:field|farm|land|agriculture)\b)",
+    r"\bsegment\s+(?:field|farm|land|agriculture)\b|"
+    # Bengali: জমির সীমানা / ক্ষেতের সীমানা / খেতের সীমানা / মাঠের সীমানা / প্লট সীমানা,
+    # জমির মানচিত্র|ম্যাপ, সীমানা নির্ধারণ, জমি চিহ্নিত
+    r"(?:জমির?|ক্ষেতের|খেতের|মাঠের|প্লট)\s*সীমানা|"
+    r"(?:জমির?|ক্ষেতের|খেতের)\s*(?:মানচিত্র|ম্যাপ)|"
+    r"সীমানা\s*নির্ধারণ|জমি\s*চিহ্নিত|"
+    # Banglish: jomir simana/shimana, kheter simana, plot simana, jomir map/manchitro
+    r"\b(?:jomir?|khete?r?|plot)\s+(?:s|sh)imana\b|"
+    r"\bsimana\s+nirdharon\b|"
+    r"\b(?:jomir?|khete?r?)\s+(?:map|manchitro)\b)",
     re.IGNORECASE,
 )
 _FLOOD_DETECTION_KEYWORDS = re.compile(
@@ -345,7 +381,11 @@ _FLOOD_DETECTION_KEYWORDS = re.compile(
     r"\bmap\s+flood(?:ing|s)?\b|"
     r"\bsatellite\s+flood\b|"
     r"\binundation\s+(?:map|area|extent|detection)\b|"
-    r"\bprithvi\b)",
+    r"\bprithvi\b|"
+    # Bengali: বন্যার মানচিত্র|ম্যাপ|বিস্তার, বন্যা শনাক্ত, স্যাটেলাইট বন্যা, প্লাবিত এলাকা, জলমগ্ন
+    r"বন্যার?\s*(?:মানচিত্র|ম্যাপ|বিস্তার|শনাক্ত)|স্যাটেলাইট\s*বন্যা|প্লাবিত\s*এলাকা|জলমগ্ন|"
+    # Banglish: bonnar map/manchitro/bistar, satellite bonna, plabito, jolmogno
+    r"\bbonnar?\s+(?:map|manchitro|bistar)\b|\bsatellite\s+bonna\b|\bplabito\b|\bjolo?mogno\b)",
     re.IGNORECASE,
 )
 # Coordinate extractor for delineation queries — matches "lat 23.5 lon 90.3",
@@ -685,7 +725,8 @@ async def query(request: QueryRequest):
       forecast    — raw BMD / stored forecast data
     """
     # ── Field boundary delineation (geo-inference-worker) ────────────────────
-    if _DELINEATION_KEYWORDS.search(request.query):
+    scan_text = request.scan_text()
+    if _DELINEATION_KEYWORDS.search(scan_text):
         if not _GEO_INFERENCE_URL:
             logger.warning(
                 "[QUERY] Delineation requested but GEO_INFERENCE_URL is unset"
@@ -702,33 +743,30 @@ async def query(request: QueryRequest):
                 "location": "",
                 "forecast": {},
             }
-        m = _LAT_LON_RE.search(request.query)
+        m = _LAT_LON_RE.search(scan_text)
+        district_hit = _find_district_64(scan_text)  # English or Bengali district name
         if m is not None:
             lat, lon = float(m.group(1)), float(m.group(2))
+        elif district_hit is not None:
+            name, lat, lon = district_hit
+            logger.info("[QUERY] Field delineation - district %s", name)
         else:
-            # No raw coordinates: resolve a place name ("delineate around Dhaka") with
-            # the same geocoder the chat map command uses - Bangladesh districts
-            # locally, Mapbox for anything else. Only fall back to asking for
-            # coordinates when nothing in the message resolves.
+            # No coordinates or district: resolve a free-text place with the same
+            # geocoder the chat map command uses; when nothing resolves, map the
+            # deployment's default location (DEFAULT_LOCATION) rather than refuse.
             place = _extract_place_name(request.query)
             geo = await _geocode_place(place) if place else None
             if geo is None:
-                text, used = _fallback(request.language, "delineation_need_place")
-                return {
-                    "answer": text,
-                    "language": used,
-                    "risk_tier": 0,
-                    "risk_label": "Normal",
-                    "advisory": "",
-                    "triggers": [],
-                    "buffer": None,
-                    "location": "",
-                    "forecast": {},
-                }
-            lat, lon = geo["lat"], geo["lon"]
-            logger.info(
-                "[QUERY] Field delineation - resolved %r -> %s", place, geo["name"]
-            )
+                lat, lon = _DEFAULT_COORDS
+                logger.info(
+                    "[QUERY] Field delineation - no place found, using default %s",
+                    _DEFAULT_DISTRICT,
+                )
+            else:
+                lat, lon = geo["lat"], geo["lon"]
+                logger.info(
+                    "[QUERY] Field delineation - resolved %r -> %s", place, geo["name"]
+                )
         logger.info("[QUERY] Field delineation — lat=%.4f  lon=%.4f", lat, lon)
         import asyncio as _asyncio
 
@@ -754,20 +792,37 @@ async def query(request: QueryRequest):
                 status_code=502, detail=f"Geo inference worker error: {exc}"
             )
         field_count = result.get("field_count", 0)
+        radius_km = result.get("radius_km")
+        radius_txt = f"{radius_km:g} km" if isinstance(radius_km, (int, float)) else ""
+        image_date = result.get("image_date") or ""
+        image_stale = bool(result.get("image_stale"))
         # Fixed sentence, so it is localised here rather than machine-translated
         # (the translator mangled "field" in the Bengali output).
         lang = (request.language or "en").lower()
         if lang == "bn":
+            within = f" {radius_txt} এর মধ্যে" if radius_txt else ""
+            dated = f" স্যাটেলাইট ছবির তারিখ: {image_date}।" if image_date else ""
+            if image_date and image_stale:
+                dated = (
+                    f" স্যাটেলাইট ছবির তারিখ: {image_date} (সাম্প্রতিক ছবিগুলো মেঘে ঢাকা ছিল)।"
+                )
             answer = (
-                f"({lat:.4f}°N, {lon:.4f}°E) এর কাছাকাছি **{field_count}টি কৃষি জমির সীমানা** পাওয়া গেছে। "
-                "জমির বহুভুজগুলো মানচিত্রে দেখানো হয়েছে।"
+                f"({lat:.4f}°N, {lon:.4f}°E) এর{within} **{field_count}টি কৃষি জমির সীমানা** পাওয়া গেছে। "
+                f"জমির বহুভুজগুলো মানচিত্রে দেখানো হয়েছে।{dated}"
             ).translate(str.maketrans("0123456789", "০১২৩৪৫৬৭৮৯"))
         else:
             lang = "en"
+            within = f"within {radius_txt} of" if radius_txt else "near"
+            dated = f" Satellite image date: {image_date}." if image_date else ""
+            if image_date and image_stale:
+                dated = (
+                    f" Satellite image date: {image_date} (the newest cloud-free image; "
+                    "more recent passes were covered by cloud)."
+                )
             answer = (
-                f"Found **{field_count} agricultural field boundaries** near "
+                f"Found **{field_count} agricultural field boundaries** {within} "
                 f"({lat:.4f}°N, {lon:.4f}°E). "
-                "The field polygons are shown on the map."
+                f"The field polygons are shown on the map.{dated}"
             )
         return {
             "answer": answer,
@@ -783,11 +838,18 @@ async def query(request: QueryRequest):
                 "field_count": field_count,
                 "fields_geojson": result.get("fields_geojson"),
                 "source": result.get("source"),
+                "radius_km": radius_km,
+                "year": result.get("year"),
+                "bbox": result.get("bbox"),
+                "image_date": image_date or None,
+                "image_dates": result.get("image_dates"),
+                "image_stale": image_stale,
+                "image_age_days": result.get("image_age_days"),
             },
         }
 
     # ── Satellite flood detection (geo-inference-worker + Prithvi-EO-2.0) ────
-    if _FLOOD_DETECTION_KEYWORDS.search(request.query):
+    if _FLOOD_DETECTION_KEYWORDS.search(scan_text):
         if not _GEO_INFERENCE_URL:
             return {
                 "answer": (
@@ -802,30 +864,24 @@ async def query(request: QueryRequest):
                 "location": "",
                 "forecast": {},
             }
-        district_info = _find_district_64(request.query) or _find_drought_district(
-            request.query
+        district_info = _find_district_64(scan_text) or _find_drought_district(
+            scan_text
         )
         if district_info:
             district, lat, lon = district_info
         else:
-            m = _LAT_LON_RE.search(request.query)
+            m = _LAT_LON_RE.search(scan_text)
             if m is None:
-                return {
-                    "answer": (
-                        "To run flood detection I need a district name or coordinates. "
-                        'Try: *"Show flood map for Dhaka"* or '
-                        '*"Flood detection at latitude 23.5 longitude 90.3"*'
-                    ),
-                    "risk_tier": 0,
-                    "risk_label": "Normal",
-                    "advisory": "",
-                    "triggers": [],
-                    "buffer": None,
-                    "location": "",
-                    "forecast": {},
-                }
-            lat, lon = float(m.group(1)), float(m.group(2))
-            district = f"{lat:.4f},{lon:.4f}"
+                # No district or coordinates named: the deployment's default location.
+                lat, lon = _DEFAULT_COORDS
+                district = _DEFAULT_DISTRICT
+                logger.info(
+                    "[QUERY] Flood detection - no place found, using default %s",
+                    district,
+                )
+            else:
+                lat, lon = float(m.group(1)), float(m.group(2))
+                district = f"{lat:.4f},{lon:.4f}"
         logger.info(
             "[QUERY] Flood detection — district=%s  lat=%.4f  lon=%.4f",
             district,
@@ -839,22 +895,62 @@ async def query(request: QueryRequest):
         # The worker call takes 30-60 s. It runs in the thread pool so this
         # single-worker service keeps answering forecasts and the banner's risk
         # polls meanwhile (a blocking call here stalled every other request).
-        def _call_worker():
+        # The worker answers 404 when no cloud-free Sentinel-2 scene exists in the
+        # lookback window (monsoon). Retry once with a longer window, then tell
+        # the user plainly instead of failing with a 502.
+        _FLOOD_LOOKBACKS = (30, 90)
+
+        def _call_worker(lookback_days: int):
             r = _req.post(
                 f"{_GEO_INFERENCE_URL}/flood-segment",
-                json={"latitude": lat, "longitude": lon},
+                json={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "lookback_days": lookback_days,
+                },
                 timeout=600,
             )
+            if r.status_code == 404:
+                return None
             r.raise_for_status()
             return r.json()
 
+        result = None
         try:
-            result = await _asyncio.get_event_loop().run_in_executor(None, _call_worker)
+            for lookback in _FLOOD_LOOKBACKS:
+                result = await _asyncio.get_event_loop().run_in_executor(
+                    None, _call_worker, lookback
+                )
+                if result is not None:
+                    break
+                logger.info(
+                    "[QUERY] Flood detection - no cloud-free scene in %d days for %s",
+                    lookback,
+                    district,
+                )
         except Exception as exc:
             logger.error("[QUERY] Flood worker error: %s", exc)
             raise HTTPException(
                 status_code=502, detail=f"Geo inference worker error: {exc}"
             )
+        if result is None:
+            text, used = _fallback(
+                request.language,
+                "flood_no_imagery",
+                district=_localized_district_name(district, request.language),
+                days=_FLOOD_LOOKBACKS[-1],
+            )
+            return {
+                "answer": text,
+                "language": used,
+                "risk_tier": 0,
+                "risk_label": "Normal",
+                "advisory": "",
+                "triggers": [],
+                "buffer": None,
+                "location": district,
+                "forecast": {},
+            }
         fraction = result.get("flood_fraction", 0.0)
         flood_pct = fraction * 100
         if flood_pct >= 20:

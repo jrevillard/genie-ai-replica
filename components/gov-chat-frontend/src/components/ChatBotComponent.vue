@@ -904,7 +904,11 @@ export default {
       // Map intent - intercept before the backend call (PolisenseAI f68d0fc46).
       // `show me the map <location>` opens the MapView overlay via the geocoder
       // and echoes a bot reply so the request shows in the transcript.
-      const mapMatch = content.match(/^show me the map\s+(.+)$/i);
+      // English "show me the map <place>", Banglish "manchitro dekhao <place>",
+      // Bengali "<place> এর মানচিত্র দেখাও" / "মানচিত্র দেখাও <place>".
+      const mapMatch =
+        content.match(/^(?:show me the map|manchitro dekhao|মানচিত্র দেখা[ওন])\s+(.+)$/i) ||
+        content.match(/^(.+?)\s*(?:এর)?\s*মানচিত্র\s*দেখা[ওন]$/);
       if (mapMatch) {
         const location = mapMatch[1].trim();
         this.chatMessages.push({ sender: 'user', content, timestamp: new Date().toISOString(), isSaved: false });

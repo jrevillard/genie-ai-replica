@@ -25,7 +25,7 @@ jest.mock('worker_threads', () => ({ Worker: jest.fn() }));
 jest.mock('path', () => ({ join: jest.fn((...parts) => parts.join('/')) }));
 
 const { _weather } = require('../../services/query-service');
-const { isWeatherCommand, withWeatherContext } = _weather;
+const { isWeatherCommand, weatherCommandKind, ensureCommandKeyword, withWeatherContext } = _weather;
 
 describe('isWeatherCommand', () => {
   const previous = process.env.WEATHER_ENABLED;
@@ -59,6 +59,36 @@ describe('isWeatherCommand', () => {
     'Is there a drought warning for Dhaka?'
   ])('leaves the question "%s" to the LLM', (message) => {
     expect(isWeatherCommand(message)).toBe(false);
+  });
+
+  it.each([
+    ['আমার জমির সীমানা দেখাও', 'delineate'],
+    ['ক্ষেতের মানচিত্র দেখান', 'delineate'],
+    ['amar jomir simana dekhao', 'delineate'],
+    ['kheter map dekhan', 'delineate'],
+    ['বন্যার মানচিত্র দেখাও', 'flood'],
+    ['bonnar map dekhao', 'flood'],
+    ['কৃষি আবহাওয়া বুলেটিন দেখান', 'bulletin']
+  ])('recognises the Bengali/Banglish command "%s" as %s', (message, kind) => {
+    expect(weatherCommandKind(message)).toBe(kind);
+    expect(isWeatherCommand(message)).toBe(true);
+  });
+
+  it.each(['আগামীকাল বৃষ্টি হবে কি?', 'আমার এলাকায় খরার অবস্থা কেমন?', 'abohawa kemon thakbe'])(
+    'leaves the Bengali/Banglish question "%s" to the LLM',
+    (message) => {
+      expect(weatherCommandKind(message)).toBeNull();
+    }
+  );
+
+  it('prefixes a canonical English command when the translation lacks the stem', () => {
+    expect(ensureCommandKeyword('Show my land boundaries in Naogaon', 'delineate')).toBe(
+      'Delineate field boundaries: Show my land boundaries in Naogaon'
+    );
+    expect(ensureCommandKeyword('delineate my field in Naogaon', 'delineate')).toBe('delineate my field in Naogaon');
+    expect(ensureCommandKeyword('Where is the water in Sylhet', 'flood')).toBe(
+      'Show the satellite flood map: Where is the water in Sylhet'
+    );
   });
 
   it('matches at word starts only, so "suitable" is not "table"', () => {

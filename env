@@ -972,6 +972,46 @@ CDSAPI_KEY=
 # Leave empty to disable; the chat answers with an honest "not enabled" message.
 # GEO_INFERENCE_URL=http://geo-inference-worker:8001
 # GEO_GPU_INFERENCE=true
+# Field delineation (geo-inference-worker, Fields of The World pipeline via
+# ftw-tools). The map covers a square of half-width DELINEATION_RADIUS_KM around
+# the user's point, hard-capped at DELINEATION_MAX_RADIUS_KM (5 km). Engine
+# "ftw" runs the FTW PRUE model on two Sentinel-2 scenes (planting + harvest,
+# CC-BY checkpoint); "delineate-anything" runs the DelineateAnything instance
+# model on one scene (AGPL-3 weights). DELINEATION_YEAR is the crop-calendar
+# year (default: previous calendar year; the harvest window must be in the past).
+# Scenes come from Microsoft Planetary Computer (mspc) or Earth Search, no key.
+# DELINEATION_ENGINE=ftw
+# DELINEATION_MODEL=FTW_PRUE_EFNET_B5_CCBY
+# DELINEATION_RADIUS_KM=2.5
+# DELINEATION_MAX_RADIUS_KM=5
+# Imagery freshness: "latest" (default) uses the newest cloud-free Sentinel-2 pass
+# within DELINEATION_MAX_AGE_DAYS as the main image, plus one about
+# DELINEATION_WINDOW_GAP_DAYS earlier for seasonal contrast; "crop-calendar" uses
+# ftw-tools' planting/harvest scenes for DELINEATION_YEAR.
+# DELINEATION_SCENE_MODE=latest
+# DELINEATION_MAX_AGE_DAYS=42
+# Cloud is measured INSIDE the tile from the Sentinel-2 SCL band (scene-wide
+# percentages hide monsoon cloud over a 5 km tile). If no pass within
+# MAX_AGE_DAYS is clear enough, the newest clear pass up to
+# MAX_AGE_FALLBACK_DAYS back is used and the answer says the map is older.
+# DELINEATION_TILE_CLOUD_MAX=15
+# DELINEATION_MAX_AGE_FALLBACK_DAYS=240
+# DELINEATION_WINDOW_GAP_DAYS=120
+# DELINEATION_YEAR=2025
+# DELINEATION_STAC_HOST=mspc
+# DELINEATION_CLOUD_COVER_MAX=20
+# Smallholder-friendly polygonization: 2 m simplification, keep plots >= 100 m2,
+# thin the boundary class so 2-5 px wide plots survive.
+# DELINEATION_SIMPLIFY_M=2
+# DELINEATION_MIN_FIELD_M2=100
+# DELINEATION_THIN_BOUNDARIES=true
+# Super-resolve both Sentinel-2 windows to 2.5 m with ESA OpenSR SEN2SR (open
+# model) before FTW inference: smoother plot outlines and about 50% more plots
+# on smallholder land. The extra detail is inferred by the model, not observed.
+# DELINEATION_SUPER_RESOLUTION=true
+# Inference always runs on a tile of at least this half-width (model quality),
+# results are then filtered to DELINEATION_RADIUS_KM.
+# DELINEATION_MIN_TILE_KM=2.5
 
 # Firebase Admin credentials — path to the service-account JSON as mounted
 # inside the backend container (see the backend volumes in docker-compose.yaml).

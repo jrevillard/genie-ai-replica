@@ -68,6 +68,11 @@ DEFAULT_LON: float = _env_coord("DEFAULT_LON", 90.4125, 180.0)
 class DelineateRequest(BaseModel):
     latitude: float = DEFAULT_LAT
     longitude: float = DEFAULT_LON
+    # Half-width of the square searched around the point, km. None = DELINEATION_RADIUS_KM.
+    # Always capped at DELINEATION_MAX_RADIUS_KM (5 km) to keep the map about the user's farm.
+    radius_km: float | None = None
+    # Optional per-request engine override: "ftw" or "delineate-anything".
+    engine: str | None = None
 
 
 class FloodSegmentRequest(BaseModel):
@@ -83,37 +88,52 @@ class FloodSegmentRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    from agri_engine.processor import DelineationConfig
+
+    return {"status": "healthy", "delineation": DelineationConfig().as_dict()}
 
 
 @app.post("/delineate")
 def delineate(req: DelineateRequest):
     """
-    Delineate agricultural field boundaries at the given coordinates.
+    Delineate agricultural field boundaries around the given coordinates.
 
-    Uses GEE to download a Sentinel-2 composite, then runs agribound
-    (delineate-anything → SAM fallback → FTW refinement).
+    Runs the Fields of The World pipeline (ftw-tools): crop-calendar Sentinel-2
+    scene selection, download, FTW PRUE inference (or DelineateAnything when
+    engine="delineate-anything"), polygonization. The searched square has a
+    half-width of `radius_km` (default DELINEATION_RADIUS_KM, capped at 5 km).
 
     Returns GeoJSON FeatureCollection in `fields_geojson`.
-    Blocks until complete — first call may take 5–15 minutes depending on
-    GEE export speed and whether SAM model needs to be downloaded.
+    Blocks until complete: typically 20-90 s on GPU; the first call also
+    downloads the model checkpoint and the crop-calendar rasters.
     """
-    logger.info("[DELINEATE] lat=%.4f  lon=%.4f", req.latitude, req.longitude)
+    logger.info(
+        "[DELINEATE] lat=%.4f  lon=%.4f  radius_km=%s  engine=%s",
+        req.latitude,
+        req.longitude,
+        req.radius_km,
+        req.engine,
+    )
     try:
         from agri_engine.processor import AgriProcessor
 
         processor = AgriProcessor()
-        result = processor.process_field(req.latitude, req.longitude)
+        result = processor.process_field(
+            req.latitude, req.longitude, radius_km=req.radius_km, engine=req.engine
+        )
         logger.info(
-            "[DELINEATE] Done — %d fields found (source=%s)",
+            "[DELINEATE] Done — %d fields found (source=%s, radius=%.2f km)",
             result["field_count"],
             result["source"],
+            result["radius_km"],
         )
         return result
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except RuntimeError as exc:
         logger.error("[DELINEATE] Failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

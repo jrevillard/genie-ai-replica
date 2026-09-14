@@ -37,6 +37,71 @@ const GEO_KEYWORDS = [
   'prithvi'
 ];
 
+// Bengali script and romanised ("Banglish") phrasings of the same commands.
+// Matched on the user's original text, so routing does not depend on the
+// translator producing the English stems above. Bengali entries are substrings
+// (no word boundaries in the script); Banglish entries are word-start stems.
+const DELINEATE_KEYWORDS_BN = [
+  'জমির সীমানা',
+  'জমি সীমানা',
+  'ক্ষেতের সীমানা',
+  'খেতের সীমানা',
+  'মাঠের সীমানা',
+  'প্লট সীমানা',
+  'সীমানা নির্ধারণ',
+  'জমির মানচিত্র',
+  'ক্ষেতের মানচিত্র',
+  'খেতের মানচিত্র',
+  'জমির ম্যাপ',
+  'ক্ষেতের ম্যাপ',
+  'খেতের ম্যাপ',
+  'জমি চিহ্নিত'
+];
+const FLOOD_KEYWORDS_BN = [
+  'বন্যার মানচিত্র',
+  'বন্যা মানচিত্র',
+  'বন্যার ম্যাপ',
+  'বন্যা ম্যাপ',
+  'বন্যার বিস্তার',
+  'বন্যা শনাক্ত',
+  'স্যাটেলাইট বন্যা',
+  'প্লাবিত এলাকা',
+  'জলমগ্ন এলাকা'
+];
+const BULLETIN_KEYWORDS_BN = ['বুলেটিন'];
+const DELINEATE_KEYWORDS_BANGLISH = [
+  'jomir simana',
+  'jomir shimana',
+  'jomi simana',
+  'jomi shimana',
+  'kheter simana',
+  'kheter shimana',
+  'khet simana',
+  'plot simana',
+  'simana nirdharon',
+  'jomir map',
+  'jomir manchitro',
+  'kheter map',
+  'khet map'
+];
+const FLOOD_KEYWORDS_BANGLISH = [
+  'bonnar map',
+  'bonna map',
+  'bonnar manchitro',
+  'bonna manchitro',
+  'bonnar bistar',
+  'satellite bonna',
+  'plabito elaka',
+  'jolmogno',
+  'jolomogno'
+];
+const BULLETIN_KEYWORDS_BANGLISH = ['abohawa bulletin', 'krishi bulletin'];
+
+// English stems split by command kind (GEO_KEYWORDS keeps the combined list for
+// callers that only need "is this a satellite job").
+const DELINEATE_KEYWORDS_EN = ['delineat', 'field boundar', 'farm boundar'];
+const FLOOD_KEYWORDS_EN = ['flood detection', 'flood map', 'flood extent', 'satellite flood', 'inundation', 'prithvi'];
+
 // Bengali (Bangla) script block. The weather/geo keyword lists are English, and
 // the weather agent's intent extractor resolves English district names, so a
 // Bengali message is translated to English once (Redis-cached) and that text is
@@ -141,12 +206,45 @@ const kwMatches = (text, kw) => new RegExp(`(?:^|[^a-z0-9])${kw.replace(/[.*+?^$
 // GEO_KEYWORDS launch satellite inference. Everything else is a question.
 const BULLETIN_KEYWORDS = ['bulletin', 'agrometeorological', 'agromet', 'agri advisory'];
 
+/** Substring test for Bengali-script keywords (NFC-normalised, no word boundaries). */
+const bnMatches = (text, kw) => text.normalize('NFC').includes(kw.normalize('NFC'));
+
+/**
+ * Which command a message is, if any: 'delineate', 'flood' or 'bulletin'.
+ * English stems are tested on the routing variants (see routingVariants);
+ * Bengali and Banglish phrasings on the same text, so it works on the user's
+ * original message and on its translation alike. null = an ordinary question.
+ */
+function weatherCommandKind(message) {
+  if (process.env.WEATHER_ENABLED !== 'true') return null;
+  const variants = routingVariants(message);
+  const hasEn = (list) => variants.some((text) => list.some((kw) => kwMatches(text, kw)));
+  const hasBn = (list) => list.some((kw) => bnMatches(message || '', kw));
+  if (hasEn(DELINEATE_KEYWORDS_EN) || hasEn(DELINEATE_KEYWORDS_BANGLISH) || hasBn(DELINEATE_KEYWORDS_BN)) {
+    return 'delineate';
+  }
+  if (hasEn(FLOOD_KEYWORDS_EN) || hasEn(FLOOD_KEYWORDS_BANGLISH) || hasBn(FLOOD_KEYWORDS_BN)) return 'flood';
+  if (hasEn(BULLETIN_KEYWORDS) || hasEn(BULLETIN_KEYWORDS_BANGLISH) || hasBn(BULLETIN_KEYWORDS_BN)) return 'bulletin';
+  return null;
+}
+
 /** True when weather-mcp-service must run the message as a command. */
 function isWeatherCommand(message) {
-  if (process.env.WEATHER_ENABLED !== 'true') return false;
-  const variants = routingVariants(message);
-  const has = (list) => variants.some((text) => list.some((kw) => kwMatches(text, kw)));
-  return has(GEO_KEYWORDS) || has(BULLETIN_KEYWORDS);
+  return weatherCommandKind(message) !== null;
+}
+
+/**
+ * weather-mcp-service routes on English stems too. When the command was
+ * recognised from Bengali/Banglish but the translated text lacks the stem,
+ * prefix a canonical English command so the MCP takes the same branch.
+ */
+function ensureCommandKeyword(text, kind) {
+  const variants = routingVariants(text);
+  const hasEn = (list) => variants.some((t) => list.some((kw) => kwMatches(t, kw)));
+  if (kind === 'delineate' && !hasEn(DELINEATE_KEYWORDS_EN)) return `Delineate field boundaries: ${text}`;
+  if (kind === 'flood' && !hasEn(FLOOD_KEYWORDS_EN)) return `Show the satellite flood map: ${text}`;
+  if (kind === 'bulletin' && !hasEn(BULLETIN_KEYWORDS)) return `Show the agromet bulletin: ${text}`;
+  return text;
 }
 
 /**
@@ -210,7 +308,7 @@ const WEATHER_FALLBACK_TEXT = {
   }
 };
 
-async function answerViaWeatherMcp(message, language = 'en') {
+async function answerViaWeatherMcp(message, language = 'en', originalMessage = null) {
   const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
   const lowerMsg = message.toLowerCase();
   const isGeo = GEO_KEYWORDS.some((kw) => lowerMsg.includes(kw));
@@ -221,7 +319,13 @@ async function answerViaWeatherMcp(message, language = 'en') {
     // the response's `language` says which language the answer actually is in
     // (English when the agent fell back to a template), so the route knows
     // whether the post-stream translation is still needed.
-    const wResp = await axios.post(`${weatherMcpUrl}/query`, { query: message, language }, { timeout });
+    // original_query carries the user's own (possibly Bengali) text so the MCP can
+    // pick up Bengali district names the translation may have altered.
+    const wResp = await axios.post(
+      `${weatherMcpUrl}/query`,
+      { query: message, language, original_query: originalMessage || undefined },
+      { timeout }
+    );
     const d = wResp.data || {};
     return {
       text: d.answer || '',
@@ -647,13 +751,24 @@ class QueryService {
     // or return artefacts are executed by weather-mcp-service; every other
     // message is answered by ChatQnA with the district's live context attached.
     const routing = await resolveRoutingText(queryText);
-    if (isWeatherCommand(routing.text)) {
-      logger.info(`[WEATHER] command -> weather-mcp-service: "${routing.text}"`);
+    // The translation is checked first; the original text catches Bengali and
+    // Banglish phrasings the translator did not turn into the English stems.
+    const commandKind = weatherCommandKind(routing.text) || weatherCommandKind(queryText);
+    if (commandKind) {
+      const routed = ensureCommandKeyword(bestRoutingText(routing.text), commandKind);
+      logger.info(`[WEATHER] ${commandKind} command -> weather-mcp-service: "${routed}"`);
       const uiLanguage = String(queryData.context?.language || routing.sourceLang || 'en').toLowerCase();
-      const weatherResult = await answerViaWeatherMcp(bestRoutingText(routing.text), uiLanguage);
+      const weatherResult = await answerViaWeatherMcp(
+        routed,
+        uiLanguage,
+        routing.sourceLang === 'bn' ? queryText : null
+      );
       return { queryId, weatherResult, authHeaders, queryData };
     }
-    const weatherContext = await fetchWeatherContext(routing.text);
+    // For Bengali messages the district scan sees both texts (Bengali names resolve natively).
+    const weatherContext = await fetchWeatherContext(
+      routing.sourceLang === 'bn' && routing.text !== queryText ? `${routing.text}\n${queryText}` : routing.text
+    );
     if (weatherContext) logger.info('[WEATHER] live context attached to the knowledge-base query');
     opeaPayload = withWeatherContext(opeaPayload, backendMode, queryText, weatherContext);
 
@@ -2050,4 +2165,4 @@ class QueryService {
 const instance = new QueryService();
 module.exports = instance;
 // Pure helpers of the weather-aware path, exported for unit tests.
-module.exports._weather = { isWeatherCommand, withWeatherContext };
+module.exports._weather = { isWeatherCommand, weatherCommandKind, ensureCommandKeyword, withWeatherContext };

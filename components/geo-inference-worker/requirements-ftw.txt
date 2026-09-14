@@ -1,0 +1,8 @@
+# Fields of The World tooling (field boundary delineation).
+# ftw-tools 2.0 is not on PyPI yet (1.4.3 there lacks the inference pipeline this
+# worker uses), so it is pinned to the ftw-tools-v2.0.0b5 tag of ftw-baselines.
+# The delineate-anything extra adds ultralytics for the DelineateAnything models.
+ftw-tools[delineate-anything] @ git+https://github.com/fieldsoftheworld/ftw-baselines@38835256103c
+# ESA OpenSR SEN2SR: open 10 m -> 2.5 m Sentinel-2 super-resolution (weights via mlstac)
+sen2sr>=0.1.0
+mlstac>=0.1.0

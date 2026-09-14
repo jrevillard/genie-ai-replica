@@ -2,7 +2,7 @@
 
 The `geo-inference-worker` is a self-hosted geospatial AI service that performs two tasks:
 
-1. **Field boundary delineation** — given a lat/lon, downloads Sentinel-2 satellite imagery from Google Earth Engine and segments agricultural field polygons using SAM (Segment Anything Model).
+1. **Field boundary delineation** — given a lat/lon, runs the Fields of The World pipeline (ftw-tools 2.0): crop-calendar Sentinel-2 scene selection from Planetary Computer / Earth Search, FTW PRUE inference (or DelineateAnything instance segmentation), polygonization. The searched square has a half-width of `DELINEATION_RADIUS_KM` (default 2.5 km), capped at `DELINEATION_MAX_RADIUS_KM` (5 km).
 2. **Flood detection** — given a lat/lon, downloads a recent Sentinel-2 composite and runs Prithvi-EO-2.0, IBM/NASA's foundation model for Earth Observation, to produce a flood-extent map.
 
 Both tasks return a GeoJSON FeatureCollection which is rendered as a Mapbox overlay in the browser.
@@ -567,8 +567,22 @@ uvicorn main:app --host 0.0.0.0 --port 8001
 | Variable | Default | Purpose |
 |---|---|---|
 | `GEE_PROJECT_ID` | `mewa-493916` | Google Earth Engine project for billing/quota |
-| `GPU_INFERENCE` | `false` | Set `true` to use CUDA for SAM |
-| `SAM_CHECKPOINT` | `/app/models/sam_vit_h_4b8939.pth` | Path to SAM ViT-H weights (~2.5 GB) |
+| `GPU_INFERENCE` | `false` | Set `true` to use CUDA for FTW / DelineateAnything / Prithvi |
+| `DELINEATION_ENGINE` | `ftw` | `ftw` (FTW PRUE, two Sentinel-2 windows) or `delineate-anything` (single window, AGPL-3 weights) |
+| `DELINEATION_MODEL` | `FTW_PRUE_EFNET_B5_CCBY` | ftw-tools registry name (`FTW_PRUE_EFNET_B{3,5,7}[_CCBY]`, `DelineateAnything[-S]`) |
+| `DELINEATION_RADIUS_KM` | `2.5` | Half-width of the searched square around the user |
+| `DELINEATION_MAX_RADIUS_KM` | `5` | Hard cap for the radius (request `radius_km` is clamped to it) |
+| `DELINEATION_MIN_TILE_KM` | `2.5` | Minimum half-width of the inference tile; results are filtered back to the requested radius |
+| `DELINEATION_YEAR` | previous year | Crop-calendar year for scene selection |
+| `DELINEATION_STAC_HOST` | `mspc` | `mspc` (Planetary Computer) or `earthsearch` |
+| `DELINEATION_TILE_CLOUD_MAX` | `15` | Max cloud+shadow share inside the tile (SCL band), percent |
+| `DELINEATION_MAX_AGE_FALLBACK_DAYS` | `240` | How far back to look when nothing within `DELINEATION_MAX_AGE_DAYS` is clear; result is flagged stale |
+| `DELINEATION_SCENE_MODE` | `latest` | `latest`: newest cloud-free pass within `DELINEATION_MAX_AGE_DAYS` (42) plus one `DELINEATION_WINDOW_GAP_DAYS` (120) earlier; `crop-calendar`: ftw-tools planting/harvest pick |
+| `DELINEATION_CLOUD_COVER_MAX` | `20` | Max scene cloud cover, percent (relaxed once automatically if nothing is found) |
+| `DELINEATION_SIMPLIFY_M` | `2` | Polygon simplification tolerance, metres |
+| `DELINEATION_MIN_FIELD_M2` | `100` | Smallest polygon kept, m² |
+| `DELINEATION_THIN_BOUNDARIES` | `true` | Thin the boundary class before polygonizing (keeps 2-5 px plots) |
+| `DELINEATION_SUPER_RESOLUTION` | `true` | Super-resolve both windows 10 m → 2.5 m with ESA OpenSR SEN2SR (open, CC0/MIT) before FTW inference; weights cached under `/app/models/sen2sr` |
 | `HF_HOME` | `/app/models/huggingface` | HuggingFace cache (Prithvi ~1.3 GB) |
 | `PRITHVI2_MODEL_REPO` | `ibm-nasa-geospatial/Prithvi-EO-2.0-300M-TL-Sen1Floods11` | HF model repo |
 | `LOG_LEVEL` | `INFO` | Python logging level |

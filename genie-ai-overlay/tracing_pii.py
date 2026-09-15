@@ -40,8 +40,7 @@ import logging
 import re
 from typing import Any
 
-from opentelemetry.sdk._logs import LogRecord
-from opentelemetry.sdk._logs.export import LogRecordProcessor
+from opentelemetry.sdk._logs import LogRecordProcessor
 
 # Reuse the canonical key patterns from `tracing.py` — single source
 # of truth for both span attribute redaction (`sanitize_attributes`)
@@ -102,7 +101,15 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
     def __init__(self, inner: LogRecordProcessor) -> None:
         self._inner = inner
 
-    def on_emit(self, log_record: LogRecord) -> None:
+    def emit(self, log_data) -> None:
+        # OTel SDK's `LogRecordProcessor.emit` receives a `LogData` wrapper
+        # (log_record + instrumentation_scope), not a raw `LogRecord`.
+        # The previous implementation used the legacy name `on_emit` and
+        # the raw `LogRecord` signature — the ABC rejected it as abstract,
+        # the LoggerProvider construction raised, and log export was
+        # silently disabled at startup.
+        log_record = log_data.log_record
+
         # Attribute redaction — both keys AND values.
         #
         # 1. Top-level key check: any key matching the sensitive patterns
@@ -131,9 +138,7 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
             except Exception as exc:  # pragma: no cover — defensive
                 # Security-control failure must be visible.
                 logging.getLogger(__name__).warning(
-                    "PII attribute redaction failed (attrs=%d): %s",
-                    len(log_record.attributes or {}),
-                    exc
+                    "PII attribute redaction failed (attrs=%d): %s", len(log_record.attributes or {}), exc
                 )
 
         # Body redaction — apply `_redact_body` unconditionally (handles
@@ -143,20 +148,16 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
             try:
                 log_record.body = _redact_body(log_record.body)
             except Exception as exc:  # pragma: no cover — defensive
-                logging.getLogger(__name__).warning(
-                    "PII body redaction failed: %s", exc
-                )
+                logging.getLogger(__name__).warning("PII body redaction failed: %s", exc)
 
         # Delegate to the inner processor (typically BatchLogRecordProcessor
         # wrapping the OTLP exporter). Wrap in try/except so a failure in
         # the inner processor never escapes (LogRecordProcessor contract
         # — errors must not propagate to the SDK pipeline).
         try:
-            self._inner.on_emit(log_record)
+            self._inner.emit(log_data)
         except Exception as exc:  # pragma: no cover — defensive
-            logging.getLogger(__name__).warning(
-                "Inner LogRecordProcessor.on_emit failed: %s", exc
-            )
+            logging.getLogger(__name__).warning("Inner LogRecordProcessor.emit failed: %s", exc)
 
     def shutdown(self) -> None:
         # Delegate so the inner processor's flush + shutdown still runs.

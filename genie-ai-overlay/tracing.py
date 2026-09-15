@@ -217,7 +217,8 @@ def setup_tracing(service_name: str) -> None:
     # provider has our resource + OTLP endpoint); suppress the warning
     # by silencing the SDK's internal logger for that one message.
     import logging as _logging
-    _otel_sdk_logger = _logging.getLogger("opentelemetry.sdk.trace")
+
+    _otel_sdk_logger = _logging.getLogger("opentelemetry.trace")
     _previous_level = _otel_sdk_logger.level
     _otel_sdk_logger.setLevel(_logging.ERROR)
     try:
@@ -428,10 +429,9 @@ def setup_logging(
     # to the log store — mirroring the Node.js `PIIRedactingLogRecordProcessor`
     # we ship on the backend + doc-repo side.
     from tracing_pii import PIIRedactingLogRecordProcessor  # local import — keeps
+
     # module-level import graph light; the file has no heavy deps.
-    pii_safe_processor = PIIRedactingLogRecordProcessor(
-        BatchLogRecordProcessor(log_exporter)
-    )
+    pii_safe_processor = PIIRedactingLogRecordProcessor(BatchLogRecordProcessor(log_exporter))
 
     _logger_provider = LoggerProvider(resource=resource)
     _logger_provider.add_log_record_processor(pii_safe_processor)

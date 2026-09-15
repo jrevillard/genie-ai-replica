@@ -171,8 +171,9 @@ groups:
             model:
               conditions:
                 - evaluator:
-                    params: []
-                    type: gt
+                    params:
+                      - 1073741824
+                    type: lt
                   operator:
                     type: and
                   query:
@@ -435,44 +436,50 @@ groups:
           severity: warning
           component: victoriatraces
 
-  # The `transform/stamp_service_name_from_container` processor must run
-  # on EVERY fluentd-sourced log record — silent failures would leave
-  # records with empty `service.name` in VL and break admin/logs filtering.
-  # The Collector's internal telemetry exposes
-  # `otelcol_processor_dropped_log_records_total{processor=...}` — alert
-  # if any records are dropped OR if the processor has accepted zero
-  # records in the last 15 min (indicates a config or pipeline issue).
-  - uid: otel-transform-stamp-service-name-failing
-    title: OTel Collector — stamp_service_name_from_container processor failing
-    condition: A or B
-    data:
-      - refId: A
-        relativeTimeRange:
-          from: 600
-          to: 0
-        datasourceUid: victoriametrics
-        model:
-          expr: rate(otelcol_processor_dropped_log_records_total{processor="transform/stamp_service_name_from_container"}[5m]) > 0
-          instant: true
-          intervalMs: 1000
-          refId: A
-      - refId: B
-        relativeTimeRange:
-          from: 900
-          to: 0
-        datasourceUid: victoriametrics
-        model:
-          expr: increase(otelcol_processor_accepted_log_records_total{processor="transform/stamp_service_name_from_container"}[15m]) == 0
-          instant: true
-          intervalMs: 1000
-          refId: B
-    noDataState: OK
-    execErrState: Alerting
-    for: 10m
-    annotations:
-      description: "OTel Collector transform processor `transform/stamp_service_name_from_container` is dropping records OR has not accepted any in 15 min. Every fluentd-sourced log will then have empty `service.name` in VictoriaLogs — admin/logs filtering and dual-emit dedup break. Check Collector config in `configs/otel/otel-collector-config.yaml` (regex syntax, fluentd label forwarding in `docker-compose.yaml`'s `&fluent-logging`)."
-      summary: "service.name stamping broken in VictoriaLogs"
-    labels:
-      severity: critical
-      component: otel-collector
-      pipeline: logs
+
+  - orgId: 1
+    name: observability.otel_log_stamping
+    folder: Observability
+    interval: 60s
+    rules:
+    # The `transform/stamp_service_name_from_container` processor must run
+    # on EVERY fluentd-sourced log record — silent failures would leave
+    # records with empty `service.name` in VL and break admin/logs filtering.
+    # The Collector's internal telemetry exposes
+    # `otelcol_processor_dropped_log_records_total{processor=...}` — alert
+    # if any records are dropped OR if the processor has accepted zero
+    # records in the last 15 min (indicates a config or pipeline issue).
+    - uid: otel-stamp-service-name-fail
+      title: OTel Collector — stamp_service_name_from_container processor failing
+      condition: A or B
+      data:
+        - refId: A
+          relativeTimeRange:
+            from: 600
+            to: 0
+          datasourceUid: victoriametrics
+          model:
+            expr: rate(otelcol_processor_dropped_log_records_total{processor="transform/stamp_service_name_from_container"}[5m]) > 0
+            instant: true
+            intervalMs: 1000
+            refId: A
+        - refId: B
+          relativeTimeRange:
+            from: 900
+            to: 0
+          datasourceUid: victoriametrics
+          model:
+            expr: increase(otelcol_processor_accepted_log_records_total{processor="transform/stamp_service_name_from_container"}[15m]) == 0
+            instant: true
+            intervalMs: 1000
+            refId: B
+      noDataState: OK
+      execErrState: Alerting
+      for: 10m
+      annotations:
+        description: "OTel Collector transform processor `transform/stamp_service_name_from_container` is dropping records OR has not accepted any in 15 min. Every fluentd-sourced log will then have empty `service.name` in VictoriaLogs — admin/logs filtering and dual-emit dedup break. Check Collector config in `configs/otel/otel-collector-config.yaml` (regex syntax, fluentd label forwarding in `docker-compose.yaml`'s `&fluent-logging`)."
+        summary: "service.name stamping broken in VictoriaLogs"
+      labels:
+        severity: critical
+        component: otel-collector
+        pipeline: logs

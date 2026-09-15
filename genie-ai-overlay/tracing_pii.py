@@ -111,8 +111,6 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
         log_record = log_data.log_record
 
         # Attribute redaction — both keys AND values.
-
-        # Attribute redaction — both keys AND values.
         #
         # 1. Top-level key check: any key matching the sensitive patterns
         #    (password, token, session_id, etc.) gets replaced with

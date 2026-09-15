@@ -135,6 +135,7 @@ async function exportBundle(repo, actor) {
     span.setAttribute('okf.bundle_version', bundleVersion);
 
     const { buffer, concept_count } = await buildBundleZip(repoId);
+    const bundleBytes = buffer.length;
     const fileName = bundleFileName(repo, bundleVersion);
     // The bundle represents version N — its graph_name metadata records the
     // SERVING graph the bundle's content becomes at ingest (born-right vN).
@@ -164,12 +165,17 @@ async function exportBundle(repo, actor) {
           bundle_version: bundleVersion,
           is_bundle: true
         },
-        { timeout: 30000 }
+        { timeout: config.documentRepository.bundleStoreTimeoutMs }
       );
       fileId = res && res.data && res.data.file_id;
     } catch (err) {
       const status = err && err.response && err.response.status;
-      logger.error('Bundle export store failed', { repo_id: repoId, bundle_version: bundleVersion, status });
+      logger.error('Bundle export store failed', {
+        repo_id: repoId,
+        bundle_version: bundleVersion,
+        bundle_bytes: bundleBytes,
+        status
+      });
       throw new ExportError(
         'EXPORT_FAILED',
         `bundle store failed (doc-repo status ${status || 'n/a'}): ${err.message}`,
@@ -192,9 +198,11 @@ async function exportBundle(repo, actor) {
     }
 
     span.setAttribute('okf.bundle.file_id', fileId || 'none');
+    span.setAttribute('okf.bundle.bytes', bundleBytes);
     logger.info('OKF bundle zip exported', {
       repo_id: repoId,
       bundle_version: bundleVersion,
+      bundle_bytes: bundleBytes,
       file_name: fileName,
       file_id: fileId,
       concepts: concept_count,

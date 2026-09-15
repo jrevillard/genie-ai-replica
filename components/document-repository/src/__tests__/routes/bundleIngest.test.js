@@ -36,6 +36,7 @@ jest.mock('../../config/appConfig', () => ({
     allowedMimeTypes: ['application/pdf', 'text/plain', 'text/html'],
     allowedExtensions: ['.pdf', '.txt', '.html'],
     maxFileSize: 52428800,
+    bundleMaxBodyMb: 100,
     maxFilesUpload: 5
   },
   labels: {
@@ -170,6 +171,27 @@ describe('POST /api/files/ingest-bundle (Story 2.5)', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  // Publish-413 regression (2026-09-15): a 1000-concept wikipedia repo ships
+  // ~42 MB of base64-in-JSON — far above the app's 10mb global JSON cap. The
+  // app-level middleware must EXEMPT this path and the route must parse it
+  // with its own, config-driven limit (upload.bundleMaxBodyMb).
+  it('should accept bundle bodies above the default 10mb JSON cap', async () => {
+    fileService.uploadBundle.mockResolvedValue({
+      file_id: 'big-bundle-id',
+      file_name: 'big-repo-v1.zip',
+      storage_path: '/uploads/big-bundle-id.zip'
+    });
+
+    const bigBody = {
+      ...validBody,
+      bundle: Buffer.alloc(11 * 1024 * 1024, 65).toString('base64') // ~14.7 MB of base64
+    };
+    const res = await request(app).post('/api/files/ingest-bundle').send(bigBody);
+
+    expect(res.status).toBe(202);
+    expect(fileService.uploadBundle).toHaveBeenCalledTimes(1);
   });
 
   it('should return 400 when graph_name does not match OKF_{repo_id}', async () => {

@@ -548,7 +548,14 @@ async function transition(repoId, action, actor) {
     }
 
     // action === 'retract'
-    if (!repo.ingested_at) {
+    // NOT_INGESTED only when there is genuinely nothing to tear down: no
+    // settled ingest AND no drain in flight. A MID-DRAIN repo (rag_drain_active,
+    // the wedge-recovery escape — see the drain-freeze amendment below) MUST be
+    // retractable: the graph drop below is idempotent and the requeue resets
+    // the partial index stamps. Live 2026-09-15 (Bali-wikipedia-LLM): the drain
+    // died at 6/1001 concepts and this guard refused the teardown with
+    // NOT_INGESTED while 6 concepts sat indexed and the drain stayed armed.
+    if (!repo.ingested_at && repo.rag_drain_active !== true) {
       throw new LifecycleError('NOT_INGESTED', 'repository is not ingested — nothing to retract', 409);
     }
     // D-C (#981, David's Stage-1 ruling): retract DROPS the serving graph with

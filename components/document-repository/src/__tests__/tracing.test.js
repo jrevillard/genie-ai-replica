@@ -4,7 +4,7 @@
 // `components/gov-chat-backend/__tests__/tracing-non-test.test.js` and
 // asserts the OTel SDK init wiring specific to doc-repo:
 //   - TracerProvider constructed WITH resource (carries service.name)
-//   - OTLPSpanExporter points at OTLP_EXPORTER_OTLP_ENDPOINT/v1/traces
+//   - OTLPTraceExporter points at OTLP_EXPORTER_OTLP_ENDPOINT/v1/traces
 //   - PIIRedactionSpanProcessor wraps the BatchSpanProcessor
 //   - AsyncLocalStorageContextManager registered (the ALS propagation
 //     bypass the monkey-patch on trace.getSpan)
@@ -12,16 +12,10 @@
 //   - SIGTERM/SIGINT listener captures the Promise + .catch (round-3
 //     H4a fix verification — process.on ignores return values)
 
-const mockStart = jest.fn();
-const mockShutdown = jest.fn().mockResolvedValue(undefined);
 const mockGetTracer = jest.fn().mockReturnValue({ startSpan: jest.fn() });
-const mockCounterAdd = jest.fn();
-const mockCreateCounter = jest.fn().mockReturnValue({ add: mockCounterAdd });
-const mockGetMeter = jest.fn().mockReturnValue({ createCounter: mockCreateCounter });
 const mockSetTracerProvider = jest.fn();
 const mockSetLoggerProvider = jest.fn();
 const mockSetContextManager = jest.fn();
-const mockTraceGetSpan = jest.fn();
 
 jest.mock('@opentelemetry/sdk-trace', () => {
   const fakeProcessor = {
@@ -32,7 +26,6 @@ jest.mock('@opentelemetry/sdk-trace', () => {
   };
   return {
     TracerProvider: jest.fn().mockImplementation(() => ({
-      addSpanProcessor: jest.fn(),
       shutdown: jest.fn().mockResolvedValue()
     })),
     BatchSpanProcessor: jest.fn().mockImplementation(() => fakeProcessor)
@@ -40,18 +33,23 @@ jest.mock('@opentelemetry/sdk-trace', () => {
 });
 
 jest.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
-  OTLPSpanExporter: jest.fn().mockImplementation(() => ({}))
+  OTLPTraceExporter: jest.fn().mockImplementation(() => ({}))
 }));
 
 jest.mock('@opentelemetry/semantic-conventions', () => ({
   ATTR_SERVICE_NAME: 'service.name',
+  ATTR_SERVICE_NAMESPACE: 'service.namespace',
   ATTR_SERVICE_VERSION: 'service.version',
   ATTR_DEPLOYMENT_ENVIRONMENT: 'deployment.environment'
 }));
 
-jest.mock('@opentelemetry/context-async-hooks', () => ({
-  AsyncLocalStorageContextManager: jest.fn().mockImplementation(() => ({}))
-}), { virtual: true });
+jest.mock(
+  '@opentelemetry/context-async-hooks',
+  () => ({
+    AsyncLocalStorageContextManager: jest.fn().mockImplementation(() => ({}))
+  }),
+  { virtual: true }
+);
 
 jest.mock('@opentelemetry/api', () => ({
   trace: {
@@ -60,10 +58,8 @@ jest.mock('@opentelemetry/api', () => ({
   },
   context: {
     active: jest.fn(),
-    setGlobalContextManager: mockSetContextManager,
-    getSpan: mockTraceGetSpan
-  },
-  metrics: { getMeter: mockGetMeter }
+    setGlobalContextManager: mockSetContextManager
+  }
 }));
 
 jest.mock('@opentelemetry/api-logs', () => ({
@@ -119,11 +115,6 @@ jest.mock('../tracing-pii-spans', () => ({
     shutdown: jest.fn(),
     forceFlush: jest.fn()
   }))
-}));
-
-jest.mock('../tracing-pii', () => ({
-  redactAttributes: jest.fn((attrs) => attrs),
-  redactLogRecordBody: jest.fn((body) => body)
 }));
 
 describe('document-repository tracing.js non-test branch', () => {

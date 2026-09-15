@@ -57,7 +57,7 @@ groups:
                       - B
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__
@@ -66,7 +66,7 @@ groups:
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
-              reducer: avg
+              reducer: last
               refId: B
               type: reduce
           - refId: C
@@ -87,7 +87,7 @@ groups:
                       - C
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__
@@ -151,7 +151,7 @@ groups:
                       - B
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__
@@ -160,7 +160,7 @@ groups:
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
-              reducer: avg
+              reducer: last
               refId: B
               type: reduce
           - refId: C
@@ -180,7 +180,7 @@ groups:
                       - C
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__
@@ -241,7 +241,7 @@ groups:
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
-              reducer: avg
+              reducer: last
               refId: B
               type: reduce
           - refId: C
@@ -262,7 +262,7 @@ groups:
                       - C
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__
@@ -323,7 +323,7 @@ groups:
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
-              reducer: avg
+              reducer: last
               refId: B
               type: reduce
           - refId: C
@@ -344,7 +344,7 @@ groups:
                       - C
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__
@@ -393,7 +393,7 @@ groups:
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
-              reducer: avg
+              reducer: last
               refId: B
               type: reduce
           - refId: C
@@ -414,7 +414,7 @@ groups:
                       - C
                     type: ref
                   reducer:
-                    type: avg
+                    type: last
                   type: query
               datasource:
                 type: __expr__

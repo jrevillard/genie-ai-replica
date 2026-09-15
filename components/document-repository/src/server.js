@@ -43,32 +43,32 @@ const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 // so the caller can `.catch()` the rejection (process.on ignores return
 // values, which would otherwise drop the promise on the floor and leak
 // the otel.shutdown span).
-const gracefulShutdown = (signal) => withBackgroundSpan(
-  'app.shutdown',
-  async () => {
-    logger.info(`Received ${signal}. Shutting down gracefully...`);
+const gracefulShutdown = (signal) =>
+  withBackgroundSpan(
+    'app.shutdown',
+    async () => {
+      logger.info(`Received ${signal}. Shutting down gracefully...`);
 
-    // Move `process.exit` OUT of the withBackgroundSpan body — otherwise
-    // the span's `finally { span.end() }` fires before the exit microtask
-    // drains, and the otel.shutdown span is leaked.
-    await new Promise((resolve) => {
-      server.close(() => {
-        logger.info('HTTP server closed.');
-        resolve();
+      // Move `process.exit` OUT of the withBackgroundSpan body — otherwise
+      // the span's `finally { span.end() }` fires before the exit microtask
+      // drains, and the otel.shutdown span is leaked.
+      await new Promise((resolve) => {
+        server.close(() => {
+          logger.info('HTTP server closed.');
+          resolve();
+        });
+        // Force close after 30 seconds
+        setTimeout(() => {
+          logger.error('Could not close connections in time, forcefully shutting down');
+          resolve();
+        }, 30000);
       });
-      // Force close after 30 seconds
-      setTimeout(() => {
-        logger.error('Could not close connections in time, forcefully shutting down');
-        resolve();
-      }, 30000);
-    });
 
-    // Caller fires process.exit AFTER this returns (and AFTER the
-    // span finally block runs). See the SIGTERM/SIGINT handlers below.
-  },
-  { signal }
+      // Caller fires process.exit AFTER this returns (and AFTER the
+      // span finally block runs). See the SIGTERM/SIGINT handlers below.
+    },
+    { signal }
   );
-};
 
 // Start server
 const server = app.listen(PORT, HOST, () => {
@@ -123,7 +123,6 @@ const server = app.listen(PORT, HOST, () => {
 // unhandled (Node 15+ default: process exit).
 function _wrapLifecycle(name, attrs, fn) {
   withBackgroundSpan(name, fn, attrs).catch((err) => {
-    // eslint-disable-next-line no-console
     console.error(`[${name}] handler failed:`, err);
   });
 }
@@ -164,7 +163,6 @@ function _exitAfter(signame) {
   return p.then(
     () => process.exit(0),
     (err) => {
-      // eslint-disable-next-line no-console
       console.error(`[${signame}] shutdown failed:`, err);
       process.exit(1);
     }
@@ -172,6 +170,5 @@ function _exitAfter(signame) {
 }
 process.on('SIGTERM', () => _exitAfter('SIGTERM'));
 process.on('SIGINT', () => _exitAfter('SIGINT'));
-});
 
 module.exports = server;

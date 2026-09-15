@@ -60,7 +60,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // (Docker drops `/lib/` from the path; Jest moduleNameMapper in
   // jest.config.js routes both `../shared-lib/X` and the source-tree
   // `../shared/lib/X` to the real file).
-  const { runInBackgroundSpan, withBackgroundSpan } = require('../shared-lib/tracing-background');
+  const { withBackgroundSpan } = require('../shared-lib/tracing-background');
   // OTLP base URL — read once, then reused for both the trace and the log
   // exporter endpoints. Pulled up to the top of the else block so neither
   // exporter construction reads it in a TDZ window (the previous ordering
@@ -87,9 +87,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     // resolves to `components/document-repository/src/`, so the parent
     // path lands on `components/document-repository/package.json`.
     try {
-      const pkg = JSON.parse(
-        fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
-      );
+      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
       return pkg.version || '0.0.0';
     } catch {
       return '0.0.0';
@@ -119,9 +117,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // must be constructed WITH a Resource — otherwise every exported span
   // has no `service.name` attribute, breaking the VL stream filter.
   const traceEndpoint = `${endpointBase}/v1/traces`;
-  const { OTLPSpanExporter } = require('@opentelemetry/exporter-trace-otlp-http');
-  const { TracerProvider, BatchSpanProcessor } = require('@opentelemetry/sdk-trace');
-  const { BatchLogRecordProcessor, LogRecordProcessor } = require('@opentelemetry/sdk-logs');
+  const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+  const { TracerProvider } = require('@opentelemetry/sdk-trace');
   const { PIIRedactionSpanProcessor } = require('./tracing-pii-spans');
   // Span-side PII redactor wraps the BatchSpanProcessor so every span
   // emitted by doc-repo (HTTP auto-instrumentation + background spans
@@ -129,11 +126,15 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // scrubbed before export. Without this, doc-repo spans carry URL
   // paths, header values, and request bodies verbatim to VictoriaTraces
   // — asymmetric with backend which DOES redact.
-  const _docRepoTracerProvider = new TracerProvider({ resource });
-  const _docRepoTraceExporter = new OTLPSpanExporter({ url: traceEndpoint });
-  _docRepoTracerProvider.addSpanProcessor(
-    new PIIRedactionSpanProcessor(_docRepoTraceExporter)
-  );
+  const _docRepoTracerProvider = new TracerProvider({
+    resource,
+    // OTel JS SDK 2.x: spanProcessors is a constructor option, not a
+    // post-construction setter (the 1.x `addSpanProcessor` method was
+    // removed; the SDK now wraps the array in a MultiSpanProcessor
+    // internally). Without this, _activeSpanProcessor stays uninitialized
+    // and exported spans are silently dropped.
+    spanProcessors: [new PIIRedactionSpanProcessor(new OTLPTraceExporter({ url: traceEndpoint }))]
+  });
   trace.setGlobalTracerProvider(_docRepoTracerProvider);
   // Register an AsyncLocalStorage-based ContextManager so
   // `tracer.startActiveSpan(...)` and `context.with(...)` propagate
@@ -186,7 +187,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // The signal name is captured as a span attribute (low-cardinality
   // span name, high-cardinality detail per OTel semconv guidance).
   const SHUTDOWN_TIMEOUT_MS = 15000;
-  const gracefulShutdown = async (signame) => {
+  const gracefulShutdown = async (_signame) => {
     let flushed = false;
     const timeout = setTimeout(() => {
       if (!flushed) process.exit(0);
@@ -216,15 +217,12 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // fires BEFORE `process.exit(0)` — calling exit inside the span body
   // terminates the process before the awaiting microtask drains.
   function _registerShutdown(signame) {
-    const exitPromise = withBackgroundSpan(
-      'otel.shutdown',
-      () => gracefulShutdown(signame),
-      { 'genie.signal': signame }
-    );
+    const exitPromise = withBackgroundSpan('otel.shutdown', () => gracefulShutdown(signame), {
+      'genie.signal': signame
+    });
     exitPromise.then(
       () => process.exit(0),
       (err) => {
-        // eslint-disable-next-line no-console
         console.error(`[otel.shutdown] ${signame} handler failed:`, err);
         process.exit(1);
       }

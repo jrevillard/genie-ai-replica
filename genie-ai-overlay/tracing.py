@@ -156,6 +156,16 @@ def setup_trace_logging(logger_name):
         if isinstance(f, TraceContextFilter):
             return
     logger.addFilter(TraceContextFilter(service_name=logger_name))
+    # `comps.cores.mega.logger.CustomLogger` constructs its underlying
+    # Python logger with `propagate=False` (comps owns its own stdout
+    # handler and avoids walking up the hierarchy to prevent duplicate
+    # log lines). Side effect: any OTel LoggingHandler attached at the
+    # root by `setup_logging()` never sees a single log record from this
+    # service. Re-enable propagation so the OTel pipeline picks them up
+    # — the comps CustomLogger's own stdout handler is untouched (logs
+    # still reach docker stdout + fluentd via the dual-logging driver).
+    if logger.propagate is False:
+        logger.propagate = True
 
 
 def setup_tracing(service_name: str) -> None:
@@ -459,6 +469,40 @@ def setup_logging(
     root_logger = logging.getLogger()
     if not any(isinstance(h, LoggingHandler) for h in root_logger.handlers):
         root_logger.addHandler(handler)
+    # The OTel LoggingHandler carries its own `level=handler_level`, but
+    # Python's logging hierarchy ALSO checks the LOGGERS' level before
+    # dispatching to handlers. Python's stdlib default for the root
+    # logger is WARNING — which would silently drop every `logger.info()`
+    # call from chatqna / dataprep / retriever / reranker before it
+    # ever reached the OTel handler. Lift the root level to match the
+    # handler so the env-driven LOG_LEVEL actually takes effect end-to-end.
+    if root_logger.level == logging.NOTSET or root_logger.level > handler_level:
+        root_logger.setLevel(handler_level)
+    # `comps.cores.mega.logger.CustomLogger` builds its underlying
+    # Python logger with `propagate=False` (the comps CustomLogger
+    # contract — it owns its own stdout handler and explicitly avoids
+    # walking up the hierarchy to prevent duplicate log lines). The
+    # side effect is that OTel's root-attached LoggingHandler never
+    # receives a single line from any comps-using module. Override the
+    # flag on the well-known OPEA overlay logger names so the OTel
+    # handler captures them — the comps CustomLogger's own stdout
+    # handler is untouched (logs still reach docker stdout + fluentd).
+    opea_logger_names = (
+        f"GENIE.AI_{service_name_resolved.replace('genieai-', '').upper()}",
+        # Some services log under a plain name (e.g. dataprep uses
+        # `GENIE_DATAPREP_ARANGODB`); try both forms + the raw name.
+        f"GENIE.{service_name_resolved.replace('genieai-', '').upper()}",
+        service_name_resolved,
+    )
+    for name in opea_logger_names:
+        try:
+            opea_log = logging.getLogger(name)
+            if opea_log.propagate is False:
+                opea_log.propagate = True
+        except Exception:  # pragma: no cover — defensive
+            # No such logger — fine, not all OPEA services use a named
+            # logger matching `service_name_resolved`. Skip.
+            pass
 
     logging.getLogger(__name__).debug(
         "OTel LoggerProvider enabled for %s → %s (handler level=%s)",

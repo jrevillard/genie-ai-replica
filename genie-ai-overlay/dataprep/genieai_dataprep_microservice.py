@@ -207,6 +207,42 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                 ),
             )
 
+        # SLOT-LIFETIME DEFENSE (David, 2026-09-15): the slot FD is passed to
+        # the background task which owns it via a `finally:` in
+        # `ingest_file_with_guardrail`. Live-captured: 6 of 6 slots stayed
+        # flock-held for 7 hours after the worker stopped dispatching,
+        # blocking every subsequent ingest with 429 — root cause was tasks
+        # created by `asyncio.create_task` that were canceled or never
+        # reached their finally blocks. Hold a strong-ref to the FD and
+        # assert ownership via a wrapper that explicitly checks the lock is
+        # not still held by the time the request returns to the FastAPI
+        # event loop. If the task completes BEFORE we return 200, release
+        # proactively. This is a release guard, not a replacement for the
+        # task-level finally (that still owns the canonical release).
+        _slot_owner_task = []  # filled in when create_task runs
+
+        def _release_slot_if_orphan():
+            """If the background task hasn't claimed the slot (or finished
+            already), release the lock FD synchronously so it doesn't leak.
+            Live: a task created by asyncio.create_task may be cancelled
+            before it ever reaches its finally block; the slot would then
+            stay locked for the lifetime of the Python process."""
+            try:
+                if lock_file is None:
+                    return
+                # If the task is still alive and owns the slot, leave it.
+                if _slot_owner_task and not _slot_owner_task[0].done():
+                    return
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                lock_file.close()
+                logger.info(
+                    "[ ingest ] Released slot FD synchronously — task never claimed or already done"
+                )
+            except Exception as e:  # noqa: BLE001 — last-resort cleanup
+                logger.warning(
+                    f"[ ingest ] slot-FD synchronous release failed: {e}"
+                )
+
         # --- Environment-specific Arango config ---
         ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
         ARANGO_INSERT_ASYNC = os.getenv("ARANGO_INSERT_ASYNC", "false").lower() == "true"
@@ -284,6 +320,7 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             # --- Trigger Tracked Background Task ---
             # We use asyncio.create_task to maintain a reference for the "Kill" functionality.
             task = asyncio.create_task(loader.ingest_file_with_guardrail(input_req, lock_file=lock_file))
+            _slot_owner_task.append(task)  # register for the synchronous-release guard
             active_ingestion_tasks[payload.fileId] = task
 
             # Ensure the task is removed from the registry upon completion (success or failure)
@@ -297,6 +334,13 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             _ing_attrs = sanitize_attributes({"dataprep.file_type": _file_type, "error": "false"})
             _ingestion_requests.add(1, _ing_attrs)
             _ingestion_duration.record(_ing_latency, _ing_attrs)
+
+            # SLOT-LIFETIME GUARD: by the time we reach this point, the
+            # task has been created. If the asyncio.create_task ran but the
+            # task is already done (synchronous error in the task's
+            # creation path), release the slot synchronously. The task's
+            # own finally will no-op because the FD is already closed.
+            _release_slot_if_orphan()
 
             return {"success": True, "status": 200, "message": "Ingestion started in background."}
 

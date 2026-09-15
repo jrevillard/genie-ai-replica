@@ -2169,7 +2169,7 @@ class TestFinalizeChunkLabelsAcl:
         """ACL labels must never trigger the 'add to Knowledge Hierarchy' WARN."""
         dp = create_dataprep()
         with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log:
-            result = await dp._finalize_chunk_labels(0, ["t:t1"], [], "file1", ["t:t1"])
+            await dp._finalize_chunk_labels(0, ["t:t1"], [], "file1", ["t:t1"])
         # No WARN emitted (new_labels excludes the ACL label) + label preserved.
         levels = [call.args[1] for call in log.await_args_list]
         assert "WARN" not in levels

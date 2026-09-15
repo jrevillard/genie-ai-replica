@@ -755,14 +755,16 @@ class LogsService {
 
     let normalizedLevel = null;
     if (level && String(level).trim() !== '') {
-      try {
-        normalizedLevel = this._normalizeLevelFilter(level);
-      } catch (err) {
-        logger.warn(`[LOGS-SERVICE] Ignoring invalid level filter "${level}": ${err.message}`);
-        normalizedLevel = null;
-      }
+      // Validate the allowlist up-front so a hostile caller gets a
+      // 400-ish error, not a silent zero-result page. The allowlist is
+      // enforced by `_normalizeLevelFilter` (throws on anything outside
+      // `TRACE|DEBUG|INFO|WARN|ERROR|FATAL`).
+      normalizedLevel = this._normalizeLevelFilter(level);
     }
     const normalizedService = service && String(service).trim() !== '' ? String(service).trim() : null;
+    // Over-fetch only when client-side filters will narrow the result —
+    // otherwise the caller-specified window is honoured exactly.
+    const needsOverFetch = normalizedLevel !== null || normalizedService !== null;
 
     return this._withVlFailOpen(
       async () => {
@@ -771,7 +773,12 @@ class LogsService {
           q: this._vlFilter(q),
           start: startIso,
           end: endIso,
-          limit: (limitN + offsetN) * 4 // over-fetch to compensate for client-side filtering
+          // Over-fetch by 4x when client-side level/service filters are
+          // active so we don't truncate the response window before the
+          // JS filter runs. Without filters, honour the caller's window
+          // exactly (paginated callers depend on this — see
+          // logs-service-vl.test.js offset/limit test).
+          limit: needsOverFetch ? (limitN + offsetN) * 4 : limitN + offsetN
         });
         const allRows = Array.isArray(rows) ? rows : [];
         // Filter client-side on the MELT-normalized level + service. The

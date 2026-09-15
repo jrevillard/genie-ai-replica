@@ -263,7 +263,14 @@ describe('LogsService VictoriaLogs rewrite', () => {
   });
 
   describe('searchLogs — VL path', () => {
-    it('builds LogSQL from term/level/service filters', async () => {
+    it('builds LogSQL from term filter only; level + service are applied client-side on the normalized rows', async () => {
+      // The fluentd-driven Winston transport writes the real level +
+      // service INSIDE the `_msg` JSON envelope (not as top-level VL
+      // fields), so the previous `level:INFO` / `_stream_service:"auth"`
+      // VL clauses never matched anything. `term` still hits VL via
+      // `_msg:"login"` (the message text IS inside `_msg`); level +
+      // service are filtered in JS after the MELT normalizer lifts them
+      // out.
       const rows = [
         {
           timestamp: '2026-09-01T00:00:00.000Z',
@@ -286,10 +293,17 @@ describe('LogsService VictoriaLogs rewrite', () => {
       });
       expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       const callArg = mockVlClient.query.mock.calls[0][0];
+      // Only the `term` clause is pushed to VL; `level:` and
+      // `_stream_service:` are intentionally absent (they never matched
+      // on fluentd-sourced rows anyway — see comment above).
       expect(callArg.q).toContain('_msg:"login"');
-      expect(callArg.q).toContain('level:INFO');
-      expect(callArg.q).toContain('_stream_service:"auth"');
-      expect(result).toEqual({ logs: rows, total: 1, limit: 50, offset: 0 });
+      expect(callArg.q).not.toMatch(/\blevel:/);
+      expect(callArg.q).not.toMatch(/_stream_service:/);
+      // The row matches the in-JS level + service filters and is
+      // returned as-is.
+      expect(result.logs).toEqual(rows);
+      expect(result.total).toBe(1);
+      expect(result.limit).toBe(50);
     });
 
     it('strips LogSQL reserved chars in the term (replaces with space)', async () => {
@@ -736,7 +750,13 @@ describe('LogsService VictoriaLogs rewrite', () => {
         ).rejects.toThrow(/must be one of/);
         expect(mockVlClient.query).not.toHaveBeenCalled();
       });
-      it('searchLogs — VL path: valid level passes and reaches VL', async () => {
+      it('searchLogs — VL path: valid level is normalised then filtered client-side (NOT pushed to VL)', async () => {
+        // The level clause used to be pushed to VL as `level:INFO AND ...`
+        // — but the fluentd-driven Winston transport writes the real
+        // level INSIDE the `_msg` JSON envelope (not as a top-level VL
+        // field), so the VL clause never matched anything. The new
+        // architecture filters level on the normalized rows AFTER the
+        // MELT adapter lifts it out of `_msg`.
         mockVlClient.query.mockResolvedValue([]);
         await logsService.searchLogs({
           level: 'INFO',
@@ -745,7 +765,7 @@ describe('LogsService VictoriaLogs rewrite', () => {
         });
         expect(mockVlClient.query).toHaveBeenCalledTimes(1);
         const call = mockVlClient.query.mock.calls[0][0];
-        expect(call.q).toMatch(/level:INFO\b/);
+        expect(call.q).not.toMatch(/\blevel:/);
       });
     });
 

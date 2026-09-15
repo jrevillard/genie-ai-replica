@@ -4,6 +4,17 @@
  * Streams content directly to disk to prevent GC Thrashing during long crawls.
  */
 
+// OpenTelemetry SDK initialization — Worker threads have isolated V8
+// isolates and globals; the main thread's SDK init doesn't apply. This
+// Worker emits its own logs (DB queries, crawl-job polling) — without
+// its own SDK + ContextManager, every log carries zeroed trace_id and
+// the OTel log exporter has no LoggerProvider to use. The two Workers
+// (this one + pageProcessor.js) emit independent traces; they are
+// NOT stitched into the main thread's trace tree (no cross-thread
+// context propagation without SharedArrayBuffer + manual injection,
+// which is not standard for a single-service deployment).
+require('../tracing');
+
 const fs = require('fs').promises;
 const fsStandard = require('fs'); // Required for createWriteStream
 const path = require('path');
@@ -61,7 +72,15 @@ const processPageOnThread = (html, url, config) => {
         // URL path-only (no query, no PII). Full URL would inflate span
         // cardinality (one stream per unique URL) and may leak session
         // tokens via query strings.
-        { 'genie.crawl.url_path': (() => { try { return new URL(url).pathname; } catch { return 'invalid'; } })() }
+        {
+          'genie.crawl.url_path': (() => {
+            try {
+              return new URL(url).pathname;
+            } catch {
+              return 'invalid';
+            }
+          })()
+        }
       );
     };
     const errorHandler = (err) => {

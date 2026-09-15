@@ -4,6 +4,11 @@
  * Receives raw HTML, cleans it using Cheerio, executes Turndown,
  * and performs language detection off the main thread.
  */
+
+// OpenTelemetry SDK initialization — see crawlWorker.js for rationale.
+// Each Worker thread needs its own SDK instance (isolated V8 isolate).
+require('../tracing');
+
 const { parentPort } = require('worker_threads');
 const TurndownService = require('turndown');
 const cheerio = require('cheerio');

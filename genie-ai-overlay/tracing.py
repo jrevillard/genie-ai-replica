@@ -181,9 +181,20 @@ def setup_tracing(service_name: str) -> None:
     if not endpoint_base:
         return
 
+    # `OTEL_SERVICE_NAME` is the canonical OTel-spec env var. The
+    # function-arg `service_name` is a per-service default (e.g.
+    # `genieai-chatqna`) that operators can shadow per environment by
+    # setting `OTEL_SERVICE_NAME` in their compose override. This matches
+    # the Node.js `logger.js:84` resolution order.
+    service_name_resolved = os.getenv("OTEL_SERVICE_NAME") or service_name
+    # `service.namespace` groups related services (e.g. all OPEA overlay
+    # services share `genieai`). Grafana `service.namespace` filter lets
+    # operators slice by tier. Overridable via env var.
+    service_namespace = os.getenv("OTEL_SERVICE_NAMESPACE", "genieai")
     resource = Resource.create(
         {
-            "service.name": service_name,
+            "service.name": service_name_resolved,
+            "service.namespace": service_namespace,
             "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
             "deployment.environment": os.getenv("NODE_ENV", "development"),
         }
@@ -394,9 +405,15 @@ def setup_logging(
         return None
 
     if resource is None:
+        # `OTEL_SERVICE_NAME` is the canonical OTel-spec env var.
+        # Same priority as `setup_tracing()` so log + trace correlation
+        # joins cleanly under one filter.
+        service_name_resolved = os.getenv("OTEL_SERVICE_NAME") or service_name
+        service_namespace = os.getenv("OTEL_SERVICE_NAMESPACE", "genieai")
         resource = Resource.create(
             {
-                "service.name": service_name,
+                "service.name": service_name_resolved,
+                "service.namespace": service_namespace,
                 "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
                 "deployment.environment": os.getenv("NODE_ENV", "development"),
             }

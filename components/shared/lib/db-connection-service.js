@@ -1243,7 +1243,13 @@ class DatabaseService {
       async () => {
         return this._performActiveRecoveryInner(name, originalError);
       },
-      { 'db.connection': name, 'db.system': this._dbType }
+      { 'db.connection': name, 'db.system': this._dbType },
+      // OTel database semantic conventions: any span representing a
+      // call from the service to the database MUST use SpanKind.CLIENT
+      // (the service is the CLIENT; the DB is the implicit server).
+      // Without this, the trace explorer cannot draw the dependency
+      // arrow from the service to the DB.
+      { kind: 3 /* SpanKind.CLIENT */ }
     );
   }
 
@@ -1318,7 +1324,8 @@ class DatabaseService {
       withBackgroundSpan(
         'db.healthcheck',
         () => this._performHealthCheck(name),
-        { 'db.connection': name, 'db.system': this._dbType }
+        { 'db.connection': name, 'db.system': this._dbType },
+        { kind: 3 /* SpanKind.CLIENT */ }
       );
     }, this.HEALTH_CHECK_INTERVAL);
 
@@ -1384,7 +1391,9 @@ class DatabaseService {
       // [DB_CLEANUP] logs and any [DB_CLOSE] emissions inside carry a
       // live trace_id. One trace per cleanup tick — cardinality scales
       // with stale-connection rate, which is by definition low.
-      withBackgroundSpan('db.cleanup_tick', async () => {
+      withBackgroundSpan(
+        'db.cleanup_tick',
+        async () => {
         const now = Date.now();
         const connectionsToClose = [];
 
@@ -1407,7 +1416,10 @@ class DatabaseService {
       if (connectionsToClose.length > 0) {
         logger.info(`[DB_CLEANUP] Cleaned up ${connectionsToClose.length} stale connections`);
       }
-      });
+        },
+        { 'db.system': this._dbType },
+        { kind: 3 /* SpanKind.CLIENT */ }
+      );
     }, this.HEALTH_CHECK_INTERVAL);
   }
 

@@ -4,8 +4,24 @@
 const { AsyncLocalStorage } = require('async_hooks');
 const { trace } = require('@opentelemetry/api');
 
-const SCOPE_NAME = 'genie-backend';
-const SCOPE_VERSION = process.env.npm_package_version || '1.0.0';
+// SCOPE_NAME reads OTEL_SERVICE_NAME first (the canonical env var per
+// OTel semconv) then falls back to the compose-pinned default. The
+// SCOPE_NAME matches `service.name` so VictoriaTraces `otel.scope.name`
+// queries return the same services as `service.name` queries.
+const SCOPE_NAME = process.env.OTEL_SERVICE_NAME || 'genie-backend';
+// SCOPE_VERSION reads SERVICE_VERSION first (already used by the
+// Resource), then reads `package.json` (the actual deployed image
+// version) — `npm_package_version` is undefined in Docker runtime.
+let SCOPE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
+try {
+  const _pkg = require('fs').readFileSync(
+    require('path').join(__dirname, '..', '..', 'package.json'),
+    'utf8'
+  );
+  SCOPE_VERSION = JSON.parse(_pkg).version || SCOPE_VERSION;
+} catch {
+  // keep fallback
+}
 
 /**
  * Why this module uses `AsyncLocalStorage` instead of `context.with`:
@@ -126,7 +142,10 @@ _installGetSpanPatch();
  * recordException) and re-thrown. The span is ended exactly once via
  * `finally`.
  *
- * @param {string} name  Span name (dotted, lowercase).
+ * @param {string} name  Span name (dotted, lowercase). Prefixed with `genie.`
+ *                       when no component prefix is present so OTel
+ *                       semantic conventions (hierarchical naming) and
+ *                       Grafana trace explorer grouping work cleanly.
  * @param {() => Promise<unknown>} fn  Async unit of work.
  * @param {Record<string, string|number|boolean>} [attrs] Optional span attributes.
  * @param {object} [options] Optional SpanOptions (`kind`, `links`).
@@ -134,13 +153,18 @@ _installGetSpanPatch();
  */
 async function withBackgroundSpan(name, fn, attrs, options = {}) {
   const tracer = _tracer();
+  // Apply OTel semantic-conventions span-name prefix when missing —
+  // `<scope>.genie.<name>` (e.g. `genie-backend.genie.db.healthcheck`).
+  // Already-prefixed names pass through unchanged so external callers
+  // can opt out by naming explicitly.
+  const namespacedName = name.includes('.') ? name : `genie.${name}`;
   const spanOptions = {};
   if (attrs) spanOptions.attributes = attrs;
   // SpanKind is part of SpanOptions (`kind` field). Accept either an
   // integer enum or a string alias; the OTel SDK accepts the integer.
   if (options.kind !== undefined) spanOptions.kind = options.kind;
   if (options.links) spanOptions.links = options.links;
-  const span = tracer.startSpan(name, spanOptions);
+  const span = tracer.startSpan(namespacedName, spanOptions);
   return _runWithSpan(span, async () => {
     try {
       return await fn();
@@ -176,7 +200,8 @@ async function withBackgroundSpan(name, fn, attrs, options = {}) {
  */
 function runInBackgroundSpan(name, fn, attrs) {
   const tracer = _tracer();
-  const span = tracer.startSpan(name, attrs ? { attributes: attrs } : undefined);
+  const namespacedName = name.includes('.') ? name : `genie.${name}`;
+  const span = tracer.startSpan(namespacedName, attrs ? { attributes: attrs } : undefined);
   let result;
   try {
     result = _runWithSpan(span, () => fn());

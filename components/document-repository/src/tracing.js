@@ -34,6 +34,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // falls back to the raw key when undefined.
   const semconv = require('@opentelemetry/semantic-conventions');
   const ATTR_SERVICE_NAME = semconv.ATTR_SERVICE_NAME;
+  const ATTR_SERVICE_NAMESPACE = semconv.ATTR_SERVICE_NAMESPACE;
   const ATTR_SERVICE_VERSION = semconv.ATTR_SERVICE_VERSION;
   const ATTR_DEPLOYMENT_ENVIRONMENT = semconv.ATTR_DEPLOYMENT_ENVIRONMENT;
   const { trace } = require('@opentelemetry/api');
@@ -95,11 +96,13 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     }
   }
   const serviceName = process.env.OTEL_SERVICE_NAME || 'genie-document-repository';
+  const serviceNamespace = process.env.OTEL_SERVICE_NAMESPACE || 'genie-core';
   const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: serviceName,
+    [ATTR_SERVICE_NAMESPACE]: serviceNamespace,
     [ATTR_SERVICE_VERSION]: serviceVersion,
     // ATTR_DEPLOYMENT_ENVIRONMENT is undefined in some semantic-conventions
     // versions — use raw key as fallback.

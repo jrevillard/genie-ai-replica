@@ -43,6 +43,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
   const {
     ATTR_SERVICE_NAME,
+    ATTR_SERVICE_NAMESPACE,
     ATTR_SERVICE_VERSION,
     ATTR_DEPLOYMENT_ENVIRONMENT
   } = require('@opentelemetry/semantic-conventions');
@@ -168,6 +169,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     }
   }
   const serviceName = process.env.OTEL_SERVICE_NAME || 'genie-backend';
+  // `service.namespace` groups related services. Overridable via env
+  // var (default 'genie-core' covers backend + doc-repo as a single
+  // tier; 'genieai' is used by the OPEA overlay services).
+  const serviceNamespace = process.env.OTEL_SERVICE_NAMESPACE || 'genie-core';
   const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
@@ -191,6 +196,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: serviceName,
+      [ATTR_SERVICE_NAMESPACE]: serviceNamespace,
       [ATTR_SERVICE_VERSION]: serviceVersion,
       // ATTR_DEPLOYMENT_ENVIRONMENT is undefined in some semantic-conventions
       // versions — use raw key as fallback.
@@ -270,6 +276,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
       loggerProvider = new LoggerProvider({
         resource: resourceFromAttributes({
           [ATTR_SERVICE_NAME]: serviceName,
+          [ATTR_SERVICE_NAMESPACE]: serviceNamespace,
           [ATTR_SERVICE_VERSION]: serviceVersion,
           ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
             ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }

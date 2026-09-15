@@ -362,17 +362,25 @@ _DELINEATION_KEYWORDS = re.compile(
     r"\bfarm\s+boundar(?:y|ies)\b|"
     r"\bplot\s+boundar(?:y|ies)\b|"
     r"\bshow\s+(?:field|farm)\s+boundar(?:y|ies)\b|"
-    r"\bmap\s+(?:my\s+)?(?:field|farm|land)\b|"
-    r"\bsegment\s+(?:field|farm|land|agriculture)\b|"
+    r"\bmap\s+(?:my\s+|the\s+|our\s+)?(?:field|farm|land|plot)s?\b|"
+    r"\b(?:field|farm|plot)s?\s+map\b|"
+    r"\bshow\s+(?:me\s+)?(?:my|our)\s+(?:field|farm|plot)s?\b|"
+    r"\boutline\s+(?:my\s+|our\s+)?(?:field|farm|plot)s?\b|"
+    r"\b(?:plot|land)\s+boundar(?:y|ies)\b|"
+    r"\bsegment\s+(?:my\s+)?(?:field|farm|land|agriculture|plot)s?\b|"
     # Bengali: জমির সীমানা / ক্ষেতের সীমানা / খেতের সীমানা / মাঠের সীমানা / প্লট সীমানা,
     # জমির মানচিত্র|ম্যাপ, সীমানা নির্ধারণ, জমি চিহ্নিত
-    r"(?:জমির?|ক্ষেতের|খেতের|মাঠের|প্লট)\s*সীমানা|"
-    r"(?:জমির?|ক্ষেতের|খেতের)\s*(?:মানচিত্র|ম্যাপ)|"
+    # noun stems take endings (জমি / জমির / জমিগুলো / জমিগুলোর), hence \S{0,8}
+    r"(?:জমি|ক্ষেত|খেত|মাঠ|প্লট)\S{0,8}\s*সীমানা|"
+    r"(?:জমি|ক্ষেত|খেত|প্লট)\S{0,8}\s*(?:মানচিত্র|ম্যাপ)|"
+    r"(?:ম্যাপ|মানচিত্র)\s*(?:কর|বানা|তৈরি)\S*\s*(?:আমার\s+)?(?:জমি|ক্ষেত|খেত)|"
+    r"(?:জমি|ক্ষেত|খেত)\S{0,8}[^।?!]{0,30}মানচিত্রে\s*দেখা|"
     r"সীমানা\s*নির্ধারণ|জমি\s*চিহ্নিত|"
-    # Banglish: jomir simana/shimana, kheter simana, plot simana, jomir map/manchitro
+    # Banglish: jomir simana/shimana, kheter simana, plot simana, jomi (gulo) map/manchitro
     r"\b(?:jomir?|khete?r?|plot)\s+(?:s|sh)imana\b|"
     r"\bsimana\s+nirdharon\b|"
-    r"\b(?:jomir?|khete?r?)\s+(?:map|manchitro)\b)",
+    r"\b(?:jomi\w*|khet\w*)\s+(?:gulo\w*\s+)?(?:map|manchitro)\b|"
+    r"\bmap\s+(?:koro\s+|korun\s+)?(?:amar\s+)?(?:jomi|khet)\w*)",
     re.IGNORECASE,
 )
 _FLOOD_DETECTION_KEYWORDS = re.compile(
@@ -383,7 +391,7 @@ _FLOOD_DETECTION_KEYWORDS = re.compile(
     r"\binundation\s+(?:map|area|extent|detection)\b|"
     r"\bprithvi\b|"
     # Bengali: বন্যার মানচিত্র|ম্যাপ|বিস্তার, বন্যা শনাক্ত, স্যাটেলাইট বন্যা, প্লাবিত এলাকা, জলমগ্ন
-    r"বন্যার?\s*(?:মানচিত্র|ম্যাপ|বিস্তার|শনাক্ত)|স্যাটেলাইট\s*বন্যা|প্লাবিত\s*এলাকা|জলমগ্ন|"
+    r"বন্যা\S{0,4}\s*(?:মানচিত্র|ম্যাপ|বিস্তার|শনাক্ত|এলাকা)|স্যাটেলাইট\s*বন্যা|প্লাবিত\s*এলাকা|জলমগ্ন|"
     # Banglish: bonnar map/manchitro/bistar, satellite bonna, plabito, jolmogno
     r"\bbonnar?\s+(?:map|manchitro|bistar)\b|\bsatellite\s+bonna\b|\bplabito\b|\bjolo?mogno\b)",
     re.IGNORECASE,

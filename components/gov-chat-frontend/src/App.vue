@@ -321,11 +321,20 @@ body {
   overflow: hidden;
 }
 
+html {
+  /* Keep text size stable when a phone rotates (iOS inflates it otherwise). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /* App layout */
 #app {
   display: flex;
   flex-direction: column;
+  /* 100vh includes the area under a phone browser's address bar, which pushed the
+     chat input off screen; dvh tracks the visible viewport where supported. */
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -412,6 +421,16 @@ body {
 @media screen and (max-width: 768px) {
   .content-area {
     margin-left: 0 !important;
+    padding: 0;
+  }
+
+  .main-container {
+    gap: 0;
+  }
+
+  .notification {
+    font-size: var(--text-sm);
+    padding: var(--space-sm) var(--space-md);
   }
 }
 

@@ -604,6 +604,8 @@ KC_DATAPREP_CLIENT_SECRET=
 # Public client with PKCE — no client secret required (RFC 8252).
 # Change per deployment: each institution needs its own clientId and redirect scheme.
 # Used by: keycloak-config-cli (creates the mobile OIDC client in Keycloak at startup)
+#          chatqna (accepts tokens whose azp is this client, next to KEYCLOAK_CLIENT_ID;
+#          KC_ALLOWED_CLIENT_IDS adds further first-party client ids, comma-separated)
 # See: site/content/en/docs/deployment/mobile-deployment-guide.md (deployment onboarding guide)
 KC_MOBILE_CLIENT_ID=genie-mobile-<institution>
 

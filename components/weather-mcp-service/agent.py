@@ -67,6 +67,9 @@ def _district_in_text(text: str) -> str | None:
     candidates: list[tuple[str, str]] = [
         (name.lower(), name) for name in BENGALI_TO_ENGLISH.values()
     ]
+    # The deployment default may be an upazila or town outside the 64-district
+    # table (e.g. Sapahar); the ingestor stores forecasts for it all the same.
+    candidates.append((_DEFAULT_DISTRICT.lower(), _DEFAULT_DISTRICT))
     candidates += list(BENGALI_TO_ENGLISH.items())
     candidates += list(_DISTRICT_ALIASES.items())
     for needle, canon in sorted(candidates, key=lambda kv: -len(kv[0])):
@@ -242,6 +245,13 @@ class WeatherAgent:
         from mcp_weather.tools.weather_forecast import _find_district
 
         district = _find_district(intent.location)
+        if (
+            not district
+            and intent.location.strip().lower() == _DEFAULT_DISTRICT.lower()
+        ):
+            # Configured default outside the district table: forecasts are
+            # ingested for it (data_ingestor registers DEFAULT_LOCATION).
+            district = _DEFAULT_DISTRICT
         if not district:
             logger.warning(
                 "[AGENT] _find_district returned None for %r", intent.location

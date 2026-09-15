@@ -1907,7 +1907,10 @@ export default {
 
 .app-container {
   display: flex;
-  height: 100vh;
+  /* Fill the content area (which already sits below the navbar and any alert
+     banner) instead of the whole viewport, so nothing is pushed off screen. */
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   gap: var(--space-sm);
 }
@@ -2243,7 +2246,9 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Centre via auto margins on the content, not justify-content: with
+     justify-content the top of a list taller than the viewport is clipped. */
+  justify-content: flex-start;
   padding: var(--space-lg);
   overflow-y: auto;
 }
@@ -2251,6 +2256,7 @@ export default {
 .quick-help-content {
   max-width: 600px;
   width: 100%;
+  margin: auto 0;
 }
 
 .quick-help-heading {
@@ -2350,25 +2356,81 @@ export default {
 }
 
 @media (max-width: 768px) {
+  .app-container {
+    gap: 0;
+  }
+
+  /* One compact row: stacking it cost a third of a phone screen. */
   .system-status-panel {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: var(--space-sm);
+    min-height: 36px;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
   }
 
   .status-metrics {
-    width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
+  }
+
+  .chat-window {
+    padding: var(--space-sm);
+  }
+
+  .message-wrapper {
+    max-width: 92%;
+  }
+
+  /* Wide markdown tables scroll inside the bubble instead of stretching the page. */
+  .message-bubble :deep(table) {
+    display: block;
+    overflow-x: auto;
+    width: max-content;
+    max-width: 100%;
+  }
+
+  /* 16px inputs stop iOS from zooming the page on focus. */
+  .chat-input :deep(textarea),
+  .chat-input :deep(input) {
+    font-size: 16px;
+  }
+
+  .chat-input :deep(textarea) {
+    min-height: 3.2em;
+  }
+
+  .quick-help-overlay {
+    padding: var(--space-md);
+  }
+
+  .quick-help-heading {
+    margin-bottom: var(--space-md);
   }
 }
 
 @media (max-width: 480px) {
   .quick-help-grid {
     grid-template-columns: 1fr;
+    gap: var(--space-sm);
   }
 
   .quick-help-heading {
     font-size: var(--text-lg);
+  }
+
+  .status-metrics {
+    display: none;
+  }
+
+  .input-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Send button fills the remaining width so it is a comfortable thumb target. */
+  .input-actions > :last-child {
+    flex: 1 1 auto;
+    margin-left: auto;
   }
 }
 

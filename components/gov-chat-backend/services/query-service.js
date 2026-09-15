@@ -41,34 +41,23 @@ const GEO_KEYWORDS = [
 // Matched on the user's original text, so routing does not depend on the
 // translator producing the English stems above. Bengali entries are substrings
 // (no word boundaries in the script); Banglish entries are word-start stems.
+// Bengali patterns. Nouns take endings (জমি, জমির, জমিগুলো, জমিগুলোর), so each
+// noun stem allows a short suffix; "মানচিত্রে দেখাও" may sit a few words later.
 const DELINEATE_KEYWORDS_BN = [
-  'জমির সীমানা',
-  'জমি সীমানা',
-  'ক্ষেতের সীমানা',
-  'খেতের সীমানা',
-  'মাঠের সীমানা',
-  'প্লট সীমানা',
-  'সীমানা নির্ধারণ',
-  'জমির মানচিত্র',
-  'ক্ষেতের মানচিত্র',
-  'খেতের মানচিত্র',
-  'জমির ম্যাপ',
-  'ক্ষেতের ম্যাপ',
-  'খেতের ম্যাপ',
-  'জমি চিহ্নিত'
+  /(?:জমি|ক্ষেত|খেত|মাঠ|প্লট)\S{0,8}\s*সীমানা/,
+  /সীমানা\s*নির্ধারণ/,
+  /(?:জমি|ক্ষেত|খেত|প্লট)\S{0,8}\s*(?:ম্যাপ|মানচিত্র)/,
+  /(?:ম্যাপ|মানচিত্র)\s*(?:কর|বানা|তৈরি)\S*\s*(?:আমার\s+)?(?:জমি|ক্ষেত|খেত)/,
+  /(?:জমি|ক্ষেত|খেত)\S{0,8}[^।?!]{0,30}মানচিত্রে\s*দেখা/,
+  /জমি\s*চিহ্নিত/
 ];
 const FLOOD_KEYWORDS_BN = [
-  'বন্যার মানচিত্র',
-  'বন্যা মানচিত্র',
-  'বন্যার ম্যাপ',
-  'বন্যা ম্যাপ',
-  'বন্যার বিস্তার',
-  'বন্যা শনাক্ত',
-  'স্যাটেলাইট বন্যা',
-  'প্লাবিত এলাকা',
-  'জলমগ্ন এলাকা'
+  /বন্যা\S{0,4}\s*(?:মানচিত্র|ম্যাপ|বিস্তার|শনাক্ত|এলাকা)/,
+  /স্যাটেলাইট\s*বন্যা/,
+  /প্লাবিত\s*এলাকা/,
+  /জলমগ্ন/
 ];
-const BULLETIN_KEYWORDS_BN = ['বুলেটিন'];
+const BULLETIN_KEYWORDS_BN = [/বুলেটিন/];
 const DELINEATE_KEYWORDS_BANGLISH = [
   'jomir simana',
   'jomir shimana',
@@ -81,8 +70,21 @@ const DELINEATE_KEYWORDS_BANGLISH = [
   'simana nirdharon',
   'jomir map',
   'jomir manchitro',
+  'jomi map',
+  'jomi manchitro',
+  'jomi gulo map',
+  'jomigulo map',
+  'jomi gulor map',
   'kheter map',
-  'khet map'
+  'kheter manchitro',
+  'khet map',
+  'khet gulo map',
+  'khetgulo map',
+  'map amar jomi',
+  'map amar khet',
+  'map jomi',
+  'map khet',
+  'map koro amar jomi'
 ];
 const FLOOD_KEYWORDS_BANGLISH = [
   'bonnar map',
@@ -99,7 +101,31 @@ const BULLETIN_KEYWORDS_BANGLISH = ['abohawa bulletin', 'krishi bulletin'];
 
 // English stems split by command kind (GEO_KEYWORDS keeps the combined list for
 // callers that only need "is this a satellite job").
-const DELINEATE_KEYWORDS_EN = ['delineat', 'field boundar', 'farm boundar'];
+// Word-start stems (kwMatches), so 'map my field' also covers 'map my fields'.
+const DELINEATE_KEYWORDS_EN = [
+  'delineat',
+  'field boundar',
+  'farm boundar',
+  'plot boundar',
+  'land boundar',
+  'map my field',
+  'map my farm',
+  'map my land',
+  'map my plot',
+  'map the field',
+  'map our field',
+  'map fields',
+  'field map',
+  'farm map',
+  'plot map',
+  'show my field',
+  'show my farm',
+  'show my plot',
+  'outline my field',
+  'outline my farm',
+  'segment my field',
+  'segment my farm'
+];
 const FLOOD_KEYWORDS_EN = ['flood detection', 'flood map', 'flood extent', 'satellite flood', 'inundation', 'prithvi'];
 
 // Bengali (Bangla) script block. The weather/geo keyword lists are English, and
@@ -206,8 +232,8 @@ const kwMatches = (text, kw) => new RegExp(`(?:^|[^a-z0-9])${kw.replace(/[.*+?^$
 // GEO_KEYWORDS launch satellite inference. Everything else is a question.
 const BULLETIN_KEYWORDS = ['bulletin', 'agrometeorological', 'agromet', 'agri advisory'];
 
-/** Substring test for Bengali-script keywords (NFC-normalised, no word boundaries). */
-const bnMatches = (text, kw) => text.normalize('NFC').includes(kw.normalize('NFC'));
+/** Bengali-script pattern test (NFC-normalised; the script has no word boundaries). */
+const bnMatches = (text, pattern) => pattern.test(text.normalize('NFC'));
 
 /**
  * Which command a message is, if any: 'delineate', 'flood' or 'bulletin'.

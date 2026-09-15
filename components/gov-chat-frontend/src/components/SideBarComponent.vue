@@ -477,6 +477,7 @@ export default {
     top: 60px;
     left: 0;
     height: calc(100vh - 60px);
+    height: calc(100dvh - 60px);
     width: 90%;
     max-width: 480px;
     transform: translateX(-100%);
@@ -491,6 +492,17 @@ export default {
 
   .mobile-sidebar-overlay {
     display: block;
+  }
+}
+
+/* The navbar is 54px tall on phones (NavBarComponent); keep the drawer flush below it. */
+@media screen and (max-width: 480px) {
+  .side-bar {
+    top: 54px;
+    height: calc(100vh - 54px);
+    height: calc(100dvh - 54px);
+    width: 100%;
+    max-width: none;
   }
 
   .sidebar-inner :deep(.ds-tabs__btn) {

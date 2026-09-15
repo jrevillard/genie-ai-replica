@@ -136,7 +136,8 @@ export default {
 
   data() {
     return {
-      sidebarCollapsed: false,
+      // Start collapsed on phones: expanded it would cover the chat as an overlay.
+      sidebarCollapsed: typeof window !== 'undefined' && window.innerWidth <= 768,
       expandedFaqs: [],
       frequentlyAskedQuestions: []
     };
@@ -552,21 +553,42 @@ export default {
 }
 
 @media (max-width: 768px) {
+  /* Expanded: a drawer over the chat, below the navbar. (It used to wait for a
+     `visible` class nothing set, so the panel and its toggle were off screen.) */
   .sidebar {
     position: fixed;
     right: 0;
-    top: 0;
+    top: 60px;
     bottom: 0;
+    width: min(320px, 88vw);
     z-index: 100;
-    transform: translateX(100%);
+    box-shadow: var(--shadow-lg);
   }
 
-  .sidebar.visible {
-    transform: translateX(0);
-  }
-
+  /* Collapsed: a floating round button above the chat input instead of a strip
+     that covered the right edge of every message and the send button. */
   .sidebar.collapsed {
-    transform: translateX(calc(100% - 50px));
+    top: auto;
+    bottom: 96px;
+    right: 12px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+  }
+
+  .sidebar.collapsed .sidebar-header {
+    padding: 0;
+    height: 44px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    top: 54px; /* phone navbar height */
   }
 }
 </style>

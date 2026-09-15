@@ -1657,6 +1657,10 @@ services:
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
+      # Tokens from the mobile OIDC client are accepted too (azp check); optional
+      # extra first-party client ids, comma-separated
+      KC_MOBILE_CLIENT_ID: ${KC_MOBILE_CLIENT_ID:-}
+      KC_ALLOWED_CLIENT_IDS: ${KC_ALLOWED_CLIENT_IDS:-}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
       CHATQNA_ABSTENTION_INSTRUCTIONS: ${CHATQNA_ABSTENTION_INSTRUCTIONS:-}

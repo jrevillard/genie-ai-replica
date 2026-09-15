@@ -19,7 +19,20 @@ logger = logging.getLogger("GENIE.AI_CHATQNA")
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "genie-app")
+# The mobile app is its own public OIDC client (keycloak-config creates it from
+# KC_MOBILE_CLIENT_ID); its tokens carry that id as azp. KC_ALLOWED_CLIENT_IDS is
+# an optional comma-separated list for any further first-party clients.
+KC_MOBILE_CLIENT_ID = os.getenv("KC_MOBILE_CLIENT_ID", "").strip()
+KC_ALLOWED_CLIENT_IDS = os.getenv("KC_ALLOWED_CLIENT_IDS", "")
 KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+
+
+def allowed_client_ids() -> set[str]:
+    """Client ids whose tokens this service accepts (checked against azp)."""
+    ids = {KC_CLIENT_ID, KC_MOBILE_CLIENT_ID}
+    ids.update(part.strip() for part in KC_ALLOWED_CLIENT_IDS.split(","))
+    return {cid for cid in ids if cid}
+
 
 # JWKS cache
 _jwks_keys = None
@@ -106,9 +119,11 @@ async def validate_token(token: str) -> dict | None:
             options={"verify_aud": False},  # Keycloak 26+ uses aud=account; azp is checked below
         )
 
-        # Validate azp (authorized party) — the client that requested the token
-        if "azp" in payload and payload["azp"] != KC_CLIENT_ID:
-            logger.warning(f"Token azp mismatch: {payload['azp']} != {KC_CLIENT_ID}")
+        # Validate azp (authorized party) — the client that requested the token.
+        # Web (KC_CLIENT_ID) and mobile (KC_MOBILE_CLIENT_ID) clients are both ours.
+        allowed = allowed_client_ids()
+        if "azp" in payload and payload["azp"] not in allowed:
+            logger.warning(f"Token azp mismatch: {payload['azp']} not in {sorted(allowed)}")
             return None
 
         return payload

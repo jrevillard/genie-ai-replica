@@ -43,6 +43,11 @@ describe('isWeatherCommand', () => {
 
   it.each([
     'delineate my field near Dhaka',
+    'map my fields',
+    'Map my farm please',
+    'show my fields on the map',
+    'field map for Naogaon',
+    'outline my fields',
     'show field boundaries around Bogra',
     'run flood detection for Sylhet',
     'show the flood map for Khulna',
@@ -63,6 +68,14 @@ describe('isWeatherCommand', () => {
 
   it.each([
     ['আমার জমির সীমানা দেখাও', 'delineate'],
+    ['আমার জমি ম্যাপ করো', 'delineate'],
+    ['আমার জমিগুলো মানচিত্রে দেখাও', 'delineate'],
+    ['ক্ষেতগুলোর ম্যাপ চাই', 'delineate'],
+    ['ম্যাপ করুন আমার খেত', 'delineate'],
+    ['amar jomi map koro', 'delineate'],
+    ['amar jomi gulo map koro', 'delineate'],
+    ['khet gulo map dekhan', 'delineate'],
+    ['বন্যা এলাকা দেখাও', 'flood'],
     ['ক্ষেতের মানচিত্র দেখান', 'delineate'],
     ['amar jomir simana dekhao', 'delineate'],
     ['kheter map dekhan', 'delineate'],
@@ -82,8 +95,8 @@ describe('isWeatherCommand', () => {
   );
 
   it('prefixes a canonical English command when the translation lacks the stem', () => {
-    expect(ensureCommandKeyword('Show my land boundaries in Naogaon', 'delineate')).toBe(
-      'Delineate field boundaries: Show my land boundaries in Naogaon'
+    expect(ensureCommandKeyword('Draw the borders of my crops in Naogaon', 'delineate')).toBe(
+      'Delineate field boundaries: Draw the borders of my crops in Naogaon'
     );
     expect(ensureCommandKeyword('delineate my field in Naogaon', 'delineate')).toBe('delineate my field in Naogaon');
     expect(ensureCommandKeyword('Where is the water in Sylhet', 'flood')).toBe(

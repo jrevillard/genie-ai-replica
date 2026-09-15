@@ -492,33 +492,26 @@ export default {
 
 /* ── Mobile: full-width bar pinned to bottom ── */
 @media screen and (max-width: 600px) {
-  .crop-alert-banner {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-width: 100%;
-    min-width: 0;
-    border-radius: 10px 10px 0 0;
-    border-left: none;
-    border-top: 5px solid #ffc107;
-    padding: 14px 16px;
-    gap: 12px;
+  /* In the page flow (App.vue renders the stack between the navbar and the chat),
+     so an alert pushes the chat down instead of covering the input at the bottom.
+     Fixed-bottom banners hid the send button on phones. */
+  .crop-alert-stack {
+    position: static;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px 8px 0;
+    max-height: 40vh;
+    max-height: 40dvh;
+    overflow-y: auto;
   }
 
-  .type-potato.tier-2 {
-    border-top-color: #f0a500;
-  }
-  .type-potato.tier-3 {
-    border-top-color: #dc3545;
-  }
-  .type-potato.tier-4 {
-    border-top-color: #6f42c1;
-  }
-  .type-drought.tier-2 {
-    border-top-color: #ef6c00;
-  }
-  .type-drought.tier-3 {
-    border-top-color: #b71c1c;
+  .crop-alert-banner {
+    max-width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    gap: 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
   }
 }
 </style>

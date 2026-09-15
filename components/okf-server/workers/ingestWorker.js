@@ -162,6 +162,15 @@ async function _refreshRagIngestion(db, repoId) {
         .collection('okf_repositories')
         .document(repoId)
         .catch(() => null);
+      // RETRACT RACE GUARD (live 2026-09-15, Bali): a drain cancelled by a
+      // mid-drain retract (the wedge-recovery escape) must never be
+      // resurrected by a late progress write from a concept still in flight —
+      // this refresh overwrote the honest 'cancelled' record with 'draining'
+      // and the dashboard chip lied ("Ingesting") while nothing was running.
+      // The settle path below already refuses disarmed repos; the progress
+      // path must refuse them too — a disarmed repo's record belongs to its
+      // teardown.
+      if (!current || current.rag_drain_active !== true) return;
       await db.collection('okf_repositories').update(repoId, {
         rag_ingestion: Object.assign({}, (current && current.rag_ingestion) || {}, {
           status: 'draining',

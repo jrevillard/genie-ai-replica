@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **GPU OCR on dataprep:** `dataprep-arango-service` now declares `NVIDIA_VISIBLE_DEVICES=all` in the Swarm env (was previously unset, leaving the GPU-in-Docling/EasyOCR path inert despite `DOCLING_DEVICE=cuda` default). The v2.1.0 image already ships `torch==2.13.0+cu130` + `cuda-toolkit==13.0.3.0` + `nvidia-cudnn-cu13==9.20.0.48`, so no image rebuild is required. Requires a Swarm node with the `gpu == true` label and `nvidia-container-toolkit` installed (already in place for the 4 OPEA services).
 
+### Fixed
+
+- **vllm-llm CUDA illegal-memory-access crash loop (RTX 6000 Ada):** The `vllm` Swarm service and the standalone-GPU `vllm-llm` service restart-looped under dataprep labeling load with `RuntimeError: CUDA error: an illegal memory access was encountered` at `gpu_model_runner.py` `sampled_token_ids.tolist()`. Root cause is a known race in vLLM 0.10 V1 between xgrammar guided JSON decoding, chunked prefill, and long-context concurrent requests (upstream vllm-project/vllm#19483, #24107, #23814, #28028). Default `--max_num_seqs` lowered from 64 to 32 across `docker-compose.yaml`, `docker-compose.gpu.yaml`, and `deploy/ansible/templates/docker-compose.gpu.yaml.j2`. Empirical starting point — the crash log showed 19 running requests at the time of failure; iterate to 16 / 8 if 32 is insufficient. Chunked prefill, prefix caching, and `gpu_memory_utilization` are unchanged to preserve the Contextual Retrieval long-prompt path, chat performance, and the shared-GPU memory split with `vllm-translation-guardrail`.
+
 ## [2.1.0] - 2026-08-31
 
 ### Changed

@@ -55,6 +55,17 @@ module.exports = {
     // src/services/X.js uses ../../shared-lib/X (two levels up) in Docker.
     '^\\.\\./\\.\\./shared-lib/tracing-background$': '<rootDir>/../shared/lib/tracing-background.js',
     '^\\.\\./\\.\\./shared-lib/boolean-env$': '<rootDir>/../shared/lib/boolean-env.js',
-    '^\\.\\./\\.\\./shared-lib/otel-batch-config$': '<rootDir>/../shared/lib/otel-batch-config.js'
+    '^\\.\\./\\.\\./shared-lib/otel-batch-config$': '<rootDir>/../shared/lib/otel-batch-config.js',
+    // The shared/lib files (e.g. `tracing-background.js`) require
+    // `@opentelemetry/api` at module top. When Jest maps `../shared-lib/X`
+    // to `<rootDir>/../shared/lib/X.js`, the bare `@opentelemetry/api`
+    // require then resolves from the SHARED file's directory
+    // (`components/shared/lib/`) — which has no node_modules — and walks
+    // up without finding anything. Force Jest to resolve it from doc-repo's
+    // own node_modules instead, regardless of which file does the require.
+    // (Local env had a stale `components/shared/lib/node_modules/` artifact
+    // that masked this; CI runs a clean `npm ci` in doc-repo only and never
+    // creates that artifact, so the bare resolution fails.)
+    '^@opentelemetry/api$': '<rootDir>/node_modules/@opentelemetry/api'
   }
 };

@@ -3,6 +3,7 @@ const path = require('path');
 const mime = require('mime-types');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+const { runInBackgroundSpan } = require('../../shared-lib/tracing-background');
 const fileUtils = require('../utils/fileUtils');
 const metadataService = require('./metadataService');
 const Crawler = require('../utils/crawler');
@@ -903,4 +904,4 @@ class FileService {
   }
 }
 
-module.exports = new FileService();
+module.exports = runInBackgroundSpan('service.init.file', () => new FileService());

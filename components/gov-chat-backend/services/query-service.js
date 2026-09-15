@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 const { Worker } = require('worker_threads');
 const path = require('path');
 const { NotFoundError } = require('../middleware/errors');
@@ -1780,5 +1781,5 @@ class QueryService {
 }
 
 // Singleton instance
-const instance = new QueryService();
+const instance = runInBackgroundSpan('service.init.query', () => new QueryService());
 module.exports = instance;

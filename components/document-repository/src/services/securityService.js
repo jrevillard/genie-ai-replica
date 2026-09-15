@@ -5,6 +5,7 @@ const { execFileSync } = require('child_process');
 const appConfig = require('../config/appConfig');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+const { runInBackgroundSpan } = require('../../shared-lib/tracing-background');
 
 // Cached ClamAV signature version.
 // Query `clamdscan --version` once at module load and cache the trimmed
@@ -203,4 +204,4 @@ class SecurityService {
   }
 }
 
-module.exports = new SecurityService();
+module.exports = runInBackgroundSpan('service.init.security', () => new SecurityService());

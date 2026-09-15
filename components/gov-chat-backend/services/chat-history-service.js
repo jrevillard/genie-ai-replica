@@ -2,6 +2,7 @@ require('dotenv').config();
 const nodeCrypto = require('crypto');
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 const { NotFoundError, ForbiddenError } = require('../middleware/errors');
 const { traceQuery } = require('../tracing-db');
 
@@ -2361,5 +2362,5 @@ class ChatHistoryService {
     }
   }
 }
-const chatHistoryService = ChatHistoryService.getInstance();
+const chatHistoryService = runInBackgroundSpan('service.init.chat_history', () => ChatHistoryService.getInstance());
 module.exports = chatHistoryService;

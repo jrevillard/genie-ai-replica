@@ -11,27 +11,38 @@ const path = require('path');
 const fs = require('fs');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const { logger, dbService, securityHeaders, SecurityMiddleware } = require('./shared-lib');
+const {
+  logger,
+  dbService,
+  securityHeaders,
+  SecurityMiddleware,
+  withBackgroundSpan,
+  runInBackgroundSpan
+} = require('./shared-lib');
 const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middleware');
 const metricsMiddlewareFactory = require('./middleware/metrics-middleware');
 
 // Validate shared-lib imports
-logger.info('Validating shared-lib imports:', {
-  logger: typeof logger,
-  dbService: typeof dbService,
-  securityHeaders: typeof securityHeaders,
-  SecurityMiddleware: typeof SecurityMiddleware
+runInBackgroundSpan('app.boot', () => {
+  logger.info('Validating shared-lib imports:', {
+    logger: typeof logger,
+    dbService: typeof dbService,
+    securityHeaders: typeof securityHeaders,
+    SecurityMiddleware: typeof SecurityMiddleware
+  });
 });
 if (!securityHeaders) {
-  logger.error('securityHeaders is undefined');
+  runInBackgroundSpan('app.boot', () => logger.error('securityHeaders is undefined'));
   throw new Error('securityHeaders is undefined');
 }
 if (!logger || !dbService || !SecurityMiddleware) {
-  logger.error('Critical shared-lib components missing:', {
-    logger: !!logger,
-    dbService: !!dbService,
-    SecurityMiddleware: !!SecurityMiddleware
-  });
+  runInBackgroundSpan('app.boot', () =>
+    logger.error('Critical shared-lib components missing:', {
+      logger: !!logger,
+      dbService: !!dbService,
+      SecurityMiddleware: !!SecurityMiddleware
+    })
+  );
   throw new Error('Critical shared-lib components missing');
 }
 
@@ -40,17 +51,19 @@ const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 try {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
-    logger.info(`Created uploads directory: ${uploadsDir}`);
+    runInBackgroundSpan('app.boot', () => logger.info(`Created uploads directory: ${uploadsDir}`));
   } else {
-    logger.debug(`Uploads directory already exists: ${uploadsDir}`);
+    runInBackgroundSpan('app.boot', () => logger.debug(`Uploads directory already exists: ${uploadsDir}`));
   }
 } catch (error) {
-  logger.error('Failed to create uploads directory:', {
-    error: error.message,
-    stack: error.stack,
-    rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    errorType: error?.constructor?.name || 'Unknown'
-  });
+  runInBackgroundSpan('app.boot', () =>
+    logger.error('Failed to create uploads directory:', {
+      error: error.message,
+      stack: error.stack,
+      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+      errorType: error?.constructor?.name || 'Unknown'
+    })
+  );
 }
 
 // Swagger definition (stays at module level for swagger-config.test.js compatibility)
@@ -1007,35 +1020,43 @@ async function initializeServices() {
 
   // Pre-initialization connection test
   logger.info('Performing pre-initialization connection test');
-  try {
-    const defaultConnection = await Promise.race([
-      dbService.getConnection('default'),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Pre-initialization connection test timed out')), 30000)
-      )
-    ]);
-    logger.info('Pre-initialization connection test successful');
+  // Background emitter (boot-time DB reachability probe) — span the probe
+  // so the boot logs and any failure carry a real trace_id.
+  await withBackgroundSpan(
+    'app.preinit_db',
+    async () => {
+      try {
+        const defaultConnection = await Promise.race([
+          dbService.getConnection('default'),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Pre-initialization connection test timed out')), 30000)
+          )
+        ]);
+        logger.info('Pre-initialization connection test successful');
 
-    try {
-      const version = await defaultConnection.version();
-      logger.debug('ArangoDB version:', { version: version.version, server: version.server });
-    } catch (versionError) {
-      logger.error('Failed to get ArangoDB version:', {
-        error: versionError.message,
-        stack: versionError.stack,
-        rawError: JSON.stringify(versionError, Object.getOwnPropertyNames(versionError)),
-        errorType: versionError?.constructor?.name || 'Unknown'
-      });
-    }
-  } catch (error) {
-    logger.error('Pre-initialization connection test failed:', {
-      error: error.message || 'Unknown error',
-      stack: error.stack || 'No stack trace',
-      rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-      errorType: error?.constructor?.name || 'Unknown'
-    });
-    throw error;
-  }
+        try {
+          const version = await defaultConnection.version();
+          logger.debug('ArangoDB version:', { version: version.version, server: version.server });
+        } catch (versionError) {
+          logger.error('Failed to get ArangoDB version:', {
+            error: versionError.message,
+            stack: versionError.stack,
+            rawError: JSON.stringify(versionError, Object.getOwnPropertyNames(versionError)),
+            errorType: versionError?.constructor?.name || 'Unknown'
+          });
+        }
+      } catch (error) {
+        logger.error('Pre-initialization connection test failed:', {
+          error: error.message || 'Unknown error',
+          stack: error.stack || 'No stack trace',
+          rawError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+          errorType: error?.constructor?.name || 'Unknown'
+        });
+        throw error;
+      }
+    },
+    { 'db.target': 'default' }
+  );
 
   const services = {};
 
@@ -1265,8 +1286,16 @@ async function startApp() {
 
   try {
     const server = app.listen(PORT, () => {
-      logger.info(`Server is running on port ${PORT}`);
-      logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+      // Background emitter (server-ready callback) — span the body so the
+      // boot logs carry a real trace_id.
+      runInBackgroundSpan(
+        'app.listen',
+        () => {
+          logger.info(`Server is running on port ${PORT}`);
+          logger.info(`API Documentation available at: http://localhost:${PORT}/api-docs`);
+        },
+        { port: PORT }
+      );
     });
     // Set server timeout to 1 hour (must match Kong/NGINX streaming timeouts)
     if (typeof server.setTimeout === 'function') {
@@ -1286,14 +1315,18 @@ async function startApp() {
 
 // Catch unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', {
-    promise: promise.toString(),
-    reason: reason?.message || 'Unknown reason',
-    stack: reason?.stack || 'No stack trace',
-    rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
-    errorType: reason?.constructor?.name || 'Unknown'
+  // Background emitter (unhandled rejection at process level) — span the
+  // handler so the emitted error log carries a real trace_id.
+  runInBackgroundSpan('app.unhandled_rejection', () => {
+    logger.error('Unhandled Rejection at:', {
+      promise: promise.toString(),
+      reason: reason?.message || 'Unknown reason',
+      stack: reason?.stack || 'No stack trace',
+      rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
+      errorType: reason?.constructor?.name || 'Unknown'
+    });
+    process.exit(1);
   });
-  process.exit(1);
 });
 
 // Auto-start only when run directly

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 
 class WeatherService {
   constructor() {
@@ -228,5 +229,5 @@ class WeatherService {
 }
 
 // Singleton instance
-const instance = new WeatherService();
+const instance = runInBackgroundSpan('service.init.weather', () => new WeatherService());
 module.exports = instance;

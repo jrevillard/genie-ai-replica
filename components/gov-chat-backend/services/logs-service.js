@@ -13,6 +13,7 @@
 
 const fs = require('fs').promises;
 const fssync = require('fs');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 const path = require('path');
 const zlib = require('zlib');
 const util = require('util');
@@ -396,7 +397,18 @@ class LogsService {
   _vlFilter(q) {
     const baseQ = typeof q === 'string' && q.trim() !== '' ? q : '*';
     if (booleanEnv('LOG_TO_VICTORIALOGS') && !booleanEnv('LOG_TO_FILE')) {
-      return `${baseQ} AND NOT (_stream:genie.backend OR _stream:genie.document-repository)`;
+      // Dual-emit dedup: while OTLP is the canonical writer, the Docker
+      // fluentd driver ALSO forwards stdout to VL — same JSON content,
+      // different field shape (fluentd adds `fluent.tag` + Compose label
+      // `service.name`, OTLP adds the OTel resource `service.name` plus
+      // `trace_id`, `span_id`, `deployment.environment`, etc.). The OTel
+      // SDK path uses the canonical `genie-*` service names (e.g.
+      // `genie-backend`, `genie-document-repository`); the fluentd path
+      // uses raw Compose service labels (e.g. `backend`,
+      // `document-repository`). Keep ONLY the OTel records by requiring
+      // `service.name:genie-*` — that filter matches both OTel-instrumented
+      // services AND excludes every fluentd duplicate.
+      return `${baseQ} AND service.name:genie-*`;
     }
     return baseQ;
   }
@@ -1760,7 +1772,7 @@ class LogsService {
   }
 }
 
-const logsService = LogsService.getInstance();
+const logsService = runInBackgroundSpan('service.init.logs', () => LogsService.getInstance());
 module.exports = logsService;
 module.exports.LogsService = LogsService;
 module.exports.VlFilesDisabledError = VlFilesDisabledError;

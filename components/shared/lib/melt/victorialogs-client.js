@@ -100,7 +100,14 @@ class VictoriaLogsAdapter extends LogQueryRepository {
    * @param {number} [options.timeout]            axios timeout in ms (overrides `VL_QUERY_TIMEOUT_MS`).
    */
   constructor({ baseURL, tenantId, skipHealthProbe, timeout } = {}) {
-    super({ baseURL, tenantId });
+    // Production default: the VL compose service is named `victorialogs`
+    // and listens on 9428 (the standard VL port). Callers can still
+    // override via `VICTORIALOGS_URL` env or an explicit `baseURL` option.
+    // The previous behaviour — axios with `baseURL: undefined` — produced
+    // `TypeError: Invalid URL` because the relative path
+    // `/select/logsql/query` had no base to resolve against.
+    const resolvedBaseURL = baseURL || process.env.VICTORIALOGS_URL || 'http://victorialogs:9428';
+    super({ baseURL: resolvedBaseURL, tenantId });
 
     const resolvedTenant = tenantId || process.env.VICTORIALOGS_TENANT_ID || DEFAULT_TENANT_ID;
     const tenantParts = String(resolvedTenant).split(':');
@@ -116,7 +123,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
           : DEFAULT_QUERY_TIMEOUT_MS;
 
     this._axios = axios.create({
-      baseURL,
+      baseURL: resolvedBaseURL,
       timeout: resolvedTimeout,
       headers: {
         AccountID: accountId,
@@ -137,13 +144,28 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   async query({ q, start, end, limit, fields }) {
     await this._ensureHealth();
 
-    const params = { q, start, end };
+    // VL's `/select/logsql/query` endpoint expects the LogsQL expression
+    // in the `query` URL parameter — NOT `q`. Earlier revisions of this
+    // adapter sent `q`; VL rejected with `query arg cannot be empty`
+    // (warn-level log per request). Rename at the boundary so callers
+    // keep the short `{q: ...}` shape.
+    const params = { query: q, start, end };
     if (limit !== undefined && limit !== null) params.limit = limit;
     if (Array.isArray(fields) && fields.length > 0) params.fields = fields.join(',');
 
-    const response = await this._axios.get('/select/logsql/query', { params });
-    const rows = Array.isArray(response.data) ? response.data : [];
-    return this._normalizeRows(rows);
+    // VL serves `/select/logsql/query` as `application/stream+json`
+    // (one JSON object per line — JSONL). Axios auto-parser only fires for
+    // `application/json`; for other types it returns the raw body string.
+    // Parse the stream+json manually here so callers always see an array.
+    const response = await this._axios.get('/select/logsql/query', {
+      params,
+      // Force text response so we can split on newlines regardless of
+      // what VL sends (axios would otherwise try to JSON.parse the
+      // entire body for `application/json` and fail on multi-line JSONL).
+      responseType: 'text',
+      transformResponse: [(data) => data]
+    });
+    return this._normalizeRows(this._parseJsonlResponse(response.data));
   }
 
   /**
@@ -163,9 +185,14 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   async hits({ q, start, end, field }) {
     await this._ensureHealth();
 
-    const params = { q, start, end, field };
-    const response = await this._axios.get('/select/logsql/hits', { params });
-    const tuples = Array.isArray(response.data) ? response.data : [];
+    // Same `q` → `query` rename as `query()` above; same JSONL parsing.
+    const params = { query: q, start, end, field };
+    const response = await this._axios.get('/select/logsql/hits', {
+      params,
+      responseType: 'text',
+      transformResponse: [(data) => data]
+    });
+    const tuples = this._parseJsonlResponse(response.data);
     const result = {};
     for (const entry of tuples) {
       if (!Array.isArray(entry) || entry.length < 2) continue;
@@ -188,6 +215,34 @@ class VictoriaLogsAdapter extends LogQueryRepository {
    *
    * @returns {Promise<void>}
    */
+  /**
+   * Parse a VL JSONL response body into an array of objects.
+   *
+   * VL serves `/select/logsql/query` and `/select/logsql/hits` as
+   * `application/stream+json` — one JSON object per line. A blank line
+   * (or whitespace-only line) is tolerated; a malformed line is
+   * silently dropped (the canonical "skip noisy entry" behaviour for
+   * the adapter — VL occasionally emits status lines that aren't rows).
+   *
+   * @param {unknown} body
+   * @returns {Array<object|Array>}
+   */
+  _parseJsonlResponse(body) {
+    if (Array.isArray(body)) return body;
+    if (typeof body !== 'string') return [];
+    const out = [];
+    for (const line of body.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed === '') continue;
+      try {
+        out.push(JSON.parse(trimmed));
+      } catch {
+        // Skip malformed lines (status lines, keep-alives, etc.).
+      }
+    }
+    return out;
+  }
+
   async _ensureHealth() {
     if (this._healthProbed === true || this._skipHealthProbe) return;
     if (this._healthProbePromise) return this._healthProbePromise;

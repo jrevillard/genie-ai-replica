@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 const { NotFoundError } = require('../middleware/errors');
 const { sanitizePath } = require('./path-sanitizer');
 const { JIT_PROTECTED_FIELDS } = require('../constants/jit-fields');
@@ -438,5 +439,5 @@ class UserProfileService {
 }
 
 // Singleton instance
-const instance = new UserProfileService();
+const instance = runInBackgroundSpan('service.init.user_profile', () => new UserProfileService());
 module.exports = instance;

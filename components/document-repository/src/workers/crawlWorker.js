@@ -11,7 +11,7 @@ const { Worker } = require('worker_threads');
 const os = require('os');
 
 // Shared libraries
-const { logger, dbService } = require('../../shared-lib');
+const { logger, dbService, withBackgroundSpan } = require('../../shared-lib');
 
 // App dependencies
 const appConfig = require('../config/appConfig');
@@ -47,9 +47,19 @@ const processPageOnThread = (html, url, config) => {
     workerRR = (workerRR + 1) % NUM_THREADS;
 
     const handler = (msg) => {
-      cleanup();
-      if (msg.result === 'error') reject(new Error(msg.message));
-      else resolve(msg);
+      // Background emitter (worker thread callback) — give the emitted logs
+      // a real trace_id by anchoring the body in a fresh OTel root span.
+      // `id` placeholder from the task brief → use the URL as the page key
+      // since no separate id is plumbed through the worker contract.
+      withBackgroundSpan(
+        'crawl.page',
+        async () => {
+          cleanup();
+          if (msg.result === 'error') reject(new Error(msg.message));
+          else resolve(msg);
+        },
+        { 'page.id': url }
+      );
     };
     const errorHandler = (err) => {
       cleanup();
@@ -68,19 +78,33 @@ const processPageOnThread = (html, url, config) => {
 };
 
 const start = () => {
-  initWorkers();
-  logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
-  poll();
+  // Background emitter (process/thread bootstrap) — wrap the boot body in
+  // a root span so log lines emitted during init carry a real trace_id.
+  withBackgroundSpan('crawl.start', async () => {
+    initWorkers();
+    logger.info(`[CRAWL-WORKER] Starting background worker. Polling every ${POLL_INTERVAL_MS}ms.`);
+    poll();
+  });
 };
 
-const poll = async () => {
-  try {
-    await checkAndProcessJobs();
-  } catch (err) {
-    logger.error(`[CRAWL-WORKER] Global polling error: ${err.message}`, err);
-  } finally {
-    setTimeout(poll, POLL_INTERVAL_MS);
-  }
+const poll = () => {
+  // Background emitter (periodic setTimeout) — each tick is its own root
+  // span so emitted logs (DB query, error handler) inherit a real trace_id.
+  // Recursion: setTimeout(poll, ...) re-enters this wrapper, creating a
+  // fresh span per tick.
+  withBackgroundSpan(
+    'crawl.poll',
+    async () => {
+      try {
+        await checkAndProcessJobs();
+      } catch (err) {
+        logger.error(`[CRAWL-WORKER] Global polling error: ${err.message}`, err);
+      } finally {
+        setTimeout(poll, POLL_INTERVAL_MS);
+      }
+    },
+    { 'poll.interval_ms': POLL_INTERVAL_MS }
+  );
 };
 
 const checkAndProcessJobs = async () => {

@@ -68,7 +68,7 @@ describe('logger OTel trace correlation', () => {
   });
 
   describe('traceFormat — no active span', () => {
-    it('includes zeroed trace_id and span_id when no span is active', () => {
+    it('OMITS trace_id and span_id when no span is active (no zero-bucket)', () => {
       mockGetSpan.mockReturnValue(undefined);
       mockContextActive.mockReturnValue({});
 
@@ -78,11 +78,20 @@ describe('logger OTel trace correlation', () => {
       testLogger.info('test message');
 
       expect(entries).toHaveLength(1);
-      expect(entries[0].trace_id).toBe(ZERO_TRACE_ID);
-      expect(entries[0].span_id).toBe(ZERO_SPAN_ID);
+      // No active span → keys OMITTED entirely (not zeroed). Zero IDs would
+      // group every orphan log under one false VL `_stream:{trace_id=0...}`
+      // bucket — the field is left undefined so the log stays uncorrelated.
+      expect(Object.prototype.hasOwnProperty.call(entries[0], 'trace_id')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(entries[0], 'span_id')).toBe(false);
+      expect(entries[0].trace_id).toBeUndefined();
+      expect(entries[0].span_id).toBeUndefined();
     });
 
-    it('returns zeroed IDs when span context has all-zero trace flags (not sampled)', () => {
+    it('STAMPS all-zero IDs when an active span exists with non-sampled trace flags', () => {
+      // Active span with non-sampled (traceFlags: 0) context — the IDs are
+      // structurally zero but the span IS active. We stamp the IDs as-is
+      // (real span, just not sampled). This is distinct from "no active
+      // span" above, where keys are OMITTED.
       const mockSpan = {
         spanContext: () => ({
           traceId: '0'.repeat(32),
@@ -253,11 +262,12 @@ describe('logger OTel trace correlation', () => {
       expect(entries).toHaveLength(2);
       expect(entries[0].trace_id).toBe('4bf92f3577b34da6a3ce929d0e0e4736');
       expect(entries[0].span_id).toBe('00f067aa0ba902b7');
-      expect(entries[1].trace_id).toBe(ZERO_TRACE_ID);
-      expect(entries[1].span_id).toBe(ZERO_SPAN_ID);
+      // Second entry: no active span → keys OMITTED, not zeroed.
+      expect(Object.prototype.hasOwnProperty.call(entries[1], 'trace_id')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(entries[1], 'span_id')).toBe(false);
     });
 
-    it('handles debug level log entries', () => {
+    it('handles debug level log entries with no span (keys omitted)', () => {
       mockGetSpan.mockReturnValue(undefined);
       mockContextActive.mockReturnValue({});
 
@@ -267,8 +277,8 @@ describe('logger OTel trace correlation', () => {
       testLogger.debug('debug message');
 
       expect(entries).toHaveLength(1);
-      expect(entries[0].trace_id).toBe(ZERO_TRACE_ID);
-      expect(entries[0].span_id).toBe(ZERO_SPAN_ID);
+      expect(Object.prototype.hasOwnProperty.call(entries[0], 'trace_id')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(entries[0], 'span_id')).toBe(false);
       expect(entries[0].level).toBe('debug');
     });
   });

@@ -20,11 +20,18 @@ import logging
 import os
 import signal
 import sys
+from contextlib import contextmanager
 from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
+
+# `set_logger_provider` lives in the API package, not the SDK
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
@@ -34,6 +41,7 @@ from opentelemetry.trace import Status, StatusCode
 
 _provider = None
 _meter_provider = None
+_logger_provider = None
 
 # Shared PII keys — import from here in all services to avoid duplication
 _PII_KEYS = frozenset(
@@ -233,6 +241,25 @@ def setup_tracing(service_name: str) -> None:
     except Exception as exc:
         logging.getLogger(__name__).warning("Failed to initialize OTel MeterProvider — metrics disabled: %s", exc)
 
+    # --- Logs ---
+    # Upstream OPEA GenAIComps telemetry scope is metrics + tracing only
+    # (see https://github.com/opea-project/GenAIComps/comps/cores/telemetry).
+    # Our overlay adds LOG export so Python services' log records reach
+    # VictoriaLogs via OTLP with indexed `service.name` and correlated
+    # `trace_id`. Without this, OPEA logs only arrive in VL via the Docker
+    # fluentd driver → Collector fluentd receiver, which leaves the OTel
+    # resource empty and trace correlation impossible.
+    #
+    # Mirrors the Node.js backend's approach (`components/gov-chat-backend/tracing.js`):
+    # LoggerProvider + OTLPLogExporter + BatchLogRecordProcessor. OPEA's
+    # Python `comps` library does NOT install a logging handler — the
+    # `TraceContextFilter` reads `trace.get_current_span()` to inject
+    # `trace_id` / `span_id` into every Python LogRecord.
+    try:
+        setup_logging(service_name, resource=resource, endpoint_base=endpoint_base)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Failed to initialize OTel LoggerProvider — log export disabled: %s", exc)
+
     atexit.register(shutdown)
 
     # Handle SIGTERM (Docker/Swarm sends SIGTERM on stop)
@@ -245,6 +272,103 @@ def get_tracer(name: str = __name__):
     Safe to call before ``setup_tracing()`` — returns a no-op tracer.
     """
     return trace.get_tracer(name)
+
+
+def setup_logging(
+    service_name: str,
+    resource: Resource | None = None,
+    endpoint_base: str | None = None,
+) -> LoggerProvider:
+    """Initialize the OTel LoggerProvider with an OTLP HTTP exporter.
+
+    Adds an OTel log SDK path parallel to the existing fluentd path.
+    Python `LogRecord`s flow through this exporter (after the
+    `comps`-supplied `TraceContextFilter` annotates them with
+    `trace_id`/`span_id`) and out via OTLP to the Collector, then on to
+    VictoriaLogs — where they land with the OTel resource attached
+    (``service.name=genieai-X``, ``deployment.environment=...``, etc.).
+
+    Without this, OPEA Python logs only reach VL via the fluentd path
+    (no indexed OTel fields, no trace correlation). Upstream OPEA's
+    GenAIComps telemetry scope is metrics + traces only (see
+    https://github.com/opea-project/GenAIComps/comps/cores/telemetry).
+
+    Called automatically by ``setup_tracing()``; may also be called
+    independently if a service wants log export without spans/metrics.
+
+    @param service_name  Service name stamped on every log record
+                         (``service.name`` resource attribute). Must
+                         match the name passed to ``setup_tracing()``
+                         so log + trace correlation joins cleanly.
+    @param resource      Optional pre-built Resource. If None, built
+                         from the same env vars as ``setup_tracing()``
+                         (``SERVICE_VERSION``, ``NODE_ENV``).
+    @param endpoint_base OTLP base URL. If None, read from
+                         ``OTEL_EXPORTER_OTLP_ENDPOINT``. Empty /
+                         unset string → function is a no-op (same
+                         observability-disabled semantics as
+                         ``setup_tracing()``).
+    @returns the registered ``LoggerProvider`` (or ``None`` when
+             observability is disabled / endpoint missing).
+    """
+    global _logger_provider
+
+    if os.getenv("ENABLE_OBSERVABILITY") != "1":
+        return None
+
+    if endpoint_base is None:
+        endpoint_base = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    if not endpoint_base:
+        return None
+
+    if resource is None:
+        resource = Resource.create(
+            {
+                "service.name": service_name,
+                "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
+                "deployment.environment": os.getenv("NODE_ENV", "development"),
+            }
+        )
+
+    log_endpoint = f"{endpoint_base.rstrip('/')}/v1/logs"
+    log_exporter = OTLPLogExporter(endpoint=log_endpoint)
+    log_processor = BatchLogRecordProcessor(log_exporter)
+
+    _logger_provider = LoggerProvider(resource=resource)
+    _logger_provider.add_log_record_processor(log_processor)
+    set_logger_provider(_logger_provider)
+
+    # Attach the OTel LoggingHandler to the root Python logger so every
+    # `logger.info(...)` call (including OPEA `comps`' CustomLogger)
+    # emits a `LogRecord` through the LoggerProvider → OTLPLogExporter
+    # → Collector → VictoriaLogs. Without this, the LoggerProvider sits
+    # idle — Python's stdlib logging has no awareness of OTel logs
+    # unless we wire a handler that converts `LogRecord`s.
+    #
+    # We attach with NOTSET (root logger passes through every record at
+    # any level). The handler itself filters by `level` argument — we
+    # set DEBUG so dev-time diagnostics flow; raise to INFO in
+    # production if log volume is a concern. Set `OTEL_PYTHON_LOG_LEVEL`
+    # env to override without code change.
+    handler_level_name = os.getenv("OTEL_PYTHON_LOG_LEVEL", "DEBUG").upper()
+    handler_level = getattr(logging, handler_level_name, logging.DEBUG)
+    handler = LoggingHandler(level=handler_level, logger_provider=_logger_provider)
+
+    # Attach at the ROOT logger so every child logger (comps CustomLogger
+    # included) propagates to us. `force=False` to avoid clobbering
+    # existing handlers (e.g. Uvicorn's stdout handler) — the OTel
+    # handler is additive.
+    root_logger = logging.getLogger()
+    if not any(isinstance(h, LoggingHandler) for h in root_logger.handlers):
+        root_logger.addHandler(handler)
+
+    logging.getLogger(__name__).debug(
+        "OTel LoggerProvider enabled for %s → %s (handler level=%s)",
+        service_name,
+        log_endpoint,
+        handler_level_name,
+    )
+    return _logger_provider
 
 
 def with_span(name: str, tracer_name: str = __name__, attributes: dict | None = None):
@@ -266,6 +390,53 @@ def with_span(name: str, tracer_name: str = __name__, attributes: dict | None = 
     tracer = get_tracer(tracer_name)
     span = tracer.start_span(name, attributes=attributes)
     return _SpanContext(span)
+
+
+@contextmanager
+def background_span(name: str, tracer_name: str = __name__, attributes: dict | None = None):
+    """Context manager that wraps background work in a fresh OTel ROOT span AND
+    sets it as the active context for the duration of the block.
+
+    Use this for periodic tasks (health checks, log rollovers, cache eviction),
+    module-load init log bursts, and post-request background tasks — anywhere a
+    log is emitted without being inside a FastAPI request span. The OTel
+    Python `TracingContextFilter` (`genieai_logging.py`) reads the active span
+    to stamp ``trace_id`` / ``span_id`` on every log record; without an active
+    span, those records are emitted with no trace correlation.
+
+    Difference from `with_span`:
+        - `with_span` uses `tracer.start_span` — does NOT make the span active,
+          so logs emitted inside do not inherit the span's `trace_id`.
+        - `background_span` uses `tracer.start_as_current_span` — both starts
+          and activates the span. Logs emitted inside the `with` block (and
+          any code they call) carry the live `trace_id`.
+
+    Usage::
+
+        from tracing import background_span
+
+        def periodic_healthcheck():
+            with background_span("dataprep.healthcheck", attributes={"interval_s": 60}):
+                logger.info("pinging arangodb")  # trace_id stamped
+                if not healthy:
+                    logger.warning("arangodb unhealthy")  # trace_id stamped
+
+    Guarantees:
+        - span.end() always called (contextmanager)
+        - Exceptions are recorded on the span, status set to ERROR, then
+          re-raised (no suppression)
+        - Safe to call before ``setup_tracing()`` — returns a no-op context
+          that emits no span but still propagates exceptions
+    """
+    tracer = get_tracer(tracer_name)
+    try:
+        with tracer.start_as_current_span(name, attributes=attributes) as span:
+            yield span
+    except Exception as exc:
+        # `start_as_current_span` already records the exception + sets ERROR
+        # status + ends the span before propagating, so this re-raise is the
+        # only thing left to do.
+        raise exc from None
 
 
 class _SpanContext:
@@ -297,9 +468,10 @@ def get_meter() -> metrics.Meter:
 
 
 def shutdown() -> None:
-    """Flush and shut down the global TracerProvider and MeterProvider (best-effort)."""
-    global _provider, _meter_provider
-    if _provider is None and _meter_provider is None:
+    """Flush and shut down the global TracerProvider, MeterProvider, and
+    LoggerProvider (best-effort)."""
+    global _provider, _meter_provider, _logger_provider
+    if _provider is None and _meter_provider is None and _logger_provider is None:
         return
     with contextlib.suppress(Exception):
         _provider.force_flush(30_000)
@@ -311,13 +483,19 @@ def shutdown() -> None:
     with contextlib.suppress(Exception):
         _meter_provider.shutdown()
     _meter_provider = None
+    with contextlib.suppress(Exception):
+        _logger_provider.force_flush(30_000)
+    with contextlib.suppress(Exception):
+        _logger_provider.shutdown()
+    _logger_provider = None
 
 
 def _reset() -> None:
     """Reset module state. Only for testing."""
-    global _provider, _meter_provider
+    global _provider, _meter_provider, _logger_provider
     _provider = None
     _meter_provider = None
+    _logger_provider = None
 
 
 def _sigterm_handler(signum, frame):

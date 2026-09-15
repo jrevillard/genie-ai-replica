@@ -619,9 +619,18 @@ describe('LogsService VictoriaLogs rewrite', () => {
     it('_vlFilter appends dual-emit dedup when LOG_TO_VICTORIALOGS=true and LOG_TO_FILE unset', () => {
       process.env.LOG_TO_VICTORIALOGS = '1';
       delete process.env.LOG_TO_FILE;
-      expect(logsService._vlFilter('level:INFO')).toBe(
-        'level:INFO AND NOT (_stream:genie.backend OR _stream:genie.document-repository)'
-      );
+      // Dual-emit dedup filter narrows to OTel-SDK records only. With the
+      // fluentd service-name stamping fix (Collector transform reading
+      // `com.docker.compose.service`), every fluentd record NOW carries a
+      // `service.name` field — but with the raw Compose label (e.g.
+      // `backend`, `document-repository`). The OTel SDK path uses the
+      // canonical `genie-*` names (`genie-backend`,
+      // `genie-document-repository`). The filter `service.name:genie-*`
+      // matches ONLY the OTel-instrumented records and excludes every
+      // fluentd duplicate — same intent as the pre-fix
+      // `service.name:*` (which worked only because fluentd records had
+      // no `service.name` at all).
+      expect(logsService._vlFilter('level:INFO')).toBe('level:INFO AND service.name:genie-*');
     });
 
     it('_sourceMode trims and lowercases ADMIN_LOGS_SOURCE (escapes " FILE " typo)', () => {

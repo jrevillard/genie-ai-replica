@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 
 class SessionService {
   constructor() {
@@ -434,5 +435,5 @@ class SessionService {
 }
 
 // Singleton instance
-const instance = new SessionService();
+const instance = runInBackgroundSpan('service.init.session', () => new SessionService());
 module.exports = instance;

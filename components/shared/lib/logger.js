@@ -42,36 +42,53 @@ const _droppedCounter = (() => {
 // possible → log is effectively dropped from the OTel-victorialogs pipeline).
 const OBSERVABILITY_DISABLED = process.env.ENABLE_OBSERVABILITY !== '1';
 
-// Winston format that injects trace_id, span_id, and service from the active OTel span
+// Winston format that injects trace_id, span_id, and service from the active OTel span.
+//
+// Service-name resolution order (canonical OTel spec env first):
+//   1. `OTEL_SERVICE_NAME` (OpenTelemetry spec — read by SDK Resource as well,
+//      so the value stamped on logs matches the value on emitted spans/traces).
+//   2. `SERVICE_NAME` (legacy override).
+//   3. `'genie-backend'` (back-compat default for the backend service).
+//
+// doc-repo does not set `OTEL_SERVICE_NAME` either: its tracing.js hard-pins
+// `service.name='genie-document-repository'` on the OTel Resource directly,
+// so the SDK's own resource carries the right value even if this fallback
+// resolves to `'genie-backend'`. The two paths converge on the same log
+// field once the env var is set per-component in docker-compose.
+//
+// trace_id / span_id semantics: when no active OTel span exists (background
+// work, worker threads, db-connection-service called outside a request span
+// context), the keys are OMITTED rather than zeroed. All-zero trace_ids
+// were a regression — VL's `_stream:{trace_id=...}` filter treats zeros as
+// a real bucket and groups every orphan log under one false stream.
 const traceFormat = format((info) => {
   const span = trace.getSpan(context.active());
   if (span) {
     const { traceId, spanId } = span.spanContext();
     info.trace_id = traceId;
     info.span_id = spanId;
-  } else {
-    info.trace_id = '00000000000000000000000000000000';
-    info.span_id = '0000000000000000';
-    if (OBSERVABILITY_DISABLED) {
-      // Log emitted without OTel correlation — count it as a drop from the
-      // OTel-victorialogs pipeline. The metric call is wrapped because a
-      // counter failure MUST NOT corrupt log records (the formatter is on the
-      // critical path of every log emit).
-      try {
-        _droppedCounter.add(1, { reason: LOG_DROPPED_REASON.OBSERVABILITY_DISABLED });
-      } catch {
-        // never break the log pipeline over a metric failure
-      }
+  } else if (OBSERVABILITY_DISABLED) {
+    // Log emitted without OTel correlation — count it as a drop from the
+    // OTel-victorialogs pipeline. The metric call is wrapped because a
+    // counter failure MUST NOT corrupt log records (the formatter is on the
+    // critical path of every log emit). NO trace_id/span_id stamp here —
+    // omit the keys so VL doesn't bucket orphan logs under a fake all-zero
+    // trace stream.
+    try {
+      _droppedCounter.add(1, { reason: LOG_DROPPED_REASON.OBSERVABILITY_DISABLED });
+    } catch {
+      // never break the log pipeline over a metric failure
     }
   }
-  info.service = process.env.SERVICE_NAME || 'genie-backend';
+  info.service =
+    process.env.OTEL_SERVICE_NAME || process.env.SERVICE_NAME || 'genie-backend';
   return info;
 });
 
 // Gate the VictoriaLogs transport on both flags so VL only fans out when the
 // observability stack is on AND the deployment opts in. Re-evaluated on every
 // reconfigure so env-var toggles take effect without restart.
-const victoriaLogsEnabled = () => booleanEnv('LOG_TO_VICTORIALOGS') && booleanEnv('ENABLE_OBSERVABILITY');
+const victoriaLogsEnabled = () => booleanEnv('LOG_TO_VICTORIALOGS', true) && booleanEnv('ENABLE_OBSERVABILITY');
 
 // Single source of truth for the transport list — used by both the initial
 // `loggerConfig` and `reconfigureLogger`, so toggling env vars between
@@ -117,7 +134,11 @@ const buildTransports = (config = {}) => {
     );
   }
   if (victoriaLogsEnabled()) {
-    list.push(new VictoriaLogsTransport({ service: process.env.SERVICE_NAME || 'genie-backend' }));
+    list.push(
+      new VictoriaLogsTransport({
+        service: process.env.OTEL_SERVICE_NAME || process.env.SERVICE_NAME || 'genie-backend'
+      })
+    );
   }
   return list;
 };

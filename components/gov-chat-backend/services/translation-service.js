@@ -1,4 +1,4 @@
-const { logger } = require('../shared-lib');
+const { logger, runInBackgroundSpan } = require('../shared-lib');
 const nodeCrypto = require('crypto'); // For generating cache key
 const Redis = require('ioredis'); // For Redis cache
 
@@ -64,10 +64,22 @@ class TranslationService {
       });
 
       this.cacheClient.on('error', (err) => {
-        logger.error(`[TRANSLATION-CACHE] Redis client error: ${err.message}`);
+        // Background emitter (Redis client error event) — span the handler
+        // so the emitted error log carries a real trace_id.
+        runInBackgroundSpan(
+          'cache.redis.error',
+          () => {
+            logger.error(`[TRANSLATION-CACHE] Redis client error: ${err.message}`);
+          },
+          { 'error.kind': err.name || 'RedisError' }
+        );
       });
       this.cacheClient.on('connect', () => {
-        logger.info('[TRANSLATION-CACHE] Connected to Redis successfully.');
+        // Background emitter (Redis client connect event) — span the
+        // handler so the emitted log carries a real trace_id.
+        runInBackgroundSpan('cache.redis.connect', () => {
+          logger.info('[TRANSLATION-CACHE] Connected to Redis successfully.');
+        });
       });
     }
   }
@@ -535,4 +547,4 @@ class TranslationService {
 }
 
 // Export singleton instance
-module.exports = new TranslationService();
+module.exports = runInBackgroundSpan('service.init.translation', () => new TranslationService());

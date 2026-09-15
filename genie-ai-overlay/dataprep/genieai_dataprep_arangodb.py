@@ -13,7 +13,7 @@ import aiohttp
 from opentelemetry import propagate
 
 from core.model_cache import get_model_id
-from tracing import get_tracer, setup_trace_logging, with_span
+from tracing import background_span, get_tracer, setup_trace_logging, with_span
 
 tracer = get_tracer(__name__)
 
@@ -254,47 +254,49 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         GENIE convention (``ARANGO_DB`` → ``ARANGO_DB_NAME`` → ``genie-ai``),
         matching the retriever's default so both target the same database.
         """
-        # GENIE convention: ARANGO_DB wins, falls back to ARANGO_DB_NAME,
-        # then genie-ai (same default as the retriever).
-        db_name = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "genie-ai"))
+        with background_span("dataprep.initialize_client"):
+            # GENIE convention: ARANGO_DB wins, falls back to ARANGO_DB_NAME,
+            # then genie-ai (same default as the retriever).
+            db_name = os.getenv("ARANGO_DB", os.getenv("ARANGO_DB_NAME", "genie-ai"))
 
-        import arango
+            import arango
 
-        self.client = arango.ArangoClient(hosts=os.getenv("ARANGO_URL", "http://localhost:8529"))
-        sys_db = self.client.db(
-            name="_system",
-            username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
-            password=os.getenv("ARANGO_PASSWORD", "test"),
-            verify=True,
-        )
+            self.client = arango.ArangoClient(hosts=os.getenv("ARANGO_URL", "http://localhost:8529"))
+            sys_db = self.client.db(
+                name="_system",
+                username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
+                password=os.getenv("ARANGO_PASSWORD", "test"),
+                verify=True,
+            )
 
-        if not sys_db.has_database(db_name):
-            sys_db.create_database(db_name)
+            if not sys_db.has_database(db_name):
+                sys_db.create_database(db_name)
 
-        self.db = self.client.db(
-            name=db_name,
-            username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
-            password=os.getenv("ARANGO_PASSWORD", "test"),
-            verify=True,
-        )
+            self.db = self.client.db(
+                name=db_name,
+                username=os.getenv("ARANGO_USERNAME", os.getenv("ARANGO_USER", "root")),
+                password=os.getenv("ARANGO_PASSWORD", "test"),
+                verify=True,
+            )
 
     def _log_environment_variables(self):
         """Debug: Print all critical environment variables at startup."""
-        logger.debug(
-            f"GENIE-AI DATAPREP CONFIGURATION: "
-            f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
-            f"BACKEND={BACKEND_SERVICE_URL}, "
-            f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
-            f"LABELING={LABELING_STRATEGY}, "
-            f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
-            f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
-            f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
-            f"LLM={os.getenv('VLLM_ENDPOINT')}, "
-            f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
-            f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
-            f"BATCHES={MAX_CONCURRENT_BATCHES}, "
-            f"CONTEXTUAL_RETRIEVAL={CONTEXTUAL_RETRIEVAL_ENABLED}"
-        )
+        with background_span("dataprep.log_environment_variables"):
+            logger.debug(
+                f"GENIE-AI DATAPREP CONFIGURATION: "
+                f"DOC_REPO={DOCUMENT_REPOSITORY_URL}, "
+                f"BACKEND={BACKEND_SERVICE_URL}, "
+                f"GUARDRAIL={GUARDRAIL_ENABLED} ({GUARDRAIL_URL}), "
+                f"LABELING={LABELING_STRATEGY}, "
+                f"EMBED_THRESHOLD={EMBEDDING_LABEL_THRESHOLD}, "
+                f"BM25_THRESHOLD={BM25_LABEL_THRESHOLD}, "
+                f"EXTRACTION={CONTENT_EXTRACTION_METHOD}, "
+                f"LLM={os.getenv('VLLM_ENDPOINT')}, "
+                f"ARANGO_DB={os.getenv('ARANGO_DB')}, "
+                f"PROMPT_LEN={len(LABEL_SELECTOR_SYSTEM_PROMPT)}, "
+                f"BATCHES={MAX_CONCURRENT_BATCHES}, "
+                f"CONTEXTUAL_RETRIEVAL={CONTEXTUAL_RETRIEVAL_ENABLED}"
+            )
 
     def _initialize_llm(self, *args, **kwargs):
         """Override parent to auto-detect model on remote GPU node.
@@ -1270,151 +1272,158 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # We are responsible for releasing and closing it in the finally block.
 
         try:
-            # --- START PROTECTED EXECUTION (Spec 5.1) ---
-            await self._update_doc_status(input.file_id, "Ingesting")
-            await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
+            with background_span("dataprep.ingest.background"):
+                # --- START PROTECTED EXECUTION (Spec 5.1) ---
+                await self._update_doc_status(input.file_id, "Ingesting")
+                await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")
 
-            try:
-                # 1. Fetch Taxonomy (FROM BACKEND)
-                all_labels = await self._fetch_all_labels()
+                try:
+                    # 1. Fetch Taxonomy (FROM BACKEND)
+                    all_labels = await self._fetch_all_labels()
 
-                self._initialize_llm(
-                    allowed_node_types=getattr(input, "allowed_node_types", []),
-                    allowed_edge_types=getattr(input, "allowed_edge_types", []),
-                    node_properties=getattr(input, "node_properties", ["description"]),
-                    edge_properties=getattr(input, "edge_properties", ["description"]),
-                )
-
-                doc_path = DocPath(
-                    path=input.file_path,
-                    chunk_size=input.chunk_size,
-                    chunk_overlap=input.chunk_overlap,
-                    process_table=input.process_table,
-                    table_strategy=input.table_strategy,
-                )
-
-                # 2. Extract and Chunk Content
-                chunks = await self._load_and_chunk(doc_path)
-                if not chunks:
-                    raise Exception("No valid content extracted from file.")
-
-                await self._write_ingestion_log(input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks.")
-
-                # 3. Guardrail Check
-                gr_result = await self._run_guardrail(chunks)
-                if not gr_result["success"]:
-                    await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
-                    raise Exception("Guardrail Violation")
-
-                # 4. Contextual Retrieval (optional) + Labeling (Spec 5.3, 5.4)
-                file_labels = getattr(input, "file_labels", [])
-                original_chunks = list(chunks)
-                # When enabled, prepend an LLM-generated document context to each
-                # chunk so the embedding carries the document's subject (see
-                # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
-                # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
-                contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
-                # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
-                # RAW chunk (the context prefix distorts labeling — over/under-
-                # label) and use the contextualized text ONLY for the embedding.
-                # When false, the context is fed to both (label contextualized).
-                label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
-                labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
-
-                # 5. Graph Insertion (BATCHED & CONCURRENT)
-                # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
-                # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
-                # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
-                graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
-
-                documents_to_process = []
-                for i, doc in enumerate(labelled_docs):
-                    # metadata.chunk_text preserves the original (un-contextualized)
-                    # chunk for display/debug. Only written when contextualization is
-                    # enabled (flag off → true no-op, page_content already == original).
-                    # Guard i so a future _apply_labels change that altered chunk
-                    # count/order can never raise here (never block ingestion).
-                    metadata = {
-                        "file_id": input.file_id,
-                        "file_path": input.storage_path,
-                        "chunk_index": i,
-                        "chunk_labels": doc["labels"],
-                    }
-                    if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
-                        metadata["chunk_text"] = original_chunks[i]
-                    # Embed the contextualized text (subject propagation); falls back
-                    # to the labelled text when indexing is somehow misaligned.
-                    embed_text = contextualized[i] if i < len(contextualized) else doc["text"]
-                    documents_to_process.append(Document(page_content=embed_text, metadata=metadata))
-
-                BATCH_SIZE = 10
-                total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
-
-                self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
-                semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
-                tasks = []
-
-                for i in range(0, len(documents_to_process), BATCH_SIZE):
-                    batch_docs = documents_to_process[i : i + BATCH_SIZE]
-                    current_batch_num = (i // BATCH_SIZE) + 1
-
-                    # Schedule batch processing with concurrency control
-                    task = asyncio.create_task(
-                        self._process_batch(batch_docs, current_batch_num, total_batches, input, graph_name, semaphore)
+                    self._initialize_llm(
+                        allowed_node_types=getattr(input, "allowed_node_types", []),
+                        allowed_edge_types=getattr(input, "allowed_edge_types", []),
+                        node_properties=getattr(input, "node_properties", ["description"]),
+                        edge_properties=getattr(input, "edge_properties", ["description"]),
                     )
-                    tasks.append(task)
 
-                # Wait for all batches to complete
-                if tasks:
-                    await asyncio.gather(*tasks)
+                    doc_path = DocPath(
+                        path=input.file_path,
+                        chunk_size=input.chunk_size,
+                        chunk_overlap=input.chunk_overlap,
+                        process_table=input.process_table,
+                        table_strategy=input.table_strategy,
+                    )
 
-                # 6. Final Status Update
-                await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
-                await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion completed successfully.")
+                    # 2. Extract and Chunk Content
+                    chunks = await self._load_and_chunk(doc_path)
+                    if not chunks:
+                        raise Exception("No valid content extracted from file.")
 
-                return {
-                    "status": 200,
-                    "message": f"Successfully ingested {len(chunks)} chunks.",
-                    "graph_name": graph_name,
-                }
+                    await self._write_ingestion_log(
+                        input.file_id, "INFO", "Chunking", f"Generated {len(chunks)} chunks."
+                    )
 
-            except asyncio.CancelledError:
-                # --- KILL SWITCH HANDLING (Spec 3.1 & 4.2) ---
-                # Triggered when task.cancel() is called from the microservice
-                kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
-                logger.warning(kill_msg)
+                    # 3. Guardrail Check
+                    gr_result = await self._run_guardrail(chunks)
+                    if not gr_result["success"]:
+                        await self._write_ingestion_log(input.file_id, "ERROR", "Guardrail", gr_result["message"])
+                        raise Exception("Guardrail Violation")
 
-                # Log the termination event
-                await self._write_ingestion_log(
-                    input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup..."
-                )
+                    # 4. Contextual Retrieval (optional) + Labeling (Spec 5.3, 5.4)
+                    file_labels = getattr(input, "file_labels", [])
+                    original_chunks = list(chunks)
+                    # When enabled, prepend an LLM-generated document context to each
+                    # chunk so the embedding carries the document's subject (see
+                    # spec-contextual-retrieval.md). No-op (returns chunks unchanged)
+                    # when CONTEXTUAL_RETRIEVAL_ENABLED=false.
+                    contextualized = await self._apply_contextualization(original_chunks, input, input.file_id)
+                    # Decoupled mode (CONTEXTUAL_LABEL_RAW, default true): label the
+                    # RAW chunk (the context prefix distorts labeling — over/under-
+                    # label) and use the contextualized text ONLY for the embedding.
+                    # When false, the context is fed to both (label contextualized).
+                    label_input = original_chunks if CONTEXTUAL_LABEL_RAW else contextualized
+                    labelled_docs = await self._apply_labels(label_input, all_labels, file_labels, input.file_id)
 
-                # Perform graceful rollback (retraction)
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
+                    # 5. Graph Insertion (BATCHED & CONCURRENT)
+                    # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
+                    # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
+                    # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
+                    graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
 
-                # Set final status to "Killed" as per state machine specification
-                await self._update_doc_status(input.file_id, "Killed")
+                    documents_to_process = []
+                    for i, doc in enumerate(labelled_docs):
+                        # metadata.chunk_text preserves the original (un-contextualized)
+                        # chunk for display/debug. Only written when contextualization is
+                        # enabled (flag off → true no-op, page_content already == original).
+                        # Guard i so a future _apply_labels change that altered chunk
+                        # count/order can never raise here (never block ingestion).
+                        metadata = {
+                            "file_id": input.file_id,
+                            "file_path": input.storage_path,
+                            "chunk_index": i,
+                            "chunk_labels": doc["labels"],
+                        }
+                        if CONTEXTUAL_RETRIEVAL_ENABLED and i < len(original_chunks):
+                            metadata["chunk_text"] = original_chunks[i]
+                        # Embed the contextualized text (subject propagation); falls back
+                        # to the labelled text when indexing is somehow misaligned.
+                        embed_text = contextualized[i] if i < len(contextualized) else doc["text"]
+                        documents_to_process.append(Document(page_content=embed_text, metadata=metadata))
 
-                await self._write_ingestion_log(
-                    input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
-                )
-                raise  # Re-raise to ensure the task terminates properly
+                    BATCH_SIZE = 10
+                    total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
 
-            except Exception as e:
-                # --- ERROR HANDLING & AUTO-RETRACTION (Spec 5.5) ---
-                error_msg = f"Ingestion failed: {str(e)}"
-                logger.error(error_msg)
+                    self.graph = ArangoGraph(db=self.db, generate_schema_on_init=False)
+                    semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+                    tasks = []
 
-                await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
-                await self._update_doc_status(input.file_id, "Ingestion Error")
+                    for i in range(0, len(documents_to_process), BATCH_SIZE):
+                        batch_docs = documents_to_process[i : i + BATCH_SIZE]
+                        current_batch_num = (i // BATCH_SIZE) + 1
 
-                # Auto-retract created data
-                await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
-                await self._write_ingestion_log(
-                    input.file_id, "INFO", "System", "Rollback complete. Document retracted."
-                )
+                        # Schedule batch processing with concurrency control
+                        task = asyncio.create_task(
+                            self._process_batch(
+                                batch_docs, current_batch_num, total_batches, input, graph_name, semaphore
+                            )
+                        )
+                        tasks.append(task)
 
-                raise HTTPException(status_code=500, detail=error_msg) from e
+                    # Wait for all batches to complete
+                    if tasks:
+                        await asyncio.gather(*tasks)
+
+                    # 6. Final Status Update
+                    await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))
+                    await self._write_ingestion_log(
+                        input.file_id, "INFO", "System", "Ingestion completed successfully."
+                    )
+
+                    return {
+                        "status": 200,
+                        "message": f"Successfully ingested {len(chunks)} chunks.",
+                        "graph_name": graph_name,
+                    }
+
+                except asyncio.CancelledError:
+                    # --- KILL SWITCH HANDLING (Spec 3.1 & 4.2) ---
+                    # Triggered when task.cancel() is called from the microservice
+                    kill_msg = f"Ingestion for {input.file_id} was KILLED by an administrator. Rolling back..."
+                    logger.warning(kill_msg)
+
+                    # Log the termination event
+                    await self._write_ingestion_log(
+                        input.file_id, "WARN", "System", "Ingestion process killed. Starting cleanup..."
+                    )
+
+                    # Perform graceful rollback (retraction)
+                    await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
+
+                    # Set final status to "Killed" as per state machine specification
+                    await self._update_doc_status(input.file_id, "Killed")
+
+                    await self._write_ingestion_log(
+                        input.file_id, "INFO", "System", "Cleanup complete. Document state set to Killed."
+                    )
+                    raise  # Re-raise to ensure the task terminates properly
+
+                except Exception as e:
+                    # --- ERROR HANDLING & AUTO-RETRACTION (Spec 5.5) ---
+                    error_msg = f"Ingestion failed: {str(e)}"
+                    logger.error(error_msg)
+
+                    await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
+                    await self._update_doc_status(input.file_id, "Ingestion Error")
+
+                    # Auto-retract created data
+                    await self.retract_file(file_id=input.file_id, graph_name=getattr(input, "graph_name", "GRAPH"))
+                    await self._write_ingestion_log(
+                        input.file_id, "INFO", "System", "Rollback complete. Document retracted."
+                    )
+
+                    raise HTTPException(status_code=500, detail=error_msg) from e
 
         finally:
             # --- LOCK MANAGEMENT ---

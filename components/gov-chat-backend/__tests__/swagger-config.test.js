@@ -22,7 +22,11 @@ jest.mock(
       )
     },
     securityHeaders: {},
-    SecurityMiddleware: {}
+    SecurityMiddleware: {},
+    // Background-task tracing helpers — no-op stubs for tests; production
+    // behavior is exercised in __tests__/tracing-background.test.js
+    withBackgroundSpan: jest.fn(async (_name, fn, _attrs) => (fn ? fn() : undefined)),
+    runInBackgroundSpan: jest.fn((_name, fn, _attrs) => (fn ? fn() : undefined))
   }),
   { virtual: true }
 );

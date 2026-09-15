@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 const { getFileHash } = require('../utils/fileUtils');
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+const { runInBackgroundSpan } = require('../../shared-lib/tracing-background');
 
 async function extractMetadata(filePath, fileInfo = {}) {
   const stats = await fs.stat(filePath);
@@ -217,4 +218,4 @@ class MetadataService {
   }
 }
 
-module.exports = new MetadataService();
+module.exports = runInBackgroundSpan('service.init.metadata', () => new MetadataService());

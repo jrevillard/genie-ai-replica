@@ -19,7 +19,7 @@ from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from core.model_cache import get_model_id
-from tracing import setup_trace_logging
+from tracing import background_span, setup_trace_logging
 
 from .config import (
     ARANGO_DB,
@@ -205,30 +205,33 @@ class GenieaiArangoRetriever(OpeaComponent):
         see core/model_cache.py) instead of using the config default VLLM_MODEL_ID.
         Falls back to the config default on any probe failure.
         """
-        if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
-            if logflag:
-                logger.debug("OpenAI API Key is set. Verifying its validity...")
-
-            openai.api_key = OPENAI_API_KEY
-
-            try:
-                openai.models.list()
+        with background_span("retriever.initialize_llm"):
+            if OPENAI_API_KEY and OPENAI_CHAT_ENABLED:
                 if logflag:
-                    logger.debug("OpenAI API Key is valid.")
-                self.llm = ChatOpenAI(
-                    temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
-                )
-                self._llm_model_id = OPENAI_CHAT_MODEL
-            except openai.error.AuthenticationError:
-                logger.error("OpenAI API Key is invalid.")
-            except Exception as e:
-                logger.error(f"An error occurred while verifying the API Key: {e}")
+                    logger.debug("OpenAI API Key is set. Verifying its validity...")
 
-        elif VLLM_ENDPOINT:
-            self._llm_model_id = self._resolve_vllm_model_id()
-            self.llm = self._create_vllm_client(self._llm_model_id)
-        else:
-            raise HTTPException(status_code=400, detail="No LLM environment variables are set, cannot generate graphs.")
+                openai.api_key = OPENAI_API_KEY
+
+                try:
+                    openai.models.list()
+                    if logflag:
+                        logger.debug("OpenAI API Key is valid.")
+                    self.llm = ChatOpenAI(
+                        temperature=OPENAI_CHAT_TEMPERATURE, model=OPENAI_CHAT_MODEL, max_tokens=OPENAI_CHAT_MAX_TOKENS
+                    )
+                    self._llm_model_id = OPENAI_CHAT_MODEL
+                except openai.error.AuthenticationError:
+                    logger.error("OpenAI API Key is invalid.")
+                except Exception as e:
+                    logger.error(f"An error occurred while verifying the API Key: {e}")
+
+            elif VLLM_ENDPOINT:
+                self._llm_model_id = self._resolve_vllm_model_id()
+                self.llm = self._create_vllm_client(self._llm_model_id)
+            else:
+                raise HTTPException(
+                    status_code=400, detail="No LLM environment variables are set, cannot generate graphs."
+                )
 
     def _resolve_vllm_model_id(self) -> str:
         """Return the vLLM model ID for summarization.
@@ -274,24 +277,25 @@ class GenieaiArangoRetriever(OpeaComponent):
 
     def _initialize_client(self):
         """Initialize the ArangoDB connection."""
-        self.client = ArangoClient(hosts=ARANGO_URL)
-        sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+        with background_span("retriever.initialize_client"):
+            self.client = ArangoClient(hosts=ARANGO_URL)
+            sys_db = self.client.db(name="_system", username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
 
-        if not sys_db.has_database(ARANGO_DB):
-            sys_db.create_database(ARANGO_DB)
+            if not sys_db.has_database(ARANGO_DB):
+                sys_db.create_database(ARANGO_DB)
 
-        self.db = self.client.db(name=ARANGO_DB, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
-        if logflag:
-            logger.debug(f"Connected to ArangoDB {self.db.version()}.")
+            self.db = self.client.db(name=ARANGO_DB, username=ARANGO_USERNAME, password=ARANGO_PASSWORD, verify=True)
+            if logflag:
+                logger.debug(f"Connected to ArangoDB {self.db.version()}.")
 
-        # Ensure the BM25 ArangoSearch view for the default graph (Contextual
-        # Retrieval Part B). Mirrors the has_database/create_database idiom;
-        # other graph_names are ensured lazily in _bm25_search on first use.
-        if HYBRID_RETRIEVAL_ENABLED:
-            try:
-                self._ensure_bm25_view(ARANGO_GRAPH_NAME)
-            except Exception as e:
-                logger.error(f"Could not ensure default BM25 view for graph '{ARANGO_GRAPH_NAME}': {e}")
+            # Ensure the BM25 ArangoSearch view for the default graph (Contextual
+            # Retrieval Part B). Mirrors the has_database/create_database idiom;
+            # other graph_names are ensured lazily in _bm25_search on first use.
+            if HYBRID_RETRIEVAL_ENABLED:
+                try:
+                    self._ensure_bm25_view(ARANGO_GRAPH_NAME)
+                except Exception as e:
+                    logger.error(f"Could not ensure default BM25 view for graph '{ARANGO_GRAPH_NAME}': {e}")
 
     def _ensure_bm25_view(self, graph_name: str) -> None:
         """Idempotently create the ArangoSearch BM25 view over <graph_name>_SOURCE.text.
@@ -394,16 +398,17 @@ class GenieaiArangoRetriever(OpeaComponent):
 
     def check_health(self) -> bool:
         """Checks the health of the retriever service."""
-        if logflag:
-            logger.debug("[ check health ] start to check health of ArangoDB")
-        try:
-            version = self.db.version()
+        with background_span("retriever.check_health"):
             if logflag:
-                logger.debug(f"[ check health ] Successfully connected to ArangoDB {version}!")
-            return True
-        except Exception as e:
-            logger.error(f"[ check health ] Failed to connect to ArangoDB: {e}")
-            return False
+                logger.debug("[ check health ] start to check health of ArangoDB")
+            try:
+                version = self.db.version()
+                if logflag:
+                    logger.debug(f"[ check health ] Successfully connected to ArangoDB {version}!")
+                return True
+            except Exception as e:
+                logger.error(f"[ check health ] Failed to connect to ArangoDB: {e}")
+                return False
 
     def fetch_neighborhoods(
         self,

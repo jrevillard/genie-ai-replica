@@ -709,6 +709,9 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 
 # Enables VictoriaLogsTransport in components/shared/lib/logger.js.
 # Boolean coercion: 1 | true | TRUE | yes activates transport.
+# Default in docker-compose.yaml backend + document-repository: 1
+# (booleanEnv defaultValue=true). Uncomment to override the default
+# (set to 0 to disable the VL writer transport while keeping observability on).
 # LOG_TO_VICTORIALOGS=1
 
 # MELT backend selector (single implementation today).

@@ -25,8 +25,20 @@
 #
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
-#   traces:  otlp → probabilistic_sampler → batch → victoriatraces
-#   logs:    fluent_forward → batch → otlp_http
+#   traces:  otlp → probabilistic_sampler → transform/kong_span_names → batch → victoriatraces
+#   logs:    otlp / fluent_forward → resource/stamp_service_name_from_container → batch → otlp_http
+#
+# Note: Docker services use the fluentd logging driver (driver: fluentd)
+# configured in docker-compose.yaml. Docker sends container stdout/stderr to
+# the collector's fluent_forward receiver on port 24224. Dual logging (Docker
+# 20.10+) keeps `docker logs` functional alongside the fluentd driver.
+#
+# Logs pipeline runs the resource processor BEFORE batch so the
+# `service.name` is set on every record before it reaches the exporter.
+# The OTel `resource` attribute `service.name` is what VictoriaLogs
+# indexes as a stream field (and what Grafana filters on). Without this
+# step, fluentd-sourced logs land in VL with no OTel resource and no
+# `service.name` — the admin/logs endpoint cannot filter them.
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
 # configured in docker-compose.yaml. Docker sends container stdout/stderr to
@@ -108,6 +120,33 @@ processors:
         statements:
           - set(name, Concat([attributes["http.method"], " ", attributes["http.route"]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and attributes["http.route"] != nil and attributes["http.route"] != ""
           - set(name, Concat([attributes["http.method"], " ", ExtractPatterns(attributes["http.url"], "https?://[^/]+(/[^?]*)")[0]], "")) where resource.attributes["service.name"] == "kong-gateway" and attributes["http.method"] != nil and name == "kong"
+  # Stamp `service.name` resource attribute from the Docker Compose
+  # service label forwarded by the fluentd driver. Compose auto-labels
+  # every container with `com.docker.compose.service=<service-block-name>`
+  # (and the `&fluent-logging` anchor in docker-compose.yaml forwards
+  # that label via the `labels:` driver option). The transform reads
+  # the label and stamps the canonical service-name onto every record
+  # — matching the Compose service block name in docker-compose.yaml so
+  # downstream `service.name` filters match the same identifier operators
+  # see in `docker compose ps`.
+  #
+  # Idempotent: only sets the attribute when it is currently empty
+  # (records that already carry a service.name — from the OTel SDK
+  # `otlp` receiver on backend / document-repository — keep their
+  # resource intact).
+  #
+  # Records without a forwarded label (e.g. the Collector itself, which
+  # has no fluentd driver) are left untouched — they end up with empty
+  # `service.name` in VL, which is the existing pre-fix behaviour.
+  transform/stamp_service_name_from_container:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Prefer the forwarded Compose service label. Fall back to
+          # extracting from fluent.tag (covers services where the label
+          # forwarding was not yet rolled out).
+          - set(resource.attributes["service.name"], attributes["com.docker.compose.service"]) where attributes["com.docker.compose.service"] != nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
 
 exporters:
   prometheusremotewrite:
@@ -185,6 +224,7 @@ service:
         - otlp
         - fluent_forward
       processors:
+        - transform/stamp_service_name_from_container
         - batch
       exporters:
         - otlp_http

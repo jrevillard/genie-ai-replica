@@ -3,6 +3,7 @@ const retry = require('async-retry');
 const http = require('http');
 const https = require('https');
 const { logger } = require('./logger');
+const { withBackgroundSpan } = require('./tracing-background');
 // Import the new translation modules. These will be built separately.
 // We are assuming they export translator functions/classes.
 const { AqlToSqlTranslator } = require('./aql-to-sql');
@@ -1231,6 +1232,22 @@ class DatabaseService {
   }
 
   async _performActiveRecovery(name, originalError) {
+    // Wrap the recovery procedure in a sub-span. When called from the
+    // healthcheck or cleanup intervals (which already run inside their
+    // own `db.healthcheck` / `db.cleanup_tick` span), this becomes a
+    // child span — visible as a sub-operation in VictoriaTraces. When
+    // called from a request handler, the recovery span becomes a child
+    // of the request span.
+    return withBackgroundSpan(
+      'db.recovery',
+      async () => {
+        return this._performActiveRecoveryInner(name, originalError);
+      },
+      { 'db.connection': name }
+    );
+  }
+
+  async _performActiveRecoveryInner(name, originalError) {
     const now = Date.now();
 
     const lastAttempt = this._lastRecoveryAttempt.get(name) || 0;
@@ -1294,8 +1311,15 @@ class DatabaseService {
       clearInterval(this._healthCheckIntervals.get(name));
     }
 
-    const interval = setInterval(async () => {
-      await this._performHealthCheck(name);
+    const interval = setInterval(() => {
+      // Background emitter — wrap in a fresh OTel root span so the
+      // health-check logs (and any errors triggering recovery) carry a
+      // live trace_id in VictoriaLogs / VictoriaTraces.
+      withBackgroundSpan(
+        'db.healthcheck',
+        () => this._performHealthCheck(name),
+        { 'db.connection': name }
+      );
     }, this.HEALTH_CHECK_INTERVAL);
 
     this._healthCheckIntervals.set(name, interval);
@@ -1355,21 +1379,26 @@ class DatabaseService {
   _startConnectionCleanup() {
     logger.info(`[DB_CLEANUP] Starting connection cleanup routine`);
 
-    setInterval(async () => {
-      const now = Date.now();
-      const connectionsToClose = [];
+    setInterval(() => {
+      // Background emitter — wrap the cleanup tick in a root span so the
+      // [DB_CLEANUP] logs and any [DB_CLOSE] emissions inside carry a
+      // live trace_id. One trace per cleanup tick — cardinality scales
+      // with stale-connection rate, which is by definition low.
+      withBackgroundSpan('db.cleanup_tick', async () => {
+        const now = Date.now();
+        const connectionsToClose = [];
 
-      for (const [name, connectionInfo] of this._connections.entries()) {
-        if (this._isConnectionStale(connectionInfo, now)) {
-          connectionsToClose.push(name);
+        for (const [name, connectionInfo] of this._connections.entries()) {
+          if (this._isConnectionStale(connectionInfo, now)) {
+            connectionsToClose.push(name);
+          }
         }
-      }
 
-      for (const name of connectionsToClose) {
-        logger.info(`[DB_CLEANUP] Cleaning up stale connection: ${name}`);
-        await this._closeConnection(name);
+        for (const name of connectionsToClose) {
+          logger.info(`[DB_CLEANUP] Cleaning up stale connection: ${name}`);
+          await this._closeConnection(name);
 
-        if (name === 'default') {
+          if (name === 'default') {
           logger.info(`[DB_CLEANUP] Initiating ACTIVE RECOVERY for essential connection: ${name}`);
           await this._performActiveRecovery(name, new Error('Connection cleanup - proactive recreation'));
         }
@@ -1378,6 +1407,7 @@ class DatabaseService {
       if (connectionsToClose.length > 0) {
         logger.info(`[DB_CLEANUP] Cleaned up ${connectionsToClose.length} stale connections`);
       }
+      });
     }, this.HEALTH_CHECK_INTERVAL);
   }
 

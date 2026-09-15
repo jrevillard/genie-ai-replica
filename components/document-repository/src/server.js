@@ -7,7 +7,7 @@ const { Worker } = require('worker_threads'); // [ADDED] For non-blocking execut
 
 const app = require('./app');
 const appConfig = require('./config/appConfig');
-const { logger } = require('../shared-lib');
+const { logger, withBackgroundSpan, runInBackgroundSpan } = require('../shared-lib');
 
 // Validate required environment variables
 const requiredEnvVars = ['ARANGO_URL', 'ARANGO_DB', 'ARANGO_PASSWORD'];
@@ -41,71 +41,96 @@ const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 
 // Graceful shutdown function
 const gracefulShutdown = (signal) => {
-  logger.info(`Received ${signal}. Shutting down gracefully...`);
+  // Background emitter (process lifecycle — SIGTERM/SIGINT/uncaught) —
+  // span the shutdown sequence so emitted logs carry a real trace_id.
+  withBackgroundSpan(
+    'app.shutdown',
+    async () => {
+      logger.info(`Received ${signal}. Shutting down gracefully...`);
 
-  server.close(() => {
-    logger.info('HTTP server closed.');
+      server.close(() => {
+        logger.info('HTTP server closed.');
 
-    // Close database connections if needed
-    // Add any cleanup code here
+        // Close database connections if needed
+        // Add any cleanup code here
 
-    process.exit(0);
-  });
+        process.exit(0);
+      });
 
-  // Force close after 30 seconds
-  setTimeout(() => {
-    logger.error('Could not close connections in time, forcefully shutting down');
-    process.exit(1);
-  }, 30000);
+      // Force close after 30 seconds
+      setTimeout(() => {
+        logger.error('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 30000);
+    },
+    { signal }
+  );
 };
 
 // Start server
 const server = app.listen(PORT, HOST, () => {
-  logger.info(appConfig.getFormattedConfiguration());
-  logger.info(`🚀 Document Repository Server is running on http://${HOST}:${PORT}`);
-  logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
-  logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
+  // Background emitter (server-ready callback) — span the body so boot
+  // logs and the crawl-worker spawn carry a real trace_id.
+  runInBackgroundSpan(
+    'app.listen',
+    () => {
+      logger.info(appConfig.getFormattedConfiguration());
+      logger.info(`🚀 Document Repository Server is running on http://${HOST}:${PORT}`);
+      logger.info(`📂 Upload directory: ${appConfig.upload.uploadDir}`);
+      logger.info(`🛡️  Virus scanning: ${appConfig.virusScanning ? 'enabled' : 'disabled'}`);
 
-  // [ADDED] Server Socket Optimizations
-  // Prevents "EMFILE" errors and helps drop stuck connections faster
-  server.maxConnections = 10000; // Hard limit on concurrent TCP connections
-  server.keepAliveTimeout = 60000; // 1 minute (must be higher than load balancer timeout)
-  server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
+      // [ADDED] Server Socket Optimizations
+      // Prevents "EMFILE" errors and helps drop stuck connections faster
+      server.maxConnections = 10000; // Hard limit on concurrent TCP connections
+      server.keepAliveTimeout = 60000; // 1 minute (must be higher than load balancer timeout)
+      server.headersTimeout = 65000; // Must be slightly higher than keepAliveTimeout
 
-  // Start background workers
-  try {
-    // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
-    const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
+      // Start background workers
+      try {
+        // [MODIFIED] Spawn Crawler in a separate thread to prevent Event Loop blocking
+        const workerPath = path.resolve(__dirname, './workers/crawlWorker.js');
 
-    // We use eval to require the file and call start(), isolating the CPU load
-    const worker = new Worker(
-      `
-      const { start } = require('${workerPath.replace(/\\/g, '/')}');
-      start();
-    `,
-      { eval: true }
-    );
+        // We use eval to require the file and call start(), isolating the CPU load
+        const worker = new Worker(
+          `
+        const { start } = require('${workerPath.replace(/\\/g, '/')}');
+        start();
+      `,
+          { eval: true }
+        );
 
-    worker.on('error', (err) => logger.error('Crawl Worker Error:', err));
-    worker.on('exit', (code) => {
-      if (code !== 0) logger.warn(`Crawl Worker stopped with exit code ${code}`);
-    });
+        worker.on('error', (err) => logger.error('Crawl Worker Error:', err));
+        worker.on('exit', (code) => {
+          if (code !== 0) logger.warn(`Crawl Worker stopped with exit code ${code}`);
+        });
 
-    logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
-  } catch (error) {
-    logger.error('Failed to start Crawl Worker:', error);
-  }
+        logger.info('🕷️  Background Crawl Worker started (Threaded Mode)');
+      } catch (error) {
+        logger.error('Failed to start Crawl Worker:', error);
+      }
+    },
+    { port: PORT, host: HOST }
+  );
 });
 
 // Handle unhandled promise rejections — log but don't crash
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Background emitter (process-level unhandled rejection) — span so the
+  // emitted error log carries a real trace_id.
+  runInBackgroundSpan('app.unhandled_rejection', () => {
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
 });
 
 // Handle uncaught exceptions — graceful shutdown then exit (process state is undefined after this)
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
-  gracefulShutdown('uncaughtException');
+  // Background emitter (process-level uncaught exception) — span so the
+  // emitted error log carries a real trace_id; spans the shutdown that
+  // follows it.
+  runInBackgroundSpan('app.uncaught_exception', () => {
+    logger.error('Uncaught Exception:', error);
+    gracefulShutdown('uncaughtException');
+  });
 });
 
 // Handle graceful shutdown

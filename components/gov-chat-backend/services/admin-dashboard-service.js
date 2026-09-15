@@ -2,6 +2,7 @@ const { logger, dbService } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 
 class AdminDashboardService {
   constructor() {
@@ -1179,5 +1180,5 @@ class ResourceUsageMonitor {
 }
 
 // Singleton instance
-const instance = new AdminDashboardService();
+const instance = runInBackgroundSpan('service.init.admin_dashboard', () => new AdminDashboardService());
 module.exports = instance;

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 const { NotFoundError, ValidationError } = require('../middleware/errors');
 
 class ServiceCategoryService {
@@ -926,5 +927,5 @@ class ServiceCategoryService {
 }
 
 // Singleton instance
-const instance = new ServiceCategoryService();
+const instance = runInBackgroundSpan('service.init.service_category', () => new ServiceCategoryService());
 module.exports = instance;

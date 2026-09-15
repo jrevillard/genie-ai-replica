@@ -36,16 +36,40 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const ATTR_SERVICE_NAME = semconv.ATTR_SERVICE_NAME;
   const ATTR_SERVICE_VERSION = semconv.ATTR_SERVICE_VERSION;
   const ATTR_DEPLOYMENT_ENVIRONMENT = semconv.ATTR_DEPLOYMENT_ENVIRONMENT;
+  const { trace } = require('@opentelemetry/api');
   const { logs } = require('@opentelemetry/api-logs');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
   const { OTLPLogExporter } = require('@opentelemetry/exporter-logs-otlp-http');
   const { LoggerProvider } = require('@opentelemetry/sdk-logs');
   const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
   // single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
-  const { booleanEnv } = require('./shared-lib/boolean-env');
+  // Note: tracing.js lives at components/document-repository/src/tracing.js —
+  // in the Docker runtime image this maps to /app/src/tracing.js, so the
+  // shared-lib barrel sits ONE level up (`/app/shared-lib`). The source tree
+  // path (`../shared/lib/boolean-env`) and the runtime path
+  // (`../shared-lib/boolean-env`) both resolve to the same file via the
+  // Jest moduleNameMapper (see package.json).
+  const { booleanEnv } = require('../shared-lib/boolean-env');
   // shared batch tuning — both backend and document-repository require this file
   // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
-  const sharedBatchConfig = require('./shared-lib/otel-batch-config');
+  const sharedBatchConfig = require('../shared-lib/otel-batch-config');
+  // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
+  // below so the emitted shutdown logs inherit a real trace_id instead of
+  // being orphaned. Deep import matches the existing shared-lib/X pattern
+  // (Docker drops `/lib/` from the path; Jest moduleNameMapper in
+  // jest.config.js routes both `../shared-lib/X` and the source-tree
+  // `../shared/lib/X` to the real file).
+  const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
+  // Minimal TracerProvider for ID generation. doc-repo is LOGS-ONLY (no
+  // span exporter, no trace export), but without ANY TracerProvider the
+  // OTel JS API returns the noop tracer whose `spanContext()` reports
+  // all-zero IDs — every background log would emit `trace_id:000...`.
+  // `BasicTracerProvider` from `@opentelemetry/sdk-trace` (already a
+  // transitive dep of `sdk-trace-base`) generates real IDs without
+  // requiring a span exporter. Spans created via `tracer.startSpan(name)`
+  // get real trace_id/span_id, which the Winston formatter then stamps.
+  const { TracerProvider } = require('@opentelemetry/sdk-trace');
+  trace.setGlobalTracerProvider(new TracerProvider());
 
   // Resource attributes (pinned literal).
   const serviceName = 'genie-document-repository';
@@ -110,8 +134,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     process.exit(0);
   };
 
-  process.on('SIGTERM', gracefulShutdown);
-  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
+  process.on('SIGINT', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
 
   module.exports = { sdk: null, loggerProvider };
 }

@@ -60,6 +60,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // Shared batch tuning — both backend and document-repository require this file
   // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
   const sharedBatchConfig = require('./shared-lib/otel-batch-config');
+  // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
+  // below so the emitted shutdown logs inherit a real trace_id instead of
+  // being orphaned. Deep import matches the existing shared-lib/X pattern.
+  const { runInBackgroundSpan } = require('./shared-lib/tracing-background');
   // otlp_unreachable call-site: module-load dropped counter.
   // Backed by the canonical enum exported from metrics.js — never pass raw
   // strings to `.add()` (cardinality-bounded set).
@@ -279,8 +283,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     process.exit(0);
   };
 
-  process.on('SIGTERM', gracefulShutdown);
-  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
+  process.on('SIGINT', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
 
   function getTracer() {
     return trace.getTracer(serviceName, serviceVersion);

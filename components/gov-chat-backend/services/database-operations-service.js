@@ -3,6 +3,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { aql } = require('arangojs');
 const { logger, dbService } = require('../shared-lib');
+const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
 
 class DatabaseOperationsService {
   constructor() {
@@ -359,5 +360,5 @@ class DatabaseOperationsService {
 }
 
 // Singleton instance
-const instance = new DatabaseOperationsService();
+const instance = runInBackgroundSpan('service.init.database_operations', () => new DatabaseOperationsService());
 module.exports = instance;

@@ -22,11 +22,14 @@ jest.mock('@opentelemetry/api', () => ({
   }
 }));
 
-// Sentinel "no active span" IDs that traceFormat emits when the OTel API has
-// no current span. Centralised here so a future format-length change is a
-// single edit; logger-otel-trace.test.js uses the same constants.
+// Zero-sentinel IDs no longer emitted by traceFormat (omitted when no span).
+// Kept as a documentation header block so the surrounding context stays in
+// sync with logger-otel-trace.test.js which references these for the
+// span-derived assertion path.
 const ZERO_TRACE_ID = '00000000000000000000000000000000';
 const ZERO_SPAN_ID = '0000000000000000';
+void ZERO_TRACE_ID;
+void ZERO_SPAN_ID;
 
 const fs = require('fs');
 const os = require('os');
@@ -279,7 +282,7 @@ describe('logger.js utility functions', () => {
   // will be re-validated once the JSON-format migration lands.
   // -------------------------------------------------------------------
   describe('traceFormat → winston.format.json pipeline', () => {
-    it('produces JSON output with trace_id and span_id as top-level keys (no active span)', () => {
+    it('OMITS trace_id and span_id from JSON output when no active span (no zero-bucket)', () => {
       const { format, createLogger, transports: winstonTransports } = require('winston');
       const { traceFormat } = loggerModule;
 
@@ -300,15 +303,18 @@ describe('logger.js utility functions', () => {
 
       expect(entries).toHaveLength(1);
       const entry = entries[0];
-      // Top-level keys on the JSON object (not printf substrings).
-      expect(entry).toHaveProperty('trace_id');
-      expect(entry).toHaveProperty('span_id');
-      // No active span → zeroed placeholder values, not undefined.
-      expect(entry.trace_id).toBe(ZERO_TRACE_ID);
-      expect(entry.span_id).toBe(ZERO_SPAN_ID);
+      // No active span → keys are OMITTED entirely (NOT zeroed). All-zero
+      // trace_ids previously grouped every orphan log under one false
+      // VL stream bucket; omit instead so the log stays un-correlated.
+      expect(Object.prototype.hasOwnProperty.call(entry, 'trace_id')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(entry, 'span_id')).toBe(false);
+      expect(entry.trace_id).toBeUndefined();
+      expect(entry.span_id).toBeUndefined();
+      // `service` is still emitted (canonical OTel field, not span-derived).
+      expect(entry).toHaveProperty('service');
     });
 
-    it('emits trace_id and span_id as JSON keys, not printf `%s` substrings', () => {
+    it('does not emit printf `trace_id=%s` substrings when no active span', () => {
       const { format, createLogger, transports: winstonTransports } = require('winston');
       const { traceFormat } = loggerModule;
 
@@ -331,17 +337,101 @@ describe('logger.js utility functions', () => {
       const raw = rawChunks[0];
       // Output is valid JSON — not a printf-formatted string.
       expect(() => JSON.parse(raw.trim())).not.toThrow();
-      // Positive assertions: parsed object has the expected top-level keys.
       const parsed = JSON.parse(raw.trim());
-      expect(Object.prototype.hasOwnProperty.call(parsed, 'trace_id')).toBe(true);
-      expect(Object.prototype.hasOwnProperty.call(parsed, 'span_id')).toBe(true);
       expect(parsed.message).toBe('hello world');
+      // No zero-bucket trace_id / span_id — keys are absent, not zero.
+      expect(Object.prototype.hasOwnProperty.call(parsed, 'trace_id')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(parsed, 'span_id')).toBe(false);
       // No printf placeholders leaked into the rendered output.
       expect(raw).not.toMatch(/trace_id=%s/);
       expect(raw).not.toMatch(/span_id=%s/);
       // No legacy printf quote-wrapped form should be present.
       expect(raw).not.toMatch(/trace_id="/);
       expect(raw).not.toMatch(/span_id="/);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Service-name resolution (canonical OTel env first, then legacy)
+  //
+  // logger.js stamps `service` from OTEL_SERVICE_NAME first (OTel-spec env
+  // read by SDK Resource too — values stay in sync between JSON field and
+  // OTel-emitted trace/log resource). Falls back to SERVICE_NAME, then to
+  // 'genie-backend' (back-compat default for the backend service). doc-repo
+  // and other components set OTEL_SERVICE_NAME in docker-compose to avoid
+  // the wrong default leaking in cross-component logs.
+  // -------------------------------------------------------------------
+  describe('service-name resolution', () => {
+    const ENV_KEYS = ['OTEL_SERVICE_NAME', 'SERVICE_NAME'];
+    const savedEnv = {};
+    for (const k of ENV_KEYS) savedEnv[k] = process.env[k];
+
+    afterEach(() => {
+      for (const k of ENV_KEYS) {
+        if (savedEnv[k] === undefined) delete process.env[k];
+        else process.env[k] = savedEnv[k];
+      }
+      jest.resetModules();
+    });
+
+    it('uses OTEL_SERVICE_NAME when set (highest priority)', () => {
+      delete process.env.SERVICE_NAME;
+      process.env.OTEL_SERVICE_NAME = 'genie-document-repository';
+      jest.resetModules();
+      const { traceFormat } = require('../../shared/lib/logger');
+      const { format } = require('winston');
+      const entries = [];
+      const passThrough = new PassThrough();
+      passThrough.on('data', (c) => entries.push(JSON.parse(c.toString().trim())));
+      const winston = require('winston');
+      const testLogger = winston.createLogger({
+        level: 'debug',
+        format: format.combine(format.timestamp(), traceFormat, format.json()),
+        transports: [new winston.transports.Stream({ stream: passThrough })],
+        exitOnError: false
+      });
+      testLogger.info('hi');
+      expect(entries[0].service).toBe('genie-document-repository');
+    });
+
+    it('falls back to SERVICE_NAME when OTEL_SERVICE_NAME is unset', () => {
+      delete process.env.OTEL_SERVICE_NAME;
+      process.env.SERVICE_NAME = 'legacy-name';
+      jest.resetModules();
+      const { traceFormat } = require('../../shared/lib/logger');
+      const { format } = require('winston');
+      const entries = [];
+      const passThrough = new PassThrough();
+      passThrough.on('data', (c) => entries.push(JSON.parse(c.toString().trim())));
+      const winston = require('winston');
+      const testLogger = winston.createLogger({
+        level: 'debug',
+        format: format.combine(format.timestamp(), traceFormat, format.json()),
+        transports: [new winston.transports.Stream({ stream: passThrough })],
+        exitOnError: false
+      });
+      testLogger.info('hi');
+      expect(entries[0].service).toBe('legacy-name');
+    });
+
+    it('defaults to genie-backend when neither env var is set', () => {
+      delete process.env.OTEL_SERVICE_NAME;
+      delete process.env.SERVICE_NAME;
+      jest.resetModules();
+      const { traceFormat } = require('../../shared/lib/logger');
+      const { format } = require('winston');
+      const entries = [];
+      const passThrough = new PassThrough();
+      passThrough.on('data', (c) => entries.push(JSON.parse(c.toString().trim())));
+      const winston = require('winston');
+      const testLogger = winston.createLogger({
+        level: 'debug',
+        format: format.combine(format.timestamp(), traceFormat, format.json()),
+        transports: [new winston.transports.Stream({ stream: passThrough })],
+        exitOnError: false
+      });
+      testLogger.info('hi');
+      expect(entries[0].service).toBe('genie-backend');
     });
   });
 

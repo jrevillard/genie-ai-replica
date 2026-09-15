@@ -16,5 +16,11 @@ module.exports = {
   SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
   reconfigureLogger: jest.fn(),
   triggerLogRollover: jest.fn(),
-  parsePositiveInt
+  parsePositiveInt,
+  // Background-task tracing helpers — no-op stubs for tests; production
+  // behavior is exercised in __tests__/tracing-background.test.js. Tests
+  // that need to assert on call sites use `jest.spyOn(sharedLib,
+  // 'withBackgroundSpan')` etc.
+  withBackgroundSpan: jest.fn(async (_name, fn, _attrs) => (fn ? fn() : undefined)),
+  runInBackgroundSpan: jest.fn((_name, fn, _attrs) => (fn ? fn() : undefined))
 };

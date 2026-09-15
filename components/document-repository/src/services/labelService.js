@@ -2,6 +2,7 @@ const config = require('../config/appConfig');
 
 const { logger } = require('../../shared-lib');
 const { dbService } = require('../../shared-lib');
+const { runInBackgroundSpan } = require('../../shared-lib/tracing-background');
 const { NotFoundError, ConflictError } = require('../middlewares/errorHandler');
 
 class LabelService {
@@ -247,4 +248,4 @@ class LabelService {
   }
 }
 
-module.exports = new LabelService();
+module.exports = runInBackgroundSpan('service.init.label', () => new LabelService());

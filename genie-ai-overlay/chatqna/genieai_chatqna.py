@@ -20,7 +20,7 @@ from metrics import (
 )
 
 from core.model_cache import get_model_id
-from tracing import get_tracer, setup_trace_logging, setup_tracing
+from tracing import background_span, get_tracer, setup_trace_logging, setup_tracing
 
 setup_tracing("genieai-chatqna")
 
@@ -1395,14 +1395,15 @@ def align_generator(self, gen, **kwargs):
 
 class ChatQnAService:
     def __init__(self, host="0.0.0.0", port=8888):
-        self.host = host
-        self.port = port
-        ServiceOrchestrator.align_inputs = align_inputs
-        ServiceOrchestrator.align_outputs = align_outputs
-        ServiceOrchestrator.align_generator = align_generator
-        self.megaservice = ServiceOrchestrator()
-        self.endpoint = str(MegaServiceEndpoint.CHAT_QNA)
-        self.user_profile_client = GenieUserProfileClient()
+        with background_span("chatqna.init"):
+            self.host = host
+            self.port = port
+            ServiceOrchestrator.align_inputs = align_inputs
+            ServiceOrchestrator.align_outputs = align_outputs
+            ServiceOrchestrator.align_generator = align_generator
+            self.megaservice = ServiceOrchestrator()
+            self.endpoint = str(MegaServiceEndpoint.CHAT_QNA)
+            self.user_profile_client = GenieUserProfileClient()
 
     def _find_node_key(self, service_name: str, result_dict: dict) -> str | None:
         """Helper to find the full key for a service in the result_dict."""

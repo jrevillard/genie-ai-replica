@@ -84,6 +84,14 @@ x-logging: &fluent-logging
     fluentd-address: "localhost:24224"
     fluentd-async: "true"
     tag: "genie.{{.Name}}"
+    # Forward the Compose-managed `com.docker.compose.service` label as a
+    # log attribute. The OTel Collector then reads it to stamp the
+    # canonical `service.name` on every fluentd-sourced log record.
+    # Without this, the collector must regex-parse `<service>` from the
+    # project-prefixed container name (which embeds the deployment
+    # project — `admin-logs-prd-document-repository` instead of just
+    # `document-repository`).
+    labels: "com.docker.compose.service,com.docker.compose.project"
 
 services:
 
@@ -575,6 +583,9 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # OTel-spec service name (read by SDK Resource AND logger.js service field).
+      # Must be set so doc-repository logs don't stamp `genie-backend`.
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-backend}
       # VictoriaLogs transport default-on. Pin to 1 in compose so
       # deployments that forget to set the env var still ship structured logs
       # to VL with proper OTel trace_id/span_id fields (not buried in _msg).
@@ -627,6 +638,18 @@ services:
       # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}
+      # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1. Both
+      # flags must mirror the backend block; the doc-repo Winston VL
+      # transport depends on the OTel LoggerProvider being initialised or
+      # it pushes to a null sink. The Collector's fluentd receiver still
+      # ships the doc-repo stdout regardless (resource processor on the
+      # Collector side stamps service.name from container attributes).
+      - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # OTel-spec service name. doc-repo's tracing.js ALSO pins the same
+      # value on the OTel Resource, but logger.js reads this env first so
+      # the JSON `service` field matches the OTel-emitted resource.
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-document-repository}
       # VictoriaLogs transport default-on — see backend block for rationale.
       - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the

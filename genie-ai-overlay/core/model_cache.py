@@ -24,6 +24,8 @@ import time
 
 import httpx
 
+from tracing import background_span
+
 logger = logging.getLogger(__name__)
 
 # Default TTL in seconds. Overridable per-deployment via MODEL_DETECT_TTL env var.
@@ -45,25 +47,26 @@ def _resolve_ttl(ttl_seconds: int | None) -> int:
 
 def _probe(endpoint_url: str) -> str | None:
     """Probe the vLLM ``/v1/models`` endpoint. Return first model ID or None."""
-    headers = {}
-    api_key = os.getenv("VLLM_API_KEY", "")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    # Align with the project's OPEA_SSL_SKIP_VERIFY mechanism (self-signed GPU
-    # certs). The global genie_ssl_patch.py (installed via the zz_genie_startup.pth
-    # site-init hook) also handles this, but we set verify explicitly so the probe
-    # is correct regardless of patch state.
-    verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
-    try:
-        resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=verify)
-        resp.raise_for_status()
-        models = resp.json()
-        if models.get("data"):
-            return models["data"][0]["id"]
-        logger.warning("model_cache: no models returned by %s/v1/models", endpoint_url)
-    except Exception as e:  # noqa: BLE001 — broad catch is intentional: any probe failure is non-fatal
-        logger.warning("model_cache: probe failed for %s: %s", endpoint_url, e)
-    return None
+    with background_span("model_cache.probe"):
+        headers = {}
+        api_key = os.getenv("VLLM_API_KEY", "")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        # Align with the project's OPEA_SSL_SKIP_VERIFY mechanism (self-signed GPU
+        # certs). The global genie_ssl_patch.py (installed via the zz_genie_startup.pth
+        # site-init hook) also handles this, but we set verify explicitly so the probe
+        # is correct regardless of patch state.
+        verify = os.getenv("OPEA_SSL_SKIP_VERIFY", "") != "1"
+        try:
+            resp = httpx.get(f"{endpoint_url}/v1/models", headers=headers, timeout=10, verify=verify)
+            resp.raise_for_status()
+            models = resp.json()
+            if models.get("data"):
+                return models["data"][0]["id"]
+            logger.warning("model_cache: no models returned by %s/v1/models", endpoint_url)
+        except Exception as e:  # noqa: BLE001 — broad catch is intentional: any probe failure is non-fatal
+            logger.warning("model_cache: probe failed for %s: %s", endpoint_url, e)
+        return None
 
 
 def get_model_id(endpoint_url: str, ttl_seconds: int | None = None) -> str | None:

@@ -1,5 +1,5 @@
 const { parentPort, workerData } = require('worker_threads');
-const { logger } = require('../../shared-lib');
+const { logger, withBackgroundSpan, runInBackgroundSpan } = require('../../shared-lib');
 
 /**
  * CPU Translation Worker
@@ -104,60 +104,85 @@ async function handleTranslate(messageId, texts, sourceCode, targetCode) {
 /**
  * Handle messages from main thread
  */
-parentPort.on('message', async (message) => {
-  const { type, data } = message;
+parentPort.on('message', (message) => {
+  // Background emitter (worker thread inbound message) — wrap the handler
+  // body in a root span so emitted logs (init progress, translation stats,
+  // errors) carry a real trace_id instead of being orphaned.
+  withBackgroundSpan(
+    'translation.worker.message',
+    async () => {
+      const { type, data } = message;
 
-  try {
-    let result;
+      try {
+        let result;
 
-    switch (type) {
-      case 'init':
-        result = await initWorker();
-        break;
+        switch (type) {
+          case 'init':
+            result = await initWorker();
+            break;
 
-      case 'translate':
-        result = await handleTranslate(data.messageId, data.texts, data.sourceCode, data.targetCode);
-        break;
+          case 'translate':
+            result = await handleTranslate(data.messageId, data.texts, data.sourceCode, data.targetCode);
+            break;
 
-      case 'terminate':
-        logger.info('[CPU-WORKER] Termination requested, exiting...');
-        process.exit(0);
-        break;
+          case 'terminate':
+            logger.info('[CPU-WORKER] Termination requested, exiting...');
+            process.exit(0);
+            break;
 
-      default:
-        result = {
+          default:
+            result = {
+              success: false,
+              error: `Unknown message type: ${type}`
+            };
+        }
+
+        parentPort.postMessage({
+          type: type,
+          success: result.success,
+          data: result
+        });
+      } catch (error) {
+        logger.error(`[CPU-WORKER] Message handler error: ${error.message}`, { stack: error.stack });
+
+        parentPort.postMessage({
+          type: type,
           success: false,
-          error: `Unknown message type: ${type}`
-        };
-    }
-
-    parentPort.postMessage({
-      type: type,
-      success: result.success,
-      data: result
-    });
-  } catch (error) {
-    logger.error(`[CPU-WORKER] Message handler error: ${error.message}`, { stack: error.stack });
-
-    parentPort.postMessage({
-      type: type,
-      success: false,
-      error: error.message,
-      data: { messageId: data?.messageId } // Include messageId for error responses
-    });
-  }
+          error: error.message,
+          data: { messageId: data?.messageId } // Include messageId for error responses
+        });
+      }
+    },
+    { 'message.type': message.type }
+  );
 });
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {
-  logger.error(`[CPU-WORKER] Uncaught exception: ${error.message}`, { stack: error.stack });
-  parentPort.postMessage({
-    type: 'error',
-    success: false,
-    error: error.message
-  });
+  // Background emitter (uncaught exception in worker thread) — span the
+  // handler so the emitted error log carries a real trace_id.
+  runInBackgroundSpan(
+    'translation.worker.uncaught',
+    () => {
+      logger.error(`[CPU-WORKER] Uncaught exception: ${error.message}`, { stack: error.stack });
+      parentPort.postMessage({
+        type: 'error',
+        success: false,
+        error: error.message
+      });
+    },
+    { 'error.kind': 'uncaughtException' }
+  );
 });
 
 process.on('unhandledRejection', (reason) => {
-  logger.error(`[CPU-WORKER] Unhandled rejection: ${reason}`);
+  // Background emitter (unhandled promise rejection in worker thread) —
+  // span the handler so the emitted error log carries a real trace_id.
+  runInBackgroundSpan(
+    'translation.worker.uncaught',
+    () => {
+      logger.error(`[CPU-WORKER] Unhandled rejection: ${reason}`);
+    },
+    { 'error.kind': 'unhandledRejection' }
+  );
 });

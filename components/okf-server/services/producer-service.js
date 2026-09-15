@@ -81,6 +81,7 @@ async function stampSources(repoId, fileIds) {
         file_type: f.file_type || f.type || f.mimetype || null,
         size_bytes: Number.isFinite(f.size) ? f.size : Number.isFinite(f.size_bytes) ? f.size_bytes : null,
         uploaded_date: f.uploaded_date || null,
+        file_hash: f.file_hash || null, // content key for the DUPLICATE_CONTENT gate
         dataprep_status: (f.dataprep && f.dataprep.status) || null,
         is_bundle: f.is_bundle === true
       };
@@ -116,6 +117,7 @@ async function stampSources(repoId, fileIds) {
           file_type: m.file_type,
           size_bytes: m.size_bytes,
           uploaded_date: m.uploaded_date,
+          file_hash: m.file_hash || null,
           import_state: 'imported',
           retracted_at: null
         }))
@@ -501,7 +503,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   // still-existing OKF repository is a 409 — the UI badge is advisory only.
   // A stamp whose repo no longer exists is STALE and self-heals (restamped
   // by stampSources below), so a deleted repo never bricks its documents.
+  // CONTENT contract (David, 2026-09-14): the same is true for the same
+  // CONTENT in a DIFFERENT file — doc-repo stores every file's SHA-256, and
+  // a candidate whose hash already backs a LIVE repository is refused, so
+  // re-uploaded copies of one corpus can never fork the knowledge base.
   const db = await getDb();
+  const candidateHashes = [];
   for (const file_id of file_ids) {
     let meta;
     try {
@@ -529,6 +536,35 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
           { code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 }
         );
       }
+    }
+    if (meta && meta.file_hash) {
+      candidateHashes.push({ file_id, hash: meta.file_hash, name: meta.file_name || file_id });
+    }
+  }
+  if (candidateHashes.length > 0) {
+    const dupRows = await db.query(
+      `FOR r IN ${COLLECTION}
+         FILTER r.deleted_at == null AND r.repo_id != @rid
+         LET dupFiles = (
+           FOR s IN (r.source_documents || [])
+             FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
+             RETURN {file_id: s.file_id, file_name: s.file_name}
+         )
+         FILTER LENGTH(dupFiles) > 0
+         SORT r.created_at
+         LIMIT 1
+         RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`,
+      { rid: repo_id, hashes: candidateHashes.map((c) => c.hash) }
+    );
+    const dup = (await dupRows.all())[0];
+    if (dup) {
+      const names = dup.dupFiles.map((d) => d.file_name || d.file_id).join(', ');
+      throw Object.assign(
+        new Error(
+          `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — retract or delete that repository before importing these documents`
+        ),
+        { code: 'DUPLICATE_CONTENT', status: 409 }
+      );
     }
   }
 

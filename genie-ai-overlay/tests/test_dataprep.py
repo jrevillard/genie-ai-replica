@@ -2173,6 +2173,23 @@ class TestFinalizeChunkLabelsAcl:
         # No WARN emitted (new_labels excludes the ACL label) + label preserved.
         levels = [call.args[1] for call in log.await_args_list]
         assert "WARN" not in levels
+
+    @pytest.mark.asyncio
+    async def test_finalize_skips_null_suggestions_instead_of_crashing(self):
+        """A malformed LLM response can put null/non-string entries in the
+        suggestion list — they must be SKIPPED, never crash the file ingest
+        (live 2026-09-14: vLLM returned a null label and `label.lower()`
+        500'd every ingest of the affected file)."""
+        dp = create_dataprep()
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock):
+            result = await dp._finalize_chunk_labels(
+                0,
+                ["Healthcare", None, "", 123],  # malformed entries ride along
+                ["Healthcare"],
+                "file1",
+                ["Healthcare"],
+            )
+        assert result == ["Healthcare"]
         assert "t:t1" in result
 
 

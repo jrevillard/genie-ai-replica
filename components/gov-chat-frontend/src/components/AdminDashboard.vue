@@ -3122,6 +3122,14 @@ export default {
       if (q.tab === 'documents' && q.file) {
         this.selectedFileId = q.file;
         this.showDetailsDialog = true;
+        // One-shot deep link (David, 2026-09-14): scrub `file` from the URL
+        // immediately, so refreshing the app does NOT re-open the dialog —
+        // the dialog opening is a click-navigation effect, not URL state.
+        if (this.$router) {
+          const rest = Object.assign({}, q);
+          delete rest.file;
+          this.$router.replace({ query: rest }).catch(() => {});
+        }
       }
     },
     // --- END: DOCUMENT METHODS ---

@@ -410,6 +410,83 @@ _PLACE_RE = re.compile(
 )
 
 
+# "around me", "near here", "in my area": the user's own location, not a place
+# name. Sending these to the geocoder mapped "me" to Mexico.
+_PLACE_STOPWORDS = {
+    # English
+    "me",
+    "us",
+    "here",
+    "there",
+    "nearby",
+    "around",
+    "around me",
+    "near me",
+    "my area",
+    "my location",
+    "my place",
+    "my village",
+    "my home",
+    "my farm",
+    "my field",
+    "my fields",
+    "my land",
+    "my plot",
+    "my plots",
+    "our area",
+    "our village",
+    "our farm",
+    "our fields",
+    "this area",
+    "the area",
+    # Banglish
+    "ekhane",
+    "ekhaney",
+    "kache",
+    "amar kache",
+    "ashepashe",
+    "amar ashepashe",
+    "amar elaka",
+    "amar elakay",
+    "amar elakar",
+    "amar gram",
+    "amar grame",
+    "amar bari",
+    "amar barir",
+    "amar jomi",
+    "amar jomir",
+    "amar khet",
+    "amar kheter",
+    "amader elaka",
+    "amader gram",
+    "amader jomi",
+    "amader khet",
+    "ei elaka",
+    "ei elakay",
+    # Bengali
+    "এখানে",
+    "আমার কাছে",
+    "আশেপাশে",
+    "আমার আশেপাশে",
+    "আমার এলাকা",
+    "আমার এলাকায়",
+    "আমার এলাকার",
+    "আমার গ্রাম",
+    "আমার গ্রামে",
+    "আমার বাড়ি",
+    "আমার জমি",
+    "আমার জমির",
+    "আমার ক্ষেত",
+    "আমার খেত",
+    "আমাদের এলাকা",
+    "আমাদের গ্রাম",
+    "আমাদের জমি",
+    "এই এলাকা",
+}
+# Possessive lead-ins mark the user's own place in every language we serve.
+_SELF_PREFIXES = ("my ", "our ", "amar ", "amader ", "আমার ", "আমাদের ")
+
+
 def _extract_place_name(query: str):
     """Best-effort place name from a delineation query; None when absent."""
     m = _PLACE_RE.search(query)
@@ -418,7 +495,10 @@ def _extract_place_name(query: str):
     place = m.group(1).strip()
     # Drop trailing filler the regex may have swallowed ("Dhaka please").
     place = re.sub(r"\s+(?:please|now|today)$", "", place, flags=re.IGNORECASE).strip()
-    return place or None
+    low = place.lower()
+    if not place or low in _PLACE_STOPWORDS or low.startswith(_SELF_PREFIXES):
+        return None
+    return place
 
 
 async def _geocode_place(place: str):
@@ -693,7 +773,9 @@ async def geocode_location(
         encoded = urllib.parse.quote(location)
         resp = _requests.get(
             f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded}.json",
-            params={"access_token": _MAPBOX_TOKEN, "limit": 1},
+            # This deployment serves Bangladesh: never resolve a free-text place
+            # abroad ("me" once geocoded to Mexico).
+            params={"access_token": _MAPBOX_TOKEN, "limit": 1, "country": "bd"},
             timeout=5,
         )
         resp.raise_for_status()

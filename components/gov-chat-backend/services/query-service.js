@@ -336,8 +336,11 @@ const WEATHER_FALLBACK_TEXT = {
 
 async function answerViaWeatherMcp(message, language = 'en', originalMessage = null) {
   const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
-  const lowerMsg = message.toLowerCase();
-  const isGeo = GEO_KEYWORDS.some((kw) => lowerMsg.includes(kw));
+  // Satellite jobs (delineation, flood mapping) take up to a few minutes; the
+  // classifier that routed the message decides, so every phrasing it accepts
+  // (English, Bengali, Banglish) gets the long timeout, not just the old stems.
+  const kind = weatherCommandKind(message);
+  const isGeo = kind === 'delineate' || kind === 'flood';
   const timeout = isGeo ? 660000 : 30000; // 11 min for satellite inference, 30 s for forecasts
   if (isGeo) logger.info('[WEATHER] geo-inference query - using 11-minute timeout');
   try {

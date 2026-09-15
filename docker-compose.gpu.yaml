@@ -41,13 +41,13 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.29.0
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
       --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-32}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
     environment:
@@ -70,7 +70,7 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.29.0
     command: >
       --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}

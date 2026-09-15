@@ -1735,17 +1735,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         raise DataprepInputTooLongError(f"vLLM context overflow on chunk {index}: {err}") from e
                     logger.warning(f"Chunk {index}: LLM label attempt {attempt}/3 failed: {err}")
+                    # Transient (will retry): WARN — the retry ladder recovers
+                    # these when the shared LLM gateway flaps. The TERMINAL
+                    # failure below is the ERROR (David, 2026-09-15: a chunk
+                    # that permanently lost LLM labeling must not log at the
+                    # same level as a self-healed retry).
                     await self._write_ingestion_log(
                         file_id,
                         "WARN",
                         "Labeling",
-                        f"Chunk {index}: LLM call attempt {attempt}/3 failed: {err}",
+                        f"Chunk {index}: transient LLM failure — retrying (attempt {attempt}/3): {err}",
                     )
         await self._write_ingestion_log(
             file_id,
-            "WARN",
+            "ERROR",
             "Labeling",
-            f"Chunk {index}: LLM failed to return valid labels after 3 attempts. Falling back to file labels.",
+            f"Chunk {index}: LLM failed to return valid labels after 3 attempts — "
+            "chunk falls back to file labels only (no LLM labeling for this chunk).",
         )
         return list(file_labels) if file_labels else []
 

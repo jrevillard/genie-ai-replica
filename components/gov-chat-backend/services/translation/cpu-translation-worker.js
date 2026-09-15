@@ -1,5 +1,5 @@
 const { parentPort, workerData } = require('worker_threads');
-const { logger, withBackgroundSpan, runInBackgroundSpan } = require('../../shared-lib');
+const { logger, withBackgroundSpan } = require('../../shared-lib');
 
 /**
  * CPU Translation Worker
@@ -157,13 +157,14 @@ parentPort.on('message', (message) => {
   );
 });
 
-// Handle uncaught errors
+// Handle uncaught errors — recordException attaches the error to the
+// span (per OTel spec: caught exceptions MUST be explicitly recorded).
+// Use withBackgroundSpan (async) so any rejection becomes a span event
+// instead of an unhandledRejection that Node15+ would terminate on.
 process.on('uncaughtException', (error) => {
-  // Background emitter (uncaught exception in worker thread) — span the
-  // handler so the emitted error log carries a real trace_id.
-  runInBackgroundSpan(
+  withBackgroundSpan(
     'translation.worker.uncaught',
-    () => {
+    async () => {
       logger.error(`[CPU-WORKER] Uncaught exception: ${error.message}`, { stack: error.stack });
       parentPort.postMessage({
         type: 'error',
@@ -171,18 +172,17 @@ process.on('uncaughtException', (error) => {
         error: error.message
       });
     },
-    { 'error.kind': 'uncaughtException' }
-  );
+    { 'error.kind': 'uncaughtException', 'error.name': error.name || 'Error' }
+  ).catch((err) => logger.error(`[CPU-WORKER] shutdown span error: ${err.message}`));
 });
 
 process.on('unhandledRejection', (reason) => {
-  // Background emitter (unhandled promise rejection in worker thread) —
-  // span the handler so the emitted error log carries a real trace_id.
-  runInBackgroundSpan(
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  withBackgroundSpan(
     'translation.worker.uncaught',
-    () => {
-      logger.error(`[CPU-WORKER] Unhandled rejection: ${reason}`);
+    async () => {
+      logger.error(`[CPU-WORKER] Unhandled rejection: ${err.message}`);
     },
-    { 'error.kind': 'unhandledRejection' }
-  );
+    { 'error.kind': 'unhandledRejection', 'error.name': err.name || 'Error' }
+  ).catch((e) => logger.error(`[CPU-WORKER] shutdown span error: ${e.message}`));
 });

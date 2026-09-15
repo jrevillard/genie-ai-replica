@@ -125,8 +125,13 @@ class VictoriaLogsTransport extends TransportStream {
         // counter failure must never break the log pipeline
       }
     } finally {
-      setImmediate(() => this.emit('logged', info));
-      callback();
+      // Winston transport contract: `callback()` must run AFTER
+      // `emit('logged', info)` so downstream listeners observe the event
+      // before the transport considers the record "fully written".
+      setImmediate(() => {
+        this.emit('logged', info);
+        callback();
+      });
     }
   }
 }

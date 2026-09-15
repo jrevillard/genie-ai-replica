@@ -58,7 +58,10 @@ const processPageOnThread = (html, url, config) => {
           if (msg.result === 'error') reject(new Error(msg.message));
           else resolve(msg);
         },
-        { 'page.id': url }
+        // URL path-only (no query, no PII). Full URL would inflate span
+        // cardinality (one stream per unique URL) and may leak session
+        // tokens via query strings.
+        { 'genie.crawl.url_path': (() => { try { return new URL(url).pathname; } catch { return 'invalid'; } })() }
       );
     };
     const errorHandler = (err) => {

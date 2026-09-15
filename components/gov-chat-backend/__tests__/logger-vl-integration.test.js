@@ -299,7 +299,10 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
     it('Given the transport logs, when the winston callback fires, then the callback is invoked exactly once (Winston contract)', async () => {
       // Given — Winston requires the transport's `log(info, callback)` to
       // call the callback even on no-op or emit failure, otherwise the
-      // pending log call hangs forever.
+      // pending log call hangs forever. The transport schedules the
+      // callback via `setImmediate` (after `emit('logged', info)`) so
+      // listeners observe the event before the transport considers the
+      // record written.
       await withFakeExporter('simple', async () => {
         const transport = new VictoriaLogsTransport({ enabled: true });
         let callbackCount = 0;
@@ -310,7 +313,8 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
         // When
         transport.log(buildWinstonInfo({ message: 'cb-check' }), cb);
 
-        // Then
+        // Then — wait one event-loop tick for the setImmediate callback to fire
+        await new Promise((resolve) => setImmediate(resolve));
         expect(callbackCount).toBe(1);
       });
     });
@@ -712,7 +716,9 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
       }
 
       // Then — noop logger silently absorbs the emit; transport still
-      // honours the Winston callback contract.
+      // honours the Winston callback contract. The transport schedules
+      // the callback via `setImmediate` (after `emit('logged', info)`).
+      await new Promise((resolve) => setImmediate(resolve));
       expect(threw).toBeNull();
       expect(callbackCount).toBe(1);
     });

@@ -584,8 +584,10 @@ services:
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       # OTel-spec service name (read by SDK Resource AND logger.js service field).
-      # Must be set so doc-repository logs don't stamp `genie-backend`.
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-backend}
+      # Pinned to the Compose service name — using `${OTEL_SERVICE_NAME:-...}`
+      # would collide with doc-repo's compose block (single global env var,
+      # two different defaults). Operators override by editing this file.
+      - OTEL_SERVICE_NAME=genie-backend
       # VictoriaLogs transport default-on. Pin to 1 in compose so
       # deployments that forget to set the env var still ship structured logs
       # to VL with proper OTel trace_id/span_id fields (not buried in _msg).
@@ -647,9 +649,9 @@ services:
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       # OTel-spec service name. doc-repo's tracing.js ALSO pins the same
-      # value on the OTel Resource, but logger.js reads this env first so
-      # the JSON `service` field matches the OTel-emitted resource.
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-document-repository}
+      # Pinned to the Compose service name. See backend block for rationale
+      # on why this is a literal (not `${OTEL_SERVICE_NAME:-...}`).
+      - OTEL_SERVICE_NAME=genie-document-repository
       # VictoriaLogs transport default-on — see backend block for rationale.
       - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the

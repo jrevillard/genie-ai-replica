@@ -63,7 +63,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
   // below so the emitted shutdown logs inherit a real trace_id instead of
   // being orphaned. Deep import matches the existing shared-lib/X pattern.
-  const { runInBackgroundSpan } = require('./shared-lib/tracing-background');
+  const { withBackgroundSpan } = require('./shared-lib/tracing-background');
   // otlp_unreachable call-site: module-load dropped counter.
   // Backed by the canonical enum exported from metrics.js — never pass raw
   // strings to `.add()` (cardinality-bounded set).
@@ -131,9 +131,23 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     }
   }
 
-  // Resource attributes
+  // Resource attributes — service.version reads package.json (npm does NOT
+  // propagate npm_package_version into Docker runtime; the previous
+  // "1.0.0" fallback was misleading — every deployment looked at v1.0.0
+  // regardless of the actual image tag). Operators can still override via
+  // the `SERVICE_VERSION` env var.
+  const fs = require('fs');
+  const path = require('path');
+  function _readPackageVersion() {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+      return pkg.version || '0.0.0';
+    } catch {
+      return '0.0.0';
+    }
+  }
   const serviceName = 'genie-backend';
-  const serviceVersion = process.env.npm_package_version || '1.0.0';
+  const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
   // Create exporter — base URL from env var, append signal-specific path (aligned with OPEA tracing.py)
@@ -261,9 +275,14 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     }
   }
 
-  // Graceful shutdown
-  const SHUTDOWN_TIMEOUT_MS = 5000;
-  const gracefulShutdown = async () => {
+  // Graceful shutdown — bump the timeout to 15s to give the
+  // BatchLogRecordProcessor + sdk force_flush enough time to drain
+  // under load (the Collector may also be tearing down concurrently in
+  // Swarm, adding latency to OTLP exports). The signal name is captured
+  // as a span attribute (low-cardinality span name, high-cardinality
+  // detail per OTel semconv guidance).
+  const SHUTDOWN_TIMEOUT_MS = 15000;
+  const gracefulShutdown = async (_signame) => {
     let flushed = false;
     const timeout = setTimeout(() => {
       if (!flushed) process.exit(0);
@@ -283,8 +302,16 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
-  process.on('SIGINT', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
+  // Use `withBackgroundSpan` (async) so the returned Promise is awaited
+  // and any rejection inside gracefulShutdown is recorded on the span
+  // instead of becoming an unhandled rejection. `runInBackgroundSpan`
+  // (sync) drops the Promise on the floor and leaks the span.
+  process.on('SIGTERM', () =>
+    withBackgroundSpan('otel.shutdown', () => gracefulShutdown('SIGTERM'), { 'genie.signal': 'SIGTERM' })
+  );
+  process.on('SIGINT', () =>
+    withBackgroundSpan('otel.shutdown', () => gracefulShutdown('SIGINT'), { 'genie.signal': 'SIGINT' })
+  );
 
   function getTracer() {
     return trace.getTracer(serviceName, serviceVersion);

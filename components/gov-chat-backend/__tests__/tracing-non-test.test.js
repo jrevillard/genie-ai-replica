@@ -153,7 +153,11 @@ describe('tracing.js non-test branch', () => {
 
   it('getTracer returns result from trace.getTracer', () => {
     const tracer = tracingModule.getTracer();
-    expect(mockGetTracer).toHaveBeenCalledWith('genie-backend', '1.0.0');
+    // serviceVersion is read from package.json (or SERVICE_VERSION env
+    // override). The test only verifies the service NAME arg + the tracer
+    // return value — version is a non-deterministic string read at module
+    // load time.
+    expect(mockGetTracer).toHaveBeenCalledWith('genie-backend', expect.any(String));
     expect(tracer).toEqual({ startSpan: expect.any(Function) });
   });
 

@@ -60,20 +60,39 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // jest.config.js routes both `../shared-lib/X` and the source-tree
   // `../shared/lib/X` to the real file).
   const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
-  // Minimal TracerProvider for ID generation. doc-repo is LOGS-ONLY (no
-  // span exporter, no trace export), but without ANY TracerProvider the
-  // OTel JS API returns the noop tracer whose `spanContext()` reports
-  // all-zero IDs — every background log would emit `trace_id:000...`.
-  // `BasicTracerProvider` from `@opentelemetry/sdk-trace` (already a
-  // transitive dep of `sdk-trace-base`) generates real IDs without
-  // requiring a span exporter. Spans created via `tracer.startSpan(name)`
-  // get real trace_id/span_id, which the Winston formatter then stamps.
-  const { TracerProvider } = require('@opentelemetry/sdk-trace');
-  trace.setGlobalTracerProvider(new TracerProvider());
+  // TracerProvider for trace export. doc-repo needs real IDs on the
+  // spans created via `tracer.startSpan(name)` so the Winston formatter
+  // stamps trace_id/span_id on log records; the spans themselves ship
+  // to the OTel Collector via OTLP and end up in VictoriaTraces (full
+  // distributed-trace visibility, matching backend). Uses
+  // `@opentelemetry/exporter-trace-otlp-http` (added to package.json)
+  // pointed at the same OTLP endpoint as the log exporter.
+  const traceEndpoint = `${endpointBase}/v1/traces`;
+  const { OTLPSpanExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+  const { TracerProvider, BatchSpanProcessor } = require('@opentelemetry/sdk-trace');
+  const _docRepoTracerProvider = new TracerProvider();
+  _docRepoTracerProvider.addSpanProcessor(new BatchSpanProcessor(new OTLPSpanExporter({ url: traceEndpoint })));
+  trace.setGlobalTracerProvider(_docRepoTracerProvider);
 
-  // Resource attributes (pinned literal).
+  // Resource attributes (pinned literal). service.version reads the
+  // doc-repo package.json (npm does NOT propagate npm_package_version
+  // into Docker runtime; the previous "1.0.0" fallback was misleading —
+  // every deployment looked at v1.0.0 regardless of the actual image
+  // tag). Operators can still override via the `SERVICE_VERSION` env var.
+  const fs = require('fs');
+  const path = require('path');
+  function _readPackageVersion() {
+    try {
+      const pkg = JSON.parse(
+        fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')
+      );
+      return pkg.version || '0.0.0';
+    } catch {
+      return '0.0.0';
+    }
+  }
   const serviceName = 'genie-document-repository';
-  const serviceVersion = process.env.npm_package_version || '1.0.0';
+  const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
   // Create exporter — base URL from env var, append signal-specific path
@@ -118,8 +137,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
 
   // Graceful shutdown — flush the LoggerProvider on SIGTERM/SIGINT.
   // Doc-repo has no NodeSDK (logs-only), so no sdk.shutdown() to call.
-  const SHUTDOWN_TIMEOUT_MS = 5000;
-  const gracefulShutdown = async () => {
+  // The signal name is captured as a span attribute (low-cardinality
+  // span name, high-cardinality detail per OTel semconv guidance).
+  const SHUTDOWN_TIMEOUT_MS = 15000;
+  const gracefulShutdown = async (signame) => {
     let flushed = false;
     const timeout = setTimeout(() => {
       if (!flushed) process.exit(0);
@@ -134,8 +155,20 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
-  process.on('SIGINT', () => runInBackgroundSpan('otel.shutdown', () => gracefulShutdown()));
+  // Use `withBackgroundSpan` (async) so the returned Promise is awaited
+  // and any rejection inside gracefulShutdown is recorded on the span
+  // instead of becoming an unhandled rejection. `runInBackgroundSpan`
+  // (sync) drops the Promise on the floor and leaks the span.
+  process.on('SIGTERM', () => withBackgroundSpan(
+    'otel.shutdown',
+    () => gracefulShutdown('SIGTERM'),
+    { 'genie.signal': 'SIGTERM' }
+  ));
+  process.on('SIGINT', () => withBackgroundSpan(
+    'otel.shutdown',
+    () => gracefulShutdown('SIGINT'),
+    { 'genie.signal': 'SIGINT' }
+  ));
 
   module.exports = { sdk: null, loggerProvider };
 }

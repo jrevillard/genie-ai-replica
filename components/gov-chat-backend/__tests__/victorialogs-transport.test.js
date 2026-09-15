@@ -452,7 +452,7 @@ describe('VictoriaLogsTransport — resilience', () => {
     clearMockHistory();
   });
 
-  it('skips emission entirely when constructed with `enabled: false` and still fires the Winston callback', () => {
+  it('skips emission entirely when constructed with `enabled: false` and still fires the Winston callback', async () => {
     const transport = new VictoriaLogsTransport({ enabled: false });
     const callback = jest.fn();
 
@@ -470,7 +470,10 @@ describe('VictoriaLogsTransport — resilience', () => {
     expect(mockEmit).not.toHaveBeenCalled();
     expect(mockGetLogger).not.toHaveBeenCalled();
     // Winston contract: the callback must fire even when emission is skipped,
-    // otherwise the calling pipeline stalls.
+    // otherwise the calling pipeline stalls. The transport schedules the
+    // callback via setImmediate (after `emit('logged', info)`) so listeners
+    // observe the event before the transport considers the record written.
+    await new Promise((resolve) => setImmediate(resolve));
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith(); // no error argument
   });
@@ -485,7 +488,7 @@ describe('VictoriaLogsTransport — resilience', () => {
     expect(mockEmit).toHaveBeenCalledTimes(1);
   });
 
-  it('swallows errors thrown by `logs.getLogger` so the Node service stays up', () => {
+  it('swallows errors thrown by `logs.getLogger` so the Node service stays up', async () => {
     // Always-throw impl (not once): the swallow contract must hold for every
     // downstream call, not only the first one.
     mockGetLogger.mockImplementation(() => {
@@ -509,11 +512,13 @@ describe('VictoriaLogsTransport — resilience', () => {
     ).not.toThrow();
 
     // The Winston contract requires the transport to invoke the callback even
-    // when emission fails — otherwise the pipeline stalls.
+    // when emission fails — otherwise the pipeline stalls. The transport
+    // schedules the callback via setImmediate (after `emit('logged', info)`).
+    await new Promise((resolve) => setImmediate(resolve));
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
-  it('swallows errors thrown by `logger.emit`', () => {
+  it('swallows errors thrown by `logger.emit`', async () => {
     const transport = new VictoriaLogsTransport({ enabled: true });
     mockEmit.mockImplementation(() => {
       throw new Error('collector unreachable');
@@ -534,6 +539,7 @@ describe('VictoriaLogsTransport — resilience', () => {
       )
     ).not.toThrow();
 
+    await new Promise((resolve) => setImmediate(resolve));
     expect(callback).toHaveBeenCalledTimes(1);
   });
 

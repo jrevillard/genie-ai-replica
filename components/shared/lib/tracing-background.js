@@ -88,10 +88,19 @@ function _installGetSpanPatch() {
         };
       }
     });
-  } catch {
-    // If the property is non-configurable (some bundlers), the patch
-    // is a no-op — callers that use the real OTel SDK will still work
-    // because the original getSpan reads the (now-frozen) context.
+  } catch (err) {
+    // If the property is non-configurable (some bundlers freeze the OTel
+    // API namespace), the patch silently no-ops and trace_id stamping
+    // regresses to zeros. Fail LOUD — log a warning to stderr so the
+    // next `docker logs` surfaces it, and DO NOT mark the patch as
+    // installed so a subsequent attempt can retry if the namespace is
+    // ever unfrozen (e.g. across hot-reloads).
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[tracing-background] failed to patch trace.getSpan — trace_id stamping ' +
+      'will fall back to whatever the OTel API returns (likely zeros):',
+      err && err.message ? err.message : err
+    );
   }
 }
 _installGetSpanPatch();
@@ -133,6 +142,11 @@ async function withBackgroundSpan(name, fn, attrs) {
  * Wrap a synchronous function in a fresh OTel root span. Returns `fn`'s
  * return value. Errors are recorded on the span and re-thrown.
  *
+ * `span.end()` is called exactly once via `finally` — covers both the
+ * success path (the bug the original version had: only `catch` called
+ * `span.end()`, leaking one OTel span object per successful invocation
+ * across the 15+ service singletons and 4 SIGTERM/SIGINT handlers).
+ *
  * @param {string} name
  * @param {() => unknown} fn
  * @param {Record<string, string|number|boolean>} [attrs]
@@ -147,11 +161,12 @@ function runInBackgroundSpan(name, fn, attrs) {
     } catch (err) {
       span.recordException(err);
       span.setStatus({
-        code: 2, // SpanStatusCode.ERROR
+        code: 2, // SpanStatusCode.ERROR (matches OTel JS enum)
         message: err && err.message ? err.message : String(err)
       });
-      span.end();
       throw err;
+    } finally {
+      span.end();
     }
   });
 }

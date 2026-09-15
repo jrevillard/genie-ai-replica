@@ -1313,19 +1313,28 @@ async function startApp() {
   }
 }
 
-// Catch unhandled promise rejections
+// Catch unhandled promise rejections. recordException is implicit via
+// the helper's catch on the wrapped fn. Use the async variant so the
+// Promise return is awaited — otherwise a rejection from the wrapped fn
+// becomes an unhandled rejection that Node 15+ would terminate the
+// process on.
 process.on('unhandledRejection', (reason, promise) => {
-  // Background emitter (unhandled rejection at process level) — span the
-  // handler so the emitted error log carries a real trace_id.
-  runInBackgroundSpan('app.unhandled_rejection', () => {
-    logger.error('Unhandled Rejection at:', {
-      promise: promise.toString(),
-      reason: reason?.message || 'Unknown reason',
-      stack: reason?.stack || 'No stack trace',
-      rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
-      errorType: reason?.constructor?.name || 'Unknown'
-    });
-    process.exit(1);
+  withBackgroundSpan(
+    'app.unhandled_rejection',
+    async () => {
+      logger.error('Unhandled Rejection at:', {
+        promise: promise.toString(),
+        reason: reason?.message || 'Unknown reason',
+        stack: reason?.stack || 'No stack trace',
+        rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
+        errorType: reason?.constructor?.name || 'Unknown'
+      });
+      process.exit(1);
+    },
+    { 'error.kind': 'unhandledRejection' }
+  ).catch(() => {
+    // Swallow secondary errors from the span wrapper itself — the
+    // original error is already logged.
   });
 });
 

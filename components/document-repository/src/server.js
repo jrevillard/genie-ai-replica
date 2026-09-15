@@ -113,24 +113,33 @@ const server = app.listen(PORT, HOST, () => {
   );
 });
 
-// Handle unhandled promise rejections — log but don't crash
+// Handle unhandled promise rejections — log but don't crash.
+// Use `withBackgroundSpan` (async) so the Promise return is awaited —
+// otherwise a rejection from the wrapped fn becomes an unhandled rejection
+// that Node 15+ would terminate the process on. `recordException` on the
+// span is implicit via the helper's catch.
 process.on('unhandledRejection', (reason, promise) => {
-  // Background emitter (process-level unhandled rejection) — span so the
-  // emitted error log carries a real trace_id.
-  runInBackgroundSpan('app.unhandled_rejection', () => {
-    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  });
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  withBackgroundSpan(
+    'app.unhandled_rejection',
+    async () => {
+      logger.error('Unhandled Rejection at:', promise, 'reason:', err);
+    },
+    { 'error.name': err.name || 'Error', 'error.kind': 'unhandledRejection' }
+  ).catch(() => {});
 });
 
-// Handle uncaught exceptions — graceful shutdown then exit (process state is undefined after this)
+// Handle uncaught exceptions — graceful shutdown then exit (process state is undefined after this).
+// recordException is implicit via the helper's catch on the wrapped fn.
 process.on('uncaughtException', (error) => {
-  // Background emitter (process-level uncaught exception) — span so the
-  // emitted error log carries a real trace_id; spans the shutdown that
-  // follows it.
-  runInBackgroundSpan('app.uncaught_exception', () => {
-    logger.error('Uncaught Exception:', error);
-    gracefulShutdown('uncaughtException');
-  });
+  withBackgroundSpan(
+    'app.uncaught_exception',
+    async () => {
+      logger.error('Uncaught Exception:', error);
+      gracefulShutdown('uncaughtException');
+    },
+    { 'error.name': error.name || 'Error', 'error.kind': 'uncaughtException' }
+  ).catch(() => {});
 });
 
 // Handle graceful shutdown

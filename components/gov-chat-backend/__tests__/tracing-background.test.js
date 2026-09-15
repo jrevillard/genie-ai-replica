@@ -130,6 +130,26 @@ describe('tracing-background helpers', () => {
       expect(span.recordException).toHaveBeenCalledWith(boom);
       expect(span.end).toHaveBeenCalledTimes(1);
     });
+
+    // Regression test for the original span-leak bug: the implementation
+    // only called `span.end()` inside the catch block, so every
+    // successful invocation leaked one OTel span object (15+ service
+    // singletons + 4 SIGTERM handlers + db intervals in production).
+    it('calls span.end() exactly once on the success path (no leak)', () => {
+      runInBackgroundSpan('service.init.X', () => 'ok');
+      expect(fakeTracer.spans[0].end).toHaveBeenCalledTimes(1);
+    });
+
+    it('end is called exactly once when fn throws (no double-end)', () => {
+      try {
+        runInBackgroundSpan('app.shutdown', () => {
+          throw new Error('boom');
+        });
+      } catch {
+        // expected
+      }
+      expect(fakeTracer.spans[0].end).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('AsyncLocalStorage context propagation', () => {

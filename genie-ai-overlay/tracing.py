@@ -18,6 +18,7 @@ import atexit
 import contextlib
 import logging
 import os
+import re
 import signal
 import sys
 from contextlib import contextmanager
@@ -44,6 +45,30 @@ _meter_provider = None
 _logger_provider = None
 
 # Shared PII keys — import from here in all services to avoid duplication
+# PII key patterns — case-insensitive regex. Mirrors the Node side
+# (`SENSITIVE_KEY_PATTERNS` in `tracing-pii.js`). The set used to be an
+# exact-match frozenset; widened to regex to catch the variants our
+# services actually emit (`auth_token`, `openai_api_key`, etc.).
+_PII_KEY_PATTERNS = [
+    re.compile(r"password", re.IGNORECASE),
+    re.compile(r"token", re.IGNORECASE),
+    re.compile(r"secret", re.IGNORECASE),
+    re.compile(r"authorization", re.IGNORECASE),
+    re.compile(r"credential", re.IGNORECASE),
+    re.compile(r"api[_-]?key", re.IGNORECASE),
+    re.compile(r"session[_-]?id", re.IGNORECASE),
+    re.compile(r"user[_-]?id", re.IGNORECASE),
+    re.compile(r"conversation[_-]?id", re.IGNORECASE),
+    re.compile(r"email", re.IGNORECASE),
+    re.compile(r"user[_-]?query", re.IGNORECASE),
+    re.compile(r"llm[_-]?response", re.IGNORECASE),
+    re.compile(r"document[_-]?text", re.IGNORECASE),
+    re.compile(r"cookie", re.IGNORECASE),
+    re.compile(r"private[_-]?key", re.IGNORECASE),
+]
+
+# Backwards-compat exact-match set — kept for callers that already use
+# `k not in _PII_KEYS`. Same surface, exact-key.
 _PII_KEYS = frozenset(
     {
         "user_query",
@@ -59,9 +84,19 @@ _PII_KEYS = frozenset(
 )
 
 
+def _is_sensitive_key(key: str) -> bool:
+    """True if *key* matches any PII key pattern. Mirrors the Node side."""
+    return any(p.search(key) for p in _PII_KEY_PATTERNS)
+
+
 def sanitize_attributes(attrs: dict) -> dict:
-    """Return a copy of *attrs* with PII keys removed."""
-    return {k: v for k, v in attrs.items() if k not in _PII_KEYS}
+    """Return a copy of *attrs* with PII keys removed.
+
+    Uses regex match against `_PII_KEY_PATTERNS` (case-insensitive) so
+    `auth_token`, `openai_api_key`, etc. are caught as well as the exact
+    keys in `_PII_KEYS`.
+    """
+    return {k: v for k, v in attrs.items() if not _is_sensitive_key(k)}
 
 
 ZEROED_TRACE_ID = "0" * 32
@@ -156,7 +191,21 @@ def setup_tracing(service_name: str) -> None:
 
     _provider = TracerProvider(resource=resource)
     _provider.add_span_processor(trace_processor)
-    trace.set_tracer_provider(_provider)
+    # OTel Python SDK logs a WARN ("Overriding of current TracerProvider
+    # is not allowed") when a previous provider exists. Upstream OPEA's
+    # `comps.cores.telemetry.opea_telemetry` installs one at import time
+    # — running first because OPEA services `from comps.cores.telemetry
+    # import ...` at module load. The override here is INTENTIONAL (our
+    # provider has our resource + OTLP endpoint); suppress the warning
+    # by silencing the SDK's internal logger for that one message.
+    import logging as _logging
+    _otel_sdk_logger = _logging.getLogger("opentelemetry.sdk.trace")
+    _previous_level = _otel_sdk_logger.level
+    _otel_sdk_logger.setLevel(_logging.ERROR)
+    try:
+        trace.set_tracer_provider(_provider)
+    finally:
+        _otel_sdk_logger.setLevel(_previous_level)
 
     # --- FastAPI auto-instrumentation (global) ---
     # MUST be called before any FastAPI app is created.  setup_tracing()
@@ -262,8 +311,21 @@ def setup_tracing(service_name: str) -> None:
 
     atexit.register(shutdown)
 
-    # Handle SIGTERM (Docker/Swarm sends SIGTERM on stop)
-    signal.signal(signal.SIGTERM, _sigterm_handler)
+    # Handle SIGTERM (Docker/Swarm sends SIGTERM on stop). `signal.signal()`
+    # is only valid in the main thread of the main interpreter — uvicorn's
+    # worker-thread model raises ValueError if init runs in a worker.
+    # `atexit` already handles shutdown on normal exit; the SIGTERM hook
+    # is best-effort and degrades silently if the thread model forbids it.
+    try:
+        signal.signal(signal.SIGTERM, _sigterm_handler)
+    except (ValueError, OSError):
+        # Worker thread or non-main interpreter — atexit still handles
+        # graceful shutdown. Log at debug level to avoid noisy warnings
+        # in multi-worker deployments.
+        logging.getLogger(__name__).debug(
+            "signal.signal(SIGTERM) unavailable in this thread (likely a "
+            "uvicorn worker); falling back to atexit-only shutdown."
+        )
 
 
 def get_tracer(name: str = __name__):
@@ -332,10 +394,20 @@ def setup_logging(
 
     log_endpoint = f"{endpoint_base.rstrip('/')}/v1/logs"
     log_exporter = OTLPLogExporter(endpoint=log_endpoint)
-    log_processor = BatchLogRecordProcessor(log_exporter)
+    # Wrap the inner BatchLogRecordProcessor with the PII redactor so
+    # every LogRecord is scrubbed of sensitive attributes + body text
+    # BEFORE the OTel exporter serialises it for VictoriaLogs. Without
+    # this, user queries / emails / tokens / session IDs flow verbatim
+    # to the log store — mirroring the Node.js `PIIRedactingLogRecordProcessor`
+    # we ship on the backend + doc-repo side.
+    from tracing_pii import PIIRedactingLogRecordProcessor  # local import — keeps
+    # module-level import graph light; the file has no heavy deps.
+    pii_safe_processor = PIIRedactingLogRecordProcessor(
+        BatchLogRecordProcessor(log_exporter)
+    )
 
     _logger_provider = LoggerProvider(resource=resource)
-    _logger_provider.add_log_record_processor(log_processor)
+    _logger_provider.add_log_record_processor(pii_safe_processor)
     set_logger_provider(_logger_provider)
 
     # Attach the OTel LoggingHandler to the root Python logger so every
@@ -345,13 +417,12 @@ def setup_logging(
     # idle — Python's stdlib logging has no awareness of OTel logs
     # unless we wire a handler that converts `LogRecord`s.
     #
-    # We attach with NOTSET (root logger passes through every record at
-    # any level). The handler itself filters by `level` argument — we
-    # set DEBUG so dev-time diagnostics flow; raise to INFO in
-    # production if log volume is a concern. Set `OTEL_PYTHON_LOG_LEVEL`
-    # env to override without code change.
-    handler_level_name = os.getenv("OTEL_PYTHON_LOG_LEVEL", "DEBUG").upper()
-    handler_level = getattr(logging, handler_level_name, logging.DEBUG)
+    # Default INFO (matches Python's stdlib default) — DEBUG would flood
+    # OPEA's `comps` CustomLogger at production scale (~5-10x volume).
+    # Operators can override with `LOG_LEVEL=DEBUG` (the env var
+    # compose sets for backend + doc-repo, kept consistent for OPEA).
+    handler_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    handler_level = getattr(logging, handler_level_name, logging.INFO)
     handler = LoggingHandler(level=handler_level, logger_provider=_logger_provider)
 
     # Attach at the ROOT logger so every child logger (comps CustomLogger

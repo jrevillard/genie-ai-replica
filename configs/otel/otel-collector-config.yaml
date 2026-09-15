@@ -143,10 +143,13 @@ processors:
     log_statements:
       - context: log
         statements:
-          # Prefer the forwarded Compose service label. Fall back to
-          # extracting from fluent.tag (covers services where the label
-          # forwarding was not yet rolled out).
+          # Prefer the forwarded Compose service label (set by the
+          # fluentd driver's `labels:` option in `&fluent-logging`).
           - set(resource.attributes["service.name"], attributes["com.docker.compose.service"]) where attributes["com.docker.compose.service"] != nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          # Fallback: parse from fluent.tag (Compose's `<service>-<replica>`
+          # naming convention). Covers services where the label forwarding
+          # was not rolled out (older Compose versions, custom one-shots).
+          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "^genie\\.(?P<svc>[^.]+)-\\d+$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
 
 exporters:
   prometheusremotewrite:

@@ -102,13 +102,15 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
         self._inner = inner
 
     def emit(self, log_data) -> None:
-        # OTel SDK's `LogRecordProcessor.emit` receives a `LogData` wrapper
-        # (log_record + instrumentation_scope), not a raw `LogRecord`.
-        # The previous implementation used the legacy name `on_emit` and
-        # the raw `LogRecord` signature — the ABC rejected it as abstract,
-        # the LoggerProvider construction raised, and log export was
-        # silently disabled at startup.
+        # OTel SDK >= 1.40 renamed `on_emit` → `emit` on the
+        # LogRecordProcessor ABC. Older SDKs (e.g. 1.36.0 still pinned
+        # in some OPEA images) still call `on_emit` — defining both
+        # keeps the class concrete on either ABC version, so
+        # `setup_logging()` succeeds regardless of which SDK is in
+        # the runtime image. Same implementation either way.
         log_record = log_data.log_record
+
+        # Attribute redaction — both keys AND values.
 
         # Attribute redaction — both keys AND values.
         #
@@ -153,11 +155,19 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
         # Delegate to the inner processor (typically BatchLogRecordProcessor
         # wrapping the OTLP exporter). Wrap in try/except so a failure in
         # the inner processor never escapes (LogRecordProcessor contract
-        # — errors must not propagate to the SDK pipeline).
+        # — errors must not propagate to the SDK pipeline). `getattr` picks
+        # the right method name (`emit` in SDK >= 1.40, `on_emit` in older).
         try:
-            self._inner.emit(log_data)
+            dispatch = getattr(self._inner, "emit", None) or self._inner.on_emit
+            dispatch(log_data)
         except Exception as exc:  # pragma: no cover — defensive
             logging.getLogger(__name__).warning("Inner LogRecordProcessor.emit failed: %s", exc)
+
+    # Legacy SDK (< 1.40) calls `on_emit` instead of `emit`. Defining both
+    # makes the class concrete on either ABC version. Both dispatch into
+    # the same body via the `emit` method above — keep them aliased here.
+    def on_emit(self, log_data) -> None:  # noqa: D401 — legacy alias
+        return self.emit(log_data)
 
     def shutdown(self) -> None:
         # Delegate so the inner processor's flush + shutdown still runs.

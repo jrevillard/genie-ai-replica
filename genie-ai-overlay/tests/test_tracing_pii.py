@@ -7,7 +7,6 @@ boundary between user content and VictoriaLogs — failures must be
 visible (a silent redaction failure is itself a security finding).
 """
 
-import logging
 import sys
 from pathlib import Path
 
@@ -17,7 +16,6 @@ OVERLAY_DIR = Path(__file__).resolve().parent.parent
 if str(OVERLAY_DIR) not in sys.path:
     sys.path.insert(0, str(OVERLAY_DIR))
 
-import tracing_pii  # noqa: E402
 from tracing_pii import PIIRedactingLogRecordProcessor  # noqa: E402
 
 
@@ -205,3 +203,87 @@ def test_redacts_both_attributes_and_body(pipeline):
     assert out["attributes"]["level"] == "info"
     assert "john@example.com" not in out["body"]
     assert "[REDACTED_EMAIL]" in out["body"]
+
+
+# Regression tests for round-2 review findings: C2e + C2f
+# (PII redactor body redaction only fired on str + only top-level
+# keys → nested dict PII leaked to VL).
+
+
+def test_redacts_pii_in_dict_body(pipeline):
+    """Dict bodies must be walked recursively (round-2 finding C2e)."""
+    redactor, inner = pipeline
+    record = _FakeLogRecord(
+        body={
+            "user": {"email": "john@example.com", "name": "John"},
+            "metadata": {"token": "Bearer xyz123abc456def"},
+        }
+    )
+    redactor.on_emit(record)
+
+    out = inner.received[0]
+    body = out["body"]
+    assert "john@example.com" not in body["user"]["email"]
+    assert "[REDACTED_EMAIL]" in body["user"]["email"]
+    assert "xyz123abc456def" not in body["metadata"]["token"]
+    assert "[REDACTED_BEARER]" in body["metadata"]["token"]
+    assert body["user"]["name"] == "John"  # non-PII preserved
+
+
+def test_redacts_pii_in_attribute_values(pipeline):
+    """Non-sensitive key, sensitive VALUE: redaction must scan string values (round-2 finding C2f)."""
+    redactor, inner = pipeline
+    record = _FakeLogRecord(
+        attributes={
+            "description": "User john@example.com logged in",
+            "context": {"user_email": "x@y.com"},
+            "metadata": {"request_id": "Bearer tok1234abcd"},
+            "level": "info",
+        }
+    )
+    redactor.on_emit(record)
+    out = inner.received[0]["attributes"]
+    assert "[REDACTED_EMAIL]" in out["description"]
+    assert "john@example.com" not in out["description"]
+    assert "[REDACTED_EMAIL]" in out["context"]["user_email"]
+    assert "x@y.com" not in out["context"]["user_email"]
+    assert "[REDACTED_BEARER]" in out["metadata"]["request_id"]
+    assert out["level"] == "info"  # non-PII preserved
+
+
+def test_redacts_pii_in_list_body(pipeline):
+    """List bodies must be walked recursively too."""
+    redactor, inner = pipeline
+    record = _FakeLogRecord(body=["john@example.com", "no-pii", "Bearer xyz"])
+    redactor.on_emit(record)
+    out = inner.received[0]["body"]
+    assert "[REDACTED_EMAIL]" in out[0]
+    assert out[1] == "no-pii"
+    assert "[REDACTED_BEARER]" in out[2]
+
+
+def test_handles_inner_processor_failure(pipeline):
+    """Inner processor.on_emit raising must not propagate (LogRecordProcessor contract)."""
+    redactor, inner = pipeline
+    inner.raise_on_emit = True
+    original_on_emit = inner.on_emit
+
+    def on_emit_with_raise(record):
+        original_on_emit(record)
+        raise RuntimeError("inner exploded")
+
+    inner.on_emit = on_emit_with_raise
+
+    record = _FakeLogRecord(body="hello")
+    # Must not raise even if the inner processor throws.
+    redactor.on_emit(record)
+    assert inner.received[0]["body"] == "hello"
+
+
+def test_redacts_jwt_in_attribute_value(pipeline):
+    """JWT-shaped strings in non-sensitive keys must be caught."""
+    redactor, inner = pipeline
+    jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    record = _FakeLogRecord(attributes={"context": {"session": jwt}})
+    redactor.on_emit(record)
+    assert jwt not in inner.received[0]["attributes"]["context"]["session"]

@@ -623,36 +623,11 @@ describe('AdminDashboardService', () => {
     });
   });
 
-  describe('runSecurityScan', () => {
-    it('should scan log files for vulnerabilities', async () => {
-      const logContent = [
-        '[ERROR] security breach detected',
-        '[ERROR] SQL injection attempt',
-        '[WARN] invalid token detected',
-        '[INFO] login attempt from unknown IP',
-        ''
-      ].join('\n');
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-05-26.log']);
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-
-      const result = await adminDashboardService.runSecurityScan();
-      expect(result.status).toBe('completed');
-      expect(result.vulnerabilities).toBeDefined();
-    });
-
-    it('should handle empty logs directory', async () => {
-      mockFs.readdir.mockResolvedValueOnce([]);
-      const result = await adminDashboardService.runSecurityScan();
-      expect(result.status).toBe('completed');
-    });
-
-    it('should handle unreadable log files', async () => {
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-05-26.log']);
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
-      const result = await adminDashboardService.runSecurityScan();
-      expect(result.status).toBe('completed');
-    });
-  });
+  // The legacy `AdminDashboardService.runSecurityScan` method was removed
+  // (it read log files via fs.readFile and used Math.random() to fabricate
+  // vulnerabilities — never reached the OTel VL pipeline). The live route
+  // + controller delegate to `securityScanService.runSecurityScan`, which
+  // has its own tests in `services/security-scan-service.test.js`.
 
   describe('storeAnalyticsData', () => {
     beforeEach(async () => {

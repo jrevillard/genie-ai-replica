@@ -69,9 +69,14 @@ function _runWithSpan(span, fn) {
  * whole `trace` getter to a Proxy. See `_installGetSpanPatch()`.)
  */
 let _installedPatch = false;
+let _patchAttempts = 0;
 function _installGetSpanPatch() {
   if (_installedPatch) return;
-  _installedPatch = true;
+  // Mark the install as "attempted" so we don't re-enter on every
+  // require() — but reset on failure so a later call can retry (e.g.
+  // after the OTel API namespace is unfrozen by hot-reload).
+  _patchAttempts += 1;
+  const attemptId = _patchAttempts;
 
   const otelTrace = require('@opentelemetry/api').trace;
   const originalGetSpan = otelTrace.getSpan;
@@ -88,17 +93,24 @@ function _installGetSpanPatch() {
         };
       }
     });
+    // Patch succeeded — mark as installed so subsequent require()s are
+    // a no-op. The patch is idempotent (subsequent calls find
+    // `_installedPatch === true` and short-circuit).
+    _installedPatch = true;
   } catch (err) {
     // If the property is non-configurable (some bundlers freeze the OTel
     // API namespace), the patch silently no-ops and trace_id stamping
     // regresses to zeros. Fail LOUD — log a warning to stderr so the
-    // next `docker logs` surfaces it, and DO NOT mark the patch as
-    // installed so a subsequent attempt can retry if the namespace is
-    // ever unfrozen (e.g. across hot-reloads).
+    // next `docker logs` surfaces it. The patch is NOT marked installed
+    // so a later `_installGetSpanPatch()` call (e.g. if the namespace is
+    // ever unfrozen by hot-reload) can retry. The retry contract
+    // documented in the docstring above IS honoured: we only mark
+    // `_installedPatch = true` on success.
     // eslint-disable-next-line no-console
     console.warn(
-      '[tracing-background] failed to patch trace.getSpan — trace_id stamping ' +
-      'will fall back to whatever the OTel API returns (likely zeros):',
+      `[tracing-background] attempt #${attemptId} failed to patch ` +
+      'trace.getSpan — trace_id stamping will fall back to whatever ' +
+      'the OTel API returns (likely zeros):',
       err && err.message ? err.message : err
     );
   }
@@ -142,10 +154,13 @@ async function withBackgroundSpan(name, fn, attrs) {
  * Wrap a synchronous function in a fresh OTel root span. Returns `fn`'s
  * return value. Errors are recorded on the span and re-thrown.
  *
- * `span.end()` is called exactly once via `finally` — covers both the
- * success path (the bug the original version had: only `catch` called
- * `span.end()`, leaking one OTel span object per successful invocation
- * across the 15+ service singletons and 4 SIGTERM/SIGINT handlers).
+ * `span.end()` is called exactly once — covers both the success path
+ * (the bug the original version had: only `catch` called `span.end()`,
+ * leaking one OTel span object per successful invocation across the
+ * 15+ service singletons) AND the async case (when `fn` returns a
+ * Promise, the span must NOT end until the Promise settles — otherwise
+ * logs emitted during the awaited work have zero trace_id and rejected
+ * promises never record an exception on the span).
  *
  * @param {string} name
  * @param {() => unknown} fn
@@ -155,20 +170,43 @@ async function withBackgroundSpan(name, fn, attrs) {
 function runInBackgroundSpan(name, fn, attrs) {
   const tracer = _tracer();
   const span = tracer.startSpan(name, attrs ? { attributes: attrs } : undefined);
-  return _runWithSpan(span, () => {
-    try {
-      return fn();
-    } catch (err) {
-      span.recordException(err);
-      span.setStatus({
-        code: 2, // SpanStatusCode.ERROR (matches OTel JS enum)
-        message: err && err.message ? err.message : String(err)
-      });
-      throw err;
-    } finally {
-      span.end();
-    }
-  });
+  let result;
+  try {
+    result = _runWithSpan(span, () => fn());
+  } catch (err) {
+    span.recordException(err);
+    span.setStatus({
+      code: 2, // SpanStatusCode.ERROR
+      message: err && err.message ? err.message : String(err)
+    });
+    span.end();
+    throw err;
+  }
+  // If `fn` returned a Promise (async), defer `span.end()` until the
+  // Promise settles — otherwise the span ends immediately, the active
+  // ALS store clears, and any log emitted during the awaited work has
+  // zero trace_id. Re-throw rejections so callers see the error (same
+  // contract as the sync path's `throw err`).
+  if (result && typeof result.then === 'function') {
+    return result.then(
+      (value) => {
+        span.end();
+        return value;
+      },
+      (err) => {
+        span.recordException(err);
+        span.setStatus({
+          code: 2, // SpanStatusCode.ERROR
+          message: err && err.message ? err.message : String(err)
+        });
+        span.end();
+        throw err;
+      }
+    );
+  }
+  // Synchronous return — end now.
+  span.end();
+  return result;
 }
 
 module.exports = {

@@ -150,6 +150,42 @@ describe('tracing-background helpers', () => {
       }
       expect(fakeTracer.spans[0].end).toHaveBeenCalledTimes(1);
     });
+
+    // Second regression — the original C1 fix called span.end() in
+    // `finally` synchronously after `fn()` returned. If `fn` returned a
+    // Promise (async), the span ended BEFORE the awaited work settled —
+    // any log emitted during the promise had zero trace_id, and rejected
+    // promises never recorded on the span. Fix: defer span.end() to the
+    // promise settlement.
+    it('does not end the span until a returned Promise resolves', async () => {
+      let resolveLater;
+      const slow = new Promise((resolve) => {
+        resolveLater = resolve;
+      });
+      const returned = runInBackgroundSpan('db.healthcheck', () => slow);
+      // Synchronously after return: span must NOT yet be ended.
+      expect(fakeTracer.spans[0].end).not.toHaveBeenCalled();
+      // Resolve the promise and await its handler.
+      resolveLater('done');
+      const result = await returned;
+      expect(result).toBe('done');
+      expect(fakeTracer.spans[0].end).toHaveBeenCalledTimes(1);
+    });
+
+    it('records rejection on the span when an async fn rejects', async () => {
+      const boom = new Error('arangodb async failure');
+      const returned = runInBackgroundSpan('db.healthcheck', () =>
+        Promise.reject(boom)
+      );
+      // Re-throw must propagate to the caller (sync error contract).
+      await expect(returned).rejects.toBe(boom);
+      expect(fakeTracer.spans[0].recordException).toHaveBeenCalledWith(boom);
+      expect(fakeTracer.spans[0].setStatus).toHaveBeenCalledWith({
+        code: 2,
+        message: 'arangodb async failure'
+      });
+      expect(fakeTracer.spans[0].end).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('AsyncLocalStorage context propagation', () => {

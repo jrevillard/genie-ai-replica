@@ -450,7 +450,7 @@ groups:
         relativeTimeRange:
           from: 600
           to: 0
-        datasourceUid: vm-datasource
+        datasourceUid: victoriametrics
         model:
           expr: rate(otelcol_processor_dropped_log_records_total{processor="transform/stamp_service_name_from_container"}[5m]) > 0
           instant: true
@@ -460,7 +460,7 @@ groups:
         relativeTimeRange:
           from: 900
           to: 0
-        datasourceUid: vm-datasource
+        datasourceUid: victoriametrics
         model:
           expr: increase(otelcol_processor_accepted_log_records_total{processor="transform/stamp_service_name_from_container"}[15m]) == 0
           instant: true

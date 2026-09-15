@@ -48,7 +48,6 @@ from opentelemetry.sdk._logs.export import LogRecordProcessor
 # AND log record attribute redaction (this redactor).
 from tracing import _is_sensitive_key  # noqa: E402
 
-
 # Body-text patterns. Mirrors `redactValue` regex set in the Node side
 # `tracing-pii.js`.
 _BODY_PATTERNS = [
@@ -69,11 +68,11 @@ _REDACTED_PLACEHOLDER = "[REDACTED]"
 
 def _redact_body(body: Any) -> Any:
     """Best-effort body redaction. Bodies may be `str`, `dict`, `list`,
-    or arbitrary Python objects (LogRecord.body is typed as Any). For
-    structured bodies we walk the dict/list; for strings we run the
-    regex set; for anything else we leave it alone (the LogRecord will
-    still be exported, but the inner processor's exporter may fail
-    safely on unsupported types).
+    or arbitrary Python objects (LogRecord.body is typed as Any). We
+    always run the regex set on strings (not gated by `isinstance(str)`
+    at the call site — the guard used to live in `on_emit` and let
+    dict/list/tuple bodies bypass entirely). Structured bodies walk
+    recursively; anything else is left verbatim.
     """
     if isinstance(body, str):
         result = body
@@ -104,23 +103,43 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
         self._inner = inner
 
     def on_emit(self, log_record: LogRecord) -> None:
-        # Attribute redaction. `LogRecord.attributes` is a dict — we
-        # iterate and replace sensitive values in place.
+        # Attribute redaction — both keys AND values.
+        #
+        # 1. Top-level key check: any key matching the sensitive patterns
+        #    (password, token, session_id, etc.) gets replaced with
+        #    `[REDACTED]` to match the Node-side contract.
+        # 2. Value scan: even non-sensitive keys can carry PII in their
+        #    string values (e.g. `description: "User foo@bar.com"` or
+        #    `context.user.email: "x@y.com"`). Recurse via `_redact_body`
+        #    so nested strings get the body-text regex applied. The
+        #    previous implementation only checked top-level keys — nested
+        #    PII leaked to VictoriaLogs.
         if log_record.attributes:
             try:
                 for key in list(log_record.attributes.keys()):
+                    value = log_record.attributes[key]
                     if _is_sensitive_key(key):
+                        # Sensitive key → placeholder. Don't bother
+                        # scanning the value — it's already redacted.
                         log_record.attributes[key] = _REDACTED_PLACEHOLDER
+                    elif isinstance(value, str):
+                        log_record.attributes[key] = _redact_body(value)
+                    elif isinstance(value, (dict, list, tuple)):
+                        # Structured value (e.g. `body: { user: { email: ... } }`)
+                        # recurse so nested PII is caught.
+                        log_record.attributes[key] = _redact_body(value)
             except Exception as exc:  # pragma: no cover — defensive
                 # Security-control failure must be visible.
                 logging.getLogger(__name__).warning(
-                    "PII attribute redaction failed: %s", exc
+                    "PII attribute redaction failed (attrs=%d): %s",
+                    len(log_record.attributes or {}),
+                    exc
                 )
 
-        # Body redaction. `LogRecord.body` is typed as Any — only strings
-        # are safe to mutate. For other types we leave the inner
-        # processor to handle.
-        if isinstance(log_record.body, str):
+        # Body redaction — apply `_redact_body` unconditionally (handles
+        # str / dict / list / tuple bodies). The previous isinstance(str)
+        # guard let dict/list/tuple bodies bypass entirely.
+        if log_record.body is not None:
             try:
                 log_record.body = _redact_body(log_record.body)
             except Exception as exc:  # pragma: no cover — defensive
@@ -128,13 +147,20 @@ class PIIRedactingLogRecordProcessor(LogRecordProcessor):
                     "PII body redaction failed: %s", exc
                 )
 
-        # Delegate to the inner processor (typically BatchSpanProcessor
-        # wrapping the OTLP exporter).
-        self._inner.on_emit(log_record)
+        # Delegate to the inner processor (typically BatchLogRecordProcessor
+        # wrapping the OTLP exporter). Wrap in try/except so a failure in
+        # the inner processor never escapes (LogRecordProcessor contract
+        # — errors must not propagate to the SDK pipeline).
+        try:
+            self._inner.on_emit(log_record)
+        except Exception as exc:  # pragma: no cover — defensive
+            logging.getLogger(__name__).warning(
+                "Inner LogRecordProcessor.on_emit failed: %s", exc
+            )
 
     def shutdown(self) -> None:
         # Delegate so the inner processor's flush + shutdown still runs.
         self._inner.shutdown()
 
-    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+    def force_flush(self, timeout_millis: int = 15_000) -> bool:
         return self._inner.force_flush(timeout_millis)

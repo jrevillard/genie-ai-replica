@@ -149,7 +149,13 @@ processors:
           # Fallback: parse from fluent.tag (Compose's `<service>-<replica>`
           # naming convention). Covers services where the label forwarding
           # was not rolled out (older Compose versions, custom one-shots).
-          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "^genie\\.(?P<svc>[^.]+)-\\d+$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          # Fallback: parse from fluent.tag. Compose's `<service>-<replica>`
+          # naming convention can be either `genie.<service>-1` (default)
+          # or `<stack>_<service>-1` (Swarm). Match the LAST `<service>-<digits>`
+          # segment so we strip the stack prefix correctly. The label path
+          # above is preferred (Compose forwards `com.docker.compose.service`
+          # automatically) — this branch only fires when that label is missing.
+          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)-\\d+(\\..*)?$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
 
 exporters:
   prometheusremotewrite:

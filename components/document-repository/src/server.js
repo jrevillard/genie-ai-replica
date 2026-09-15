@@ -39,31 +39,33 @@ http.globalAgent.keepAlive = true;
 const PORT = appConfig.port || process.env.PORT || 3001;
 const HOST = appConfig.host || process.env.HOST || '0.0.0.0';
 
-// Graceful shutdown function
-const gracefulShutdown = (signal) => {
-  // Background emitter (process lifecycle — SIGTERM/SIGINT/uncaught) —
-  // span the shutdown sequence so emitted logs carry a real trace_id.
-  withBackgroundSpan(
-    'app.shutdown',
-    async () => {
-      logger.info(`Received ${signal}. Shutting down gracefully...`);
+// Graceful shutdown function — returns the promise from withBackgroundSpan
+// so the caller can `.catch()` the rejection (process.on ignores return
+// values, which would otherwise drop the promise on the floor and leak
+// the otel.shutdown span).
+const gracefulShutdown = (signal) => withBackgroundSpan(
+  'app.shutdown',
+  async () => {
+    logger.info(`Received ${signal}. Shutting down gracefully...`);
 
+    // Move `process.exit` OUT of the withBackgroundSpan body — otherwise
+    // the span's `finally { span.end() }` fires before the exit microtask
+    // drains, and the otel.shutdown span is leaked.
+    await new Promise((resolve) => {
       server.close(() => {
         logger.info('HTTP server closed.');
-
-        // Close database connections if needed
-        // Add any cleanup code here
-
-        process.exit(0);
+        resolve();
       });
-
       // Force close after 30 seconds
       setTimeout(() => {
         logger.error('Could not close connections in time, forcefully shutting down');
-        process.exit(1);
+        resolve();
       }, 30000);
-    },
-    { signal }
+    });
+
+    process.exit(0);
+  },
+  { signal }
   );
 };
 
@@ -114,36 +116,57 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 // Handle unhandled promise rejections — log but don't crash.
-// Use `withBackgroundSpan` (async) so the Promise return is awaited —
-// otherwise a rejection from the wrapped fn becomes an unhandled rejection
-// that Node 15+ would terminate the process on. `recordException` on the
-// span is implicit via the helper's catch.
+// `process.on` ignores the listener's return value, so we MUST capture
+// the Promise returned by withBackgroundSpan and attach `.catch()` so the
+// span's `finally { span.end() }` runs AND rejections don't become
+// unhandled (Node 15+ default: process exit).
+function _wrapLifecycle(name, attrs, fn) {
+  withBackgroundSpan(name, fn, attrs).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error(`[${name}] handler failed:`, err);
+  });
+}
+
 process.on('unhandledRejection', (reason, promise) => {
   const err = reason instanceof Error ? reason : new Error(String(reason));
-  withBackgroundSpan(
+  _wrapLifecycle(
     'app.unhandled_rejection',
+    { 'error.name': err.name || 'Error', 'error.kind': 'unhandledRejection' },
     async () => {
       logger.error('Unhandled Rejection at:', promise, 'reason:', err);
-    },
-    { 'error.name': err.name || 'Error', 'error.kind': 'unhandledRejection' }
-  ).catch(() => {});
+    }
+  );
 });
 
 // Handle uncaught exceptions — graceful shutdown then exit (process state is undefined after this).
-// recordException is implicit via the helper's catch on the wrapped fn.
 process.on('uncaughtException', (error) => {
-  withBackgroundSpan(
+  _wrapLifecycle(
     'app.uncaught_exception',
+    { 'error.name': error.name || 'Error', 'error.kind': 'uncaughtException' },
     async () => {
       logger.error('Uncaught Exception:', error);
-      gracefulShutdown('uncaughtException');
-    },
-    { 'error.name': error.name || 'Error', 'error.kind': 'uncaughtException' }
-  ).catch(() => {});
+      // gracefulShutdown now returns a Promise (await + .catch inside).
+      // We intentionally do NOT `.catch` here — gracefulShutdown calls
+      // process.exit(0) on success and process.exit(1) on its own timer;
+      // any throw from inside is a real bug we want to surface.
+      await gracefulShutdown('uncaughtException');
+    }
+  );
 });
 
-// Handle graceful shutdown
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// Handle graceful shutdown — capture the Promise so process.on's
+// value-discarding doesn't drop it (see H4a fix in backend/tracing.js).
+process.on('SIGTERM', () => {
+  gracefulShutdown('SIGTERM').catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[SIGTERM] shutdown failed:', err);
+  });
+});
+process.on('SIGINT', () => {
+  gracefulShutdown('SIGINT').catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[SIGINT] shutdown failed:', err);
+  });
+});
 
 module.exports = server;

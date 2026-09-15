@@ -311,21 +311,24 @@ def setup_tracing(service_name: str) -> None:
 
     atexit.register(shutdown)
 
-    # Handle SIGTERM (Docker/Swarm sends SIGTERM on stop). `signal.signal()`
-    # is only valid in the main thread of the main interpreter — uvicorn's
-    # worker-thread model raises ValueError if init runs in a worker.
-    # `atexit` already handles shutdown on normal exit; the SIGTERM hook
-    # is best-effort and degrades silently if the thread model forbids it.
-    try:
-        signal.signal(signal.SIGTERM, _sigterm_handler)
-    except (ValueError, OSError):
-        # Worker thread or non-main interpreter — atexit still handles
-        # graceful shutdown. Log at debug level to avoid noisy warnings
-        # in multi-worker deployments.
-        logging.getLogger(__name__).debug(
-            "signal.signal(SIGTERM) unavailable in this thread (likely a "
-            "uvicorn worker); falling back to atexit-only shutdown."
-        )
+    # Handle SIGTERM (Docker/Swarm sends SIGTERM on stop) and SIGINT
+    # (interactive Ctrl+C). `signal.signal()` is only valid in the main
+    # thread of the main interpreter — uvicorn's worker-thread model
+    # raises ValueError if init runs in a worker. `atexit` already
+    # handles shutdown on normal exit; the signal hooks are best-effort
+    # and degrade silently if the thread model forbids it.
+    for _signame in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(_signame, _sigterm_handler)
+        except (ValueError, OSError):
+            # Worker thread or non-main interpreter — atexit still
+            # handles graceful shutdown. Log at debug level to avoid
+            # noisy warnings in multi-worker deployments.
+            logging.getLogger(__name__).debug(
+                f"signal.signal({_signame}) unavailable in this thread "
+                "(likely a uvicorn worker); falling back to atexit-only "
+                "shutdown."
+            )
 
 
 def get_tracer(name: str = __name__):
@@ -544,18 +547,24 @@ def shutdown() -> None:
     global _provider, _meter_provider, _logger_provider
     if _provider is None and _meter_provider is None and _logger_provider is None:
         return
+    # Use a 15 s force_flush budget on both sides — matches the JS-side
+    # `SHUTDOWN_TIMEOUT_MS=15000` so the JS + Python services flush
+    # symmetrically under Swarm `stop_grace_period` (default 10 s +
+    # grace = 30 s max). The previous 30 s Python budget was wasted
+    # budget (Docker SIGKILLs at stop_grace_period regardless).
+    force_flush_timeout_ms = 15_000
     with contextlib.suppress(Exception):
-        _provider.force_flush(30_000)
+        _provider.force_flush(force_flush_timeout_ms)
     with contextlib.suppress(Exception):
         _provider.shutdown()
     _provider = None
     with contextlib.suppress(Exception):
-        _meter_provider.force_flush()
+        _meter_provider.force_flush(force_flush_timeout_ms)
     with contextlib.suppress(Exception):
         _meter_provider.shutdown()
     _meter_provider = None
     with contextlib.suppress(Exception):
-        _logger_provider.force_flush(30_000)
+        _logger_provider.force_flush(force_flush_timeout_ms)
     with contextlib.suppress(Exception):
         _logger_provider.shutdown()
     _logger_provider = None

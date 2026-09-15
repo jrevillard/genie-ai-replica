@@ -1317,7 +1317,8 @@ async function startApp() {
 // the helper's catch on the wrapped fn. Use the async variant so the
 // Promise return is awaited — otherwise a rejection from the wrapped fn
 // becomes an unhandled rejection that Node 15+ would terminate the
-// process on.
+// process on. `process.exit(1)` is moved OUT of the withBackgroundSpan
+// body (after `.then`) so the span's `finally { span.end() }` fires first.
 process.on('unhandledRejection', (reason, promise) => {
   withBackgroundSpan(
     'app.unhandled_rejection',
@@ -1329,13 +1330,20 @@ process.on('unhandledRejection', (reason, promise) => {
         rawReason: JSON.stringify(reason, Object.getOwnPropertyNames(reason)),
         errorType: reason?.constructor?.name || 'Unknown'
       });
-      process.exit(1);
     },
     { 'error.kind': 'unhandledRejection' }
-  ).catch(() => {
-    // Swallow secondary errors from the span wrapper itself — the
-    // original error is already logged.
-  });
+  )
+    .catch((err) => {
+      // Span wrapper itself failed — log + fall through to exit.
+      // eslint-disable-next-line no-console
+      console.error('[unhandledRejection] span wrapper failed:', err);
+    })
+    .finally(() => {
+      // Exit AFTER the span's `finally` block runs (otherwise the span
+      // is leaked). process.exit is synchronous but the span has already
+      // had its microtask drained by the time `.finally` fires.
+      process.exit(1);
+    });
 });
 
 // Auto-start only when run directly

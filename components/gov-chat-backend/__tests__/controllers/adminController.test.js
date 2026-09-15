@@ -38,6 +38,14 @@ jest.mock('../../services/logs-service', () => {
   }));
 });
 
+// Mock securityScanService — controller delegates to it for runSecurityScan
+// instead of the legacy adminDashboardService fs.readFile-based path.
+jest.mock('../../services/security-scan-service', () => ({
+  runSecurityScan: jest.fn().mockResolvedValue({
+    vulnerabilities: { critical: [], medium: [], low: [], details: [] }
+  })
+}));
+
 jest.mock('../../services/database-operations-service', () => {
   return jest.fn().mockImplementation(() => ({
     init: jest.fn().mockResolvedValue(undefined),
@@ -53,7 +61,12 @@ describe('adminController', () => {
     jest.clearAllMocks();
     req = {
       query: {},
-      params: {}
+      params: {},
+      // The controller delegates to securityScanService via
+      // req.app.locals.logsService — mock that path so the test doesn't
+      // reach into the real LogsService singleton (the old fs-based
+      // path didn't need it).
+      app: { locals: { logsService: {} } }
     };
     res = {
       status: jest.fn().mockReturnThis(),
@@ -388,26 +401,30 @@ describe('adminController', () => {
     it('should run security scan successfully', async () => {
       await adminController.runSecurityScan(req, res);
 
+      // The controller now delegates to securityScanService.runSecurityScan
+      // (was: AdminDashboardService.runSecurityScan via fs.readFile).
+      // The test mocks both paths but the controller route resolves the
+      // securityScanService response directly.
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
           message: 'Security scan completed',
-          data: expect.objectContaining({
-            scanResults: 'clean'
-          })
+          data: expect.objectContaining({ vulnerabilities: expect.any(Object) })
         })
       );
     });
 
     it('should return 500 on error', async () => {
-      const AdminDashboardService = require('../../services/admin-dashboard-service');
-      AdminDashboardService.mockImplementationOnce(() => ({
-        init: jest.fn().mockRejectedValue(new Error('Scan failed'))
-      }));
-
-      await adminController.runSecurityScan(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
+      const securityScanService = require('../../services/security-scan-service');
+      // Override the mock for one call to throw.
+      const original = securityScanService.runSecurityScan;
+      securityScanService.runSecurityScan = jest.fn().mockRejectedValue(new Error('Scan failed'));
+      try {
+        await adminController.runSecurityScan(req, res);
+        expect(res.status).toHaveBeenCalledWith(500);
+      } finally {
+        securityScanService.runSecurityScan = original;
+      }
     });
   });
 

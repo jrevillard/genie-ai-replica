@@ -60,44 +60,78 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // jest.config.js routes both `../shared-lib/X` and the source-tree
   // `../shared/lib/X` to the real file).
   const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
-  // TracerProvider for trace export. doc-repo needs real IDs on the
-  // spans created via `tracer.startSpan(name)` so the Winston formatter
-  // stamps trace_id/span_id on log records; the spans themselves ship
-  // to the OTel Collector via OTLP and end up in VictoriaTraces (full
-  // distributed-trace visibility, matching backend). Uses
-  // `@opentelemetry/exporter-trace-otlp-http` (added to package.json)
-  // pointed at the same OTLP endpoint as the log exporter.
-  const traceEndpoint = `${endpointBase}/v1/traces`;
-  const { OTLPSpanExporter } = require('@opentelemetry/exporter-trace-otlp-http');
-  const { TracerProvider, BatchSpanProcessor } = require('@opentelemetry/sdk-trace');
-  const _docRepoTracerProvider = new TracerProvider();
-  _docRepoTracerProvider.addSpanProcessor(new BatchSpanProcessor(new OTLPSpanExporter({ url: traceEndpoint })));
-  trace.setGlobalTracerProvider(_docRepoTracerProvider);
+  // OTLP base URL — read once, then reused for both the trace and the log
+  // exporter endpoints. Pulled up to the top of the else block so neither
+  // exporter construction reads it in a TDZ window (the previous ordering
+  // had `traceEndpoint` reference `endpointBase` 30 lines before its
+  // declaration, throwing ReferenceError at module load).
+  const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-  // Resource attributes (pinned literal). service.version reads the
-  // doc-repo package.json (npm does NOT propagate npm_package_version
-  // into Docker runtime; the previous "1.0.0" fallback was misleading —
-  // every deployment looked at v1.0.0 regardless of the actual image
-  // tag). Operators can still override via the `SERVICE_VERSION` env var.
+  // Resource attributes — the SAME resource is used for the TracerProvider
+  // (so spans carry service.name in VictoriaTraces) AND for the
+  // LoggerProvider (so logs carry the same name). Building two separate
+  // resources with the same content would drift over time; share via a
+  // single Resource instance.
+  //
+  // service.name falls back to the OTel-spec env var before the
+  // compose-pinned literal — the pinned literal was a regression that
+  // prevented operators from overriding per environment.
   const fs = require('fs');
   const path = require('path');
   function _readPackageVersion() {
+    // Read THIS component's package.json (not the shared
+    // `components/package.json`) — otherwise both backend + doc-repo
+    // would report the same version, defeating the per-component claim.
+    // `__dirname` for tracing.js at `components/document-repository/src/tracing.js`
+    // resolves to `components/document-repository/src/`, so the parent
+    // path lands on `components/document-repository/package.json`.
     try {
       const pkg = JSON.parse(
-        fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')
+        fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
       );
       return pkg.version || '0.0.0';
     } catch {
       return '0.0.0';
     }
   }
-  const serviceName = 'genie-document-repository';
+  const serviceName = process.env.OTEL_SERVICE_NAME || 'genie-document-repository';
   const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
-  // Create exporter — base URL from env var, append signal-specific path
-  // (aligned with OPEA tracing.py + backend tracing.js).
-  const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const resource = resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: serviceName,
+    [ATTR_SERVICE_VERSION]: serviceVersion,
+    // ATTR_DEPLOYMENT_ENVIRONMENT is undefined in some semantic-conventions
+    // versions — use raw key as fallback.
+    ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
+      ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
+      : { 'deployment.environment': deploymentEnvironment })
+  });
+
+  // TracerProvider for trace export. doc-repo needs real IDs on the
+  // spans created via `tracer.startSpan(name)` so the Winston formatter
+  // stamps trace_id/span_id on log records; the spans themselves ship
+  // to the OTel Collector via OTLP and end up in VictoriaTraces (full
+  // distributed-trace visibility, matching backend). The TracerProvider
+  // must be constructed WITH a Resource — otherwise every exported span
+  // has no `service.name` attribute, breaking the VL stream filter.
+  const traceEndpoint = `${endpointBase}/v1/traces`;
+  const { OTLPSpanExporter } = require('@opentelemetry/exporter-trace-otlp-http');
+  const { TracerProvider, BatchSpanProcessor } = require('@opentelemetry/sdk-trace');
+  const { BatchLogRecordProcessor, LogRecordProcessor } = require('@opentelemetry/sdk-logs');
+  const { PIIRedactionSpanProcessor } = require('./tracing-pii-spans');
+  // Span-side PII redactor wraps the BatchSpanProcessor so every span
+  // emitted by doc-repo (HTTP auto-instrumentation + background spans
+  // from runInBackgroundSpan / withBackgroundSpan) has its attributes
+  // scrubbed before export. Without this, doc-repo spans carry URL
+  // paths, header values, and request bodies verbatim to VictoriaTraces
+  // — asymmetric with backend which DOES redact.
+  const _docRepoTracerProvider = new TracerProvider({ resource });
+  const _docRepoTraceExporter = new OTLPSpanExporter({ url: traceEndpoint });
+  _docRepoTracerProvider.addSpanProcessor(
+    new PIIRedactionSpanProcessor(_docRepoTraceExporter)
+  );
+  trace.setGlobalTracerProvider(_docRepoTracerProvider);
 
   // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS AND
   // ENABLE_OBSERVABILITY. Already inside the ENABLE_OBSERVABILITY gate
@@ -111,19 +145,17 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // scheduledDelayMillis / maxQueueSize for both backend + document-repository.
   // PII first, batching second is preserved by the wrapper
   // composition — onEmit redacts before delegating to the inner batch.
+  //
+  // Same `resource` instance as the TracerProvider above — shared so spans
+  // and logs both stamp `service.name=genie-document-repository` and
+  // Grafana filter `service.name:genie-document-repository` matches both.
   let loggerProvider = null;
   if (booleanEnv('LOG_TO_VICTORIALOGS', true)) {
     const logExporter = new OTLPLogExporter({
       url: `${endpointBase}/v1/logs`
     });
     loggerProvider = new LoggerProvider({
-      resource: resourceFromAttributes({
-        [ATTR_SERVICE_NAME]: serviceName,
-        [ATTR_SERVICE_VERSION]: serviceVersion,
-        ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
-          ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
-          : { 'deployment.environment': deploymentEnvironment })
-      }),
+      resource,
       // sdk-logs 0.221.x reads `config.processors` (NOT `logRecordProcessors`).
       processors: [
         new PIIRedactingLogRecordProcessor({
@@ -155,20 +187,25 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     process.exit(0);
   };
 
-  // Use `withBackgroundSpan` (async) so the returned Promise is awaited
-  // and any rejection inside gracefulShutdown is recorded on the span
-  // instead of becoming an unhandled rejection. `runInBackgroundSpan`
-  // (sync) drops the Promise on the floor and leaks the span.
-  process.on('SIGTERM', () => withBackgroundSpan(
-    'otel.shutdown',
-    () => gracefulShutdown('SIGTERM'),
-    { 'genie.signal': 'SIGTERM' }
-  ));
-  process.on('SIGINT', () => withBackgroundSpan(
-    'otel.shutdown',
-    () => gracefulShutdown('SIGINT'),
-    { 'genie.signal': 'SIGINT' }
-  ));
+  // `process.on()` ignores the listener's return value, so the Promise
+  // returned by `withBackgroundSpan` would be dropped on the floor —
+  // the span's `finally` block never fires, the span leaks, and any
+  // rejection inside `gracefulShutdown` becomes an unhandled rejection.
+  // Capture the Promise explicitly and attach `.catch()` so the span
+  // ends AND rejections surface (not as process termination via
+  // Node 15+'s unhandledRejection default policy).
+  function _registerShutdown(signame) {
+    withBackgroundSpan(
+      'otel.shutdown',
+      () => gracefulShutdown(signame),
+      { 'genie.signal': signame }
+    ).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error(`[otel.shutdown] ${signame} handler failed:`, err);
+    });
+  }
+  process.on('SIGTERM', () => _registerShutdown('SIGTERM'));
+  process.on('SIGINT', () => _registerShutdown('SIGINT'));
 
   module.exports = { sdk: null, loggerProvider };
 }

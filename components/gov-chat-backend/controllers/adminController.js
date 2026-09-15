@@ -1,5 +1,6 @@
 const AdminDashboardService = require('../services/admin-dashboard-service');
 const LogsService = require('../services/logs-service');
+const securityScanService = require('../services/security-scan-service');
 const { logger, triggerLogRollover } = require('../shared-lib');
 const { parsePositiveInt } = require('../shared-lib');
 
@@ -228,10 +229,17 @@ const adminController = {
 
   async runSecurityScan(req, res) {
     try {
-      const adminDashboardService = new AdminDashboardService();
-      await adminDashboardService.init();
-      logger.info('Controller: Running security scan');
-      const scanResults = await adminDashboardService.runSecurityScan();
+      // The legacy path instantiated `AdminDashboardService` and called
+      // its `runSecurityScan` method (which read logs from on-disk files
+      // via `fs.readFile` and simulated `Math.random()` results when
+      // none found). The live route (`admin-routes.js:317-331`) uses
+      // `securityScanService.runSecurityScan(logsService)` directly and
+      // bypasses this controller method. Route to the same service here
+      // so future direct callers don't silently hit the broken fs-based
+      // implementation.
+      logger.info('Controller: Running security scan (via securityScanService)');
+      const logsService = req.app.locals.logsService;
+      const scanResults = await securityScanService.runSecurityScan(logsService);
       res.json({
         success: true,
         message: 'Security scan completed',

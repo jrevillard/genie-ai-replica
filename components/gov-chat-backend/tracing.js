@@ -139,8 +139,13 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const fs = require('fs');
   const path = require('path');
   function _readPackageVersion() {
+    // Read THIS component's package.json (not the shared
+    // `components/package.json`) — otherwise backend + doc-repo would
+    // report the same version, defeating the per-component claim.
+    // `__dirname` for backend's tracing.js is `components/gov-chat-backend/`,
+    // so the file lives at `components/gov-chat-backend/package.json`.
     try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
       return pkg.version || '0.0.0';
     } catch {
       return '0.0.0';
@@ -302,16 +307,28 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     process.exit(0);
   };
 
-  // Use `withBackgroundSpan` (async) so the returned Promise is awaited
-  // and any rejection inside gracefulShutdown is recorded on the span
-  // instead of becoming an unhandled rejection. `runInBackgroundSpan`
-  // (sync) drops the Promise on the floor and leaks the span.
-  process.on('SIGTERM', () =>
-    withBackgroundSpan('otel.shutdown', () => gracefulShutdown('SIGTERM'), { 'genie.signal': 'SIGTERM' })
-  );
-  process.on('SIGINT', () =>
-    withBackgroundSpan('otel.shutdown', () => gracefulShutdown('SIGINT'), { 'genie.signal': 'SIGINT' })
-  );
+  // `process.on()` ignores the listener's return value, so the Promise
+  // returned by `withBackgroundSpan` would be dropped on the floor —
+  // the span's `finally` block never fires, the span leaks, and any
+  // rejection inside `gracefulShutdown` becomes an unhandled rejection.
+  // We must explicitly capture the Promise and attach `.catch()` so the
+  // span ends AND rejections surface (not as process termination via
+  // Node 15+'s unhandledRejection default policy).
+  function _registerShutdown(signame) {
+    withBackgroundSpan(
+      'otel.shutdown',
+      () => gracefulShutdown(signame),
+      { 'genie.signal': signame }
+    ).catch((err) => {
+      // Rejection inside the span body — record + log, but do not crash
+      // the shutdown path. `process.exit` still runs via the inner
+      // gracefulShutdown timeout (or the inner try/finally itself).
+      // eslint-disable-next-line no-console
+      console.error(`[otel.shutdown] ${signame} handler failed:`, err);
+    });
+  }
+  process.on('SIGTERM', () => _registerShutdown('SIGTERM'));
+  process.on('SIGINT', () => _registerShutdown('SIGINT'));
 
   function getTracer() {
     return trace.getTracer(serviceName, serviceVersion);

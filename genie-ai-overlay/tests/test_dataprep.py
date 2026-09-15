@@ -2312,6 +2312,30 @@ class TestPerChunkFallbackAclPreserve:
         assert mock_client.chat.completions.create.call_count == 3  # exhausted retries
 
 
+class TestLlmLabelLogClassification:
+    """David, 2026-09-15: transient LLM failures (self-healed by the retry
+    ladder) are WARN, but the TERMINAL per-chunk fallback (all 3 attempts
+    exhausted — the chunk permanently loses LLM labeling) must log at ERROR.
+    Live: the shared vLLM gateway flapped 502s during the Bali ingest and 229
+    permanently-degraded chunks sat in the log as warnings."""
+
+    @pytest.mark.asyncio
+    async def test_terminal_fallback_is_error_and_transients_are_warn(self):
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("502 Bad Gateway"))
+
+        with patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock) as log:
+            await dp._llm_call_single(mock_client, "test-model", "sys", 42, "chunk text", "file1", ["Healthcare"])
+
+        levels = [call.args[1] for call in log.call_args_list]
+        assert levels == ["WARN", "WARN", "WARN", "ERROR"]  # attempts 1-3 then the terminal row
+        # The transient rows say they are retrying; the terminal row says the
+        # chunk degraded to file labels.
+        assert all("retrying" in call.args[3] for call in log.call_args_list[:3])
+        assert "falls back to file labels" in log.call_args_list[3].args[3]
+
+
 class TestAclLabelPreserveE2E:
     """End-to-end: ACL labels survive ingest_file_with_guardrail into the
     persisted chunk's metadata.chunk_labels. REVISED (2026-08-23): _apply_labels

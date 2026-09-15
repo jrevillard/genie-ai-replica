@@ -84,8 +84,10 @@
              SELECTED node — the concept's OKF data at a glance without
              scrolling to the file viewer. Selection sync is untouched: tap
              still emits 'select' (opens the file) and focuses the
-             neighborhood; the card is a read-only overlay (pointer-events:
-             none) so it never intercepts graph interaction. -->
+             neighborhood. The card IS interactive (David, 2026-09-14): it
+             carries clickable source links and survives the node→card mouse
+             move (grace-delayed dismiss, canceled on card enter); it closes
+             on mouse-leave or click. -->
         <Transition name="okf-gv-card">
           <div
             v-if="card.visible"
@@ -94,6 +96,9 @@
             :class="['okf-gv__card--' + card.kind, { 'okf-gv__card--below': card.below }]"
             role="tooltip"
             :style="{ left: card.x + 'px', top: card.y + 'px' }"
+            @mouseenter="cancelCardHide"
+            @mouseleave="hideCard"
+            @click.stop="hideCard"
           >
             <p class="okf-gv__card-title"><span class="okf-gv__card-dot" aria-hidden="true"></span>{{ card.title }}</p>
             <p v-if="card.chips.length" class="okf-gv__card-chips">
@@ -670,9 +675,15 @@ export default {
       // nothing: the card belongs to the focused neighborhood.
       this.cy.on('mouseover', 'node', (evt) => {
         if (!this._neighbourIds || !this._neighbourIds.has(evt.target.id())) return;
+        this.cancelCardHide(); // re-entering the node cancels a pending dismiss
         this.showCard(evt.target);
       });
-      this.cy.on('mouseout', 'node', () => this.hideCard());
+      // Grace delay instead of instant hide: it leaves time to move the mouse
+      // from the node onto the CARD, which cancels the dismiss on enter.
+      this.cy.on('mouseout', 'node', () => {
+        this.cancelCardHide();
+        this._cardHideTimer = setTimeout(() => this.hideCard(), 250);
+      });
       // Pan/zoom/drag moves the node out from under the cursor — hide rather
       // than chase it; the card re-appears on the next hover.
       this.cy.on('viewport', () => this.hideCard());
@@ -811,12 +822,27 @@ export default {
     },
     // ---- hover summary card -------------------------------------------------
     hideCard() {
+      if (this._cardHideTimer) {
+        clearTimeout(this._cardHideTimer);
+        this._cardHideTimer = null;
+      }
       if (this.card.visible) this.card.visible = false;
+    },
+    // The card is interactive (source links): moving from the node onto the
+    // card must NOT dismiss it — only leaving BOTH does (David, 2026-09-14).
+    cancelCardHide() {
+      if (this._cardHideTimer) {
+        clearTimeout(this._cardHideTimer);
+        this._cardHideTimer = null;
+      }
     },
     // Story 7.7: a source-document link in the card deep-links to the
     // doc-repo details view (?tab=documents&file= — AdminDashboard watcher).
+    // Clicking the link also dismisses the card (David: "it can disappear
+    // when I click the card or the link").
     openSource(s) {
       const fileId = s && s.file_id;
+      this.hideCard();
       if (!fileId || !this.$router) return;
       this.$router.push({ query: { ...(this.$route.query || {}), tab: 'documents', file: fileId } }).catch(() => {});
     },
@@ -967,7 +993,12 @@ export default {
 .okf-gv__card {
   position: absolute;
   z-index: 3;
-  pointer-events: none; /* pure overlay — the canvas keeps every interaction */
+  /* Interactive (David, 2026-09-14): the card carries clickable source links
+     and must survive the node→card mouse move. It dismisses on mouse-leave
+     and on click; the small overlay area is the only place it eats canvas
+     events, and the canvas re-takes them the moment it disappears. */
+  pointer-events: auto;
+  cursor: default;
   width: 272px;
   max-width: calc(100% - 16px);
   padding: var(--space-sm) var(--space-md);

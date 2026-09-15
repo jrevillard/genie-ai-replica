@@ -1408,4 +1408,25 @@ describe('AdminDashboard', () => {
       expect(wrapper.vm.okfGateTitle).toBe('1 docs still serve');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Story 7.7 deep link — one-shot: opens the FileDetailsDialog on click-
+  // navigation, then scrubs ?file= so a REFRESH does not re-open it.
+  // -----------------------------------------------------------------------
+  describe('applyRouteQuery deep link (one-shot)', () => {
+    it('opens the dialog and scrubs ?file= from the URL', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.$router = { replace: jest.fn().mockResolvedValue(undefined) };
+      wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-9', keep: 'x' });
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
+      expect(wrapper.vm.selectedFileId).toBe('f-9');
+      expect(wrapper.vm.$router.replace).toHaveBeenCalledWith({ query: { tab: 'documents', keep: 'x' } });
+    });
+
+    it('tolerates a missing router (unit contexts) without crashing', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.applyRouteQuery({ tab: 'documents', file: 'f-9' });
+      expect(wrapper.vm.showDetailsDialog).toBe(true);
+    });
+  });
 });

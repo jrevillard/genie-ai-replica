@@ -907,17 +907,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 if response.status == 200:
                     data = await response.json()
                     labels = []
-                    # Backend returns a tree structure (Category -> Children)
+                    # Backend returns a tree structure (Category -> Children).
+                    # Only STRING names may enter the taxonomy: a category or
+                    # service missing its EN translation surfaces as name:null,
+                    # and a None here later crashes EVERY ingest at
+                    # `x.lower()` inside _finalize_chunk_labels (live
+                    # 2026-09-14 — one malformed taxonomy doc blocked all
+                    # labeling fleet-wide).
                     if isinstance(data, list):
                         for category in data:
                             # Add the Category Name
-                            if isinstance(category, dict) and "name" in category:
+                            if isinstance(category, dict) and isinstance(category.get("name"), str):
                                 labels.append(category["name"])
                                 # Add all Children (Services)
                                 if "children" in category and isinstance(category["children"], list):
                                     for child in category["children"]:
                                         # Children might be strings or objects depending on query
-                                        if isinstance(child, dict) and "name" in child:
+                                        if isinstance(child, dict) and isinstance(child.get("name"), str):
                                             labels.append(child["name"])
                                         elif isinstance(child, str):
                                             labels.append(child)
@@ -1601,6 +1607,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         final_labels: set[str] = set()
         new_labels: list[str] = []
         for label in suggested:
+            if not isinstance(label, str) or not label:
+                # A malformed LLM response can yield null/non-string entries in
+                # the suggestion list — skip them instead of crashing the whole
+                # file ingest (the chunk still ingests; an absent label is the
+                # documented fallback). Live: vLLM returned a null label and
+                # `label.lower()` 500'd every ingest of the file (2026-09-14).
+                continue
             if label in final_labels:
                 continue
             if label in all_labels:

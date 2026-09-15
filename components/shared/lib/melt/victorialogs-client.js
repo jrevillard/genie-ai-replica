@@ -277,13 +277,26 @@ class VictoriaLogsAdapter extends LogQueryRepository {
    *
    * Mapping:
    *  - `timestamp` : ISO 8601 string from `_time` (via `new Date`).
-   *  - `message`   : string from `_msg`.
-   *  - `stream`    : `{service, environment}` projection of `_stream`.
+   *  - `message`   : parsed `.message` from `_msg` JSON envelope
+   *                  (fallback to the raw `_msg` string when not JSON).
+   *  - `stream`    : `{service, environment}` projection of the source
+   *                  of truth (top-level OTel fields first, then
+   *                  `_msg` JSON, then VL `_stream`).
    *  - `fields`    : `...rest` keys EXCEPT `_msg`/`_stream`/`_time`.
    *  - `date`      : UTC `YYYY-MM-DD` portion of `_time`.
    *  - `time`      : UTC `HH:MM:SS` portion of `_time`.
-   *  - `level`     : uppercase — `fields.level` || `_stream.level` || `INFO`.
-   *  - `service`   : `_stream.service` || `unknown`.
+   *  - `level`     : uppercase — `severity_text` (OTel canonical) first,
+   *                  then `_msg.level`, then `fields.level` /
+   *                  `_stream.level` / `INFO`.
+   *  - `service`   : `service.name` (OTel canonical top-level field),
+   *                  then `_msg.service`, then `_stream.service`,
+   *                  then `unknown`.
+   *
+   * The fluentd-sourced rows (the dominant path today) carry the real
+   * service + level INSIDE the `_msg` JSON envelope, not on top-level
+   * OTel fields nor on `_stream` — the previous implementation read
+   * only those and returned `unknown` / `INFO` for every row, breaking
+   * the admin panel filters.
    *
    * @param {Array<object>} rawRows VL wire rows (`{_msg, _stream, _time, ...rest}`).
    * @returns {import('./types').VictoriaLogsRow[]} Normalized rows.
@@ -310,6 +323,18 @@ class VictoriaLogsAdapter extends LogQueryRepository {
       }
     }
 
+    // fluentd-sourced rows encode their real message + level + service
+    // as a JSON STRING in `_msg`. Parse it once so the level/service/
+    // message extractors below can fall through to it.
+    let _msgParsed = null;
+    if (typeof _msg === 'string') {
+      try {
+        _msgParsed = JSON.parse(_msg);
+      } catch {
+        _msgParsed = null;
+      }
+    }
+
     let timestamp = '';
     let date = '';
     let time = '';
@@ -323,25 +348,54 @@ class VictoriaLogsAdapter extends LogQueryRepository {
       }
     }
 
-    const streamService = _stream && typeof _stream === 'object' ? _stream.service : undefined;
-    const streamEnv = _stream && typeof _stream === 'object' ? _stream.environment : undefined;
-    const streamLevel = _stream && typeof _stream === 'object' ? _stream.level : undefined;
+    // `_stream` from VL is a logfmt-ish string like `{service.name="x"}`
+    // — it's stream-shard metadata, NOT a structured object. Guard
+    // against the earlier `typeof _stream === 'object'` check, which
+    // matched `String` (always truthy in JS) and returned `"unknown"` for
+    // every fluentd row.
+    const _streamIsString = typeof _stream === 'string';
+    const _streamIsObject = _stream && typeof _stream === 'object' && !_streamIsString;
+    const streamService = _streamIsObject ? _stream.service : undefined;
+    const streamEnv = _streamIsObject ? _stream.environment : undefined;
+    const streamLevel = _streamIsObject ? _stream.level : undefined;
 
-    const fieldsLevel = fields.level;
-    const rawLevel = fieldsLevel !== undefined ? fieldsLevel : streamLevel;
+    // OTel canonical: `severity_text` is "INFO" / "WARN" / "ERROR" on the
+    // OTel-LoggingHandler path; fluentd-only rows set it to "Unspecified".
+    let rawLevel = raw && raw.severity_text;
+    if (rawLevel === undefined || rawLevel === null || String(rawLevel).toUpperCase() === 'UNSPECIFIED') {
+      rawLevel = _msgParsed && _msgParsed.level;
+    }
+    if (rawLevel === undefined || rawLevel === null) rawLevel = fields.level;
+    if (rawLevel === undefined || rawLevel === null) rawLevel = streamLevel;
     const level =
       rawLevel !== undefined && rawLevel !== null && String(rawLevel).length > 0
         ? String(rawLevel).toUpperCase()
         : DEFAULT_LEVEL;
 
+    // OTel canonical: `service.name` is a top-level field on the
+    // OTel-LoggingHandler path; absent on fluentd (it goes into
+    // `_msg.service` instead). Then `_msgParsed.service` for fluentd
+    // rows; then `_stream.service` (legacy VL metadata).
+    let rawService = raw && raw['service.name'];
+    if (rawService === undefined || rawService === null || String(rawService).length === 0) {
+      rawService = _msgParsed && _msgParsed.service;
+    }
+    if (rawService === undefined || rawService === null || String(rawService).length === 0) {
+      rawService = streamService;
+    }
     const service =
-      streamService !== undefined && streamService !== null && String(streamService).length > 0
-        ? String(streamService)
+      rawService !== undefined && rawService !== null && String(rawService).length > 0
+        ? String(rawService)
         : DEFAULT_SERVICE;
+
+    // Real `message` is inside the `_msg` JSON envelope for fluentd rows.
+    const message =
+      (_msgParsed && typeof _msgParsed.message === 'string' && _msgParsed.message) ||
+      (_msg !== undefined && _msg !== null ? String(_msg) : '');
 
     return {
       timestamp,
-      message: _msg !== undefined && _msg !== null ? String(_msg) : '',
+      message,
       stream: {
         service,
         environment: streamEnv !== undefined && streamEnv !== null ? String(streamEnv) : ''

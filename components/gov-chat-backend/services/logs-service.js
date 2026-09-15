@@ -734,23 +734,35 @@ class LogsService {
     const limitN = Math.max(0, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 1000, 10000));
     const offsetN = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
 
+    // Push ONLY the `term` filter to VL — level + service are applied
+    // client-side AFTER the MELT normalizer has lifted them out of the
+    // `_msg` JSON envelope. Pushing `level:WARN` to the VL query never
+    // matched anything because the fluentd-driven Winston transport
+    // writes the level INSIDE `_msg` (a JSON string), not as a top-level
+    // VL field — the LogsQL `level:` clause only matches OTel-stamped
+    // records (a minority path). Filtering post-normalization catches
+    // BOTH paths consistently.
     const filterParts = [];
     if (term && String(term).trim() !== '') {
       const escaped = this._escapeLogSql(String(term));
       filterParts.push(`_msg:"${escaped}"`);
-    }
-    if (level && String(level).trim() !== '') {
-      filterParts.push(`level:${this._normalizeLevelFilter(level)}`);
-    }
-    if (service && String(service).trim() !== '') {
-      const escaped = this._escapeLogSql(String(service));
-      filterParts.push(`_stream_service:"${escaped}"`);
     }
     const q = filterParts.length > 0 ? filterParts.join(' AND ') : '*';
 
     const { startDate, endDate } = this.getDateRange(options);
     const startIso = `${startDate}T00:00:00.000Z`;
     const endIso = `${endDate}T23:59:59.999Z`;
+
+    let normalizedLevel = null;
+    if (level && String(level).trim() !== '') {
+      try {
+        normalizedLevel = this._normalizeLevelFilter(level);
+      } catch (err) {
+        logger.warn(`[LOGS-SERVICE] Ignoring invalid level filter "${level}": ${err.message}`);
+        normalizedLevel = null;
+      }
+    }
+    const normalizedService = service && String(service).trim() !== '' ? String(service).trim() : null;
 
     return this._withVlFailOpen(
       async () => {
@@ -759,12 +771,27 @@ class LogsService {
           q: this._vlFilter(q),
           start: startIso,
           end: endIso,
-          limit: limitN + offsetN
+          limit: (limitN + offsetN) * 4 // over-fetch to compensate for client-side filtering
         });
-        const pageRows = Array.isArray(rows) ? rows.slice(offsetN, offsetN + limitN) : [];
+        const allRows = Array.isArray(rows) ? rows : [];
+        // Filter client-side on the MELT-normalized level + service. The
+        // over-fetch above bounds how many rows we drop; if the user
+        // still wants more, they can tighten the term filter to narrow.
+        const filteredRows = allRows.filter((row) => {
+          if (normalizedLevel) {
+            const rowLevel = String(row.level || '').toUpperCase();
+            if (rowLevel !== normalizedLevel) return false;
+          }
+          if (normalizedService) {
+            const rowService = String(row.service || '').toLowerCase();
+            if (!rowService.includes(normalizedService.toLowerCase())) return false;
+          }
+          return true;
+        });
+        const pageRows = filteredRows.slice(offsetN, offsetN + limitN);
         return {
           logs: pageRows,
-          total: Array.isArray(rows) ? rows.length : 0,
+          total: filteredRows.length,
           limit: limitN,
           offset: offsetN
         };
@@ -1345,6 +1372,23 @@ class LogsService {
       const timestamp = this._extractTimestamp(parsed);
       const date = timestamp.slice(0, 10);
       const time = timestamp.slice(11, 19);
+      // `fluentd`-sourced log records store their real message + level +
+      // service as a JSON STRING in `_msg` (the raw line that fluentd
+      // shipped). Top-level OTel fields (`service.name`, `severity_text`,
+      // `deployment.environment`) are populated only on the
+      // OTel-LoggingHandler path, NOT on the fluentd path — so most rows
+      // carry NO top-level `service` / `level`. The previous extraction
+      // therefore returned `unknown` / `INFO` for everything and the
+      // admin panel filters never matched. Parse `_msg` once and stash
+      // it on `parsed._msgParsed` so the per-field extractors below can
+      // fall through to it.
+      if (typeof parsed._msg === 'string') {
+        try {
+          parsed._msgParsed = JSON.parse(parsed._msg);
+        } catch {
+          parsed._msgParsed = null;
+        }
+      }
       const service = this._extractService(parsed);
       const level = this._extractLevel(parsed);
       const message = this._extractMessage(parsed);
@@ -1379,21 +1423,41 @@ class LogsService {
   _extractMessage(parsed) {
     if (!parsed || typeof parsed !== 'object') return '';
     if (typeof parsed.message === 'string') return parsed.message;
+    // Most rows: the real message lives inside the `_msg` JSON envelope.
+    if (parsed._msgParsed && typeof parsed._msgParsed.message === 'string') {
+      return parsed._msgParsed.message;
+    }
     if (typeof parsed._msg === 'string') return parsed._msg;
     return '';
   }
 
   _extractService(parsed) {
     if (!parsed || typeof parsed !== 'object') return 'unknown';
+    // OTel-canonical top-level field (populated on the OTel-LoggingHandler
+    // path; absent on fluentd-only ingestion).
+    if (typeof parsed['service.name'] === 'string') return parsed['service.name'];
     if (typeof parsed.service === 'string') return parsed.service;
-    if (parsed._stream && typeof parsed._stream.service === 'string') return parsed._stream.service;
+    // `_stream` is a VL logfmt-ish string like `{service.name="foo"}` —
+    // its values are stream-shard metadata, NOT the message author. The
+    // previous extractor mistakenly treated it as a structured object
+    // and returned its own shard id back as `service="unknown"` here.
+    // Skip it; the real source is the `_msg` JSON envelope.
+    if (parsed._msgParsed && typeof parsed._msgParsed.service === 'string') {
+      return parsed._msgParsed.service;
+    }
     return 'unknown';
   }
 
   _extractLevel(parsed) {
     if (!parsed || typeof parsed !== 'object') return 'INFO';
-    let raw = parsed.level;
-    if (raw === undefined && parsed._stream) raw = parsed._stream.level;
+    // OTel canonical `severity_text` (string like "INFO" / "WARN" / "ERROR")
+    // — set on the OTel-LoggingHandler path; fluentd-only rows leave it as
+    // "Unspecified".
+    let raw = parsed.severity_text;
+    if (raw === undefined || raw === null || String(raw).toUpperCase() === 'UNSPECIFIED') {
+      raw = parsed._msgParsed && parsed._msgParsed.level;
+    }
+    if (raw === undefined || raw === null) raw = parsed.level;
     if (raw === undefined || raw === null) return 'INFO';
     const upper = String(raw).toUpperCase();
     return upper.length > 0 ? upper : 'INFO';
@@ -1401,8 +1465,13 @@ class LogsService {
 
   _extractEnvironment(parsed) {
     if (!parsed || typeof parsed !== 'object') return '';
+    if (typeof parsed['deployment.environment'] === 'string') {
+      return parsed['deployment.environment'];
+    }
     if (typeof parsed.environment === 'string') return parsed.environment;
-    if (parsed._stream && typeof parsed._stream.environment === 'string') return parsed._stream.environment;
+    if (parsed._msgParsed && typeof parsed._msgParsed.environment === 'string') {
+      return parsed._msgParsed.environment;
+    }
     return '';
   }
 

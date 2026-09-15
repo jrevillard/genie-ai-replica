@@ -2142,8 +2142,13 @@ export default {
           limit: 20 // Get more logs than we'll display in the summary
         });
 
-        if (response && response.data && response.data.data) {
-          this.logs = response.data.data.logs || [];
+        // Backend envelope is `{logs: [...], total, limit, offset}` — the
+        // previous `response.data.data.logs` path was reading `undefined`
+        // and silently emptying the panel. Access the envelope directly.
+        if (response && response.data && Array.isArray(response.data.logs)) {
+          this.logs = response.data.logs;
+        } else {
+          this.logs = [];
         }
       } catch (error) {
         console.error('Error loading logs:', error);

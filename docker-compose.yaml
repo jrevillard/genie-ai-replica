@@ -584,10 +584,19 @@ services:
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
       # OTel-spec service name (read by SDK Resource AND logger.js service field).
-      # Pinned to the Compose service name — using `${OTEL_SERVICE_NAME:-...}`
-      # would collide with doc-repo's compose block (single global env var,
-      # two different defaults). Operators override by editing this file.
-      - OTEL_SERVICE_NAME=genie-backend
+      # Each service block has its own pinned default — using a single
+      # `${OTEL_SERVICE_NAME:-...}` would collapse both to one value.
+      # Operators override per service by exporting OTEL_SERVICE_NAME before
+      # `docker compose up` (e.g. `OTEL_SERVICE_NAME=genie-backend-canary`).
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-backend}
+      # OTel Resource semantic convention for service grouping. Grafana
+      # `service.namespace` filter lets operators slice by tier (backend +
+      # doc-repo share `genie-core`; OPEA overlay services share `genieai`).
+      - OTEL_SERVICE_NAMESPACE=${OTEL_SERVICE_NAMESPACE:-genie-core}
+      # Override the version stamped on every emitted OTel resource
+      # (service.version attribute). Defaults to the consuming component's
+      # package.json — override only for canary / compliance runs.
+      - SERVICE_VERSION=${SERVICE_VERSION:-}
       # VictoriaLogs transport default-on. Pin to 1 in compose so
       # deployments that forget to set the env var still ship structured logs
       # to VL with proper OTel trace_id/span_id fields (not buried in _msg).
@@ -648,10 +657,18 @@ services:
       # Collector side stamps service.name from container attributes).
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      # OTel-spec service name. doc-repo's tracing.js ALSO pins the same
-      # Pinned to the Compose service name. See backend block for rationale
-      # on why this is a literal (not `${OTEL_SERVICE_NAME:-...}`).
-      - OTEL_SERVICE_NAME=genie-document-repository
+      # OTel-spec service name. Operators override per service by exporting
+      # `OTEL_SERVICE_NAME` before `docker compose up`. See backend block
+      # for the per-service default rationale (each service block has its
+      # own `${OTEL_SERVICE_NAME:-...}` so overrides apply per-service).
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-document-repository}
+      # OTel Resource semantic convention for service grouping (Grafana
+      # `service.namespace` filter). backend + doc-repo share
+      # `genie-core`; OPEA overlay services share `genieai`.
+      - OTEL_SERVICE_NAMESPACE=${OTEL_SERVICE_NAMESPACE:-genie-core}
+      # Override the version stamped on every emitted OTel resource
+      # (service.version attribute). Defaults to doc-repo/package.json.
+      - SERVICE_VERSION=${SERVICE_VERSION:-}
       # VictoriaLogs transport default-on — see backend block for rationale.
       - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the
@@ -1107,6 +1124,20 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # OTel-spec service name override (canonical source read by tracing.py).
+      # Defaults to the Compose service name; operators override by exporting
+      # `OTEL_SERVICE_NAME` before `docker compose up` (e.g. for canary).
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-reranker}
+      # OTel Resource semantic convention for service grouping (Grafana
+      # `service.namespace` filter). All OPEA overlay services share
+      # `genieai`; backend + doc-repo share `genie-core`.
+      - OTEL_SERVICE_NAMESPACE=${OTEL_SERVICE_NAMESPACE:-genieai}
+      # Override the version stamped on every emitted OTel resource.
+      # Defaults to the consuming service's package.json.
+      - SERVICE_VERSION=${SERVICE_VERSION:-}
+      # Log level threshold for the OTel Python LoggingHandler installed in
+      # setup_logging(). Mirror LOG_LEVEL above (Node side via logger.js).
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       # Adaptive utility-cost selection (read at reranker startup; only used
       # when RERANKING_STRATEGY=adaptive)
       - NOVELTY_SIGMOID_A=${NOVELTY_SIGMOID_A:-20.0}
@@ -1197,6 +1228,20 @@ services:
       DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL: ${DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL:-100000}
       DATAPREP_CONTEXTUAL_MAX_TOKENS: ${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
       CONTEXTUAL_RETRIEVAL_PROMPT: ${CONTEXTUAL_RETRIEVAL_PROMPT:-}
+      # OTel-spec service name override (canonical source read by tracing.py).
+      # Defaults to the Compose service name; operators override by exporting
+      # `OTEL_SERVICE_NAME` before `docker compose up` (e.g. for canary).
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-dataprep-arango-service}
+      # OTel Resource semantic convention for service grouping (Grafana
+      # `service.namespace` filter). All OPEA overlay services share
+      # `genieai`; backend + doc-repo share `genie-core`.
+      OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-genieai}
+      # Override the version stamped on every emitted OTel resource.
+      # Defaults to the consuming service's package.json.
+      SERVICE_VERSION: ${SERVICE_VERSION:-}
+      # Log level threshold for the OTel Python LoggingHandler installed in
+      # setup_logging(). Mirror LOG_LEVEL above (Node side via logger.js).
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       CONTEXTUAL_STRATEGY: ${CONTEXTUAL_STRATEGY:-doc_level}
       CONTEXTUAL_LABEL_RAW: ${CONTEXTUAL_LABEL_RAW:-true}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
@@ -1272,6 +1317,20 @@ services:
       RETRIEVER_ARANGO_SEARCH_START: ${RETRIEVER_ARANGO_SEARCH_START:-chunk}
       RETRIEVER_ARANGO_SEARCH_MODE: ${RETRIEVER_ARANGO_SEARCH_MODE:-vector}
       RETRIEVER_ARANGO_USE_APPROX_SEARCH: ${RETRIEVER_ARANGO_USE_APPROX_SEARCH:-false}
+      # OTel-spec service name override (canonical source read by tracing.py).
+      # Defaults to the Compose service name; operators override by exporting
+      # `OTEL_SERVICE_NAME` before `docker compose up` (e.g. for canary).
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-retriever-arango-service}
+      # OTel Resource semantic convention for service grouping (Grafana
+      # `service.namespace` filter). All OPEA overlay services share
+      # `genieai`; backend + doc-repo share `genie-core`.
+      OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-genieai}
+      # Override the version stamped on every emitted OTel resource.
+      # Defaults to the consuming service's package.json.
+      SERVICE_VERSION: ${SERVICE_VERSION:-}
+      # Log level threshold for the OTel Python LoggingHandler installed in
+      # setup_logging(). Mirror LOG_LEVEL above (Node side via logger.js).
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       RETRIEVER_ARANGO_DISTANCE_STRATEGY: ${RETRIEVER_ARANGO_DISTANCE_STRATEGY:-COSINE}
       RETRIEVER_ARANGO_NUM_CENTROIDS: ${RETRIEVER_ARANGO_NUM_CENTROIDS:-1}
       RETRIEVER_HYBRID_RETRIEVAL_ENABLED: ${RETRIEVER_HYBRID_RETRIEVAL_ENABLED:-true}
@@ -1364,6 +1423,17 @@ services:
       # so the retriever service's own RETRIEVER_ARANGO_* env vars are inert
       # (OPEA-vendored fallback, only reached on direct retriever API calls that
       # bypass chatqna). Defaults are intentionally kept identical in both blocks
+      # OTel-spec service name override (canonical source read by tracing.py).
+      # Defaults to the Compose service name; operators override by exporting
+      # `OTEL_SERVICE_NAME` before `docker compose up` (e.g. for canary).
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-chatqna-xeon-backend-server}
+      # OTel Resource semantic convention for service grouping (Grafana
+      # `service.namespace` filter). All OPEA overlay services share
+      # `genieai`; backend + doc-repo share `genie-core`.
+      OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-genieai}
+      # Override the version stamped on every emitted OTel resource.
+      # Defaults to the consuming service's package.json.
+      SERVICE_VERSION: ${SERVICE_VERSION:-}
       # to avoid silent drift; tune here and the retriever block tracks it.
       RETRIEVER_ARANGO_K: ${RETRIEVER_ARANGO_K:-20}
       RETRIEVER_ARANGO_FETCH_K: ${RETRIEVER_ARANGO_FETCH_K:-30}

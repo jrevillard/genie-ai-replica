@@ -100,11 +100,11 @@
         "options": [],
         "query": {
           "type": "fieldValue",
-          "field": "service.name",
+          "field": "container_name",
           "query": "*"
         },
         "refresh": 2,
-        "regex": "/admin-logs-prd-(.+)-\\d+$/",
+        "regex": "/.+_(.+)\\.\\d+\\./",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
@@ -167,7 +167,7 @@
         "query": {
           "type": "fieldValue",
           "field": "_msg",
-          "query": "_msg:~\"trace_id="
+          "query": "_msg:~\"trace_id=\""
         },
         "refresh": 2,
         "regex": ".*trace_id=\"([^\"]+)\".*",

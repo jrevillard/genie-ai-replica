@@ -23,6 +23,7 @@ class _FakeLogRecord:
     """Minimal stand-in for OTel SDK LogRecord — has the attributes/body
     fields the redactor touches and tracks calls to the inner processor.
     """
+
     def __init__(self, *, attributes=None, body=""):
         self.attributes = dict(attributes or {})
         self.body = body
@@ -30,16 +31,19 @@ class _FakeLogRecord:
 
 class _FakeProcessor:
     """Inner processor that records the records it sees (post-redaction)."""
+
     def __init__(self):
         self.received = []
         self.shutdown_called = False
         self.force_flush_return = True
 
     def on_emit(self, log_record):
-        self.received.append({
-            "attributes": dict(log_record.attributes),
-            "body": log_record.body,
-        })
+        self.received.append(
+            {
+                "attributes": dict(log_record.attributes),
+                "body": log_record.body,
+            }
+        )
 
     def shutdown(self):
         self.shutdown_called = True
@@ -57,14 +61,32 @@ def pipeline():
 
 # --- attribute redaction ------------------------------------------------
 
-@pytest.mark.parametrize("key", [
-    "password", "PASSWORD", "api_key", "api-key", "apiKey",
-    "session_id", "session-id", "user_id", "email",
-    "user_query", "llm_response", "document_text",
-    "auth_token", "Bearer_Token", "secret_value",
-    "api_secret", "private_key", "credential_id",
-    "openai_api_key", "anthropic_api_key",
-])
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "password",
+        "PASSWORD",
+        "api_key",
+        "api-key",
+        "apiKey",
+        "session_id",
+        "session-id",
+        "user_id",
+        "email",
+        "user_query",
+        "llm_response",
+        "document_text",
+        "auth_token",
+        "Bearer_Token",
+        "secret_value",
+        "api_secret",
+        "private_key",
+        "credential_id",
+        "openai_api_key",
+        "anthropic_api_key",
+    ],
+)
 def test_redacts_known_sensitive_attribute_keys(pipeline, key):
     redactor, inner = pipeline
     record = _FakeLogRecord(attributes={key: "super-secret"})
@@ -76,13 +98,15 @@ def test_redacts_known_sensitive_attribute_keys(pipeline, key):
 
 def test_does_not_redact_non_sensitive_keys(pipeline):
     redactor, inner = pipeline
-    record = _FakeLogRecord(attributes={
-        "level": "info",
-        "service": "test",
-        "trace_id": "abc123",
-        "duration_ms": 100,
-        "db.system": "arangodb",
-    })
+    record = _FakeLogRecord(
+        attributes={
+            "level": "info",
+            "service": "test",
+            "trace_id": "abc123",
+            "duration_ms": 100,
+            "db.system": "arangodb",
+        }
+    )
     redactor.on_emit(record)
 
     assert inner.received[0]["attributes"] == {
@@ -115,6 +139,7 @@ def test_handles_empty_attributes(pipeline):
 
 
 # --- body redaction ------------------------------------------------------
+
 
 def test_redacts_email_in_body(pipeline):
     redactor, inner = pipeline
@@ -168,6 +193,7 @@ def test_does_not_redact_short_or_benign_strings(pipeline):
 
 # --- delegate / lifecycle ------------------------------------------------
 
+
 def test_delegates_to_inner_processor(pipeline):
     redactor, inner = pipeline
     record = _FakeLogRecord(body="hello world")
@@ -189,6 +215,7 @@ def test_force_flush_delegates(pipeline):
 
 
 # --- integration: combined attributes + body ------------------------------
+
 
 def test_redacts_both_attributes_and_body(pipeline):
     redactor, inner = pipeline

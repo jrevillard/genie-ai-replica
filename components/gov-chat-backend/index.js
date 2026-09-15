@@ -1335,7 +1335,6 @@ process.on('unhandledRejection', (reason, promise) => {
   )
     .catch((err) => {
       // Span wrapper itself failed — log + fall through to exit.
-      // eslint-disable-next-line no-console
       console.error('[unhandledRejection] span wrapper failed:', err);
     })
     .finally(() => {

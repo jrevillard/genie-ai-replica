@@ -346,18 +346,15 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     // fires before `process.exit(0)`. Calling `process.exit` inside the
     // span body terminates the process before the awaiting microtask
     // drains, leaking the otel.shutdown span.
-    const exitPromise = withBackgroundSpan(
-      'otel.shutdown',
-      () => gracefulShutdown(signame),
-      { 'genie.signal': signame }
-    );
+    const exitPromise = withBackgroundSpan('otel.shutdown', () => gracefulShutdown(signame), {
+      'genie.signal': signame
+    });
     exitPromise.then(
       () => process.exit(0),
       (err) => {
         // Rejection inside the span body — log + still exit so the
         // process doesn't hang in Swarm stop_grace_period. The 15 s
         // gracefulShutdown timeout fires `process.exit(0)` independently.
-        // eslint-disable-next-line no-console
         console.error(`[otel.shutdown] ${signame} handler failed:`, err);
         process.exit(1);
       }

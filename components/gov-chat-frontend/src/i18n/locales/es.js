@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Tamaño de la Base de Datos',
     totalTables: 'Tablas Totales',
     logManagement: 'Gestión de Registros',
-    rolloverLogs: 'Rotar Registros',
     searchLogs: 'Buscar Registros',
     logTime: 'Tiempo',
     logLevel: 'Nivel',
@@ -323,10 +322,6 @@ export default {
         success: 'Optimización de base de datos completada con éxito',
         error: 'Error durante la optimización de la base de datos',
         loading: 'Optimizando base de datos...'
-      },
-      rolloverLogs: {
-        success: 'Rotación de registros completada con éxito',
-        loading: 'Rotando registros...'
       },
       searchLogs: {
         success: 'Búsqueda de registros completada',

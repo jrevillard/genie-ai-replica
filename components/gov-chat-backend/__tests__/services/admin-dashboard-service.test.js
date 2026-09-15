@@ -435,29 +435,6 @@ describe('AdminDashboardService', () => {
     });
   });
 
-  describe('rolloverLogs', () => {
-    it('should rename existing log file', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.rename.mockResolvedValueOnce(undefined);
-      const result = await adminDashboardService.rolloverLogs();
-      expect(result.status).toBe('success');
-      expect(mockFs.rename).toHaveBeenCalled();
-    });
-
-    it('should handle missing log file gracefully', async () => {
-      const err = new Error('ENOENT');
-      err.code = 'ENOENT';
-      mockFs.access.mockRejectedValueOnce(err);
-      const result = await adminDashboardService.rolloverLogs();
-      expect(result.status).toBe('success');
-    });
-
-    it('should re-throw non-ENOENT access errors', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Permission denied'));
-      await expect(adminDashboardService.rolloverLogs()).rejects.toThrow('Permission denied');
-    });
-  });
-
   describe('debugYesterdayLogs', () => {
     it('should return debug and error logs from yesterday', async () => {
       const logContent = [

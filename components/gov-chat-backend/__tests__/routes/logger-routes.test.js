@@ -23,7 +23,6 @@ jest.mock('../../services/admin-dashboard-service', () => ({
   getSystemHealth: jest.fn(),
   getDatabaseStats: jest.fn(),
   getLogs: jest.fn(),
-  rolloverLogs: jest.fn(),
   getUserStats: jest.fn(),
   searchLogs: jest.fn(),
   debugYesterdayLogs: jest.fn(),
@@ -144,21 +143,21 @@ describe('Auth guard', () => {
     expect(response.status).toBe(403);
   });
 
-  it('should return 401 on POST /api/logger/rollover without token', async () => {
+  it('should return 401 on POST /api/logger/configure without token', async () => {
     keycloakAuthMiddleware.authenticate.mockImplementation((req, res) => {
       res.status(401).json({ error: 'TOKEN_INVALID', message: 'Authentication required' });
     });
 
-    const response = await request(app).post('/api/logger/rollover');
+    const response = await request(app).post('/api/logger/configure').send({ level: 'debug' });
     expect(response.status).toBe(401);
   });
 
-  it('should return 403 for non-admin user on POST /api/logger/rollover', async () => {
+  it('should return 403 for non-admin user on POST /api/logger/configure', async () => {
     keycloakAuthMiddleware.requireAdmin.mockImplementation((req, res) => {
       res.status(403).json({ error: 'FORBIDDEN', message: 'Admin access required' });
     });
 
-    const response = await authPost('/api/logger/rollover', {});
+    const response = await authPost('/api/logger/configure', { level: 'debug' });
     expect(response.status).toBe(403);
   });
 });
@@ -189,25 +188,5 @@ describe('POST /api/logger/configure (deprecated)', () => {
     expect(response.status).toBe(200);
     expect(response.body.deprecated).toBe(true);
     expect(sharedLib.reconfigureLogger).not.toHaveBeenCalled();
-  });
-});
-
-// ============================================================
-// Deprecated POST /api/logger/rollover
-// ============================================================
-describe('POST /api/logger/rollover (deprecated)', () => {
-  it('should return 200 with deprecation body for admin caller and not call triggerLogRollover', async () => {
-    const response = await authPost('/api/logger/rollover', {});
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      deprecated: true,
-      message: 'Log rollover is deprecated; logs are written directly to VictoriaLogs.'
-    });
-    expect(sharedLib.triggerLogRollover).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith(
-      expect.stringContaining('/api/logger/rollover is deprecated'),
-      expect.objectContaining({ user: 'user-123' })
-    );
   });
 });

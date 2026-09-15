@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Ukubwa wa Hifadhidata',
     totalTables: 'Jumla ya Jedwali',
     logManagement: 'Usimamizi wa Kumbukumbu',
-    rolloverLogs: 'Badilisha Kumbukumbu',
     searchLogs: 'Tafuta Kumbukumbu',
     logTime: 'Wakati',
     logLevel: 'Kiwango',
@@ -324,10 +323,6 @@ export default {
         success: 'Uboreshaji wa hifadhidata umekamilika',
         error: 'Hitilafu wakati wa kuboresha hifadhidata',
         loading: 'Inaboresha hifadhidata...'
-      },
-      rolloverLogs: {
-        success: 'Upitishaji wa kumbukumbu umekamilika',
-        loading: 'Inapitisha kumbukumbu...'
       },
       searchLogs: {
         success: 'Utafutaji wa kumbukumbu umekamilika',

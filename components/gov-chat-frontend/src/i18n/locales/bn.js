@@ -265,7 +265,6 @@ export default {
     databaseSize: 'ডেটাবেসের আকার',
     totalTables: 'মোট টেবিল',
     logManagement: 'লগ ম্যানেজমেন্ট',
-    rolloverLogs: 'রোলওভার লগস',
     searchLogs: 'লগ অনুসন্ধান করুন',
     logTime: 'সময়',
     logLevel: 'স্তর (Level)',
@@ -321,10 +320,6 @@ export default {
         success: 'ডেটাবেস অপ্টিমাইজেশন সফলভাবে সম্পন্ন হয়েছে',
         error: 'ডেটাবেস অপ্টিমাইজ করার সময় ত্রুটি',
         loading: 'ডেটাবেস অপ্টিমাইজ করা হচ্ছে...'
-      },
-      rolloverLogs: {
-        success: 'লগ রোলওভার সফলভাবে সম্পন্ন হয়েছে',
-        loading: 'লগ রোলওভার করা হচ্ছে...'
       },
       searchLogs: {
         success: 'লগ অনুসন্ধান সম্পন্ন হয়েছে',

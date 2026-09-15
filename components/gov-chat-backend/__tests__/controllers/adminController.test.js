@@ -12,7 +12,6 @@ jest.mock('arangojs', () => ({
 }));
 
 const adminController = require('../../controllers/adminController');
-const sharedLib = require('../../shared-lib');
 
 // Mock the services
 jest.mock('../../services/admin-dashboard-service', () => {
@@ -309,37 +308,6 @@ describe('adminController', () => {
       await adminController.debugYesterdayLogs(req, res);
 
       expect(res.status).toHaveBeenCalledWith(500);
-    });
-  });
-
-  describe('rolloverLogs', () => {
-    it('should trigger log rollover successfully', async () => {
-      await adminController.rolloverLogs(req, res);
-
-      expect(sharedLib.triggerLogRollover).toHaveBeenCalled();
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: true,
-          message: 'Logs rolled over successfully',
-          timestamp: expect.any(String)
-        })
-      );
-    });
-
-    it('should return 500 on error', async () => {
-      sharedLib.triggerLogRollover.mockImplementation(() => {
-        throw new Error('Rollover failed');
-      });
-
-      await adminController.rolloverLogs(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: false,
-          message: 'Failed to rollover logs'
-        })
-      );
     });
   });
 

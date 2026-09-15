@@ -498,42 +498,6 @@ class AdminDashboardService {
   }
 
   /**
-   * Trigger log rollover
-   * @returns {Promise<Object>} Rollover result
-   */
-  async rolloverLogs() {
-    logger.info('Triggering log rollover');
-
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${today}.log`);
-      logger.debug(`Checking current log file: ${logFile}`);
-
-      try {
-        await fs.access(logFile);
-        logger.debug('Log file exists, proceeding with rollover');
-        const newFile = path.join(__dirname, `../logs/combined-${today}-${Date.now()}.log`);
-        await fs.rename(logFile, newFile);
-        logger.debug(`Log file renamed to: ${newFile}`);
-      } catch (error) {
-        if (error.code === 'ENOENT') {
-          logger.debug('No log file exists for today, no rollover needed');
-        } else {
-          throw error;
-        }
-      }
-
-      return {
-        status: 'success',
-        message: 'Log rollover completed successfully'
-      };
-    } catch (error) {
-      logger.error(`Error in rolloverLogs: ${error.message}`, { stack: error.stack });
-      throw error;
-    }
-  }
-
-  /**
    * Get logs summary by type and service
    * @param {Object} options - Summary options
    * @param {string} options.date - Date to summarize (YYYY-MM-DD)

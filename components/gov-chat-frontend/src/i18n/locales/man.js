@@ -265,7 +265,6 @@ export default {
     databaseSize: 'Detabeesi warayaa',
     totalTables: 'Tebulol bee kafung',
     logManagement: 'Log Lataramoo',
-    rolloverLogs: 'Logolu murung',
     searchLogs: 'Logolu ñining',
     logTime: 'Waatoo',
     logLevel: 'Kafo-jukuto (Level)',
@@ -321,10 +320,6 @@ export default {
         success: 'Detabeesi dadiyaa benta',
         error: 'Filiyata detabeesi dadiyaa to',
         loading: 'A ka detabeesi dadiyaa...'
-      },
-      rolloverLogs: {
-        success: 'Log murung-murung benta',
-        loading: 'A ka logolu murung-murung...'
       },
       searchLogs: {
         success: 'Log ñiningo benta',

@@ -2703,3 +2703,11 @@ source_spec: `5-4-admin-dashboard-service-drop-fs-readfile-path-join-delegate.md
 severity: medium
 reason: Same F4 regression that story 5.4 fixed for `getLogs` still affects `debugYesterdayLogs`, `runSecurityScan`, and `getSystemHealth`. LogsService already owns the parsing; the admin layer should delegate end-to-end before any of these endpoints are relied upon.
 status: pending
+
+### DW-412: victoriametrics-logs-datasource plugin fieldValues query broken on Grafana 12.4
+origin: live-verification 2026-09-15 (admin-logs PRD post-merge), Service Logs dashboard filter dropdowns empty
+location: configs/grafana/provisioning/dashboards/service-logs.json (templating.service + templating.trace_id variables)
+source_spec: `7-6-deploy-victorialogs-centralized-log-aggregation` (admin-logs PRD follow-up)
+severity: medium
+reason: The Grafana `victoriametrics-logs-datasource` plugin returns `500 — error from datasource: query arg cannot be empty` for EVERY format of `queryType: fieldValues` (or `streamFieldValues`, `fieldNames`) — tried with `query: "*"`, `query: "service.name:*"`, `field: "service.name"` set, `target: "service.name"`, all combinations. The downstream VL `/select/logsql/field_values?field=service.name&query=*` endpoint works perfectly (returns all 9 service.name values), so the issue is purely in the plugin's `fieldValues` handler — likely a version mismatch between the plugin shipped with `grafana/grafana:12.4` and the VL API the plugin assumes. Side effect: the `service` and `trace_id` dropdowns on the Service Logs dashboard stay empty (only the `$__all` option shows up); users can still filter via the `filter` textbox at the bottom of the Logs panel (type `service_name:chatqna-xeon-backend-server` or `severity_text:ERROR`). Out of scope for admin-logs PRD — belongs to a plugin upgrade story.
+status: pending

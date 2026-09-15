@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Taille de la base de données',
     totalTables: 'Nombre total de tables',
     logManagement: 'Gestion des journaux',
-    rolloverLogs: 'Rotation des journaux',
     searchLogs: 'Rechercher dans les journaux',
     logTime: 'Heure',
     logLevel: 'Niveau',
@@ -324,10 +323,6 @@ export default {
         success: 'Optimisation de la base de données terminée avec succès',
         error: "Erreur lors de l'optimisation de la base de données",
         loading: 'Optimisation de la base de données...'
-      },
-      rolloverLogs: {
-        success: 'Rotation des journaux terminée avec succès',
-        loading: 'Rotation des journaux en cours...'
       },
       searchLogs: {
         success: 'Recherche dans les journaux terminée',

@@ -267,7 +267,6 @@ export default {
     databaseSize: 'حجم قاعدة البيانات',
     totalTables: 'إجمالي الجداول',
     logManagement: 'إدارة السجلات',
-    rolloverLogs: 'تدوير السجلات',
     searchLogs: 'البحث في السجلات',
     logTime: 'الوقت',
     logLevel: 'المستوى',
@@ -323,10 +322,6 @@ export default {
         success: 'تم إكمال تحسين قاعدة البيانات بنجاح',
         error: 'خطأ أثناء تحسين قاعدة البيانات',
         loading: 'جاري تحسين قاعدة البيانات...'
-      },
-      rolloverLogs: {
-        success: 'تم إكمال تدوير السجلات بنجاح',
-        loading: 'جاري تدوير السجلات...'
       },
       searchLogs: {
         success: 'تم إكمال البحث في السجلات',

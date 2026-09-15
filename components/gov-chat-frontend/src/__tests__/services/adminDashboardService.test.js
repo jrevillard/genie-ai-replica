@@ -177,22 +177,6 @@ describe('adminDashboardService', () => {
     });
   });
 
-  describe('rolloverLogs', () => {
-    it('triggers log rotation', async () => {
-      mockPost.mockResolvedValue({ data: { success: true } });
-
-      await adminDashboardService.rolloverLogs();
-
-      expect(mockPost).toHaveBeenCalledWith('admin/logs/rollover');
-    });
-
-    it('throws on API failure', async () => {
-      mockPost.mockRejectedValue(new Error('Server error'));
-
-      await expect(adminDashboardService.rolloverLogs()).rejects.toThrow('Server error');
-    });
-  });
-
   describe('getLogsSummary', () => {
     it('fetches logs summary', async () => {
       const summary = { errors: [], warnings: [], date: '2026-05-26' };

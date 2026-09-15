@@ -268,7 +268,6 @@ export default {
     databaseSize: '数据库大小',
     totalTables: '总表数',
     logManagement: '日志管理',
-    rolloverLogs: '日志轮转',
     searchLogs: '搜索日志',
     logTime: '时间',
     logLevel: '级别',
@@ -324,10 +323,6 @@ export default {
         success: '数据库优化成功完成',
         error: '数据库优化过程中出错',
         loading: '正在优化数据库...'
-      },
-      rolloverLogs: {
-        success: '日志轮转成功完成',
-        loading: '正在轮转日志...'
       },
       searchLogs: {
         success: '日志搜索完成',

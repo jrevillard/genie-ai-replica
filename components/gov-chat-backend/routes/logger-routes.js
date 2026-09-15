@@ -49,45 +49,5 @@ module.exports = () => {
     });
   });
 
-  /**
-   * @swagger
-   * /api/logger/rollover:
-   *   post:
-   *     summary: Deprecated: trigger log rollover
-   *     description: |
-   *       Deprecated; logs are written directly to VictoriaLogs. Log rotation
-   *       is no longer a configurable HTTP action.
-   *     tags: [Logger]
-   *     security:
-   *       - KeycloakOAuth2: ['openid']
-   *     responses:
-   *       200:
-   *         description: Deprecation notice
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 deprecated:
-   *                   type: boolean
-   *                   example: true
-   *                 message:
-   *                   type: string
-   *                   example: Log rollover is deprecated; logs are written directly to VictoriaLogs.
-   *       401:
-   *         description: Unauthorized, authentication required
-   *       403:
-   *         description: Forbidden, admin privileges required
-   */
-  router.post('/rollover', keycloakAuthMiddleware.authenticate, keycloakAuthMiddleware.requireAdmin, (req, res) => {
-    logger.info('[LOGGER-ROUTES] /api/logger/rollover is deprecated; logs are written directly to VictoriaLogs', {
-      user: req.user?.iss_sub || 'unknown'
-    });
-    res.json({
-      deprecated: true,
-      message: 'Log rollover is deprecated; logs are written directly to VictoriaLogs.'
-    });
-  });
-
   return router;
 };

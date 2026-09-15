@@ -637,25 +637,6 @@
                           {{ translate('admin.searchLogs', 'Search Logs') }}
                         </span>
                       </DsButton>
-                      <DsButton variant="secondary" style="margin-left: 8px" @click="rolloverLogs">
-                        <span style="display: flex; align-items: center">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            style="margin-right: 4px"
-                          >
-                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1 -.57-8.38" />
-                          </svg>
-                          {{ translate('admin.rolloverLogs', 'Rollover Logs') }}
-                        </span>
-                      </DsButton>
                     </div>
                   </div>
 
@@ -2285,18 +2266,6 @@ export default {
           this.setActiveTab('logs');
         }
       }
-    },
-
-    // Log operations
-    async rolloverLogs() {
-      this.executeOperation('rolloverLogs', async () => {
-        const response = await adminDashboardService.rolloverLogs();
-        // Refresh logs after rollover
-        if (response.data && response.data.success) {
-          await Promise.all([this.loadLogsSummary(), this.loadLogs()]);
-        }
-        return response.data;
-      });
     },
 
     // Load security metrics

@@ -14,7 +14,6 @@ const tracingBackground = require('./tracing-background');
 module.exports = {
   logger: loggerModule.logger, // Export the Winston logger instance
   reconfigureLogger: loggerModule.reconfigureLogger,
-  triggerLogRollover: loggerModule.triggerLogRollover,
   cleanupCombinedLog: loggerModule.cleanupCombinedLog,
   parsePositiveInt: validationUtils.parsePositiveInt,
   dbService,

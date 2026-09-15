@@ -180,37 +180,6 @@ const reconfigureLogger = (newConfig) => {
   logger.info('Logger configuration updated');
 };
 
-// Function to trigger an immediate log rollover
-const triggerLogRollover = () => {
-  try {
-    const currentErrorTransport = logger.transports.find(
-      (transport) => transport instanceof DailyRotateFile && transport.level === 'error'
-    );
-    const currentCombinedTransport = logger.transports.find(
-      (transport) => transport instanceof DailyRotateFile && !transport.level
-    );
-
-    if (currentErrorTransport && typeof currentErrorTransport.rotate === 'function') {
-      currentErrorTransport.rotate();
-      logger.info('Error log rolled over manually');
-    } else {
-      logger.warn('Error log transport not found or does not support rotation');
-    }
-
-    if (currentCombinedTransport && typeof currentCombinedTransport.rotate === 'function') {
-      currentCombinedTransport.rotate();
-      logger.info('Combined log rolled over manually');
-    } else {
-      logger.warn('Combined log transport not found or does not support rotation');
-    }
-
-    logger.info('Log rollover operation completed');
-  } catch (error) {
-    logger.error(`Error during log rollover: ${error.message}`);
-    throw error;
-  }
-};
-
 // Function to clean up the large combined.log file
 const cleanupCombinedLog = () => {
   try {
@@ -243,7 +212,6 @@ module.exports = {
   logger,
   traceFormat: traceFormat(),
   reconfigureLogger,
-  triggerLogRollover,
   cleanupCombinedLog,
   flushLogs,
   victoriaLogsEnabled,

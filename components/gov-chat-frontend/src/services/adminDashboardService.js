@@ -97,19 +97,6 @@ const adminDashboardService = {
   },
 
   /**
-   * Trigger log rotation
-   * @returns {Promise} Operation result
-   */
-  async rolloverLogs() {
-    try {
-      return await httpService.post('admin/logs/rollover');
-    } catch (error) {
-      console.error('Error rolling over logs:', error);
-      throw error;
-    }
-  },
-
-  /**
    * Run system diagnostics
    * @returns {Promise} Diagnostics results
    */

@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Datenbankgröße',
     totalTables: 'Gesamttabellen',
     logManagement: 'Protokollverwaltung',
-    rolloverLogs: 'Protokolle umschalten',
     searchLogs: 'Protokolle durchsuchen',
     logTime: 'Zeit',
     logLevel: 'Ebene',
@@ -324,10 +323,6 @@ export default {
         success: 'Datenbankoptimierung erfolgreich abgeschlossen',
         error: 'Fehler bei der Datenbankoptimierung',
         loading: 'Datenbank wird optimiert...'
-      },
-      rolloverLogs: {
-        success: 'Protokollumschaltung erfolgreich abgeschlossen',
-        loading: 'Protokolle werden umgeschaltet...'
       },
       searchLogs: {
         success: 'Protokollsuche abgeschlossen',

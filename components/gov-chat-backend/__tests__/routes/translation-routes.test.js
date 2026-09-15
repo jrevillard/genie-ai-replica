@@ -29,7 +29,6 @@ jest.mock('../../services/admin-dashboard-service', () => ({
   getSystemHealth: jest.fn(),
   getDatabaseStats: jest.fn(),
   getLogs: jest.fn(),
-  rolloverLogs: jest.fn(),
   getUserStats: jest.fn(),
   searchLogs: jest.fn(),
   debugYesterdayLogs: jest.fn(),

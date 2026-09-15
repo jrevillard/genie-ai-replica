@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Tamanho do Banco de Dados',
     totalTables: 'Total de Tabelas',
     logManagement: 'Gerenciamento de Logs',
-    rolloverLogs: 'Rolar Logs',
     searchLogs: 'Buscar Logs',
     logTime: 'Tempo',
     logLevel: 'Nível',
@@ -324,10 +323,6 @@ export default {
         success: 'Otimização do banco de dados concluída com sucesso',
         error: 'Erro durante a otimização do banco de dados',
         loading: 'Otimizando banco de dados...'
-      },
-      rolloverLogs: {
-        success: 'Rolagem de logs concluída com sucesso',
-        loading: 'Rolando logs...'
       },
       searchLogs: {
         success: 'Busca de logs concluída',

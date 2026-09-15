@@ -1,7 +1,7 @@
 const AdminDashboardService = require('../services/admin-dashboard-service');
 const LogsService = require('../services/logs-service');
 const securityScanService = require('../services/security-scan-service');
-const { logger, triggerLogRollover } = require('../shared-lib');
+const { logger } = require('../shared-lib');
 const { parsePositiveInt } = require('../shared-lib');
 
 const adminController = {
@@ -163,25 +163,6 @@ const adminController = {
       res.status(500).json({
         success: false,
         message: 'Failed to debug yesterday logs',
-        error: error.message
-      });
-    }
-  },
-
-  async rolloverLogs(req, res) {
-    try {
-      logger.info('Controller: Triggering log rollover');
-      triggerLogRollover();
-      res.json({
-        success: true,
-        message: 'Logs rolled over successfully',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      logger.error(`Error rolling over logs: ${error.message}`, { stack: error.stack });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to rollover logs',
         error: error.message
       });
     }

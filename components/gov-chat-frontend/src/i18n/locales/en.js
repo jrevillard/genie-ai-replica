@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Database Size',
     totalTables: 'Total Tables',
     logManagement: 'Log Management',
-    rolloverLogs: 'Rollover Logs',
     searchLogs: 'Search Logs',
     logTime: 'Time',
     logLevel: 'Level',
@@ -323,10 +322,6 @@ export default {
         success: 'Database optimization completed successfully',
         error: 'Error during database optimization',
         loading: 'Optimizing database...'
-      },
-      rolloverLogs: {
-        success: 'Log rollover completed successfully',
-        loading: 'Rolling over logs...'
       },
       searchLogs: {
         success: 'Log search completed',

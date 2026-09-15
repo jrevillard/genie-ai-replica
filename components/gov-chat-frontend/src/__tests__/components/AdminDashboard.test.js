@@ -60,7 +60,6 @@ const mockSearchUsers = jest.fn().mockResolvedValue({
 const mockGetSecurityDetails = jest.fn().mockResolvedValue({});
 const mockRunDiagnostics = jest.fn().mockResolvedValue({});
 const mockRunSecurityScan = jest.fn().mockResolvedValue({});
-const mockRolloverLogs = jest.fn().mockResolvedValue({});
 
 jest.mock('../../services/adminDashboardService', () => ({
   getSystemHealth: mockGetSystemHealth,
@@ -72,8 +71,7 @@ jest.mock('../../services/adminDashboardService', () => ({
   searchUsers: mockSearchUsers,
   getSecurityDetails: mockGetSecurityDetails,
   runDiagnostics: mockRunDiagnostics,
-  runSecurityScan: mockRunSecurityScan,
-  rolloverLogs: mockRolloverLogs
+  runSecurityScan: mockRunSecurityScan
 }));
 
 jest.mock('../../services/serviceTreeService', () => ({

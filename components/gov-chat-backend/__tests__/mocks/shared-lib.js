@@ -15,7 +15,6 @@ module.exports = {
   securityHeaders: (req, res, next) => next(),
   SecurityMiddleware: { applySecurityMiddleware: jest.fn() },
   reconfigureLogger: jest.fn(),
-  triggerLogRollover: jest.fn(),
   parsePositiveInt,
   // Background-task tracing helpers — no-op stubs for tests; production
   // behavior is exercised in __tests__/tracing-background.test.js. Tests

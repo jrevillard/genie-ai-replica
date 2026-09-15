@@ -265,7 +265,6 @@ export default {
     databaseSize: 'Boholo ba Datha (Database)',
     totalTables: 'Ditafole kaofela',
     logManagement: 'Tsamaiso ya Lilog',
-    rolloverLogs: 'Fetisa Lilog (Rollover)',
     searchLogs: 'Batla Lilog',
     logTime: 'Nako',
     logLevel: 'Boemo',
@@ -321,10 +320,6 @@ export default {
         success: 'Ho ntlafatsa database ho phethetswe ka katleho',
         error: 'Phoso nakong ya ho ntlafatsa database',
         loading: 'E ntlafatsa database...'
-      },
-      rolloverLogs: {
-        success: 'Phetoho ya log e phethetswe ka katleho',
-        loading: 'E fetisa lilog...'
       },
       searchLogs: {
         success: 'Patlo ya log e phethetswe',

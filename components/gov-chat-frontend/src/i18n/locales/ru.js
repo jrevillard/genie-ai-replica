@@ -268,7 +268,6 @@ export default {
     databaseSize: 'Размер базы данных',
     totalTables: 'Всего таблиц',
     logManagement: 'Управление журналами',
-    rolloverLogs: 'Ротация журналов',
     searchLogs: 'Поиск в журналах',
     logTime: 'Время',
     logLevel: 'Уровень',
@@ -324,10 +323,6 @@ export default {
         success: 'Оптимизация базы данных успешно завершена',
         error: 'Ошибка при оптимизации базы данных',
         loading: 'Оптимизация базы данных...'
-      },
-      rolloverLogs: {
-        success: 'Ротация журналов успешно завершена',
-        loading: 'Ротация журналов...'
       },
       searchLogs: {
         success: 'Поиск в журналах завершен',

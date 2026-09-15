@@ -1,4 +1,4 @@
-// Tests for logger.js utility functions: reconfigureLogger, triggerLogRollover,
+// Tests for logger.js utility functions: reconfigureLogger,
 // cleanupCombinedLog, flushLogs. These tests verify observable behavior, not
 // internal mock wiring.
 
@@ -111,69 +111,6 @@ describe('logger.js utility functions', () => {
       // the audit-retention escape hatch adds the two DailyRotateFile
       // streams + the tailable File transport.
       expect(logger.transports.length).toBe(originalTransportCount);
-    });
-  });
-
-  // -------------------------------------------------------------------
-  // triggerLogRollover
-  // -------------------------------------------------------------------
-  describe('triggerLogRollover', () => {
-    // Force LOG_TO_FILE=1 so the DailyRotateFile transports the existing
-    // cases look up actually exist; under the post-cutover default
-    // (LOG_TO_FILE unset) triggerLogRollover silently no-ops and the
-    // assertions below would pass vacuously.
-    beforeEach(() => {
-      process.env.LOG_TO_FILE = '1';
-    });
-    afterEach(() => {
-      delete process.env.LOG_TO_FILE;
-    });
-
-    it('does not throw when DailyRotateFile transports have rotate method', () => {
-      const { triggerLogRollover } = loggerModule;
-
-      // The real DailyRotateFile transports should have a rotate method
-      expect(() => triggerLogRollover()).not.toThrow();
-    });
-
-    it('warns when error rotate transport is missing rotate method', () => {
-      const { logger, triggerLogRollover } = loggerModule;
-
-      // Temporarily remove the rotate method from error transport
-      const errorTransport = logger.transports.find(
-        (t) => t.constructor.name === 'DailyRotateFile' && t.level === 'error'
-      );
-      const originalRotate = errorTransport && errorTransport.rotate;
-      if (errorTransport) {
-        errorTransport.rotate = undefined;
-      }
-
-      // Should not throw — just warns
-      expect(() => triggerLogRollover()).not.toThrow();
-
-      // Restore
-      if (errorTransport && originalRotate) {
-        errorTransport.rotate = originalRotate;
-      }
-    });
-
-    it('re-throws errors from rotate failures', () => {
-      const { logger, triggerLogRollover } = loggerModule;
-
-      const errorTransport = logger.transports.find(
-        (t) => t.constructor.name === 'DailyRotateFile' && t.level === 'error'
-      );
-
-      if (errorTransport) {
-        const originalRotate = errorTransport.rotate;
-        errorTransport.rotate = () => {
-          throw new Error('disk full');
-        };
-
-        expect(() => triggerLogRollover()).toThrow('disk full');
-
-        errorTransport.rotate = originalRotate;
-      }
     });
   });
 

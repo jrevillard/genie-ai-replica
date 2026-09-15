@@ -268,7 +268,6 @@ export default {
     databaseSize: 'ขนาดฐานข้อมูล',
     totalTables: 'ตารางทั้งหมด',
     logManagement: 'การจัดการบันทึก',
-    rolloverLogs: 'โรลโอเวอร์บันทึก',
     searchLogs: 'ค้นหาบันทึก',
     logTime: 'เวลา',
     logLevel: 'ระดับ',
@@ -324,10 +323,6 @@ export default {
         success: 'ปรับปรุงฐานข้อมูลเสร็จสิ้นสำเร็จ',
         error: 'ข้อผิดพลาดระหว่างปรับปรุงฐานข้อมูล',
         loading: 'กำลังปรับปรุงฐานข้อมูล...'
-      },
-      rolloverLogs: {
-        success: 'โรลโอเวอร์บันทึกเสร็จสิ้นสำเร็จ',
-        loading: 'กำลังโรลโอเวอร์บันทึก...'
       },
       searchLogs: {
         success: 'ค้นหาบันทึกเสร็จสิ้น',

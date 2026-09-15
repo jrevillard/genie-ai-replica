@@ -267,7 +267,6 @@ export default {
     databaseSize: 'Ukuran Database',
     totalTables: 'Total Tabel',
     logManagement: 'Manajemen Log',
-    rolloverLogs: 'Rollover Log',
     searchLogs: 'Cari Log',
     logTime: 'Waktu',
     logLevel: 'Level',
@@ -323,10 +322,6 @@ export default {
         success: 'Optimasi database berhasil diselesaikan',
         error: 'Kesalahan saat optimasi database',
         loading: 'Mengoptimalkan database...'
-      },
-      rolloverLogs: {
-        success: 'Rollover log berhasil diselesaikan',
-        loading: 'Melakukan rollover log...'
       },
       searchLogs: {
         success: 'Pencarian log selesai',

@@ -93,31 +93,47 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     }
 
     onStart(span, parentContext) {
-      this._delegate.onStart(span, parentContext);
-    }
-
-    onEnd(span) {
-      // Drop health-check spans before export to reduce noise in Grafana
+      // Drop health-check spans BEFORE the span is recorded — once a
+      // span ends, the OTel SDK marks attributes read-only and
+      // `span.setAttribute()` becomes a no-op (`Span.js:77-78`). We must
+      // mutate attributes (PII redaction) and decide to drop at
+      // onStart while the span is still mutable.
       const attrs = span.attributes || {};
       const target = attrs['http.target'] || attrs['http.route'] || '';
       if (target && this._ignoredPaths.some((p) => target.includes(p))) {
-        return; // silently drop the span
-      }
-      // Drop Express catch-all route handler spans (health checks hitting wildcard routes)
-      const opName = span.name || '';
-      if (opName.startsWith('request handler - *')) {
-        return;
+        // Mark the span as dropped — we can't actually delete a started
+        // span from the SDK API surface, but we can clear all
+        // attributes and set an internal marker so onEnd short-circuits.
+        span.setAttribute('genie.pii.dropped', true);
+        return this._delegate.onStart(span, parentContext);
       }
       try {
-        const attrs = span.attributes;
-        if (attrs) {
-          const redacted = redactAttributes(attrs);
-          for (const [key, value] of Object.entries(redacted)) {
+        const redacted = redactAttributes(attrs);
+        for (const [key, value] of Object.entries(redacted)) {
+          // Only set the attribute if the value changed — avoids
+          // triggering span updates when no PII was redacted.
+          if (attrs[key] !== value) {
             span.setAttribute(key, value);
           }
         }
       } catch {
         // Redaction failure must not block span export
+      }
+      this._delegate.onStart(span, parentContext);
+    }
+
+    onEnd(span) {
+      // Honor the drop flag set in onStart — health-check paths and
+      // Express catch-all wildcards never reach the exporter.
+      if (span.attributes && span.attributes['genie.pii.dropped'] === true) {
+        return;
+      }
+      // Drop Express catch-all route handler spans (health checks hitting
+      // wildcard routes). Filter on `opName` rather than `target` because
+      // wildcard spans may not have an http.target attribute.
+      const opName = span.name || '';
+      if (opName.startsWith('request handler - *')) {
+        return;
       }
       this._delegate.onEnd(span);
     }
@@ -151,7 +167,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
       return '0.0.0';
     }
   }
-  const serviceName = 'genie-backend';
+  const serviceName = process.env.OTEL_SERVICE_NAME || 'genie-backend';
   const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';
 
@@ -304,7 +320,11 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
       // Shutdown errors are non-fatal — best-effort flush
     }
     clearTimeout(timeout);
-    process.exit(0);
+    // NOTE: process.exit is intentionally NOT called here. The wrapping
+    // `withBackgroundSpan` body must finish so the span's `finally {
+    // span.end() }` runs. `_registerShutdown` chains `.then` + `.catch`
+    // after the wrapper Promise and fires `process.exit(0)` in `.then`
+    // — this fires AFTER the span-microtask drains, so no leak.
   };
 
   // `process.on()` ignores the listener's return value, so the Promise
@@ -315,17 +335,26 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // span ends AND rejections surface (not as process termination via
   // Node 15+'s unhandledRejection default policy).
   function _registerShutdown(signame) {
-    withBackgroundSpan(
+    // Chain `.then().catch()` so the span's `finally { span.end() }`
+    // fires before `process.exit(0)`. Calling `process.exit` inside the
+    // span body terminates the process before the awaiting microtask
+    // drains, leaking the otel.shutdown span.
+    const exitPromise = withBackgroundSpan(
       'otel.shutdown',
       () => gracefulShutdown(signame),
       { 'genie.signal': signame }
-    ).catch((err) => {
-      // Rejection inside the span body — record + log, but do not crash
-      // the shutdown path. `process.exit` still runs via the inner
-      // gracefulShutdown timeout (or the inner try/finally itself).
-      // eslint-disable-next-line no-console
-      console.error(`[otel.shutdown] ${signame} handler failed:`, err);
-    });
+    );
+    exitPromise.then(
+      () => process.exit(0),
+      (err) => {
+        // Rejection inside the span body — log + still exit so the
+        // process doesn't hang in Swarm stop_grace_period. The 15 s
+        // gracefulShutdown timeout fires `process.exit(0)` independently.
+        // eslint-disable-next-line no-console
+        console.error(`[otel.shutdown] ${signame} handler failed:`, err);
+        process.exit(1);
+      }
+    );
   }
   process.on('SIGTERM', () => _registerShutdown('SIGTERM'));
   process.on('SIGINT', () => _registerShutdown('SIGINT'));

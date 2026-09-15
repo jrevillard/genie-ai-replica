@@ -63,7 +63,8 @@ const gracefulShutdown = (signal) => withBackgroundSpan(
       }, 30000);
     });
 
-    process.exit(0);
+    // Caller fires process.exit AFTER this returns (and AFTER the
+    // span finally block runs). See the SIGTERM/SIGINT handlers below.
   },
   { signal }
   );
@@ -156,17 +157,21 @@ process.on('uncaughtException', (error) => {
 
 // Handle graceful shutdown — capture the Promise so process.on's
 // value-discarding doesn't drop it (see H4a fix in backend/tracing.js).
-process.on('SIGTERM', () => {
-  gracefulShutdown('SIGTERM').catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error('[SIGTERM] shutdown failed:', err);
-  });
-});
-process.on('SIGINT', () => {
-  gracefulShutdown('SIGINT').catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error('[SIGINT] shutdown failed:', err);
-  });
+// Chain `.then(process.exit).catch()` so the span's `finally { span.end() }`
+// runs BEFORE `process.exit` fires (otherwise the otel.shutdown span leaks).
+function _exitAfter(signame) {
+  const p = gracefulShutdown(signame);
+  return p.then(
+    () => process.exit(0),
+    (err) => {
+      // eslint-disable-next-line no-console
+      console.error(`[${signame}] shutdown failed:`, err);
+      process.exit(1);
+    }
+  );
+}
+process.on('SIGTERM', () => _exitAfter('SIGTERM'));
+process.on('SIGINT', () => _exitAfter('SIGINT'));
 });
 
 module.exports = server;

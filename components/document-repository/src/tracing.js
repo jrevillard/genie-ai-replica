@@ -59,7 +59,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // (Docker drops `/lib/` from the path; Jest moduleNameMapper in
   // jest.config.js routes both `../shared-lib/X` and the source-tree
   // `../shared/lib/X` to the real file).
-  const { runInBackgroundSpan } = require('../shared-lib/tracing-background');
+  const { runInBackgroundSpan, withBackgroundSpan } = require('../shared-lib/tracing-background');
   // OTLP base URL — read once, then reused for both the trace and the log
   // exporter endpoints. Pulled up to the top of the else block so neither
   // exporter construction reads it in a TDZ window (the previous ordering
@@ -132,6 +132,17 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     new PIIRedactionSpanProcessor(_docRepoTraceExporter)
   );
   trace.setGlobalTracerProvider(_docRepoTracerProvider);
+  // Register an AsyncLocalStorage-based ContextManager so
+  // `tracer.startActiveSpan(...)` and `context.with(...)` propagate
+  // trace context across awaits. Without this, the OTel JS API uses
+  // the noop ContextManager and span contexts never propagate
+  // (causing every emitted log to lose its `trace_id`). doc-repo does
+  // NOT use NodeSDK (which auto-installs the context manager), so we
+  // must register explicitly. Backend is unaffected (NodeSDK installs
+  // this for it at startup).
+  const { context } = require('@opentelemetry/api');
+  const { AsyncLocalStorageContextManager } = require('@opentelemetry/context-async-hooks');
+  context.setGlobalContextManager(new AsyncLocalStorageContextManager());
 
   // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS AND
   // ENABLE_OBSERVABILITY. Already inside the ENABLE_OBSERVABILITY gate
@@ -177,9 +188,16 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     const timeout = setTimeout(() => {
       if (!flushed) process.exit(0);
     }, SHUTDOWN_TIMEOUT_MS);
+    // Flush + shut down the trace provider FIRST so span batches don't
+    // get cut off when the 15 s budget hits. Then the logger provider.
+    try {
+      await _docRepoTracerProvider?.shutdown();
+      flushed = true;
+    } catch {
+      // Shutdown errors are non-fatal — best-effort flush
+    }
     try {
       await loggerProvider?.shutdown();
-      flushed = true;
     } catch {
       // Shutdown errors are non-fatal — best-effort flush
     }
@@ -191,18 +209,23 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // returned by `withBackgroundSpan` would be dropped on the floor —
   // the span's `finally` block never fires, the span leaks, and any
   // rejection inside `gracefulShutdown` becomes an unhandled rejection.
-  // Capture the Promise explicitly and attach `.catch()` so the span
-  // ends AND rejections surface (not as process termination via
-  // Node 15+'s unhandledRejection default policy).
+  // Chain `.then().catch()` so the span's `finally { span.end() }`
+  // fires BEFORE `process.exit(0)` — calling exit inside the span body
+  // terminates the process before the awaiting microtask drains.
   function _registerShutdown(signame) {
-    withBackgroundSpan(
+    const exitPromise = withBackgroundSpan(
       'otel.shutdown',
       () => gracefulShutdown(signame),
       { 'genie.signal': signame }
-    ).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error(`[otel.shutdown] ${signame} handler failed:`, err);
-    });
+    );
+    exitPromise.then(
+      () => process.exit(0),
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.error(`[otel.shutdown] ${signame} handler failed:`, err);
+        process.exit(1);
+      }
+    );
   }
   process.on('SIGTERM', () => _registerShutdown('SIGTERM'));
   process.on('SIGINT', () => _registerShutdown('SIGINT'));

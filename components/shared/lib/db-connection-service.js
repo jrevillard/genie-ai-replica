@@ -1243,7 +1243,7 @@ class DatabaseService {
       async () => {
         return this._performActiveRecoveryInner(name, originalError);
       },
-      { 'db.connection': name }
+      { 'db.connection': name, 'db.system': this._dbType }
     );
   }
 
@@ -1318,7 +1318,7 @@ class DatabaseService {
       withBackgroundSpan(
         'db.healthcheck',
         () => this._performHealthCheck(name),
-        { 'db.connection': name }
+        { 'db.connection': name, 'db.system': this._dbType }
       );
     }, this.HEALTH_CHECK_INTERVAL);
 

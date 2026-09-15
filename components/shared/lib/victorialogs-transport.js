@@ -64,7 +64,17 @@ class VictoriaLogsTransport extends TransportStream {
     // `service` is reported as an attribute; downstream maps to stream
     // field. Decoupled from `this.name` so callers can override service identity
     // without renaming the transport instance.
-    this._service = opts.service || process.env.SERVICE_NAME || 'genie-backend';
+    // Single source of truth for `service.name` resolution — the OTel spec
+    // mandates `OTEL_SERVICE_NAME` as the canonical env var. We accept it
+    // FIRST (overriding the constructor's `opts.service` arg) so that
+    // operators can flip the value per environment without code changes.
+    // Matches `logger.js:84` so the JSON `service` field and the
+    // `LogRecord.attributes.service` field never diverge.
+    this._service =
+      process.env.OTEL_SERVICE_NAME ||
+      opts.service ||
+      process.env.SERVICE_NAME ||
+      'genie-backend';
     this._loggerName = opts.loggerName || 'winston';
     this._enabled = opts.enabled !== false;
   }

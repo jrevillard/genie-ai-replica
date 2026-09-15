@@ -119,7 +119,19 @@ def get_trace_context():
 
 
 class TraceContextFilter(logging.Filter):
-    """Python logging Filter that injects trace_id, span_id, and service into every log record."""
+    """Python logging Filter that stamps trace_id, span_id, and service on
+    every log record. The OTel Python SDK's `LoggingHandler` propagates
+    those record attributes into the OTel `LogRecord.trace_id` /
+    `LogRecord.span_id` / `LogRecord.resource.attributes['service.name']`
+    fields — VictoriaLogs indexes them as first-class stream fields.
+
+    The PREVIOUS implementation prepended `trace_id="..."` /
+    `span_id="..."` into `record.msg` itself. That corrupted the message
+    body (every `_msg:` filter matched the prefix first instead of the
+    real text) and wasted bandwidth on every log emit. The OTel SDK's
+    structured fields are the canonical correlation surface — drop the
+    body prepend.
+    """
 
     def __init__(self, service_name="unknown"):
         super().__init__()
@@ -130,11 +142,6 @@ class TraceContextFilter(logging.Filter):
         record.trace_id = ctx["trace_id"]
         record.span_id = ctx["span_id"]
         record.service = self.service_name
-        # Prepend trace context into the message itself so it appears in
-        # VictoriaLogs _msg regardless of the formatter used by CustomLogger.
-        # Match the backend Node.js format: trace_id="..." span_id="..."
-        if ctx["trace_id"] != ZEROED_TRACE_ID:
-            record.msg = f'trace_id="{ctx["trace_id"]}" span_id="{ctx["span_id"]}" {record.msg}'
         return True
 
 

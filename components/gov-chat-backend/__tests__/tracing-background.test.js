@@ -83,7 +83,10 @@ describe('tracing-background helpers', () => {
 
     it('passes no attributes when none provided', async () => {
       await withBackgroundSpan('db.cleanup_tick', async () => null);
-      expect(fakeTracer.spans[0].attrs).toBeUndefined();
+      // The helper passes a SpanOptions object as the second arg to
+      // `tracer.startSpan`. When no attrs are supplied, the object is
+      // `{}` (no `.attributes` key) — verify neither has the key.
+      expect(fakeTracer.spans[0].attrs).not.toHaveProperty('attributes');
     });
 
     it('records thrown errors on the span and re-throws', async () => {

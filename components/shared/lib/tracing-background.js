@@ -129,11 +129,18 @@ _installGetSpanPatch();
  * @param {string} name  Span name (dotted, lowercase).
  * @param {() => Promise<unknown>} fn  Async unit of work.
  * @param {Record<string, string|number|boolean>} [attrs] Optional span attributes.
+ * @param {object} [options] Optional SpanOptions (`kind`, `links`).
  * @returns {Promise<unknown>} `fn`'s resolved value.
  */
-async function withBackgroundSpan(name, fn, attrs) {
+async function withBackgroundSpan(name, fn, attrs, options = {}) {
   const tracer = _tracer();
-  const span = tracer.startSpan(name, attrs ? { attributes: attrs } : undefined);
+  const spanOptions = {};
+  if (attrs) spanOptions.attributes = attrs;
+  // SpanKind is part of SpanOptions (`kind` field). Accept either an
+  // integer enum or a string alias; the OTel SDK accepts the integer.
+  if (options.kind !== undefined) spanOptions.kind = options.kind;
+  if (options.links) spanOptions.links = options.links;
+  const span = tracer.startSpan(name, spanOptions);
   return _runWithSpan(span, async () => {
     try {
       return await fn();

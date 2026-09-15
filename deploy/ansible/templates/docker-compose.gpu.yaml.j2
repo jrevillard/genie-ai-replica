@@ -25,7 +25,7 @@ services:
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.55') }}
       --served-model-name {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --max_model_len {{ vllm_max_model_len | default('65536') }}
-      --max_num_seqs {{ vllm_max_num_seqs | default('64') }}
+      --max_num_seqs {{ vllm_max_num_seqs | default('32') }}
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
     environment:

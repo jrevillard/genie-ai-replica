@@ -18,6 +18,7 @@ jest.mock('../../config/appConfig', () => ({
     allowedMimeTypes: ['application/pdf', 'text/plain', 'text/html'],
     allowedExtensions: ['.pdf', '.txt', '.html'],
     maxFileSize: 52428800,
+    bundleMaxBodyMb: 100,
     maxFilesUpload: 5
   },
   virusScanning: true,

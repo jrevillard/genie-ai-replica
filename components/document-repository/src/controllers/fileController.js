@@ -1428,6 +1428,18 @@ class FileController {
       const dataprepUrl = `${config.dataprep.host}:${config.dataprep.port}/v1/dataprep/kill_ingest`;
 
       const response = await axios.post(dataprepUrl, { fileId });
+      // dataprep reports "no active task" as {success:false, status:404} in a
+      // 200 body — forward it as a real error status so the UI does not show
+      // "Kill request sent" for a file whose ingest already finished (or was
+      // never dispatched). Live 2026-09-15: the Bali kill toasted success on a
+      // completed file while the repo-wide drain kept running.
+      if (response.data && response.data.success === false) {
+        return res.status(response.data.status || 502).json({
+          success: false,
+          error: 'NO_ACTIVE_INGEST',
+          message: response.data.message || 'No active ingestion task found for this file.'
+        });
+      }
       res.json(response.data);
     } catch (error) {
       logger.error('Kill ingestion error:', error);

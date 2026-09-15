@@ -71,7 +71,8 @@ jest.mock('../../../config/appConfig', () => ({
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ],
     allowedExtensions: ['.pdf', '.txt', '.html', '.md', '.docx'],
-    maxFileSize: 52428800
+    maxFileSize: 52428800,
+    bundleMaxBodyMb: 100
   },
   virusScanning: false,
   crawler: { maxPages: 100 },

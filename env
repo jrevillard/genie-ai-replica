@@ -607,6 +607,17 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # from okf-server). Leave empty to disable.
 # OKF_CONVERSION_DEBUG=
 
+# Maximum body size (MB) doc-repo accepts for the OKF bundle-ingest route
+# (POST /api/files/ingest-bundle). Publish ships the whole repository zip as
+# base64-in-JSON, so large repos need this headroom: a 1000-concept wikipedia
+# repo zips to ~30 MB ≈ ~42 MB of JSON. Default 100 (10× the app's 10mb JSON
+# cap); every other JSON route stays at the 10mb default.
+# OKF_BUNDLE_MAX_MB=100
+# Timeout (ms) for okf-server's bundle-store POST to doc-repo during publish.
+# Large bundles (tens of MB) plus the ClamAV scan can outrun a short timeout.
+# Default 300000 (5 min).
+# OKF_BUNDLE_STORE_TIMEOUT_MS=300000
+
 # Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 

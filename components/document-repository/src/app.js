@@ -83,8 +83,15 @@ app.set('trust proxy', 1);
 // Compression middleware
 app.use(compression());
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+// Body parsing middleware. POST /api/files/ingest-bundle is EXEMPT from the
+// global JSON parser — it carries base64-encoded OKF repository bundles far
+// above the normal cap (a 1000-concept repo ships ~42 MB of JSON), and it
+// mounts its own, config-driven limit in routes/fileRoutes.js. Every other
+// JSON route stays at the 10mb default.
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/api/files/ingest-bundle') return next();
+  return express.json({ limit: '10mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Create uploads directory if it doesn't exist

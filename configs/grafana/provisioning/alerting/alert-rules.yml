@@ -476,7 +476,7 @@ groups:
         - refId: C
           datasourceUid: __expr__
           model:
-            expression: A or B
+            expression: $A || $B
             refId: C
             type: math
       noDataState: OK

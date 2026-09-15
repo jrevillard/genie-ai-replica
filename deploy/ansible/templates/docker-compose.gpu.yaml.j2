@@ -19,13 +19,13 @@ services:
 
   vllm-llm:
     restart: unless-stopped
-    image: {{ vllm_llm_image | default('vllm/vllm-openai:latest') }}
+    image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
     command: >
       --model {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.55') }}
       --served-model-name {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --max_model_len {{ vllm_max_model_len | default('65536') }}
-      --max_num_seqs {{ vllm_max_num_seqs | default('32') }}
+      --max_num_seqs {{ vllm_max_num_seqs | default('16') }}
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
     environment:
@@ -44,7 +44,7 @@ services:
 
   vllm-translation:
     restart: unless-stopped
-    image: {{ vllm_translation_image | default('vllm/vllm-openai:v0.10.0') }}
+    image: {{ vllm_translation_image | default('vllm/vllm-openai:v0.29.0') }}
     command: >
       --model {{ vllm_translation_model_id | default('google/gemma-3-4b-it') }}
       --gpu_memory_utilization {{ vllm_translation_gpu_utilization | default('0.3') }}

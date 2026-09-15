@@ -738,7 +738,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.29.0
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
@@ -747,7 +747,7 @@ services:
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
       --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-32}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
       --enforce-eager
     environment:
@@ -821,7 +821,7 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.10.0
+    image: vllm/vllm-openai:v0.29.0
     # Internal only
     # ports:
     #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **vllm-llm CUDA illegal-memory-access crash loop (RTX 6000 Ada):** The `vllm` Swarm service and the standalone-GPU `vllm-llm` service restart-looped under dataprep labeling load with `RuntimeError: CUDA error: an illegal memory access was encountered` at `gpu_model_runner.py` `sampled_token_ids.tolist()`. Root cause is a known race in vLLM 0.10 V1 between xgrammar guided JSON decoding, chunked prefill, and long-context concurrent requests (upstream vllm-project/vllm#19483, #24107, #23814, #28028). Default `--max_num_seqs` lowered from 64 to 32 across `docker-compose.yaml`, `docker-compose.gpu.yaml`, and `deploy/ansible/templates/docker-compose.gpu.yaml.j2`. Empirical starting point — the crash log showed 19 running requests at the time of failure; iterate to 16 / 8 if 32 is insufficient. Chunked prefill, prefix caching, and `gpu_memory_utilization` are unchanged to preserve the Contextual Retrieval long-prompt path, chat performance, and the shared-GPU memory split with `vllm-translation-guardrail`.
 
+### Changed
+
+- **vLLM bump v0.10.0 to v0.29.0 (both services):** Mitigates the persistent CUDA illegal-memory-access crash loop in the chat/labeling vLLM under dataprep labeling load (vllm-project/vllm#23814, #24107 family — closed stale, no documented fix). Both `vllm-llm` and `vllm-translation` images are bumped for version consistency. The `--max_num_seqs` default is also lowered from 64 to 16 (iterative tuning showed no measurable effect on the crash, but kept as defense in depth).
+
 ## [2.1.0] - 2026-08-31
 
 ### Changed

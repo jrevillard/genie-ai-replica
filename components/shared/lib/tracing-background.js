@@ -1,7 +1,6 @@
 // components/shared/lib/tracing-background.js
 'use strict';
 
-const { AsyncLocalStorage } = require('async_hooks');
 const { trace } = require('@opentelemetry/api');
 
 // SCOPE_NAME reads OTEL_SERVICE_NAME first (the canonical env var per
@@ -24,26 +23,28 @@ try {
 }
 
 /**
- * Why this module uses `AsyncLocalStorage` instead of `context.with`:
+ * Why this module uses `tracer.startActiveSpan`:
  *
- * The OTel JS Context API (`@opentelemetry/api`) propagates context via a
- * registered ContextManager. When no SDK TracerProvider is initialized
- * (the document-repository case — its tracing.js is logs-only, no span
- * exporter), the global ContextManager is the `NoopContextManager` which
- * silently drops every `context.with(ctx, fn)` call — `context.active()`
- * inside `fn` still returns the original context. End result: no span is
- * visible to the Winston `traceFormat` formatter, every background log
- * is emitted without a trace_id.
+ * `startActiveSpan` creates a span AND binds it to the active context
+ * for the duration of the callback. The AsyncLocalStorageContextManager
+ * (registered in both backend and document-repository tracing.js) uses
+ * `als.enterWith` internally, which PERSISTS the binding across awaits
+ * — so logs emitted during awaited work inside the callback carry the
+ * live trace_id / span_id.
  *
- * Bypassing the OTel ContextManager with Node's built-in AsyncLocalStorage
- * is the standard escape hatch documented in the OTel JS contrib repo.
- * It works regardless of whether a full SDK TracerProvider is registered
- * (the backend has one, doc-repo does not — both paths now work).
+ * Why we DON'T use `context.with(trace.setSpan(...))` directly: OTel's
+ * `context.with` delegates to `als.run`, which exits when fn returns
+ * synchronously. Fire-and-forget call sites (the db healthcheck
+ * `setInterval` wrapper) lose the binding before their async work
+ * even starts — every healthcheck log then carries zeroed trace_id.
+ *
+ * An earlier version ALSO monkey-patched `trace.getSpan` to bridge via
+ * a module-local AsyncLocalStorage — but OTel's `trace` namespace is a
+ * Proxy that gets RECREATED when `setGlobalTracerProvider` runs, so the
+ * patch silently captured the orphaned pre-registration proxy.
  *
  * @module shared/lib/tracing-background
  */
-
-const _als = new AsyncLocalStorage();
 
 /**
  * Resolve a tracer. Lazy — avoids the OTel global being absent at module
@@ -57,81 +58,6 @@ const _als = new AsyncLocalStorage();
 function _tracer() {
   return trace.getTracer(SCOPE_NAME, SCOPE_VERSION);
 }
-
-/**
- * Run `fn` inside an AsyncLocalStorage scope where `context.active()`
- * (when read via our `_getActiveSpan()`) returns the supplied span.
- * Bypasses the OTel ContextManager so it works regardless of SDK init.
- *
- * @template T
- * @param {import('@opentelemetry/api').Span} span
- * @param {() => T} fn
- * @returns {T}
- */
-function _runWithSpan(span, fn) {
-  return _als.run(span, fn);
-}
-
-/**
- * Read the currently-active span from our AsyncLocalStorage. The
- * `logger.js` `traceFormat` formatter reads `trace.getSpan(context.active())`
- * — that path STILL uses the OTel ContextManager (which is noop in
- * doc-repo). To make the formatter see the wrapped span, we monkey-patch
- * `trace.getSpan` at module load: install a wrapper that checks our
- * AsyncLocalStorage first, falls back to the original OTel behavior.
- *
- * (This monkey-patch is per-process, not global across requires, because
- * OTel's `trace.getSpan` is a getter on a frozen object — we replace the
- * whole `trace` getter to a Proxy. See `_installGetSpanPatch()`.)
- */
-let _installedPatch = false;
-let _patchAttempts = 0;
-function _installGetSpanPatch() {
-  if (_installedPatch) return;
-  // Mark the install as "attempted" so we don't re-enter on every
-  // require() — but reset on failure so a later call can retry (e.g.
-  // after the OTel API namespace is unfrozen by hot-reload).
-  _patchAttempts += 1;
-  const attemptId = _patchAttempts;
-
-  const otelTrace = require('@opentelemetry/api').trace;
-  const originalGetSpan = otelTrace.getSpan;
-  // Replace the property with a function that consults our ALS first.
-  try {
-    Object.defineProperty(otelTrace, 'getSpan', {
-      configurable: true,
-      enumerable: true,
-      get() {
-        return (ctx) => {
-          const als = _als.getStore();
-          if (als) return als;
-          return originalGetSpan(ctx);
-        };
-      }
-    });
-    // Patch succeeded — mark as installed so subsequent require()s are
-    // a no-op. The patch is idempotent (subsequent calls find
-    // `_installedPatch === true` and short-circuit).
-    _installedPatch = true;
-  } catch (err) {
-    // If the property is non-configurable (some bundlers freeze the OTel
-    // API namespace), the patch silently no-ops and trace_id stamping
-    // regresses to zeros. Fail LOUD — log a warning to stderr so the
-    // next `docker logs` surfaces it. The patch is NOT marked installed
-    // so a later `_installGetSpanPatch()` call (e.g. if the namespace is
-    // ever unfrozen by hot-reload) can retry. The retry contract
-    // documented in the docstring above IS honoured: we only mark
-    // `_installedPatch = true` on success.
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[tracing-background] attempt #${attemptId} failed to patch ` +
-      'trace.getSpan — trace_id stamping will fall back to whatever ' +
-      'the OTel API returns (likely zeros):',
-      err && err.message ? err.message : err
-    );
-  }
-}
-_installGetSpanPatch();
 
 /**
  * Wrap an async function in a fresh OTel root span. The span becomes
@@ -153,31 +79,19 @@ _installGetSpanPatch();
  */
 async function withBackgroundSpan(name, fn, attrs, options = {}) {
   const tracer = _tracer();
-  // Apply OTel semantic-conventions span-name prefix when missing —
-  // `<scope>.genie.<name>` (e.g. `genie-backend.genie.db.healthcheck`).
-  // Already-prefixed names pass through unchanged so external callers
-  // can opt out by naming explicitly.
   const namespacedName = name.includes('.') ? name : `genie.${name}`;
   const spanOptions = {};
   if (attrs) spanOptions.attributes = attrs;
-  // SpanKind is part of SpanOptions (`kind` field). Accept either an
-  // integer enum or a string alias; the OTel SDK accepts the integer.
   if (options.kind !== undefined) spanOptions.kind = options.kind;
   if (options.links) spanOptions.links = options.links;
-  const span = tracer.startSpan(namespacedName, spanOptions);
-  return _runWithSpan(span, async () => {
-    try {
-      return await fn();
-    } catch (err) {
-      span.recordException(err);
-      span.setStatus({
-        code: 2, // SpanStatusCode.ERROR
-        message: err && err.message ? err.message : String(err)
-      });
-      throw err;
-    } finally {
-      span.end();
-    }
+  // `tracer.startActiveSpan(name, options, fn)` creates a span AND
+  // binds it via the registered ContextManager (AsyncLocalStorage
+  // → als.enterWith → persists across awaits). The span is auto-ended
+  // when fn settles (no manual span.end needed).
+  return tracer.startActiveSpan(namespacedName, spanOptions, async (span) => {
+    // `startActiveSpan` already records thrown errors on the span.
+    // Just re-throw so callers see the original error.
+    return fn();
   });
 }
 
@@ -201,44 +115,38 @@ async function withBackgroundSpan(name, fn, attrs, options = {}) {
 function runInBackgroundSpan(name, fn, attrs) {
   const tracer = _tracer();
   const namespacedName = name.includes('.') ? name : `genie.${name}`;
-  const span = tracer.startSpan(namespacedName, attrs ? { attributes: attrs } : undefined);
-  let result;
-  try {
-    result = _runWithSpan(span, () => fn());
-  } catch (err) {
-    span.recordException(err);
-    span.setStatus({
-      code: 2, // SpanStatusCode.ERROR
-      message: err && err.message ? err.message : String(err)
-    });
-    span.end();
-    throw err;
-  }
-  // If `fn` returned a Promise (async), defer `span.end()` until the
-  // Promise settles — otherwise the span ends immediately, the active
-  // ALS store clears, and any log emitted during the awaited work has
-  // zero trace_id. Re-throw rejections so callers see the error (same
-  // contract as the sync path's `throw err`).
-  if (result && typeof result.then === 'function') {
-    return result.then(
-      (value) => {
-        span.end();
-        return value;
-      },
-      (err) => {
-        span.recordException(err);
-        span.setStatus({
-          code: 2, // SpanStatusCode.ERROR
-          message: err && err.message ? err.message : String(err)
-        });
-        span.end();
+  // `tracer.startActiveSpan` creates + binds + auto-ends in one call.
+  // Returns whatever fn returns (sync value or Promise that resolves
+  // to the value). Throws sync, or returns a rejected Promise on
+  // async failure (auto-recorded on the span).
+  return tracer.startActiveSpan(
+    namespacedName,
+    attrs ? { attributes: attrs } : undefined,
+    (span) => {
+      let result;
+      try {
+        result = fn();
+      } catch (err) {
+        // `startActiveSpan` records thrown errors automatically —
+        // we just re-throw so the caller sees the original.
         throw err;
       }
-    );
-  }
-  // Synchronous return — end now.
-  span.end();
-  return result;
+      // If `fn` returned a Promise, attach a rejection handler so the
+      // span's status is set on async failure too (startActiveSpan
+      // records sync throws but doesn't auto-catch promise rejections).
+      if (result && typeof result.then === 'function') {
+        return result.catch((err) => {
+          span.recordException(err);
+          span.setStatus({
+            code: 2, // SpanStatusCode.ERROR
+            message: err && err.message ? err.message : String(err)
+          });
+          throw err;
+        });
+      }
+      return result;
+    }
+  );
 }
 
 module.exports = {

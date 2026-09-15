@@ -54,11 +54,19 @@ jest.mock(
 jest.mock('@opentelemetry/api', () => ({
   trace: {
     getTracer: mockGetTracer,
-    setGlobalTracerProvider: mockSetTracerProvider
+    setGlobalTracerProvider: mockSetTracerProvider,
+    setSpan: jest.fn((_ctx, span) => ({ __mockSpan: span })),
+    getSpan: jest.fn(() => ({
+      spanContext: () => ({ traceId: 'a'.repeat(32), spanId: 'b'.repeat(16), traceFlags: 1 })
+    }))
   },
   context: {
-    active: jest.fn(),
-    setGlobalContextManager: mockSetContextManager
+    active: jest.fn(() => ({})),
+    setGlobalContextManager: mockSetContextManager,
+    // Real `context.with(ctx, fn)` invokes `fn()` synchronously and
+    // returns its result. Mocked as such so tracing-background.js's
+    // `_runWithSpan` sees the same return-value contract.
+    with: jest.fn((_ctx, fn) => fn())
   }
 }));
 

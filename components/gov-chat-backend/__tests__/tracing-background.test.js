@@ -4,15 +4,15 @@
 // a real trace_id instead of being orphaned.
 //
 // Implementation note (see header in tracing-background.js): the helpers
-// use Node's AsyncLocalStorage to propagate context because the OTel JS
-// SDK's NoopContextManager (active when no SDK TracerProvider is
-// registered — doc-repo's logs-only setup) silently drops every
-// `context.with` call. The helpers also monkey-patch `trace.getSpan` so
-// the Winston formatter sees the ALS-stored span.
+// bind the span to BOTH the OTel context (via `context.with(trace.setSpan(...))`)
+// and Node's AsyncLocalStorage. The OTel binding covers the production
+// path (AsyncLocalStorageContextManager propagates via `context.active()`);
+// the ALS binding is a fallback for the noop ContextManager (tests).
+// The mock `context.with` below also stores the span in ALS so
+// `trace.getSpan(context.active())` returns it.
 
-// Node's AsyncLocalStorage powers the helper's context propagation
-// (see header in tracing-background.js for why we bypass OTel's
-// NoopContextManager). The fakeTracer below simulates the SDK contract.
+// Node's AsyncLocalStorage powers the helper's context propagation fallback.
+// The fakeTracer below simulates the SDK contract.
 const fakeTracer = {
   spans: [],
   startSpan(name, opts) {
@@ -32,21 +32,68 @@ const fakeTracer = {
     };
     this.spans.push(span);
     return span;
+  },
+  // `startActiveSpan(name, options, fn)` — OTel SDK signature.
+  // (The helper also accepts `startActiveSpan(name, fn)` — no options.)
+  // Mirrors the real AsyncLocalStorageContextManager semantics: bind
+  // the span via ALS (persists across awaits), run fn, end the span
+  // exactly once when fn settles.
+  startActiveSpan(name, optsOrFn, maybeFn) {
+    const opts = typeof optsOrFn === 'function' ? undefined : optsOrFn;
+    const fn = typeof optsOrFn === 'function' ? optsOrFn : maybeFn;
+    const span = this.startSpan(name, opts);
+    // Bind via ALS so the span is visible to trace.getSpan across
+    // awaits inside fn (the production ContextManager does the same).
+    return mockAls.run({ span }, () => {
+      try {
+        const result = fn(span);
+        if (result && typeof result.then === 'function') {
+          return result.then(
+            (v) => {
+              span.end();
+              return v;
+            },
+            (err) => {
+              span.recordException(err);
+              span.setStatus({ code: 2, message: err.message });
+              span.end();
+              throw err;
+            }
+          );
+        }
+        span.end();
+        return result;
+      } catch (err) {
+        span.recordException(err);
+        span.setStatus({ code: 2, message: err.message });
+        span.end();
+        throw err;
+      }
+    });
   }
 };
 
-jest.mock('@opentelemetry/api', () => ({
-  trace: {
-    getTracer: jest.fn(() => fakeTracer),
-    getSpan: jest.fn(),
-    setSpan: jest.fn(),
-    __mockTracer: fakeTracer
-  },
-  context: {
-    active: jest.fn(() => ({})),
-    with: jest.fn()
-  }
-}));
+const { AsyncLocalStorage } = require('async_hooks');
+const mockAls = new AsyncLocalStorage();
+jest.mock('@opentelemetry/api', () => {
+  // The mock mirrors AsyncLocalStorageContextManager's contract:
+  // - setSpan returns a new context with the span attached (doesn't persist)
+  // - context.with runs fn() while the new context is active (ALS)
+  // - trace.getSpan reads the span attached to the active context
+  // - context.active returns the active context (the ALS store)
+  return {
+    trace: {
+      getTracer: jest.fn(() => fakeTracer),
+      getSpan: jest.fn(() => mockAls.getStore()?.span),
+      setSpan: jest.fn((_ctx, span) => ({ span })),
+      __mockTracer: fakeTracer
+    },
+    context: {
+      active: jest.fn(() => mockAls.getStore() || {}),
+      with: jest.fn((ctx, fn) => mockAls.run(ctx, fn))
+    }
+  };
+});
 
 const { trace } = require('@opentelemetry/api');
 const { withBackgroundSpan, runInBackgroundSpan } = require('../../shared/lib/tracing-background');
@@ -177,9 +224,7 @@ describe('tracing-background helpers', () => {
 
     it('records rejection on the span when an async fn rejects', async () => {
       const boom = new Error('arangodb async failure');
-      const returned = runInBackgroundSpan('db.healthcheck', () =>
-        Promise.reject(boom)
-      );
+      const returned = runInBackgroundSpan('db.healthcheck', () => Promise.reject(boom));
       // Re-throw must propagate to the caller (sync error contract).
       await expect(returned).rejects.toBe(boom);
       expect(fakeTracer.spans[0].recordException).toHaveBeenCalledWith(boom);

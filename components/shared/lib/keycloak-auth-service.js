@@ -151,6 +151,28 @@ async function init(idpUrl) {
   const jwks = createJwksCache(doc.jwks_uri);
   issuerMap.set(doc.issuer, jwks);
 
+  // JWKS host override (David, 2026-09-15): Keycloak publishes its jwks_uri
+  // based on the request hostname (KC_HOSTNAME) — in local Docker it returns
+  // `http://localhost:8080/...` which is unreachable from inside service
+  // containers. Operators set KEYCLOAK_JWKS_URL to a container-reachable URL
+  // (e.g. http://keycloak:8080) and we register it under BOTH the discovery
+  // issuer and the public issuer so token lookup succeeds regardless of which
+  // issuer the JWT was minted with. No-op when unset.
+  const jwksOverride = process.env.KEYCLOAK_JWKS_URL;
+  if (jwksOverride) {
+    const overrideJwks = createJwksCache(jwksOverride);
+    issuerMap.set(doc.issuer, overrideJwks);
+    // Compute the public issuer here too so token lookups work when the JWT
+    // carries the public-side issuer (KEYCLOAK_PUBLIC_URL differs from the
+    // discovery issuer in split-URL local builds).
+    const publicUrlOverride = process.env.KEYCLOAK_PUBLIC_URL;
+    if (publicUrlOverride) {
+      const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
+      issuerMap.set(publicIssuerOverride, overrideJwks);
+    }
+    logger.info(`[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} (overrides discovery ${doc.jwks_uri})`);
+  }
+
   // Alias a public-facing issuer for split internal/public OIDC URLs (e.g. local
   // build behind Docker Desktop): the browser token iss (https://localhost) can
   // differ from the discovery issuer fetched internally (http://kong:8000). Map

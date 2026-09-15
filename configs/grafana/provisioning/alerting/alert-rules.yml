@@ -451,7 +451,7 @@ groups:
     # records in the last 15 min (indicates a config or pipeline issue).
     - uid: otel-stamp-service-name-fail
       title: OTel Collector — stamp_service_name_from_container processor failing
-      condition: A or B
+      condition: C
       data:
         - refId: A
           relativeTimeRange:
@@ -473,6 +473,12 @@ groups:
             instant: true
             intervalMs: 1000
             refId: B
+        - refId: C
+          datasourceUid: __expr__
+          model:
+            expression: A or B
+            refId: C
+            type: math
       noDataState: OK
       execErrState: Alerting
       for: 10m

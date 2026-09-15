@@ -55,6 +55,25 @@ function programQuery() {
       live.conversion = Object.assign({}, live.conversion, bind.patch);
       return { all: async () => [] };
     }
+    if (text && text.includes('POSITION(@hashes')) {
+      // DUPLICATE_CONTENT gate: first LIVE other-repo whose source_documents
+      // carries one of the candidate content hashes.
+      const wanted = (bind && bind.hashes) || [];
+      const dup = Object.values(store).find(
+        (r) =>
+          r &&
+          !r.deleted_at &&
+          r.repo_id !== bind.rid &&
+          (r.source_documents || []).some((s) => s.file_hash && wanted.includes(s.file_hash))
+      );
+      if (dup) {
+        const dupFiles = (dup.source_documents || [])
+          .filter((s) => s.file_hash && wanted.includes(s.file_hash))
+          .map((s) => ({ file_id: s.file_id, file_name: s.file_name }));
+        return { all: async () => [{ repo_id: dup.repo_id, name: dup.name, dupFiles }] };
+      }
+      return { all: async () => [] };
+    }
     if (live && text && text.includes('source_documents')) {
       live.source_documents = bind.docs;
       return { all: async () => [] };
@@ -213,6 +232,64 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const repoDoc = await mockDb.collection('okf_repositories').document(RID);
     expect(repoDoc.conversion.status).toBe('done');
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
+  });
+
+  it('409s the SAME CONTENT (file_hash) already backing a LIVE other repository', async () => {
+    await mockDb.collection('okf_repositories').save({
+      _key: 'r-other',
+      repo_id: 'r-other',
+      name: 'Other repo',
+      domain: 'general',
+      created_at: '2026-09-14T00:00:01Z',
+      source_documents: [{ kind: 'document', file_id: 'old-1', file_name: 'alpha.md', file_hash: 'HASH1' }]
+    });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    mockDocs({ f1: 'alpha.md' });
+    authedAxios.get.mockImplementationOnce((url) => {
+      const fid = String(url).split('/api/files/')[1];
+      return Promise.resolve({
+        data: {
+          file: { file_id: fid, file_name: 'alpha.md', file_hash: 'HASH1', dataprep: { status: 'Pending' } }
+        }
+      });
+    });
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
+  });
+
+  it('allows re-importing the same content into the SAME repository (idempotent)', async () => {
+    await mockDb.collection('okf_repositories').save({
+      _key: RID,
+      repo_id: RID,
+      name: 'Mine',
+      domain: 'general',
+      source_documents: [{ kind: 'document', file_id: 'f1', file_name: 'alpha.md', file_hash: 'HASH-SELF' }]
+    });
+    mockDocs({ f1: 'alpha.md' });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      const fid = s.split('/api/files/')[1];
+      return Promise.resolve({
+        data: {
+          file: { file_id: fid, file_name: 'alpha.md', file_hash: 'HASH-SELF', dataprep: { status: 'Pending' } }
+        }
+      });
+    });
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
+    expect(repoDoc.conversion.status).toBe('done');
   });
 
   it('imports the corpus: per-file drafts, cross-links, index LAST, one curation pass, done record', async () => {

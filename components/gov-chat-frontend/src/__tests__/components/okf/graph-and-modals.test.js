@@ -306,8 +306,11 @@ describe('OkfRepoGraphView', () => {
     expect(wrapper.vm.card.visible).toBe(true);
     expect(wrapper.vm.card.title).toBe('Wildlife of the Mara');
     // orphan is outside the highlighted neighborhood — nothing shows.
+    // (mouseout now GRACE-DELAYS the dismiss so the user can reach the card;
+    // the old card lingers briefly, and the un-highlighted node never shows.)
     cy.getElementById('wildlife').emit('mouseout');
     cy.getElementById('orphan').emit('mouseover');
+    await new Promise((r) => setTimeout(r, 320)); // past the 250ms grace
     expect(wrapper.vm.card.visible).toBe(false);
   });
 
@@ -324,7 +327,43 @@ describe('OkfRepoGraphView', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.vm.card.visible).toBe(true);
     cy.getElementById('wildlife').emit('mouseout');
+    // Grace-delayed dismiss (node→card mouse move) — gone after the window.
+    await new Promise((r) => setTimeout(r, 320));
     expect(wrapper.vm.card.visible).toBe(false);
+  });
+
+  it('keeps the card while the mouse moves onto it and dismisses on card leave (David UX)', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, {
+      repoId: 'r-1',
+      concepts: RICH_CONCEPTS,
+      selectedId: 'wildlife'
+    });
+    await wrapper.vm.$nextTick();
+    await built(wrapper);
+    const cy = wrapper.vm.cy;
+    cy.getElementById('wildlife').emit('mouseover');
+    await wrapper.vm.$nextTick();
+    const card = wrapper.find('.okf-gv__card');
+    expect(card.exists()).toBe(true);
+    // Mouse leaves the node, enters the CARD: the pending dismiss is canceled.
+    cy.getElementById('wildlife').emit('mouseout');
+    await card.trigger('mouseenter');
+    await new Promise((r) => setTimeout(r, 320));
+    expect(wrapper.vm.card.visible).toBe(true); // survived the node→card move
+    // Leaving the card dismisses it.
+    await card.trigger('mouseleave');
+    expect(wrapper.vm.card.visible).toBe(false);
+  });
+
+  it('hides the card on pan/zoom (viewport) and when the selection moves', async () => {
+    const wrapper = mountWith(OkfRepoGraphView, {
+      repoId: 'r-1',
+      concepts: RICH_CONCEPTS,
+      selectedId: 'wildlife'
+    });
+    await wrapper.vm.$nextTick();
+    await built(wrapper);
+    const cy = wrapper.vm.cy;
     cy.getElementById('wildlife').emit('mouseover');
     await wrapper.vm.$nextTick();
     cy.emit('viewport'); // pan/zoom moves the node from under the cursor

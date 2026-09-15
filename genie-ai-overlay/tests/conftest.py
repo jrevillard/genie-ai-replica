@@ -130,18 +130,16 @@ _kneed_mock = MagicMock()
 _kneed_mock.KneeLocator = MagicMock()
 sys.modules.setdefault("kneed", _kneed_mock)
 
-# OpenTelemetry — only mock exporter and instrumentation packages.
-# Core packages (opentelemetry-api, opentelemetry-sdk) are in pyproject.toml test deps.
-# The exporter and instrumentation packages are Dockerfile-only.
-sys.modules.setdefault("opentelemetry.exporter", MagicMock())
-sys.modules.setdefault("opentelemetry.exporter.otlp", MagicMock())
-sys.modules.setdefault("opentelemetry.exporter.otlp.proto", MagicMock())
-sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http", MagicMock())
-sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http.trace_exporter", MagicMock())
-sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http.metric_exporter", MagicMock())
-sys.modules.setdefault("opentelemetry.instrumentation", MagicMock())
+# OpenTelemetry — only mock submodules whose parent package is NOT in
+# pyproject.toml test deps. The exporter, otlp proto http, instrumentation
+# httpx, opentelemetry-api, and opentelemetry-sdk packages are all real
+# test deps now (since opentelemetry-exporter-otlp-proto-http was added
+# to [project.optional-dependencies].test). Mocking them here shadows the
+# real installs — `tracing.py` then fails to import `_log_exporter`
+# because the MagicMock has no such attribute.
+# Keeping the fastapi instrumentation mock because that submodule is not
+# a declared test dependency (it's pulled in by the Docker image only).
 sys.modules.setdefault("opentelemetry.instrumentation.fastapi", MagicMock())
-sys.modules.setdefault("opentelemetry.instrumentation.httpx", MagicMock())
 
 _integrations_mock = MagicMock()
 _integrations_tei_module = MagicMock()

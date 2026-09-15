@@ -29,15 +29,34 @@ class _FakeLogRecord:
         self.body = body
 
 
+class _FakeLogData:
+    """Wrapper matching the OTel SDK >= 1.40 contract: `LogRecordProcessor.emit`
+    receives a `LogData` whose `.log_record` is the actual `LogRecord`. The
+    `_FakeLogRecord` itself stands in for the `LogRecord`."""
+
+    def __init__(self, log_record):
+        self.log_record = log_record
+
+
 class _FakeProcessor:
-    """Inner processor that records the records it sees (post-redaction)."""
+    """Inner processor that records the records it sees (post-redaction).
+    Implements BOTH `emit` (SDK >= 1.40 contract) AND `on_emit` (legacy SDK
+    contract) so the redactor's `getattr(self._inner, 'emit', None) or
+    self._inner.on_emit` dispatch in `tracing_pii.py` always finds a method.
+    """
 
     def __init__(self):
         self.received = []
         self.shutdown_called = False
         self.force_flush_return = True
 
-    def on_emit(self, log_record):
+    def emit(self, log_data):
+        self._accept(log_data.log_record)
+
+    def on_emit(self, log_data):
+        self._accept(log_data.log_record)
+
+    def _accept(self, log_record):
         self.received.append(
             {
                 "attributes": dict(log_record.attributes),
@@ -90,7 +109,7 @@ def pipeline():
 def test_redacts_known_sensitive_attribute_keys(pipeline, key):
     redactor, inner = pipeline
     record = _FakeLogRecord(attributes={key: "super-secret"})
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
 
     assert len(inner.received) == 1
     assert inner.received[0]["attributes"][key] == "[REDACTED]"
@@ -107,7 +126,7 @@ def test_does_not_redact_non_sensitive_keys(pipeline):
             "db.system": "arangodb",
         }
     )
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
 
     assert inner.received[0]["attributes"] == {
         "level": "info",
@@ -124,7 +143,7 @@ def test_preserves_key_when_redacting_value(pipeline):
     """
     redactor, inner = pipeline
     record = _FakeLogRecord(attributes={"session_id": "abc-123-xyz"})
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
 
     # Key still present, value replaced
     assert "session_id" in inner.received[0]["attributes"]
@@ -134,7 +153,7 @@ def test_preserves_key_when_redacting_value(pipeline):
 def test_handles_empty_attributes(pipeline):
     redactor, inner = pipeline
     record = _FakeLogRecord()
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert inner.received[0]["attributes"] == {}
 
 
@@ -144,7 +163,7 @@ def test_handles_empty_attributes(pipeline):
 def test_redacts_email_in_body(pipeline):
     redactor, inner = pipeline
     record = _FakeLogRecord(body="User john.doe@example.com logged in")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert "john.doe@example.com" not in inner.received[0]["body"]
     assert "[REDACTED_EMAIL]" in inner.received[0]["body"]
 
@@ -152,7 +171,7 @@ def test_redacts_email_in_body(pipeline):
 def test_redacts_bearer_token_in_body(pipeline):
     redactor, inner = pipeline
     record = _FakeLogRecord(body="Authorization: Bearer abc123def456ghi789jkl012mno345pqr")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert "abc123def456ghi789jkl012mno345pqr" not in inner.received[0]["body"]
     assert "[REDACTED_BEARER]" in inner.received[0]["body"]
 
@@ -161,14 +180,14 @@ def test_redacts_jwt_in_body(pipeline):
     redactor, inner = pipeline
     jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
     record = _FakeLogRecord(body=f"token: {jwt}")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert jwt not in inner.received[0]["body"]
 
 
 def test_redacts_api_key_prefixes(pipeline):
     redactor, inner = pipeline
     record = _FakeLogRecord(body="using sk-proj1234567890abcdefghij")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert "sk-proj1234567890abcdefghij" not in inner.received[0]["body"]
 
 
@@ -177,7 +196,7 @@ def test_redacts_long_hex_strings(pipeline):
     # 32+ char hex — matches the SDK's "looks like a secret" pattern
     hex_str = "abcdef0123456789abcdef0123456789"
     record = _FakeLogRecord(body=f"token={hex_str}")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert hex_str not in inner.received[0]["body"]
 
 
@@ -186,7 +205,7 @@ def test_does_not_redact_short_or_benign_strings(pipeline):
     # 30-char string (under the 32 threshold) — should pass through
     benign = "trace-id:abc123"  # 11 chars, hex but short
     record = _FakeLogRecord(body=f"msg: {benign}")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     # The hex redactor only kicks in at 32+ chars — short hex stays
     assert "[REDACTED_HEX]" not in inner.received[0]["body"]
 
@@ -197,7 +216,7 @@ def test_does_not_redact_short_or_benign_strings(pipeline):
 def test_delegates_to_inner_processor(pipeline):
     redactor, inner = pipeline
     record = _FakeLogRecord(body="hello world")
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert len(inner.received) == 1
     assert inner.received[0]["body"] == "hello world"
 
@@ -223,7 +242,7 @@ def test_redacts_both_attributes_and_body(pipeline):
         attributes={"session_id": "secret-123", "level": "info"},
         body="user john@example.com sent a request",
     )
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
 
     out = inner.received[0]
     assert out["attributes"]["session_id"] == "[REDACTED]"
@@ -246,7 +265,7 @@ def test_redacts_pii_in_dict_body(pipeline):
             "metadata": {"token": "Bearer xyz123abc456def"},
         }
     )
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
 
     out = inner.received[0]
     body = out["body"]
@@ -268,7 +287,7 @@ def test_redacts_pii_in_attribute_values(pipeline):
             "level": "info",
         }
     )
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     out = inner.received[0]["attributes"]
     assert "[REDACTED_EMAIL]" in out["description"]
     assert "john@example.com" not in out["description"]
@@ -281,8 +300,8 @@ def test_redacts_pii_in_attribute_values(pipeline):
 def test_redacts_pii_in_list_body(pipeline):
     """List bodies must be walked recursively too."""
     redactor, inner = pipeline
-    record = _FakeLogRecord(body=["john@example.com", "no-pii", "Bearer xyz"])
-    redactor.on_emit(record)
+    record = _FakeLogRecord(body=["john@example.com", "no-pii", "Bearer abc123def456ghi789jkl"])
+    redactor.on_emit(_FakeLogData(record))
     out = inner.received[0]["body"]
     assert "[REDACTED_EMAIL]" in out[0]
     assert out[1] == "no-pii"
@@ -303,7 +322,7 @@ def test_handles_inner_processor_failure(pipeline):
 
     record = _FakeLogRecord(body="hello")
     # Must not raise even if the inner processor throws.
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert inner.received[0]["body"] == "hello"
 
 
@@ -312,5 +331,5 @@ def test_redacts_jwt_in_attribute_value(pipeline):
     redactor, inner = pipeline
     jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
     record = _FakeLogRecord(attributes={"context": {"session": jwt}})
-    redactor.on_emit(record)
+    redactor.on_emit(_FakeLogData(record))
     assert jwt not in inner.received[0]["attributes"]["context"]["session"]

@@ -88,7 +88,7 @@ async function withBackgroundSpan(name, fn, attrs, options = {}) {
   // binds it via the registered ContextManager (AsyncLocalStorage
   // → als.enterWith → persists across awaits). The span is auto-ended
   // when fn settles (no manual span.end needed).
-  return tracer.startActiveSpan(namespacedName, spanOptions, async (span) => {
+  return tracer.startActiveSpan(namespacedName, spanOptions, async (_span) => {
     // `startActiveSpan` already records thrown errors on the span.
     // Just re-throw so callers see the original error.
     return fn();
@@ -123,17 +123,12 @@ function runInBackgroundSpan(name, fn, attrs) {
     namespacedName,
     attrs ? { attributes: attrs } : undefined,
     (span) => {
-      let result;
-      try {
-        result = fn();
-      } catch (err) {
-        // `startActiveSpan` records thrown errors automatically —
-        // we just re-throw so the caller sees the original.
-        throw err;
-      }
-      // If `fn` returned a Promise, attach a rejection handler so the
-      // span's status is set on async failure too (startActiveSpan
-      // records sync throws but doesn't auto-catch promise rejections).
+      // `startActiveSpan` records thrown errors automatically — let
+      // them propagate to the caller as-is. If `fn` returned a Promise,
+      // attach a rejection handler so the span's status is set on async
+      // failure too (startActiveSpan records sync throws but doesn't
+      // auto-catch promise rejections).
+      const result = fn();
       if (result && typeof result.then === 'function') {
         return result.catch((err) => {
           span.recordException(err);

@@ -112,7 +112,10 @@ class TestShutdown:
         tracing._provider = mock_provider
         tracing.shutdown()
 
-        mock_provider.force_flush.assert_called_once_with(30_000)
+        # 15_000 ms matches the SHUTDOWN_TIMEOUT_MS constant in tracing.py
+        # (kept in sync with the JS-side SHUTDOWN_TIMEOUT_MS=15000 so
+        # both runtimes flush under the same Swarm stop_grace_period).
+        mock_provider.force_flush.assert_called_once_with(15_000)
         mock_provider.shutdown.assert_called_once()
 
     def test_handles_missing_provider_gracefully(self):

@@ -1,5 +1,6 @@
 const express = require('express');
 const fileController = require('../controllers/fileController');
+const appConfig = require('../config/appConfig');
 const { uploadSingle, uploadMultiple, validateFiles } = require('../middlewares/fileUpload');
 const { authenticateToken, authorizeRole } = require('../middlewares/keycloak-auth-middleware');
 
@@ -777,7 +778,17 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *       '403':
  *         description: Forbidden - Admin role required
  */
-router.post('/ingest-bundle', authorizeRole(['Admin', 'okf-service']), fileController.bundleIngest);
+// The bundle body is exempt from the app's global 10mb JSON parser (see
+// app.js) — this route parses it with its own, config-driven limit
+// (upload.bundleMaxBodyMb, OKF_BUNDLE_MAX_MB, default 100 MB = 10× the
+// global JSON cap).
+const bundleBodyLimit = `${appConfig.upload.bundleMaxBodyMb}mb`;
+router.post(
+  '/ingest-bundle',
+  express.json({ limit: bundleBodyLimit }),
+  authorizeRole(['Admin', 'okf-service']),
+  fileController.bundleIngest
+);
 
 /**
  * @swagger

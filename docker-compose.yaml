@@ -632,6 +632,8 @@ services:
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
       # Repository soft-delete grace window (hours) before hard delete (sweep deferred to Story 4.6).
       - OKF_DELETE_GRACE_HOURS=${OKF_DELETE_GRACE_HOURS:-168}
+      # Bundle-store POST timeout during publish (large bundles + ClamAV scan)
+      - OKF_BUNDLE_STORE_TIMEOUT_MS=${OKF_BUNDLE_STORE_TIMEOUT_MS:-300000}
       # Story 6.1 (RFC 8707): activate audience binding by setting e.g. okf-server.
       # Empty default = off (deployments without the audience mapper keep working).
       - OKF_AUDIENCE=${OKF_AUDIENCE:-}
@@ -756,6 +758,9 @@ services:
       - KC_REALM=${KEYCLOAK_REALM:-genie}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # OKF publish bundle-ingest body cap (base64-in-JSON, 10× the app's 10mb
+      # JSON cap — see upload.bundleMaxBodyMb in src/config/appConfig.js)
+      - OKF_BUNDLE_MAX_MB=${OKF_BUNDLE_MAX_MB:-100}
       # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
       - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-1}

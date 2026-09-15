@@ -118,6 +118,7 @@ jest.mock('../../config/appConfig', () => ({
     ],
     allowedExtensions: ['.pdf', '.txt', '.html', '.md', '.docx'],
     maxFileSize: 52428800,
+    bundleMaxBodyMb: 100,
     maxFilesUpload: 5
   },
   labels: {
@@ -898,6 +899,22 @@ describe('File Routes Integration', () => {
       expect(res.status).toBe(500);
       expect(res.body.success).toBe(false);
       expect(res.body.message).toBe('Failed to send kill signal');
+    });
+
+    // Live 2026-09-15: dataprep reports "no active task" as {success:false,
+    // status:404} inside a 200 body — forwarding it verbatim made the UI toast
+    // "Kill request sent" for a file whose ingest had already completed.
+    it('should forward dataprep no-active-task as a 404 error, not success', async () => {
+      axios.post.mockResolvedValue({
+        data: { success: false, status: 404, message: 'No active ingestion task found for this file.' }
+      });
+
+      const res = await request(app).post('/api/files/file-abc123/kill-ingest');
+
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('NO_ACTIVE_INGEST');
+      expect(res.body.message).toContain('No active ingestion task');
     });
   });
 

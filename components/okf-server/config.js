@@ -13,7 +13,10 @@ module.exports = {
     scanPath: '/v1/pii/scan'
   },
   documentRepository: {
-    url: process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001'
+    url: process.env.DOCUMENT_REPOSITORY_URL || 'http://document-repository:3001',
+    // Bundle-store POST (base64-in-JSON, can be tens of MB) — the receipt +
+    // ClamAV scan of a large zip can outrun a short timeout.
+    bundleStoreTimeoutMs: parseInt(process.env.OKF_BUNDLE_STORE_TIMEOUT_MS, 10) || 300000
   },
   // Story 4.8-amend: content-only chunking — the worker POSTs concepts directly
   // to dataprep (no doc-repo files doc), and dataprep's completion callback hits

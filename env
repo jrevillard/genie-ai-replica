@@ -683,6 +683,32 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # Distinct from OTEL_EXPORTER_OTLP_ENDPOINT above (base URL, used for traces + metrics)
 # OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://otel-collector:4318/v1/logs
 
+# OTel-spec service name override — read by backend (Node.js tracing.js) +
+# doc-repo (tracing.js) + OPEA overlay (tracing.py) AS THE CANONICAL source.
+# Overrides the compose-pinned literal per service (genie-backend /
+# genie-document-repository / genieai-*). Use for canary / per-environment
+# rename without code change. Matches OTel Resource semantic conventions.
+# OTEL_SERVICE_NAME=genie-backend
+
+# OTel-spec service.namespace — groups related services in Grafana
+# queries (e.g. all genieai-* services share namespace=genieai). Read by
+# backend + doc-repo + OPEA overlay. Defaults: genie-core for
+# backend + doc-repo; genieai for the OPEA overlay services.
+# OTEL_SERVICE_NAMESPACE=genie-core
+
+# Override the version stamped on every emitted OTel resource
+# (service.version attribute) — by default both backend and doc-repo
+# read it from their respective package.json (the actual deployed image
+# tag), with a '1.0.0' fallback if the file isn't readable. Override
+# via env var to lock a specific version for canary / compliance runs.
+# SERVICE_VERSION=1.0.0
+
+# Log level threshold for the OTel Python LoggingHandler installed in
+# setup_logging(). Default INFO. DEBUG floods OPEA's comps CustomLogger
+# at production scale (~5-10x). Mirror LOG_LEVEL above (shared with
+# backend + doc-repo Node services via logger.js).
+# LOG_LEVEL=info
+
 # Grafana alerting contact points (optional — configure via Grafana UI for production)
 # Used by: grafana service (alerting notification channels)
 # GRAFANA_ALERT_WEBHOOK_URL=

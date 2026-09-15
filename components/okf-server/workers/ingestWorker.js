@@ -33,7 +33,7 @@ const DEFAULT_INTERVAL_MS = 15000;
 const DEFAULT_SWEEP_INTERVAL_MS = 3600000;
 // Per-file terminal-state poll — env-tunable so tests run in milliseconds.
 const JOB_POLL_MS = () => safeInt('OKF_INGEST_WORKER_JOB_POLL_MS', 5000);
-const JOB_TIMEOUT_MS = () => safeInt('OKF_INGEST_WORKER_JOB_TIMEOUT_MS', 600000); // 10 min (matches the smoke's proven drains)
+const JOB_TIMEOUT_MS = () => safeInt('OKF_INGEST_WORKER_JOB_TIMEOUT_MS', 1800000); // 30 min (David, 2026-09-15: dataprep's per-doc retry path with 12-batch files + 2 retry rounds can take 9-13 min; 10 min JOB_TIMEOUT was producing false-positive "Concept ingestion timed out" audit rows even when dataprep finished successfully)
 
 const meter = getMeter();
 const jobsCounter = meter.createCounter('okf_ingest_worker_jobs_total', {
@@ -479,7 +479,38 @@ async function _processOneJob() {
     // stale after JOB_TIMEOUT_MS) so the reaper only ever catches TRUE
     // mid-drain process deaths.
     if (terminal.status === 'timeout') {
+      // DEDUPE GUARD (David, 2026-09-15): the worker gave up at JOB_TIMEOUT_MS
+      // but dataprep's per-doc retry path with 12-batch files can legitimately
+      // take 9-13 minutes (live-captured). The next worker cycle would otherwise
+      // re-enqueue a concept dataprep already finished, producing more HTTP 409
+      // WRITE_CONFLICTs on _ENTITY and a duplicate-ingest storm (live: same
+      // file_id completed 3x in 60s before this fix). Re-read the row's
+      // CURRENT index_status; if dataprep flipped it during the wait, treat as
+      // ingested and do NOT clear the claim (which would re-enqueue).
       try {
+        const currentRows = await (
+          await db.query(aql`
+          FOR m IN okf_concepts_meta FILTER m.repo_id == ${job.repo_id} AND m.concept_id == ${conceptId}
+            RETURN KEEP(m, ['index_status', 'chunk_count'])
+          `)
+        ).all();
+        const current = currentRows[0];
+        if (current && (current.index_status === 'indexed' || current.index_status === 'failed')) {
+          logger.info('Ingest worker: timeout but dataprep already settled — accepting outcome (no requeue)', {
+            repo_id: job.repo_id,
+            concept_id: conceptId,
+            index_status: current.index_status,
+            chunk_count: current.chunk_count
+          });
+          return {
+            outcome: current.index_status === 'indexed' ? 'ingested' : 'failed',
+            concept_id: conceptId,
+            chunk_count: current.chunk_count || 0,
+            last_error: null
+          };
+        }
+        // Genuine timeout (dataprep never flipped the row) — release the
+        // claim so the row is reclaimable for the next cycle.
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
@@ -881,12 +912,35 @@ function start() {
     lanes
   });
   // One self-scheduling loop per lane; a lane busy draining simply misses
-  // ticks (its timer fires only after its cycle settles).
+  // ticks (its timer fires only after its cycle settles). POLL-CYCLE TIMEOUT
+  // (David, 2026-09-15): a wedged concept (dataprep 429 storm, network
+  // hang, broken future) must NOT poison the lane forever. Race the cycle
+  // against OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS (default 30 min = 2x
+  // JOB_TIMEOUT_MS); on timeout, log loudly + release any claim the cycle
+  // owned + re-schedule. The next cycle's claim reaper clears the stale row.
+  const cycleTimeoutMs = () => safeInt('OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS', 1800000);
   _drainTimers = [];
   for (let lane = 0; lane < lanes; lane++) {
     const poll = async () => {
       try {
-        await _drainCycle();
+        let timeoutHandle;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutHandle = setTimeout(() => reject(new Error('Ingest worker cycle timeout')), cycleTimeoutMs());
+        });
+        try {
+          await Promise.race([_drainCycle(), timeoutPromise]);
+        } finally {
+          clearTimeout(timeoutHandle);
+        }
+      } catch (err) {
+        logger.error('Ingest worker: cycle exceeded timeout OR threw — releasing lane', {
+          lane,
+          error_name: err && err.name,
+          error_message: err && err.message
+        });
+        // Best-effort: we don't know which row was active here — the next
+        // claimNextJob will pick the freshest stale-claim row first (FILTER
+        // clause orders by updated_at ASC).
       } finally {
         const i = _drainTimers.indexOf(poll);
         _drainTimers[i >= 0 ? i : _drainTimers.length] = setTimeout(poll, intervalMs());

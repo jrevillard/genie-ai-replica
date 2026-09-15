@@ -219,6 +219,38 @@ describe('lifecycle transitions — the machine, exhaustively', () => {
       expect(mockDb._stores.okf_repositories[REPO].rag_drain_active).toBe(false);
     });
 
+    // Live 2026-09-15 (Bali-wikipedia-LLM): the drain died at 6/1001 concepts
+    // — NEVER settled (ingested_at null) — and the NOT_INGESTED guard refused
+    // the teardown while 6 concepts sat indexed and the drain stayed armed.
+    // The guard must accept the mid-FIRST-drain shape too; only a repo with
+    // neither a settled ingest nor an armed drain has nothing to retract.
+    test('retract tears down a MID-FIRST-DRAIN repo (never settled, drain armed)', async () => {
+      seedRepo({
+        lifecycle_state: 'publish',
+        version: 2,
+        ingested_at: null,
+        ingested_version: null,
+        ingested_graph_name: null,
+        rag_drain_active: true,
+        rag_ingestion: { status: 'draining', concepts_total: 1001, concepts_done: 6 }
+      });
+      const res = await lifecycleService.transition(REPO, 'retract', {});
+      expect(res).toMatchObject({ ok: true, lifecycle_state: 'retracted' });
+      const doc = mockDb._stores.okf_repositories[REPO];
+      expect(doc.rag_drain_active).toBe(false);
+      expect(doc.rag_ingestion.status).toBe('cancelled');
+      expect(doc.rag_ingestion.concepts_total).toBe(0);
+      expect(doc.ingested_version).toBeNull();
+    });
+
+    test('retract with nothing to tear down stays 409 NOT_INGESTED', async () => {
+      seedRepo({ lifecycle_state: 'publish', version: 2, rag_drain_active: false });
+      await expect(lifecycleService.transition(REPO, 'retract', {})).rejects.toMatchObject({
+        code: 'NOT_INGESTED',
+        status: 409
+      });
+    });
+
     test('assertWritable freezes PII/content mutations mid-drain', () => {
       expect(() => lifecycleService.assertWritable({ rag_drain_active: true })).toThrow(
         expect.objectContaining({ code: 'DRAIN_IN_PROGRESS', status: 409 })

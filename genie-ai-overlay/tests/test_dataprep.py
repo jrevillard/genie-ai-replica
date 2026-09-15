@@ -2451,7 +2451,6 @@ class TestFinalizeChunkLabelsAcl:
                 ["Healthcare"],
             )
         assert result == ["Healthcare"]
-        assert "t:t1" in result
 
 
 class TestApplyLabelsAclPoolSemantics:

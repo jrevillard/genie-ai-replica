@@ -483,6 +483,36 @@ describe('ingestWorker._refreshRagIngestion — nested-record contract (0/997 ca
     // THE REGRESSION: the patch carries NO flat dotted attribute names.
     expect(Object.keys(patch).some((k) => k.includes('.'))).toBe(false);
   });
+
+  // Live 2026-09-15 (Bali-wikipedia-LLM): a concept still in flight during a
+  // mid-drain retract came back, and the progress refresh overwrote the
+  // honest 'cancelled' record with 'draining' — the dashboard chip showed
+  // "Ingesting" in the retracted lane while nothing was running. The settle
+  // path already refuses disarmed repos; the progress path must too.
+  test('a DISARMED repo (drain cancelled by retract) is never refreshed back to draining', async () => {
+    conceptMeta.countByIndexStatus = jest
+      .fn()
+      .mockResolvedValueOnce(995) // parsed
+      .mockResolvedValueOnce(6) // indexed
+      .mockResolvedValueOnce(0); // failed
+    mockDb.collection('okf_repositories').save({
+      _key: 'bali',
+      repo_id: 'bali',
+      lifecycle_state: 'retracted',
+      rag_drain_active: false,
+      rag_ingestion: {
+        status: 'cancelled',
+        error: 'drain cancelled — the repository was retracted mid-ingest',
+        concepts_total: 0,
+        concepts_done: 0,
+        failed_concepts: []
+      }
+    });
+    await worker._refreshRagIngestion(mockDb, 'bali');
+    expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
+    const doc = mockDb._stores.okf_repositories['bali'];
+    expect(doc.rag_ingestion.status).toBe('cancelled'); // honest record survives
+  });
 });
 
 describe('settle reconciliation (2026-09-13 wedge fix: www-gov-uk-full-crawl 31h "not drained")', () => {

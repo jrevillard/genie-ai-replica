@@ -1,7 +1,7 @@
 // tracing.js — OpenTelemetry SDK initialization (LOGS-ONLY path) for document-repository.
 // PARALLEL of components/gov-chat-backend/tracing.js with these differences:
 //
-// - Resource `service.name` = 'genie-document-repository' (pinned).
+// - Resource `service.name` = 'document-repository' (pinned, matches Compose block).
 // - Logs-only: NO OTLPTraceExporter, NO OTLPMetricExporter,
 //   NO PeriodicExportingMetricReader. Only OTLPLogExporter.
 // - No NodeSDK / no auto-instrumentations / no span processor — doc-repo ships
@@ -73,10 +73,6 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // LoggerProvider (so logs carry the same name). Building two separate
   // resources with the same content would drift over time; share via a
   // single Resource instance.
-  //
-  // service.name falls back to the OTel-spec env var before the
-  // compose-pinned literal — the pinned literal was a regression that
-  // prevented operators from overriding per environment.
   const fs = require('fs');
   const path = require('path');
   function _readPackageVersion() {

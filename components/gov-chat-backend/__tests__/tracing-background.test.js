@@ -4,12 +4,13 @@
 // a real trace_id instead of being orphaned.
 //
 // Implementation note (see header in tracing-background.js): the helpers
-// bind the span to BOTH the OTel context (via `context.with(trace.setSpan(...))`)
-// and Node's AsyncLocalStorage. The OTel binding covers the production
-// path (AsyncLocalStorageContextManager propagates via `context.active()`);
-// the ALS binding is a fallback for the noop ContextManager (tests).
-// The mock `context.with` below also stores the span in ALS so
-// `trace.getSpan(context.active())` returns it.
+// use OTel `tracer.startActiveSpan` + the registered
+// AsyncLocalStorageContextManager to bind the span to the active context.
+// The ContextManager propagates the binding across awaits via
+// `als.enterWith`, so log records emitted during awaited work carry the
+// live trace_id / span_id. The mock below mirrors the SDK contract: ALS
+// stores the span via `mockAls.run({ span }, ...)`, and `trace.getSpan`
+// reads it back through `context.active()`.
 
 // Node's AsyncLocalStorage powers the helper's context propagation fallback.
 // The fakeTracer below simulates the SDK contract.
@@ -36,40 +37,22 @@ const fakeTracer = {
   // `startActiveSpan(name, options, fn)` — OTel SDK signature.
   // (The helper also accepts `startActiveSpan(name, fn)` — no options.)
   // Mirrors the real AsyncLocalStorageContextManager semantics: bind
-  // the span via ALS (persists across awaits), run fn, end the span
-  // exactly once when fn settles.
+  // the span via ALS (persists across awaits), run fn, return whatever
+  // fn returns (sync value or Promise). The real SDK does NOT auto-end
+  // the span on settlement — callers own span.end() (the original test
+  // mock here had an auto-end wrapper that masked the bug fix: the
+  // real leak was that production code never called span.end() because
+  // the mock was already ending it).
   startActiveSpan(name, optsOrFn, maybeFn) {
     const opts = typeof optsOrFn === 'function' ? undefined : optsOrFn;
     const fn = typeof optsOrFn === 'function' ? optsOrFn : maybeFn;
     const span = this.startSpan(name, opts);
     // Bind via ALS so the span is visible to trace.getSpan across
     // awaits inside fn (the production ContextManager does the same).
-    return mockAls.run({ span }, () => {
-      try {
-        const result = fn(span);
-        if (result && typeof result.then === 'function') {
-          return result.then(
-            (v) => {
-              span.end();
-              return v;
-            },
-            (err) => {
-              span.recordException(err);
-              span.setStatus({ code: 2, message: err.message });
-              span.end();
-              throw err;
-            }
-          );
-        }
-        span.end();
-        return result;
-      } catch (err) {
-        span.recordException(err);
-        span.setStatus({ code: 2, message: err.message });
-        span.end();
-        throw err;
-      }
-    });
+    // Return whatever fn returns — error recording and span.end() are
+    // the caller's responsibility (the production code uses
+    // try/catch/finally inside fn to guarantee exactly-once end).
+    return mockAls.run({ span }, () => fn(span));
   }
 };
 
@@ -238,8 +221,9 @@ describe('tracing-background helpers', () => {
 
   describe('AsyncLocalStorage context propagation', () => {
     it('stores the span so a caller-installed getSpan wrapper can read it', () => {
-      // Verify the module-level monkey-patch on trace.getSpan installed a
-      // wrapper that consults the ALS first.
+      // Verify the active span (bound via `startActiveSpan` →
+      // AsyncLocalStorageContextManager) is visible to `trace.getSpan`
+      // through the ALS store while fn runs.
       runInBackgroundSpan('app.boot', () => {
         const span = trace.getSpan({});
         expect(span).not.toBeNull();
@@ -266,7 +250,7 @@ describe('tracing-background helpers', () => {
         expect(trace.getSpan({})).not.toBeNull();
       });
       // After the wrapper exits, ALS.getStore() returns undefined —
-      // trace.getSpan (our patch) returns undefined, not null.
+      // trace.getSpan returns undefined, not null.
       expect(trace.getSpan({})).toBeUndefined();
     });
   });
@@ -274,9 +258,10 @@ describe('tracing-background helpers', () => {
   // ---------------------------------------------------------------------
   // End-to-end: a real Winston logger emitting inside the helper DOES
   // inherit the live span context. The traceFormat formatter reads
-  // `trace.getSpan(context.active())` — our monkey-patch on `trace.getSpan`
-  // returns the ALS-stored span, so the formatter stamps the
-  // 32-hex-char trace_id on the log record.
+  // `trace.getSpan(context.active())`, which resolves to the span
+  // bound via `startActiveSpan` + AsyncLocalStorageContextManager —
+  // so the formatter stamps the 32-hex-char trace_id on the log
+  // record.
   // ---------------------------------------------------------------------
   describe('integration with shared/lib/logger.js formatter', () => {
     it('stamps a real trace_id on logs emitted inside withBackgroundSpan', async () => {

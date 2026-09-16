@@ -159,7 +159,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | GET | `/system-health` | Retrieve system health metrics |
 | GET | `/database/stats` | Get database statistics |
 | GET | `/logs` | Retrieve system logs with filtering |
-| POST | `/logs/rollover` | Trigger log rotation |
 | GET | `/user-stats` | Get user statistics |
 | GET | `/security-metrics` | Retrieve security metrics |
 | POST | `/security-scan` | Run a security scan |
@@ -310,7 +309,6 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/configure` | Reconfigure logger settings |
-| POST | `/rollover` | Trigger log rotation |
 
 #### Key Parameters
 - `level`: Logging level (error, warn, info, debug).
@@ -319,11 +317,11 @@ All routes require Keycloak OIDC authentication via `keycloakAuthMiddleware`, ex
 - `zippedArchive`: Whether to compress rotated logs.
 
 #### Services Called
-- **Logger Service**: Uses `reconfigureLogger` and `triggerLogRollover` functions to manage logging configuration.
+- **Logger Service**: Uses `reconfigureLogger` to manage logging configuration.
 
 #### Security
-- Both routes require JWT authentication (`authMiddleware.authenticate`).
-- Both routes require admin privileges (`authMiddleware.isAdmin`).
+- The route requires JWT authentication (`authMiddleware.authenticate`).
+- The route requires admin privileges (`authMiddleware.isAdmin`).
 
 ### Query Routes
 

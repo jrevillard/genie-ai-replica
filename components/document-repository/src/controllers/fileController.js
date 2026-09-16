@@ -742,7 +742,18 @@ class FileController {
     try {
       const { fileId } = req.params;
 
-      logger.debug(`[FILE-CONTROLLER] Update File Request: ${JSON.stringify(req.body, null, 2)}`);
+      // SECURITY NOTE: prior version dumped `JSON.stringify(req.body, null, 2)`
+      // into the log line — file-metadata updates carry user-supplied strings
+      // (displayName, description, customMetadata), and a future bug could add
+      // a sensitive field (e.g. a new "encryptedSecret" column) that would
+      // silently land in VictoriaLogs. Replaced with structured routing-only
+      // metadata: the fileId in flight + the authenticated subject. Do not
+      // re-add headers / query / body here without first running the value
+      // through `tracing-pii.redactAttributes`.
+      logger.debug('[FILE-CONTROLLER] Update File Request', {
+        fileId,
+        userId: req.user?.userId
+      });
 
       if (!fileId) {
         return res.status(400).json({

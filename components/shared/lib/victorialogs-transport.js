@@ -153,6 +153,13 @@ class VictoriaLogsTransport extends TransportStream {
 //   - number            → treated as epoch ms already (Date.now() shape)
 //   - string            → Date.parse (ISO 8601, or YYYY-MM-DD HH:mm:ss from
 //                         Winston's format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }))
+//
+// Silent `Date.now()` fallback on a failed parse used to lose the original
+// timestamp entirely (the record lands in VL stamped with the import time
+// rather than the event time, silently breaking temporal queries). Increment
+// the existing `log_record_dropped_total` counter with a dedicated
+// `invalid_timestamp` reason so the data loss is observable. The metric
+// call is best-effort — a counter failure must never break the log pipeline.
 function toMilliseconds(value) {
   if (value === undefined || value === null) {
     return Date.now();
@@ -164,7 +171,15 @@ function toMilliseconds(value) {
     const parsed = Date.parse(String(value));
     ms = Number.isFinite(parsed) ? parsed : NaN;
   }
-  return Number.isFinite(ms) ? ms : Date.now();
+  if (!Number.isFinite(ms)) {
+    try {
+      _droppedCounter.add(1, { reason: 'invalid_timestamp' });
+    } catch {
+      // counter failure must never break the log pipeline
+    }
+    return Date.now();
+  }
+  return ms;
 }
 
 module.exports = {

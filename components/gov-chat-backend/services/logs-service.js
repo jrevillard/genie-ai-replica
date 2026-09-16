@@ -40,6 +40,22 @@ const MAX_LINES_TO_PROCESS = 200000;
 // NDJSON re-parse window after a `SyntaxError` (truncated line from
 // `kill -9` mid-write). Read the next N bytes, append, attempt re-parse.
 const RE_PARSE_WINDOW_BYTES = 4096;
+// Canonical log-type patterns shared between `getLogsSummary()` (summary
+// projection) and `groupLogs()` (legacy group-by endpoint). Hoisted to
+// module scope so the two paths cannot drift — previously the same
+// 8-entry array was duplicated inline, which a previous reviewer flagged
+// as a maintenance hazard. Frozen so accidental mutation in a consumer
+// doesn't corrupt the next call.
+const SUMMARY_PATTERNS = Object.freeze([
+  Object.freeze({ regex: /connection timeout/i, type: 'Connection Timeout' }),
+  Object.freeze({ regex: /database query failed/i, type: 'Database Query Failed' }),
+  Object.freeze({ regex: /authentication failure/i, type: 'Authentication Failure' }),
+  Object.freeze({ regex: /invalid token/i, type: 'Invalid Token' }),
+  Object.freeze({ regex: /disk space below threshold/i, type: 'Disk Space Below Threshold' }),
+  Object.freeze({ regex: /slow query performance/i, type: 'Slow Query Performance' }),
+  Object.freeze({ regex: /rate limit approaching/i, type: 'Rate Limit Approaching' }),
+  Object.freeze({ regex: /ENOENT: no such file or directory/i, type: 'File Not Found' })
+]);
 // Hard cap on the date span served by `getLogFilesInRange` (one descriptor
 // per UTC day; prevents memory blow-up on a wide admin range). 366 covers
 // a full year + leap day.
@@ -396,7 +412,7 @@ class LogsService {
    */
   _vlFilter(q) {
     const baseQ = typeof q === 'string' && q.trim() !== '' ? q : '*';
-    if (booleanEnv('LOG_TO_VICTORIALOGS') && !booleanEnv('LOG_TO_FILE')) {
+    if (booleanEnv('LOG_TO_VICTORIALOGS', true) && !booleanEnv('LOG_TO_FILE')) {
       // Dual-emit dedup: while OTLP is the canonical writer, the Docker
       // fluentd driver ALSO forwards container stdout to VL — same JSON
       // content, different ingestion path. fluentd-sourced rows carry a
@@ -599,16 +615,7 @@ class LogsService {
     // stream index. Indexed log_type was tried before (reverted) and
     // would explode memory when every distinct log message becomes a
     // unique value.
-    const summaryPatterns = [
-      { regex: /connection timeout/i, type: 'Connection Timeout' },
-      { regex: /database query failed/i, type: 'Database Query Failed' },
-      { regex: /authentication failure/i, type: 'Authentication Failure' },
-      { regex: /invalid token/i, type: 'Invalid Token' },
-      { regex: /disk space below threshold/i, type: 'Disk Space Below Threshold' },
-      { regex: /slow query performance/i, type: 'Slow Query Performance' },
-      { regex: /rate limit approaching/i, type: 'Rate Limit Approaching' },
-      { regex: /ENOENT: no such file or directory/i, type: 'File Not Found' }
-    ];
+    const summaryPatterns = SUMMARY_PATTERNS;
     const extractType = (message) => {
       if (!message || typeof message !== 'string' || !message.split) {
         return 'Generic Event';
@@ -1723,16 +1730,7 @@ class LogsService {
    */
   groupLogs(logs) {
     const groups = {};
-    const summaryPatterns = [
-      { regex: /connection timeout/i, type: 'Connection Timeout' },
-      { regex: /database query failed/i, type: 'Database Query Failed' },
-      { regex: /authentication failure/i, type: 'Authentication Failure' },
-      { regex: /invalid token/i, type: 'Invalid Token' },
-      { regex: /disk space below threshold/i, type: 'Disk Space Below Threshold' },
-      { regex: /slow query performance/i, type: 'Slow Query Performance' },
-      { regex: /rate limit approaching/i, type: 'Rate Limit Approaching' },
-      { regex: /ENOENT: no such file or directory/i, type: 'File Not Found' }
-    ];
+    const summaryPatterns = SUMMARY_PATTERNS;
 
     logs.forEach((log) => {
       try {

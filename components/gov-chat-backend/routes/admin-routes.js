@@ -32,11 +32,21 @@ module.exports = (adminService, logsService) => {
   });
 
   // Debug: Log request entry before middleware
+  // SECURITY NOTE: prior version dumped raw `req.headers` / `req.query` /
+  // `req.body` into the structured log body — the `headers` top-level key
+  // does not match any SENSITIVE_KEY_PATTERN, so a shallow `redactAttributes`
+  // walker let the raw `authorization: Bearer …` JWT slip into the OTel
+  // LogRecord attributes and from there into the admin /logs search dialog.
+  // Fixed in 6851023b5 (backend redactAttributes recursion) — this entry is
+  // restricted to routing-only metadata: HTTP method, URL (without query
+  // string), and (post-auth) the JWT subject. `req.user?.sub` is undefined
+  // here because authentication runs in the middleware below; logged as
+  // `undefined` until auth completes. Do not re-add headers / query / body.
   router.use((req, res, next) => {
     logger.info(`[ADMIN-ROUTES] Request received: ${req.method} ${req.originalUrl}`, {
-      headers: req.headers,
-      query: req.query,
-      body: req.body
+      method: req.method,
+      url: req.originalUrl,
+      userSub: req.user?.sub
     });
     next();
   });

@@ -376,3 +376,67 @@ describe('VictoriaLogsAdapter — _normalizeRows edge cases', () => {
     expect(queryCall[1].params.query).toBe(reservedQ);
   });
 });
+
+// ----- _parseJsonlResponse — JSONL wire format ------------------------------
+
+describe('VictoriaLogsAdapter — _parseJsonlResponse', () => {
+  // Coverage for the JSONL parsing path. Until now this function had zero
+  // direct unit tests — the `query()` integration only ever saw one mocked
+  // shape, so a regression in the malformed-line skip / non-array body /
+  // pre-parsed array branches would slip past the suite.
+  function adapter() {
+    return makeAdapter({ baseURL: 'http://vl.local', skipHealthProbe: true }).adapter;
+  }
+
+  it('multi-line JSONL body with N rows → N parsed objects', () => {
+    const body =
+      '{"_msg":"row1","_time":"2026-01-01T00:00:00.000Z"}\n' +
+      '{"_msg":"row2","_time":"2026-01-01T00:00:01.000Z"}\n' +
+      '{"_msg":"row3","_time":"2026-01-01T00:00:02.000Z"}';
+    const out = adapter()._parseJsonlResponse(body);
+    expect(out).toHaveLength(3);
+    expect(out[0]._msg).toBe('row1');
+    expect(out[1]._msg).toBe('row2');
+    expect(out[2]._msg).toBe('row3');
+  });
+
+  it('empty body returns []', () => {
+    expect(adapter()._parseJsonlResponse('')).toEqual([]);
+  });
+
+  it('body containing only blank lines / whitespace returns []', () => {
+    expect(adapter()._parseJsonlResponse('\n\n   \n\t\n')).toEqual([]);
+  });
+
+  it('malformed lines are silently skipped (status lines, keep-alives)', () => {
+    const body =
+      '{"_msg":"row1","_time":"2026-01-01T00:00:00.000Z"}\n' +
+      'this is not json\n' +
+      '{"_msg":"row2","_time":"2026-01-01T00:00:01.000Z"}\n' +
+      '{"unterminated":"oops\n' +
+      '{"_msg":"row3","_time":"2026-01-01T00:00:02.000Z"}';
+    const out = adapter()._parseJsonlResponse(body);
+    expect(out).toHaveLength(3);
+    expect(out.map((r) => r._msg)).toEqual(['row1', 'row2', 'row3']);
+  });
+
+  it('non-string non-array body (null / undefined / number / object) returns []', () => {
+    expect(adapter()._parseJsonlResponse(null)).toEqual([]);
+    expect(adapter()._parseJsonlResponse(undefined)).toEqual([]);
+    expect(adapter()._parseJsonlResponse(42)).toEqual([]);
+    expect(adapter()._parseJsonlResponse({ _msg: 'x' })).toEqual([]);
+  });
+
+  it('pre-parsed array body passes through unchanged (reference identity)', () => {
+    const arr = [{ _msg: 'a' }, { _msg: 'b' }];
+    const out = adapter()._parseJsonlResponse(arr);
+    expect(out).toBe(arr);
+  });
+
+  it('a trailing newline after the last valid line is tolerated', () => {
+    const body = '{"_msg":"row1"}\n{"_msg":"row2"}\n';
+    const out = adapter()._parseJsonlResponse(body);
+    expect(out).toHaveLength(2);
+    expect(out[1]._msg).toBe('row2');
+  });
+});

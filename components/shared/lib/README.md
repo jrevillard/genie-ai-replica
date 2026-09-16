@@ -58,13 +58,11 @@ A configurable Winston-based logger with support for console output, daily rotat
   - Daily rotated error and combined logs (e.g., `logs/error-YYYY-MM-DD.log`).
   - Static combined log file with size limits.
   - Configurable log levels, max sizes, and retention periods.
-  - Functions for reconfiguration, manual log rollover, cleanup, and flushing.
+  - Functions for reconfiguration and combined-log cleanup.
 
 - **Exported Functions**:
   - `reconfigureLogger(newConfig)`: Updates logger configuration (e.g., log level, file sizes).
-  - `triggerLogRollover()`: Manually rotates log files.
   - `cleanupCombinedLog()`: Removes the large combined log file.
-  - `flushLogs()`: Flushes all pending logs.
 
 - **Usage Example**:
   ```javascript

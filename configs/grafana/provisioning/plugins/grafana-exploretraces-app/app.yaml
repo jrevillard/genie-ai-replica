@@ -1,0 +1,29 @@
+apiVersion: 1
+
+# Traces Drilldown (Explore Traces) app configuration.
+#
+# Traces Drilldown's plugin.json AppConfig exposes EXACTLY ONE setting:
+# `queryRangeHours` — the time range width for cached batches (1..24 hours).
+# See: https://github.com/grafana/traces-drilldown/blob/main/src/components/AppConfig/AppConfig.tsx
+#   export type JsonData = { queryRangeHours?: number };
+#
+# The app does NOT read a `datasourceUid` / `defaultDatasourceUid` from its
+# jsonData. The datasource is resolved at runtime from:
+#   1. the `var-ds=<uid>` URL query parameter (set explicitly when linking
+#      from another page); or
+#   2. the only Jaeger/Tempo datasource in the org; or
+#   3. the org default datasource, if it is a Jaeger/Tempo type.
+#
+# When all three datasources (VictoriaLogs/VictoriaMetrics/VictoriaTraces)
+# coexist in the stack, the org default is VictoriaMetrics (Prometheus), so
+# option (3) fails for traces — always pass `var-ds=victoriatraces` on the URL.
+#
+# File name MUST be `app.yaml` (Grafana 12.4 silently ignores non-canonical
+# filenames under /etc/grafana/provisioning/plugins/<id>/, despite the docs
+# implying any *.yaml works; reload endpoint returns 200 even on no-op).
+
+apps:
+  - type: grafana-exploretraces-app
+    disabled: false
+    jsonData:
+      queryRangeHours: 24

@@ -148,6 +148,58 @@ describe('tracing-pii.js', () => {
       });
       expect(result.raw_header).toBe('Authorization: [REDACTED] for [REDACTED]');
     });
+
+    it('recurses into nested plain-object values (admin-routes Authorization leak fix)', () => {
+      // Pre-fix: redactAttributes was shallow — a top-level key that did
+      // NOT match the SENSITIVE_KEY_PATTERNS (e.g. `headers`) would pass
+      // its nested object value through verbatim, smuggling
+      // `headers.authorization: 'Bearer ...'` into VictoriaLogs. The
+      // admin-routes request-entry logger wrote
+      // `logger.info('[ADMIN-ROUTES] ...', { headers: req.headers, ... })`
+      // — that landed in the OTel attributes with the raw header map,
+      // and `headers` doesn't match any sensitive key pattern. Post-fix:
+      // the walker recurses into plain-object values via
+      // `redactLogRecordBody`, so nested `authorization` keys are caught.
+      const result = redactAttributes({
+        headers: {
+          accept: 'application/json',
+          authorization: 'Bearer eyJhbGciOiJSUzI1NiJ9.payload.sig',
+          'x-forwarded-for': '127.0.0.1'
+        },
+        query: { page: '1' },
+        body: { username: 'alice', password: 'hunter2' }
+      });
+      expect(result.headers.authorization).toBe('[REDACTED]');
+      expect(result.headers.accept).toBe('application/json');
+      expect(result.headers['x-forwarded-for']).toBe('127.0.0.1');
+      expect(result.query).toEqual({ page: '1' });
+      expect(result.body).toEqual({ username: 'alice', password: '[REDACTED]' });
+    });
+
+    it('preserves non-plain object values (Date, Buffer, Error, class instances)', () => {
+      // The walker must not attempt to introspect Date / Buffer / Error /
+      // class-instance internals — redacting those would be lossy and
+      // unsafe. Same contract as redactLogRecordBody.
+      const dt = new Date('2026-09-16T10:00:00.000Z');
+      const buf = Buffer.from('hello');
+      const err = new Error('boom');
+      class CustomThing {
+        constructor() {
+          this.password = 'leaked';
+        }
+      }
+      const inst = new CustomThing();
+      const result = redactAttributes({
+        ts: dt,
+        blob: buf,
+        failure: err,
+        custom: inst
+      });
+      expect(result.ts).toBe(dt);
+      expect(result.blob).toBe(buf);
+      expect(result.failure).toBe(err);
+      expect(result.custom).toBe(inst);
+    });
   });
 
   describe('SENSITIVE_KEY_PATTERNS', () => {

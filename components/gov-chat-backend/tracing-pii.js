@@ -19,12 +19,34 @@ function isSensitiveKey(key) {
 
 function redactAttributes(attributes) {
   if (!attributes) return attributes;
+  // Recurse into nested object values so callers cannot smuggle
+  // sensitive data through a non-matching top-level key. Pre-recursion,
+  // `logger.info('msg', { headers: req.headers })` wrote the raw
+  // `req.headers` object (including the `authorization` Bearer token)
+  // verbatim into the OTel attributes because the top-level key
+  // `headers` did not match the SENSITIVE_KEY_PATTERNS. The body walker
+  // (`redactLogRecordBody`) already recurses; attributes now mirror it.
+  //
+  // Non-plain objects (Date, Buffer, Map, Set, Error, class instances)
+  // pass through untouched — redacting their internals is lossy and
+  // unsafe. Same contract as `redactLogRecordBody`.
   const redacted = {};
   for (const [key, value] of Object.entries(attributes)) {
     if (isSensitiveKey(key)) {
       redacted[key] = '[REDACTED]';
     } else if (typeof value === 'string') {
       redacted[key] = redactValue(value);
+    } else if (Array.isArray(value)) {
+      redacted[key] = value.map((item) =>
+        typeof item === 'object' && item !== null ? redactLogRecordBody(item) : item
+      );
+    } else if (value !== null && typeof value === 'object') {
+      const proto = Object.getPrototypeOf(value);
+      if (proto === null || proto === Object.prototype) {
+        redacted[key] = redactLogRecordBody(value);
+      } else {
+        redacted[key] = value;
+      }
     } else {
       redacted[key] = value;
     }

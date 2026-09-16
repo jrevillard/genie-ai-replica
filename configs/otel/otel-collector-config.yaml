@@ -215,6 +215,35 @@ processors:
           - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{"'
           - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body)'
           - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"])'
+          # Normalise Winston JSON envelopes: replace `body` with the inner
+          # `.message` field so VictoriaLogs `_msg` carries the human-readable
+          # log line instead of the JSON envelope. Without this transform the
+          # admin /logs search filter `_msg:"DB"` matches every URL fragment
+          # containing the search term (the access-log middleware writes the
+          # full URL including the query string into its `HTTP_REQUEST:` log
+          # line — so searching for `term=DB` finds its OWN prior request
+          # rows, drowning out the actual `[DB_CONNECTION]` rows).
+          #
+          # Cardinality: the inner message becomes the indexed VL field
+          # `_msg`, which is full-text searchable but NOT indexed as a
+          # stream field — so unbounded message distinctness does NOT
+          # blow up the VL stream index the way an indexed `log.message`
+          # stream field would. The other envelope fields (`level`,
+          # `service`, `trace_id`, `span_id`, ...) are already routed
+          # to OTel LogRecord attributes / resource attributes by the
+          # SDK + the transforms above, so the envelope structure is
+          # preserved for downstream tools that want to inspect it via
+          # OTel collector debug exporters / span correlation.
+          #
+          # Idempotent: only fires when the envelope actually parses
+          # AND has a string `.message` field. Plain-text bodies
+          # (uvicorn access logs, container startup banners) pass
+          # through untouched — `set(body, ...)` would either no-op
+          # (when ParseJSON fails) or set body to nil (when the
+          # envelope parses but lacks `.message`); the IsString guard
+          # filters both cases out.
+          - 'set(body, ParseJSON(body)["message"]) where IsString(body) and Substring(body, 0, 1) == "{" and IsString(ParseJSON(body)["message"])'
+          - 'set(body, body["message"]) where IsMap(body) and IsString(body["message"])'
           # Stamp `severity_number` alongside `severity_text` — VL's OTLP
           # exporter maps severity_number → severity_text at export time, so
           # leaving severity_number at 0 (the fluentd default) causes VL to

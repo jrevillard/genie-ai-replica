@@ -157,6 +157,20 @@ body[data-theme='dark'],
   --accent-fg: #0f1a12;
   --accent-secondary: #176b3a;
 
+  /* --- Brand override for dark mode (chart/curve visibility) ---
+     Verde AgroGenio #176b3a is too dark on #0f1a12 bg (invisible).
+     Use brighter verde cultivo so navbar + chart curves stay visible.
+     Trade-off: navbar bg becomes brighter verde in dark mode. */
+  --brand: #69a83b;
+
+  /* --- Semantic status overrides for dark mode (chart/curve visibility) ---
+     Light mode AgroGenio colors (success=#69a83b, warning=#b86b00, info=#1565a8)
+     have insufficient contrast on dark verde bg (#0f1a12). Brighter variants. */
+  --success: #9bc97b;
+  --warning: #e08a1a;
+  --info: #7ab3e8;
+  --danger: #e85a4f;
+
   /* --- Navbar (dark mode) --- */
   --navbar-fg: #f2f4ee;
 
@@ -184,6 +198,15 @@ body[data-theme='dark'],
 
   /* --- Info (semantic) — brighter blue for dark contrast --- */
   --info: #4a8dcb;
+
+  /* --- Semantic status overrides (duplicate of main dark block above) ---
+     Kept here to stay consistent with the [data-theme='dark'] rules.
+     Without these, status colors fall back to light-mode values that
+     blend into the dark bg (see main dark block for explanation). */
+  --success: #9bc97b;
+  --warning: #e08a1a;
+  --info: #7ab3e8;
+  --danger: #e85a4f;
 
   /* --- Form elements --- */
   --slider-track: #2a3b30;
@@ -215,6 +238,13 @@ body[data-theme='dark'],
     --accent-muted: #69a83b26;
     --accent-fg: #0f1a12;
     --accent-secondary: #176b3a;
+
+    /* Brand + semantic overrides (chart/curve visibility on dark bg) */
+    --brand: #69a83b;
+    --success: #9bc97b;
+    --warning: #e08a1a;
+    --info: #7ab3e8;
+    --danger: #e85a4f;
 
     --navbar-fg: #f2f4ee;
 

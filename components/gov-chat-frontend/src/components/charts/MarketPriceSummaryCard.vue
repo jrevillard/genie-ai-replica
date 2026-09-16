@@ -184,22 +184,10 @@ export default {
           show: false
         },
         tooltip: {
-          enabled: true,
-          theme: 'dark',
-          x: {
-            formatter: (value) => {
-              const index = value - 1;
-              if (this.timeSeries[index]) {
-                return this.timeSeries[index].year;
-              }
-              return value;
-            }
-          },
-          y: {
-            formatter: (value) => {
-              return value ? value.toFixed(2) : this.$t('charts.market.noData', 'N/A');
-            }
-          }
+          // Disabled on the sparkline (60x60 button) — full chart details
+          // are available by clicking through to the panel. The ApexCharts
+          // dark tooltip on a small surface is also hard to read.
+          enabled: false
         },
         dataLabels: {
           enabled: false

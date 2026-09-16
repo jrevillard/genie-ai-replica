@@ -648,33 +648,6 @@ describe('LogsService VictoriaLogs rewrite', () => {
       expect(logsService._isVlUnavailable({ response: { status: '500' } })).toBe(false);
     });
 
-    it('_sumHits coerces stringified hits() values to numbers', () => {
-      expect(logsService._sumHits({ ERROR: '4', WARN: '2' }, 'ERROR')).toBe(4);
-      expect(logsService._sumHits({ ERROR: '4', WARN: '2' }, 'WARN')).toBe(2);
-    });
-
-    describe('_sumHits single-key fallback', () => {
-      it('returns the value when the lone key matches the requested level', () => {
-        expect(logsService._sumHits({ ERROR: 5 }, 'ERROR')).toBe(5);
-        expect(logsService._sumHits({ error: 5 }, 'ERROR')).toBe(5);
-        expect(logsService._sumHits({ Error: 5 }, 'error')).toBe(5);
-      });
-      it('does NOT bleed counts from a sibling level when the lone key does not match', () => {
-        // The previous behaviour returned the value unconditionally when
-        // there was exactly one bucket — so asking for ERROR but receiving
-        // {FATAL: 5} would incorrectly return 5.
-        expect(logsService._sumHits({ FATAL: 5 }, 'ERROR')).toBe(0);
-        expect(logsService._sumHits({ WARN: 3 }, 'ERROR')).toBe(0);
-      });
-      it('returns the value when no level is requested', () => {
-        expect(logsService._sumHits({ ERROR: 7 }, undefined)).toBe(7);
-        expect(logsService._sumHits({ ERROR: 7 }, '')).toBe(7);
-      });
-      it('returns 0 when the single-key object has multiple zero values', () => {
-        expect(logsService._sumHits({ ERROR: 0, WARN: 0 }, 'ERROR')).toBe(0);
-      });
-    });
-
     it('_vlFilter falls back to "*" when called with empty/whitespace q', () => {
       expect(logsService._vlFilter('')).toBe('*');
       expect(logsService._vlFilter('   ')).toBe('*');

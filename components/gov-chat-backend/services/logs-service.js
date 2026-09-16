@@ -648,47 +648,6 @@ class LogsService {
     );
   }
 
-  /**
-   * Sum a `hits()` bucket for a single level. VictoriaLogs returns the full
-   * bucketed object (every value of `field`); `_sumHits` must not bleed
-   * counts from unrelated levels into the requested total. Use the explicit
-   * level passed to the parent query, falling back to a single-key sum
-   * when only one bucket is present (older adapter shape).
-   *
-   * @param {Record<string, number>|null|undefined} hits
-   * @param {string} [level] - the level this query was filtered to (case-insensitive)
-   * @returns {number}
-   */
-  _sumHits(hits, level) {
-    if (!hits || typeof hits !== 'object') return 0;
-    const coerce = (v) => {
-      if (typeof v === 'number') return v;
-      if (typeof v === 'string') {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-      }
-      return 0;
-    };
-    if (level) {
-      const direct = hits[level] ?? hits[level.toUpperCase()] ?? hits[level.toLowerCase()];
-      if (direct !== undefined && direct !== null) return coerce(direct);
-    }
-    // Fallback for adapter responses that return a single-key object.
-    // Only return the value when the lone key actually matches the
-    // requested level — otherwise the count would bleed from a sibling
-    // level (e.g. asking for ERROR but receiving {FATAL: 5}).
-    const keys = Object.keys(hits);
-    if (level && keys.length === 1) {
-      const onlyKey = keys[0];
-      if (onlyKey.toUpperCase() === level.toUpperCase()) {
-        return coerce(hits[onlyKey]);
-      }
-      return 0;
-    }
-    if (keys.length === 1) return coerce(hits[keys[0]]);
-    return 0;
-  }
-
   async _getLogsSummaryFromFile(options = {}) {
     if (!booleanEnv('LOG_TO_FILE')) {
       throw new VlFilesDisabledError();

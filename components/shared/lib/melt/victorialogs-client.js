@@ -375,18 +375,6 @@ class VictoriaLogsAdapter extends LogQueryRepository {
       }
     }
 
-    // fluentd-sourced rows encode their real message + level + service
-    // as a JSON STRING in `_msg`. Parse it once so the level/service/
-    // message extractors below can fall through to it.
-    let _msgParsed = null;
-    if (typeof _msg === 'string') {
-      try {
-        _msgParsed = JSON.parse(_msg);
-      } catch {
-        _msgParsed = null;
-      }
-    }
-
     let timestamp = '';
     let date = '';
     let time = '';
@@ -411,27 +399,27 @@ class VictoriaLogsAdapter extends LogQueryRepository {
     const streamEnv = _streamIsObject ? _stream.environment : undefined;
     const streamLevel = _streamIsObject ? _stream.level : undefined;
 
-    // OTel canonical: `severity_text` is "INFO" / "WARN" / "ERROR" on the
-    // OTel-LoggingHandler path; fluentd-only rows set it to "Unspecified".
+    // OTel canonical: `severity_text` is stamped at the LogRecord
+    // top-level by the OTel SDK LoggingHandler path AND by the
+    // `transform/stamp_log_metadata_from_msg` collector transform
+    // for the fluentd path. No fallback to `_msg` JSON envelope fields
+    // is needed — the producer guarantees a clean top-level value.
     let rawLevel = raw && raw.severity_text;
     if (rawLevel === undefined || rawLevel === null || String(rawLevel).toUpperCase() === 'UNSPECIFIED') {
-      rawLevel = _msgParsed && _msgParsed.level;
+      rawLevel = fields.level;
     }
-    if (rawLevel === undefined || rawLevel === null) rawLevel = fields.level;
     if (rawLevel === undefined || rawLevel === null) rawLevel = streamLevel;
     const level =
       rawLevel !== undefined && rawLevel !== null && String(rawLevel).length > 0
         ? String(rawLevel).toUpperCase()
         : DEFAULT_LEVEL;
 
-    // OTel canonical: `service.name` is a top-level field on the
-    // OTel-LoggingHandler path; absent on fluentd (it goes into
-    // `_msg.service` instead). Then `_msgParsed.service` for fluentd
-    // rows; then `_stream.service` (legacy VL metadata).
+    // `service.name` follows the same producer-stamped path as
+    // `severity_text`. The `_stream.service` legacy fallback covers
+    // pre-stamp records (rolled-over partitions, manually-imported
+    // data) but no `_msg` JSON envelope parsing — that's a fluentd
+    // workaround the transform now obviates.
     let rawService = raw && raw['service.name'];
-    if (rawService === undefined || rawService === null || String(rawService).length === 0) {
-      rawService = _msgParsed && _msgParsed.service;
-    }
     if (rawService === undefined || rawService === null || String(rawService).length === 0) {
       rawService = streamService;
     }
@@ -440,10 +428,11 @@ class VictoriaLogsAdapter extends LogQueryRepository {
         ? String(rawService)
         : DEFAULT_SERVICE;
 
-    // Real `message` is inside the `_msg` JSON envelope for fluentd rows.
-    const message =
-      (_msgParsed && typeof _msgParsed.message === 'string' && _msgParsed.message) ||
-      (_msg !== undefined && _msg !== null ? String(_msg) : '');
+    // `message` is the raw `_msg` string verbatim — the producer
+    // (collector transform + app-side `service` injection) keeps it
+    // human-readable. For uvicorn access logs `_msg` is the format
+    // string; for OTel SDK logs it is the actual message text.
+    const message = _msg !== undefined && _msg !== null ? String(_msg) : '';
 
     return {
       timestamp,

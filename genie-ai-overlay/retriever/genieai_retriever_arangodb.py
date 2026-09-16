@@ -76,7 +76,7 @@ class GenieEmbedDoc(EmbedDoc):
 
 
 logger = CustomLogger("genieai_retriever_arangodb")
-setup_trace_logging("genieai_retriever_arangodb")
+setup_trace_logging("retriever-arango-service")
 logflag = os.getenv("LOGFLAG", False)
 
 ARANGO_TEXT_FIELD = "text"

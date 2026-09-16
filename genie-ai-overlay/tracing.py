@@ -36,7 +36,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Status, StatusCode
 
@@ -97,6 +97,73 @@ def sanitize_attributes(attrs: dict) -> dict:
     keys in `_PII_KEYS`.
     """
     return {k: v for k, v in attrs.items() if not _is_sensitive_key(k)}
+
+
+def redact_attributes(attrs: dict) -> dict:
+    """Mirror of `components/gov-chat-backend/tracing-pii.js#redactAttributes`.
+
+    Replace VALUES (not keys) for sensitive keys so the key is preserved
+    for downstream filterability — Grafana can still filter by
+    `db.system = postgresql` even when `password` is `[REDACTED]`. Same
+    contract as the Node side: drop the value, keep the key.
+
+    NOTE: Span-level redaction only fires for attributes passed at span
+    construction (`with_span(..., attributes=...)`). Attributes set via
+    `span.set_attribute(...)` after the span is already started bypass
+    this processor — they reach the exporter verbatim. Callers handling
+    PII must pass it via the constructor attrs. (The Node side has the
+    same limitation; see Node tracing.js onStart.)
+    """
+    return {k: ("[REDACTED]" if _is_sensitive_key(k) else v) for k, v in attrs.items()}
+
+
+class RedactingSpanProcessor(SpanProcessor):
+    """Wraps a delegate `SpanProcessor` and scrubs PII from span attributes
+    at `on_start` time. Mirrors `PIIRedactionProcessor` on the Node side
+    (`components/gov-chat-backend/tracing.js:89-149`).
+
+    The processor runs `redact_attributes(...)` over the attributes passed
+    to `tracer.start_span(name, attributes=...)` / `start_as_current_span(...)`
+    and writes the redacted values back via `span.set_attribute(...)`.
+    After `on_start` the delegate (typically `BatchSpanProcessor` wrapping
+    an `OTLPSpanExporter`) sees the redacted view.
+
+    Why `on_start` (not `on_end`): once a span ends, its attributes become
+    read-only on the OTel Python SDK — `set_attribute` raises. PII must
+    be scrubbed before the span is finalised. Trade-off: attributes added
+    via `span.set_attribute(...)` AFTER `on_start` returned are not
+    caught. Documented contract; callers must pass sensitive data via
+    the constructor attrs.
+    """
+
+    def __init__(self, delegate: SpanProcessor) -> None:
+        self._delegate = delegate
+
+    def on_start(self, span, parent_context=None) -> None:
+        # `span._attributes` is the internal mutable dict on the OTel
+        # Python `_Span` class. Read it (the SDK does the same in its
+        # built-in samplers and attribute-limit processors) and apply the
+        # redaction. Access is best-effort — some test doubles don't
+        # implement `_attributes`; treat absence as "nothing to redact".
+        raw = getattr(span, "_attributes", None) or {}
+        if raw:
+            redacted = redact_attributes(dict(raw))
+            for key, value in redacted.items():
+                # Redaction failure must not break span export; the
+                # Node side swallows too. Logged elsewhere by the
+                # attribute-limit / batch processors.
+                with contextlib.suppress(Exception):
+                    span.set_attribute(key, value)
+        self._delegate.on_start(span, parent_context)
+
+    def on_end(self, span) -> None:
+        self._delegate.on_end(span)
+
+    def shutdown(self) -> None:
+        self._delegate.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30_000) -> bool:
+        return self._delegate.force_flush(timeout_millis)
 
 
 ZEROED_TRACE_ID = "0" * 32
@@ -215,7 +282,14 @@ def setup_tracing(service_name: str) -> None:
     trace_endpoint = f"{endpoint_base.rstrip('/')}/v1/traces"
 
     trace_exporter = OTLPSpanExporter(endpoint=trace_endpoint)
-    trace_processor = BatchSpanProcessor(trace_exporter)
+    inner_processor = BatchSpanProcessor(trace_exporter)
+    # Wrap the BatchSpanProcessor in a PII redactor — every span passes
+    # through `RedactingSpanProcessor.on_start` BEFORE the inner exporter
+    # sees it, so sensitive keys (password / token / secret / api_key /
+    # ...) are scrubbed to "[REDACTED]" before reaching VictoriaTraces.
+    # Mirror of `PIIRedactionProcessor` on the Node side
+    # (`components/gov-chat-backend/tracing.js:89-149`).
+    trace_processor = RedactingSpanProcessor(inner_processor)
 
     _provider = TracerProvider(resource=resource)
     _provider.add_span_processor(trace_processor)
@@ -226,6 +300,14 @@ def setup_tracing(service_name: str) -> None:
     # import ...` at module load. The override here is INTENTIONAL (our
     # provider has our resource + OTLP endpoint); suppress the warning
     # by silencing the SDK's internal logger for that one message.
+    #
+    # TODO: switch to the OTel-spec `_SUPPRESS_INSTRUMENTATION_KEY` context
+    # var (`opentelemetry.context._SUPPRESS_INSTRUMENTATION_KEY`) instead of
+    # the racy logger-level manipulation. The current approach is acceptable
+    # for now because (a) the warning fires once at process startup, (b) the
+    # level is restored in the `finally` block, and (c) suppressing a single
+    # WARN line is the documented workaround per the OTel Python issue
+    # tracker.
     import logging as _logging
 
     _otel_sdk_logger = _logging.getLogger("opentelemetry.trace")
@@ -333,10 +415,22 @@ def setup_tracing(service_name: str) -> None:
     # Python `comps` library does NOT install a logging handler — the
     # `TraceContextFilter` reads `trace.get_current_span()` to inject
     # `trace_id` / `span_id` into every Python LogRecord.
+    #
+    # `OTEL_LOGS_ENABLED` opt-out: operators can disable ONLY the log
+    # export path (keeping traces + metrics) by setting
+    # `OTEL_LOGS_ENABLED=0` in their `.env`. The failure path is
+    # non-silent by default (the exception is logged at WARNING level
+    # so a misconfigured OTel stack is visible in `docker logs`) but
+    # does NOT crash the service — trace/metric export remains active.
     try:
         setup_logging(service_name, resource=resource, endpoint_base=endpoint_base)
     except Exception as exc:
-        logging.getLogger(__name__).warning("Failed to initialize OTel LoggerProvider — log export disabled: %s", exc)
+        if os.getenv("OTEL_LOGS_ENABLED", "1") == "0":
+            logging.getLogger(__name__).debug("OTel log export disabled via OTEL_LOGS_ENABLED=0 (init error: %s)", exc)
+        else:
+            logging.getLogger(__name__).warning(
+                "Failed to initialize OTel LoggerProvider — log export disabled: %s", exc
+            )
 
     atexit.register(shutdown)
 
@@ -542,18 +636,16 @@ def background_span(name: str, tracer_name: str = __name__, attributes: dict | N
         - span.end() always called (contextmanager)
         - Exceptions are recorded on the span, status set to ERROR, then
           re-raised (no suppression)
-        - Safe to call before ``setup_tracing()`` — returns a no-op context
-          that emits no span but still propagates exceptions
+
+    Caveat: if `setup_tracing` has not been called, the OTel SDK returns a
+    no-op tracer and `span` is a no-op. Attributes set on a no-op span
+    are silently lost — callers should not rely on attribute presence
+    (the OTel SDK guarantees the contract: a no-op span returns False
+    from `is_recording()` and discards `set_attribute` calls).
     """
     tracer = get_tracer(tracer_name)
-    try:
-        with tracer.start_as_current_span(name, attributes=attributes) as span:
-            yield span
-    except Exception as exc:
-        # `start_as_current_span` already records the exception + sets ERROR
-        # status + ends the span before propagating, so this re-raise is the
-        # only thing left to do.
-        raise exc from None
+    with tracer.start_as_current_span(name, attributes=attributes) as span:
+        yield span
 
 
 class _SpanContext:

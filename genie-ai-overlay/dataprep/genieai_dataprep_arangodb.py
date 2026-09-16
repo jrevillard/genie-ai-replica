@@ -43,7 +43,7 @@ from pydantic import ValidationError  # Import Pydantic validation error
 from rank_bm25 import BM25Okapi
 
 logger = CustomLogger("GENIE_DATAPREP_ARANGODB")
-setup_trace_logging("GENIE_DATAPREP_ARANGODB")
+setup_trace_logging("dataprep-arango-service")
 logflag = os.getenv("LOGFLAG", "false").lower() == "true"
 
 # --- GENIE-Specific Configuration ---

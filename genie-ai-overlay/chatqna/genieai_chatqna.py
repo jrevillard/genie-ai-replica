@@ -22,7 +22,7 @@ from metrics import (
 from core.model_cache import get_model_id
 from tracing import background_span, get_tracer, setup_trace_logging, setup_tracing
 
-setup_tracing("genieai-chatqna")
+setup_tracing("chatqna")
 
 import aiohttp  # for async http requests
 import httpx
@@ -41,7 +41,7 @@ from langdetect import detect
 from transformers import AutoTokenizer
 
 logger = CustomLogger("GENIE.AI_CHATQNA")
-setup_trace_logging("GENIE.AI_CHATQNA")
+setup_trace_logging("chatqna")
 
 # Tracer for pipeline-node-level spans emitted from align_outputs (e.g. the
 # reranker-selection identity span used by the retrieval-quality eval harness).

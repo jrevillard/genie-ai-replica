@@ -9,7 +9,7 @@ from opentelemetry.trace import Status, StatusCode
 
 from tracing import get_meter, get_tracer, sanitize_attributes, setup_trace_logging, setup_tracing
 
-setup_tracing("genieai-reranker")
+setup_tracing("reranker")
 
 # Custom application metrics
 _reranker_meter = get_meter()
@@ -41,7 +41,7 @@ from comps.rerankings.src.integrations.genieai_tei_reranker import GenieTEIReran
 from pydantic import Field
 
 logger = CustomLogger("opea_reranking_microservice")
-setup_trace_logging("opea_reranking_microservice")
+setup_trace_logging("reranker")
 logflag = os.getenv("LOGFLAG", False)
 
 

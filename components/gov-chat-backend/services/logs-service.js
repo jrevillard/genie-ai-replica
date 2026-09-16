@@ -582,21 +582,6 @@ class LogsService {
     const wantWarn = !level || String(level).toUpperCase() === 'WARN';
     const wantInfo = !level || (level && String(level).toUpperCase() === 'INFO');
 
-    /**
-     * Shape a `Record<serviceName, count>` hits bucket into the
-     * `{type, typeKey, service, count}[]` the Vue UI expects. Rows are
-     * sorted by count descending so the most active services surface
-     * first; `service: 'all'` rows are dropped (the UI has its own
-     * totals).
-     */
-    const shape = (levelConst, typeKey) => {
-      const map = bucketsByLevel[levelConst] || {};
-      return Object.entries(map)
-        .map(([service, count]) => ({ type: levelConst, typeKey, service, count }))
-        .filter((row) => row.service && row.service !== 'all')
-        .sort((a, b) => b.count - a.count);
-    };
-
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
@@ -619,6 +604,21 @@ class LogsService {
         const results = await Promise.all(calls.map(async ([tag, p]) => [tag, await p]));
         const bucketsByLevel = Object.fromEntries(results.filter(([tag]) => tag !== '_ALL'));
         const allBuckets = results.find(([tag]) => tag === '_ALL')?.[1] || {};
+
+        /**
+         * Shape a `Record<serviceName, count>` hits bucket into the
+         * `{type, typeKey, service, count}[]` the Vue UI expects. Rows
+         * are sorted by count descending so the most active services
+         * surface first; `service: 'all'` rows are dropped (the UI has
+         * its own totals).
+         */
+        const shape = (levelConst, typeKey) => {
+          const map = bucketsByLevel[levelConst] || {};
+          return Object.entries(map)
+            .map(([service, count]) => ({ type: levelConst, typeKey, service, count }))
+            .filter((row) => row.service && row.service !== 'all')
+            .sort((a, b) => b.count - a.count);
+        };
 
         return {
           errors: wantError ? shape('ERROR', 'error') : [],
@@ -772,13 +772,12 @@ class LogsService {
       const escaped = this._escapeLogSql(String(term));
       filterParts.push(`_msg:"${escaped}"`);
     }
-    let normalizedLevel = null;
     if (level && String(level).trim() !== '') {
       // Validate the allowlist up-front so a hostile caller gets a
       // 400-ish error, not a silent zero-result page. The allowlist is
       // enforced by `_normalizeLevelFilter` (throws on anything outside
       // `TRACE|DEBUG|INFO|WARN|ERROR|FATAL`).
-      normalizedLevel = this._normalizeLevelFilter(level);
+      const normalizedLevel = this._normalizeLevelFilter(level);
       filterParts.push(`severity_text:${normalizedLevel}`);
     }
     if (service && String(service).trim() !== '') {

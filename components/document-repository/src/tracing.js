@@ -61,14 +61,6 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // jest.config.js routes both `../shared-lib/X` and the source-tree
   // `../shared/lib/X` to the real file).
   const { setScopeName, withBackgroundSpan } = require('../shared-lib/tracing-background');
-  // Stamp otel.scope.name=document-repository on every span this SDK
-  // emits. The shared helper defaults to 'backend' (the backend
-  // service name); without this call every doc-repo span would land
-  // in VictoriaTraces under the wrong scope and the
-  // otel.scope.name:document-repository filter returns zero rows.
-  // Set BEFORE the TracerProvider is constructed so the first
-  // trace.getTracer() call uses the right scope.
-  setScopeName(serviceName);
   // OTLP base URL — read once, then reused for both the trace and the log
   // exporter endpoints. Pulled up to the top of the else block so neither
   // exporter construction reads it in a TDZ window (the previous ordering
@@ -106,6 +98,14 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // block name). No env override — operators who want a different name
   // for a canary should override at the Compose layer, not here.
   const serviceName = 'document-repository';
+  // Stamp otel.scope.name=document-repository on every span this SDK
+  // emits. The shared helper defaults to 'backend' (the backend
+  // service name); without this call every doc-repo span would land
+  // in VictoriaTraces under the wrong scope and the
+  // otel.scope.name:document-repository filter returns zero rows.
+  // Set BEFORE the TracerProvider is constructed so the first
+  // trace.getTracer() call uses the right scope.
+  setScopeName(serviceName);
   const serviceNamespace = process.env.OTEL_SERVICE_NAMESPACE || 'genie-core';
   const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';

@@ -213,4 +213,63 @@ describe('tracing-pii.js', () => {
       });
     });
   });
+
+  describe('redactLogRecordBody (circular-reference guard, P8)', () => {
+    const { redactLogRecordBody } = require('../tracing-pii');
+
+    it('walks deeply-nested plain objects without recursing forever', () => {
+      // 20 levels of nesting — without the WeakSet guard the walker would
+      // exhaust the stack on large payloads (the previous code crashed at
+      // ~10k frames with RangeError).
+      const deep = { level: 0 };
+      let cursor = deep;
+      for (let i = 1; i < 20; i++) {
+        cursor.next = { level: i };
+        cursor = cursor.next;
+      }
+      expect(() => redactLogRecordBody(deep)).not.toThrow();
+      expect(redactLogRecordBody(deep).level).toBe(0);
+    });
+
+    it('returns "[CIRCULAR]" for self-referential objects instead of stack overflow', () => {
+      // Express middleware commonly logs `req` which has `req.req = req` or
+      // `req.socket.parser.incoming.req` cycles. The old walker crashed
+      // the entire log pipeline with RangeError on these.
+      const obj = { headers: { authorization: 'Bearer abc' }, data: null };
+      obj.data = obj; // self-reference
+      const out = redactLogRecordBody(obj);
+      expect(out.data).toBe('[CIRCULAR]');
+      // Sensitive keys still redacted in non-cycled branches
+      expect(out.headers.authorization).toBe('[REDACTED]');
+    });
+
+    it('handles indirect cycles (a -> b -> a)', () => {
+      const a = {};
+      const b = { a };
+      a.b = b;
+      const out = redactLogRecordBody(a);
+      expect(out.b.a).toBe('[CIRCULAR]');
+    });
+
+    it('walks arrays containing cycles', () => {
+      const arr = [];
+      arr.push(arr); // self-referential array
+      const out = redactLogRecordBody({ items: arr });
+      expect(out.items[0]).toBe('[CIRCULAR]');
+    });
+
+    it('preserves independent WeakSet state across top-level calls (no leak between calls)', () => {
+      // After a cycle was detected, the next top-level call must NOT see
+      // the previous call's seen set (WeakSet is scoped per-call by
+      // default param). Otherwise unrelated objects sharing id() across
+      // calls would be falsely flagged as circular.
+      const cycle = {};
+      cycle.self = cycle;
+      redactLogRecordBody(cycle); // first call
+
+      const plain = { a: 1, b: 2 };
+      const out = redactLogRecordBody(plain);
+      expect(out).toEqual({ a: 1, b: 2 });
+    });
+  });
 });

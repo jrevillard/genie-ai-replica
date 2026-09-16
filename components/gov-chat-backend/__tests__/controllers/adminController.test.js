@@ -394,6 +394,22 @@ describe('adminController', () => {
         securityScanService.runSecurityScan = original;
       }
     });
+
+    it('P3 — should return 503 when app.locals.logsService is not initialised', async () => {
+      // Reproduce the bug P3 fixed: a non-HTTP caller (cron, script,
+      // test harness bypassing createApp) reaches runSecurityScan without
+      // req.app.locals.logsService set. The previous code threw a
+      // TypeError that surfaced as a 500; the fix surfaces a 503 with a
+      // clear "service unavailable" hint so callers can distinguish init
+      // failures from real scan failures.
+      const reqNoLogs = {
+        ...req,
+        app: { locals: {} } // logsService missing
+      };
+      await adminController.runSecurityScan(reqNoLogs, res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith({ error: 'logs service unavailable' });
+    });
   });
 
   describe('runDiagnostics', () => {

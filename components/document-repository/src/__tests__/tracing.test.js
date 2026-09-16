@@ -238,3 +238,63 @@ describe('document-repository tracing.js non-test branch', () => {
   it.skip('SIGTERM handler returns a Promise with .then (covered by backend test)', () => {});
   it.skip('SIGTERM handler exits via .then (covered by backend test)', () => {});
 });
+
+// P1 — scopeName must be set to the doc-repo service identity BEFORE the
+// TracerProvider is constructed so every span this SDK emits carries
+// `otel.scope.name=document-repository`. Without this call the helper's
+// default `'backend'` would tag every doc-repo span with the wrong scope
+// and the otel.scope.name filter would return zero rows.
+describe('P1 — setScopeName wiring', () => {
+  // Reset module cache per test so each test sees a fresh helper state.
+  // The SDK init branch in tracing.js short-circuits on NODE_ENV=test
+  // (it returns the no-op exports before reaching setScopeName), so
+  // asserting via require('../tracing') is unreliable. Instead we read
+  // the source file directly and assert the call appears before the
+  // TracerProvider construction.
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'tracing.js'), 'utf8');
+
+  it('tracing.js calls setScopeName with the doc-repo service identity', () => {
+    // The fix must call `setScopeName(serviceName)` where serviceName
+    // is the hardcoded 'document-repository' literal — see P1 finding
+    // in the multi-perspective review. We assert against the source
+    // string rather than executing the SDK init (which is gated on
+    // ENABLE_OBSERVABILITY=1 and won't run in NODE_ENV=test).
+    const setScopeCallIdx = src.indexOf('setScopeName(');
+    expect(setScopeCallIdx).toBeGreaterThan(-1);
+    // Extract the call argument (handles multi-line).
+    const afterCall = src.slice(setScopeCallIdx);
+    const argMatch = afterCall.match(/setScopeName\(([\s\S]*?)\)/);
+    expect(argMatch).not.toBeNull();
+    // The argument must reference `serviceName` (the local const) so a
+    // future rename of the hardcoded literal still flows through. A
+    // bare `'document-repository'` literal would be brittle.
+    expect(argMatch[1].trim()).toBe('serviceName');
+  });
+
+  it('setScopeName call appears BEFORE TracerProvider construction', () => {
+    // The helper reads `getScopeName()` lazily inside `_tracer()`, so
+    // calling setScopeName anywhere before the first
+    // `trace.getTracer(...)` is sufficient. Assert the call is
+    // top-of-branch (in the same `else` block, before
+    // `new TracerProvider(`).
+    const setScopeIdx = src.indexOf('setScopeName(');
+    const tracerProviderIdx = src.indexOf('new TracerProvider(');
+    expect(setScopeIdx).toBeGreaterThan(-1);
+    expect(tracerProviderIdx).toBeGreaterThan(-1);
+    expect(setScopeIdx).toBeLessThan(tracerProviderIdx);
+  });
+
+  it('the helper exposes both setScopeName and getScopeName exports', () => {
+    // Sanity check on the shared helper contract — both functions must
+    // be exported so consumers (backend, doc-repo) can flip the scope.
+    const helper = require('../shared-lib/tracing-background');
+    expect(typeof helper.setScopeName).toBe('function');
+    expect(typeof helper.getScopeName).toBe('function');
+    // Default scope name remains 'backend' (the backend's service
+    // name) so the helper is safe to import without an explicit
+    // setScopeName call (e.g. in tests).
+    expect(helper.getScopeName()).toBe('backend');
+  });
+});

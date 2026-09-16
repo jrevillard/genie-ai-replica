@@ -270,3 +270,14 @@ def test_background_span_logs_inside_block_do_not_raise(noop_tracer, caplog):
         logger.info("inside block")
 
     assert "inside block" in [r.getMessage() for r in caplog.records]
+
+
+# NOTE: P10 (background_span exception handling) was investigated and
+# REVOKED during the MR #383 multi-perspective review triage. The OTel
+# Python SDK's `start_as_current_span` context manager auto-records
+# exceptions on the span and flips status to ERROR on exit — verified
+# by the existing `test_background_span_records_exception_and_marks_error`
+# test added in commit 96f8ae5214. The original `yield span` body was
+# correct; no production-side change is needed. The "P10" tests below
+# were removed because they asserted via a mocked span and would have
+# double-recorded the auto-recorded exception (2 events instead of 1).

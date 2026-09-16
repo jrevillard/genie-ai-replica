@@ -645,17 +645,7 @@ def background_span(name: str, tracer_name: str = __name__, attributes: dict | N
     """
     tracer = get_tracer(tracer_name)
     with tracer.start_as_current_span(name, attributes=attributes) as span:
-        try:
-            yield span
-        except Exception as exc:
-            # Record the exception on the span and flip status to ERROR
-            # so VictoriaTraces surfaces the failure (otherwise the span
-            # would land with status=UNSET and look successful even
-            # though the background emitter raised). Re-raise so callers
-            # can still handle the exception upstream.
-            span.record_exception(exc)
-            span.set_status(Status(StatusCode.ERROR, str(exc)))
-            raise
+        yield span
 
 
 class _SpanContext:

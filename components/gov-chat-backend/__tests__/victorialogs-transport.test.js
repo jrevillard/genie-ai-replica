@@ -554,4 +554,76 @@ describe('VictoriaLogsTransport — resilience', () => {
     expect(transport).toBeInstanceOf(TransportStream);
     expect(transport.name).toBe('victorialogs');
   });
+
+  describe('P6 — "logged" listener throw must not freeze the pipeline', () => {
+    let transport;
+    let mockEmit;
+
+    beforeEach(() => {
+      transport = new VictoriaLogsTransport({ enabled: true });
+      // Replace the inherited emit() with a controllable mock so we can
+      // simulate a buggy 'logged' listener throwing synchronously.
+      mockEmit = jest.fn();
+      transport.emit = mockEmit;
+    });
+
+    it('still invokes the callback when a "logged" listener throws', async () => {
+      // Without the try/finally wrapper, a throwing listener would
+      // skip the callback() and Winston backpressure would halt every
+      // subsequent log emit on this transport.
+      mockEmit.mockImplementation(() => {
+        throw new Error('buggy listener crashed');
+      });
+
+      const callback = jest.fn();
+      transport.log(
+        {
+          level: 'info',
+          message: 'safe log message',
+          timestamp: new Date(FIXED_TS)
+        },
+        callback
+      );
+
+      // Drain the setImmediate queue.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('still emits "logged" before callback() so listeners observe the event', async () => {
+      // Order matters: contract says listeners observe the emit before
+      // the transport considers the record written. A buggy listener
+      // must not invert that order (otherwise downstream consumers like
+      // VL ingestion trackers lose the event).
+      const order = [];
+      mockEmit.mockImplementation(() => order.push('emit'));
+
+      const callback = jest.fn(() => order.push('callback'));
+      transport.log({ level: 'info', message: 'ordered test', timestamp: new Date(FIXED_TS) }, callback);
+
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(order).toEqual(['emit', 'callback']);
+    });
+
+    it('a throwing listener does NOT prevent the next log emit from succeeding', async () => {
+      // The original bug: first emit stalls the pipeline because callback
+      // never fires. Verify backpressure is broken: subsequent log() calls
+      // must still trigger callback() (Winston checks callback before
+      // accepting the next record).
+      let callCount = 0;
+      mockEmit.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) throw new Error('first listener crashes');
+      });
+
+      const cb1 = jest.fn();
+      const cb2 = jest.fn();
+      transport.log({ level: 'info', message: 'first', timestamp: new Date(FIXED_TS) }, cb1);
+      transport.log({ level: 'info', message: 'second', timestamp: new Date(FIXED_TS) }, cb2);
+
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(cb1).toHaveBeenCalledTimes(1);
+      expect(cb2).toHaveBeenCalledTimes(1);
+    });
+  });
 });

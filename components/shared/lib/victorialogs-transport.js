@@ -135,14 +135,34 @@ class VictoriaLogsTransport extends TransportStream {
       // Winston transport contract: `callback()` must run AFTER
       // `emit('logged', info)` so downstream listeners observe the event
       // before the transport considers the record "fully written".
-      // Wrap `emit('logged', info)` in try/finally so a synchronous
-      // throw from any registered listener still triggers `callback()`
-      // — otherwise Winston backpressure halts the entire log pipeline
-      // on that record (callback never fires → next writes queued
-      // behind it forever).
+      // Guard `emit('logged', info)` so a synchronous throw from a
+      // registered listener cannot freeze Winston backpressure AND
+      // cannot escape into Node's uncaught-exception handler (which
+      // would crash the process). The bug is observable via the
+      // debug log below; the listener author is responsible for fixing
+      // their catch blocks.
       setImmediate(() => {
         try {
-          this.emit('logged', info);
+          try {
+            this.emit('logged', info);
+          } catch (listenerErr) {
+            // Swallow the listener exception after ensuring the
+            // callback still runs via the outer finally. Without this
+            // catch, the throw escapes setImmediate and crashes the
+            // Node process via uncaughtException. Operators see the
+            // bug in this debug log; the listener author sees the
+            // missing try/catch in their code on first inspection.
+            try {
+              _droppedCounter.add(1, { reason: 'logged_listener_threw' });
+            } catch {
+              // counter failure must never break the log pipeline
+            }
+            if (typeof this.logger?.error === 'function') {
+              this.logger.error('Winston logged-listener threw', {
+                error: listenerErr && listenerErr.message
+              });
+            }
+          }
         } finally {
           callback();
         }

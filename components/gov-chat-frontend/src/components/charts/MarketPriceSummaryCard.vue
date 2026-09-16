@@ -158,14 +158,12 @@ export default {
         // Resolved at render time (see resolvedCategoryColor). Falls back to
         // the raw var() string if getComputedStyle returns empty.
         colors: [this.resolvedCategoryColor],
+        // Solid fill (light opacity) instead of gradient — the gradient
+        // version made the line stroke appear to fade because ApexCharts
+        // applies the fill opacity to the line border as well.
         fill: {
-          type: 'gradient',
-          gradient: {
-            shadeIntensity: 1,
-            opacityFrom: 0.55,
-            opacityTo: 0,
-            stops: [0, 100]
-          }
+          type: 'solid',
+          opacity: 0.2
         },
         xaxis: {
           categories: this.timeSeries.map((d) => d.year),
@@ -227,11 +225,13 @@ export default {
     // and does not always inherit CSS custom properties from the host element,
     // so we resolve to hex at render time. Re-resolved on theme change via the
     // themeKey watcher below.
+    //
+    // Use --fg (text color) directly: it gives guaranteed contrast against
+    // --bg in both light and dark modes without introducing new DS tokens.
+    // Per-category colors were too pale on dark bg; --fg (dark text in light
+    // mode, warm off-white in dark mode) reads cleanly in both.
     resolvedCategoryColor() {
-      const match = this.categoryColor.match(/var\((--[a-z0-9-]+)\)/i);
-      if (!match) return this.categoryColor;
-      const varName = match[1];
-      const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      const value = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
       return value || this.categoryColor;
     },
 

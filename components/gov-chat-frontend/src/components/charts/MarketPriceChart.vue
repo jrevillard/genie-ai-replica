@@ -220,6 +220,10 @@ export default {
     // Resolve var(--xxx) in cssVars to actual hex at render time. ApexCharts
     // builds SVG internally and does not always inherit CSS custom properties
     // from the host element. Re-resolved on theme change via useChartTheme.
+    //
+    // Use --fg (text color) directly for the series line: it gives guaranteed
+    // contrast against --bg in both light and dark modes without introducing
+    // new DS tokens. Per-category colors were too pale on dark bg.
     resolvedCssVars() {
       const raw = this.getCssVarStrings();
       const resolve = (val) => {
@@ -241,12 +245,10 @@ export default {
     },
 
     resolvedCategoryColor() {
-      const color = this.categoryConfig.color;
-      if (!color) return null;
-      const match = color.match(/var\((--[a-z0-9-]+)\)/i);
-      if (!match) return color;
-      const v = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
-      return v || color;
+      // Override per-category color with --fg for guaranteed contrast in
+      // both themes. Removes the pale-green-on-dark-bg issue.
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      return v || null;
     },
     commodityName() {
       return this.categoryConfig.i18nKey ? this.$t(this.categoryConfig.i18nKey) : this.category;
@@ -315,9 +317,12 @@ export default {
         },
         colors: [seriesColor],
         stroke: { curve: 'smooth', width: 4 },
+        // Solid fill (light opacity) instead of gradient — the gradient
+        // version made the line stroke appear to fade because ApexCharts
+        // applies the fill opacity to the line border as well.
         fill: {
-          type: 'gradient',
-          gradient: { shadeIntensity: 1, opacityFrom: 0.65, opacityTo: 0.1, stops: [0, 90, 100] }
+          type: 'solid',
+          opacity: 0.15
         },
         markers: {
           size: 6,

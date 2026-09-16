@@ -45,4 +45,25 @@
 /* Header brand — Verde AgroGenio */
 #kc-header-wrapper {
   color: #176b3a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#kc-header-wrapper img {
+  width: 200px;
+  height: auto;
+  margin-bottom: 0.5rem;
+}
+/* Hide the realm displayName ("genie") that the template renders next to the
+   logo, and surface our own brand label "AgroGenio" via ::after so the header
+   reads as one cohesive unit. */
+#kc-header-wrapper > *:not(img) {
+  display: none;
+}
+#kc-header-wrapper::after {
+  content: "AgroGenio";
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #176b3a;
+  letter-spacing: 0.02em;
 }

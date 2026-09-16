@@ -26,7 +26,7 @@
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
 #   traces:  otlp → probabilistic_sampler → transform/kong_span_names → batch → victoriatraces
-#   logs:    otlp / fluent_forward → resource/stamp_service_name_from_container → transform/stamp_log_metadata_from_msg → batch → otlp_http
+#   logs:    otlp / fluent_forward → resource/stamp_service_name_from_container → transform/stamp_log_metadata_from_msg → transform/normalize_log_body → batch → otlp_http
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
 # configured in docker-compose.yaml. Docker sends container stdout/stderr to
@@ -260,6 +260,86 @@ processors:
           # envelope's `service` field here. The Compose label
           # transform (`stamp_service_name_from_container`) is the
           # single canonical source — stamping from both produced
+  # Normalise the `body` field to a human-readable message and
+  # extract structured `http.*` attributes from plain-text access
+  # logs (morgan on Node, uvicorn on Python OPEA).
+  #
+  # Runs AFTER `stamp_log_metadata_from_msg` so severity_text +
+  # severity_number are already stamped (the rewrite would otherwise
+  # lose the level prefix that the prior transform parsed). Runs
+  # AFTER `stamp_service_name_from_container` so the rows are
+  # correctly grouped by service before body normalisation.
+  #
+  # Idempotent: every rule is guarded by an exact-substring check on
+  # the body prefix. Rows that don't match ANY of the patterns pass
+  # through untouched (tag-prefixed logs, startup banners, Go
+  # internal logs from VictoriaMetrics/Logs, etc. — all already
+  # human-readable). If the upstream format string changes (morgan
+  # version bump, uvicorn config switch) the rule simply no-ops and
+  # the row lands in VL with the legacy format — no data loss.
+  #
+  # NOTE: this collector's RE2 regex parser does NOT accept \?
+  # as a literal-question-mark escape (only [?] works in a char
+  # class). All morgan status/path patterns below use [?] for the
+  # query-string separator instead of \?.
+  transform/normalize_log_body:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # ===== Morgan HTTP access logs (Node services) =====
+          # body = "HTTP_REQUEST: METHOD PATH[?QUERY] STATUS TIME ms - Headers: CT UA"
+          - 'set(severity_text, "INFO") where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(severity_number, 9) where severity_text == "INFO" and severity_number == 0'
+          - 'set(attributes["http.method"], ExtractPatterns(body, "^HTTP_REQUEST: (?P<m>[A-Z]+) ")["m"])
+             where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.path"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ (?P<p>[^ ?]+)")["p"])
+             where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.status_code"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? (?P<s>[0-9]+) ")["s"])
+             where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.response_time_ms"], ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? [0-9]+ (?P<ms>[0-9.]+) ms")["ms"])
+             where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(attributes["http.user_agent"], ExtractPatterns(body, "Headers:[ ](?:-|[^ ]+)[ ](?P<ua>.+)$")["ua"])
+             where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+          - 'set(body, Concat([
+               ExtractPatterns(body, "^HTTP_REQUEST: (?P<m>[A-Z]+) ")["m"], " ",
+               ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ (?P<p>[^ ?]+)")["p"], " ",
+               ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? (?P<s>[0-9]+) ")["s"], " ",
+               ExtractPatterns(body, "^HTTP_REQUEST: [A-Z]+ [^ ]+( [?] [^ ]*)? [0-9]+ (?P<ms>[0-9.]+) ms")["ms"], " ms"
+             ], ""))
+             where IsString(body) and Substring(body, 0, 13) == "HTTP_REQUEST:"'
+
+          # ===== Uvicorn HTTP access logs (Python OPEA services) =====
+          # body = 'INFO:     IP:PORT - "METHOD PATH[?QUERY] HTTP/x.x" STATUS [MSG]'
+          # `INFO:` prefix is already handled by `stamp_log_metadata_from_msg`.
+          # Inner double-quote in regex needs \" escaping so OTTL string
+          # parser doesn't terminate early.
+          - 'set(attributes["http.client_ip"], ExtractPatterns(body, "(?P<ip>[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+):[0-9]+")["ip"])
+             where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(attributes["http.method"], ExtractPatterns(body, "\"(?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["m"])
+             where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(attributes["http.path"], ExtractPatterns(body, "\"(?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["p"])
+             where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(attributes["http.status_code"], ExtractPatterns(body, "\" (?P<s>[0-9]{3}) ")["s"])
+             where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+          - 'set(body, Concat([
+               ExtractPatterns(body, "\"(?P<m>[A-Z]+) ")["m"], " ",
+               ExtractPatterns(body, "\"(?P<m>[A-Z]+) (?P<p>[^ ?\"]+)")["p"], " ",
+               ExtractPatterns(body, "\" (?P<s>[0-9]{3}) ")["s"]
+             ], ""))
+             where IsString(body) and Substring(body, 0, 5) == "INFO:" and IsMatch(body, "^[A-Z]+:[ ]+[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+:")'
+
+          # ===== Kong / db migrations / keycloak-config =====
+          # body = "[2026-09-16 10:44:41] MESSAGE"
+          # Strip the bracketed ISO timestamp prefix — VL already indexes
+          # `_time`, the prefix is redundant. Idempotent: only fires
+          # when the body matches the `[TIMESTAMP] ` shape, otherwise
+          # pass-through (other `[tag] msg` formats like `[DB_CONNECTION]`
+          # are intentionally NOT touched — those prefixes are part of
+          # the human-readable message).
+          - 'set(body, ExtractPatterns(body, "^\\[[^]]+\\][ ](?P<m>.+)$")["m"])
+             where IsString(body) and IsMatch(body, "^\\[[0-9]{4}-[0-9]{2}-[0-9]{2}[ ][0-9]{2}:[0-9]{2}:[0-9]{2}\\][ ]")'
+
 
 exporters:
   prometheusremotewrite:
@@ -339,6 +419,7 @@ service:
       processors:
         - transform/stamp_service_name_from_container
         - transform/stamp_log_metadata_from_msg
+        - transform/normalize_log_body
         - batch
       exporters:
         - otlp_http

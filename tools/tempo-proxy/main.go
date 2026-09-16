@@ -361,7 +361,13 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 func handleSearchTagsV2(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"scopes": []map[string]interface{}{
-			{"name": "resource", "tags": []string{"service.name"}},
+			// Both `service.name` (current OTel SC, what Tempo/Jaeger
+			// returns) and `resource.service.name` (older OTel SC, what
+			// Grafana Explore Traces app sends via `var-groupBy=...`
+			// when a user pastes a bookmark with the legacy name) are
+			// listed — `handleSearchTagValuesV2` already accepts both
+			// as equivalent so values resolve identically.
+			{"name": "resource", "tags": []string{"service.name", "resource.service.name"}},
 			{"name": "span", "tags": []string{"name", "status"}},
 		},
 	})

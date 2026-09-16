@@ -42,6 +42,7 @@ All rows verified live across 6 research agents on 2026-09-16. Gaps resolved via
 | 20 | Post-harvest/storage indicator | FAOSTAT SDG 12.3.1 (bulk verified, updated 2026-09-16): **Central America 16.5% (2023)** | regional aggregate only — no country rows | — | 📌 curated contextual stat; no feed exists |
 | 21 | Department-level SV staple prices | not viable free today — regional thinness confirmed: every current WFP CA series collapses to one market (SV=San Salvador, GT=La Terminal, NIC=national avg; HN dead since 2022-06) | — | — | ❌ accepted limitation |
 | 22 | FX (contingency; SLV dollarized) | frankfurter.dev (no key, CORS `*`) | 2026-09-16 | jsdelivr currency-api | ✅ |
+| 23 | El Salvador CPI (inflation adjustment of missing years — user requirement) | WB indicators `FP.CPI.TOTL` (keyless) | **2025** (verified live 2026-09-17, lastupdated 2026-07-13) | IMF CPI | ✅ |
 
 ## News (Market Prices prediction dialogs; ES + EN)
 

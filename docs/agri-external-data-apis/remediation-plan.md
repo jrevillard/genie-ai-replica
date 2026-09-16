@@ -75,7 +75,7 @@ Rules:
 - **Contract tests per adapter:** recorded fixtures (a real response per source) replayed in CI; a parser regression is caught before deploy.
 - **Adding source #19:** create adapter file, register, add fixture, set env — no client or route changes.
 
-### Adapter inventory (16 at launch)
+### Adapter inventory (17 at launch)
 
 | Adapter id | Serves | Upstream |
 |---|---|---|
@@ -88,6 +88,7 @@ Rules:
 | `faostat-sdg` | storage curated stat (CA loss %) | bulk zip |
 | `comtrade` | tilapia + import parity (HS 3102/3808/0409/030461/030271) | preview API, 1 req/s throttle |
 | `bls-ppi` | crop-protection proxy | BLS v1 |
+| `wb-cpi` | El Salvador CPI for inflation adjustment of missing years (§5.1) | WB indicators API `FP.CPI.TOTL` (verified live through **2025**, keyless) |
 | `oirsa` | regional pest news | WP REST/RSS |
 | `inaturalist` | pest sightings | REST |
 | `gdelt` | global news EN+ES | DOC 2.0, ≥10 s spacing |
@@ -109,10 +110,17 @@ All responses share an envelope:
     "attribution": "Source: WFP VAM via HDX (CC BY-IGO)",
     "stale": false,
     "coverage": "San Salvador wholesale, Jan 2026–Aug 2026; gap 2023–2025",
-    "nextRefresh": "2026-09-17T00:00:00Z"
+    "estimation": "2023–2025 values are inflation-adjusted estimates (base: 2022 actual, WB CPI)",
+    "nextRefresh": "2026-09-17T00:00:00Z",
+    "caveats": [
+      { "code": "ESTIMATED_CPI", "params": { "years": "2023–2025", "baseYear": 2022 } },
+      { "code": "SINGLE_MARKET", "params": { "market": "San Salvador" } }
+    ]
   }
 }
 ```
+
+**Caveat codes** (structured, rendered client-side via i18n — never raw server prose): `REGIONAL_DATA` (country), `ESTIMATED_CPI` (years, baseYear), `GAP_YEARS` (range), `ANNUAL_ONLY` (lastYear), `SINGLE_MARKET` (market), `COMMUNITY_DATA`, `CURATED_STAT` (asOf), `PROXY_INDEX` (index name), `STALE_CACHE` (age). Every impacted screen MUST render its active caveats visibly (§8) — this is a user requirement, not a nicety.
 
 | Endpoint | Returns |
 |---|---|
@@ -145,6 +153,15 @@ Auth: standard gateway JWT (same as other `/api/*`). Rate limit: generous — da
 **Client LKG:** Vue caches each response in localStorage keyed by endpoint (stale-while-revalidate: render cache, refresh in background); Flutter in SharedPreferences. Charts show a freshness chip: "Updated 2 h ago" / "Saved data — 6 d old" / "Bundled snapshot (Sep 2026)".
 
 **Bundled seeds:** CI job exports the current Arango snapshot per endpoint to `agri-seeds/*.json`; committed monthly by the scheduled pipeline; shipped in both app builds. Ultimate floor — even first launch offline shows real data, never mocks.
+
+### 5.1 Estimation engine — inflation-adjusted missing years (user requirement)
+
+Where a price series has missing years (FAOSTAT producer prices end 2022; WFP SLV has a 2023–25 hole), the backend fills them with **CPI-adjusted estimates** from the `wb-cpi` adapter (El Salvador CPI, WB `FP.CPI.TOTL`, verified through 2025):
+
+- **Trailing gaps** (e.g. honey: actual to 2022): `est(Y) = lastActual × CPI(Y) / CPI(baseYear)` for each missing year. For the current year where CPI is not yet published, apply the last known YoY rate and flag `partial`.
+- **Interior gaps** (WFP 2023–25): same CPI chain from the last pre-gap actual; when actuals resume, actuals override. If the CPI-scaled estimate at the resume point deviates > 15 % from the resumed actual, the gap is instead bridged actual-to-actual along the CPI path (blend), and the deviation is noted in `meta.estimation`.
+- **Series items are quality-tagged:** `{date, value, quality: "actual" | "estimated", estMethod: "cpi", baseYear}`. Charts render estimated segments as a **dashed line with a legend entry**; the AI prompt builders append `meta.estimation` verbatim so the LLM never presents an estimate as a market observation.
+- CPI is annual — monthly series use the year's CPI ratio (disclosed); no attempt to invent monthly inflation.
 
 ---
 
@@ -182,32 +199,43 @@ Auth: standard gateway JWT (same as other `/api/*`). Rate limit: generous — da
 
 **Vue:** new `services/agriApiService.js` (GET via httpService, LKG localStorage, envelope unwrap) → chart components load from it; add freshness chip + picker to `MarketPriceChart.vue`; three-section render in `PestAlertChart.vue`; relabel "Alerts"→advisories+regional+sightings.
 **Flutter:** new `services/agri_api_service.dart`; same changes to `market_price_chart.dart`, `pest_alert_chart.dart` (+ map card fed by sightings coordinates); SharedPreferences LKG.
-**Delete (deprecation §11):** all five old services on both platforms + their tests.
+
+**On-screen caveat documentation (user requirement — every impacted screen):** wherever placeholder estimates or regional data are used, the screen shows it clearly, not buried in tooltips:
+- Market-price charts: caveat banner row directly under the chart title, active codes rendered as DsPill chips (e.g. "Regional data: Nicaragua", "2023–25 estimated (inflation-adjusted)") + a collapsible **"About this data"** panel listing per-series source + country, estimation method + base year, last actual date, unit, and attribution link.
+- Estimated series segments render dashed with a legend entry.
+- Pest dialog: per-section subtitles ("Regional official news — OIRSA", "Community sightings — iNaturalist (unverified)").
+- Crop health: source + dekad date chip.
+- Freshness chip (§5) on every screen; caveat strings via i18n (`charts.caveats.*`), ES + EN at minimum.
+- AI prompts inject the same caveat text (§4 mandate) — what the user sees is what the model sees.
+
+**Delete (deprecation §11):** all five old services on both platforms + their tests, and with them ALL World Bank indicator calls (decision: full removal — no WB production-index context lines).
 
 ---
 
-## 9. Implementation phases
+## 9. Implementation — three staged MRs (interview decision 2026-09-17)
 
-| Phase | Content | Effort |
+| MR | Content | Effort |
 |---|---|---|
-| 0 | Research + this plan + BMAD verification | done |
-| 1 | Backend: agri module skeleton, adapter registry, envelope, Redis/Arango serving layer, scheduler, `/health`, OTel spans, seed-export job | 3–4 d |
-| 2 | Market-price adapters (wfp ×3, pink-sheet, imf, faostat-pp, comtrade, bls) + normalization + category mapping + fixtures | 4–5 d |
-| 3 | NDVI adapters (hdx-ndvi, ornl-modis) + baselines | 1–2 d |
-| 4 | Pest adapters (oirsa, inaturalist) + curated advisory seed (EPPO-enriched) + POARS watch note | 2 d |
-| 5 | News adapters + `/api/agri/news` + picker UI both platforms | 2–3 d |
-| 6 | Client migration (both platforms) + LKG + freshness chips + bundled seeds | 3–4 d |
-| 7 | Deprecation removal, test updates, Playwright E2E (dialogs, picker, stale-mode), config-validator entries | 2–3 d |
-| 8 | MR → `release/el-salvador`, deploy to test stack, E2E vs live endpoints, verify Grafana freshness panel, **cold-start smoke test** (fresh stack + no Redis/Arango → dialogs render from imported seeds) | 1–2 d |
+| **MR1 — backend** | agri module skeleton, adapter registry, envelope, Redis/Arango serving layer + startup seed import, single-flight scheduler, estimation engine (§5.1), ALL 17 adapters + fixtures, `/api/agri/*` routes incl. `/health`, OTel spans, seed-export job; curl-verifiable on the test stack | 8–10 d |
+| **MR2 — clients** | Vue + Flutter `agriApiService`, LKG caches, freshness chips, on-screen caveat system (§8), chart migration, pest three-section UI | 5–6 d |
+| **MR3 — news picker + cleanup** | News picker on both platforms, deprecation deletion (§11), Playwright E2E (dialogs, picker, stale-mode, caveats), config-validator entries, cold-start smoke test | 3–4 d |
 
-Feature-flagged rollout: `AGRI_API_ENABLED` lets the old and new paths coexist on the test stack until parity is proven, then old code is deleted (phase 7).
+Each MR is reviewed and merged to `release/el-salvador` before the next begins. `AGRI_API_ENABLED` flag lets old and new paths coexist on the test stack until MR3 deletes the old code.
 
-## 10. Open decisions (need your call)
+## 10. Resolved decisions (user interview, 2026-09-17)
 
-1. **Harvest & Storage button** — keep as curated regional stat (recommended), or drop the button?
-2. **Tilapia button** — keep as annual regional reference (recommended), or drop?
-3. Confirm **Google News RSS drop** (clean official feeds replace it).
-4. Optional: use your FAOSTAT contact to ask about the dead API roadmap + elevated bulk access.
+| Decision | Resolution |
+|---|---|
+| Harvest & Storage button | **Keep as curated stat** (CA loss 16.5 %, FAO 2023) |
+| Tilapia button | **Keep as annual regional reference** (HN/CR export UVs) |
+| Google News RSS | **Dropped** — MAG + Presidencia + CoLatino official feeds |
+| Price display unit | **USD per quintal** (render; canonical storage USD/kg) |
+| Pest button name | **Keep "Pest Alerts"** — honest three-section dialog inside |
+| World Bank indicator data | **Full removal** — no production-index context lines |
+| Delivery | **Three staged MRs** (MR1 backend → MR2 clients → MR3 news+cleanup) |
+| FAOSTAT contact email | **Skipped** — instead: inflation-adjust missing years (§5.1) via WB CPI |
+| Missing-year values | **Inflation-adjusted estimates, visibly documented on screen** (§4 caveats, §5.1, §8) |
+| Caveats on impacted screens | **Every screen with estimates/regional data shows them clearly** — caveat chips + "About this data" panel; same text feeds the AI prompts |
 
 ## 11. Deprecation list (exact files)
 

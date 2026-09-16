@@ -76,7 +76,11 @@ jest.mock('../../main.js', () => ({
 // Mock heavy libraries
 jest.mock('marked', () => ({
   __esModule: true,
-  marked: { parse: jest.fn((c) => c) }
+  marked: {
+    parse: jest.fn((c) => c),
+    use: jest.fn(),
+    Renderer: jest.fn().mockImplementation(() => ({}))
+  }
 }));
 jest.mock('dompurify', () => ({ sanitize: jest.fn((c) => c) }));
 jest.mock('jspdf', () => {

@@ -307,6 +307,16 @@ import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import { resolveConfigText } from '../utils/configResolver';
 
+// Links in chat responses (e.g. the drought report PDF) open in a new tab so
+// the user never navigates away from the chat.
+const linkRenderer = new marked.Renderer();
+linkRenderer.link = function ({ href, title, tokens }) {
+  const text = this.parser.parseInline(tokens);
+  const titleAttr = title ? ` title="${title}"` : '';
+  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+};
+marked.use({ renderer: linkRenderer });
+
 export default {
   name: 'ChatBotComponent',
   components: {
@@ -704,10 +714,10 @@ export default {
     renderMarkdown(content) {
       try {
         const html = marked.parse(content);
-        return DOMPurify.sanitize(html);
+        return DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
       } catch (error) {
         console.error('Error rendering Markdown:', error);
-        return DOMPurify.sanitize(content);
+        return DOMPurify.sanitize(content, { ADD_ATTR: ['target'] });
       }
     },
 

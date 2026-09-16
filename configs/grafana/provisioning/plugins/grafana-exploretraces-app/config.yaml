@@ -2,7 +2,7 @@ apiVersion: 1
 
 apps:
   - type: grafana-exploretraces-app
-    options:
+    jsonData:
       # Default datasource UID for the Explore Traces (Traces Drilldown)
       # app. The app reads this when var-ds is empty in the URL —
       # otherwise it shows "Datasource was not found". Must match the

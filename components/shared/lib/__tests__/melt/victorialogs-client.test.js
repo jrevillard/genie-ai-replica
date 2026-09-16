@@ -263,7 +263,7 @@ describe('VictoriaLogsAdapter — _normalizeRows 8 sub-shapes', () => {
       {
         _msg: 'hello world',
         _time: '2026-09-06T12:34:56.789Z',
-        _stream: { service: 'genie-backend', environment: 'prod', level: 'info' },
+        _stream: { service: 'backend', environment: 'prod', level: 'info' },
         trace_id: 'abc123',
         user_id: 'u-42'
       }
@@ -274,7 +274,7 @@ describe('VictoriaLogsAdapter — _normalizeRows 8 sub-shapes', () => {
     // 2. message — string from _msg
     expect(row.message).toBe('hello world');
     // 3. stream — { service, environment } from _stream
-    expect(row.stream).toEqual({ service: 'genie-backend', environment: 'prod' });
+    expect(row.stream).toEqual({ service: 'backend', environment: 'prod' });
     // 4. fields — every ...rest key EXCEPT _msg / _stream / _time
     expect(row.fields).toEqual({ trace_id: 'abc123', user_id: 'u-42' });
     expect(Object.prototype.hasOwnProperty.call(row.fields, '_msg')).toBe(false);
@@ -287,7 +287,7 @@ describe('VictoriaLogsAdapter — _normalizeRows 8 sub-shapes', () => {
     // 7. level — uppercase, sourced from _stream.level here
     expect(row.level).toBe('INFO');
     // 8. service — from _stream.service
-    expect(row.service).toBe('genie-backend');
+    expect(row.service).toBe('backend');
   });
 
   it('prefers fields.level over _stream.level when both are present', () => {
@@ -357,11 +357,22 @@ describe('VictoriaLogsAdapter — _normalizeRows edge cases', () => {
     const reservedQ = '_msg:"hello: world"';
     await adapter.query({ q: reservedQ, start: '2026-01-01T00:00:00.000Z', end: '2026-01-02T00:00:00.000Z' });
 
-    expect(mockGet).toHaveBeenCalledWith('/select/logsql/query', {
-      params: { q: reservedQ, start: '2026-01-01T00:00:00.000Z', end: '2026-01-02T00:00:00.000Z' }
-    });
+    // The adapter translates the input `q` → VL's native `query` param name
+    // (VictoriaLogs' HTTP API expects `query=...`, not `q=...`). All three
+    // bounds are wrapped under axios's `params:` key — that's how axios
+    // applies them as URL query-string parameters.
+    expect(mockGet).toHaveBeenCalledWith(
+      '/select/logsql/query',
+      expect.objectContaining({
+        params: {
+          query: reservedQ,
+          start: '2026-01-01T00:00:00.000Z',
+          end: '2026-01-02T00:00:00.000Z'
+        }
+      })
+    );
     // Pin the exact string equality (no adapter-side escaping).
     const queryCall = mockGet.mock.calls.find((c) => c[0] === '/select/logsql/query');
-    expect(queryCall[1].params.q).toBe(reservedQ);
+    expect(queryCall[1].params.query).toBe(reservedQ);
   });
 });

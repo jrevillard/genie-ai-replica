@@ -88,7 +88,7 @@ function buildWinstonInfo(overrides = {}) {
     level: 'info',
     message: 'hello world',
     timestamp: '2026-09-06T01:30:34.000Z',
-    service: 'genie-backend',
+    service: 'backend',
     ...overrides
   };
 }
@@ -193,7 +193,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
           severityNumber: SeverityNumber.INFO,
           severityText: 'INFO',
           body: 'hello world',
-          attributes: { service: 'genie-backend' }
+          attributes: { service: 'backend' }
         });
 
         // Then
@@ -201,7 +201,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
         expect(fake.exportedRecords[0].body).toBe('hello world');
         expect(fake.exportedRecords[0].severityNumber).toBe(SeverityNumber.INFO);
         expect(fake.exportedRecords[0].severityText).toBe('INFO');
-        expect(fake.exportedRecords[0].attributes.service).toBe('genie-backend');
+        expect(fake.exportedRecords[0].attributes.service).toBe('backend');
       });
     });
   });
@@ -221,7 +221,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
         expect(rec.body).toBe('hello world');
         expect(rec.severityNumber).toBe(SeverityNumber.INFO);
         expect(rec.severityText).toBe('INFO');
-        expect(rec.attributes.service).toBe('genie-backend');
+        expect(rec.attributes.service).toBe('backend');
       });
     });
 
@@ -633,7 +633,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
         const byBody = Object.fromEntries(fake.exportedRecords.map((r) => [r.body, r]));
         expect(byBody.one.severityNumber).toBe(SeverityNumber.INFO);
         expect(byBody.one.severityText).toBe('INFO');
-        expect(byBody.one.attributes.service).toBe('genie-backend');
+        expect(byBody.one.attributes.service).toBe('backend');
         expect(coerceHrTimeToSeconds(byBody.one.hrTime)).toBe(expectedSec);
 
         expect(byBody.two.severityNumber).toBe(SeverityNumber.WARN);
@@ -745,7 +745,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
           severityNumber: SeverityNumber.WARN,
           severityText: 'WARN',
           body: 'mem-export check',
-          attributes: { service: 'genie-backend' }
+          attributes: { service: 'backend' }
         });
 
         // Then
@@ -754,7 +754,7 @@ describe('logger-vl-integration.test.js — Winston → VictoriaLogs end-to-end'
         expect(records[0].body).toBe('mem-export check');
         expect(records[0].severityNumber).toBe(SeverityNumber.WARN);
         expect(records[0].severityText).toBe('WARN');
-        expect(records[0].attributes.service).toBe('genie-backend');
+        expect(records[0].attributes.service).toBe('backend');
       } finally {
         await provider.shutdown();
         logs.disable();

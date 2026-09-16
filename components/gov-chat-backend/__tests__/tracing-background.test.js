@@ -116,9 +116,9 @@ describe('tracing-background helpers', () => {
       expect(fakeTracer.spans[0].name).toBe('cache.redis.connect');
     });
 
-    it('resolves tracer from scope "genie-backend"', async () => {
+    it('resolves tracer from scope "backend"', async () => {
       await withBackgroundSpan('db.init', async () => null);
-      expect(trace.getTracer).toHaveBeenCalledWith('genie-backend', expect.any(String));
+      expect(trace.getTracer).toHaveBeenCalledWith('backend', expect.any(String));
     });
 
     it('passes attributes when provided', async () => {

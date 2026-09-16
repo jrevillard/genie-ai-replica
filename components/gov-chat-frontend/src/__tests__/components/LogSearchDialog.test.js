@@ -1030,7 +1030,7 @@ describe('LogSearchDialog', () => {
         timestamp: '2026-05-29T10:15:30.000Z',
         level: 'info',
         message: 'Request received',
-        service: 'genie-backend',
+        service: 'backend',
         ...overrides
       };
     }
@@ -1042,7 +1042,7 @@ describe('LogSearchDialog', () => {
         timestamp: '2026-05-29T10:15:30.000Z',
         level: 'info',
         message: 'Request received',
-        service: 'genie-backend',
+        service: 'backend',
         trace_id: undefined,
         span_id: undefined
       });

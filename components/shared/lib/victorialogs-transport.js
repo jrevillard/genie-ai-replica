@@ -64,17 +64,14 @@ class VictoriaLogsTransport extends TransportStream {
     // `service` is reported as an attribute; downstream maps to stream
     // field. Decoupled from `this.name` so callers can override service identity
     // without renaming the transport instance.
-    // Single source of truth for `service.name` resolution — the OTel spec
-    // mandates `OTEL_SERVICE_NAME` as the canonical env var. We accept it
-    // FIRST (overriding the constructor's `opts.service` arg) so that
-    // operators can flip the value per environment without code changes.
-    // Matches `logger.js:84` so the JSON `service` field and the
-    // `LogRecord.attributes.service` field never diverge.
-    this._service =
-      process.env.OTEL_SERVICE_NAME ||
-      opts.service ||
-      process.env.SERVICE_NAME ||
-      'genie-backend';
+    // Hardcoded canonical default `'backend'` — matches logger.js's
+    // traceFormat stamp AND the Compose block name in docker-compose.yaml,
+    // so the JSON `service` field, the `LogRecord.attributes.service`
+    // field, the OTel SDK Resource, and the collector's
+    // stamp_service_name_from_container transform all land on the same
+    // identifier. Single source of truth; operators override at the
+    // Compose layer (block name + env forwarding), not via this chain.
+    this._service = opts.service || 'backend';
     this._loggerName = opts.loggerName || 'winston';
     this._enabled = opts.enabled !== false;
   }

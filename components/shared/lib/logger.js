@@ -139,7 +139,7 @@ const buildTransports = (config = {}) => {
   if (victoriaLogsEnabled()) {
     list.push(
       new VictoriaLogsTransport({
-        service: process.env.OTEL_SERVICE_NAME || process.env.SERVICE_NAME || 'genie-backend'
+        service: 'backend'
       })
     );
   }

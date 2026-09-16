@@ -119,7 +119,7 @@ describe('tracing-pii.js', () => {
         'db.name': 'genie_db',
         'db.operation': 'FOR',
         'db.collection': 'users',
-        'service.name': 'genie-backend',
+        'service.name': 'backend',
         'service.version': '1.0.0'
       };
       expect(redactAttributes(safe)).toEqual(safe);

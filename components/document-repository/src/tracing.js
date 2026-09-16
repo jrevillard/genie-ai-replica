@@ -170,8 +170,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // composition — onEmit redacts before delegating to the inner batch.
   //
   // Same `resource` instance as the TracerProvider above — shared so spans
-  // and logs both stamp `service.name=genie-document-repository` and
-  // Grafana filter `service.name:genie-document-repository` matches both.
+  // and logs both stamp `service.name=document-repository` and
+  // Grafana filter `service.name:document-repository` matches both.
   let loggerProvider = null;
   if (booleanEnv('LOG_TO_VICTORIALOGS', true)) {
     const logExporter = new OTLPLogExporter({

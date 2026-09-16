@@ -211,7 +211,7 @@ class VictoriaLogsAdapter extends LogQueryRepository {
     let parsed;
     try {
       parsed = response.data ? JSON.parse(response.data) : null;
-    } catch (_) {
+    } catch {
       return {};
     }
     if (!parsed || !Array.isArray(parsed.hits)) return {};
@@ -225,7 +225,9 @@ class VictoriaLogsAdapter extends LogQueryRepository {
       const value = entry.fields[field];
       if (value === undefined || value === null) continue;
       // `total` is the sum across the time series for this bucket.
-      const count = Number(entry.total ?? (Array.isArray(entry.values) ? entry.values.reduce((a, b) => a + (Number(b) || 0), 0) : 0));
+      const count = Number(
+        entry.total ?? (Array.isArray(entry.values) ? entry.values.reduce((a, b) => a + (Number(b) || 0), 0) : 0)
+      );
       if (!Number.isFinite(count)) continue;
       result[String(value)] = count;
     }

@@ -398,17 +398,22 @@ class LogsService {
     const baseQ = typeof q === 'string' && q.trim() !== '' ? q : '*';
     if (booleanEnv('LOG_TO_VICTORIALOGS') && !booleanEnv('LOG_TO_FILE')) {
       // Dual-emit dedup: while OTLP is the canonical writer, the Docker
-      // fluentd driver ALSO forwards stdout to VL — same JSON content,
-      // different field shape (fluentd adds `fluent.tag` + Compose label
-      // `service.name`, OTLP adds the OTel resource `service.name` plus
-      // `trace_id`, `span_id`, `deployment.environment`, etc.). The OTel
-      // SDK path uses the canonical `genie-*` service names (e.g.
-      // `genie-backend`, `genie-document-repository`); the fluentd path
-      // uses raw Compose service labels (e.g. `backend`,
-      // `document-repository`). Keep ONLY the OTel records by requiring
-      // `service.name:genie-*` — that filter matches both OTel-instrumented
-      // services AND excludes every fluentd duplicate.
-      return `${baseQ} AND service.name:genie-*`;
+      // fluentd driver ALSO forwards container stdout to VL — same JSON
+      // content, different ingestion path. fluentd-sourced rows carry a
+      // `fluent.tag` attribute (e.g. `genie.admin-logs-prd-backend-1`)
+      // that OTel-instrumented records do NOT have. Exclude the
+      // fluentd duplicates by requiring `NOT fluent.tag:*` so only the
+      // canonical OTel records land in the admin panel + Grafana.
+      //
+      // The previous filter `service.name:genie-*` was based on a stale
+      // assumption that OTel records carry `genie-backend` /
+      // `genie-document-repository` while fluentd records carry `backend`
+      // / `document-repository`. After the service-name unification
+      // (service.name is now hardcoded to match the Compose block name
+      // across all ingestion paths), both paths produce the SAME
+      // service.name — the dedup key had to switch from `service.name`
+      // to a fluentd-specific signal (`fluent.tag`).
+      return `${baseQ} AND NOT fluent.tag:*`;
     }
     return baseQ;
   }
@@ -582,61 +587,173 @@ class LogsService {
     const wantWarn = !level || String(level).toUpperCase() === 'WARN';
     const wantInfo = !level || (level && String(level).toUpperCase() === 'INFO');
 
+    // Extract a per-row "type" label from the log message — mirrors the
+    // legacy file-log `groupLogs()` behaviour:
+    //   1. First matching regex pattern wins (categorical labels like
+    //      "Connection Timeout", "Authentication Failure", etc.).
+    //   2. Fallback: `message.split(':')[0]`, truncated to 50 chars
+    //      with "..." suffix.
+    //   3. If the message isn't a string at all: "Generic Event".
+    // Computed at QUERY TIME — not stamped on ingest — so the
+    // cardinality is bounded by the row fetch window, not by a VL
+    // stream index. Indexed log_type was tried before (reverted) and
+    // would explode memory when every distinct log message becomes a
+    // unique value.
+    const summaryPatterns = [
+      { regex: /connection timeout/i, type: 'Connection Timeout' },
+      { regex: /database query failed/i, type: 'Database Query Failed' },
+      { regex: /authentication failure/i, type: 'Authentication Failure' },
+      { regex: /invalid token/i, type: 'Invalid Token' },
+      { regex: /disk space below threshold/i, type: 'Disk Space Below Threshold' },
+      { regex: /slow query performance/i, type: 'Slow Query Performance' },
+      { regex: /rate limit approaching/i, type: 'Rate Limit Approaching' },
+      { regex: /ENOENT: no such file or directory/i, type: 'File Not Found' }
+    ];
+    const extractType = (message) => {
+      if (!message || typeof message !== 'string' || !message.split) {
+        return 'Generic Event';
+      }
+      for (const pattern of summaryPatterns) {
+        if (pattern.regex.test(message)) {
+          return pattern.type;
+        }
+      }
+      const head = message.split(':')[0] || 'Generic Event';
+      if (head.length > 50) {
+        return `${head.substring(0, 50)}...`;
+      }
+      return head;
+    };
+
+    /**
+     * Bucket raw VL rows for the requested level by `(type, service)`.
+     * Uses `hits(field=service.name)` for per-service counts so the
+     * service list is complete even if the row window truncates;
+     * uses a parallel row fetch (capped at 10 000 — matches legacy
+     * `_getLogsInRangeFromVL` bound) to derive the type label.
+     */
+    const bucketForLevel = async (levelConst, q, typeKey) => {
+      const client = this._getVlClient();
+      const [serviceMap, rows] = await Promise.all([
+        client.hits({ q, start: startIso, end: endIso, field: 'service.name' }),
+        client.query({ q, start: startIso, end: endIso, limit: 10000, fields: 'service.name,_msg' })
+      ]);
+      const grouped = new Map();
+      // Seed every service we know about with the level itself as the
+      // fallback type (services whose rows are beyond the 10 000 limit
+      // still appear in the summary so the per-service column stays
+      // populated even when the type column shows the level itself).
+      for (const [service] of Object.entries(serviceMap)) {
+        if (!service || service === 'all') continue;
+        const key = `${levelConst}|${service}`;
+        grouped.set(key, {
+          type: levelConst,
+          typeKey,
+          service,
+          count: 0,
+          // Placeholder — overwritten once we see a row for this
+          // service in the window.
+          messageHead: null,
+          observedInRows: false
+        });
+      }
+      for (const row of Array.isArray(rows) ? rows : []) {
+        const service = row.service || row['service.name'];
+        if (!service || service === 'all') continue;
+        // VL `_msg` for Node services is the raw Winston JSON envelope
+        // (e.g. `{"level":"info","message":"DB connection",...}`). The
+        // regex patterns + `split(':')[0]` fallback work on the actual
+        // human-readable `message` field, not the JSON envelope — the
+        // legacy file-log `groupLogs()` path had a pre-parse step that
+        // pulled `message` out of the envelope before grouping. Mirror
+        // that here so the TYPE column shows categorical labels like
+        // `[DB_CONNECTION]` instead of `{"level"`. Non-JSON envelopes
+        // (Python uvicorn access logs, k8s audit lines) fall through
+        // to the raw `_msg` string unchanged.
+        const raw = row.message || row._msg || '';
+        let message = raw;
+        if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed.message === 'string') {
+              message = parsed.message;
+            }
+          } catch {
+            // Not valid JSON — keep `message` as the raw `_msg`.
+          }
+        }
+        const head = extractType(typeof message === 'string' ? message : String(message || ''));
+        const key = `${head}|${service}`;
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.count++;
+          existing.observedInRows = true;
+        } else {
+          grouped.set(key, {
+            type: head,
+            typeKey,
+            service,
+            count: 1,
+            messageHead: head,
+            observedInRows: true
+          });
+        }
+      }
+      const result = [];
+      for (const v of grouped.values()) {
+        if (!v.observedInRows) {
+          // Service existed in the day window but had no rows in the
+          // 10 000-fetch window — surface as the level itself with
+          // count = hits() count so the row still shows.
+          const hitsCount = serviceMap[v.service] || 0;
+          result.push({
+            type: levelConst,
+            typeKey,
+            service: v.service,
+            count: hitsCount
+          });
+        } else {
+          result.push({
+            type: v.messageHead || v.type,
+            typeKey: v.messageHead
+              ? v.messageHead
+                  .toLowerCase()
+                  .replace(/\s+/g, '_')
+                  .replace(/[^a-z0-9_]/g, '')
+              : typeKey,
+            service: v.service,
+            count: v.count
+          });
+        }
+      }
+      return result.sort((a, b) => b.count - a.count);
+    };
+
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
-        // Producer-side stamping (transform/stamp_log_metadata_from_msg in
-        // the OTel collector config) lifts severity_text + service.name
-        // to top-level VL fields for every fluentd-sourced log, so
-        // `hits(field=service.name, q=severity_text:ERROR)` returns
-        // per-service counts directly — no client-side re-parsing of
-        // `_msg` envelopes.
-        const calls = [];
-        if (wantError)
-          calls.push([
-            'ERROR',
-            client.hits({ q: 'severity_text:ERROR', start: startIso, end: endIso, field: 'service.name' })
-          ]);
-        if (wantWarn)
-          calls.push([
-            'WARN',
-            client.hits({ q: 'severity_text:WARN', start: startIso, end: endIso, field: 'service.name' })
-          ]);
-        if (wantInfo)
-          calls.push([
-            'INFO',
-            client.hits({ q: 'severity_text:INFO', start: startIso, end: endIso, field: 'service.name' })
-          ]);
         // Distinct service list for the dropdown — `q=*` + `field=service.name`
         // returns every distinct service that emitted a log in the window
         // (no level filter so every service shows up regardless of its
         // dominant level).
-        calls.push(['_ALL', client.hits({ q: '*', start: startIso, end: endIso, field: 'service.name' })]);
-
-        const results = await Promise.all(calls.map(async ([tag, p]) => [tag, await p]));
-        const bucketsByLevel = Object.fromEntries(results.filter(([tag]) => tag !== '_ALL'));
-        const allBuckets = results.find(([tag]) => tag === '_ALL')?.[1] || {};
-
-        /**
-         * Shape a `Record<serviceName, count>` hits bucket into the
-         * `{type, typeKey, service, count}[]` the Vue UI expects. Rows
-         * are sorted by count descending so the most active services
-         * surface first; `service: 'all'` rows are dropped (the UI has
-         * its own totals).
-         */
-        const shape = (levelConst, typeKey) => {
-          const map = bucketsByLevel[levelConst] || {};
-          return Object.entries(map)
-            .map(([service, count]) => ({ type: levelConst, typeKey, service, count }))
-            .filter((row) => row.service && row.service !== 'all')
-            .sort((a, b) => b.count - a.count);
-        };
+        const allServiceMap = await client.hits({
+          q: '*',
+          start: startIso,
+          end: endIso,
+          field: 'service.name'
+        });
+        const [errorsP, warningsP, infosP] = [
+          wantError ? bucketForLevel('ERROR', 'severity_text:ERROR', 'error') : Promise.resolve([]),
+          wantWarn ? bucketForLevel('WARN', 'severity_text:WARN', 'warn') : Promise.resolve([]),
+          wantInfo ? bucketForLevel('INFO', 'severity_text:INFO', 'info') : Promise.resolve([])
+        ];
+        const [errors, warnings, infos] = await Promise.all([errorsP, warningsP, infosP]);
 
         return {
-          errors: wantError ? shape('ERROR', 'error') : [],
-          warnings: wantWarn ? shape('WARN', 'warn') : [],
-          infos: wantInfo ? shape('INFO', 'info') : [],
-          services: Object.entries(allBuckets)
+          errors,
+          warnings,
+          infos,
+          services: Object.entries(allServiceMap)
             .map(([name, count]) => ({ name, count }))
             .filter((s) => s.name)
             .sort((a, b) => b.count - a.count),

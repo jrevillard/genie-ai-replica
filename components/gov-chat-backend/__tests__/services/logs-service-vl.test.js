@@ -134,8 +134,8 @@ describe('LogsService VictoriaLogs rewrite', () => {
           date: '2026-09-01',
           time: '00:00:00',
           level: 'INFO',
-          service: 'genie-backend',
-          stream: { service: 'genie-backend', environment: 'test' },
+          service: 'backend',
+          stream: { service: 'backend', environment: 'test' },
           fields: {}
         },
         {
@@ -144,8 +144,8 @@ describe('LogsService VictoriaLogs rewrite', () => {
           date: '2026-09-01',
           time: '00:00:01',
           level: 'INFO',
-          service: 'genie-backend',
-          stream: { service: 'genie-backend', environment: 'test' },
+          service: 'backend',
+          stream: { service: 'backend', environment: 'test' },
           fields: {}
         }
       ];
@@ -171,8 +171,8 @@ describe('LogsService VictoriaLogs rewrite', () => {
         date: '2026-09-01',
         time: `00:00:0${i}`,
         level: 'INFO',
-        service: 'genie-backend',
-        stream: { service: 'genie-backend', environment: 'test' },
+        service: 'backend',
+        stream: { service: 'backend', environment: 'test' },
         fields: {}
       }));
       mockVlClient.query.mockResolvedValueOnce(rows);
@@ -245,25 +245,96 @@ describe('LogsService VictoriaLogs rewrite', () => {
       // q=severity_text:LEVEL)` for per-service counts (no row fetch +
       // client-side counting).
       mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:ERROR') return { 'genie-backend': 3 };
-        if (q === 'severity_text:WARN') return { 'genie-backend': 1 };
-        if (q === 'severity_text:INFO') return { 'genie-backend': 2, 'document-repository': 10 };
-        if (q === '*') return { 'genie-backend': 6, 'document-repository': 10 };
+        if (q === 'severity_text:ERROR') return { backend: 3 };
+        if (q === 'severity_text:WARN') return { backend: 1 };
+        if (q === 'severity_text:INFO') return { backend: 2, 'document-repository': 10 };
+        if (q === '*') return { backend: 6, 'document-repository': 10 };
         return {};
       });
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
       expect(mockVlClient.hits).toHaveBeenCalled();
       expect(result.date).toBe('2026-09-01');
-      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'genie-backend', count: 3 }]);
-      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'genie-backend', count: 1 }]);
+      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'backend', count: 3 }]);
+      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'backend', count: 1 }]);
       expect(result.infos).toEqual([
         { type: 'INFO', typeKey: 'info', service: 'document-repository', count: 10 },
-        { type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 2 }
+        { type: 'INFO', typeKey: 'info', service: 'backend', count: 2 }
       ]);
       expect(result.services).toEqual([
         { name: 'document-repository', count: 10 },
-        { name: 'genie-backend', count: 6 }
+        { name: 'backend', count: 6 }
       ]);
+    });
+
+    it('extracts the actual message from a Winston JSON envelope before categorising (TYPE column fidelity)', async () => {
+      // Real VL `_msg` for Node services is a Winston JSON envelope:
+      //   `{"level":"info","message":"[DB_CONNECTION] Getting database connection",...}`
+      // The legacy file-log `groupLogs()` path parsed the envelope first
+      // and ran the regex / `split(':')[0]` fallback on the inner
+      // `.message` field. The VL summary must do the same — otherwise
+      // the TYPE column shows literal `{"level"` for every Winston row.
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:INFO') return { backend: 2 };
+        if (q === '*') return { backend: 2 };
+        return {};
+      });
+      mockVlClient.query.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:INFO') {
+          return [
+            {
+              _msg: JSON.stringify({
+                level: 'info',
+                message: '[DB_CONNECTION] Getting database connection',
+                service: 'backend'
+              }),
+              service: 'backend'
+            },
+            {
+              _msg: JSON.stringify({
+                level: 'info',
+                message: 'ENOENT: no such file or directory',
+                service: 'backend'
+              }),
+              service: 'backend'
+            }
+          ];
+        }
+        return [];
+      });
+      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
+      const types = result.infos.map((r) => r.type).sort();
+      // Three entries expected: 2 message-derived types + 1 seed row
+      // (the seeded service had 2 hits() counts; the row fetch only saw
+      // its first 2 rows whose types happened to be different, so the
+      // service is still surfaced as INFO with the hits() count).
+      expect(types).toEqual(['File Not Found', 'INFO', '[DB_CONNECTION] Getting database connection']);
+      // No literal envelope leakage.
+      expect(result.infos.every((r) => !r.type.startsWith('{'))).toBe(true);
+    });
+
+    it('falls through to the raw `_msg` for non-JSON payloads (e.g. uvicorn access logs)', async () => {
+      // Python uvicorn access logs are NOT JSON envelopes — they are
+      // raw text lines like `INFO: 127.0.0.1:... - "GET /health"`.
+      // The `split(':')[0]` fallback should still work on them.
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:INFO') return { textgen: 1 };
+        if (q === '*') return { textgen: 1 };
+        return {};
+      });
+      mockVlClient.query.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:INFO') {
+          return [
+            {
+              _msg: 'INFO:     127.0.0.1:51056 - "GET /health HTTP/1.1" 200 OK',
+              service: 'textgen'
+            }
+          ];
+        }
+        return [];
+      });
+      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
+      expect(result.infos).toHaveLength(1);
+      expect(result.infos[0].type).toBe('INFO');
     });
 
     it('returns empty buckets when VL has no ERROR/WARN rows', async () => {
@@ -302,15 +373,15 @@ describe('LogsService VictoriaLogs rewrite', () => {
 
     it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
       mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:INFO') return { 'genie-backend': 2, 'document-repository': 1 };
-        if (q === '*') return { 'genie-backend': 2, 'document-repository': 1 };
+        if (q === 'severity_text:INFO') return { backend: 2, 'document-repository': 1 };
+        if (q === '*') return { backend: 2, 'document-repository': 1 };
         return {};
       });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
       expect(result.infos).toEqual([
-        { type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 2 },
+        { type: 'INFO', typeKey: 'info', service: 'backend', count: 2 },
         { type: 'INFO', typeKey: 'info', service: 'document-repository', count: 1 }
       ]);
     });
@@ -544,8 +615,8 @@ describe('LogsService VictoriaLogs rewrite', () => {
       // parses, and the second line (after \n) must parse on its own.
       const truncated = '{"timestamp":"2026-09-01T00:00:00.000Z","message":"truncated';
       const tail =
-        '","level":"INFO","service":"genie-backend"}\n' +
-        '{"timestamp":"2026-09-01T00:00:01.000Z","message":"next","level":"INFO","service":"genie-backend"}\n';
+        '","level":"INFO","service":"backend"}\n' +
+        '{"timestamp":"2026-09-01T00:00:01.000Z","message":"next","level":"INFO","service":"backend"}\n';
       const content = truncated + tail;
 
       // Today (2026-09-07) is NOT in [2026-09-01..2026-09-01], so the
@@ -656,18 +727,18 @@ describe('LogsService VictoriaLogs rewrite', () => {
     it('_vlFilter appends dual-emit dedup when LOG_TO_VICTORIALOGS=true and LOG_TO_FILE unset', () => {
       process.env.LOG_TO_VICTORIALOGS = '1';
       delete process.env.LOG_TO_FILE;
-      // Dual-emit dedup filter narrows to OTel-SDK records only. With the
-      // fluentd service-name stamping fix (Collector transform reading
-      // `com.docker.compose.service`), every fluentd record NOW carries a
-      // `service.name` field — but with the raw Compose label (e.g.
-      // `backend`, `document-repository`). The OTel SDK path uses the
-      // canonical `genie-*` names (`genie-backend`,
-      // `genie-document-repository`). The filter `service.name:genie-*`
-      // matches ONLY the OTel-instrumented records and excludes every
-      // fluentd duplicate — same intent as the pre-fix
-      // `service.name:*` (which worked only because fluentd records had
-      // no `service.name` at all).
-      expect(logsService._vlFilter('level:INFO')).toBe('level:INFO AND service.name:genie-*');
+      // Dual-emit dedup: while OTLP is the canonical writer, the Docker
+      // fluentd driver ALSO forwards container stdout to VL. The two
+      // emission paths used to be distinguishable by the `service.name`
+      // value (`genie-backend` from the OTel SDK vs `backend` from the
+      // Compose label forwarded by fluentd). After the service-name
+      // unification (logger.js + tracing.js now hardcode the same
+      // Compose-block name across both ingestion paths), both produce
+      // the SAME `service.name` — so the dedup key switched to a
+      // fluentd-specific signal: `NOT fluent.tag:*` (fluentd-sourced
+      // rows carry the `fluent.tag` attribute, OTel-instrumented rows
+      // do NOT).
+      expect(logsService._vlFilter('level:INFO')).toBe('level:INFO AND NOT fluent.tag:*');
     });
 
     it('_sourceMode trims and lowercases ADMIN_LOGS_SOURCE (escapes " FILE " typo)', () => {
@@ -861,7 +932,7 @@ describe('LogsService VictoriaLogs rewrite', () => {
           _time: '2026-09-06T12:00:00.000Z',
           _msg: 'hello',
           level: 'INFO',
-          service: 'genie-backend',
+          service: 'backend',
           stream: 'genie.backend'
         }
       ]);
@@ -1021,15 +1092,15 @@ describe('LogsService VictoriaLogs rewrite', () => {
       // 42 INFO rows (38 in genie-backend + 4 in retriever) + a WARN
       // row that the level=INFO filter excludes from the WARN bucket.
       mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:INFO') return { 'genie-backend': 38, retriever: 4 };
-        if (q === '*') return { 'genie-backend': 38, retriever: 4 };
+        if (q === 'severity_text:INFO') return { backend: 38, retriever: 4 };
+        if (q === '*') return { backend: 38, retriever: 4 };
         return {};
       });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
       expect(result.infos).toEqual([
-        { type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 38 },
+        { type: 'INFO', typeKey: 'info', service: 'backend', count: 38 },
         { type: 'INFO', typeKey: 'info', service: 'retriever', count: 4 }
       ]);
     });
@@ -1039,18 +1110,18 @@ describe('LogsService VictoriaLogs rewrite', () => {
       // level bucket + one unfiltered for the dropdown service list).
       // The single-fetch-old tests are no longer applicable.
       mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:ERROR') return { 'genie-backend': 4 };
-        if (q === 'severity_text:WARN') return { 'genie-backend': 2 };
-        if (q === 'severity_text:INFO') return { 'genie-backend': 100 };
-        if (q === '*') return { 'genie-backend': 106 };
+        if (q === 'severity_text:ERROR') return { backend: 4 };
+        if (q === 'severity_text:WARN') return { backend: 2 };
+        if (q === 'severity_text:INFO') return { backend: 100 };
+        if (q === '*') return { backend: 106 };
         return {};
       });
       const result = await logsService.getLogsSummary({ date: '2026-09-06' });
       expect(mockVlClient.hits).toHaveBeenCalledTimes(4);
-      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'genie-backend', count: 4 }]);
-      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'genie-backend', count: 2 }]);
-      expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 100 }]);
-      expect(result.services).toEqual([{ name: 'genie-backend', count: 106 }]);
+      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'backend', count: 4 }]);
+      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'backend', count: 2 }]);
+      expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'backend', count: 100 }]);
+      expect(result.services).toEqual([{ name: 'backend', count: 106 }]);
     });
   });
 

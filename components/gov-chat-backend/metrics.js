@@ -4,7 +4,7 @@
 
 const { metrics } = require('@opentelemetry/api');
 
-const SERVICE_NAME = 'genie-backend';
+const SERVICE_NAME = 'backend';
 const SERVICE_VERSION = process.env.npm_package_version || '1.0.0';
 
 /**

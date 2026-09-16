@@ -289,14 +289,20 @@ describe('logger.js utility functions', () => {
   });
 
   // -------------------------------------------------------------------
-  // Service-name resolution (canonical OTel env first, then legacy)
+  // Service-name resolution — hardcoded canonical value.
   //
-  // logger.js stamps `service` from OTEL_SERVICE_NAME first (OTel-spec env
-  // read by SDK Resource too — values stay in sync between JSON field and
-  // OTel-emitted trace/log resource). Falls back to SERVICE_NAME, then to
-  // 'genie-backend' (back-compat default for the backend service). doc-repo
-  // and other components set OTEL_SERVICE_NAME in docker-compose to avoid
-  // the wrong default leaking in cross-component logs.
+  // `service.name` is no longer resolved from OTEL_SERVICE_NAME /
+  // SERVICE_NAME env vars. logger.js stamps `'backend'` directly so the
+  // JSON `service` field always matches the Compose block name in
+  // docker-compose.yaml, which is the same identifier the OTel SDK
+  // Resource and the collector's stamp_service_name_from_container
+  // transform land on for fluentd-sourced logs. Single source of truth;
+  // operators must override at the Compose layer (block name + env
+  // forwarding) rather than via an env that has to be kept in sync
+  // across tracing.js + logger.js + docker-compose.
+  //
+  // doc-repo does the same — its tracing.js hard-pins
+  // `service.name='document-repository'`.
   // -------------------------------------------------------------------
   describe('service-name resolution', () => {
     const ENV_KEYS = ['OTEL_SERVICE_NAME', 'SERVICE_NAME'];
@@ -311,28 +317,11 @@ describe('logger.js utility functions', () => {
       jest.resetModules();
     });
 
-    it('uses OTEL_SERVICE_NAME when set (highest priority)', () => {
-      delete process.env.SERVICE_NAME;
+    it('always stamps the canonical "backend" identifier, regardless of env vars', () => {
+      // All three states (OTEL_SERVICE_NAME set, SERVICE_NAME set, both
+      // unset) must produce the SAME hardcoded value — env vars are no
+      // longer part of the resolution chain.
       process.env.OTEL_SERVICE_NAME = 'genie-document-repository';
-      jest.resetModules();
-      const { traceFormat } = require('../../shared/lib/logger');
-      const { format } = require('winston');
-      const entries = [];
-      const passThrough = new PassThrough();
-      passThrough.on('data', (c) => entries.push(JSON.parse(c.toString().trim())));
-      const winston = require('winston');
-      const testLogger = winston.createLogger({
-        level: 'debug',
-        format: format.combine(format.timestamp(), traceFormat, format.json()),
-        transports: [new winston.transports.Stream({ stream: passThrough })],
-        exitOnError: false
-      });
-      testLogger.info('hi');
-      expect(entries[0].service).toBe('genie-document-repository');
-    });
-
-    it('falls back to SERVICE_NAME when OTEL_SERVICE_NAME is unset', () => {
-      delete process.env.OTEL_SERVICE_NAME;
       process.env.SERVICE_NAME = 'legacy-name';
       jest.resetModules();
       const { traceFormat } = require('../../shared/lib/logger');
@@ -348,10 +337,10 @@ describe('logger.js utility functions', () => {
         exitOnError: false
       });
       testLogger.info('hi');
-      expect(entries[0].service).toBe('legacy-name');
+      expect(entries[0].service).toBe('backend');
     });
 
-    it('defaults to genie-backend when neither env var is set', () => {
+    it('still stamps "backend" when both env vars are unset', () => {
       delete process.env.OTEL_SERVICE_NAME;
       delete process.env.SERVICE_NAME;
       jest.resetModules();
@@ -368,7 +357,7 @@ describe('logger.js utility functions', () => {
         exitOnError: false
       });
       testLogger.info('hi');
-      expect(entries[0].service).toBe('genie-backend');
+      expect(entries[0].service).toBe('backend');
     });
   });
 

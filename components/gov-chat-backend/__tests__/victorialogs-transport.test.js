@@ -93,7 +93,7 @@ function emitRecord(transport, info) {
 function makeTransport(opts = {}) {
   return new VictoriaLogsTransport({
     enabled: true,
-    service: 'genie-backend',
+    service: 'backend',
     loggerName: 'winston-test',
     ...opts
   });
@@ -204,7 +204,7 @@ describe('VictoriaLogsTransport — trace_id and span_id flow', () => {
       expect.objectContaining({
         trace_id: REAL_TRACE_ID,
         span_id: REAL_SPAN_ID,
-        service: 'genie-backend'
+        service: 'backend'
       })
     );
   });
@@ -282,7 +282,7 @@ describe('VictoriaLogsTransport — trace_id and span_id flow', () => {
       expect.objectContaining({
         trace_id: REAL_TRACE_ID,
         span_id: REAL_SPAN_ID,
-        service: 'genie-backend',
+        service: 'backend',
         user_id: 'u-42',
         conversation_id: 'conv-7'
       })
@@ -403,11 +403,11 @@ describe('VictoriaLogsTransport — service identity and configuration', () => {
     clearMockHistory();
   });
 
-  it('defaults `service` to `genie-backend` when no constructor opts are given', () => {
+  it('defaults `service` to `backend` when no constructor opts are given', () => {
     const transport = new VictoriaLogsTransport({ enabled: true });
     const record = emitRecord(transport, baseInfo({ level: 'info', message: 'default service' }));
 
-    expect(record.attributes.service).toBe('genie-backend');
+    expect(record.attributes.service).toBe('backend');
   });
 
   it('honors a constructor-time `service` override', () => {
@@ -418,7 +418,7 @@ describe('VictoriaLogsTransport — service identity and configuration', () => {
   });
 
   it('lets a per-record `info.service` override the transport default', () => {
-    const transport = new VictoriaLogsTransport({ enabled: true, service: 'genie-backend' });
+    const transport = new VictoriaLogsTransport({ enabled: true, service: 'backend' });
     const record = emitRecord(
       transport,
       baseInfo({ level: 'info', message: 'overridden service', service: 'chatqna' })

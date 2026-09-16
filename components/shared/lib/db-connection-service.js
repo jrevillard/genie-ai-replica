@@ -1394,28 +1394,28 @@ class DatabaseService {
       withBackgroundSpan(
         'db.cleanup_tick',
         async () => {
-        const now = Date.now();
-        const connectionsToClose = [];
+          const now = Date.now();
+          const connectionsToClose = [];
 
-        for (const [name, connectionInfo] of this._connections.entries()) {
-          if (this._isConnectionStale(connectionInfo, now)) {
-            connectionsToClose.push(name);
+          for (const [name, connectionInfo] of this._connections.entries()) {
+            if (this._isConnectionStale(connectionInfo, now)) {
+              connectionsToClose.push(name);
+            }
           }
-        }
 
-        for (const name of connectionsToClose) {
-          logger.info(`[DB_CLEANUP] Cleaning up stale connection: ${name}`);
-          await this._closeConnection(name);
+          for (const name of connectionsToClose) {
+            logger.info(`[DB_CLEANUP] Cleaning up stale connection: ${name}`);
+            await this._closeConnection(name);
 
-          if (name === 'default') {
-          logger.info(`[DB_CLEANUP] Initiating ACTIVE RECOVERY for essential connection: ${name}`);
-          await this._performActiveRecovery(name, new Error('Connection cleanup - proactive recreation'));
-        }
-      }
+            if (name === 'default') {
+              logger.info(`[DB_CLEANUP] Initiating ACTIVE RECOVERY for essential connection: ${name}`);
+              await this._performActiveRecovery(name, new Error('Connection cleanup - proactive recreation'));
+            }
+          }
 
-      if (connectionsToClose.length > 0) {
-        logger.info(`[DB_CLEANUP] Cleaned up ${connectionsToClose.length} stale connections`);
-      }
+          if (connectionsToClose.length > 0) {
+            logger.info(`[DB_CLEANUP] Cleaned up ${connectionsToClose.length} stale connections`);
+          }
         },
         { 'db.system': this._dbType },
         { kind: 3 /* SpanKind.CLIENT */ }

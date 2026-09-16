@@ -30,7 +30,7 @@ function buildLogRecord(body) {
     severityText: 'INFO',
     body,
     attributes: {
-      'service.name': 'genie-backend',
+      'service.name': 'backend',
       'deployment.environment': 'test'
     },
     traceId: '4bf92f3577b34da6a3ce929d0e0e4736',

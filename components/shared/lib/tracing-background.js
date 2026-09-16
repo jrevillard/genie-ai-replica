@@ -3,20 +3,20 @@
 
 const { trace } = require('@opentelemetry/api');
 
-// SCOPE_NAME reads OTEL_SERVICE_NAME first (the canonical env var per
-// OTel semconv) then falls back to the compose-pinned default. The
-// SCOPE_NAME matches `service.name` so VictoriaTraces `otel.scope.name`
-// queries return the same services as `service.name` queries.
-const SCOPE_NAME = process.env.OTEL_SERVICE_NAME || 'genie-backend';
+// SCOPE_NAME is hardcoded to `'backend'` — matches the OTel SDK Resource
+// `service.name` (set by tracing.js) and the Compose block name in
+// docker-compose.yaml, so VictoriaTraces `otel.scope.name` queries
+// return the same services as `service.name` queries. Single source of
+// truth — operators override at the Compose layer (block name + env
+// forwarding), not via an env chain that has to be kept in sync across
+// tracing.js + tracing-background.js + docker-compose.
+const SCOPE_NAME = 'backend';
 // SCOPE_VERSION reads SERVICE_VERSION first (already used by the
 // Resource), then reads `package.json` (the actual deployed image
 // version) — `npm_package_version` is undefined in Docker runtime.
 let SCOPE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
 try {
-  const _pkg = require('fs').readFileSync(
-    require('path').join(__dirname, '..', '..', 'package.json'),
-    'utf8'
-  );
+  const _pkg = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'package.json'), 'utf8');
   SCOPE_VERSION = JSON.parse(_pkg).version || SCOPE_VERSION;
 } catch {
   // keep fallback
@@ -119,29 +119,25 @@ function runInBackgroundSpan(name, fn, attrs) {
   // Returns whatever fn returns (sync value or Promise that resolves
   // to the value). Throws sync, or returns a rejected Promise on
   // async failure (auto-recorded on the span).
-  return tracer.startActiveSpan(
-    namespacedName,
-    attrs ? { attributes: attrs } : undefined,
-    (span) => {
-      // `startActiveSpan` records thrown errors automatically — let
-      // them propagate to the caller as-is. If `fn` returned a Promise,
-      // attach a rejection handler so the span's status is set on async
-      // failure too (startActiveSpan records sync throws but doesn't
-      // auto-catch promise rejections).
-      const result = fn();
-      if (result && typeof result.then === 'function') {
-        return result.catch((err) => {
-          span.recordException(err);
-          span.setStatus({
-            code: 2, // SpanStatusCode.ERROR
-            message: err && err.message ? err.message : String(err)
-          });
-          throw err;
+  return tracer.startActiveSpan(namespacedName, attrs ? { attributes: attrs } : undefined, (span) => {
+    // `startActiveSpan` records thrown errors automatically — let
+    // them propagate to the caller as-is. If `fn` returned a Promise,
+    // attach a rejection handler so the span's status is set on async
+    // failure too (startActiveSpan records sync throws but doesn't
+    // auto-catch promise rejections).
+    const result = fn();
+    if (result && typeof result.then === 'function') {
+      return result.catch((err) => {
+        span.recordException(err);
+        span.setStatus({
+          code: 2, // SpanStatusCode.ERROR
+          message: err && err.message ? err.message : String(err)
         });
-      }
-      return result;
+        throw err;
+      });
     }
-  );
+    return result;
+  });
 }
 
 module.exports = {

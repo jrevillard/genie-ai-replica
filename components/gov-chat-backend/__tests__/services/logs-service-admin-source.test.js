@@ -136,8 +136,8 @@ describe('admin-source no-restart path switch', () => {
         date: '2026-09-01',
         time: '00:00:00',
         level: 'INFO',
-        service: 'genie-backend',
-        stream: { service: 'genie-backend', environment: 'test' },
+        service: 'backend',
+        stream: { service: 'backend', environment: 'test' },
         fields: {}
       }
     ];
@@ -246,8 +246,8 @@ describe('admin-source no-restart path switch', () => {
         date: '2026-09-01',
         time: '00:00:00',
         level: 'INFO',
-        service: 'genie-backend',
-        stream: { service: 'genie-backend', environment: 'test' },
+        service: 'backend',
+        stream: { service: 'backend', environment: 'test' },
         fields: {}
       }
     ];

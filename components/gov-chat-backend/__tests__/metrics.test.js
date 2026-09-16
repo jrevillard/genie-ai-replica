@@ -30,7 +30,7 @@ describe('metrics.js', () => {
 
   it('calls metrics.getMeter with service name and version', () => {
     getMeter();
-    expect(metrics.getMeter).toHaveBeenCalledWith('genie-backend', '1.0.0');
+    expect(metrics.getMeter).toHaveBeenCalledWith('backend', '1.0.0');
   });
 
   it('returns the meter from metrics.getMeter', () => {

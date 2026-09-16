@@ -157,7 +157,7 @@ describe('tracing.js non-test branch', () => {
     // override). The test only verifies the service NAME arg + the tracer
     // return value — version is a non-deterministic string read at module
     // load time.
-    expect(mockGetTracer).toHaveBeenCalledWith('genie-backend', expect.any(String));
+    expect(mockGetTracer).toHaveBeenCalledWith('backend', expect.any(String));
     expect(tracer).toEqual({ startSpan: expect.any(Function) });
   });
 

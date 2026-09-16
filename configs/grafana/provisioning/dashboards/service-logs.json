@@ -48,7 +48,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "${datasource}"
           },
-          "expr": "container_name:~\"$service\" _msg:~\"$level\" $filter",
+          "expr": "service.name:~\"$service\" severity_text:~\"$level\" $filter",
           "refId": "A"
         }
       ],
@@ -100,11 +100,11 @@
         "options": [],
         "query": {
           "type": "fieldValue",
-          "field": "container_name",
-          "query": "*"
+          "field": "service.name",
+          "query": "service.name:*"
         },
         "refresh": 2,
-        "regex": "/.+_(.+)\\.\\d+\\./",
+        "regex": "",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
@@ -124,8 +124,18 @@
         "options": [
           {
             "selected": false,
-            "text": "ERROR",
-            "value": "ERROR"
+            "text": "TRACE",
+            "value": "TRACE"
+          },
+          {
+            "selected": false,
+            "text": "DEBUG",
+            "value": "DEBUG"
+          },
+          {
+            "selected": false,
+            "text": "INFO",
+            "value": "INFO"
           },
           {
             "selected": false,
@@ -134,8 +144,13 @@
           },
           {
             "selected": false,
-            "text": "INFO",
-            "value": "INFO"
+            "text": "ERROR",
+            "value": "ERROR"
+          },
+          {
+            "selected": false,
+            "text": "FATAL",
+            "value": "FATAL"
           },
           {
             "selected": true,
@@ -143,7 +158,7 @@
             "value": "$__all"
           }
         ],
-        "query": "ERROR,WARN,INFO,DEBUG",
+        "query": "TRACE,DEBUG,INFO,WARN,ERROR,FATAL",
         "skipUrlSync": false,
         "type": "custom"
       },

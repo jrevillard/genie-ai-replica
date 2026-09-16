@@ -500,6 +500,7 @@ const ROUTE_CONFIGS = [
     keycloakAuth: true
   },
   { file: 'weather-routes', paths: ['/api/weather'], serviceName: 'weatherService', keycloakAuth: true },
+  { file: 'agri-routes', paths: ['/api/agri'], serviceName: 'agriService', keycloakAuth: true },
   { file: 'translation-routes', paths: ['/api/translate'], serviceName: 'translationService', keycloakAuth: true }
 ];
 
@@ -1036,7 +1037,7 @@ async function initializeServices() {
   // Import services individually with error handling
   let userProfileService, adminDashboardService, analyticsService, queryService;
   let chatHistoryService, serviceCategoryService, logsService;
-  let databaseOperationsService, weatherService, securityScanService, translationService;
+  let databaseOperationsService, weatherService, securityScanService, translationService, agriService;
 
   const importService = async (name, servicePath) => {
     logger.info(`Importing service: ${name}`);
@@ -1068,6 +1069,15 @@ async function initializeServices() {
       './services/database-operations-service'
     );
     weatherService = await importService('WeatherService', './services/weather-service');
+    const { AgriService } = await importService('AgriService', './services/agri/agri-service');
+    agriService = AgriService.getInstance();
+    try {
+      await agriService.init();
+    } catch (agriError) {
+      // Never-fail design: agri data is supplementary — a broken init must
+      // not take the backend down (routes will serve seed/stale envelopes)
+      logger.error(`AgriService init failed (continuing without live data): ${agriError.message}`);
+    }
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
 
@@ -1086,6 +1096,7 @@ async function initializeServices() {
       chatHistoryService: { instance: chatHistoryService, name: 'ChatHistoryService' },
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
+      agriService: { instance: agriService, name: 'AgriService' },
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
       translationService: { instance: translationService, name: 'TranslationService' }
     };

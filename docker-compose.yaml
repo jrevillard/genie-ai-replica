@@ -1428,7 +1428,13 @@ services:
       # OTel-spec service name override (canonical source read by tracing.py).
       # Defaults to the Compose service name; operators override by exporting
       # `OTEL_SERVICE_NAME` before `docker compose up` (e.g. for canary).
-      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-chatqna-xeon-backend-server}
+      # Bare `chatqna` (no `-xeon-backend-server` suffix) keeps Grafana
+      # `service.name` queries aligned with the OPEA code's
+      # `setup_tracing("chatqna")` fallback — both the OTel and the fluentd
+      # paths then resolve to the same identifier (dashboard filter
+      # `service.name:chatqna` returns every chatqna record regardless of
+      # ingestion path).
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-chatqna}
       # OTel Resource semantic convention for service grouping (Grafana
       # `service.namespace` filter). All OPEA overlay services share
       # `genieai`; backend + doc-repo share `genie-core`.
@@ -1876,7 +1882,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 60s
     networks:
       - genieai_network
     deploy:

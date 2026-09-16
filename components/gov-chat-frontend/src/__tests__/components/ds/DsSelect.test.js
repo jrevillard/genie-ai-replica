@@ -44,16 +44,25 @@ describe('DsSelect', () => {
   });
 
   describe('Placeholder', () => {
-    it('renders placeholder option when provided', () => {
+    it('renders placeholder option when provided (and is RE-SELECTABLE — not disabled)', () => {
+      // The placeholder option doubles as the "reset to no value" choice
+      // for filter dropdowns (e.g. admin/logs "All Levels" / "All Services").
+      // Disabling it made the reset state unreachable — see issue 3 in
+      // the admin-logs PRD: once a level/service was picked, the user
+      // could not return to the unfiltered view. The placeholder is
+      // visually distinguishable because its `value=""` matches the
+      // default `v-model`; the browser displays it as the SELECTED text
+      // when `modelValue` is empty.
       const wrapper = mountSelect({ placeholder: 'Choose...' });
-      const placeholderOption = wrapper.find('option[disabled]');
+      const placeholderOption = wrapper.find('option[value=""]');
       expect(placeholderOption.exists()).toBe(true);
       expect(placeholderOption.text()).toBe('Choose...');
+      expect(placeholderOption.attributes('disabled')).toBeUndefined();
     });
 
     it('does not render placeholder option when not provided', () => {
       const wrapper = mountSelect();
-      expect(wrapper.find('option[disabled]').exists()).toBe(false);
+      expect(wrapper.find('option[value=""]').exists()).toBe(false);
     });
   });
 

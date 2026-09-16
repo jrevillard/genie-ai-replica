@@ -99,9 +99,20 @@ describe('LogSearchDialog', () => {
       expect(wrapper.exists()).toBe(true);
     });
 
-    it('has empty props definition', () => {
+    it('declares the availableServices prop with empty default', () => {
       const wrapper = createLogSearchDialogWrapper();
-      expect(wrapper.vm.$options.props).toEqual({});
+      // The dialog accepts an :available-services prop from the parent
+      // <AdminDashboard> (populated from the summary endpoint's
+      // `services: [{name, count}]` field). Default is [] so the
+      // dropdown falls back to "Any service" when the parent doesn't
+      // pass the list.
+      expect(wrapper.vm.$options.props).toEqual({
+        availableServices: {
+          type: Array,
+          default: expect.any(Function)
+        }
+      });
+      expect(wrapper.vm.$options.props.availableServices.default()).toEqual([]);
     });
 
     it('initializes adminDashboardService mock correctly', () => {

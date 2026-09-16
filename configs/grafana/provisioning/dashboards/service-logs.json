@@ -166,11 +166,11 @@
         "options": [],
         "query": {
           "type": "fieldValue",
-          "field": "_msg",
-          "query": "_msg:~\"trace_id=\""
+          "field": "trace_id",
+          "query": "trace_id:*"
         },
         "refresh": 2,
-        "regex": ".*trace_id=\"([^\"]+)\".*",
+        "regex": "",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"

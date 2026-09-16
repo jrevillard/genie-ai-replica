@@ -330,7 +330,11 @@ export default {
           strokeColors: cssVars.backgroundColor,
           strokeWidth: 2
         },
-        tooltip: { y: { formatter: (v) => this.formatValue(v) }, theme: this.isDarkMode ? 'dark' : 'light' },
+        // ApexCharts 'dark' theme uses hardcoded dark colors that don't contrast
+        // well with our --bg in dark mode. Use 'light' (high contrast always)
+        // and let scoped CSS below override the tooltip bg/text to use our
+        // DS tokens, so the tooltip stays readable and theme-consistent.
+        tooltip: { y: { formatter: (v) => this.formatValue(v) } },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 }
       };
     },

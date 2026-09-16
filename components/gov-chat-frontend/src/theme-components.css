@@ -221,3 +221,31 @@ td {
   flex: 1;
   color: var(--fg);
 }
+
+/* ================================================================
+   APEXCHARTS TOOLTIP — override hardcoded colors with DS tokens
+   ApexCharts renders tooltips portal-style at body level with inline
+   styles, so scoped CSS doesn't reach them. We force bg/fg/border to
+   follow our DS tokens in both light and dark modes. !important is
+   required to override ApexCharts inline style attributes.
+   ================================================================ */
+.apexcharts-tooltip {
+  background: var(--surface) !important;
+  color: var(--fg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.apexcharts-tooltip-title {
+  background: var(--surface) !important;
+  color: var(--fg) !important;
+  border-bottom: 1px solid var(--border) !important;
+  font-weight: 600;
+}
+.apexcharts-tooltip-series-group apexcharts-tooltip-text,
+.apexcharts-tooltip-series-group apexcharts-tooltip-text-y-value {
+  color: var(--fg) !important;
+}
+.apexcharts-tooltip-marker {
+  background: var(--fg) !important;
+}

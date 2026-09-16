@@ -33,7 +33,6 @@ import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsPill from '../ds/Pill.vue';
 import worldBankService from '../../services/worldBankService.js';
-import { useChartTheme } from '../../composables/useChartTheme.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
@@ -68,8 +67,7 @@ export default {
   emits: ['open-chart'],
 
   setup() {
-    const { getCssVarStrings } = useChartTheme({});
-    return { getCssVarStrings };
+    return {};
   },
   data() {
     return {
@@ -142,8 +140,6 @@ export default {
     },
 
     chartOptions() {
-      const cssVars = this.getCssVarStrings();
-
       return {
         chart: {
           type: 'line',
@@ -157,14 +153,17 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: 2
+          width: 3
         },
-        colors: [cssVars.accentColor],
+        // Use category-specific semantic color so each market stands out
+        // (maize/warning/info/...). The default accentColor made all six
+        // buttons look identical at a glance.
+        colors: [this.categoryColor],
         fill: {
           type: 'gradient',
           gradient: {
             shadeIntensity: 1,
-            opacityFrom: 0.3,
+            opacityFrom: 0.35,
             opacityTo: 0,
             stops: [0, 100]
           }

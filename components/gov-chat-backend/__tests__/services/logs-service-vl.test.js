@@ -290,8 +290,8 @@ describe('LogsService VictoriaLogs rewrite', () => {
 
     it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
       mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:ERROR') return { 'auth': 2 };
-        if (q === '*') return { 'auth': 2 };
+        if (q === 'severity_text:ERROR') return { auth: 2 };
+        if (q === '*') return { auth: 2 };
         return {};
       });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });

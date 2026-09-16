@@ -592,9 +592,21 @@ class LogsService {
         // per-service counts directly — no client-side re-parsing of
         // `_msg` envelopes.
         const calls = [];
-        if (wantError) calls.push(['ERROR', client.hits({ q: 'severity_text:ERROR', start: startIso, end: endIso, field: 'service.name' })]);
-        if (wantWarn) calls.push(['WARN', client.hits({ q: 'severity_text:WARN', start: startIso, end: endIso, field: 'service.name' })]);
-        if (wantInfo) calls.push(['INFO', client.hits({ q: 'severity_text:INFO', start: startIso, end: endIso, field: 'service.name' })]);
+        if (wantError)
+          calls.push([
+            'ERROR',
+            client.hits({ q: 'severity_text:ERROR', start: startIso, end: endIso, field: 'service.name' })
+          ]);
+        if (wantWarn)
+          calls.push([
+            'WARN',
+            client.hits({ q: 'severity_text:WARN', start: startIso, end: endIso, field: 'service.name' })
+          ]);
+        if (wantInfo)
+          calls.push([
+            'INFO',
+            client.hits({ q: 'severity_text:INFO', start: startIso, end: endIso, field: 'service.name' })
+          ]);
         // Distinct service list for the dropdown — `q=*` + `field=service.name`
         // returns every distinct service that emitted a log in the window
         // (no level filter so every service shows up regardless of its

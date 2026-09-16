@@ -64,26 +64,17 @@ function redactAttributes(attributes) {
 // that recurses into plain objects and arrays while preserving primitives,
 // null, undefined, and special objects (Date, Buffer, Error, Map, Set, etc.)
 // verbatim. This intentionally avoids any cloning of non-plain values.
-function redactLogRecordBody(body, seen) {
+function redactLogRecordBody(body) {
   if (body === null || body === undefined) return body;
   if (typeof body !== 'object') {
     return redactValue(body);
   }
-  // Circular-reference guard. Express middleware that logs `req` (or any
-  // self-referential payload) would otherwise infinite-recurse into the
-  // walker and crash with RangeError: Maximum call stack size exceeded.
-  // WeakSet lets GC reclaim entries once the top-level walk finishes;
-  // the marker `[CIRCULAR]` makes the cycle visible in VictoriaLogs so
-  // operators can spot the offending caller.
-  if (!seen) seen = new WeakSet();
-  if (seen.has(body)) return '[CIRCULAR]';
-  seen.add(body);
   // Non-plain objects (Date, Buffer, Error, Map, Set, RegExp, etc.) and class
   // instances are passed through untouched — redacting their internals would
   // be both unsafe and lossy. Callers serialize them before logging in
   // practice; the walker only owns plain data shapes.
   if (Array.isArray(body)) {
-    return body.map((item) => redactLogRecordBody(item, seen));
+    return body.map((item) => redactLogRecordBody(item));
   }
   const proto = Object.getPrototypeOf(body);
   if (proto !== null && proto !== Object.prototype) {
@@ -94,7 +85,7 @@ function redactLogRecordBody(body, seen) {
     if (isSensitiveKey(key)) {
       redacted[key] = '[REDACTED]';
     } else {
-      redacted[key] = redactLogRecordBody(value, seen);
+      redacted[key] = redactLogRecordBody(value);
     }
   }
   return redacted;

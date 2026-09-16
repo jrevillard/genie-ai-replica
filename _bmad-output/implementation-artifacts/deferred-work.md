@@ -2711,3 +2711,142 @@ source_spec: `7-6-deploy-victorialogs-centralized-log-aggregation` (admin-logs P
 severity: medium
 reason: The Grafana `victoriametrics-logs-datasource` plugin returns `500 — error from datasource: query arg cannot be empty` for EVERY format of `queryType: fieldValues` (or `streamFieldValues`, `fieldNames`) — tried with `query: "*"`, `query: "service.name:*"`, `field: "service.name"` set, `target: "service.name"`, all combinations. The downstream VL `/select/logsql/field_values?field=service.name&query=*` endpoint works perfectly (returns all 9 service.name values), so the issue is purely in the plugin's `fieldValues` handler — likely a version mismatch between the plugin shipped with `grafana/grafana:12.4` and the VL API the plugin assumes. Side effect: the `service` and `trace_id` dropdowns on the Service Logs dashboard stay empty (only the `$__all` option shows up); users can still filter via the `filter` textbox at the bottom of the Logs panel (type `service_name:chatqna-xeon-backend-server` or `severity_text:ERROR`). Out of scope for admin-logs PRD — belongs to a plugin upgrade story.
 status: pending
+
+
+## Deferred from: code review of SPEC.md (2026-09-16) — MR !383
+
+Multi-perspective review (4 chunks × 4 reviewers = 16 reports). Verdicts reflect cross-validation: a finding raised by 2+ reviewers is graded higher; a single-reviewer claim about an unverifiable condition is graded `maybe-false` and deferred. Verifications read the actual files at the cited paths.
+
+### CRITICAL (must fix or decision before merge)
+
+- **CAP-7/D1 not satisfied** — `docker-compose.yaml` still has 5× `profiles: [observability]` on `victorialogs`/`otel-collector`/`otel-collector-init`; `victorialogs.deploy.replicas` not pinned to 1. SPEC CAP-7 + verification.md §P0 require both. (AA3 #170) `[components/.../docker-compose.yaml:1838,1906,1940,1976 + scope]`
+- **CAP-6 rollback switches not tested** — `test-results-2026-09-14.md` admits 5 switches (ADMIN_LOGS_SOURCE, LOG_TO_VICTORIALOGS, VL_FAIL_OPEN, LOG_TO_FILE, SECURITY_SCAN_BACKEND) are `NOT TESTED`. SPEC CAP-6 + verification.md §6 both gate merge on these. (AA4 #219) `[test-artifacts/test-results-2026-09-14.md]`
+- **CI test will fail in MR** — `alerting-provisioning.test.js:67,77` asserts `groups.length===4` and `rules.length===5`. yml now has 5 groups / 6 rules (added `observability.otel_log_stamping` group + `otel-stamp-service-name-fail` rule). No CI green light until test bumped. (VG3 #167) `[configs/grafana/provisioning/__tests__/alerting-provisioning.test.js:67,77]`
+- **service.name rename `genie-backend` → `backend` breaks verification.md** — old: `info.service = process.env.SERVICE_NAME || 'genie-backend'`. New: `info.service = 'backend'`. SPEC verification.md:24,40,52,129 all key off `q=service:genie-backend`; phases.md §P1a forbids the rename. Decision needed: keep "backend" (update SPEC + verification scripts) vs revert to "genie-backend". (AA1 #41-43, BH1 #7, AA1 #45, ECH2 #81) `[components/shared/lib/logger.js:87, components/shared/lib/victorialogs-transport.js:74]`
+- **`opea/translation:1.5` → `1.3` silent downgrade** — no inline comment, no spec AC. Either intentional pin (document why + add upgrade tracker) or accidental revert (split to its own MR). (BH3 #130, ECH3 #157, AA3 #177) `[docker-compose.yaml:927]`
+
+### HIGH (patch before merge — cross-validated)
+
+- **OTel collector config: duplicate header comment block** — the new "Note: Docker services use the fluentd logging driver…" block is inserted immediately above the unchanged old block (lines ~1531-1542 + 1551-1553), producing two copies. Structural merge error. (BH3 #121, AA3 #175) `[configs/otel/otel-collector-config.yaml]`
+- **OTel collector config: pipeline-overview comment mismatch** — header says `resource/stamp_service_name_from_container` but the processor actually defined is `transform/stamp_service_name_from_container`. (BH3 #119, ECH3 #151) `[configs/otel/otel-collector-config.yaml:29]`
+- **`rag-pipeline-trace-waterfall.json` `$pipeline` allValue contains `chatqna-xeon-backend-server` while compose now stamps `chatqna`** — when "All" selected, regex excludes every chatqna record. Falsifies commit 3a0a89422's stated goal. (ECH3 #146, ECH3 #161) `[configs/grafana/provisioning/dashboards/rag-pipeline-trace-waterfall.json:766]`
+- **Components/AGENTS.md symlink to root CLAUDE.md is wrong scope** — every component (mobile/, genie-ai-overlay/, etc.) inherits root-repo rules (rtk, glab, never-commit-main, El-Salvador deploy topology) that don't apply. Either narrow symlink target or scope-aware per-component AGENTS.md. (BH4 #208, AA4 #230) `[components/AGENTS.md]`
+- **`tools/tempo-proxy/main.go` change is out of SPEC scope** — `c7f197fed fix(tempo-proxy): expose resource.service.name as alias for service.name`. SPEC.md + companions don't mention `tempo-proxy`. Bundled into admin-logs MR violates C-7. (AA4 #228) `[tools/tempo-proxy/main.go:370]`
+- **`service.namespace` resource attribute added without updating C-4** — SPEC.md C-4 enumerates permitted stream fields as `service.name`, `deployment.environment` only. Code adds `service.namespace`. Update C-4 or drop attribute. (AA2 #107) `[genie-ai-overlay/tracing.py]`
+- **DW-412 ships visible dashboard regression as "out of scope"** — `service-logs.json` `service` + `trace_id` filter dropdowns empty on Grafana 12.4. Only a workaround (textbox) works. Marked "out of scope for admin-logs PRD" but the PRD provisions this dashboard. (AA3 from chunk 4 #227) `[configs/grafana/provisioning/dashboards/service-logs.json]`
+
+### MEDIUM (defer or patch with tests)
+
+- **Verification gaps in `_normalizeRows`** — production bug fix (severity_text/service.name priority + `_stream` STRING branch) is not pinned by any test. Highest-leverage gap. (VG1 #31, VG1 #32) `[components/shared/lib/__tests__/melt/victorialogs-client.test.js]`
+- **`hits()` adapter rewrite has zero direct unit tests** — every consumer mocks `VictoriaLogsClient.hits()`; the production-dominant path is never exercised. (ECH1 #18, VG1 #33) `[components/shared/lib/melt/victorialogs-client.js]`
+- **`booleanEnv(name, defaultValue)` flipped `LOG_TO_VICTORIALOGS` default silently** — `false` → `true` when env unset. No CHANGELOG entry. Production deployments that relied on unset (off) now enable transport. (BH1 #8, AA1 #50) `[components/shared/lib/boolean-env.js]`
+- ~~**`booleanEnv` has zero direct unit tests** — function is universally mocked; matrix (unset/'1'/'0'/'true'/'TRUE'/'yes'/'no' case-sensitivity, whitespace-trim) not asserted. (ECH1 #24, VG1 #39) `[components/shared/lib/boolean-env.js]`~~ — RESOLVED by commit `76938f55a` (P9): `components/shared/lib/__tests__/boolean-env.test.js` adds 11 cases (defaultValue true+false, all env value shapes, whitespace trim).
+- **`tracing-background.js` SCOPE_VERSION reads wrong path** — `path.join(__dirname, '..', '..', 'package.json')` resolves to non-existent `components/package.json`. Silently keeps `'1.0.0'` fallback; `otel.scope.version` is wrong on every span. (BH1 #1, AA1 #48) `[components/shared/lib/tracing-background.js]`
+- **`tracing-background.js` `withBackgroundSpan` has zero tests** — new public surface consumed by 3 db-connection-service call sites. (BH1 finding, ECH1 #20-22)
+- **DB connection service: `setInterval` withBackgroundSpan fires-and-forgets** — promise rejection → UnhandledPromiseRejection under default Node policy. (BH1 #10, ECH1 at interval sites) `[components/shared/lib/db-connection-service.js:1320-1330,1389-1404]`
+- **`_performActiveRecovery` span wraps every call** including throttled no-op path → cardinality spike on noisy clients. (BH1 #11) `[components/shared/lib/db-connection-service.js:1234-1253]`
+- **`RedactingSpanProcessor` (Python) has no direct test** — log path redactor has `assertIsWired`-style test; trace path redactor doesn't. (VG2 #98) `[genie-ai-overlay/tracing.py]`
+- **`setup_trace_logging` propagate-flip has no test** — critical for comps CustomLogger records to reach OTel. (VG2 #99) `[genie-ai-overlay/tracing.py]`
+- **service.name unification call sites have no end-to-end test** — actual production names (`chatqna`, `reranker`, `dataprep-arango-service`, `retriever-arango-service`) not asserted anywhere. (VG2 #100) `[genie-ai-overlay/chatqna,reranker,dataprep,retriever]`
+- **OTel Collector log-pipeline transforms added with zero behavioral test** — 3 new transform processors (`stamp_service_name_from_container`, `stamp_log_metadata_from_msg`, `normalize_log_body`) ship with no test fixture. The previous failure (raw Winston envelopes drowning VL) is the regression risk. (VG3 #163) `[configs/otel/otel-collector-config.yaml]` — service.name regex chain PARTIALLY RESOLVED by commit `df33f0312` (P5) — chain of 2 regex (Swarm + single-host) + empty-label guard; verified against `otel/opentelemetry-collector-contrib:0.152.0` with 19 fixture payloads (10/10 cases pass per harness at `/tmp/otel-verify/`). The other 2 transforms (`stamp_log_metadata_from_msg`, `normalize_log_body`) remain untested.
+- **`service-logs.json` `trace_id` dropdown enumerates every distinct trace** — `trace_id:*` returns tens of thousands of rows; Grafana hangs after a few hours of traffic. Scope to `_time:>now-15m` or cap `max: 1000`. (BH3 #128, ECH3 #150) `[configs/grafana/provisioning/dashboards/service-logs.json:1458-1469]`
+- **3 env vars introduced without updating env-vars.md** — `OTEL_LOGS_ENABLED`, `OTEL_SERVICE_NAME`, `OTEL_SERVICE_NAMESPACE` (last 2 are OTel-spec canonical but missing from the catalog). (AA2 #105) `[genie-ai-overlay/tracing.py]`
+- **`background_span` docstring references nonexistent `genieai_logging.py`** — points new contributors at a module that doesn't exist. (AA2 #106) `[genie-ai-overlay/tracing.py]`
+- **`LOG_LEVEL` env hijacked to set OTel `LoggingHandler` level + lift global root logger** — operator-set `LOG_LEVEL=ERROR` no longer keeps OPEA quiet. (AA2 #109) `[genie-ai-overlay/tracing.py]`
+- **`LOG_DROPPED_REASON` enum self-violated** — `victorialogs-transport.js` passes raw `'invalid_timestamp'` string to a counter whose own comment forbids raw strings. (AA1 #46) `[components/shared/lib/victorialogs-transport.js:176]`
+- **`service-logs.json` level dropdown excludes Python WARNING/CRITICAL/NOTICE** — silently filters out Python logs at those severities. (ECH3 #149) `[configs/grafana/provisioning/dashboards/service-logs.json:1458]`
+- **OTel collector severity_text regex runs on JSON bodies** — no guard; rule fires on every record even when it returns empty. (BH3 #124) `[configs/otel/otel-collector-config.yaml:stamp_log_metadata_from_msg]`
+- **OTel collector ISO 8601 timestamps with `T` separator don't match `[YYYY-MM-DD HH:MM:SS]` regex** — ISO-timestamped log bodies keep redundant prefix in VL `_msg`. (ECH3 #155) `[configs/otel/otel-collector-config.yaml:1774-1775]`
+- **OTel collector empty regex match → Concat empty body** — malformed access log results in blank `_msg` in VL. (ECH3 #156) `[configs/otel/otel-collector-config.yaml:1738-1744,1759-1764]`
+- **`SetScopeName` exported but not re-exported from `shared/lib/index.js`** — doc-repo consumer cannot reach it without re-violating the lint guard the same MR strengthens. (BH1 #4) `[components/shared/lib/index.js]`
+- **`alert-rules.yml` disk-storage alert threshold silently inverted** — `gt[]` → `lt[1073741824]` plus `avg` → `last` across ~10 reducers. Undocumented in MR. (AA3 #183, ECH3 #142-143) `[configs/grafana/provisioning/alerting/alert-rules.yml]`
+- **Dual metric-name `or` join duplicated across 4 dashboards, 12 panels** — belongs as Prometheus recording rule. (BH3 #127) `[configs/grafana/provisioning/dashboards/*.json]`
+- **`otel-collector-init` `cap_add: [CHOWN]` added without spec AC** — references "SAST wave-4" but no AC traceability. (AA3 #182) `[docker-compose.yaml:1769-1772]`
+- **`OTEL_SERVICE_NAME/NAMESPACE` not set for kong, nginx, postgres, redis, keycloak** — dashboards filter by these namespaces; services silently excluded. (BH3 #132) `[docker-compose.yaml]`
+- **Test counts internal contradiction in `test-results-2026-09-14.md`** — 134 vs 1988, 8 vs 9 fixes, 22 vs 23 services, 3 vs 5 verified PRD AC. (BH4 #193-196, AA4 #218, #224-225)
+- **SPEC baseline_revision not bumped** — still `81c270b6` while branch tip is `3a0a89422`; preservation-validated contract is unauditable. (AA4 #226) `[SPEC.md:4]`
+- **`.gitlab-ci.yml` cosmetic comment edits unrelated to migration** — "Story 1.3" → "the test stage", "Epic 8" → "RAG Quality tests". (AA3 #180) `[.gitlab-ci.yml]`
+- **`components/shared/eslint-rules-base.js` glob rationale contradicts `components/CLAUDE.md` "Pitfall 3"** — the rule's stated "doesn't match barrel" claim is wrong; only the `!**/shared/lib/index.js` exemption saves it. No test resolves the contradiction. (BH1 #5, AA1 #47, VG1 #40)
+- **Cross-cutting: `genie-backend` literal may remain in any un-migrated dashboard** — cheap insurance: `rg '"genie-backend"' configs/grafana` post-merge. (BH3 #138)
+- **No CI pipeline evidence in `test-results-2026-09-14.md`** — per `feedback_never_merge_without_ci`, umbrella should reference commit SHA + pipeline id. (AA4 #232)
+
+### LOW (rejected or one-liner)
+
+- README.md stale relative to code (flushLogs still exported but removed from doc list; new helpers undocumented). (BH1 #13)
+- `service-health.json` no trailing newline. (BH3 #129, AA4 #231)
+- `Select.vue` long placeholder comment duplicates prior memory note. (BH3 #136)
+- Translation keys `admin.services.*` removed from LogSearchDialog but remain in locale files. (BH3 #135)
+- `tools/tempo-proxy/main.go` change has no Go test file (`*_test.go`). (VG4 #217, AA4 #229)
+- `components/AGENTS.md` no trailing newline. (AA4 #231)
+- `manual:rag-quality` CI job runs pytest -m rag-quality on tree with no `rag-quality`-marked tests (perpetual warning). (BH3 #137)
+- `Ms → s` axis unit change in `service-health.json` while some pods may still emit ms-based metrics (1000× off magnitude during transition). (ECH3 #148)
+- `EXPECTED_DASHBOARD_SERVICES` hand-curated set blocks legitimate new OPEA service additions. (ECH2 #91, ECH2 #97)
+- Many reviewer false-positives around test counts (134 vs 1988 — different scopes, not a real contradiction).
+
+### Rejected as `false` or out-of-scope
+
+- Many "magic number" / "trailing whitespace" findings — not worth the patch cost. (BH3 #126, ECH3 #142-143 partial)
+- Findings about Python-only PII extension asymmetry (tested + documented as design choice).
+- Findings about `singleShot` semantics of OTel setup_logging (pre-existing pattern, not new in this MR).
+- `boolean-env.js` semantics change for callers that DON'T pass defaultValue — backward compatible.
+
+
+## Addendum (2026-09-16, post-user-correction)
+
+**Source-of-truth reframe.** The 5 fix commits on this branch (`8bf85a263` contract assertion alignment, `4332f4713` Node.js tracing/PII hardening, `f41ab9e2c` OTel collector + dashboard legacy names + bidirectional contracts, `ae31dcdf7` OPEA Python tracing hardening + service.name alignment, `3a0a89422` chatqna service.name divergence + VL cold-start budget) are LEGITIMATE CORRECTIONS to the SPEC + companions. SPEC.md, phases.md, verification.md, rollback-matrix.md, env-vars.md are stale relative to the branch. Findings below are downgraded per the user's correction.
+
+### No-longer-defects (SPEC drift, not bug)
+
+- **service.name `genie-backend` → `backend` rename** — intentional alignment. SPEC verification.md scripts using `q=service:genie-backend` must be updated (housekeeping), but the rename itself is correct. NOT a violation.
+- **CAP-7/D1 `profiles:[observability]` not removed** — out of scope for this MR; D1 lift is a separate scope. SPEC drift; not a blocker for THIS MR.
+- **CAP-6 rollback switches "not tested"** — not in scope for this MR's OTel correlation focus; tracked elsewhere. SPEC drift.
+- **`service.namespace` resource attribute added** — design choice per OTel spec; SPEC C-4 needs updating.
+- **3 env vars not in env-vars.md catalog** — env-vars.md lag; update on next spec pass.
+- **`background_span` docstring referencing `genieai_logging.py`** — doc nit, no runtime impact.
+- **`LOG_LEVEL` hijacked for OTel handler** — documented behavior; legitimate per OTel convention.
+- **`LOG_DROPPED_REASON` raw string 'invalid_timestamp'** — enum convention drift; not in this MR's scope to extend the canonical enum.
+- **`opea/translation:1.5` → `1.3` downgrade** — not in this MR's diff (transitive from another commit); check base SHA `8ada6644` if intentional.
+- **NG-3 dashboard rewrites / NG-2 frontend changes** — implicit acceptance via the 5 fix commits; out of scope to challenge.
+- **`.gitlab-ci.yml` cosmetic comment edits** — pure hygiene; matches `feedback_no_story_refs_in_comments`.
+
+### Real defects (CI/runtime/hygiene — independent of spec drift)
+
+The remaining set that survives the reframe:
+
+#### CI blockers (must fix before merge)
+1. **`alerting-provisioning.test.js:67,77` count drift** — asserts 4 groups / 5 rules; yml has 5 / 6. CI will fail. Concrete fix.
+2. **`test-results-2026-09-14.md` self-contradicting counts** — 134 vs 1988, 8 vs 9 fixes, 22 vs 23 services, 3 vs 5 verified AC. The doc is the evidence trail; pick one set.
+
+#### Runtime hazards (genuine bugs)
+1. **`tracing-background.js` SCOPE_VERSION reads wrong path** — `path.join(__dirname,'..','..','package.json')` resolves to non-existent `components/package.json`. `otel.scope.version` silently stamps `'1.0.0'` on every span.
+2. **DB connection service `setInterval` withBackgroundSpan fires-and-forgets** — promise rejection → UnhandledPromiseRejection under default Node policy. Two sites (healthcheck + cleanup_tick).
+3. **`booleanEnv('LOG_TO_VICTORIALOGS', true)` flips default silently** — production deployments that relied on unset (off) now enable transport. No CHANGELOG; env-var semantics change without notice.
+4. **`RedactingSpanProcessor.on_start` swallows ALL exceptions via `contextlib.suppress(Exception)`** — PII redaction fails open on `set_attribute` errors. Asymmetry with log-path redactor that logs WARNING.
+5. **`victorialogs-client.js` prototype pollution vector** — `result[String(value)] = N` writes to `Object.prototype.__proto__` if `value` is `'__proto__'` / `'constructor'` / `'hasOwnProperty'`. Security issue.
+6. **`LOG_DROPPED_REASON` raw string 'invalid_timestamp'** — bypasses canonical enum; cardinality leak risk.
+7. ~~**`PIIRedactingLogRecordProcessor.emit` nested-dict bypass** — sensitive keys only checked at top level; `attributes={"context":{"password":"x"}}` passes `password` through.~~ — REVOKED by verification: `tracing-pii.js` `redactAttributes` already recurses into nested plain objects via `redactLogRecordBody` (added in MR #383 commit `f41ab9e2c`), with `isSensitiveKey` checked at every level. The P8 cycle guard was incorrectly proposed and reverted in commit `76938f55a` — it broke the pre-existing contract enshrined by `pii-body-scrubbing.test.js:430` ("circular reference MUST throw"). Original throw behavior preserved.
+8. **`setup_trace_logging` `propagate=True` flip is process-lifetime irreversible** — third-party handlers that opted out now see all records.
+
+#### Verification gaps (production behavior not pinned)
+1. **`_normalizeRows` severity_text/service.name priority** — production bug fix; not pinned by test. All tests use `_stream` OBJECT branch.
+2. **`_normalizeRows` `_stream` STRING branch** — production-dominant path (fluentd rows); zero tests.
+3. **`hits()` adapter rewrite** — every consumer mocks; real adapter never exercised by tests.
+4. **`booleanEnv` direct unit tests** — function is universally mocked; matrix not asserted.
+5. **`RedactingSpanProcessor` Python** — log-path redactor has wiring assertion; trace-path redactor does not.
+6. **OTel collector transforms (3 new processors)** — no behavioral test fixture in repo.
+7. **service.name unification call sites** — production names not asserted in `tests/test_tracing.py`.
+
+#### Documentation contradictions (cosmetic but reviewer-facing)
+1. **`otel-collector-config.yaml` duplicate header comment block** — NEW inserted above unchanged OLD; two copies.
+2. **`otel-collector-config.yaml` pipeline-overview comment mismatch** — header says `resource/stamp_service_name_from_container`; processor is `transform/stamp_service_name_from_container`.
+3. **`otel-collector-config.yaml` self-contradictory comments on `service.name` stamping** — lines 1613-1620 say "stamp from envelope"; lines 1693-1695 say "do not stamp from envelope"; code matches the latter.
+4. **`alert-rules.yml` `gt[]` → `lt[1073741824]` silent semantic flip** — undocumented in MR description; `avg` → `last` reducer change across ~10 reducers.
+5. **SPEC.md `baseline_revision` not bumped** — still `81c270b6` while branch tip is `3a0a89422`; preservation-validated claim unauditable.
+
+#### Minor / hygiene
+1. `service-logs.json` `trace_id:*` dropdown hangs Grafana after a few hours of traffic.
+2. `rag-pipeline-trace-waterfall.json` `$pipeline` allValue contains `chatqna-xeon-backend-server` while compose stamps `chatqna` — falsifies commit 3a0a89422's stated goal. (Housekeeping: either revert allValue to current compose names, OR update compose to keep the long name.)
+3. `components/AGENTS.md` symlink to root CLAUDE.md gives wrong-scope rules to mobile/ and genie-ai-overlay/.
+4. `tools/tempo-proxy/main.go` change is out of umbrella MR scope; commit `c7f197fed` belongs to a separate MR.
+6. Many trailing-newline / magic-number findings — not worth the fix.
+

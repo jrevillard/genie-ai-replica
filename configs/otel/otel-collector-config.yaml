@@ -26,7 +26,7 @@
 # Pipeline:
 #   metrics: otlp → batch → prometheusremotewrite
 #   traces:  otlp → probabilistic_sampler → transform/kong_span_names → batch → victoriatraces
-#   logs:    otlp / fluent_forward → resource/stamp_service_name_from_container → batch → otlp_http
+#   logs:    otlp / fluent_forward → resource/stamp_service_name_from_container → transform/stamp_log_metadata_from_msg → batch → otlp_http
 #
 # Note: Docker services use the fluentd logging driver (driver: fluentd)
 # configured in docker-compose.yaml. Docker sends container stdout/stderr to
@@ -157,6 +157,78 @@ processors:
           # automatically) — this branch only fires when that label is missing.
           - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)-\\d+(\\..*)?$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
 
+  # Stamp `severity_text` from the `_msg` payload when the record
+  # arrived via the fluentd driver (NOT through the OTel SDK's
+  # LoggingHandler, which already sets severity_text at source).
+  #
+  # Two payload shapes show up in VL under the fluentd path:
+  #   1. Winston JSON (Node.js services): `{"level":"info","message":"...",...}`
+  #   2. Uvicorn access log (Python services): `INFO: 127.0.0.1:... "GET ..."`
+  # The regex below matches BOTH formats via alternation. The captured
+  # group is the canonical uppercase form (INFO/WARN/ERROR/DEBUG/FATAL/TRACE)
+  # so the admin panel + Grafana dashboards can filter by it directly
+  # without re-parsing the JSON envelope client-side.
+  #
+  # Idempotent: only writes when severity_text is unset or `Unspecified`
+  # (the OTel SDK default for fluentd-sourced rows), so records that
+  # already carry a proper severity — from the OTel SDK `otlp` receiver —
+  # keep their original value.
+  #
+  # Also extracts the `service` field from the Winston JSON envelope
+  # (when present) and stamps `service.name` ONLY if the resource
+  # doesn't already have it from the Compose label / fluent.tag path
+  # above. This makes the service identifier consistent between the
+  # OTel LoggingHandler path (`genie-*`) and the Winston path
+  # (`genie-backend`, `genie-document-repository`, …) by preferring
+  # whatever the application's own log record declared.
+  transform/stamp_log_metadata_from_msg:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          # Stamp `severity_text` for fluentd-sourced logs that don't go
+          # through an OTel SDK LoggingHandler (which sets severity_text
+          # at source). Two payload shapes reach the collector as `body`:
+          #
+          #   1. Node.js Winston JSON string: `{"level":"info","message":"..."}`
+          #      body is a STRING whose first char is `{`. Use ParseJSON to
+          #      read the `level` key directly (RE2 + YAML escaping made
+          #      regex on the envelope fragile — see commit history).
+          #   2. Python uvicorn access log: `INFO: 127.0.0.1:... "GET ..."`
+          #      body is a STRING that starts with the uppercase level word
+          #      followed by `:` or ` `. Use ExtractPatterns + ToUpperCase.
+          #   3. Winston JSON envelope already parsed into a MAP (when the
+          #      LogRecord was decoded by the receiver — `body.level` is
+          #      the lowercase level). Direct map access.
+          #
+          # The matched level is always uppercased to canonical OTel form
+          # (INFO/WARN/ERROR/DEBUG/FATAL/TRACE) so the admin panel and
+          # Grafana dashboards filter consistently without re-parsing.
+          #
+          # Idempotent: Path 1/2/3 are guarded by IsString/IsMap + Substring
+          # so each fires only on its matching payload shape; ExtractPatterns
+          # returns an empty map when body doesn't match → `["sev"]` errors
+          # silently (error_mode: ignore).
+          - 'set(severity_text, ToUpperCase(ParseJSON(body)["level"])) where IsString(body) and Substring(body, 0, 1) == "{"'
+          - 'set(severity_text, ToUpperCase(ExtractPatterns(body, "(?i)^(?P<sev>info|warn|warning|error|debug|fatal|trace)[: ]")["sev"])) where IsString(body)'
+          - 'set(severity_text, ToUpperCase(body["level"])) where IsMap(body) and IsString(body["level"])'
+          # Stamp `severity_number` alongside `severity_text` — VL's OTLP
+          # exporter maps severity_number → severity_text at export time, so
+          # leaving severity_number at 0 (the fluentd default) causes VL to
+          # overwrite the stamped severity_text back to "Unspecified".
+          # Canonical OTel severity numbers (OTel logs data-model spec):
+          # TRACE=1, DEBUG=5, INFO=9, WARN=13, ERROR=17, FATAL=21.
+          - 'set(severity_number, 9) where severity_text == "INFO"'
+          - 'set(severity_number, 13) where severity_text == "WARN"'
+          - 'set(severity_number, 17) where severity_text == "ERROR"'
+          - 'set(severity_number, 5) where severity_text == "DEBUG"'
+          - 'set(severity_number, 21) where severity_text == "FATAL"'
+          - 'set(severity_number, 1) where severity_text == "TRACE"'
+          # Stamp `service.name` from the Winston JSON envelope's `service`
+          # field — only when resource.service.name is unset (the Compose
+          # label / fluent.tag path above is preferred).
+          - 'set(resource.attributes["service.name"], body["service"]) where IsMap(body) and IsString(body["service"]) and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")'
+
 exporters:
   prometheusremotewrite:
     endpoint: http://victoriametrics:8428/api/v1/write
@@ -234,6 +306,7 @@ service:
         - fluent_forward
       processors:
         - transform/stamp_service_name_from_container
+        - transform/stamp_log_metadata_from_msg
         - batch
       exporters:
         - otlp_http

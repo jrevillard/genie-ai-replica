@@ -641,10 +641,17 @@ class LogsService {
      */
     const bucketForLevel = async (levelConst, q, typeKey) => {
       const client = this._getVlClient();
-      const [serviceMap, rows] = await Promise.all([
+      // Promise.allSettled so one VL call failing (network blip, 5xx)
+      // does not tear down the sibling call. Without this, a single
+      // `/hits` rejection would propagate to the outer Promise.all in
+      // `getLogsSummary` and collapse every bucket to empty — the UI
+      // would show zero rows instead of "degraded: partial data".
+      const [hitsResult, queryResult] = await Promise.allSettled([
         client.hits({ q, start: startIso, end: endIso, field: 'service.name' }),
         client.query({ q, start: startIso, end: endIso, limit: 10000, fields: 'service.name,_msg' })
       ]);
+      const serviceMap = hitsResult.status === 'fulfilled' ? hitsResult.value : {};
+      const rows = queryResult.status === 'fulfilled' ? queryResult.value : [];
       const grouped = new Map();
       // Seed every service we know about with the level itself as the
       // fallback type (services whose rows are beyond the 10 000 limit
@@ -754,7 +761,14 @@ class LogsService {
           wantWarn ? bucketForLevel('WARN', 'severity_text:WARN', 'warn') : Promise.resolve([]),
           wantInfo ? bucketForLevel('INFO', 'severity_text:INFO', 'info') : Promise.resolve([])
         ];
-        const [errors, warnings, infos] = await Promise.all([errorsP, warningsP, infosP]);
+        // Promise.allSettled — one bucket failing (e.g. `errors` query 5xx)
+        // must not collapse `warnings` + `infos`. The previous `Promise.all`
+        // rejected fast and dropped every bucket on the floor during partial
+        // VL outages, leaving the admin/logs panel with zero rows.
+        const [errorsResult, warningsResult, infosResult] = await Promise.allSettled([errorsP, warningsP, infosP]);
+        const errors = errorsResult.status === 'fulfilled' ? errorsResult.value : [];
+        const warnings = warningsResult.status === 'fulfilled' ? warningsResult.value : [];
+        const infos = infosResult.status === 'fulfilled' ? infosResult.value : [];
 
         return {
           errors,

@@ -60,7 +60,15 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // (Docker drops `/lib/` from the path; Jest moduleNameMapper in
   // jest.config.js routes both `../shared-lib/X` and the source-tree
   // `../shared/lib/X` to the real file).
-  const { withBackgroundSpan } = require('../shared-lib/tracing-background');
+  const { setScopeName, withBackgroundSpan } = require('../shared-lib/tracing-background');
+  // Stamp otel.scope.name=document-repository on every span this SDK
+  // emits. The shared helper defaults to 'backend' (the backend
+  // service name); without this call every doc-repo span would land
+  // in VictoriaTraces under the wrong scope and the
+  // otel.scope.name:document-repository filter returns zero rows.
+  // Set BEFORE the TracerProvider is constructed so the first
+  // trace.getTracer() call uses the right scope.
+  setScopeName(serviceName);
   // OTLP base URL — read once, then reused for both the trace and the log
   // exporter endpoints. Pulled up to the top of the else block so neither
   // exporter construction reads it in a TDZ window (the previous ordering

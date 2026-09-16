@@ -65,23 +65,37 @@ _BODY_PATTERNS = [
 _REDACTED_PLACEHOLDER = "[REDACTED]"
 
 
-def _redact_body(body: Any) -> Any:
+def _redact_body(body: Any, _seen: set | None = None) -> Any:
     """Best-effort body redaction. Bodies may be `str`, `dict`, `list`,
     or arbitrary Python objects (LogRecord.body is typed as Any). We
     always run the regex set on strings (not gated by `isinstance(str)`
     at the call site — the guard used to live in `on_emit` and let
     dict/list/tuple bodies bypass entirely). Structured bodies walk
     recursively; anything else is left verbatim.
+
+    `_seen` (set of `id()`) guards against circular references — a
+    self-referential dict or list would otherwise recurse forever and
+    crash the OTel log pipeline with `RecursionError`. The marker
+    `[CIRCULAR]` makes the cycle visible in VictoriaLogs so operators
+    can spot the offending caller.
     """
+    if _seen is None:
+        _seen = set()
+    body_id = id(body)
+    if body_id in _seen:
+        return "[CIRCULAR]"
+    # Only track mutable containers that could legitimately cycle.
+    if isinstance(body, (dict, list, tuple)):
+        _seen.add(body_id)
     if isinstance(body, str):
         result = body
         for pattern, replacement in _BODY_PATTERNS:
             result = pattern.sub(replacement, result)
         return result
     if isinstance(body, dict):
-        return {k: _redact_body(v) for k, v in body.items()}
+        return {k: _redact_body(v, _seen) for k, v in body.items()}
     if isinstance(body, (list, tuple)):
-        return type(body)(_redact_body(v) for v in body)
+        return type(body)(_redact_body(v, _seen) for v in body)
     return body
 
 

@@ -23,7 +23,7 @@ const { keycloakAuthMiddleware } = require('./middleware/keycloak-auth-middlewar
 const metricsMiddlewareFactory = require('./middleware/metrics-middleware');
 
 // Validate shared-lib imports
-runInBackgroundSpan('app.boot', () => {
+runInBackgroundSpan('app.boot.validate_imports', () => {
   logger.info('Validating shared-lib imports:', {
     logger: typeof logger,
     dbService: typeof dbService,
@@ -32,11 +32,11 @@ runInBackgroundSpan('app.boot', () => {
   });
 });
 if (!securityHeaders) {
-  runInBackgroundSpan('app.boot', () => logger.error('securityHeaders is undefined'));
+  runInBackgroundSpan('app.boot.missing_security_headers', () => logger.error('securityHeaders is undefined'));
   throw new Error('securityHeaders is undefined');
 }
 if (!logger || !dbService || !SecurityMiddleware) {
-  runInBackgroundSpan('app.boot', () =>
+  runInBackgroundSpan('app.boot.missing_components', () =>
     logger.error('Critical shared-lib components missing:', {
       logger: !!logger,
       dbService: !!dbService,
@@ -51,12 +51,14 @@ const uploadsDir = path.join(__dirname, process.env.UPLOAD_DIR || 'Uploads');
 try {
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
-    runInBackgroundSpan('app.boot', () => logger.info(`Created uploads directory: ${uploadsDir}`));
+    runInBackgroundSpan('app.boot.uploads_created', () => logger.info(`Created uploads directory: ${uploadsDir}`));
   } else {
-    runInBackgroundSpan('app.boot', () => logger.debug(`Uploads directory already exists: ${uploadsDir}`));
+    runInBackgroundSpan('app.boot.uploads_already_exist', () =>
+      logger.debug(`Uploads directory already exists: ${uploadsDir}`)
+    );
   }
 } catch (error) {
-  runInBackgroundSpan('app.boot', () =>
+  runInBackgroundSpan('app.boot.uploads_failed', () =>
     logger.error('Failed to create uploads directory:', {
       error: error.message,
       stack: error.stack,

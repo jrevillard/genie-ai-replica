@@ -145,7 +145,7 @@ def fake_otel(monkeypatch):
 def test_setup_logging_no_op_when_observability_disabled(monkeypatch, fake_otel):
     monkeypatch.setenv("ENABLE_OBSERVABILITY", "0")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318")
-    result = tracing.setup_logging("genieai-chatqna")
+    result = tracing.setup_logging("chatqna")
     assert result is None
     fake_otel["OTLPLogExporter"].assert_not_called()
     fake_otel["LoggerProvider"].assert_not_called()
@@ -157,7 +157,7 @@ def test_setup_logging_no_op_when_observability_disabled(monkeypatch, fake_otel)
 def test_setup_logging_no_op_when_endpoint_missing(monkeypatch, fake_otel):
     monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
-    result = tracing.setup_logging("genieai-chatqna")
+    result = tracing.setup_logging("chatqna")
     assert result is None
     fake_otel["OTLPLogExporter"].assert_not_called()
 
@@ -208,8 +208,8 @@ def test_setup_logging_is_idempotent_about_handler_attachment(monkeypatch, fake_
     monkeypatch.setenv("ENABLE_OBSERVABILITY", "1")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318")
 
-    tracing.setup_logging("genieai-chatqna")
-    tracing.setup_logging("genieai-chatqna")
+    tracing.setup_logging("chatqna")
+    tracing.setup_logging("chatqna")
 
     root = logging.getLogger()
     handler_count = sum(1 for h in root.handlers if type(h).__name__ == "LoggingHandler")
@@ -229,7 +229,7 @@ def test_setup_logging_handles_exporter_init_failure(monkeypatch, fake_otel):
         # setup_logging lets the exception propagate (the caller decides
         # what to do). The call inside setup_tracing is wrapped in a
         # try/except so the service keeps running.
-        tracing.setup_logging("genieai-chatqna")
+        tracing.setup_logging("chatqna")
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +308,7 @@ def test_setup_logging_wires_real_otlp_exporter_end_to_end(monkeypatch, captured
     monkeypatch.setenv("SERVICE_VERSION", "9.9.9")
     monkeypatch.setenv("NODE_ENV", "production")
 
-    provider = tracing.setup_logging("genieai-chatqna")
+    provider = tracing.setup_logging("chatqna")
 
     # Provider is non-None + is the real OTel LoggerProvider (not a mock).
     assert provider is not None
@@ -381,7 +381,7 @@ def test_setup_logging_otlplogs_enabled_opt_out_demotes_failure_to_debug(monkeyp
     # the swallowing branch by wrapping the call here.
     with caplog.at_level(logging.DEBUG, logger="tracing"):
         try:
-            tracing.setup_logging("genieai-chatqna")
+            tracing.setup_logging("chatqna")
         except RuntimeError:
             # Mirroring setup_tracing's try/except for the test only.
             import os

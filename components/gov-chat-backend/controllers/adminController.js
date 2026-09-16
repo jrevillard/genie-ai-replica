@@ -220,6 +220,15 @@ const adminController = {
       // implementation.
       logger.info('Controller: Running security scan (via securityScanService)');
       const logsService = req.app.locals.logsService;
+      if (!logsService) {
+        // logsService is registered by `createApp()` into app.locals during
+        // normal HTTP bootstrap. Non-HTTP callers (cron, scripts, tests
+        // bypassing createApp) would have undefined here and crash the
+        // security scan with a TypeError. Surface a 503 instead so the
+        // caller can distinguish "service not initialised" from a real
+        // scan failure.
+        return res.status(503).json({ error: 'logs service unavailable' });
+      }
       const scanResults = await securityScanService.runSecurityScan(logsService);
       res.json({
         success: true,

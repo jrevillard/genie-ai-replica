@@ -135,9 +135,17 @@ class VictoriaLogsTransport extends TransportStream {
       // Winston transport contract: `callback()` must run AFTER
       // `emit('logged', info)` so downstream listeners observe the event
       // before the transport considers the record "fully written".
+      // Wrap `emit('logged', info)` in try/finally so a synchronous
+      // throw from any registered listener still triggers `callback()`
+      // — otherwise Winston backpressure halts the entire log pipeline
+      // on that record (callback never fires → next writes queued
+      // behind it forever).
       setImmediate(() => {
-        this.emit('logged', info);
-        callback();
+        try {
+          this.emit('logged', info);
+        } finally {
+          callback();
+        }
       });
     }
   }

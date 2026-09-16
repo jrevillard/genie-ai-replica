@@ -227,13 +227,39 @@ function makeVlClientForRows(rows) {
   const sortedDesc = [...rows].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
   return {
     query: jest.fn().mockImplementation(async ({ q } = {}) => applyFilter(sortedDesc, q)),
-    hits: jest.fn().mockImplementation(async ({ q } = {}) => {
-      // The VL `/hits` shape that `_getLogsSummaryFromVL` consumes is
-      // `{ <level>: count, ... }` keyed by the requested field value.
-      const lvlMatch = /^level:(\S+)$/i.exec(q || '');
-      const targetLevel = lvlMatch ? lvlMatch[1].toUpperCase() : null;
-      const matched = targetLevel ? rows.filter((r) => r.level === targetLevel) : rows;
-      return targetLevel ? { [targetLevel]: matched.length } : {};
+    hits: jest.fn().mockImplementation(async ({ field, q } = {}) => {
+      // The VL `/hits` shape that `_getLogsSummaryFromVL` consumes is a
+      // `{ <fieldValue>: count, ... }` map keyed by the requested field
+      // value. The summary endpoint asks for `field=service.name` and
+      // either `q=severity_text:<LEVEL>` (per-level buckets) or `q=*`
+      // (the dropdown's distinct service list) — produce counts bucketed
+      // by `service.name` accordingly.
+      const lvlMatch = /^(?:level|severity_text):(\S+)$/i.exec(q || '');
+      if (lvlMatch && field === 'service.name') {
+        const targetLevel = lvlMatch[1].toUpperCase();
+        const matched = rows.filter((r) => r.level === targetLevel);
+        const out = {};
+        for (const r of matched) {
+          const svc = r.service || 'unknown';
+          out[svc] = (out[svc] || 0) + 1;
+        }
+        return out;
+      }
+      if (q === '*' && field === 'service.name') {
+        const out = {};
+        for (const r of rows) {
+          const svc = r.service || 'unknown';
+          out[svc] = (out[svc] || 0) + 1;
+        }
+        return out;
+      }
+      // Legacy fallback: `q=level:<LEVEL>` style (no service split).
+      const legacyMatch = /^level:(\S+)$/i.exec(q || '');
+      if (legacyMatch) {
+        const targetLevel = legacyMatch[1].toUpperCase();
+        return { [targetLevel]: rows.filter((r) => r.level === targetLevel).length };
+      }
+      return {};
     })
   };
 }

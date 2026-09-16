@@ -239,69 +239,90 @@ describe('LogsService VictoriaLogs rewrite', () => {
     // always returns `{ERROR: 0, WARN: 0, ...}`. We fetch the day's rows
     // and count client-side AFTER the MELT normalizer has lifted the
     // level out of `_msg`.
-    it('counts ERROR + WARN + INFO buckets from the row window client-side', async () => {
-      mockVlClient.query.mockResolvedValueOnce([
-        { level: 'INFO' },
-        { level: 'INFO' },
-        { level: 'WARN' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' }
-      ]);
+    it('counts ERROR + WARN + INFO buckets from per-service VL hits()', async () => {
+      // Producer-side transform stamps severity_text + service.name at
+      // top level in VL, so the summary uses `hits(field=service.name,
+      // q=severity_text:LEVEL)` for per-service counts (no row fetch +
+      // client-side counting).
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:ERROR') return { 'genie-backend': 3 };
+        if (q === 'severity_text:WARN') return { 'genie-backend': 1 };
+        if (q === 'severity_text:INFO') return { 'genie-backend': 2, 'document-repository': 10 };
+        if (q === '*') return { 'genie-backend': 6, 'document-repository': 10 };
+        return {};
+      });
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
-      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
-      expect(mockVlClient.query).toHaveBeenCalledWith(
-        expect.objectContaining({ q: '*', start: '2026-09-01T00:00:00.000Z', end: '2026-09-01T23:59:59.999Z' })
-      );
+      expect(mockVlClient.hits).toHaveBeenCalled();
       expect(result.date).toBe('2026-09-01');
-      expect(result.errors[0]).toMatchObject({ type: 'ERROR', count: 3 });
-      expect(result.warnings[0]).toMatchObject({ type: 'WARN', count: 1 });
+      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'genie-backend', count: 3 }]);
+      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'genie-backend', count: 1 }]);
+      expect(result.infos).toEqual([
+        { type: 'INFO', typeKey: 'info', service: 'document-repository', count: 10 },
+        { type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 2 }
+      ]);
+      expect(result.services).toEqual([
+        { name: 'document-repository', count: 10 },
+        { name: 'genie-backend', count: 6 }
+      ]);
     });
 
     it('returns empty buckets when VL has no ERROR/WARN rows', async () => {
-      mockVlClient.query.mockResolvedValueOnce([{ level: 'INFO' }, { level: 'INFO' }]);
+      mockVlClient.hits.mockImplementation(async () => ({}));
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
+      expect(result.infos).toEqual([]);
+      expect(result.services).toEqual([]);
     });
 
     it('returns empty envelope (degraded) on VL outage with VL_FAIL_OPEN=true', async () => {
       process.env.VL_FAIL_OPEN = 'true';
       const err = new Error('timeout');
       err.code = 'ETIMEDOUT';
-      mockVlClient.query.mockRejectedValueOnce(err);
+      mockVlClient.hits.mockRejectedValue(err);
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
       expect(result.degraded).toBe(true);
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
+      expect(result.services).toEqual([]);
       expect(result.date).toBe('2026-09-01');
     });
 
     it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
-      mockVlClient.query.mockResolvedValueOnce([{ level: 'ERROR' }, { level: 'ERROR' }, { level: 'WARN' }]);
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:ERROR') return { 'auth': 2 };
+        if (q === '*') return { 'auth': 2 };
+        return {};
+      });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
-      expect(result.errors[0]).toMatchObject({ type: 'ERROR', count: 2 });
+      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'auth', count: 2 }]);
       expect(result.warnings).toEqual([]);
+      expect(result.infos).toEqual([]);
     });
 
     it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
-      mockVlClient.query.mockResolvedValueOnce([{ level: 'INFO' }, { level: 'INFO' }]);
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:INFO') return { 'genie-backend': 2, 'document-repository': 1 };
+        if (q === '*') return { 'genie-backend': 2, 'document-repository': 1 };
+        return {};
+      });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
-      expect(result.infos[0]).toMatchObject({ type: 'INFO', count: 2 });
+      expect(result.infos).toEqual([
+        { type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 2 },
+        { type: 'INFO', typeKey: 'info', service: 'document-repository', count: 1 }
+      ]);
     });
   });
 
   describe('searchLogs — VL path', () => {
-    it('builds LogSQL from term filter only; level + service are applied client-side on the normalized rows', async () => {
-      // The fluentd-driven Winston transport writes the real level +
-      // service INSIDE the `_msg` JSON envelope (not as top-level VL
-      // fields), so the previous `level:INFO` / `_stream_service:"auth"`
-      // VL clauses never matched anything. `term` still hits VL via
-      // `_msg:"login"` (the message text IS inside `_msg`); level +
-      // service are filtered in JS after the MELT normalizer lifts them
-      // out.
+    it('builds LogSQL from term + severity_text + service.name filters', async () => {
+      // The producer-side transform stamps severity_text + service.name
+      // at top level in VL, so the level + service filters are pushed
+      // down to VL (no over-fetch + client-side filter required). The
+      // resulting VL query matches every fluentd-sourced log uniformly
+      // (no dual-path fallback needed).
       const rows = [
         {
           timestamp: '2026-09-01T00:00:00.000Z',
@@ -324,14 +345,12 @@ describe('LogsService VictoriaLogs rewrite', () => {
       });
       expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       const callArg = mockVlClient.query.mock.calls[0][0];
-      // Only the `term` clause is pushed to VL; `level:` and
-      // `_stream_service:` are intentionally absent (they never matched
-      // on fluentd-sourced rows anyway — see comment above).
+      // All three filters are now pushed down to VL as LogSQL clauses.
       expect(callArg.q).toContain('_msg:"login"');
-      expect(callArg.q).not.toMatch(/\blevel:/);
-      expect(callArg.q).not.toMatch(/_stream_service:/);
-      // The row matches the in-JS level + service filters and is
-      // returned as-is.
+      expect(callArg.q).toContain('severity_text:INFO');
+      expect(callArg.q).toContain('service.name:"auth"');
+      // Limit is honoured exactly (no more 4x over-fetch multiplier).
+      expect(callArg.limit).toBe(50);
       expect(result.logs).toEqual(rows);
       expect(result.total).toBe(1);
       expect(result.limit).toBe(50);
@@ -1006,52 +1025,59 @@ describe('LogsService VictoriaLogs rewrite', () => {
     });
 
     it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
-      mockVlClient.query.mockResolvedValueOnce([
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'WARN' }
-      ]);
+      // Per-service hits() with q=severity_text:ERROR returns 7 ERROR
+      // rows across two services (5 in auth + 2 in system). The summary
+      // surfaces both rows, sorted by count desc; the WARN row in the
+      // input set is dropped because the caller's level=ERROR filter
+      // excluded it before the bucket was queried.
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:ERROR') return { auth: 5, system: 2 };
+        if (q === '*') return { auth: 5, system: 2 };
+        return {};
+      });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
-      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
-      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'all', count: 7 }]);
+      expect(result.errors).toEqual([
+        { type: 'ERROR', typeKey: 'error', service: 'auth', count: 5 },
+        { type: 'ERROR', typeKey: 'error', service: 'system', count: 2 }
+      ]);
       expect(result.warnings).toEqual([]);
+      expect(result.infos).toEqual([]);
     });
 
     it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
-      // 42 INFO rows + 1 WARN row to verify that WARN is NOT in the
-      // response when `level=INFO` is requested.
-      mockVlClient.query.mockResolvedValueOnce(
-        Array.from({ length: 42 }, () => ({ level: 'INFO' })).concat([{ level: 'WARN' }])
-      );
+      // 42 INFO rows (38 in genie-backend + 4 in retriever) + a WARN
+      // row that the level=INFO filter excludes from the WARN bucket.
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:INFO') return { 'genie-backend': 38, retriever: 4 };
+        if (q === '*') return { 'genie-backend': 38, retriever: 4 };
+        return {};
+      });
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
-      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
-      expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'all', count: 42 }]);
+      expect(result.infos).toEqual([
+        { type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 38 },
+        { type: 'INFO', typeKey: 'info', service: 'retriever', count: 4 }
+      ]);
     });
 
-    it('getLogsSummary — VL path with level unset queries the day window once (single client.query)', async () => {
-      // The new architecture fetches the day's rows ONCE and counts the
-      // three buckets (ERROR + WARN + INFO) client-side. The OLD code
-      // issued parallel `hits()` calls per bucket — those tests are
-      // intentionally no longer applicable.
-      mockVlClient.query.mockResolvedValueOnce([
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'ERROR' },
-        { level: 'WARN' },
-        { level: 'WARN' }
-      ]);
+    it('getLogsSummary — VL path with level unset queries ERROR + WARN + INFO + services in parallel', async () => {
+      // The new architecture issues 4 parallel hits() calls (one per
+      // level bucket + one unfiltered for the dropdown service list).
+      // The single-fetch-old tests are no longer applicable.
+      mockVlClient.hits.mockImplementation(async ({ q }) => {
+        if (q === 'severity_text:ERROR') return { 'genie-backend': 4 };
+        if (q === 'severity_text:WARN') return { 'genie-backend': 2 };
+        if (q === 'severity_text:INFO') return { 'genie-backend': 100 };
+        if (q === '*') return { 'genie-backend': 106 };
+        return {};
+      });
       const result = await logsService.getLogsSummary({ date: '2026-09-06' });
-      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
-      expect(result.errors[0].count).toBe(4);
-      expect(result.warnings[0].count).toBe(2);
+      expect(mockVlClient.hits).toHaveBeenCalledTimes(4);
+      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'genie-backend', count: 4 }]);
+      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'genie-backend', count: 2 }]);
+      expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'genie-backend', count: 100 }]);
+      expect(result.services).toEqual([{ name: 'genie-backend', count: 106 }]);
     });
   });
 

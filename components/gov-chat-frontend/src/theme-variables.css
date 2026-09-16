@@ -157,11 +157,12 @@ body[data-theme='dark'],
   --accent-fg: #0f1a12;
   --accent-secondary: #176b3a;
 
-  /* --- Brand override for dark mode (chart/curve visibility) ---
-     Verde AgroGenio #176b3a is too dark on #0f1a12 bg (invisible).
-     Use brighter verde cultivo so navbar + chart curves stay visible.
-     Trade-off: navbar bg becomes brighter verde in dark mode. */
-  --brand: #69a83b;
+  /* --- Brand in dark mode ---
+     Same Verde AgroGenio #176b3a as light mode. Keeps navbar visually
+     consistent across themes (no jarring bright green flip). Earlier override
+     to #69a83b (verde cultivo bright) made the navbar feel too saturated /
+     neon; reverted after design review feedback. */
+  --brand: #176b3a;
 
   /* --- Semantic status overrides for dark mode (chart/curve visibility) ---
      Light mode AgroGenio colors (success=#69a83b, warning=#b86b00, info=#1565a8)
@@ -239,8 +240,10 @@ body[data-theme='dark'],
     --accent-fg: #0f1a12;
     --accent-secondary: #176b3a;
 
-    /* Brand + semantic overrides (chart/curve visibility on dark bg) */
-    --brand: #69a83b;
+    /* Brand in dark mode — same AgroGenio primary as light mode (#176b3a)
+       for visual consistency. Semantic overrides below kept for chart/badge
+       visibility on the dark surface. */
+    --brand: #176b3a;
     --success: #9bc97b;
     --warning: #e08a1a;
     --info: #7ab3e8;

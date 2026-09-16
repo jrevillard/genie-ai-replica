@@ -228,6 +228,25 @@ processors:
           # field — only when resource.service.name is unset (the Compose
           # label / fluent.tag path above is preferred).
           - 'set(resource.attributes["service.name"], body["service"]) where IsMap(body) and IsString(body["service"]) and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")'
+          # Stamp `log_type` from the message body for the error/warning
+          # category breakdown (UI summary panel + Grafana drill-down).
+          # Mirrors the legacy file-log `summaryPatterns` so the existing
+          # admin panel grouping stays correct under VL — server-side
+          # categorisation, no client-side regex parsing of `_msg`.
+          #
+          # Matched against either the raw body (Winston JSON envelope
+          # string, uvicorn access log string) or `body.message` (when
+          # the receiver decoded the envelope into a map). First matching
+          # pattern wins — the `where log_type == nil` guard makes the
+          # chain a priority-ordered cascade.
+          - 'set(attributes["log_type"], "Connection Timeout") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)connection timeout")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)connection timeout")))'
+          - 'set(attributes["log_type"], "Database Query Failed") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)database query failed")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)database query failed")))'
+          - 'set(attributes["log_type"], "Authentication Failure") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)authentication failure")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)authentication failure")))'
+          - 'set(attributes["log_type"], "Invalid Token") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)invalid token")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)invalid token")))'
+          - 'set(attributes["log_type"], "Disk Space Below Threshold") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)disk space below threshold")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)disk space below threshold")))'
+          - 'set(attributes["log_type"], "Slow Query Performance") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)slow query performance")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)slow query performance")))'
+          - 'set(attributes["log_type"], "Rate Limit Approaching") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "(?i)rate limit approaching")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "(?i)rate limit approaching")))'
+          - 'set(attributes["log_type"], "File Not Found") where attributes["log_type"] == nil and ((IsString(body) and IsMatch(body, "ENOENT: no such file or directory")) or (IsMap(body) and IsString(body["message"]) and IsMatch(body["message"], "ENOENT: no such file or directory")))'
 
 exporters:
   prometheusremotewrite:

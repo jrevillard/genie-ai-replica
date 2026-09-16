@@ -38,6 +38,8 @@ from defaults import (
 )
 from defaults import (
     EWS_CROPS,
+    REGION_CROPS,
+    UNPROFILED_CROPS,
 )
 from defaults import (
     ensure_default_district as _ensure_default_district,
@@ -1335,6 +1337,22 @@ def _build_weather_context(
         f"Today is {now:%A %d %B %Y} (UTC), ISO week {today.isocalendar()[1]}. District: {district}."
     ]
 
+    # Which crops the region grows, and which of them this system has detailed
+    # data for. Without this the model picked a crop from the documents (potato).
+    profiled = [c for c in REGION_CROPS if c in wanted]
+    crops_line = (
+        f"Crops grown in this region: {', '.join(_crop_label(c) for c in REGION_CROPS)}. "
+        f"Detailed crop profiles (thresholds, growth-stage calendar, pest and disease "
+        f"conditions) exist for: {', '.join(_crop_label(c) for c in profiled) or 'none'}."
+    )
+    if UNPROFILED_CROPS:
+        crops_line += (
+            f" No crop profile exists yet for: {', '.join(_crop_label(c) for c in UNPROFILED_CROPS)}"
+            " — for these give general weather guidance only and say that detailed crop "
+            "data is not available. Do not bring in crops that are not grown in this region."
+        )
+    sections.append(crops_line)
+
     # Crop season calendar + seasonal assessments (Copernicus vs crop thresholds),
     # one block per crop the engine watches.
     for crop in wanted:
@@ -1374,10 +1392,22 @@ def _build_weather_context(
                 stamp = f"{d.date} ({when})"
             except ValueError:
                 stamp = d.date
+            # Humidity as a single number reads as "the humidity today" and the
+            # stored one is the dawn peak, which is near-saturated all monsoon.
+            # Give the day's range so neither the model nor the farmer mistakes
+            # the peak for a typical reading.
+            if d.humidity_min is not None:
+                humidity_text = f"humidity {d.humidity_min:.0f}–{d.humidity:.0f}%" + (
+                    f" (average {d.humidity_mean:.0f}%)"
+                    if d.humidity_mean is not None
+                    else ""
+                )
+            else:
+                humidity_text = f"peak humidity {d.humidity:.0f}%"
             line = (
                 f"  {stamp}: {d.temperature.min:.1f}–{d.temperature.max:.1f}°C, "
                 f"rain {d.precipitation.value:.1f} mm ({int(d.precipitation.probability * 100)}% chance), "
-                f"humidity {d.humidity:.0f}%, wind {d.wind.speed:.0f} km/h"
+                f"{humidity_text}, wind {d.wind.speed:.0f} km/h"
             )
             if d.soil_moisture is not None:
                 # Same wet/moist/dry banding the forecast strip shows the user;
@@ -1507,6 +1537,11 @@ def _build_weather_context(
         "Not available in this system: observed rainfall records for past weeks or months, "
         "and alert subscriptions (the assistant cannot notify anyone later)."
     )
+    if UNPROFILED_CROPS:
+        limits += (
+            " Also not available: crop profiles for "
+            f"{', '.join(_crop_label(c) for c in UNPROFILED_CROPS)}."
+        )
     if forecast_horizon:
         limits += " " + forecast_horizon
     sections.append(limits)

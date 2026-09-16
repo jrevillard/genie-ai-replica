@@ -181,12 +181,12 @@ class CropShortTermEWS:
             assessment["location"], self._crop, assessment["tier"], within_hours=12
         )
 
-    def record_alert(self, assessment: dict) -> None:
+    def record_alert(self, assessment: dict, channel: str = "frontend_poll") -> None:
         """Record that an alert was dispatched (deduplication log)."""
         self._storage.record_crop_alert_sent(
             assessment["location"],
             self._crop,
             assessment["tier"],
-            "frontend_poll",
+            channel,
             assessment.get("forecast_date", ""),
         )

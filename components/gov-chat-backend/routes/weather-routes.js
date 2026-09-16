@@ -4,7 +4,7 @@ const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middlewa
 const { logger } = require('../shared-lib');
 const axios = require('axios');
 const translationService = require('../services/translation-service');
-const { nearestDistrict } = require('../data/bd-districts');
+const { nearestDistrict } = require('../services/bd-districts');
 
 // Weather MCP service (PolisenseAI). Serves /geocode for the chat map command;
 // resolves Bangladesh district names locally, falls back to Mapbox Geocoding.

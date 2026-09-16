@@ -17,7 +17,7 @@ Two signals per district, combined into the engine's 0-4 tier scale:
     Return-period thresholds (2/5/20-year) are NOT available from Open-Meteo; when
     a CDS key is configured, `cems-glofas-forecast` can replace the ratio rule.
 
-The result is stored like the potato assessment (`risk_assessments`, crop="flood")
+The result is stored like the crop assessments (`risk_assessments`, crop="flood")
 so the weather service, the web banner and the notifier need no new storage.
 """
 

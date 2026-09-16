@@ -1,8 +1,11 @@
 /**
- * Bangladesh district centroids, copied from weather-mcp-service/data_ingestor.py
+ * Bangladesh district centroids (kept in services/, NOT data/: /app/data is a persistent
+ * volume that would shadow updates to this file). Copied from weather-mcp-service/data_ingestor.py
  * (the table the warning system assesses). Used to map a browser geolocation to
  * the district whose alerts the web banner should show.
  */
+const { getDefaultLocation } = require('./default-location');
+
 const DISTRICTS = [
   ['Dhaka', 23.8103, 90.4125],
   ['Gazipur', 23.9999, 90.4272],
@@ -84,9 +87,23 @@ function distanceKm(lat1, lon1, lat2, lon2) {
  * Nearest district to a coordinate. Returns null when the point is far outside
  * Bangladesh (> maxKm from every centroid) so callers can fall back to a default.
  */
+/**
+ * Districts the resolver may return: the static table plus the deployment
+ * fallback (DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON) when it is not already
+ * listed. The warning system always assesses the fallback district (see
+ * warning_system_engine defaults.ensure_default_in_list), so a device located
+ * there must register under the same name for its pushes to match — e.g. the
+ * Sapahar pilot would otherwise resolve to "Naogaon" and miss Sapahar alerts.
+ */
+function resolvableDistricts() {
+  const { name, latitude, longitude } = getDefaultLocation();
+  if (!name || DISTRICTS.some(([district]) => district === name)) return DISTRICTS;
+  return [...DISTRICTS, [name, latitude, longitude]];
+}
+
 function nearestDistrict(lat, lon, maxKm = 150) {
   let best = null;
-  for (const [name, dLat, dLon] of DISTRICTS) {
+  for (const [name, dLat, dLon] of resolvableDistricts()) {
     const km = distanceKm(lat, lon, dLat, dLon);
     if (!best || km < best.distanceKm) best = { district: name, distanceKm: km };
   }
@@ -94,4 +111,4 @@ function nearestDistrict(lat, lon, maxKm = 150) {
   return { district: best.district, distanceKm: Math.round(best.distanceKm * 10) / 10 };
 }
 
-module.exports = { DISTRICTS, nearestDistrict, distanceKm };
+module.exports = { DISTRICTS, resolvableDistricts, nearestDistrict, distanceKm };

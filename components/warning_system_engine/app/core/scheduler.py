@@ -86,10 +86,15 @@ def _env_int(name: str, default: int) -> int:
 async def run_crop_ews_pipeline(
     storage: "StorageLayer",
     crop_ews_list: "list[CropShortTermEWS]",
+    notifier: "Notifier | None" = None,
 ) -> dict:
     """
     Run the crop EWS for all districts that have a stored forecast, once per
     configured crop. Called after the main pipeline so weather_forecasts is fresh.
+
+    Tier >= 2 assessments are pushed through the backend broadcast (FCM to the
+    devices registered for the district / crop) when a notifier is given; the
+    web banner still polls the stored assessment either way.
     """
     import asyncio
 
@@ -110,8 +115,18 @@ async def run_crop_ews_pipeline(
                 if assessment:
                     evaluated += 1
                     if crop_ews.should_alert(assessment):
+                        pushed = False
+                        if notifier is not None:
+                            pushed = await asyncio.get_running_loop().run_in_executor(
+                                None,
+                                lambda a=assessment: notifier.dispatch_crop_alert(a),
+                            )
+                        channel = "push" if pushed else "frontend_poll"
                         await asyncio.get_running_loop().run_in_executor(
-                            None, lambda a=assessment, e=crop_ews: e.record_alert(a)
+                            None,
+                            lambda a=assessment, e=crop_ews, ch=channel: e.record_alert(
+                                a, channel=ch
+                            ),
                         )
                         alerted += 1
             except Exception as exc:
@@ -289,7 +304,7 @@ async def run_daily_pipeline(
 
     if crop_ews_list:
         try:
-            await run_crop_ews_pipeline(storage, crop_ews_list)
+            await run_crop_ews_pipeline(storage, crop_ews_list, notifier)
         except Exception as exc:
             logger.error("[PIPELINE] Crop EWS pipeline failed: %s", exc)
 

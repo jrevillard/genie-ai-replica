@@ -15,9 +15,15 @@
 
 const PRUNE_CODES = new Set([
   'messaging/registration-token-not-registered', // UNREGISTERED — uninstalled / rotated
-  'messaging/invalid-registration-token', // malformed token
-  'messaging/mismatched-credential' // SENDER_ID_MISMATCH — token from another project
+  'messaging/invalid-registration-token' // malformed token
 ]);
+
+// SENDER_ID_MISMATCH: the token was issued by a different Firebase project than
+// the service account the backend runs with. That is a SERVER configuration
+// error (wrong GOOGLE_APPLICATION_CREDENTIALS), not a dead token — pruning here
+// deactivated every registered device the first time a misconfigured backend
+// broadcast. Fail the send and leave the token alone.
+const SERVER_CONFIG_CODES = new Set(['messaging/mismatched-credential']);
 
 const RETRY_CODES = new Set([
   'messaging/quota-exceeded', // 429
@@ -39,6 +45,7 @@ const MASS_INVALID_ARGUMENT_RATIO = 0.5;
 function classify(error) {
   const code = error?.code || '';
   if (ABORT_CODES.has(code)) return 'abort';
+  if (SERVER_CONFIG_CODES.has(code)) return 'fail';
   if (PRUNE_CODES.has(code)) return 'prune';
   if (RETRY_CODES.has(code)) return 'retry';
   if (code === INVALID_ARGUMENT) return 'invalid-argument';

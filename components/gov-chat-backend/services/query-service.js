@@ -308,7 +308,10 @@ function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext)
     'When you quote a threshold range, check the value against it before judging it: a value ' +
     'inside the range is within it, not above or below it. ' +
     'Write for a farmer: short plain sentences, and when a pest, disease or unit has to be named, ' +
-    'add a few plain words saying what it is.';
+    'add a few plain words saying what it is. ' +
+    'If the question is about drought and the live data above has a "Drought assessment" line with a ' +
+    '"Full report:" link, you MUST end your answer with that link formatted as a markdown link, ' +
+    'exactly like this on its own line: [View full drought report](THE_LINK_URL).';
   if (backendMode === 'single-message') {
     return { ...opeaPayload, messages: wrap(queryText) };
   }

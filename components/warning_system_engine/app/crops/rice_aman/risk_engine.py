@@ -19,6 +19,7 @@ class DailyForecastPoint:
     temp_min: float
     temp_max: float
     humidity_max: float
+    humidity_min: float
     rain_mm: float
     wind_kmh: float
     source: str
@@ -26,11 +27,15 @@ class DailyForecastPoint:
 
 def to_point_from_dict(day: dict, source: str) -> DailyForecastPoint:
     """Convert a raw ArangoDB DayForecast dict to DailyForecastPoint."""
+    # `humidity` is the daily maximum. Older documents and the BMD source
+    # carry only that one value; fall back to it so a missing daily minimum
+    # cannot silently read as 0% and fire a dryness trigger.
     return DailyForecastPoint(
         date=day["date"],
         temp_min=day["temperature"]["min"],
         temp_max=day["temperature"]["max"],
         humidity_max=day["humidity"],
+        humidity_min=day.get("humidity_min") or day["humidity"],
         rain_mm=day["precipitation"]["value"],
         wind_kmh=day["wind"]["speed"],
         source=source,
@@ -49,10 +54,19 @@ def evaluate_rice_aman_day(day: DailyForecastPoint, t: RiceAmanThresholds) -> li
         triggers.append(
             f"Min temperature {day.temp_min:.1f}°C below Rice Aman limit {t.temp_min:.0f}°C"
         )
-    if day.humidity_max < t.humidity_min or day.humidity_max > t.humidity_max:
+    # Relative humidity swings ~25 points within a day, so each bound is
+    # tested against the statistic it was derived from: the floor comes from
+    # the season's daily minima, the ceiling from its daily maxima. Testing
+    # the daily maximum against the floor made every humid day read as dry.
+    if day.humidity_min < t.humidity_min:
         triggers.append(
-            f"Humidity {day.humidity_max:.0f}% outside Rice Aman range "
-            f"{t.humidity_min:.0f}–{t.humidity_max:.0f}%"
+            f"Humidity fell to {day.humidity_min:.0f}%, below the Rice Aman "
+            f"daily low of {t.humidity_min:.0f}%"
+        )
+    elif day.humidity_max > t.humidity_max:
+        triggers.append(
+            f"Humidity peaked at {day.humidity_max:.0f}%, above the Rice Aman "
+            f"daily high of {t.humidity_max:.0f}%"
         )
     if day.rain_mm >= t.rain_critical:
         triggers.append(f"Critical rainfall {day.rain_mm:.1f} mm/day")
@@ -166,11 +180,8 @@ def classify_tier(
     advisory = 0
     for trig in triggers:
         t_lower = trig.lower()
-        if (
-            "critical rainfall" in t_lower
-            or "temperature" in t_lower
-            or "wind" in t_lower
-            or "high rainfall" in t_lower
+        if "critical rainfall" in t_lower or (
+            "temperature" in t_lower or "wind" in t_lower or "high rainfall" in t_lower
         ):
             severe += 1
         else:

@@ -37,6 +37,27 @@ def _crop_list() -> list[str]:
 EWS_CROPS: list[str] = _crop_list()
 
 
+def _region_crop_list() -> list[str]:
+    """
+    Crops grown in the deployment region (REGION_CROPS), in display order.
+    Every EWS crop is always included; the extra entries are crops the farmers
+    grow but for which no crop profile (thresholds, calendar) exists yet, e.g.
+    REGION_CROPS=rice_aman,eggplant,mango,turmeric with EWS_CROPS=eggplant,rice_aman.
+    """
+    raw = os.getenv("REGION_CROPS", "").strip()
+    crops = [crop.strip() for crop in raw.split(",") if crop.strip()]
+    for crop in EWS_CROPS:
+        if crop not in crops:
+            crops.append(crop)
+    return crops
+
+
+REGION_CROPS: list[str] = _region_crop_list()
+# Region crops without a crop profile: the advisor may only give general
+# weather guidance for these and must say the detailed crop data is missing.
+UNPROFILED_CROPS: list[str] = [c for c in REGION_CROPS if c not in EWS_CROPS]
+
+
 def _coord(name: str, fallback: float, limit: float) -> float:
     raw = os.getenv(name, "").strip()
     if not raw:

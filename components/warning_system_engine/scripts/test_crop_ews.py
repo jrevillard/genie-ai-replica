@@ -444,7 +444,7 @@ def main():
             f"    {d['date']}  "
             f"temp {d['temperature']['min']}–{d['temperature']['max']}°C  "
             f"rain {d['precipitation']['value']} mm  "
-            f"humidity {d['humidity']}%  "
+            f"humidity {d.get('humidity_min', d['humidity'])}–{d['humidity']}%  "
             f"wind {d['wind']['speed']} km/h"
         )
 
@@ -583,7 +583,7 @@ def main():
                 else:
                     from app.core.notifier import Notifier
 
-                    sms_ok = Notifier(storage).dispatch_potato_sms(
+                    sms_ok = Notifier(storage).dispatch_crop_sms(
                         assessment, message=message
                     )
                     tick(

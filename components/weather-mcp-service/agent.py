@@ -86,8 +86,11 @@ def _district_in_text(text: str) -> str | None:
 
 # Crop whose stored assessment grounds the agricultural tip. Only crops with a
 # profile in the warning_system_engine produce assessments; the rest return "".
-# Defaults to the first crop the engine watches (EWS_CROPS).
-_ADVISORY_CROP = os.getenv("WEATHER_ADVISORY_CROP", "").strip() or _EWS_CROPS[0]
+# Crops the weather explanation reports on. Defaults to every crop the engine
+# watches (EWS_CROPS); WEATHER_ADVISORY_CROP narrows it to a comma-separated subset.
+_ADVISORY_CROPS: list[str] = [
+    c.strip() for c in os.getenv("WEATHER_ADVISORY_CROP", "").split(",") if c.strip()
+] or list(_EWS_CROPS)
 
 
 class WeatherIntent(BaseModel):
@@ -512,32 +515,40 @@ class WeatherAgent:
 
     def _crop_context(self, district: str) -> str:
         """
-        The stored crop risk for this district, as prompt context.
+        The stored crop risk for this district, one line per watched crop, as
+        prompt context.
 
-        Reuses the assessment the warning_system_engine writes daily (crop
+        Reuses the assessments the warning_system_engine writes daily (crop
         thresholds vs the same forecast); returns "" when none is stored, so the
         prompt is unchanged for districts without a crop profile.
         """
         if not self.storage:
             return ""
-        try:
-            stored = self.storage.get_latest_crop_risk(district, _ADVISORY_CROP)
-        except Exception as exc:
-            logger.warning("[AGENT] Crop risk lookup failed for %s: %s", district, exc)
-            return ""
-        if not stored:
-            return ""
-        triggers = stored.get("triggers") or []
-        if not triggers and int(stored.get("tier", 0) or 0) == 0:
-            return (
-                f"\nCrop assessment ({_ADVISORY_CROP}): conditions are within the "
-                f"{_ADVISORY_CROP} tolerance range.\n"
+        parts: list[str] = []
+        for crop in _ADVISORY_CROPS:
+            label = crop.replace("_", " ").title()
+            try:
+                stored = self.storage.get_latest_crop_risk(district, crop)
+            except Exception as exc:
+                logger.warning(
+                    "[AGENT] Crop risk lookup failed for %s/%s: %s", district, crop, exc
+                )
+                continue
+            if not stored:
+                continue
+            triggers = stored.get("triggers") or []
+            if not triggers and int(stored.get("tier", 0) or 0) == 0:
+                parts.append(
+                    f"Crop assessment ({label}): conditions are within the "
+                    f"{label} tolerance range."
+                )
+                continue
+            lines = "; ".join(str(t) for t in triggers)
+            parts.append(
+                f"Crop assessment ({label}): {stored.get('tier_label', 'Normal')}."
+                + (f" Exceeded thresholds: {lines}." if lines else "")
             )
-        lines = "; ".join(str(t) for t in triggers)
-        return (
-            f"\nCrop assessment ({_ADVISORY_CROP}): {stored.get('tier_label', 'Normal')}."
-            + (f" Exceeded thresholds: {lines}.\n" if lines else "\n")
-        )
+        return ("\n" + "\n".join(parts) + "\n") if parts else ""
 
     async def _generate_explanation(
         self,
@@ -574,10 +585,14 @@ class WeatherAgent:
             t = p.get("temperature", {})
             pr = p.get("precipitation", {})
             hum = p.get("humidity", {})
+            if hum.get("min") is not None and hum.get("max") is not None:
+                hum_text = f"humidity {hum['min']:.0f}–{hum['max']:.0f}%"
+            else:
+                hum_text = f"peak humidity {hum.get('value', '?')}%"
             day_lines.append(
                 f"  {date}: {t.get('min')}–{t.get('max')}°C, "
                 f"rain {pr.get('value', 0):.1f}mm ({int(pr.get('probability', 0) * 100)}%), "
-                f"humidity {hum.get('value', '?')}%"
+                f"{hum_text}"
             )
         day_summary = "\n".join(day_lines)
 
@@ -789,7 +804,15 @@ class WeatherAgent:
                             "unit": "mm",
                             "probability": day.precipitation.probability,
                         },
-                        "humidity": {"value": day.humidity, "unit": "percent"},
+                        # "value" stays the daily maximum for existing readers;
+                        # min/mean are what a "what is the humidity" answer needs.
+                        "humidity": {
+                            "value": day.humidity,
+                            "max": day.humidity,
+                            "mean": day.humidity_mean,
+                            "min": day.humidity_min,
+                            "unit": "percent",
+                        },
                         "wind": {"speed": day.wind.speed, "unit": "km/h"},
                         "soil_moisture": {"value": day.soil_moisture, "unit": "m3/m3"},
                     },

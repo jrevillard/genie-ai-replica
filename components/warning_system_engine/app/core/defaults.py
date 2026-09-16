@@ -5,7 +5,7 @@ Read from DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON (root .env, Section 15).
 The same variables are used by the backend, weather-mcp-service,
 drought-monitoring and geo-inference-worker so every service falls back to one
 place. The fallback district is always registered in the engine's district
-tables so every pipeline (potato, flood, seasonal, drought) assesses it.
+tables so every pipeline (crop, flood, seasonal, drought) assesses it.
 Unset = Dhaka.
 """
 
@@ -42,6 +42,24 @@ DEFAULT_LOCATION: str = os.getenv("DEFAULT_LOCATION", "").strip() or _BUILT_IN_L
 DEFAULT_LAT: float = _coord("DEFAULT_LAT", _BUILT_IN_LAT, 90.0)
 DEFAULT_LON: float = _coord("DEFAULT_LON", _BUILT_IN_LON, 180.0)
 DEFAULT_COORDS: tuple[float, float] = (DEFAULT_LAT, DEFAULT_LON)
+
+
+# Administrative district the fallback location belongs to when it is a
+# sub-district point (e.g. DEFAULT_LOCATION=Sapahar, DEFAULT_LOCATION_DISTRICT=
+# Naogaon). Official district-level warnings (BMD CAP) name the district, so
+# they must also target the fallback location. Unset = no expansion.
+DEFAULT_LOCATION_DISTRICT: str = os.getenv("DEFAULT_LOCATION_DISTRICT", "").strip()
+
+
+def expand_default_parent(districts: list[str]) -> list[str]:
+    """Add the fallback location to a district list that names its parent district."""
+    if (
+        DEFAULT_LOCATION_DISTRICT
+        and DEFAULT_LOCATION_DISTRICT in districts
+        and DEFAULT_LOCATION not in districts
+    ):
+        return sorted([*districts, DEFAULT_LOCATION])
+    return districts
 
 
 def ensure_default_district(coords: dict[str, tuple[float, float]]) -> None:

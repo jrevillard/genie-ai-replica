@@ -67,9 +67,16 @@ class TokenRepository {
 
   /**
    * Streams matching tokens without materialising the full audience.
-   * The AQL is built dynamically: a `LENGTH(@x) == 0 OR ...` fallback would
-   * defeat the optimizer and force a full scan past the array indexes, so
-   * only the clauses that apply are emitted.
+   * The AQL is built dynamically: a `LENGTH(@x) == 0 OR ...` fallback on the
+   * BIND variables would defeat the optimizer and force a full scan past the
+   * array indexes, so only the clauses that apply are emitted.
+   *
+   * Targeting semantics (pilot): DISTRICT IS THE ONLY MATCH. Every device
+   * registered for a district that the alert names receives it — no crop or
+   * alert-type opt-in. Stored crop / alertType preferences are kept on the
+   * document for a future opt-out UI but are deliberately NOT used to narrow
+   * the audience: the mobile app registers legacy fixed lists (e.g. crops
+   * ["potato"]) that would otherwise silently drop every other crop's alert.
    */
   async *streamMatchingTokens(audience, { batchSize = 1000 } = {}) {
     const filters = ['token.active == true', 'token.fcmToken != null AND token.fcmToken != ""'];
@@ -77,14 +84,6 @@ class TokenRepository {
     if (audience.districts?.length) {
       filters.push('token.preferences.districts ANY IN @districts');
       bindVars.districts = audience.districts;
-    }
-    if (audience.crops?.length) {
-      filters.push('token.preferences.crops ANY IN @crops');
-      bindVars.crops = audience.crops;
-    }
-    if (audience.alertTypes?.length) {
-      filters.push('token.preferences.alertTypes ANY IN @alertTypes');
-      bindVars.alertTypes = audience.alertTypes;
     }
 
     const query = `

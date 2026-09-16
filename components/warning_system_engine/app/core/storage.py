@@ -6,7 +6,7 @@ Collections (created on first run if absent):
   risk_assessments     — RiskAssessment documents         (recommended TTL: 90 days)
   alerts_sent          — Deduplication log                (recommended TTL: 7 days)
   seasonal_forecasts   — Copernicus SEAS5 monthly outlook (recommended TTL: 180 days)
-  seasonal_assessments — Long-term potato risk per month  (recommended TTL: 180 days)
+  seasonal_assessments — Long-term crop risk per month  (recommended TTL: 180 days)
   special_bulletins    — BAMIS special bulletin archive rows
 
 Upsert keys:
@@ -296,7 +296,7 @@ class StorageLayer:
     def upsert_crop_assessment(self, assessment: dict, crop: str) -> str:
         """
         Upsert a crop-specific risk assessment.
-        Key: {location}__short__{crop}  (e.g. dhaka__short__potato)
+        Key: {location}__short__{crop}  (e.g. dhaka__short__rice_aman)
         """
         key = _norm_key(
             f"{assessment['location']}__{assessment.get('horizon', 'short')}__{crop}"
@@ -425,13 +425,13 @@ class StorageLayer:
             return None
 
     # ------------------------------------------------------------------
-    # Seasonal assessments  (long-term potato risk per month)
+    # Seasonal assessments  (long-term crop risk per month)
     # ------------------------------------------------------------------
 
     def upsert_seasonal_assessment(self, assessment: dict) -> str:
         """
-        Upsert a long-term monthly potato risk assessment.
-        Key: {location}__{crop}__{YYYY_MM}  e.g. dhaka__potato__2026_06
+        Upsert a long-term monthly crop risk assessment.
+        Key: {location}__{crop}__{YYYY_MM}  e.g. dhaka__rice_aman__2026_06
         """
         month_key = assessment["target_month"].replace("-", "_")
         key = _norm_key(f"{assessment['location']}__{assessment['crop']}__{month_key}")

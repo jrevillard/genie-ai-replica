@@ -276,8 +276,8 @@
   "features": {
     "chat": {
       "welcomeMessage": {
-        "en": "Welcome to MEWA! Ask me about this week's weather, potato crop risks, drought status or planting advice for your district.",
-        "bn": "MEWA-তে স্বাগতম! এই সপ্তাহের আবহাওয়া, আলু ফসলের ঝুঁকি, খরার অবস্থা বা আপনার জেলার জন্য রোপণের পরামর্শ সম্পর্কে আমাকে জিজ্ঞাসা করুন।"
+        "en": "Welcome to MEWA! Ask me about this week's weather, risks to your rice, eggplant, mango or turmeric crops, drought status or planting advice for your district.",
+        "bn": "MEWA-তে স্বাগতম! এই সপ্তাহের আবহাওয়া, আপনার ধান, বেগুন, আম বা হলুদ ফসলের ঝুঁকি, খরার অবস্থা বা আপনার জেলার জন্য রোপণের পরামর্শ সম্পর্কে আমাকে জিজ্ঞাসা করুন।"
       },
       "botName": "GENIE.AI",
       "quickHelp": {
@@ -311,8 +311,8 @@
                 "bn": "আমার জেলায় এই সপ্তাহের আবহাওয়ার পূর্বাভাস কী?"
               },
               "hiddenPrompt": {
-                "en": "What is the weather forecast for this week in {{location}}? Interpret it for my potato crop.",
-                "bn": "What is the weather forecast for this week in {{location}}? Interpret it for my potato crop."
+                "en": "What is the weather forecast for this week in {{location}}? Give the day-by-day figures first, then say what they mean for the crops grown here.",
+                "bn": "What is the weather forecast for this week in {{location}}? Give the day-by-day figures first, then say what they mean for the crops grown here."
               }
             }
           },
@@ -399,8 +399,8 @@
                 "bn": "এই মৌসুমে কখন রোপণ করব এবং কী আশা করব?"
               },
               "hiddenPrompt": {
-                "en": "When should I plant potatoes this season in {{location}}? What weather should I expect at each growth stage?",
-                "bn": "When should I plant potatoes this season in {{location}}? What weather should I expect at each growth stage?"
+                "en": "When should I plant this season in {{location}}, for the crops grown here? What weather should I expect at each growth stage?",
+                "bn": "When should I plant this season in {{location}}, for the crops grown here? What weather should I expect at each growth stage?"
               }
             }
           }

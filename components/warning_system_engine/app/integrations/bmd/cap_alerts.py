@@ -23,6 +23,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 import requests
+from app.core.defaults import expand_default_parent
 from app.core.storage import StorageLayer
 from app.workflows.short_term.flood_ews import DISTRICT_COORDS
 
@@ -227,7 +228,8 @@ def map_areas_to_districts(areas: list[dict]) -> tuple[list[str], bool]:
                     if poly and _point_in_polygon(lat, lon, poly):
                         found.add(name)
                         matched = True
-    return sorted(found), nationwide
+    # A sub-district fallback location (Sapahar) inherits its district's warnings.
+    return expand_default_parent(sorted(found)), nationwide
 
 
 class BmdCapWatcher:

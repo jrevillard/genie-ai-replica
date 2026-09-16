@@ -154,30 +154,38 @@ class Notifier:
                 a.location,
             )
 
-    def dispatch_potato_alert(self, assessment: dict) -> bool:
-        """Broadcast a potato EWS alert through the backend token registry."""
+    def dispatch_crop_alert(self, assessment: dict) -> bool:
+        """Broadcast a crop EWS alert through the backend token registry.
+
+        Crop-agnostic: the crop comes from the assessment written by
+        CropShortTermEWS (``assessment["crop"]``, e.g. ``rice_aman``), so every
+        crop configured in EWS_CROPS gets its own type, title and dedup key.
+        """
         tier = int(assessment.get("tier", 0) or 0)
         if tier < 2:
             return False
 
         location = assessment.get("location", "")
+        crop = self._crop_slug(assessment)
+        crop_name = self._crop_display_name(crop)
         tier_label = (
             assessment.get("tier_label") or assessment.get("tierLabel") or "Warning"
         )
-        body = self._potato_message(assessment)
+        body = self._crop_message(assessment)
         payload = {
-            "type": "potato_ews",
-            "title": f"Potato {tier_label} — {location}",
+            "type": "crop_ews",
+            "title": f"{crop_name} {tier_label} — {location}",
             "body": body[:240],
             "location": location,
             "districts": [location] if location else [],
-            "crops": ["potato"],
-            "alertTypes": ["potato_ews", "weather_warning"],
+            "crops": [crop],
+            "alertTypes": ["crop_ews", f"{crop}_ews", "weather_warning"],
             "tier": tier,
             "tierLabel": tier_label,
             "data": {
-                "type": "potato_ews",
-                "crop": "potato",
+                "type": "crop_ews",
+                "crop": crop,
+                "crop_name": crop_name,
                 "tier": str(tier),
                 "tier_label": tier_label,
                 "location": location,
@@ -189,13 +197,14 @@ class Notifier:
         bucket = assessment.get("forecast_date") or date.today().isoformat()
         if self._post_notification_broadcast(
             payload,
-            f"potato alert for {location}",
-            self._idempotency_key("potato_ews", location, tier, bucket),
+            f"{crop} alert for {location}",
+            self._idempotency_key(f"crop_ews:{crop}", location, tier, bucket),
         ):
             return True
 
         logger.warning(
-            "[NOTIFY] Backend notification URL not configured or failed — potato alert for %s not pushed",
+            "[NOTIFY] Backend notification URL not configured or failed — %s alert for %s not pushed",
+            crop,
             location,
         )
         return False
@@ -390,18 +399,21 @@ class Notifier:
         )
         return False
 
-    def dispatch_potato_sms(self, assessment: dict, message: str | None = None) -> bool:
-        """Send the potato EWS display message as an SMS via Twilio."""
+    def dispatch_crop_sms(self, assessment: dict, message: str | None = None) -> bool:
+        """Send the crop EWS display message as an SMS via Twilio."""
         tier = int(assessment.get("tier", 0) or 0)
+        crop = self._crop_slug(assessment)
         if tier < 2:
             logger.info(
-                "[NOTIFY] Potato SMS skipped — tier %d is below warning threshold", tier
+                "[NOTIFY] %s SMS skipped — tier %d is below warning threshold",
+                crop,
+                tier,
             )
             return False
 
-        location = assessment.get("location", "potato alert")
-        message_body = message or self._potato_message(assessment)
-        return self._send_sms_message(message_body, f"potato alert for {location}")
+        location = assessment.get("location", f"{crop} alert")
+        message_body = message or self._crop_message(assessment)
+        return self._send_sms_message(message_body, f"{crop} alert for {location}")
 
     def _sms(self, a: RiskAssessment) -> bool:
         """
@@ -519,7 +531,18 @@ class Notifier:
         return False
 
     @staticmethod
-    def _potato_message(assessment: dict) -> str:
+    def _crop_slug(assessment: dict) -> str:
+        """Crop identifier as written by CropShortTermEWS (``rice_aman``)."""
+        return str(assessment.get("crop") or "crop").strip().lower()
+
+    @staticmethod
+    def _crop_display_name(crop: str) -> str:
+        """``rice_aman`` -> ``Rice Aman`` (matches the generated risk engines)."""
+        return crop.replace("_", " ").title()
+
+    @classmethod
+    def _crop_message(cls, assessment: dict) -> str:
+        crop_name = cls._crop_display_name(cls._crop_slug(assessment))
         return (
             assessment.get("message")
             or "; ".join(
@@ -527,7 +550,7 @@ class Notifier:
                     :2
                 ]
             )
-            or "New potato early warning alert"
+            or f"New {crop_name} early warning alert"
         )
 
     @staticmethod

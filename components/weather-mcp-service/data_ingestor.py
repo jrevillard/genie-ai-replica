@@ -130,7 +130,9 @@ _OM_VARS = (
     "precipitation_probability_max,"
     "windspeed_10m_max,"
     "winddirection_10m_dominant,"
-    "relative_humidity_2m_max"
+    "relative_humidity_2m_max,"
+    "relative_humidity_2m_mean,"
+    "relative_humidity_2m_min"
 )
 
 # Open-Meteo hourly variables (soil moisture is hourly-only in the API)
@@ -452,6 +454,8 @@ class DataIngestor:
             wind = _safe(daily, "windspeed_10m_max", i, 0.0)
             wdir = _safe(daily, "winddirection_10m_dominant", i, None)
             humidity = _safe(daily, "relative_humidity_2m_max", i, 70.0)
+            humidity_mean = _safe(daily, "relative_humidity_2m_mean", i, None)
+            humidity_min = _safe(daily, "relative_humidity_2m_min", i, None)
             soil_m = _daily_soil_moisture(i)
 
             days_list.append(
@@ -461,6 +465,8 @@ class DataIngestor:
                     precipitation=PrecipitationData(value=rain, probability=rain_p),
                     wind=WindData(speed=wind, direction=wdir),
                     humidity=humidity,
+                    humidity_mean=humidity_mean,
+                    humidity_min=humidity_min,
                     soil_moisture=soil_m,
                     extreme_flags=ExtremeFlags(
                         heavy_rain=rain >= 50.0,

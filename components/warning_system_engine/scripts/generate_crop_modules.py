@@ -294,6 +294,7 @@ def _render_risk_engine_py(
         f"    temp_min: float\n"
         f"    temp_max: float\n"
         f"    humidity_max: float\n"
+        f"    humidity_min: float\n"
         f"    rain_mm: float\n"
         f"    wind_kmh: float\n"
         f"    source: str\n"
@@ -301,11 +302,15 @@ def _render_risk_engine_py(
         f"\n"
         f"def to_point_from_dict(day: dict, source: str) -> DailyForecastPoint:\n"
         f'    """Convert a raw ArangoDB DayForecast dict to DailyForecastPoint."""\n'
+        f"    # `humidity` is the daily maximum. Older documents and the BMD source\n"
+        f"    # carry only that one value; fall back to it so a missing daily minimum\n"
+        f"    # cannot silently read as 0% and fire a dryness trigger.\n"
         f"    return DailyForecastPoint(\n"
         f'        date=day["date"],\n'
         f'        temp_min=day["temperature"]["min"],\n'
         f'        temp_max=day["temperature"]["max"],\n'
         f'        humidity_max=day["humidity"],\n'
+        f'        humidity_min=day.get("humidity_min") or day["humidity"],\n'
         f'        rain_mm=day["precipitation"]["value"],\n'
         f'        wind_kmh=day["wind"]["speed"],\n'
         f"        source=source,\n"
@@ -327,10 +332,19 @@ def _render_risk_engine_py(
         f"        triggers.append(\n"
         f'            f"Min temperature {{day.temp_min:.1f}}°C below {display_name} limit {{t.temp_min:.0f}}°C"\n'
         f"        )\n"
-        f"    if day.humidity_max < t.humidity_min or day.humidity_max > t.humidity_max:\n"
+        f"    # Relative humidity swings ~25 points within a day, so each bound is\n"
+        f"    # tested against the statistic it was derived from: the floor comes from\n"
+        f"    # the season's daily minima, the ceiling from its daily maxima. Testing\n"
+        f"    # the daily maximum against the floor made every humid day read as dry.\n"
+        f"    if day.humidity_min < t.humidity_min:\n"
         f"        triggers.append(\n"
-        f'            f"Humidity {{day.humidity_max:.0f}}% outside {display_name} range "\n'
-        f'            f"{{t.humidity_min:.0f}}–{{t.humidity_max:.0f}}%"\n'
+        f'            f"Humidity fell to {{day.humidity_min:.0f}}%, below the {display_name} "\n'
+        f'            f"daily low of {{t.humidity_min:.0f}}%"\n'
+        f"        )\n"
+        f"    elif day.humidity_max > t.humidity_max:\n"
+        f"        triggers.append(\n"
+        f'            f"Humidity peaked at {{day.humidity_max:.0f}}%, above the {display_name} "\n'
+        f'            f"daily high of {{t.humidity_max:.0f}}%"\n'
         f"        )\n"
         f"    if day.rain_mm >= t.rain_critical:\n"
         f'        triggers.append(f"Critical rainfall {{day.rain_mm:.1f}} mm/day")\n'

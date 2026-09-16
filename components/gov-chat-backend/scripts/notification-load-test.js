@@ -80,7 +80,7 @@ async function seed() {
       preferences: {
         districts: [district],
         crops: i % 2 === 0 ? ['potato'] : [],
-        alertTypes: ['weather_warning', 'potato_ews', 'drought_alert']
+        alertTypes: ['weather_warning', 'crop_ews', 'drought_alert']
       },
       deviceInfo: { synthetic: true },
       active: true,

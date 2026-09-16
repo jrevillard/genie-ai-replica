@@ -858,7 +858,34 @@ class LogsService {
     const filterParts = [];
     if (term && String(term).trim() !== '') {
       const escaped = this._escapeLogSql(String(term));
-      filterParts.push(`_msg:"${escaped}"`);
+      // Substring / token-fragment match via both-sides wildcard.
+      //
+      // Why not the obvious phrase search `_msg:"<escaped>"`?
+      // VL tokenises `_msg` on word boundaries: `[DB_CONNECTION]` is a
+      // single indexed token `db_connection`. A phrase search for
+      // `"DB_"` requires the literal substring `DB_` followed by a
+      // separator — it does NOT match inside `DB_CONNECTION` because
+      // the underscore is mid-token, not at a token boundary. Users
+      // searching for a fragment like `DB_` would see zero results
+      // even though the message visibly contains the fragment.
+      //
+      // The both-sides wildcard `*<term>*` does prefix-within-token
+      // matching: VL expands `*` over the byte stream of the indexed
+      // term, so `*DB_*` matches `db_connection` (the query fragment
+      // `DB_` is a prefix of the token's raw bytes).
+      //
+      // Min length 2: a 1-char term like `*D*` matches an enormous
+      // slice of the corpus and burns VL CPU. Reject single-char
+      // searches by falling back to the (cheap) exact-word match
+      // `_msg:D` instead — VL still tokenises so the result set stays
+      // bounded, and the user gets a useful error page if they
+      // really meant to grep for a single letter.
+      const fragment = escaped.trim();
+      if (fragment.length >= 2) {
+        filterParts.push(`_msg:*${fragment}*`);
+      } else {
+        filterParts.push(`_msg:${fragment}`);
+      }
     }
     if (level && String(level).trim() !== '') {
       // Validate the allowlist up-front so a hostile caller gets a

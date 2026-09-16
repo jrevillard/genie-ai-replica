@@ -417,7 +417,11 @@ describe('LogsService VictoriaLogs rewrite', () => {
       expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       const callArg = mockVlClient.query.mock.calls[0][0];
       // All three filters are now pushed down to VL as LogSQL clauses.
-      expect(callArg.q).toContain('_msg:"login"');
+      // Term uses both-sides wildcard (`*<term>*`) so VL does prefix-
+      // within-token matching — phrase `"<term>"` would fail to match
+      // substring fragments like `DB_` inside a longer token
+      // (`DB_CONNECTION` tokenises as one word).
+      expect(callArg.q).toContain('_msg:*login*');
       expect(callArg.q).toContain('severity_text:INFO');
       expect(callArg.q).toContain('service.name:"auth"');
       // Limit is honoured exactly (no more 4x over-fetch multiplier).
@@ -435,7 +439,7 @@ describe('LogsService VictoriaLogs rewrite', () => {
       // escaping (LogSQL has no escape sequence for newline/control chars;
       // a literal newline in the source would break out of the quoted
       // segment and inject arbitrary filter syntax).
-      expect(callArg.q).toContain('_msg:"a b c d e f"');
+      expect(callArg.q).toContain('_msg:*a b c d e f*');
     });
 
     it('strips newline + LogSQL control chars to prevent injection', async () => {
@@ -443,14 +447,16 @@ describe('LogsService VictoriaLogs rewrite', () => {
       // Newline + quoted-string terminator + backtick + control chars.
       // After stripping, the `_stream:"evil"` filter clause cannot
       // appear verbatim — the `"`, `:` and newline that close the
-      // outer `_msg:"..."` segment are removed.
+      // outer `_msg:*...*` segment are removed (the wildcard wrap does
+      // not use quotes, so any literal `"` or `:` would still be a
+      // LogSQL injection vector).
       await logsService.searchLogs({
         dateRange: 'today',
         term: 'safe\n_stream:"evil" _msg:`injected'
       });
       const callArg = mockVlClient.query.mock.calls[0][0];
       expect(callArg.q).not.toContain('_stream:"evil"');
-      expect(callArg.q).not.toContain('_msg:"evil"');
+      expect(callArg.q).not.toContain('_msg:*evil*');
       expect(callArg.q).not.toContain('`');
       expect(callArg.q).not.toContain('\n');
     });

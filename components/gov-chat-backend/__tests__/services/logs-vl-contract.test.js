@@ -174,7 +174,11 @@ function parseFixtureAsRows(svc) {
  *   - `*` / `` -> all rows
  *   - `service:<name>` -> only rows for that service
  *   - `level:<lvl>` -> only rows at that level
- *   - `_msg:"<term>"` -> rows whose `message` contains `<term>`
+ *   - `_msg:*<term>*` -> rows whose `message` contains `<term>`
+ *     (subsequence match via both-sides wildcard — VL tokenises
+ *      `[DB_CONNECTION]` as one word `db_connection` so a phrase
+ *      search for `"DB_"` would miss; the wildcard wrap covers the
+ *      token-internal fragment)
  *   - `_stream_service:"<name>"` -> rows for that service
  *   - any `AND`-joined combination -> intersection
  *   - everything else -> empty (mimics VL returning no matches)
@@ -188,7 +192,10 @@ function makeVlClientForRows(rows) {
     for (const raw of clauses) {
       const clause = raw.trim();
       if (clause === '' || clause === '*') continue;
-      const msgMatch = /^_msg:"([^"]*)"$/.exec(clause);
+      // Both-sides wildcard wrap: `_msg:*<fragment>*`. The mock strips
+      // the literal `*`s around the fragment to recover the needle —
+      // see `_searchLogsFromVL` for the rationale on substring search.
+      const msgMatch = /^_msg:\*(.+)\*$/.exec(clause);
       if (msgMatch) {
         const needle = msgMatch[1].toLowerCase();
         out = out.filter((r) => (r.message || '').toLowerCase().includes(needle));
@@ -495,7 +502,7 @@ describe('file path vs VL path deep-equal on the same fixture', () => {
       // limit echoed in both envelopes.
       expect(fileResponse.limit).toBe(50);
       expect(vlResponse.limit).toBe(50);
-      // The VL mock honours the `_msg:"<term>"` filter and returns the
+      // The VL mock honours the `_msg:*<term>*` filter and returns the
       // matching rows from the fixture; the VL total must equal the
       // number of fixture rows whose message contains `clamav`.
       const expectedMatches = vlRows.filter((r) => (r.message || '').toLowerCase().includes(term)).length;

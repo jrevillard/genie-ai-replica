@@ -216,6 +216,38 @@ export default {
       };
       return configs[this.category] || {};
     },
+
+    // Resolve var(--xxx) in cssVars to actual hex at render time. ApexCharts
+    // builds SVG internally and does not always inherit CSS custom properties
+    // from the host element. Re-resolved on theme change via useChartTheme.
+    resolvedCssVars() {
+      const raw = this.getCssVarStrings();
+      const resolve = (val) => {
+        if (typeof val !== 'string') return val;
+        const match = val.match(/var\((--[a-z0-9-]+)\)/i);
+        if (!match) return val;
+        const v = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+        return v || val;
+      };
+      const resolved = {};
+      for (const [k, val] of Object.entries(raw)) {
+        if (Array.isArray(val)) {
+          resolved[k] = val.map(resolve);
+        } else {
+          resolved[k] = resolve(val);
+        }
+      }
+      return resolved;
+    },
+
+    resolvedCategoryColor() {
+      const color = this.categoryConfig.color;
+      if (!color) return null;
+      const match = color.match(/var\((--[a-z0-9-]+)\)/i);
+      if (!match) return color;
+      const v = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+      return v || color;
+    },
     commodityName() {
       return this.categoryConfig.i18nKey ? this.$t(this.categoryConfig.i18nKey) : this.category;
     },
@@ -260,7 +292,8 @@ export default {
       const minVal = Math.min(...values);
       const maxVal = Math.max(...values);
       const range = maxVal - minVal || 1;
-      const cssVars = this.getCssVarStrings();
+      const cssVars = this.resolvedCssVars;
+      const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
 
       return {
         chart: {
@@ -280,15 +313,15 @@ export default {
           max: Math.ceil((maxVal + range * 0.05) / 10) * 10,
           labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) }
         },
-        colors: [this.categoryConfig.color || cssVars.accentColor],
-        stroke: { curve: 'smooth', width: 3 },
+        colors: [seriesColor],
+        stroke: { curve: 'smooth', width: 4 },
         fill: {
           type: 'gradient',
-          gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] }
+          gradient: { shadeIntensity: 1, opacityFrom: 0.65, opacityTo: 0.1, stops: [0, 90, 100] }
         },
         markers: {
           size: 6,
-          colors: [this.categoryConfig.color || cssVars.accentColor],
+          colors: [seriesColor],
           strokeColors: cssVars.backgroundColor,
           strokeWidth: 2
         },

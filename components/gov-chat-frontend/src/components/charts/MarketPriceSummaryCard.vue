@@ -153,17 +153,16 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: 3
+          width: 4
         },
-        // Use category-specific semantic color so each market stands out
-        // (maize/warning/info/...). The default accentColor made all six
-        // buttons look identical at a glance.
-        colors: [this.categoryColor],
+        // Resolved at render time (see resolvedCategoryColor). Falls back to
+        // the raw var() string if getComputedStyle returns empty.
+        colors: [this.resolvedCategoryColor],
         fill: {
           type: 'gradient',
           gradient: {
             shadeIntensity: 1,
-            opacityFrom: 0.35,
+            opacityFrom: 0.55,
             opacityTo: 0,
             stops: [0, 100]
           }
@@ -222,11 +221,55 @@ export default {
         harvestStorage: 'var(--muted)'
       };
       return colorMap[this.category] || 'var(--muted)';
+    },
+
+    // Resolve CSS var() to actual hex value. ApexCharts builds SVG internally
+    // and does not always inherit CSS custom properties from the host element,
+    // so we resolve to hex at render time. Re-resolved on theme change via the
+    // themeKey watcher below.
+    resolvedCategoryColor() {
+      const match = this.categoryColor.match(/var\((--[a-z0-9-]+)\)/i);
+      if (!match) return this.categoryColor;
+      const varName = match[1];
+      const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      return value || this.categoryColor;
+    },
+
+    // Bump on theme change to force ApexCharts to re-render with new colors.
+    themeKey() {
+      return document.documentElement.getAttribute('data-theme') || 'light';
+    }
+  },
+
+  watch: {
+    themeKey() {
+      // Watching themeKey causes chartOptions to re-compute (resolvedCategoryColor
+      // depends on document.documentElement), which triggers ApexCharts re-render.
     }
   },
 
   async mounted() {
+    // Listen for theme changes so the sparkline color updates without a route
+    // change. Without this, toggling dark mode leaves the curve the old color.
+    this.themeObserver = new MutationObserver(() => {
+      // Trigger chartOptions re-computation by reading the attr (already in
+      // themeKey getter). Forcing a no-op update via $forceUpdate is needed
+      // because Vue's reactivity does not track DOM attribute reads.
+      this.$forceUpdate();
+    });
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
     await this.loadPriceData();
+  },
+
+  beforeUnmount() {
+    if (this.themeObserver) {
+      this.themeObserver.disconnect();
+      this.themeObserver = null;
+    }
   },
 
   methods: {

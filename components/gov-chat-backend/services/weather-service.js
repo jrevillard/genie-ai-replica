@@ -21,8 +21,11 @@ class WeatherService {
       logger.debug('WeatherService already initialized, skipping');
       return;
     }
+    // Fetch server location from ipapi.co — isolated try/catch so a 429 (rate
+    // limit) on this third-party service does not abort init and leave the
+    // service without a DB collection handle (root cause of the
+    // "Cannot read properties of null (reading 'save')" 500s on /api/weather).
     try {
-      // Fetch server location from ipapi.co
       logger.debug('WeatherService.fetching_server_location');
       const geoResponse = await axios.get('https://ipapi.co/json/', { timeout: 5000 });
       logger.debug('WeatherService.server_location_response', {
@@ -38,19 +41,33 @@ class WeatherService {
         logger.warn('Server location fetch failed; using default coordinates (0, 0)');
       }
       logger.info('WeatherService.server_location_set', { serverLocation: this.serverLocation });
+    } catch (geoError) {
+      logger.warn('WeatherService.server_location_unavailable', {
+        error: geoError.message,
+        statusCode: geoError.response?.status
+      });
+      // Default fallback so getWeather() callers without explicit coords
+      // still get a response (lat:0/lon:0 will be passed to open-meteo).
+      this.serverLocation = { latitude: 0, longitude: 0, city: 'Unknown' };
+    }
 
+    // DB collection handle — isolated try/catch so a transient ArangoDB
+    // outage does not abort init. If this fails, getWeather() degrades to
+    // "skip persistence" mode (see guard at the .save() call site).
+    try {
       this.db = await this.dbService.getConnection('default');
       this.weatherRequests = this.db.collection('weatherRequests');
-      this.initialized = true;
-      logger.info('WeatherService initialized successfully');
-    } catch (error) {
-      logger.error(`Error initializing WeatherService: ${error.message}`, {
-        stack: error.stack,
-        statusCode: error.response?.status,
-        responseData: error.response?.data
+      logger.info('WeatherService.weather_requests_collection_ready');
+    } catch (dbError) {
+      logger.error('WeatherService.weather_requests_collection_unavailable', {
+        error: dbError.message,
+        stack: dbError.stack
       });
-      throw error;
+      this.weatherRequests = null;
     }
+
+    this.initialized = true;
+    logger.info('WeatherService initialized successfully');
   }
 
   /**
@@ -180,7 +197,8 @@ class WeatherService {
         }))
       };
 
-      // Store request in ArangoDB
+      // Store request in ArangoDB (best-effort audit log — never block the
+      // user-facing response on persistence failure).
       const requestDoc = {
         userId: userId || null,
         latitude,
@@ -188,9 +206,21 @@ class WeatherService {
         city,
         timestamp: new Date().toISOString()
       };
-      logger.debug('WeatherService.saving_request', { requestDoc });
-      const request = await this.weatherRequests.save(requestDoc);
-      const requestId = request._key;
+      let requestId = null;
+      if (!this.weatherRequests) {
+        logger.warn('WeatherService.request_persistence_skipped', { reason: 'collection_unavailable' });
+      } else {
+        try {
+          logger.debug('WeatherService.saving_request', { requestDoc });
+          const request = await this.weatherRequests.save(requestDoc);
+          requestId = request._key;
+        } catch (persistError) {
+          logger.warn('WeatherService.request_persistence_failed', {
+            error: persistError.message,
+            userId: requestDoc.userId
+          });
+        }
+      }
 
       // Record in analytics
       if (this.analyticsService) {

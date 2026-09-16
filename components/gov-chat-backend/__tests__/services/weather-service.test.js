@@ -104,12 +104,51 @@ describe('WeatherService', () => {
       expect(dbService.getConnection).toHaveBeenCalledTimes(1);
     });
 
-    it('should throw on ipapi failure', async () => {
+    it('should not throw on ipapi failure (degraded mode)', async () => {
+      // ipapi.co rate-limits with 429 from our datacenter IP; init must not
+      // throw so the rest of the service (DB collection, weather API) can
+      // still come up. Regression test for the 30-day 500 storm on
+      // POST /api/weather (the 429 caused this.weatherRequests to stay null).
       axios.get.mockRejectedValueOnce(new Error('Network error'));
       const { service } = setupService();
       service.initialized = false;
 
-      await expect(service.init()).rejects.toThrow('Network error');
+      await expect(service.init()).resolves.toBeUndefined();
+      expect(service.serverLocation).toEqual({ latitude: 0, longitude: 0, city: 'Unknown' });
+      expect(service.initialized).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(
+        'WeatherService.server_location_unavailable',
+        expect.objectContaining({ error: 'Network error' })
+      );
+    });
+
+    it('should not throw on ipapi 429 rate-limit (degraded mode)', async () => {
+      const err = new Error('Request failed with status code 429');
+      err.response = { status: 429 };
+      axios.get.mockRejectedValueOnce(err);
+      const { service } = setupService();
+      service.initialized = false;
+
+      await expect(service.init()).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'WeatherService.server_location_unavailable',
+        expect.objectContaining({ statusCode: 429 })
+      );
+    });
+
+    it('should not throw on DB collection failure (persistence skipped later)', async () => {
+      axios.get.mockResolvedValueOnce(ipapiResponse);
+      dbService.getConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
+      const { service } = setupService();
+      service.initialized = false;
+
+      await expect(service.init()).resolves.toBeUndefined();
+      expect(service.weatherRequests).toBeNull();
+      expect(service.initialized).toBe(true);
+      expect(logger.error).toHaveBeenCalledWith(
+        'WeatherService.weather_requests_collection_unavailable',
+        expect.objectContaining({ error: 'ArangoDB unreachable' })
+      );
     });
 
     it('should warn when server location returns 0,0 coordinates', async () => {
@@ -339,6 +378,30 @@ describe('WeatherService', () => {
 
       const result = await service.getWeather({ latitude: 47.37, longitude: 8.54 });
       expect(result.location).toBe('Zurich, Switzerland');
+    });
+
+    it('should return weather data even when weatherRequests collection is unavailable', async () => {
+      // Simulates the prod failure mode: init() failed (ipapi 429) and
+      // this.weatherRequests stayed null. Without this guard, every
+      // /api/weather call returned 500 "Cannot read properties of null
+      // (reading 'save')" for 30 days.
+      service.weatherRequests = null;
+      axios.get.mockResolvedValueOnce(openMeteoResponse);
+
+      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+
+      expect(result).toBeDefined();
+      expect(result.location).toBe('Geneva, Switzerland');
+      expect(result.current).toEqual({
+        temperature: 22,
+        condition: 'Clear',
+        humidity: 55,
+        windSpeed: 10
+      });
+      expect(logger.warn).toHaveBeenCalledWith(
+        'WeatherService.request_persistence_skipped',
+        expect.objectContaining({ reason: 'collection_unavailable' })
+      );
     });
   });
 });

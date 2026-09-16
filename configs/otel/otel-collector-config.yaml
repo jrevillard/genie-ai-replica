@@ -148,17 +148,33 @@ processors:
         statements:
           # Prefer the forwarded Compose service label (set by the
           # fluentd driver's `labels:` option in `&fluent-logging`).
-          - set(resource.attributes["service.name"], attributes["com.docker.compose.service"]) where attributes["com.docker.compose.service"] != nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
-          # Fallback: parse from fluent.tag (Compose's `<service>-<replica>`
-          # naming convention). Covers services where the label forwarding
-          # was not rolled out (older Compose versions, custom one-shots).
-          # Fallback: parse from fluent.tag. Compose's `<service>-<replica>`
-          # naming convention can be either `genie.<service>-1` (default)
-          # or `<stack>_<service>-1` (Swarm). Match the LAST `<service>-<digits>`
-          # segment so we strip the stack prefix correctly. The label path
-          # above is preferred (Compose forwards `com.docker.compose.service`
-          # automatically) — this branch only fires when that label is missing.
-          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "[^.]*?-(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)-\\d+(\\..*)?$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          - set(resource.attributes["service.name"], attributes["com.docker.compose.service"]) where attributes["com.docker.compose.service"] != nil and attributes["com.docker.compose.service"] != "" and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          # Fallback: parse from fluent.tag when the Compose label was not
+          # forwarded (older Compose v1.x, custom one-shots, Swarm nodes
+          # without the fluentd logging driver's `labels:` option). The
+          # label path above is preferred — Compose auto-forwards
+          # `com.docker.compose.service`, so these regexes only fire on
+          # edge cases.
+          #
+          # Known limitation: stack-prefixed single-host tags
+          # (e.g. `admin-logs-prd-<svc>-1`) cannot be reliably parsed
+          # without knowing the project name — `logs-prd-<svc>` and
+          # `<svc>` are both valid prefix/svc splits. The label path
+          # above is the canonical source for these (Compose forwards
+          # `com.docker.compose.service` regardless of the project
+          # name); this regex chain is only defence-in-depth for label
+          # loss. Operators running a non-default project name should
+          # verify the label path covers their stack (it does in any
+          # recent Compose v2.x — `&fluent-logging` forwards
+          # `com.docker.compose.service` for every project name).
+          #
+          # Each `set` is guarded by `where` AND by `ExtractPatterns`
+          # returning a non-empty capture group — error_mode: ignore on
+          # the transform swallows the silent NO MATCH from the wrong
+          # format. Statements run in order; the first one that fires
+          # sets service.name and the rest short-circuit on the guard.
+          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "^[a-z0-9_]+_(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)\\.\\d+\\.[a-z0-9_-]+$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
+          - set(resource.attributes["service.name"], ExtractPatterns(attributes["fluent.tag"], "^[a-z0-9-]+?-(?P<svc>[a-z0-9]+(?:-[a-z0-9]+)*)-\\d+$")["svc"]) where attributes["fluent.tag"] != nil and attributes["com.docker.compose.service"] == nil and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")
 
   # Stamp `severity_text` from the `_msg` payload when the record
   # arrived via the fluentd driver (NOT through the OTel SDK's

@@ -460,7 +460,7 @@
           "text": "All",
           "value": "$__all"
         },
-        "allValue": "backend|chatqna-xeon-backend-server|dataprep-arango-service|retriever-arango-service|reranker|genie-backend|genieai-chatqna|genieai-dataprep|genieai-retriever|genieai-reranker",
+        "allValue": "backend|document-repository|chatqna-xeon-backend-server|dataprep-arango-service|retriever-arango-service|reranker|embedding|translation",
         "datasource": {
           "type": "prometheus",
           "uid": "${DS_VICTORIAMETRICS}"

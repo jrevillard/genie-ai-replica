@@ -259,13 +259,16 @@ def import_docarray(attr: str):
 # 75fc48393 unified service.name across all OTel emission paths):
 # the compose service names are now the canonical names, not the legacy
 # 'genie-*' / 'genieai-*' aliases that lived only in the BFF.
-EXPECTED_DASHBOARD_SERVICES = (
+EXPECTED_DASHBOARD_SERVICES = {
     "backend",
+    "document-repository",
     "chatqna-xeon-backend-server",
     "dataprep-arango-service",
     "retriever-arango-service",
     "reranker",
-)
+    "embedding",
+    "translation",
+}
 
 # Span operation names the overlay emits (from code, matched against the
 # dashboard's service_name labels + the dataprep span taxonomy).
@@ -311,6 +314,8 @@ def extract_dashboard_services(dashboards_dir: str | os.PathLike) -> set[str]:
         # Inline regex patterns in PromQL expressions
         for m in pattern.finditer(text):
             raw = m.group(1)
+            if not raw.strip():
+                continue
             if "|" in raw:
                 services.update(s.strip() for s in raw.split("|") if s.strip())
             else:
@@ -320,6 +325,8 @@ def extract_dashboard_services(dashboards_dir: str | os.PathLike) -> set[str]:
         # the choice to the user via a Grafana variable.
         for m in allvalue_pattern.finditer(text):
             raw = m.group(1)
+            if not raw.strip():
+                continue
             if raw.startswith("$"):
                 continue  # `$__all` etc. — not a service name
             if "|" in raw:

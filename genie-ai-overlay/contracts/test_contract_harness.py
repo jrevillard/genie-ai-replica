@@ -126,9 +126,15 @@ def test_expected_dashboard_services_match_real_dashboard():
         pytest.skip("repo dashboards not found (in-image run)")
     dashboards = repo_root / "configs/grafana/provisioning/dashboards"
     real = _harness.extract_dashboard_services(dashboards)
-    for svc in _harness.EXPECTED_DASHBOARD_SERVICES:
+    expected = set(_harness.EXPECTED_DASHBOARD_SERVICES)
+    for svc in expected:
         assert svc in real, (
             f"expected dashboard service {svc} not found in {dashboards} — telemetry assertion source drifted"
+        )
+    for svc in real:
+        assert svc in expected, (
+            f"unexpected dashboard service {svc} not in EXPECTED_DASHBOARD_SERVICES — "
+            f"dashboards drifted beyond the assertion source (legacy/stale name still referenced)"
         )
 
 

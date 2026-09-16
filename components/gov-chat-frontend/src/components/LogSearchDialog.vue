@@ -57,26 +57,8 @@
                 v-model="searchParams.service"
                 :placeholder="translate('admin.logSearch.allServices', 'All Services')"
               >
-                <option value="API Gateway">
-                  {{ translate('admin.services.apiGateway', 'API Gateway') }}
-                </option>
-                <option value="Auth Service">
-                  {{ translate('admin.services.authService', 'Auth Service') }}
-                </option>
-                <option value="Data Service">
-                  {{ translate('admin.services.dataService', 'Data Service') }}
-                </option>
-                <option value="Storage">
-                  {{ translate('admin.services.storage', 'Storage') }}
-                </option>
-                <option value="Cache">
-                  {{ translate('admin.services.cache', 'Cache') }}
-                </option>
-                <option value="Database">
-                  {{ translate('admin.services.database', 'Database') }}
-                </option>
-                <option value="External API">
-                  {{ translate('admin.services.externalApi', 'External API') }}
+                <option v-for="svc in availableServices" :key="svc.name" :value="svc.name">
+                  {{ svc.name }} ({{ svc.count }})
                 </option>
               </DsSelect>
             </div>
@@ -247,7 +229,19 @@ export default {
     DsInput,
     DsSelect
   },
-  props: {},
+  props: {
+    /**
+     * Services that emitted logs in the active window — fed by the
+     * parent's summary load so the dropdown matches what's actually
+     * queryable in VL. Each entry is `{ name, count }`; when the prop
+     * is empty (e.g. summary load failed) the dropdown falls back to a
+     * single `Any service` option so the form remains usable.
+     */
+    availableServices: {
+      type: Array,
+      default: () => []
+    }
+  },
   emits: ['close', 'search-completed'],
   data() {
     return {

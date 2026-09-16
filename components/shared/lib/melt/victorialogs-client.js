@@ -169,11 +169,16 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   }
 
   /**
-   * Bucket-hit count for a field (e.g. counts per `level`, per `_msg`).
+   * Bucket-hit count for a field (e.g. counts per `service.name`, per `level`).
    *
-   * VL `/select/logsql/hits` returns an array of `[fieldValue, count]`
-   * tuples; we reshape to `Record<string, number>` per the port
-   * contract.
+   * VL `/select/logsql/hits` returns
+   *   `{"hits":[{"fields":{"<field>":"<value>"},"timestamps":[...],"values":[N],"total":N}, ...]}`
+   * when the request includes the mandatory `step` parameter (the API
+   * rejects calls without it with `cannot parse duration from the arg
+   * 'step='`). We reshape to `Record<string, number>` per the port
+   * contract. The `step` is auto-sized to the requested window so single
+   * buckets span the entire query range — callers asking for a day's
+   * worth of hits get one bucket per distinct field value.
    *
    * @param {object} query
    * @param {string} query.q
@@ -185,24 +190,71 @@ class VictoriaLogsAdapter extends LogQueryRepository {
   async hits({ q, start, end, field }) {
     await this._ensureHealth();
 
-    // Same `q` → `query` rename as `query()` above; same JSONL parsing.
-    const params = { query: q, start, end, field };
+    const params = {
+      query: q,
+      start,
+      end,
+      field,
+      // `step` is mandatory for VL hits; use the request span so the
+      // series collapses to one bucket per field value (no time-axis
+      // breakdown). Falls back to 1h if the span can't be computed
+      // (defensive — caller's `start`/`end` are always ISO strings).
+      step: this._stepForSpan(start, end) || '1h'
+    };
     const response = await this._axios.get('/select/logsql/hits', {
       params,
       responseType: 'text',
       transformResponse: [(data) => data]
     });
-    const tuples = this._parseJsonlResponse(response.data);
+
+    // VL returns a single JSON object — not JSONL. Tolerate empty body.
+    let parsed;
+    try {
+      parsed = response.data ? JSON.parse(response.data) : null;
+    } catch (_) {
+      return {};
+    }
+    if (!parsed || !Array.isArray(parsed.hits)) return {};
+
     const result = {};
-    for (const entry of tuples) {
-      if (!Array.isArray(entry) || entry.length < 2) continue;
-      const [value, count] = entry;
+    for (const entry of parsed.hits) {
+      if (!entry || !entry.fields || typeof entry.fields !== 'object') continue;
+      // The bucket key is the requested field's value (`fields[field]`).
+      // For grouped queries VL may return several fields — pick the one
+      // we asked for; the others (if any) are ignored.
+      const value = entry.fields[field];
       if (value === undefined || value === null) continue;
-      const n = Number(count);
-      if (!Number.isFinite(n)) continue;
-      result[String(value)] = n;
+      // `total` is the sum across the time series for this bucket.
+      const count = Number(entry.total ?? (Array.isArray(entry.values) ? entry.values.reduce((a, b) => a + (Number(b) || 0), 0) : 0));
+      if (!Number.isFinite(count)) continue;
+      result[String(value)] = count;
     }
     return result;
+  }
+
+  /**
+   * Pick a `step` value larger than the query span so VL returns a
+   * single bucket per field value. Returns `null` when the span can't
+   * be parsed (caller should fall back to its own default).
+   *
+   * @param {string} start
+   * @param {string} end
+   * @returns {string|null}
+   * @private
+   */
+  _stepForSpan(start, end) {
+    if (!start || !end) return null;
+    const t0 = Date.parse(start);
+    const t1 = Date.parse(end);
+    if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 <= t0) return null;
+    const ms = t1 - t0;
+    // Pick the next-larger canonical step. Doubles the bucket size to
+    // be safely above the span (e.g. span 1h → step 2h).
+    if (ms <= 60_000) return '2m';
+    if (ms <= 3_600_000) return '2h';
+    if (ms <= 86_400_000) return '2d';
+    if (ms <= 7 * 86_400_000) return '14d';
+    return '60d';
   }
 
   /**

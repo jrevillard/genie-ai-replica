@@ -757,6 +757,7 @@
 
                   <log-search-dialog
                     v-if="showLogSearchDialog"
+                    :available-services="availableServices"
                     @close="showLogSearchDialog = false"
                     @search-results="handleSearchResults"
                   />
@@ -1650,6 +1651,11 @@ export default {
       // CORRECTED: Hardcoded data removed. Initialized as empty arrays.
       errorLogsSummary: [],
       warningLogsSummary: [],
+      // Distinct services that emitted logs in the active window —
+      // populated by `loadLogsSummary` from the summary endpoint's
+      // `services: [{name, count}]` field and forwarded to
+      // <LogSearchDialog> for the service dropdown.
+      availableServices: [],
 
       showLogSearchDialog: false,
 
@@ -2169,6 +2175,7 @@ export default {
         if (response && response.data && Array.isArray(response.data.errors) && Array.isArray(response.data.warnings)) {
           this.errorLogsSummary = response.data.errors || [];
           this.warningLogsSummary = response.data.warnings || [];
+          this.availableServices = Array.isArray(response.data.services) ? response.data.services : [];
           if (this.errorLogsSummary.length === 0 && this.warningLogsSummary.length === 0) {
             this.showNotification(this.translate('admin.noLogsFound', 'No logs found for today'), 'info');
           }
@@ -2180,6 +2187,7 @@ export default {
           );
           this.errorLogsSummary = [];
           this.warningLogsSummary = [];
+          this.availableServices = [];
         }
       } catch (error) {
         console.error('[AdminDashboard] Error loading logs summary:', error.message, error.stack);

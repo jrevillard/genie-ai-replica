@@ -571,7 +571,7 @@ class LogsService {
     const { date, level } = options;
     const targetDate = date || new Date().toISOString().split('T')[0];
     if (!isValidDateStr(targetDate)) {
-      return { errors: [], warnings: [], date: targetDate };
+      return { errors: [], warnings: [], services: [], date: targetDate };
     }
     const startIso = `${targetDate}T00:00:00.000Z`;
     const endIso = `${targetDate}T23:59:59.999Z`;
@@ -582,46 +582,57 @@ class LogsService {
     const wantWarn = !level || String(level).toUpperCase() === 'WARN';
     const wantInfo = !level || (level && String(level).toUpperCase() === 'INFO');
 
+    /**
+     * Shape a `Record<serviceName, count>` hits bucket into the
+     * `{type, typeKey, service, count}[]` the Vue UI expects. Rows are
+     * sorted by count descending so the most active services surface
+     * first; `service: 'all'` rows are dropped (the UI has its own
+     * totals).
+     */
+    const shape = (levelConst, typeKey) => {
+      const map = bucketsByLevel[levelConst] || {};
+      return Object.entries(map)
+        .map(([service, count]) => ({ type: levelConst, typeKey, service, count }))
+        .filter((row) => row.service && row.service !== 'all')
+        .sort((a, b) => b.count - a.count);
+    };
+
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
-        // We can't use the VL `hits(field=level)` endpoint here because
-        // the fluentd-driven Winston transport writes the level INSIDE
-        // the `_msg` JSON envelope (not as a top-level VL field), so the
-        // bucket count always comes back as `{ERROR: 0, WARN: 0, ...}`.
-        // Same root cause as the searchLogs level filter — the fix is
-        // to fetch the row window and count client-side AFTER the MELT
-        // normalizer has lifted level out of `_msg`. We bound the fetch
-        // to 10k rows which comfortably covers a day's worth of logs
-        // for the volumes this UI handles.
-        const rows = await client.query({
-          q: '*',
-          start: startIso,
-          end: endIso,
-          limit: 10000
-        });
-        let errorCount = 0;
-        let warnCount = 0;
-        let infoCount = 0;
-        if (Array.isArray(rows)) {
-          for (const row of rows) {
-            const lvl = String(row.level || '').toUpperCase();
-            if (lvl === 'ERROR') errorCount++;
-            else if (lvl === 'WARN') warnCount++;
-            else if (lvl === 'INFO') infoCount++;
-          }
-        }
+        // Producer-side stamping (transform/stamp_log_metadata_from_msg in
+        // the OTel collector config) lifts severity_text + service.name
+        // to top-level VL fields for every fluentd-sourced log, so
+        // `hits(field=service.name, q=severity_text:ERROR)` returns
+        // per-service counts directly — no client-side re-parsing of
+        // `_msg` envelopes.
+        const calls = [];
+        if (wantError) calls.push(['ERROR', client.hits({ q: 'severity_text:ERROR', start: startIso, end: endIso, field: 'service.name' })]);
+        if (wantWarn) calls.push(['WARN', client.hits({ q: 'severity_text:WARN', start: startIso, end: endIso, field: 'service.name' })]);
+        if (wantInfo) calls.push(['INFO', client.hits({ q: 'severity_text:INFO', start: startIso, end: endIso, field: 'service.name' })]);
+        // Distinct service list for the dropdown — `q=*` + `field=service.name`
+        // returns every distinct service that emitted a log in the window
+        // (no level filter so every service shows up regardless of its
+        // dominant level).
+        calls.push(['_ALL', client.hits({ q: '*', start: startIso, end: endIso, field: 'service.name' })]);
+
+        const results = await Promise.all(calls.map(async ([tag, p]) => [tag, await p]));
+        const bucketsByLevel = Object.fromEntries(results.filter(([tag]) => tag !== '_ALL'));
+        const allBuckets = results.find(([tag]) => tag === '_ALL')?.[1] || {};
+
         return {
-          errors:
-            wantError && errorCount > 0 ? [{ type: 'ERROR', typeKey: 'error', service: 'all', count: errorCount }] : [],
-          warnings:
-            wantWarn && warnCount > 0 ? [{ type: 'WARN', typeKey: 'warn', service: 'all', count: warnCount }] : [],
-          infos: wantInfo && infoCount > 0 ? [{ type: 'INFO', typeKey: 'info', service: 'all', count: infoCount }] : [],
+          errors: wantError ? shape('ERROR', 'error') : [],
+          warnings: wantWarn ? shape('WARN', 'warn') : [],
+          infos: wantInfo ? shape('INFO', 'info') : [],
+          services: Object.entries(allBuckets)
+            .map(([name, count]) => ({ name, count }))
+            .filter((s) => s.name)
+            .sort((a, b) => b.count - a.count),
           date: targetDate
         };
       },
       'getLogsSummary',
-      { errors: [], warnings: [], date: targetDate }
+      { errors: [], warnings: [], services: [], date: targetDate }
     );
   }
 
@@ -750,25 +761,17 @@ class LogsService {
     const limitN = Math.max(0, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 1000, 10000));
     const offsetN = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
 
-    // Push ONLY the `term` filter to VL — level + service are applied
-    // client-side AFTER the MELT normalizer has lifted them out of the
-    // `_msg` JSON envelope. Pushing `level:WARN` to the VL query never
-    // matched anything because the fluentd-driven Winston transport
-    // writes the level INSIDE `_msg` (a JSON string), not as a top-level
-    // VL field — the LogsQL `level:` clause only matches OTel-stamped
-    // records (a minority path). Filtering post-normalization catches
-    // BOTH paths consistently.
+    // Push ALL filters down to VL — the producer-side transform
+    // (`transform/stamp_log_metadata_from_msg` in the OTel collector
+    // config) lifts `severity_text` + `service.name` to top-level VL
+    // fields for every fluentd-sourced log, so server-side filtering on
+    // these fields matches the OTel SDK path too. No more over-fetch +
+    // client-side filter dance.
     const filterParts = [];
     if (term && String(term).trim() !== '') {
       const escaped = this._escapeLogSql(String(term));
       filterParts.push(`_msg:"${escaped}"`);
     }
-    const q = filterParts.length > 0 ? filterParts.join(' AND ') : '*';
-
-    const { startDate, endDate } = this.getDateRange(options);
-    const startIso = `${startDate}T00:00:00.000Z`;
-    const endIso = `${endDate}T23:59:59.999Z`;
-
     let normalizedLevel = null;
     if (level && String(level).trim() !== '') {
       // Validate the allowlist up-front so a hostile caller gets a
@@ -776,11 +779,21 @@ class LogsService {
       // enforced by `_normalizeLevelFilter` (throws on anything outside
       // `TRACE|DEBUG|INFO|WARN|ERROR|FATAL`).
       normalizedLevel = this._normalizeLevelFilter(level);
+      filterParts.push(`severity_text:${normalizedLevel}`);
     }
-    const normalizedService = service && String(service).trim() !== '' ? String(service).trim() : null;
-    // Over-fetch only when client-side filters will narrow the result —
-    // otherwise the caller-specified window is honoured exactly.
-    const needsOverFetch = normalizedLevel !== null || normalizedService !== null;
+    if (service && String(service).trim() !== '') {
+      const normalizedService = String(service).trim();
+      // Escape any quotes in the service name (defensive — service
+      // identifiers from the dropdown are produced by the OTel
+      // collector / Compose labels, but a hostile caller could send
+      // arbitrary input).
+      filterParts.push(`service.name:"${this._escapeLogSql(normalizedService)}"`);
+    }
+    const q = filterParts.length > 0 ? filterParts.join(' AND ') : '*';
+
+    const { startDate, endDate } = this.getDateRange(options);
+    const startIso = `${startDate}T00:00:00.000Z`;
+    const endIso = `${endDate}T23:59:59.999Z`;
 
     return this._withVlFailOpen(
       async () => {
@@ -789,32 +802,15 @@ class LogsService {
           q: this._vlFilter(q),
           start: startIso,
           end: endIso,
-          // Over-fetch by 4x when client-side level/service filters are
-          // active so we don't truncate the response window before the
-          // JS filter runs. Without filters, honour the caller's window
-          // exactly (paginated callers depend on this — see
-          // logs-service-vl.test.js offset/limit test).
-          limit: needsOverFetch ? (limitN + offsetN) * 4 : limitN + offsetN
+          // Honour the caller's window exactly — VL filters at the
+          // source so the round-trip is already the post-filter page.
+          limit: limitN + offsetN
         });
         const allRows = Array.isArray(rows) ? rows : [];
-        // Filter client-side on the MELT-normalized level + service. The
-        // over-fetch above bounds how many rows we drop; if the user
-        // still wants more, they can tighten the term filter to narrow.
-        const filteredRows = allRows.filter((row) => {
-          if (normalizedLevel) {
-            const rowLevel = String(row.level || '').toUpperCase();
-            if (rowLevel !== normalizedLevel) return false;
-          }
-          if (normalizedService) {
-            const rowService = String(row.service || '').toLowerCase();
-            if (!rowService.includes(normalizedService.toLowerCase())) return false;
-          }
-          return true;
-        });
-        const pageRows = filteredRows.slice(offsetN, offsetN + limitN);
+        const pageRows = allRows.slice(offsetN, offsetN + limitN);
         return {
           logs: pageRows,
-          total: filteredRows.length,
+          total: allRows.length,
           limit: limitN,
           offset: offsetN
         };

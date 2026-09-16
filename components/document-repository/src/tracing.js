@@ -93,7 +93,15 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
       return '0.0.0';
     }
   }
-  const serviceName = process.env.OTEL_SERVICE_NAME || 'genie-document-repository';
+  // Canonical container identifier — must match the Compose block name
+  // in docker-compose.yaml so the OTel Resource's service.name aligns
+  // with the Compose label the fluentd driver forwards (collector
+  // transform stamps service.name from the Compose label for logs;
+  // OTel SDK stamps it from this value for traces + metrics — both
+  // paths produce the same identifier when this matches the Compose
+  // block name). No env override — operators who want a different name
+  // for a canary should override at the Compose layer, not here.
+  const serviceName = 'document-repository';
   const serviceNamespace = process.env.OTEL_SERVICE_NAMESPACE || 'genie-core';
   const serviceVersion = process.env.SERVICE_VERSION || _readPackageVersion();
   const deploymentEnvironment = process.env.NODE_ENV || 'development';

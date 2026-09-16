@@ -583,12 +583,14 @@ services:
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      # OTel-spec service name (read by SDK Resource AND logger.js service field).
-      # Each service block has its own pinned default — using a single
-      # `${OTEL_SERVICE_NAME:-...}` would collapse both to one value.
-      # Operators override per service by exporting OTEL_SERVICE_NAME before
-      # `docker compose up` (e.g. `OTEL_SERVICE_NAME=backend-canary`).
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-backend}
+      # OTel Resource `service.name` is HARDCODED in tracing.js + logger.js
+      # to match the Compose block name (`backend`). No env override —
+      # the OTel SDK + Winston JSON envelope paths both produce the
+      # canonical container identifier; the collector's
+      # stamp_service_name_from_container transform stamps the same
+      # value from the Compose label for fluentd-only records.
+      # Operators who want a different name for a canary should rename
+      # the Compose block AND the source-code constants together.
       # OTel Resource semantic convention for service grouping. Grafana
       # `service.namespace` filter lets operators slice by tier (backend +
       # doc-repo share `genie-core`; OPEA overlay services share `genieai`).
@@ -657,11 +659,11 @@ services:
       # Collector side stamps service.name from container attributes).
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
-      # OTel-spec service name. Operators override per service by exporting
-      # `OTEL_SERVICE_NAME` before `docker compose up`. See backend block
-      # for the per-service default rationale (each service block has its
-      # own `${OTEL_SERVICE_NAME:-...}` so overrides apply per-service).
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-document-repository}
+      # OTel Resource `service.name` is HARDCODED in tracing.js to match
+      # the Compose block name (`document-repository`). No env override —
+      # see the backend block for the rationale. Source code constants
+      # are the single source of truth; renaming requires updating the
+      # Compose block AND the tracing.js constant together.
       # OTel Resource semantic convention for service grouping (Grafana
       # `service.namespace` filter). backend + doc-repo share
       # `genie-core`; OPEA overlay services share `genieai`.

@@ -44,17 +44,21 @@ const OBSERVABILITY_DISABLED = process.env.ENABLE_OBSERVABILITY !== '1';
 
 // Winston format that injects trace_id, span_id, and service from the active OTel span.
 //
-// Service-name resolution order (canonical OTel spec env first):
-//   1. `OTEL_SERVICE_NAME` (OpenTelemetry spec — read by SDK Resource as well,
-//      so the value stamped on logs matches the value on emitted spans/traces).
-//   2. `SERVICE_NAME` (legacy override).
-//   3. `'genie-backend'` (back-compat default for the backend service).
+// Service-name resolution: hardcoded `'backend'` — matches the Compose
+// block name in docker-compose.yaml so the OTel Resource's service.name
+// aligns with the Compose label the fluentd driver forwards (collector
+// transform stamps service.name from the Compose label for logs; OTel
+// SDK stamps it from the Resource for traces + metrics — both paths
+// produce the same identifier when this matches the Compose block name).
 //
-// doc-repo does not set `OTEL_SERVICE_NAME` either: its tracing.js hard-pins
-// `service.name='genie-document-repository'` on the OTel Resource directly,
-// so the SDK's own resource carries the right value even if this fallback
-// resolves to `'genie-backend'`. The two paths converge on the same log
-// field once the env var is set per-component in docker-compose.
+// No env override here — operators who want a different name for a
+// canary should override at the Compose layer (block name + env
+// forwarding), not via an env that has to be kept in sync across
+// three locations (compose, tracing.js, logger.js). Single source of
+// truth.
+// doc-repo does the same — its tracing.js hard-pins
+// `service.name='document-repository'`. Both ingestion paths land on
+// the same identifier.
 //
 // trace_id / span_id semantics: when no active OTel span exists (background
 // work, worker threads, db-connection-service called outside a request span
@@ -80,8 +84,7 @@ const traceFormat = format((info) => {
       // never break the log pipeline over a metric failure
     }
   }
-  info.service =
-    process.env.OTEL_SERVICE_NAME || process.env.SERVICE_NAME || 'genie-backend';
+  info.service = 'backend';
   return info;
 });
 

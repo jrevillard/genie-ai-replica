@@ -39,7 +39,7 @@
     </div>
 
     <!-- Splash screen (controlled via auth state) -->
-    <splash-screen v-if="showSplash" @splash-complete="showSplash = false" />
+    <splash-screen v-if="showSplash" :splash-path="splashImagePath" @splash-complete="showSplash = false" />
   </div>
 </template>
 
@@ -79,6 +79,10 @@ export default {
     ...mapGetters(['isAuthenticated', 'currentUser']),
     showSidebar() {
       return this.$route.meta.showSidebar !== false;
+    },
+    splashImagePath() {
+      // Prefer runtime config (per-deployment splash asset), fall back to bundled default.
+      return this.$config?.app?.splash?.value || '/config/splash.png';
     }
   },
   watch: {

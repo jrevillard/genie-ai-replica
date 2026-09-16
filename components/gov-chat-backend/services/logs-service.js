@@ -577,35 +577,51 @@ class LogsService {
     const endIso = `${targetDate}T23:59:59.999Z`;
 
     // Honour the documented `level` filter: when provided, restrict to
-    // that level only; otherwise bucket both ERROR and WARN.
+    // that level only; otherwise bucket ERROR + WARN + INFO.
     const wantError = !level || String(level).toUpperCase() === 'ERROR';
     const wantWarn = !level || String(level).toUpperCase() === 'WARN';
-    const wantInfo = level && String(level).toUpperCase() === 'INFO';
+    const wantInfo = !level || (level && String(level).toUpperCase() === 'INFO');
 
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
-        const calls = [];
-        if (wantError) calls.push(client.hits({ q: 'level:ERROR', start: startIso, end: endIso, field: 'level' }));
-        if (wantWarn) calls.push(client.hits({ q: 'level:WARN', start: startIso, end: endIso, field: 'level' }));
-        if (wantInfo) calls.push(client.hits({ q: 'level:INFO', start: startIso, end: endIso, field: 'level' }));
-        const results = await Promise.all(calls);
-        const errorHits = wantError ? results[0] : null;
-        const warnHits = wantWarn ? results[wantError ? 1 : 0] : null;
-        const infoIdx = (wantError ? 1 : 0) + (wantWarn ? 1 : 0);
-        const infoHits = wantInfo ? results[infoIdx] : null;
-        const errorCount = wantError ? this._sumHits(errorHits, 'ERROR') : 0;
-        const warnCount = wantWarn ? this._sumHits(warnHits, 'WARN') : 0;
-        const infoCount = wantInfo ? this._sumHits(infoHits, 'INFO') : 0;
+        // We can't use the VL `hits(field=level)` endpoint here because
+        // the fluentd-driven Winston transport writes the level INSIDE
+        // the `_msg` JSON envelope (not as a top-level VL field), so the
+        // bucket count always comes back as `{ERROR: 0, WARN: 0, ...}`.
+        // Same root cause as the searchLogs level filter — the fix is
+        // to fetch the row window and count client-side AFTER the MELT
+        // normalizer has lifted level out of `_msg`. We bound the fetch
+        // to 10k rows which comfortably covers a day's worth of logs
+        // for the volumes this UI handles.
+        const rows = await client.query({
+          q: '*',
+          start: startIso,
+          end: endIso,
+          limit: 10000
+        });
+        let errorCount = 0;
+        let warnCount = 0;
+        let infoCount = 0;
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            const lvl = String(row.level || '').toUpperCase();
+            if (lvl === 'ERROR') errorCount++;
+            else if (lvl === 'WARN') warnCount++;
+            else if (lvl === 'INFO') infoCount++;
+          }
+        }
         return {
-          errors: errorCount > 0 ? [{ type: 'ERROR', typeKey: 'error', service: 'all', count: errorCount }] : [],
-          warnings: warnCount > 0 ? [{ type: 'WARN', typeKey: 'warn', service: 'all', count: warnCount }] : [],
-          infos: infoCount > 0 ? [{ type: 'INFO', typeKey: 'info', service: 'all', count: infoCount }] : [],
+          errors:
+            wantError && errorCount > 0 ? [{ type: 'ERROR', typeKey: 'error', service: 'all', count: errorCount }] : [],
+          warnings:
+            wantWarn && warnCount > 0 ? [{ type: 'WARN', typeKey: 'warn', service: 'all', count: warnCount }] : [],
+          infos: wantInfo && infoCount > 0 ? [{ type: 'INFO', typeKey: 'info', service: 'all', count: infoCount }] : [],
           date: targetDate
         };
       },
       'getLogsSummary',
-      { errors: [], warnings: [], infos: [], date: targetDate }
+      { errors: [], warnings: [], date: targetDate }
     );
   }
 

@@ -233,17 +233,33 @@ describe('LogsService VictoriaLogs rewrite', () => {
   });
 
   describe('getLogsSummary — VL path', () => {
-    it('queries hits() twice (ERROR + WARN) and shapes the legacy envelope', async () => {
-      mockVlClient.hits.mockResolvedValueOnce({ ERROR: 4 }).mockResolvedValueOnce({ WARN: 2 });
+    // Same root cause as the searchLogs level filter: the fluentd-driven
+    // Winston transport writes the real level INSIDE the `_msg` JSON
+    // envelope (not as a top-level VL field), so VL's `hits(field=level)`
+    // always returns `{ERROR: 0, WARN: 0, ...}`. We fetch the day's rows
+    // and count client-side AFTER the MELT normalizer has lifted the
+    // level out of `_msg`.
+    it('counts ERROR + WARN + INFO buckets from the row window client-side', async () => {
+      mockVlClient.query.mockResolvedValueOnce([
+        { level: 'INFO' },
+        { level: 'INFO' },
+        { level: 'WARN' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' }
+      ]);
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
-      expect(mockVlClient.hits).toHaveBeenCalledTimes(2);
+      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
+      expect(mockVlClient.query).toHaveBeenCalledWith(
+        expect.objectContaining({ q: '*', start: '2026-09-01T00:00:00.000Z', end: '2026-09-01T23:59:59.999Z' })
+      );
       expect(result.date).toBe('2026-09-01');
-      expect(result.errors[0]).toMatchObject({ type: 'ERROR', count: 4 });
-      expect(result.warnings[0]).toMatchObject({ type: 'WARN', count: 2 });
+      expect(result.errors[0]).toMatchObject({ type: 'ERROR', count: 3 });
+      expect(result.warnings[0]).toMatchObject({ type: 'WARN', count: 1 });
     });
 
     it('returns empty buckets when VL has no ERROR/WARN rows', async () => {
-      mockVlClient.hits.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+      mockVlClient.query.mockResolvedValueOnce([{ level: 'INFO' }, { level: 'INFO' }]);
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
@@ -253,12 +269,27 @@ describe('LogsService VictoriaLogs rewrite', () => {
       process.env.VL_FAIL_OPEN = 'true';
       const err = new Error('timeout');
       err.code = 'ETIMEDOUT';
-      mockVlClient.hits.mockRejectedValueOnce(err);
+      mockVlClient.query.mockRejectedValueOnce(err);
       const result = await logsService.getLogsSummary({ date: '2026-09-01' });
       expect(result.degraded).toBe(true);
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
       expect(result.date).toBe('2026-09-01');
+    });
+
+    it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
+      mockVlClient.query.mockResolvedValueOnce([{ level: 'ERROR' }, { level: 'ERROR' }, { level: 'WARN' }]);
+      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
+      expect(result.errors[0]).toMatchObject({ type: 'ERROR', count: 2 });
+      expect(result.warnings).toEqual([]);
+    });
+
+    it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
+      mockVlClient.query.mockResolvedValueOnce([{ level: 'INFO' }, { level: 'INFO' }]);
+      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toEqual([]);
+      expect(result.infos[0]).toMatchObject({ type: 'INFO', count: 2 });
     });
   });
 
@@ -975,28 +1006,50 @@ describe('LogsService VictoriaLogs rewrite', () => {
     });
 
     it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
-      mockVlClient.hits.mockResolvedValueOnce({ ERROR: 7 }).mockResolvedValueOnce({ WARN: 99 });
+      mockVlClient.query.mockResolvedValueOnce([
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'WARN' }
+      ]);
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
-      expect(mockVlClient.hits).toHaveBeenCalledTimes(1);
-      expect(mockVlClient.hits).toHaveBeenCalledWith(expect.objectContaining({ q: 'level:ERROR' }));
+      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'all', count: 7 }]);
       expect(result.warnings).toEqual([]);
     });
 
     it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
-      mockVlClient.hits.mockResolvedValueOnce({ INFO: 42 });
+      // 42 INFO rows + 1 WARN row to verify that WARN is NOT in the
+      // response when `level=INFO` is requested.
+      mockVlClient.query.mockResolvedValueOnce(
+        Array.from({ length: 42 }, () => ({ level: 'INFO' })).concat([{ level: 'WARN' }])
+      );
       const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
-      expect(mockVlClient.hits).toHaveBeenCalledTimes(1);
-      expect(mockVlClient.hits).toHaveBeenCalledWith(expect.objectContaining({ q: 'level:INFO' }));
+      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([]);
       expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'all', count: 42 }]);
     });
 
-    it('getLogsSummary — VL path with level unset queries both ERROR + WARN (parallel)', async () => {
-      mockVlClient.hits.mockResolvedValueOnce({ ERROR: 4 }).mockResolvedValueOnce({ WARN: 2 });
+    it('getLogsSummary — VL path with level unset queries the day window once (single client.query)', async () => {
+      // The new architecture fetches the day's rows ONCE and counts the
+      // three buckets (ERROR + WARN + INFO) client-side. The OLD code
+      // issued parallel `hits()` calls per bucket — those tests are
+      // intentionally no longer applicable.
+      mockVlClient.query.mockResolvedValueOnce([
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'ERROR' },
+        { level: 'WARN' },
+        { level: 'WARN' }
+      ]);
       const result = await logsService.getLogsSummary({ date: '2026-09-06' });
-      expect(mockVlClient.hits).toHaveBeenCalledTimes(2);
+      expect(mockVlClient.query).toHaveBeenCalledTimes(1);
       expect(result.errors[0].count).toBe(4);
       expect(result.warnings[0].count).toBe(2);
     });

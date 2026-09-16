@@ -121,7 +121,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
-          "expr": "(sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\", service_name=~\"$service\"}[5m])) by (service_name)\nor\nsum(rate(http_server_duration_milliseconds_count{http_response_status_code=~\"5..\", service_name=~\"$service\"}[5m])) by (service_name))\n/\n(sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[5m])) by (service_name)\nor\nsum(rate(http_server_duration_milliseconds_count{service_name=~\"$service\"}[5m])) by (service_name))",
+          "expr": "(sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\", service_name=~\"$service\"}[5m])) by (service_name)\n+\nsum(rate(http_server_duration_milliseconds_count{http_status_code=~\"5..\", service_name=~\"$service\"}[5m])) by (service_name))\n/\n(sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[5m])) by (service_name)\n+\nsum(rate(http_server_duration_milliseconds_count{service_name=~\"$service\"}[5m])) by (service_name))",
           "legendFormat": "{{service_name}}",
           "refId": "A"
         }

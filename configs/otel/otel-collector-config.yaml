@@ -133,7 +133,10 @@ processors:
   # Idempotent: only sets the attribute when it is currently empty
   # (records that already carry a service.name — from the OTel SDK
   # `otlp` receiver on backend / document-repository — keep their
-  # resource intact).
+  # resource intact). The OTel SDK path produces the same value via
+  # `OTEL_SERVICE_NAME` (defaults aligned with the Compose block name
+  # in docker-compose.yaml), so both ingestion paths land on the same
+  # identifier and the admin panel sees one row per container.
   #
   # Records without a forwarded label (e.g. the Collector itself, which
   # has no fluentd driver) are left untouched — they end up with empty
@@ -224,10 +227,12 @@ processors:
           - 'set(severity_number, 5) where severity_text == "DEBUG"'
           - 'set(severity_number, 21) where severity_text == "FATAL"'
           - 'set(severity_number, 1) where severity_text == "TRACE"'
-          # Stamp `service.name` from the Winston JSON envelope's `service`
-          # field — only when resource.service.name is unset (the Compose
-          # label / fluent.tag path above is preferred).
-          - 'set(resource.attributes["service.name"], body["service"]) where IsMap(body) and IsString(body["service"]) and (resource.attributes["service.name"] == nil or resource.attributes["service.name"] == "")'
+          # Note: `service.name` is NOT stamped from the Winston JSON
+          # envelope's `service` field here. The Compose label
+          # transform (`stamp_service_name_from_container`) is the
+          # single canonical source — stamping from both produced
+          # duplicate entries in the admin panel (`document-repository`
+          # + `genie-document-repository` for the same container).
           # Stamp `log_type` from the message body for the error/warning
           # category breakdown (UI summary panel + Grafana drill-down).
           # Mirrors the legacy file-log `summaryPatterns` so the existing

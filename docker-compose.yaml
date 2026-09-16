@@ -587,8 +587,8 @@ services:
       # Each service block has its own pinned default — using a single
       # `${OTEL_SERVICE_NAME:-...}` would collapse both to one value.
       # Operators override per service by exporting OTEL_SERVICE_NAME before
-      # `docker compose up` (e.g. `OTEL_SERVICE_NAME=genie-backend-canary`).
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-backend}
+      # `docker compose up` (e.g. `OTEL_SERVICE_NAME=backend-canary`).
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-backend}
       # OTel Resource semantic convention for service grouping. Grafana
       # `service.namespace` filter lets operators slice by tier (backend +
       # doc-repo share `genie-core`; OPEA overlay services share `genieai`).
@@ -661,7 +661,7 @@ services:
       # `OTEL_SERVICE_NAME` before `docker compose up`. See backend block
       # for the per-service default rationale (each service block has its
       # own `${OTEL_SERVICE_NAME:-...}` so overrides apply per-service).
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-genie-document-repository}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-document-repository}
       # OTel Resource semantic convention for service grouping (Grafana
       # `service.namespace` filter). backend + doc-repo share
       # `genie-core`; OPEA overlay services share `genieai`.

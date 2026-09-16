@@ -1575,6 +1575,9 @@ export default {
   },
   cropAlert: {
     potato: 'Potato',
+    eggplant: 'Eggplant',
+    rice_aman: 'Aman Rice',
+    crop: 'Crop',
     drought: 'Drought',
     flood: 'Flood',
     dismiss: 'Dismiss',

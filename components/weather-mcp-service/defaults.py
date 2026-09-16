@@ -1,10 +1,14 @@
 """
-Deployment fallback location shared across GENIE.AI climate services.
+Deployment fallback location and crop list shared across GENIE.AI climate services.
 
 Read from DEFAULT_LOCATION / DEFAULT_LAT / DEFAULT_LON (root .env, Section 15).
 The same variables are used by the backend, drought-monitoring,
 warning_system_engine and geo-inference-worker so every service falls back to
 one place. Unset = Dhaka.
+
+EWS_CROPS lists the crops the warning_system_engine assesses. This service only
+reads those assessments, so the two must agree: a crop missing here is a crop
+whose alerts never reach the chat or the frontend banner.
 """
 
 from __future__ import annotations
@@ -17,6 +21,20 @@ logger = logging.getLogger(__name__)
 _BUILT_IN_LOCATION = "Dhaka"
 _BUILT_IN_LAT = 23.8103
 _BUILT_IN_LON = 90.4125
+
+# Must match the warning_system_engine default (app/main.py DEFAULT_EWS_CROPS)
+_BUILT_IN_CROPS = ("eggplant", "rice_aman")
+
+
+def _crop_list() -> list[str]:
+    raw = os.getenv("EWS_CROPS", "").strip()
+    crops = [crop.strip() for crop in raw.split(",") if crop.strip()]
+    if not crops:
+        return list(_BUILT_IN_CROPS)
+    return crops
+
+
+EWS_CROPS: list[str] = _crop_list()
 
 
 def _coord(name: str, fallback: float, limit: float) -> float:

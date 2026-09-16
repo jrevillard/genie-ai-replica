@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-test_potato_ews.py — end-to-end test that triggers the frontend pop-out.
+test_crop_ews.py — end-to-end test that triggers the frontend pop-out.
 
 What this script does:
   1. Writes a synthetic weather_forecasts document into ArangoDB with values
-     that exceed (or satisfy) potato thresholds for the chosen scenario.
+     that exceed (or satisfy) the crop's thresholds for the chosen scenario.
+     Scenario values are derived from the crop profile, so they stay valid for
+     whichever crop is selected with --crop.
   2. Calls POST /internal/run-potato-pipeline on the running weather-mcp-standalone
      service so it processes the new forecast and writes the risk_assessment.
      (Falls back to running the EWS locally if the service is not reachable.)
@@ -14,13 +16,18 @@ What this script does:
   5. Prints the exact message the pop-out will display.
   6. Tells you what to do in the browser to see the pop-out immediately.
 
+  Steps 2-4 use the weather-mcp-service / backend routes, which are still named
+  after the crop they were introduced for. They read risk_assessments by crop
+  key, so they only return data for the crop those services ask for.
+
 Usage (from the warning_system_engine directory):
-  python3 scripts/test_potato_ews.py                        # heat, Dhaka
-  python3 scripts/test_potato_ews.py --scenario rain
-  python3 scripts/test_potato_ews.py --scenario combined    # tier 3 Severe
-  python3 scripts/test_potato_ews.py --scenario blight      # tier 1 Advisory
-  python3 scripts/test_potato_ews.py --scenario normal      # clears the alert
-  python3 scripts/test_potato_ews.py --district Sylhet
+  python3 scripts/test_crop_ews.py                          # heat, eggplant, Dhaka
+  python3 scripts/test_crop_ews.py --crop rice_aman
+  python3 scripts/test_crop_ews.py --scenario rain
+  python3 scripts/test_crop_ews.py --scenario combined      # tier 3 Severe
+  python3 scripts/test_crop_ews.py --scenario disease       # tier 1 Advisory
+  python3 scripts/test_crop_ews.py --scenario normal        # clears the alert
+  python3 scripts/test_crop_ews.py --district Sylhet
 
 Env overrides (all optional):
   ARANGO_URL          default: http://localhost:8529
@@ -30,8 +37,8 @@ Env overrides (all optional):
   TWILIO_*           Twilio env vars used only when --send-sms is passed
   EMERGENCY_CONTACT_NUMBERS comma-separated SMS recipients, e.g. +8801...
 """
+
 import argparse
-import json
 import os
 import sys
 import time
@@ -78,6 +85,7 @@ if not os.getenv("ARANGO_URL"):
     os.environ["ARANGO_URL"] = "http://localhost:8529"
 
 import logging
+
 logging.basicConfig(level=logging.WARNING, format="%(levelname)-7s  %(message)s")
 
 import requests as _http
@@ -85,6 +93,7 @@ import requests as _http
 # ---------------------------------------------------------------------------
 # Scenario definitions
 # ---------------------------------------------------------------------------
+
 
 def _day(date, t_min, t_max, humidity, rain, wind):
     return {
@@ -102,55 +111,75 @@ def _day(date, t_min, t_max, humidity, rain, wind):
     }
 
 
-SCENARIOS = {
-    "heat": {
-        "label": "Heat stress",
-        "description": "Max temp 33°C — exceeds 30°C potato limit → tier 2 Warning",
-        "days": lambda d0, d1: [
-            _day(d0, 22, 33, 72, 0,  12),
-            _day(d1, 23, 34, 70, 0,  10),
-        ],
-    },
-    "rain": {
-        "label": "High rainfall",
-        "description": "30 mm/day — exceeds medium threshold (25 mm) → tier 2 Warning",
-        "days": lambda d0, d1: [
-            _day(d0, 22, 28, 85, 30, 15),
-            _day(d1, 21, 27, 88, 28, 12),
-        ],
-    },
-    "combined": {
-        "label": "Heat + rain",
-        "description": "33°C + 30 mm/day — two severe triggers → tier 3 Severe",
-        "days": lambda d0, d1: [
-            _day(d0, 22, 33, 85, 30, 15),
-            _day(d1, 23, 34, 88, 28, 10),
-        ],
-    },
-    "blight": {
-        "label": "Late blight watch",
-        "description": "Cool + humid + wet → blight advisory → tier 1 Advisory (no pop-out, tier < 2)",
-        "days": lambda d0, d1: [
-            _day(d0, 16, 20, 92, 2, 8),
-            _day(d1, 15, 19, 94, 3, 6),
-        ],
-    },
-    "normal": {
-        "label": "Normal conditions",
-        "description": "All values within safe ranges → tier 0 Normal (clears any existing alert)",
-        "days": lambda d0, d1: [
-            _day(d0, 18, 27, 72, 5, 12),
-            _day(d1, 19, 28, 75, 3, 10),
-        ],
-    },
-}
+SCENARIO_NAMES = ["heat", "rain", "combined", "disease", "normal"]
+
+
+def build_scenarios(t):
+    """
+    Build forecast scenarios from the crop's own thresholds, so the same
+    scenarios stay meaningful for every crop in app/crops/.
+
+    *t* is the <Crop>Thresholds dataclass loaded from the crop profile.
+    """
+    safe_temp = round((t.temp_min + t.temp_max) / 2)
+    safe_rh = round((t.humidity_min + t.humidity_max) / 2)
+    hot = round(t.temp_max + 3)
+    wet = round(t.rain_medium + 5)
+    very_wet = round(t.rain_critical + 5)
+
+    return {
+        "heat": {
+            "label": "Heat stress",
+            "description": f"Max temp {hot}°C — exceeds the {t.temp_max:.0f}°C limit → tier 2 Warning",
+            "days": lambda d0, d1: [
+                _day(d0, safe_temp, hot, safe_rh, 0, 12),
+                _day(d1, safe_temp, hot + 1, safe_rh, 0, 10),
+            ],
+        },
+        "rain": {
+            "label": "High rainfall",
+            "description": f"{wet} mm/day — exceeds the medium threshold ({t.rain_medium:.0f} mm) → tier 2 Warning",
+            "days": lambda d0, d1: [
+                _day(d0, safe_temp, safe_temp + 4, safe_rh, wet, 15),
+                _day(d1, safe_temp, safe_temp + 4, safe_rh, wet - 2, 12),
+            ],
+        },
+        "combined": {
+            "label": "Heat + rain",
+            "description": f"{hot}°C + {very_wet} mm/day — two severe triggers → tier 3 Severe",
+            "days": lambda d0, d1: [
+                _day(d0, safe_temp, hot, safe_rh, very_wet, 15),
+                _day(d1, safe_temp, hot + 1, safe_rh, very_wet - 2, 10),
+            ],
+        },
+        "disease": {
+            "label": "Disease watch",
+            "description": "Humid + wet within temperature range → disease advisory → tier 1 Advisory (no pop-out, tier < 2)",
+            "days": lambda d0, d1: [
+                _day(d0, safe_temp, safe_temp + 3, round(t.humidity_max), 2, 8),
+                _day(d1, safe_temp, safe_temp + 3, round(t.humidity_max), 3, 6),
+            ],
+        },
+        "normal": {
+            "label": "Normal conditions",
+            "description": "All values within safe ranges → tier 0 Normal (clears any existing alert)",
+            "days": lambda d0, d1: [
+                _day(d0, safe_temp, safe_temp + 2, safe_rh, 0, 12),
+                _day(d1, safe_temp, safe_temp + 3, safe_rh, 0, 10),
+            ],
+        },
+    }
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _norm_key(s):
-    return s.lower().replace(" ", "_").replace("'", "").replace("-", "_").replace("’", "")
+    return (
+        s.lower().replace(" ", "_").replace("'", "").replace("-", "_").replace("’", "")
+    )
 
 
 def section(title):
@@ -159,7 +188,7 @@ def section(title):
     print(f"{'─' * 62}")
 
 
-_OK   = "\033[32m✓\033[0m"
+_OK = "\033[32m✓\033[0m"
 _FAIL = "\033[31m✗\033[0m"
 _WARN = "\033[33m!\033[0m"
 
@@ -180,8 +209,10 @@ def tick(status, label, detail=""):
 # Step 1 — inject forecast directly into ArangoDB
 # ---------------------------------------------------------------------------
 
+
 def inject_forecast(district, forecast_days):
     from app.core.storage import StorageLayer
+
     storage = StorageLayer()
 
     key = _norm_key(f"{district}__open_meteo__short")
@@ -208,6 +239,7 @@ def inject_forecast(district, forecast_days):
 # ---------------------------------------------------------------------------
 # Step 2 — trigger EWS (via API if running, otherwise locally)
 # ---------------------------------------------------------------------------
+
 
 def _reachable_url(preferred_url, path="/health"):
     """
@@ -243,25 +275,30 @@ def trigger_ews_via_api(weather_mcp_url, district):
             timeout=10,
         )
         if resp.ok:
-            time.sleep(3)   # background task needs a moment to write to ArangoDB
+            time.sleep(3)  # background task needs a moment to write to ArangoDB
             return True, (live_url, resp.json())
         return False, {"status": resp.status_code, "body": resp.text[:200]}
     except Exception as exc:
         return False, str(exc)
 
 
-def trigger_ews_locally(storage, district):
-    """Run EWS in-process as fallback when the service is not reachable."""
+def load_crop_ews(storage, crop):
+    """Build the in-process EWS for *crop* (also used to read its thresholds)."""
     _ensure_warning_engine_importable()
-    from app.workflows.short_term.potato_ews import PotatoShortTermEWS
-    from app.crops.potato.profile import load_potato_thresholds
-    ews = PotatoShortTermEWS(storage, load_potato_thresholds())
-    return ews.evaluate(district)
+    from app.workflows.short_term.crop_ews import CropShortTermEWS
+
+    return CropShortTermEWS(storage, crop)
+
+
+def trigger_ews_locally(storage, district, crop):
+    """Run EWS in-process as fallback when the service is not reachable."""
+    return load_crop_ews(storage, crop).evaluate(district)
 
 
 # ---------------------------------------------------------------------------
 # Step 3 — verify via weather-mcp API
 # ---------------------------------------------------------------------------
+
 
 def verify_mcp_api(weather_mcp_url, district):
     live_url = _reachable_url(weather_mcp_url)
@@ -283,6 +320,7 @@ def verify_mcp_api(weather_mcp_url, district):
 # ---------------------------------------------------------------------------
 # Step 4 — verify via Node.js backend proxy
 # ---------------------------------------------------------------------------
+
 
 def verify_backend_api(backend_url, district):
     candidates = []
@@ -342,43 +380,65 @@ def verify_backend_api(backend_url, district):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Inject dummy potato alert and verify the full frontend pop-out chain"
+        description="Inject a dummy crop alert and verify the full frontend pop-out chain"
     )
-    parser.add_argument("--scenario", choices=list(SCENARIOS), default="heat",
-                        help="Threshold scenario (default: heat)")
-    parser.add_argument("--district", default="Dhaka",
-                        help="Bangladesh district (default: Dhaka)")
-    parser.add_argument("--weather-mcp-url",
-                        default=os.getenv("WEATHER_MCP_URL", "http://localhost:8100"),
-                        help="weather-mcp-standalone base URL (default: http://localhost:8100)")
-    parser.add_argument("--backend-url",
-                        default=os.getenv("BACKEND_URL", "http://localhost:3000"),
-                        help="Node.js backend base URL (default: http://localhost:3000)")
-    parser.add_argument("--send-sms", action="store_true",
-                        help="also send the displayed potato pop-out message via Twilio SMS")
-    parser.add_argument("--sms-to",
-                        default=os.getenv("EMERGENCY_CONTACT_NUMBERS", ""),
-                        help="comma-separated recipient numbers; overrides EMERGENCY_CONTACT_NUMBERS for this run")
+    parser.add_argument(
+        "--crop",
+        default="eggplant",
+        help="Crop module under app/crops/ (default: eggplant)",
+    )
+    parser.add_argument(
+        "--scenario",
+        choices=SCENARIO_NAMES,
+        default="heat",
+        help="Threshold scenario (default: heat)",
+    )
+    parser.add_argument(
+        "--district", default="Dhaka", help="Bangladesh district (default: Dhaka)"
+    )
+    parser.add_argument(
+        "--weather-mcp-url",
+        default=os.getenv("WEATHER_MCP_URL", "http://localhost:8100"),
+        help="weather-mcp-standalone base URL (default: http://localhost:8100)",
+    )
+    parser.add_argument(
+        "--backend-url",
+        default=os.getenv("BACKEND_URL", "http://localhost:3000"),
+        help="Node.js backend base URL (default: http://localhost:3000)",
+    )
+    parser.add_argument(
+        "--send-sms",
+        action="store_true",
+        help="also send the displayed pop-out message via Twilio SMS",
+    )
+    parser.add_argument(
+        "--sms-to",
+        default=os.getenv("EMERGENCY_CONTACT_NUMBERS", ""),
+        help="comma-separated recipient numbers; overrides EMERGENCY_CONTACT_NUMBERS for this run",
+    )
     args = parser.parse_args()
 
     if args.send_sms and args.sms_to:
         os.environ["EMERGENCY_CONTACT_NUMBERS"] = args.sms_to
 
-    scenario = SCENARIOS[args.scenario]
-    today    = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Scenarios are derived from the crop's own thresholds
+    thresholds = load_crop_ews(None, args.crop)._thresholds
+    scenario = build_scenarios(thresholds)[args.scenario]
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
-    fc_days  = scenario["days"](today, tomorrow)
+    fc_days = scenario["days"](today, tomorrow)
 
     # ── Header ───────────────────────────────────────────────────────────────
-    section("Potato EWS — end-to-end test")
+    section(f"{args.crop} EWS — end-to-end test")
     print(f"  Scenario : [{args.scenario}] {scenario['label']}")
     print(f"  District : {args.district}")
     print(f"  Dates    : {today} / {tomorrow}")
     print(f"  Intent   : {scenario['description']}")
 
-    print(f"\n  Forecast values being injected:")
+    print("\n  Forecast values being injected:")
     for d in fc_days:
         print(
             f"    {d['date']}  "
@@ -395,7 +455,9 @@ def main():
         tick(True, "Forecast written", f"weather_forecasts/{arango_key}")
     except Exception as exc:
         tick(False, f"ArangoDB write failed: {exc}")
-        print(f"\n  Tip: export ARANGO_URL=http://localhost:8529 and check ARANGO_PASSWORD")
+        print(
+            "\n  Tip: export ARANGO_URL=http://localhost:8529 and check ARANGO_PASSWORD"
+        )
         sys.exit(1)
 
     # ── Step 2: trigger EWS ──────────────────────────────────────────────────
@@ -405,14 +467,23 @@ def main():
     if api_ok:
         live_url, _ = api_result
         tick(True, "Triggered via API", f"POST {live_url}/internal/run-potato-pipeline")
-        assessment = None   # will read back from API in step 3
+        assessment = None  # will read back from API in step 3
     else:
-        tick("warn", f"API not reachable ({api_result}) — running EWS locally as fallback")
-        assessment = trigger_ews_locally(storage, args.district)
+        tick(
+            "warn",
+            f"API not reachable ({api_result}) — running EWS locally as fallback",
+        )
+        assessment = trigger_ews_locally(storage, args.district, args.crop)
         if assessment:
-            tick(True, "EWS ran locally", f"tier={assessment.get('tier')} {assessment.get('tier_label')}")
+            tick(
+                True,
+                "EWS ran locally",
+                f"tier={assessment.get('tier')} {assessment.get('tier_label')}",
+            )
         else:
-            tick(False, "Local EWS produced no result — check ArangoDB and storage logs")
+            tick(
+                False, "Local EWS produced no result — check ArangoDB and storage logs"
+            )
             sys.exit(1)
 
     # ── Step 3: verify weather-mcp endpoint ──────────────────────────────────
@@ -420,50 +491,72 @@ def main():
     mcp_ok, mcp_data = verify_mcp_api(args.weather_mcp_url, args.district)
     if mcp_ok:
         assessment = mcp_data
-        tick(True, "Assessment readable from weather-mcp",
-             f"tier={mcp_data.get('tier')} — {mcp_data.get('tier_label')}")
+        tick(
+            True,
+            "Assessment readable from weather-mcp",
+            f"tier={mcp_data.get('tier')} — {mcp_data.get('tier_label')}",
+        )
     else:
         status_code = mcp_data.get("status") if isinstance(mcp_data, dict) else None
         if status_code == 404:
-            tick("warn", "weather-mcp returned 404 — container has old code, needs rebuild")
+            tick(
+                "warn",
+                "weather-mcp returned 404 — container has old code, needs rebuild",
+            )
             print("  Run: docker compose up -d --build weather-mcp-standalone")
         else:
             tick("warn", f"weather-mcp not reachable: {mcp_data}")
         if assessment:
-            print("  (using locally computed assessment for display — data IS in ArangoDB)")
+            print(
+                "  (using locally computed assessment for display — data IS in ArangoDB)"
+            )
         else:
-            stored = storage.get_latest_crop_risk(args.district, "potato")
+            stored = storage.get_latest_crop_risk(args.district, args.crop)
             assessment = stored or {}
 
     # ── Step 4: verify backend proxy ─────────────────────────────────────────
     section("Step 4 — Verify GET /api/weather/potato-risk (Node.js backend)")
     be_ok, be_data = verify_backend_api(args.backend_url, args.district)
     if be_ok is True:
-        tick(True, "Backend proxy working",
-             f"{be_data.get('_backend_url')} tier={be_data.get('tier')} — {be_data.get('tier_label')}")
+        tick(
+            True,
+            "Backend proxy working",
+            f"{be_data.get('_backend_url')} tier={be_data.get('tier')} — {be_data.get('tier_label')}",
+        )
     elif be_ok == "auth_required":
-        tick(True, "Backend route reachable (401 — auth required)",
-             f"{be_data.get('url')} — frontend sends its own token, this is correct")
+        tick(
+            True,
+            "Backend route reachable (401 — auth required)",
+            f"{be_data.get('url')} — frontend sends its own token, this is correct",
+        )
     else:
         tick("warn", f"Backend not reachable: {be_data}")
-        print("  (frontend calls this endpoint — if backend is down, pop-out won't appear)")
+        print(
+            "  (frontend calls this endpoint — if backend is down, pop-out won't appear)"
+        )
 
     # ── Result summary ────────────────────────────────────────────────────────
     section("Assessment — what the pop-out will display")
-    tier       = assessment.get("tier", 0)
+    tier = assessment.get("tier", 0)
     tier_label = assessment.get("tier_label", "Unknown")
-    message    = assessment.get("message", "")
-    triggers   = assessment.get("triggers", [])
-    disease    = assessment.get("disease_risks", [])
+    message = assessment.get("message", "")
+    triggers = assessment.get("triggers", [])
+    disease = assessment.get("disease_risks", [])
 
-    tier_colour = {0: "\033[32m", 1: "\033[33m", 2: "\033[33m", 3: "\033[31m", 4: "\033[35m"}
+    tier_colour = {
+        0: "\033[32m",
+        1: "\033[33m",
+        2: "\033[33m",
+        3: "\033[31m",
+        4: "\033[35m",
+    }
     c = tier_colour.get(tier, "")
     r = "\033[0m"
 
     print(f"  Tier     : {c}{tier} — {tier_label}{r}")
     print(f"  Triggers : {triggers or '[]'}")
     print(f"  Disease  : {disease or '[]'}")
-    print(f"\n  Pop-out message:")
+    print("\n  Pop-out message:")
     print(f"  \033[1m{message or '(none — Normal tier)'}\033[0m")
 
     if args.send_sms:
@@ -476,7 +569,8 @@ def main():
             try:
                 _load_warning_engine_env()
                 missing = [
-                    name for name in (
+                    name
+                    for name in (
                         "TWILIO_ACCOUNT_SID",
                         "TWILIO_AUTH_TOKEN",
                         "TWILIO_PHONE_FROM",
@@ -488,9 +582,15 @@ def main():
                     tick("warn", "SMS not sent", f"missing env: {', '.join(missing)}")
                 else:
                     from app.core.notifier import Notifier
-                    sms_ok = Notifier(storage).dispatch_potato_sms(assessment, message=message)
-                    tick(sms_ok, "Twilio SMS sent" if sms_ok else "Twilio SMS not sent",
-                         "using the exact pop-out message text")
+
+                    sms_ok = Notifier(storage).dispatch_potato_sms(
+                        assessment, message=message
+                    )
+                    tick(
+                        sms_ok,
+                        "Twilio SMS sent" if sms_ok else "Twilio SMS not sent",
+                        "using the exact pop-out message text",
+                    )
             except Exception as exc:
                 tick(False, f"Twilio SMS failed: {exc}")
 
@@ -508,12 +608,14 @@ def main():
         print("  • Check localStorage — open DevTools → Application → Local Storage")
         print("    and delete the key 'crop_alert_dismissed_until' if it exists.")
         print("  • Check the browser console for '[CropAlertBanner] poll error'.")
-        print(f"  • Confirm GET /api/weather/potato-risk?location={args.district} returns tier≥2.")
+        print(
+            f"  • Confirm GET /api/weather/potato-risk?location={args.district} returns tier≥2."
+        )
     elif tier == 1:
-        print(f"  Tier 1 (Advisory) — banner does NOT appear (threshold is tier ≥ 2).")
+        print("  Tier 1 (Advisory) — banner does NOT appear (threshold is tier ≥ 2).")
         print("  Use --scenario heat, rain, or combined to trigger the pop-out.")
     else:
-        print(f"  Tier 0 (Normal) — no banner. This scenario clears any existing alert.")
+        print("  Tier 0 (Normal) — no banner. This scenario clears any existing alert.")
         print("  Refresh the browser — the pop-out should disappear if it was showing.")
 
     print()

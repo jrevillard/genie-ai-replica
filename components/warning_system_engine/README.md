@@ -20,7 +20,7 @@ Standalone Docker container that owns the full early warning pipeline for the ME
 │  │   weather-mcp-service     │  ← READ ONLY from ArangoDB                   │
 │  │   (FastAPI + WeatherAgent)│◄──────────────────────────────────────────┐  │
 │  │                           │  /risk/latest                             │  │
-│  │   • Natural-language      │  /potato/risk/latest                      │  │
+│  │   • Natural-language      │  /potato/risk/latest  (crop risk)         │  │
 │  │     weather queries       │  /seasonal (Copernicus)                   │  │
 │  │   • MCP tool server       │                                           │  │
 │  │   • Data ingestion        │                                           │  │
@@ -49,6 +49,24 @@ Standalone Docker container that owns the full early warning pipeline for the ME
 
 ---
 
+## Crops Under Watch
+
+| Crop | Calendar | Season | Stages | Evaluated pests/diseases |
+|---|---|---|---|---|
+| `eggplant` | `data/eggplant.pdf` — Rajshahi region | Rabi (weeks 44–12) + Kharif (weeks 18–39) | Germination & Seedling, Vegetative Growth, Flowering, Fruiting, Harvesting | 8 |
+| `rice_aman` | `data/rice_aman.pdf` — Rajshahi region | Aman (weeks 24–42, June–October) | Seedbed, Transplanting, Tillering, Heading, Flowering, Grain Formation, Maturity to Harvesting | 8 |
+
+Both calendars cover the Rajshahi region (Rajshahi, Chapainawabganj, Naogaon,
+Natore). The eggplant calendar carries both its seasons in one profile, so that
+crop is in season for most of the year.
+
+The crop list comes from `EWS_CROPS` (default `eggplant,rice_aman`). Adding a
+crop means dropping its BAMIS PDF into `data/`, re-running
+`scripts/build_crop_profiles_pipeline.py`, and adding its name to `EWS_CROPS` —
+no workflow code changes.
+
+---
+
 ## Package Structure
 
 ```
@@ -73,9 +91,9 @@ warning_system_engine/
 │   │
 │   ├── workflows/
 │   │   ├── short_term/
-│   │   │   └── potato_ews.py            — Deterministic 48-hour potato risk evaluator
+│   │   │   └── crop_ews.py              — Deterministic 48-hour crop risk evaluator
 │   │   └── long_term/
-│   │       ├── potato_ews.py            — Deterministic 5-month seasonal potato risk evaluator
+│   │       ├── crop_ews.py              — Deterministic 5-month seasonal crop risk evaluator
 │   │       └── drought_ews.py           — Reads drought_assessments; dispatches drought alerts
 │   │
 │   └── crops/
@@ -93,8 +111,7 @@ warning_system_engine/
 │   ├── build_crop_profiles_pipeline.py  — Master pipeline: PDF → JSON → Python modules
 │   ├── generate_crop_modules.py         — Step 3: JSON → app/crops/<crop>/ Python files
 │   ├── enrich_crop_profiles.py          — Step 2: bamis_metadata.json → example_crop_profile.json
-│   ├── test_potato_ews.py               — End-to-end smoke test for potato EWS
-│   └── POTATO_EWS_TEST_GUIDE.md         — Test scenario reference
+│   └── test_crop_ews.py                 — End-to-end smoke test for the crop EWS
 │
 ├── Dockerfile
 ├── docker-compose.yml
@@ -119,19 +136,19 @@ Before the EWS pipelines can run, crop knowledge must flow from BAMIS PDFs throu
   (one per crop × region, 34 crops × 14 regions)
        │
        │  Step 1 — parse_bamis_pdfs.py
-       │  Row-oriented table extraction (pdfplumber)
-       │  Infers crop + region from filename
+       │  Row- or column-oriented table extraction (pdfplumber)
+       │  Crop from the filename, region from the calendar header
        ▼
   bamis_metadata.json
-  [{"crop":"potato","region":"dhaka","week_number":42,
-    "crop_stage":"Sprouting","max_temp_c":32.0,...}, ...]
+  [{"crop":"eggplant","region":"rajshahi","week_number":44,
+    "crop_stage":"Germination and Seedling Planting","max_temp_c":31.7,...}, ...]
        │
        │  Step 2 — enrich_crop_profiles.py
        │  Aggregates per stage, derives thresholds,
        │  maps disease risk conditions
        ▼
   example_crop_profile.json
-  {"potato_dhaka": {"season_span":..., "growth_stages":...,
+  {"eggplant_rajshahi": {"season_span":..., "growth_stages":...,
     "weekly_calendar":..., "crop_rules":..., "disease_risks":...}}
        │
        │  Step 3 — generate_crop_modules.py
@@ -143,8 +160,8 @@ Before the EWS pipelines can run, crop knowledge must flow from BAMIS PDFs throu
        │
        │  Imported at runtime by
        ▼
-  app/workflows/short_term/<crop>_ews.py
-  app/workflows/long_term/<crop>_ews.py
+  app/workflows/short_term/crop_ews.py   (one instance per crop)
+  app/workflows/long_term/crop_ews.py
 ```
 
 ### Why row-oriented PDF extraction matters
@@ -159,6 +176,28 @@ Standard PDF extractors (PyMuPDF, pdfminer) read tables **column by column**, wh
 ```
 
 …gets extracted as three separate chunks (stage column, month column, temp column), so no single chunk ever contains both the stage name and its month. `parse_bamis_pdfs.py` uses `pdfplumber`'s row-level table API to yield one complete record per row, preserving all relationships.
+
+### Two calendar layouts
+
+BAMIS also publishes the **transposed** layout — one column per standard week,
+one row per variable, with the growth stages as merged cells spanning several
+week columns:
+
+```
+│ Std.Week        │  44  │  45  │  46  │  47  │  48  │  49  │ …
+│ Rainfall (mm)   │  7.0 │  5.0 │  1.0 │  0.0 │  2.0 │  1.0 │ …
+│ Max. Temp (oC)  │ 31.7 │ 31.0 │ 30.4 │ 30.4 │ 29.6 │ 27.0 │ …
+│ Stages          │ Germination and Seedling  │ Vegetative Growth   │ …
+```
+
+`parse_bamis_pdfs.py` tries the row-oriented reader first and falls back to the
+column-oriented one. Alignment uses the table's own column grid rather than text
+positions, so a merged stage cell keeps its exact week span (an off-by-one week
+at a stage boundary is the failure mode when aligning by text coordinates).
+
+The same pass mines the pest/disease and weather-warning rows, turning prose
+such as `"Temperature : 24-30º C, RH: 55-75%"` into the `when` blocks that
+`generate_crop_modules.py` compiles into `detect_<disease>()` functions.
 
 ---
 
@@ -194,7 +233,7 @@ Pipeline flags:
 | `--pdf-dir PATH` | Root directory of raw BAMIS PDFs |
 | `--data-dir PATH` | Output directory for JSON artefacts (default: `data/`) |
 | `--crops-dir PATH` | Output directory for Python modules (default: `app/crops/`) |
-| `--crop NAME` | Process only this crop (e.g. `potato`, `tomato`) |
+| `--crop NAME` | Process only this crop (e.g. `eggplant`, `rice_aman`) |
 | `--region NAME` | Process only this region (e.g. `dhaka`, `bogura`) |
 | `--skip-parse` | Use existing `bamis_metadata.json` |
 | `--skip-enrich` | Use existing `example_crop_profile.json` |
@@ -274,9 +313,9 @@ weather_forecasts
                              └──────────────┬───────────────────────┘
                                             │
                              ┌──────────────▼───────────────────────┐
-                             │ 3. PotatoShortTermEWS.evaluate()      │
+                             │ 3. CropShortTermEWS.evaluate()        │
                              │    today + tomorrow against crop rules│
-                             │    detect_late_blight()               │
+                             │    get_disease_risks()                │
                              │    _dedup_by_category()               │
                              │    classify_tier()                    │
                              └──────────────┬───────────────────────┘
@@ -303,27 +342,31 @@ weather_forecasts
 
 Multi-hazard escalation (IPC rule): two independent Tier-2+ triggers on the same day → +1 tier (capped at 4).
 
-**Potato-specific short-term example output**
+**Crop-specific short-term example output**
+
+One document is written per crop, so the same district holds one assessment for
+each crop under watch.
 
 ```jsonc
-// ArangoDB: risk_assessments / key: "dhaka__short__potato"
+// ArangoDB: risk_assessments / key: "naogaon__short__eggplant"
 {
-  "location": "Dhaka",
-  "crop": "potato",
+  "location": "Naogaon",
+  "crop": "eggplant",
   "horizon": "short",
-  "forecast_date": "2026-11-10",
-  "assessed_at": "2026-11-10T05:00:14Z",
+  "forecast_date": "2026-09-15",
+  "assessed_at": "2026-09-15T05:00:14Z",
   "tier": 2,
   "tier_label": "Warning",
   "forecast_source": "open_meteo",
   "sense_check_passed": true,
   "fallback_used": false,
   "triggers": [
-    "Max temperature 31.2°C exceeds Potato limit 30°C",
-    "Humidity 83.0% outside Potato range 65–80%"
+    "Max temperature 36.5°C exceeds Eggplant limit 32°C"
   ],
-  "disease_risks": [],
-  "message": "Potato warning for Dhaka on 2026-11-10: Max temperature 31.2°C exceeds Potato limit 30°C. Take protective action today."
+  "disease_risks": [
+    "Fruit Rot risk: weather conditions match threshold"
+  ],
+  "message": "Eggplant warning for Naogaon on 2026-09-15: Max temperature 36.5°C exceeds Eggplant limit 32°C. Take protective action today."
 }
 ```
 
@@ -351,14 +394,14 @@ Copernicus CDS                warning_system_engine
                                  nearest-neighbour grid extraction ──────────────► seasonal_forecasts
                                             │
                                             ▼
-                              3. LongTermPotatoEWS.evaluate_all()
-                                 for each district × each forecast month:
+                              3. LongTermCropEWS.evaluate_all()
+                                 for each crop × district × forecast month:
                                    a. stages_for_month()   ← crop_profile_loader
                                    b. baseline_for_month() ← weekly calendar aggregation
                                    c. absolute threshold checks  (temp_max, temp_min)
                                    d. deviation checks (Δ from baseline mean)
                                    e. precipitation ratio checks (×1.5 / ×2.5 / ×0.3)
-                                   f. late blight humidity check
+                                   f. fungal disease humidity check
                                    g. classify tier 0–3
                                             │
                                             ▼──────────────────────────────────► seasonal_assessments
@@ -394,16 +437,17 @@ Max tier is 3 — seasonal uncertainty is too high to support Tier 4 Emergency.
 **Seasonal assessment example output**
 
 ```jsonc
-// ArangoDB: seasonal_assessments / key: "dhaka__potato__2026_11"
+// ArangoDB: seasonal_assessments / key: "naogaon__rice_aman__2026_08"
 {
-  "location": "Dhaka",
-  "crop": "potato",
-  "target_month": "2026-11",
-  "stages": ["Vegetative Growth", "Tuber Set/Initiation"],
+  "location": "Naogaon",
+  "crop": "rice_aman",
+  "target_month": "2026-08",
+  "stages": ["Tillering", "Heading"],
   "tier": 1,
   "tier_label": "Advisory",
   "triggers": [
-    "Monthly mean temp 28.4°C is +3.0°C above stage baseline 25.4°C"
+    "Monthly mean temp 31.5°C approaching rice aman heat limit 33°C",
+    "Rainfall 1.9× above seasonal baseline"
   ],
   "rule_support": {
     "temperature": "copernicus_ready",
@@ -416,7 +460,9 @@ Max tier is 3 — seasonal uncertainty is too high to support Tier 4 Emergency.
 
 **Graceful degradation:** If `CDSAPI_KEY` is not set and `~/.cdsapirc` does not exist, `CopernicusFetcher._cds_configured()` returns `False`, the weekly job is never registered, and short-term continues normally.
 
-**Season filtering:** `CropProfileLoader.stages_for_month()` returns an empty list for months outside the potato season (roughly June–September). The engine skips those months with zero ArangoDB writes, making the off-season pass cost-free.
+**Season filtering:** `CropProfileLoader.stages_for_month()` returns an empty list for months outside the crop season — Aman rice runs June–October, so the other months are skipped with zero ArangoDB writes, making the off-season pass cost-free. Eggplant has both a Rabi and a Kharif calendar in one profile, so it covers most of the year.
+
+**Region fallback:** BAMIS publishes one calendar per agro-climatic region. `LongTermCropEWS._region_for()` maps a district to its own profile when one exists, otherwise to the crop's published region — so every district in the Rajshahi region (Rajshahi, Chapainawabganj, Naogaon, Natore) is assessed against the Rajshahi calendar.
 
 ---
 
@@ -487,70 +533,80 @@ All channels are opt-in via env vars. Missing keys are logged and skipped gracef
 
 ## Crop Profile (`data/example_crop_profile.json`)
 
-Auto-generated by the pipeline. Keyed as `{crop}_{region}` — e.g. `potato_dhaka`, `tomato_bogura`.
+Auto-generated by the pipeline. Keyed as `{crop}_{region}` — e.g. `eggplant_rajshahi`, `rice_aman_rajshahi`.
 
 ```jsonc
 {
-  "potato_dhaka": {
-    "crop": "potato",
-    "region": "dhaka",
+  "rice_aman_rajshahi": {
+    "crop": "rice_aman",
+    "region": "rajshahi",
     "season_span": {
-      "weeks": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 1, 2, 3, 4],
-      "months": ["October", "November", "December", "January"],
-      "duration_weeks": 15
+      "weeks": [27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 24, 25, 26],
+      "months": ["June", "July", "August", "September", "October"],
+      "duration_weeks": 19
     },
     "growth_stages": [
       {
-        "stage": "Sprouting",
-        "weeks": [42],
-        "months": ["October"],
-        "week_count": 1,
+        "stage": "Transplanting",
+        "weeks": [27, 28, 29],
+        "months": ["July"],
+        "week_count": 3,
         "climate_stats": {
-          "temp_max_c": { "mean": 32.0, "min": 32.0, "max": 32.0 },
-          "temp_min_c": { "mean": 23.8, "min": 23.8, "max": 23.8 },
-          "rainfall_mm": { "mean": 40.5, "sum": 40.5 }
+          "temp_max_c": { "mean": 32.63, "min": 32.3, "max": 32.9 },
+          "temp_min_c": { "mean": 26.0, "min": 26.0, "max": 26.0 },
+          "rainfall_mm": { "mean": 70.67, "sum": 212.0 }
         }
       }
       // … 6 more stages
     ],
     "weekly_calendar": [
       {
-        "week": 42, "month": "October", "stage": "Sprouting",
-        "temp_min_c": 23.8, "temp_max_c": 32.0, "temp_mean_c": 27.9,
-        "rainfall_mm": 40.5, "rh_max_pct": 95.0, "rh_min_pct": 60.2
+        "week": 27, "month": "July", "stage": "Transplanting",
+        "temp_min_c": 26.0, "temp_max_c": 32.7, "temp_mean_c": 29.35,
+        "rainfall_mm": 66.0, "rh_max_pct": 96.6, "rh_min_pct": 73.7
       }
-      // … 14 more weeks
+      // … 18 more weeks
     ],
     "crop_rules": {
-      "temperature_min": { "min": 10 },
-      "temperature_max": { "max": 30 },
-      "humidity":        { "min": 65, "max": 80 },
+      "temperature_min": { "min": 10.0, "source_section": "Weather Warning" },
+      "temperature_max": { "max": 33.0, "source_section": "derived_from_season_data" },
+      "humidity":        { "min": 70.8, "max": 88.7 },
       "rainfall_daily":  [
-        { "severity": "medium",   "min": 25 },
-        { "severity": "critical", "min": 100 }
+        { "severity": "medium",   "min": 50.0,  "source_section": "Weather Warning" },
+        { "severity": "critical", "min": 100.0, "source_section": "Weather Warning" }
       ],
-      "wind_speed_kmh":  { "max": 30 }
+      "wind_speed_kmh":  { "max": 30.0, "source_section": "Weather Warning" }
     },
     "disease_risks": [
       {
-        "name": "late_blight",
+        "name": "bacterial_leaf_blight",
         "when": {
-          "temperature_mean": { "min": 16, "max": 20 },
-          "humidity":         { "min": 90 },
-          "precipitation":    { "min": 1 }
+          "temperature_mean": { "min": 28, "max": 30 },
+          "humidity":         { "min": 80, "max": 90 },
+          "rainfall_mm":      { "min": 30 }
         },
-        "evaluable_with_current_feeds": true
+        "evaluable_with_current_feeds": true,
+        "requires_additional_variables": ["cloud_cover"]   // cloudiness not in the feed
       },
       {
-        "name": "potato_wire_worm",
-        "when": { "soil_temperature": { "min": 10, "max": 27 } },
-        "evaluable_with_current_feeds": false,   // soil_temp not in current feeds
-        "requires_additional_variables": ["soil_temperature"]
+        "name": "blast",
+        "when": {
+          "temperature_min": { "min": 16, "max": 20 },
+          "humidity":        { "min": 90 }
+        },
+        "evaluable_with_current_feeds": true
       }
     ]
   }
 }
 ```
+
+**Where the thresholds come from.** `crop_rules` are derived from the weekly
+climate normals in the calendar, then overlaid with the daily thresholds the PDF
+states in its "Weather warning" section (`source_section: "Weather Warning"`).
+The derived values are weekly means, so they are far too high to use as daily
+triggers on their own — whenever the calendar states a daily limit, it wins.
+
 
 `app/core/crop_profile_loader.py` provides typed accessors so workflows never parse JSON directly:
 - `stages_for_month(month)` → list of stage names active that month
@@ -579,6 +635,7 @@ Copy `.env.example` to `.env`. All variables are optional unless marked Required
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
+| `EWS_CROPS` | No | `eggplant,rice_aman` | Comma-separated crops to watch; each needs a module in `app/crops/<crop>/` |
 | `ARANGO_URL` | Yes | `http://arango-vector-db:8529` | ArangoDB host |
 | `ARANGO_DB_NAME` | Yes | `genie-ai` | Database name |
 | `ARANGO_USER` | Yes | `root` | ArangoDB user |
@@ -650,20 +707,23 @@ docker exec -it warning-system-engine python /app/scripts/build_crop_profiles_pi
 #   /app/crops/<crop>/risk_engine.py       (generated evaluator + disease detectors)
 ```
 
-### Test the Potato EWS end-to-end
+### Test the crop EWS end-to-end
+
+Scenario values are derived from the selected crop's own thresholds, so the same
+scenario names work for every crop in `app/crops/`.
 
 ```bash
 # Requires ArangoDB reachable (set ARANGO_URL in env if not default)
 cd components/warning_system_engine
-python3 scripts/test_potato_ews.py --scenario heat --district Dhaka
-python3 scripts/test_potato_ews.py --scenario combined
+python3 scripts/test_crop_ews.py --scenario heat --district Naogaon
+python3 scripts/test_crop_ews.py --crop rice_aman --scenario combined
 
 # From inside the container
 docker exec -it warning-system-engine \
-    python3 /app/scripts/test_potato_ews.py --scenario late_blight
+    python3 /app/scripts/test_crop_ews.py --scenario disease
 ```
 
-See `scripts/POTATO_EWS_TEST_GUIDE.md` for the full scenario reference.
+Available scenarios: `heat`, `rain`, `combined`, `disease`, `normal`.
 
 ---
 

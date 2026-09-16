@@ -54,7 +54,12 @@ module.exports = (weatherService) => {
       );
       // translateMarkdown re-serialises markdown and appends a trailing newline.
       const clean = translated.map((t) => (typeof t === 'string' ? t.trim() : t));
-      return { ...data, message: clean[0], triggers: clean.slice(1), language: target };
+      // The crop risk response carries one entry per crop (the banner renders a
+      // card each), so every entry needs the same treatment as the top level.
+      const crops = Array.isArray(data.crops)
+        ? await Promise.all(data.crops.map((c) => localizeRisk(c, target)))
+        : data.crops;
+      return { ...data, message: clean[0], triggers: clean.slice(1), crops, language: target };
     } catch (err) {
       logger.warn(`[RISK] Translation to ${target} failed, returning English: ${err.message}`);
       return data;

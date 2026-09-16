@@ -3,11 +3,13 @@ Scheduler — APScheduler async jobs for the Warning System Engine.
 
 Short-term pipeline  (daily, 05:00 UTC):
   Read weather_forecasts from ArangoDB → classify → notify tier ≥ 2
-  Run PotatoShortTermEWS for all districts → store crop risk assessments
+  Run CropShortTermEWS per configured crop for all districts
+  → store crop risk assessments
 
 Long-term pipeline  (weekly, Monday 06:00 UTC):
   Fetch Copernicus SEAS5 5-month outlook → store in seasonal_forecasts
-  Run LongTermPotatoEWS for all districts → store in seasonal_assessments
+  Run LongTermCropEWS per configured crop for all districts
+  → store in seasonal_assessments
   Notify tier ≥ 2 seasonal warnings
 
 Startup:
@@ -31,9 +33,9 @@ if TYPE_CHECKING:
     from app.core.storage import StorageLayer
     from app.integrations.bamis.special_bulletin import BamisSpecialBulletinEWS
     from app.integrations.copernicus.fetcher import CopernicusFetcher
+    from app.workflows.long_term.crop_ews import LongTermCropEWS
     from app.workflows.long_term.drought_ews import DroughtEWS
-    from app.workflows.long_term.potato_ews import LongTermPotatoEWS
-    from app.workflows.short_term.potato_ews import PotatoShortTermEWS
+    from app.workflows.short_term.crop_ews import CropShortTermEWS
 
 logger = logging.getLogger(__name__)
 
@@ -81,39 +83,45 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-async def run_potato_ews_pipeline(
+async def run_crop_ews_pipeline(
     storage: "StorageLayer",
-    potato_ews: "PotatoShortTermEWS",
+    crop_ews_list: "list[CropShortTermEWS]",
 ) -> dict:
     """
-    Run the potato EWS for all districts that have a stored forecast.
-    Called after the main pipeline so weather_forecasts is fresh.
+    Run the crop EWS for all districts that have a stored forecast, once per
+    configured crop. Called after the main pipeline so weather_forecasts is fresh.
     """
     import asyncio
 
-    logger.info("[POTATO_PIPELINE] Potato EWS run started")
+    logger.info(
+        "[CROP_PIPELINE] Crop EWS run started for %s",
+        ", ".join(ews.crop for ews in crop_ews_list) or "no crops",
+    )
     evaluated = 0
     alerted = 0
     errors = 0
 
-    for location in DISTRICT_LIST:
-        try:
-            assessment = await asyncio.get_running_loop().run_in_executor(
-                None, lambda loc=location: potato_ews.evaluate(loc)
-            )
-            if assessment:
-                evaluated += 1
-                if potato_ews.should_alert(assessment):
-                    await asyncio.get_running_loop().run_in_executor(
-                        None, lambda a=assessment: potato_ews.record_alert(a)
-                    )
-                    alerted += 1
-        except Exception as exc:
-            logger.error("[POTATO_PIPELINE] Failed for %s: %s", location, exc)
-            errors += 1
+    for crop_ews in crop_ews_list:
+        for location in DISTRICT_LIST:
+            try:
+                assessment = await asyncio.get_running_loop().run_in_executor(
+                    None, lambda loc=location, e=crop_ews: e.evaluate(loc)
+                )
+                if assessment:
+                    evaluated += 1
+                    if crop_ews.should_alert(assessment):
+                        await asyncio.get_running_loop().run_in_executor(
+                            None, lambda a=assessment, e=crop_ews: e.record_alert(a)
+                        )
+                        alerted += 1
+            except Exception as exc:
+                logger.error(
+                    "[CROP_PIPELINE] %s failed for %s: %s", crop_ews.crop, location, exc
+                )
+                errors += 1
 
     result = {"evaluated": evaluated, "alerted": alerted, "errors": errors}
-    logger.info("[POTATO_PIPELINE] Done: %s", result)
+    logger.info("[CROP_PIPELINE] Done: %s", result)
     return result
 
 
@@ -181,7 +189,7 @@ async def run_daily_pipeline(
     ingestor,  # DataIngestor | None
     risk_engine: "RiskEngine",
     notifier: "Notifier",
-    potato_ews: "PotatoShortTermEWS | None" = None,
+    crop_ews_list: "list[CropShortTermEWS] | None" = None,
 ) -> dict:
     """
     Daily pipeline:
@@ -190,7 +198,7 @@ async def run_daily_pipeline(
       3. Classify each district → RiskAssessment
       4. Persist to risk_assessments
       5. Dispatch notifications for tier ≥ 2
-      6. Run potato EWS
+      6. Run the crop EWS for every configured crop
     """
     import asyncio
 
@@ -279,11 +287,11 @@ async def run_daily_pipeline(
     }
     logger.info("[PIPELINE] Daily pipeline complete: %s", result)
 
-    if potato_ews is not None:
+    if crop_ews_list:
         try:
-            await run_potato_ews_pipeline(storage, potato_ews)
+            await run_crop_ews_pipeline(storage, crop_ews_list)
         except Exception as exc:
-            logger.error("[PIPELINE] Potato EWS pipeline failed: %s", exc)
+            logger.error("[PIPELINE] Crop EWS pipeline failed: %s", exc)
 
     return result
 
@@ -296,14 +304,14 @@ async def run_daily_pipeline(
 async def run_long_term_pipeline(
     storage: "StorageLayer",
     copernicus: "CopernicusFetcher",
-    long_term_ews: "LongTermPotatoEWS",
+    long_term_ews_list: "list[LongTermCropEWS]",
     notifier: "Notifier | None" = None,
 ) -> dict:
     """
     Weekly pipeline:
       1. Fetch Copernicus SEAS5 5-month outlook for all Bangladesh districts
       2. Store raw monthly climate data in `seasonal_forecasts`
-      3. Run LongTermPotatoEWS → store assessments in `seasonal_assessments`
+      3. Run LongTermCropEWS per crop → store in `seasonal_assessments`
       4. Dispatch seasonal advisory notifications for tier ≥ 2
 
     This is independent of the short-term daily pipeline.
@@ -321,11 +329,16 @@ async def run_long_term_pipeline(
     if fetch_result.get("error") == "cds_not_configured":
         return {"status": "skipped", "reason": "CDS not configured", **fetch_result}
 
-    # Step 3: Run deterministic seasonal EWS
-    ews_result = await asyncio.get_running_loop().run_in_executor(
-        None, lambda: long_term_ews.evaluate_all()
-    )
-    logger.info("[LT_PIPELINE] Long-term EWS: %s", ews_result)
+    # Step 3: Run deterministic seasonal EWS for every configured crop
+    evaluated = 0
+    ews_errors = 0
+    for long_term_ews in long_term_ews_list:
+        ews_result = await asyncio.get_running_loop().run_in_executor(
+            None, lambda e=long_term_ews: e.evaluate_all()
+        )
+        logger.info("[LT_PIPELINE] Long-term EWS: %s", ews_result)
+        evaluated += ews_result.get("evaluated", 0)
+        ews_errors += ews_result.get("errors", 0)
 
     # Step 4: Dispatch seasonal notifications for tier ≥ 2
     notified = 0
@@ -335,9 +348,9 @@ async def run_long_term_pipeline(
     result = {
         "status": "ok" if fetch_result.get("error") is None else "partial",
         "copernicus_stored": fetch_result.get("stored", 0),
-        "assessments_stored": ews_result.get("evaluated", 0),
+        "assessments_stored": evaluated,
         "alerts_dispatched": notified,
-        "errors": ews_result.get("errors", 0),
+        "errors": ews_errors,
     }
     logger.info("[LT_PIPELINE] Long-term pipeline complete: %s", result)
     return result
@@ -346,7 +359,7 @@ async def run_long_term_pipeline(
 async def run_long_term_startup_seed(
     storage: "StorageLayer",
     copernicus: "CopernicusFetcher",
-    long_term_ews: "LongTermPotatoEWS",
+    long_term_ews_list: "list[LongTermCropEWS]",
     notifier: "Notifier | None" = None,
 ) -> dict:
     """
@@ -393,7 +406,9 @@ async def run_long_term_startup_seed(
             len(DISTRICT_LIST),
         )
 
-    return await run_long_term_pipeline(storage, copernicus, long_term_ews, notifier)
+    return await run_long_term_pipeline(
+        storage, copernicus, long_term_ews_list, notifier
+    )
 
 
 async def _dispatch_seasonal_alerts(
@@ -533,9 +548,9 @@ def create_scheduler(
     ingestor,
     risk_engine: "RiskEngine",
     notifier: "Notifier",
-    potato_ews: "PotatoShortTermEWS | None" = None,
+    crop_ews_list: "list[CropShortTermEWS] | None" = None,
     copernicus: "CopernicusFetcher | None" = None,
-    long_term_ews: "LongTermPotatoEWS | None" = None,
+    long_term_ews_list: "list[LongTermCropEWS] | None" = None,
     drought_ews: "DroughtEWS | None" = None,
     drought_monitoring_url: str = "",
     bamis_special_bulletin_ews: "BamisSpecialBulletinEWS | None" = None,
@@ -560,7 +575,7 @@ def create_scheduler(
     scheduler = AsyncIOScheduler()
 
     # ── Short-term daily pipeline ─────────────────────────────────────────
-    st_args = [storage, ingestor, risk_engine, notifier, potato_ews]
+    st_args = [storage, ingestor, risk_engine, notifier, crop_ews_list]
 
     scheduler.add_job(
         run_daily_pipeline,
@@ -585,8 +600,8 @@ def create_scheduler(
     )
 
     # ── Long-term weekly pipeline ─────────────────────────────────────────
-    if copernicus is not None and long_term_ews is not None:
-        lt_args = [storage, copernicus, long_term_ews, notifier]
+    if copernicus is not None and long_term_ews_list:
+        lt_args = [storage, copernicus, long_term_ews_list, notifier]
 
         scheduler.add_job(
             run_long_term_pipeline,

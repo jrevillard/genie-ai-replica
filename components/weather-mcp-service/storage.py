@@ -377,13 +377,11 @@ class StorageLayer:
             )
             return None
 
-    def get_seasonal_assessments(
-        self, location: str, crop: str = "potato"
-    ) -> list[dict]:
+    def get_seasonal_assessments(self, location: str, crop: str) -> list[dict]:
         """
         Monthly crop risk assessments for a district, oldest month first.
 
-        Written by LongTermPotatoEWS, which compares the Copernicus outlook
+        Written by LongTermCropEWS, which compares the Copernicus outlook
         against the crop thresholds and growth stages. Returns [] when the
         seasonal pipeline has not run for this district.
         """

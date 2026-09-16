@@ -36,21 +36,28 @@
       </div>
     </transition-group>
 
-    <transition name="crop-alert-slide">
-      <div v-if="visible" class="crop-alert-banner" :class="[`tier-${alert.tier}`, `type-${alertType}`]" role="alert">
-        <div class="crop-alert-icon" aria-hidden="true">{{ tierGlyph }}</div>
+    <!-- One card per active alert: a crop each, plus drought and flood. -->
+    <transition-group name="crop-alert-slide" tag="div">
+      <div
+        v-for="a in alerts"
+        :key="alertKey(a)"
+        class="crop-alert-banner"
+        :class="[`tier-${a.tier}`, `type-${a._type}`]"
+        role="alert"
+      >
+        <div class="crop-alert-icon" aria-hidden="true">{{ tierGlyph(a) }}</div>
         <div class="crop-alert-body">
           <div class="crop-alert-title">
-            {{ alertTypeLabel }} — {{ tierLabel }}
-            <span class="crop-alert-scope">· {{ alert.location || district }}</span>
+            {{ alertTypeLabel(a) }} — {{ tierLabel(a) }}
+            <span class="crop-alert-scope">· {{ a.location || district }}</span>
           </div>
-          <div class="crop-alert-message">{{ alert.message }}</div>
-          <div v-if="alert.triggers && alert.triggers.length" class="crop-alert-triggers">
-            <span v-for="(t, i) in alert.triggers" :key="i" class="crop-alert-trigger-tag">{{ t }}</span>
+          <div class="crop-alert-message">{{ a.message }}</div>
+          <div v-if="a.triggers && a.triggers.length" class="crop-alert-triggers">
+            <span v-for="(t, i) in a.triggers" :key="i" class="crop-alert-trigger-tag">{{ t }}</span>
           </div>
           <a
-            v-if="alertType === 'drought' && alert.report_filename"
-            :href="`/api/weather/drought-report/${alert.report_filename}`"
+            v-if="a._type === 'drought' && a.report_filename"
+            :href="`/api/weather/drought-report/${a.report_filename}`"
             target="_blank"
             rel="noopener noreferrer"
             class="crop-alert-report-link"
@@ -63,7 +70,7 @@
           type="button"
           :title="$t('cropAlert.dismiss')"
           :aria-label="$t('cropAlert.dismiss')"
-          @click="dismiss"
+          @click="dismiss(a)"
         >
           <svg
             viewBox="0 0 16 16"
@@ -79,7 +86,7 @@
           </svg>
         </button>
       </div>
-    </transition>
+    </transition-group>
   </div>
 </template>
 
@@ -117,16 +124,8 @@ export default {
 
   data() {
     return {
-      visible: false,
-      alert: {
-        tier: 0,
-        tier_label: 'Normal',
-        message: '',
-        triggers: [],
-        location: '',
-        report_filename: ''
-      },
-      alertType: 'potato', // 'potato' | 'drought'
+      // Active alerts, worst first: one per crop ('crop'), plus drought and flood.
+      alerts: [],
       pollTimer: null,
       // District whose alerts this browser shows: nearest to the geolocation,
       // cached for a day; the configured default until the location is known or when refused.
@@ -141,24 +140,8 @@ export default {
     uiLocale() {
       return String(this.$i18n?.locale || 'en').toLowerCase();
     },
-    tierLabel() {
-      const key = TIER_KEYS[this.alert.tier];
-      const translated = key ? this.$t(`cropAlert.tier.${key}`) : '';
-      return translated && translated !== `cropAlert.tier.${key}` ? translated : this.alert.tier_label || 'Alert';
-    },
-    alertTypeLabel() {
-      const key = { drought: 'cropAlert.drought', flood: 'cropAlert.flood' }[this.alertType] || 'cropAlert.potato';
-      return this.$t(key);
-    },
     visibleNotices() {
       return this.notices.filter((n) => !this.dismissedNotices.includes(n.id));
-    },
-    // Plain glyphs: the app does not ship an icon font.
-    tierGlyph() {
-      if (this.alertType === 'flood') return '\u{1F30A}'; // water wave
-      if (this.alert.tier >= 3) return '\u26A0'; // warning sign
-      if (this.alertType === 'drought') return '\u2600'; // sun
-      return '\u2757'; // exclamation
     }
   },
 
@@ -184,6 +167,42 @@ export default {
   },
 
   methods: {
+    /** Stable v-for key: the crop name for crop alerts, the channel otherwise. */
+    alertKey(a) {
+      return a._type === 'crop' ? `crop:${a.crop || ''}` : a._type;
+    },
+
+    /** Dismissal is per crop, so silencing eggplant leaves rice aman showing. */
+    dismissTarget(a) {
+      return a._type === 'crop' ? a.crop || 'crop' : a._type;
+    },
+
+    tierLabel(a) {
+      const key = TIER_KEYS[a.tier];
+      const translated = key ? this.$t(`cropAlert.tier.${key}`) : '';
+      return translated && translated !== `cropAlert.tier.${key}` ? translated : a.tier_label || 'Alert';
+    },
+
+    alertTypeLabel(a) {
+      const fixed = { drought: 'cropAlert.drought', flood: 'cropAlert.flood' }[a._type];
+      if (fixed) return this.$t(fixed);
+      // Crop alerts name the crop the engine assessed (eggplant, rice_aman, …).
+      // Untranslated crops fall back to their prettified name rather than a key.
+      const crop = String(a.crop || '');
+      if (!crop) return this.$t('cropAlert.crop');
+      const key = `cropAlert.${crop}`;
+      const translated = this.$t(key);
+      return translated !== key ? translated : crop.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    },
+
+    // Plain glyphs: the app does not ship an icon font.
+    tierGlyph(a) {
+      if (a._type === 'flood') return '\u{1F30A}'; // water wave
+      if (a.tier >= 3) return '\u26A0'; // warning sign
+      if (a._type === 'drought') return '\u2600'; // sun
+      return '\u2757'; // exclamation
+    },
+
     pollWhenVisible() {
       if (!document.hidden) {
         this.poll();
@@ -246,37 +265,36 @@ export default {
           );
         }
 
-        // Collect active alerts (tier >= 2) that are not dismissed
+        // One card per active alert (tier >= 2, not dismissed): a crop each,
+        // plus drought and flood. `crops` carries every crop the engine watches;
+        // older responses without it are treated as a single crop alert.
+        const cropList =
+          Array.isArray(potato?.crops) && potato.crops.length ? potato.crops : potato && potato.crop ? [potato] : [];
+
         const candidates = [
-          potato && potato.tier >= 2 && !this.isDismissedRecently('potato') ? { ...potato, _type: 'potato' } : null,
+          ...cropList
+            .filter((c) => c && c.tier >= 2 && !this.isDismissedRecently(c.crop || 'crop'))
+            .map((c) => ({ ...c, _type: 'crop' })),
           drought && drought.tier >= 2 && !this.isDismissedRecently('drought')
             ? { ...drought, _type: 'drought' }
             : null,
           flood && flood.tier >= 2 && !this.isDismissedRecently('flood') ? { ...flood, _type: 'flood' } : null
         ].filter(Boolean);
 
-        if (candidates.length === 0) {
-          this.visible = false;
-          return;
-        }
-
-        // Show highest-tier alert; prefer drought when tied (it's the newer sensor)
+        // Worst first; drought wins a tie (it's the newer sensor)
         candidates.sort((a, b) => b.tier - a.tier || (a._type === 'drought' ? -1 : 1));
-        const best = candidates[0];
-
-        this.alertType = best._type;
-        this.alert = best;
-        this.visible = true;
+        this.alerts = candidates;
       } catch (err) {
         // Silently ignore — EWS should never break the main UI
         console.debug('[CropAlertBanner] poll error:', err);
       }
     },
 
-    dismiss() {
-      this.visible = false;
+    dismiss(a) {
+      const target = this.dismissTarget(a);
+      this.alerts = this.alerts.filter((x) => this.alertKey(x) !== this.alertKey(a));
       const until = Date.now() + 12 * 60 * 60 * 1000;
-      localStorage.setItem(dismissKey(this.alertType), String(until));
+      localStorage.setItem(dismissKey(target), String(until));
     },
 
     /** Bengali text of a notice when the UI is Bengali and the broadcast carries it (BMD CAP alerts do). */
@@ -356,17 +374,17 @@ export default {
 }
 
 /* ── Potato tiers ── */
-.crop-alert-banner.type-potato.tier-2 {
+.crop-alert-banner.type-crop.tier-2 {
   background: #fff3cd;
   border-left-color: #f0a500;
   color: #6b4e00;
 }
-.crop-alert-banner.type-potato.tier-3 {
+.crop-alert-banner.type-crop.tier-3 {
   background: #fde8e8;
   border-left-color: #dc3545;
   color: #6e0000;
 }
-.crop-alert-banner.type-potato.tier-4 {
+.crop-alert-banner.type-crop.tier-4 {
   background: #ede0f7;
   border-left-color: #6f42c1;
   color: #3a006f;
@@ -392,13 +410,13 @@ export default {
   margin-top: 2px;
 }
 
-.type-potato.tier-2 .crop-alert-icon {
+.type-crop.tier-2 .crop-alert-icon {
   color: #f0a500;
 }
-.type-potato.tier-3 .crop-alert-icon {
+.type-crop.tier-3 .crop-alert-icon {
   color: #dc3545;
 }
-.type-potato.tier-4 .crop-alert-icon {
+.type-crop.tier-4 .crop-alert-icon {
   color: #6f42c1;
 }
 .type-drought.tier-2 .crop-alert-icon {

@@ -3,12 +3,16 @@ Warning System Engine — standalone container entrypoint.
 
 Short-term (daily 05:00 UTC):
   Reads weather_forecasts from ArangoDB (written by weather-mcp-service ingestor)
-  → RiskEngine tier classification → PotatoShortTermEWS → alerts
+  → RiskEngine tier classification → CropShortTermEWS per crop → alerts
 
 Long-term (weekly Mon 06:00 UTC):
   Fetches Copernicus SEAS5 5-month outlook for all Bangladesh districts
-  → LongTermPotatoEWS compares against example_crop_profile.json thresholds
+  → LongTermCropEWS compares against example_crop_profile.json thresholds
   → stores seasonal_assessments → logs seasonal advisory alerts
+
+The crops under watch come from EWS_CROPS (default: eggplant,rice_aman). Each
+must have a generated module in app/crops/<crop>/ — see
+scripts/build_crop_profiles_pipeline.py.
 
 Long-term requires CDSAPI_URL + CDSAPI_KEY env vars (or ~/.cdsapirc).
 If not configured the long-term pipeline is silently skipped; short-term
@@ -32,6 +36,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("warning_system_engine")
 
+# Crops watched by the short-term and seasonal pipelines. Each needs a module
+# in app/crops/<crop>/ generated from its BAMIS calendar PDF.
+DEFAULT_EWS_CROPS = "eggplant,rice_aman"
+
+
+def _configured_crops() -> list[str]:
+    raw = os.getenv("EWS_CROPS", DEFAULT_EWS_CROPS)
+    return [crop.strip() for crop in raw.split(",") if crop.strip()]
+
 
 async def run() -> None:
     from app.core.crop_profile_loader import CropProfileLoader
@@ -39,14 +52,28 @@ async def run() -> None:
     from app.core.risk_engine import RiskEngine
     from app.core.scheduler import create_scheduler
     from app.core.storage import StorageLayer
-    from app.workflows.short_term.potato_ews import PotatoShortTermEWS
+    from app.workflows.short_term.crop_ews import CropShortTermEWS
 
     logger.info("[MAIN] Warning System Engine starting up")
 
     storage = StorageLayer()
     risk_engine = RiskEngine()
     notifier = Notifier(storage)
-    potato_ews = PotatoShortTermEWS(storage)
+
+    crops = _configured_crops()
+    crop_ews_list: list[CropShortTermEWS] = []
+    for crop in crops:
+        try:
+            crop_ews_list.append(CropShortTermEWS(storage, crop))
+            logger.info("[MAIN] Short-term EWS ready for crop '%s'", crop)
+        except (ImportError, KeyError, AttributeError) as exc:
+            logger.error(
+                "[MAIN] Crop '%s' has no generated module (%s) — skipped. "
+                "Run scripts/build_crop_profiles_pipeline.py to generate it.",
+                crop,
+                exc,
+            )
+
     bamis_special_bulletin_ews = None
 
     if os.getenv("BAMIS_SPECIAL_BULLETIN_ENABLED", "true").lower() in {
@@ -113,16 +140,21 @@ async def run() -> None:
 
     # ── Long-term components (optional — requires CDS credentials) ────────
     copernicus = None
-    long_term_ews = None
+    long_term_ews_list = []
 
     try:
         from app.integrations.copernicus.fetcher import CopernicusFetcher
-        from app.workflows.long_term.potato_ews import LongTermPotatoEWS
+        from app.workflows.long_term.crop_ews import LongTermCropEWS
 
         profile_loader = CropProfileLoader()
         copernicus = CopernicusFetcher()
-        long_term_ews = LongTermPotatoEWS(storage, profile_loader)
-        logger.info("[MAIN] Long-term EWS ready — Copernicus pipeline enabled")
+        long_term_ews_list = [
+            LongTermCropEWS(storage, ews.crop, profile_loader) for ews in crop_ews_list
+        ]
+        logger.info(
+            "[MAIN] Long-term EWS ready for %s — Copernicus pipeline enabled",
+            ", ".join(ews.crop for ews in long_term_ews_list) or "no crops",
+        )
     except ImportError as exc:
         logger.warning(
             "[MAIN] Long-term dependencies missing (%s) — "
@@ -135,9 +167,9 @@ async def run() -> None:
         ingestor=None,  # ingestor lives in weather-mcp-service
         risk_engine=risk_engine,
         notifier=notifier,
-        potato_ews=potato_ews,
+        crop_ews_list=crop_ews_list,
         copernicus=copernicus,
-        long_term_ews=long_term_ews,
+        long_term_ews_list=long_term_ews_list,
         drought_ews=drought_ews,
         drought_monitoring_url=drought_monitoring_url,
         bamis_special_bulletin_ews=bamis_special_bulletin_ews,
@@ -146,10 +178,11 @@ async def run() -> None:
     )
     scheduler.start()
     logger.info(
-        "[MAIN] Scheduler started — short-term: daily 05:00 UTC | "
+        "[MAIN] Scheduler started — crops: %s | short-term: daily 05:00 UTC | "
         "long-term: Mon 06:00 UTC (Copernicus=%s) | "
         "drought: daily 07:00 UTC (DroughtEWS=%s) | "
         "BAMIS special bulletin: hourly (enabled=%s)",
+        ", ".join(ews.crop for ews in crop_ews_list) or "none",
         copernicus is not None,
         drought_ews is not None,
         bamis_special_bulletin_ews is not None,

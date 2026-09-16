@@ -1,33 +1,34 @@
 """
-PotatoShortTermEWS — deterministic short-term potato early warning system.
+CropShortTermEWS — deterministic short-term crop early warning system.
 
-Reads already-ingested weather forecasts from ArangoDB, applies potato-specific
+Reads already-ingested weather forecasts from ArangoDB, applies the crop's
 thresholds from the crop profile JSON, and stores a crop-aware risk assessment.
 No LLM, no external API calls, no Prithvi at this stage.
+
+The crop module (`app.crops.<crop>`) is generated from the BAMIS calendar by
+build_crop_profiles_pipeline.py, so this workflow stays crop-agnostic.
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from importlib import import_module
 
-from app.crops.potato.profile import PotatoThresholds, load_potato_thresholds
-from app.crops.potato.risk_engine import (
-    DailyForecastPoint,
-    to_point_from_dict,
-    evaluate_potato_day,
-    detect_late_blight,
-    classify_tier,
-    build_push_message,
-)
 from app.core.storage import StorageLayer
 
 logger = logging.getLogger(__name__)
 
-_CROP = "potato"
-
 # Category keywords used to deduplicate triggers from multiple forecast days.
 # The first keyword that matches determines the category bucket.
-_TRIGGER_CATEGORIES = ["max temperature", "min temperature", "humidity", "critical rainfall", "high rainfall", "wind"]
+_TRIGGER_CATEGORIES = [
+    "max temperature",
+    "min temperature",
+    "humidity",
+    "critical rainfall",
+    "high rainfall",
+    "wind",
+]
 
 
 def _dedup_by_category(triggers: list[str]) -> list[str]:
@@ -47,29 +48,44 @@ def _dedup_by_category(triggers: list[str]) -> list[str]:
     return result
 
 
-class PotatoShortTermEWS:
+class CropShortTermEWS:
     """
-    Evaluates short-term potato risk for a district.
+    Evaluates short-term risk for one crop across a district.
     Reads from weather_forecasts, writes to risk_assessments (crop-keyed).
     """
 
     def __init__(
         self,
         storage: StorageLayer,
-        thresholds: PotatoThresholds | None = None,
+        crop: str,
+        thresholds=None,
     ) -> None:
         self._storage = storage
-        self._thresholds = thresholds or load_potato_thresholds()
+        self._crop = crop
+        self._profile = import_module(f"app.crops.{crop}.profile")
+        self._engine = import_module(f"app.crops.{crop}.risk_engine")
+        self._thresholds = (
+            thresholds or getattr(self._profile, f"load_{crop}_thresholds")()
+        )
+        self._evaluate_day = getattr(self._engine, f"evaluate_{crop}_day")
+
+    @property
+    def crop(self) -> str:
+        return self._crop
 
     def evaluate(self, location: str) -> dict:
         """
-        Run potato risk evaluation for a district.
+        Run crop risk evaluation for a district.
         Returns the assessment dict, or {} if no forecast data is available.
         """
         om_doc, bmd_doc = self._storage.get_latest_forecast_pair(location)
 
         if om_doc is None and bmd_doc is None:
-            logger.warning("[POTATO_EWS] No forecast in DB for %s — skipping", location)
+            logger.warning(
+                "[CROP_EWS] No forecast in DB for %s — skipping (%s)",
+                location,
+                self._crop,
+            )
             return {}
 
         # Respect the sense_check result already stored by the ingestion pipeline.
@@ -86,32 +102,36 @@ class PotatoShortTermEWS:
         forecast_entries = source_doc.get("forecast", [])[:2]  # today + tomorrow
 
         if not forecast_entries:
-            logger.warning("[POTATO_EWS] Empty forecast list for %s — skipping", location)
+            logger.warning(
+                "[CROP_EWS] Empty forecast list for %s — skipping (%s)",
+                location,
+                self._crop,
+            )
             return {}
 
-        points: list[DailyForecastPoint] = [
-            to_point_from_dict(day, source) for day in forecast_entries
+        points = [
+            self._engine.to_point_from_dict(day, source) for day in forecast_entries
         ]
 
         # Evaluate thresholds across both forecast days
         triggers: list[str] = []
         disease_risks: list[str] = []
         for point in points:
-            triggers.extend(evaluate_potato_day(point, self._thresholds))
-            blight = detect_late_blight(point)
-            if blight:
-                disease_risks.append(blight)
+            triggers.extend(self._evaluate_day(point, self._thresholds))
+            disease_risks.extend(self._engine.get_disease_risks(point))
 
         # Deduplicate by category — keep the worst value per trigger type
         # (e.g. heat breach on day 1 and day 2 counts as one severe trigger)
         triggers = _dedup_by_category(triggers)
         disease_risks = list(dict.fromkeys(disease_risks))
 
-        tier, label = classify_tier(triggers + disease_risks, flood_confirmed=False)
+        tier, label = self._engine.classify_tier(
+            triggers + disease_risks, flood_confirmed=False
+        )
 
         assessment = {
             "location": location,
-            "crop": _CROP,
+            "crop": self._crop,
             "horizon": "short",
             "forecast_date": points[0].date,
             "assessed_at": datetime.now(timezone.utc).isoformat(),
@@ -122,25 +142,34 @@ class PotatoShortTermEWS:
             "fallback_used": source != "open_meteo",
             "triggers": triggers,
             "disease_risks": disease_risks,
-            "message": build_push_message({
-                "location": location,
-                "forecast_date": points[0].date,
-                "tier": tier,
-                "triggers": triggers,
-                "disease_risks": disease_risks,
-            }),
+            "message": self._engine.build_push_message(
+                {
+                    "location": location,
+                    "forecast_date": points[0].date,
+                    "tier": tier,
+                    "triggers": triggers,
+                    "disease_risks": disease_risks,
+                }
+            ),
         }
 
-        self._storage.upsert_crop_assessment(assessment, _CROP)
+        self._storage.upsert_crop_assessment(assessment, self._crop)
 
         if tier > 0:
             logger.warning(
-                "[POTATO_EWS] %s — tier=%d (%s) | %s",
-                location, tier, label,
+                "[CROP_EWS] %s %s — tier=%d (%s) | %s",
+                self._crop,
+                location,
+                tier,
+                label,
                 "; ".join(triggers + disease_risks) or "—",
             )
         else:
-            logger.debug("[POTATO_EWS] %s — Normal (no thresholds breached)", location)
+            logger.debug(
+                "[CROP_EWS] %s %s — Normal (no thresholds breached)",
+                self._crop,
+                location,
+            )
 
         return assessment
 
@@ -149,14 +178,14 @@ class PotatoShortTermEWS:
         if not assessment or assessment.get("tier", 0) < 2:
             return False
         return not self._storage.was_crop_alert_sent(
-            assessment["location"], _CROP, assessment["tier"], within_hours=12
+            assessment["location"], self._crop, assessment["tier"], within_hours=12
         )
 
     def record_alert(self, assessment: dict) -> None:
         """Record that an alert was dispatched (deduplication log)."""
         self._storage.record_crop_alert_sent(
             assessment["location"],
-            _CROP,
+            self._crop,
             assessment["tier"],
             "frontend_poll",
             assessment.get("forecast_date", ""),

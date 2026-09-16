@@ -304,7 +304,11 @@ function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext)
     `[Live weather and farm data, retrieved now]\n${weatherContext}\n[End of live data]\n\n` +
     `Question: ${question}\n\n` +
     'Answer only this question. Use the parts of the live data and the retrieved documents it needs ' +
-    'and leave the rest out; do not state weather values that are not listed above.';
+    'and leave the rest out; do not state weather values that are not listed above. ' +
+    'When you quote a threshold range, check the value against it before judging it: a value ' +
+    'inside the range is within it, not above or below it. ' +
+    'Write for a farmer: short plain sentences, and when a pest, disease or unit has to be named, ' +
+    'add a few plain words saying what it is.';
   if (backendMode === 'single-message') {
     return { ...opeaPayload, messages: wrap(queryText) };
   }

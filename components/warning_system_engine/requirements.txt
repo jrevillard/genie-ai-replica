@@ -22,7 +22,7 @@ pdfplumber>=0.11.0
 python-dotenv==1.0.1
 
 # ── Long-term pipeline (Copernicus SEAS5) ─────────────────────────────────
-# Required for the weekly Copernicus fetch + LongTermPotatoEWS.
+# Required for the weekly Copernicus fetch + LongTermCropEWS.
 # If not installed, the long-term pipeline is automatically disabled at startup.
 cdsapi>=0.7.0          # Copernicus Climate Data Store API client
 xarray>=2024.1.0       # NetCDF / GRIB dataset handling

@@ -31,14 +31,15 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Any
 
-_SCRIPTS_DIR  = Path(__file__).resolve().parent
-_ENGINE_ROOT  = _SCRIPTS_DIR.parent
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+_ENGINE_ROOT = _SCRIPTS_DIR.parent
 _DEFAULT_PROFILE = _ENGINE_ROOT / "data" / "example_crop_profile.json"
 _DEFAULT_CROPS_DIR = _ENGINE_ROOT / "app" / "crops"
 
 # ---------------------------------------------------------------------------
 # Name helpers
 # ---------------------------------------------------------------------------
+
 
 def _to_class_name(crop: str) -> str:
     """'rice_aman' → 'RiceAman'"""
@@ -62,12 +63,15 @@ def _to_func_slug(name: str) -> str:
 
 # Maps 'when' key → (python_expr, optional_preamble_line)
 _VAR_MAP: dict[str, tuple[str, str | None]] = {
-    "temperature_mean":  ("temp_mean",       "    temp_mean = (day.temp_min + day.temp_max) / 2.0"),
-    "temperature_min":   ("day.temp_min",     None),
-    "temperature_max":   ("day.temp_max",     None),
-    "humidity":          ("day.humidity_max", None),
-    "precipitation":     ("day.rain_mm",      None),
-    "rainfall_mm":       ("day.rain_mm",      None),
+    "temperature_mean": (
+        "temp_mean",
+        "    temp_mean = (day.temp_min + day.temp_max) / 2.0",
+    ),
+    "temperature_min": ("day.temp_min", None),
+    "temperature_max": ("day.temp_max", None),
+    "humidity": ("day.humidity_max", None),
+    "precipitation": ("day.rain_mm", None),
+    "rainfall_mm": ("day.rain_mm", None),
 }
 
 
@@ -118,7 +122,9 @@ def _render_disease_func(name: str, when: dict[str, Any]) -> str | None:
             body_lines.append(p)
     cond_expr = " and ".join(conditions)
     body_lines.append(f"    if {cond_expr}:")
-    body_lines.append(f'        return "{display} risk: weather conditions match threshold"')
+    body_lines.append(
+        f'        return "{display} risk: weather conditions match threshold"'
+    )
     body_lines.append("    return None")
 
     return "\n".join(body_lines)
@@ -127,6 +133,7 @@ def _render_disease_func(name: str, when: dict[str, Any]) -> str | None:
 # ---------------------------------------------------------------------------
 # profile.py template
 # ---------------------------------------------------------------------------
+
 
 def _render_profile_py(
     crop: str,
@@ -205,6 +212,7 @@ def _render_profile_py(
 # risk_engine.py template
 # ---------------------------------------------------------------------------
 
+
 def _render_risk_engine_py(
     crop: str,
     class_name: str,
@@ -213,7 +221,7 @@ def _render_risk_engine_py(
 ) -> str:
     # Split evaluable vs non-evaluable diseases
     evaluable: list[dict] = []
-    skipped:   list[dict] = []
+    skipped: list[dict] = []
     for d in disease_risks:
         if d.get("evaluable_with_current_feeds", True) and d.get("when"):
             evaluable.append(d)
@@ -370,11 +378,11 @@ def _render_risk_engine_py(
         f"\n"
         f"\n"
         f"def build_push_message(assessment: dict) -> str:\n"
-        f"    location      = assessment[\"location\"]\n"
-        f"    forecast_date = assessment.get(\"forecast_date\", \"\")\n"
-        f"    tier          = assessment.get(\"tier\", 0)\n"
-        f"    triggers      = assessment.get(\"triggers\", [])\n"
-        f"    disease_risks = assessment.get(\"disease_risks\", [])\n"
+        f'    location      = assessment["location"]\n'
+        f'    forecast_date = assessment.get("forecast_date", "")\n'
+        f'    tier          = assessment.get("tier", 0)\n'
+        f'    triggers      = assessment.get("triggers", [])\n'
+        f'    disease_risks = assessment.get("disease_risks", [])\n'
         f"\n"
         f"    if tier >= 4:\n"
         f"        return (\n"
@@ -410,6 +418,7 @@ def _render_risk_engine_py(
 # Directory writer
 # ---------------------------------------------------------------------------
 
+
 def generate_all_modules(
     profile_json: Path,
     crops_dir: Path,
@@ -424,13 +433,13 @@ def generate_all_modules(
     with open(profile_json, encoding="utf-8") as f:
         profiles: dict[str, dict] = json.load(f)
 
-    # Group profile keys by crop
+    # Group profile keys by crop. The crop/region fields are authoritative —
+    # splitting the "{crop}_{region}" key on the first underscore would break
+    # multi-word crop names such as "rice_aman".
     crop_regions: dict[str, list[str]] = {}
-    for key in profiles:
-        parts = key.split("_", 1)
-        if len(parts) != 2:
-            continue
-        crop, region = parts[0], parts[1]
+    for key, profile in profiles.items():
+        crop = profile.get("crop") or key.split("_", 1)[0]
+        region = profile.get("region") or key.split("_", 1)[-1]
         crop_regions.setdefault(crop, []).append(region)
 
     written: list[Path] = []
@@ -439,7 +448,7 @@ def generate_all_modules(
         if crop_filter and crop != crop_filter:
             continue
 
-        class_name   = _to_class_name(crop)
+        class_name = _to_class_name(crop)
         display_name = _to_display_name(crop)
 
         # Use the first key found to get disease risks (risks are per-crop, same across regions)
@@ -465,14 +474,17 @@ def generate_all_modules(
         for path, content in files_to_write.items():
             if path.exists() and not overwrite:
                 if verbose:
-                    print(f"  [SKIP] {path.relative_to(crops_dir.parent.parent)} (exists, --no-overwrite)")
+                    print(
+                        f"  [SKIP] {path.relative_to(crops_dir.parent.parent)} (exists, --no-overwrite)"
+                    )
                 continue
             path.write_text(content, encoding="utf-8")
             written.append(path)
 
         if verbose:
             evaluable = sum(
-                1 for d in disease_risks
+                1
+                for d in disease_risks
                 if d.get("evaluable_with_current_feeds", True) and d.get("when")
             )
             print(
@@ -487,29 +499,37 @@ def generate_all_modules(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Generate app/crops/<crop>/ Python modules from example_crop_profile.json"
     )
     ap.add_argument(
-        "--profile", type=Path, default=_DEFAULT_PROFILE,
+        "--profile",
+        type=Path,
+        default=_DEFAULT_PROFILE,
         help=f"Path to example_crop_profile.json (default: {_DEFAULT_PROFILE})",
     )
     ap.add_argument(
-        "--crops-dir", type=Path, default=_DEFAULT_CROPS_DIR,
+        "--crops-dir",
+        type=Path,
+        default=_DEFAULT_CROPS_DIR,
         help=f"Output parent dir for crop modules (default: {_DEFAULT_CROPS_DIR})",
     )
     ap.add_argument("--crop", default=None, help="Generate only this crop")
     ap.add_argument(
-        "--no-overwrite", action="store_true",
+        "--no-overwrite",
+        action="store_true",
         help="Skip crops whose module directory already exists",
     )
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
     if not args.profile.exists():
-        sys.exit(f"[ERROR] Profile not found: {args.profile}\n"
-                 "        Run the pipeline first to generate example_crop_profile.json.")
+        sys.exit(
+            f"[ERROR] Profile not found: {args.profile}\n"
+            "        Run the pipeline first to generate example_crop_profile.json."
+        )
 
     print(f"[INFO] Generating crop modules → {args.crops_dir}")
     written = generate_all_modules(

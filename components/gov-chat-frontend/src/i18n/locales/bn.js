@@ -1548,6 +1548,9 @@ export default {
   },
   cropAlert: {
     potato: 'আলু',
+    eggplant: 'বেগুন',
+    rice_aman: 'আমন ধান',
+    crop: 'ফসল',
     drought: 'খরা',
     flood: 'বন্যা',
     dismiss: 'বন্ধ করুন',

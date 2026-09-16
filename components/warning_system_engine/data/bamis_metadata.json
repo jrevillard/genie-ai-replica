@@ -1,0 +1,1389 @@
+[
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 44,
+    "month": "November",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 7.0,
+    "max_temp_c": 31.7,
+    "min_temp_c": 23.1,
+    "mean_temp_c": 27.4,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 60.9,
+    "wind_speed_kmh": 3.9
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 45,
+    "month": "November",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 5.0,
+    "max_temp_c": 31.0,
+    "min_temp_c": 21.4,
+    "mean_temp_c": 26.2,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 57.4,
+    "wind_speed_kmh": 4.3
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 46,
+    "month": "November",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 1.0,
+    "max_temp_c": 30.4,
+    "min_temp_c": 20.7,
+    "mean_temp_c": 25.6,
+    "rh_max_percent": 95.9,
+    "rh_min_percent": 55.9,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 47,
+    "month": "November",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 0.0,
+    "max_temp_c": 30.4,
+    "min_temp_c": 19.3,
+    "mean_temp_c": 24.9,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 51.9,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 48,
+    "month": "December",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 2.0,
+    "max_temp_c": 29.6,
+    "min_temp_c": 17.6,
+    "mean_temp_c": 23.6,
+    "rh_max_percent": 95.7,
+    "rh_min_percent": 49.4,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 49,
+    "month": "December",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 1.0,
+    "max_temp_c": 27.0,
+    "min_temp_c": 14.0,
+    "mean_temp_c": 20.5,
+    "rh_max_percent": 94.7,
+    "rh_min_percent": 46.9,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 50,
+    "month": "December",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 3.0,
+    "max_temp_c": 26.0,
+    "min_temp_c": 13.1,
+    "mean_temp_c": 19.6,
+    "rh_max_percent": 95.9,
+    "rh_min_percent": 50.1,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 51,
+    "month": "December",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 0.0,
+    "max_temp_c": 25.4,
+    "min_temp_c": 12.4,
+    "mean_temp_c": 18.9,
+    "rh_max_percent": 95.3,
+    "rh_min_percent": 50.0,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 52,
+    "month": "December",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 4.0,
+    "max_temp_c": 24.4,
+    "min_temp_c": 11.6,
+    "mean_temp_c": 18.0,
+    "rh_max_percent": 95.7,
+    "rh_min_percent": 50.0,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 1,
+    "month": "January",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 1.0,
+    "max_temp_c": 24.0,
+    "min_temp_c": 11.0,
+    "mean_temp_c": 17.5,
+    "rh_max_percent": 95.6,
+    "rh_min_percent": 50.1,
+    "wind_speed_kmh": 3.9
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 2,
+    "month": "January",
+    "crop_stage": "Flowering",
+    "rainfall_mm": 1.0,
+    "max_temp_c": 23.9,
+    "min_temp_c": 10.9,
+    "mean_temp_c": 17.4,
+    "rh_max_percent": 95.1,
+    "rh_min_percent": 48.4,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 3,
+    "month": "January",
+    "crop_stage": "Flowering",
+    "rainfall_mm": 2.0,
+    "max_temp_c": 24.0,
+    "min_temp_c": 10.9,
+    "mean_temp_c": 17.5,
+    "rh_max_percent": 95.3,
+    "rh_min_percent": 47.9,
+    "wind_speed_kmh": 3.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 4,
+    "month": "January",
+    "crop_stage": "Flowering",
+    "rainfall_mm": 1.0,
+    "max_temp_c": 24.9,
+    "min_temp_c": 10.9,
+    "mean_temp_c": 17.9,
+    "rh_max_percent": 95.3,
+    "rh_min_percent": 45.7,
+    "wind_speed_kmh": 4.4
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 5,
+    "month": "February",
+    "crop_stage": "Fruiting",
+    "rainfall_mm": 4.0,
+    "max_temp_c": 25.6,
+    "min_temp_c": 12.0,
+    "mean_temp_c": 18.8,
+    "rh_max_percent": 95.3,
+    "rh_min_percent": 44.7,
+    "wind_speed_kmh": 3.9
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 6,
+    "month": "February",
+    "crop_stage": "Fruiting",
+    "rainfall_mm": 3.0,
+    "max_temp_c": 26.7,
+    "min_temp_c": 12.3,
+    "mean_temp_c": 19.5,
+    "rh_max_percent": 94.0,
+    "rh_min_percent": 42.0,
+    "wind_speed_kmh": 5.0
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 7,
+    "month": "February",
+    "crop_stage": "Fruiting",
+    "rainfall_mm": 2.0,
+    "max_temp_c": 28.1,
+    "min_temp_c": 13.6,
+    "mean_temp_c": 20.9,
+    "rh_max_percent": 93.9,
+    "rh_min_percent": 40.3,
+    "wind_speed_kmh": 3.9
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 8,
+    "month": "February",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 3.0,
+    "max_temp_c": 29.3,
+    "min_temp_c": 14.1,
+    "mean_temp_c": 21.7,
+    "rh_max_percent": 92.0,
+    "rh_min_percent": 36.6,
+    "wind_speed_kmh": 5.0
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 9,
+    "month": "March",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 5.0,
+    "max_temp_c": 30.4,
+    "min_temp_c": 15.1,
+    "mean_temp_c": 22.8,
+    "rh_max_percent": 91.6,
+    "rh_min_percent": 34.6,
+    "wind_speed_kmh": 5.0
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 10,
+    "month": "March",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 4.0,
+    "max_temp_c": 32.1,
+    "min_temp_c": 16.4,
+    "mean_temp_c": 24.3,
+    "rh_max_percent": 90.3,
+    "rh_min_percent": 32.7,
+    "wind_speed_kmh": 5.4
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 11,
+    "month": "March",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 3.0,
+    "max_temp_c": 33.1,
+    "min_temp_c": 17.6,
+    "mean_temp_c": 25.4,
+    "rh_max_percent": 88.7,
+    "rh_min_percent": 30.4,
+    "wind_speed_kmh": 5.4
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 12,
+    "month": "March",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 4.0,
+    "max_temp_c": 34.6,
+    "min_temp_c": 19.4,
+    "mean_temp_c": 27.0,
+    "rh_max_percent": 88.3,
+    "rh_min_percent": 30.4,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 18,
+    "month": "May",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 24.0,
+    "max_temp_c": 35.4,
+    "min_temp_c": 23.7,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 92.1,
+    "rh_min_percent": 50.0,
+    "wind_speed_kmh": 7.4
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 19,
+    "month": "May",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 29.0,
+    "max_temp_c": 35.3,
+    "min_temp_c": 24.3,
+    "mean_temp_c": 29.8,
+    "rh_max_percent": 92.7,
+    "rh_min_percent": 51.9,
+    "wind_speed_kmh": 7.2
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 20,
+    "month": "May",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 33.0,
+    "max_temp_c": 35.1,
+    "min_temp_c": 24.6,
+    "mean_temp_c": 29.9,
+    "rh_max_percent": 93.3,
+    "rh_min_percent": 55.6,
+    "wind_speed_kmh": 7.2
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 21,
+    "month": "May",
+    "crop_stage": "Germination and Seedling Planting",
+    "rainfall_mm": 36.0,
+    "max_temp_c": 35.0,
+    "min_temp_c": 25.0,
+    "mean_temp_c": 30.0,
+    "rh_max_percent": 93.1,
+    "rh_min_percent": 58.3,
+    "wind_speed_kmh": 7.2
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 22,
+    "month": "June",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 34.0,
+    "max_temp_c": 35.3,
+    "min_temp_c": 25.4,
+    "mean_temp_c": 30.4,
+    "rh_max_percent": 93.7,
+    "rh_min_percent": 58.9,
+    "wind_speed_kmh": 7.2
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 23,
+    "month": "June",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 48.0,
+    "max_temp_c": 35.0,
+    "min_temp_c": 25.9,
+    "mean_temp_c": 30.5,
+    "rh_max_percent": 94.6,
+    "rh_min_percent": 62.6,
+    "wind_speed_kmh": 6.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 24,
+    "month": "June",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 51.0,
+    "max_temp_c": 33.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 30.0,
+    "rh_max_percent": 95.4,
+    "rh_min_percent": 67.9,
+    "wind_speed_kmh": 6.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 25,
+    "month": "June",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 78.0,
+    "max_temp_c": 33.1,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 71.1,
+    "wind_speed_kmh": 6.8
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 26,
+    "month": "June",
+    "crop_stage": "Vegetative Growth",
+    "rainfall_mm": 72.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.6,
+    "rh_min_percent": 73.4,
+    "wind_speed_kmh": 6.8
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 27,
+    "month": "July",
+    "crop_stage": "Flowering",
+    "rainfall_mm": 66.0,
+    "max_temp_c": 32.7,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.4,
+    "rh_max_percent": 96.6,
+    "rh_min_percent": 73.7,
+    "wind_speed_kmh": 5.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 28,
+    "month": "July",
+    "crop_stage": "Flowering",
+    "rainfall_mm": 71.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.9,
+    "rh_min_percent": 74.3,
+    "wind_speed_kmh": 6.1
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 29,
+    "month": "July",
+    "crop_stage": "Flowering",
+    "rainfall_mm": 75.0,
+    "max_temp_c": 32.3,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.2,
+    "rh_max_percent": 97.0,
+    "rh_min_percent": 75.3,
+    "wind_speed_kmh": 6.3
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 30,
+    "month": "July",
+    "crop_stage": "Fruiting",
+    "rainfall_mm": 72.0,
+    "max_temp_c": 32.6,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.3,
+    "rh_max_percent": 96.9,
+    "rh_min_percent": 73.9,
+    "wind_speed_kmh": 6.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 31,
+    "month": "August",
+    "crop_stage": "Fruiting",
+    "rainfall_mm": 52.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 72.6,
+    "wind_speed_kmh": 6.3
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 32,
+    "month": "August",
+    "crop_stage": "Fruiting",
+    "rainfall_mm": 57.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.1,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.6,
+    "rh_min_percent": 72.6,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 33,
+    "month": "August",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 64.0,
+    "max_temp_c": 32.7,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.4,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 74.1,
+    "wind_speed_kmh": 5.7
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 34,
+    "month": "August",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 53.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.1,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 72.0,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 35,
+    "month": "August",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 57.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.4,
+    "rh_min_percent": 70.9,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 36,
+    "month": "September",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 54.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.3,
+    "rh_min_percent": 71.3,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 37,
+    "month": "September",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 59.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 71.0,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 38,
+    "month": "September",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 52.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.3,
+    "rh_min_percent": 69.6,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "week_number": 39,
+    "month": "September",
+    "crop_stage": "Harvesting",
+    "rainfall_mm": 83.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 25.3,
+    "mean_temp_c": 29.1,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 68.9,
+    "wind_speed_kmh": 5.4
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Shoot And Fruit Borer",
+    "description": "Temperature : 24-30º C, RH: 55-75%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Shoot and Fruit Borer: Temperature : 24-30º C, RH: 55-75%",
+    "when": {
+      "temperature_mean": {
+        "min": 24.0,
+        "max": 30.0
+      },
+      "humidity": {
+        "min": 55.0,
+        "max": 75.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Leaf Hopper/Jassid/Thrips",
+    "description": "Temperature : 22-30º C, RH: 60-65%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Leaf hopper/Jassid/Thrips: Temperature : 22-30º C, RH: 60-65%",
+    "when": {
+      "temperature_mean": {
+        "min": 22.0,
+        "max": 30.0
+      },
+      "humidity": {
+        "min": 60.0,
+        "max": 65.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Epilachna Beetle",
+    "description": "Temperature : 25-30º C, RH: 55-65%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Epilachna beetle: Temperature : 25-30º C, RH: 55-65%",
+    "when": {
+      "temperature_mean": {
+        "min": 25.0,
+        "max": 30.0
+      },
+      "humidity": {
+        "min": 55.0,
+        "max": 65.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Red Mites",
+    "description": "Temperature : 15-26º C, RH: 60-70%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Red Mites: Temperature : 15-26º C, RH: 60-70%",
+    "when": {
+      "temperature_mean": {
+        "min": 15.0,
+        "max": 26.0
+      },
+      "humidity": {
+        "min": 60.0,
+        "max": 70.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "White Fly",
+    "description": "Temperature : 22-32º C, RH: 55-75%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "White fly: Temperature : 22-32º C, RH: 55-75%",
+    "when": {
+      "temperature_mean": {
+        "min": 22.0,
+        "max": 32.0
+      },
+      "humidity": {
+        "min": 55.0,
+        "max": 75.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Wilting",
+    "description": "Temperature : 25-30º C, RH: 50-80%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Wilting: Temperature : 25-30º C, RH: 50-80%",
+    "when": {
+      "temperature_mean": {
+        "min": 25.0,
+        "max": 30.0
+      },
+      "humidity": {
+        "min": 50.0,
+        "max": 80.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Foot Rot/Collar Rot Disease",
+    "description": "Temperature : 24-30º C, RH: 70-80%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Foot rot/collar rot disease: Temperature : 24-30º C, RH: 70-80%",
+    "when": {
+      "temperature_mean": {
+        "min": 24.0,
+        "max": 30.0
+      },
+      "humidity": {
+        "min": 70.0,
+        "max": 80.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Fruit Rot",
+    "description": "Temperature : 28-32º C, RH: 55-75%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Fruit rot: Temperature : 28-32º C, RH: 55-75%",
+    "when": {
+      "temperature_mean": {
+        "min": 28.0,
+        "max": 32.0
+      },
+      "humidity": {
+        "min": 55.0,
+        "max": 75.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Rainfall (Mm)",
+    "description": "Rainfall exceeds 5-10 mm (one day)",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Rainfall (mm): Rainfall exceeds 5-10 mm (one day)",
+    "when": {
+      "rainfall_mm": {
+        "min": 5.0,
+        "max": 10.0
+      }
+    },
+    "evaluable_with_current_feeds": true,
+    "thresholds": {
+      "rainfall_mm": [
+        5.0,
+        10.0
+      ]
+    }
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Cloudy Weather",
+    "description": "Cloudy condition",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Cloudy weather: Cloudy condition",
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Drought",
+    "description": "Moisture stress in the soil due to dry and warm weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Drought: Moisture stress in the soil due to dry and warm weather",
+    "requires_additional_variables": [
+      "soil_temperature"
+    ],
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Duration Of Soil Remain Wet (Day)",
+    "description": "3 to 5 days",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Duration of soil remain wet (day): 3 to 5 days",
+    "requires_additional_variables": [
+      "soil_temperature"
+    ],
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Hailstorms",
+    "description": "Last season rainfall with hailstorms",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Hailstorms: Last season rainfall with hailstorms",
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Wind Speed (Km/Hr.)",
+    "description": "40 Km/hr or more",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Wind speed (Km/hr.): 40 Km/hr or more",
+    "evaluable_with_current_feeds": false,
+    "thresholds": {
+      "wind_speed_kmh": [
+        40.0
+      ]
+    }
+  },
+  {
+    "crop": "eggplant",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Temperature (ºc)",
+    "description": "32.5 to 35.5º C",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Temperature (ºC): 32.5 to 35.5º C",
+    "when": {
+      "temperature_mean": {
+        "min": 32.5,
+        "max": 35.5
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 24,
+    "month": "June",
+    "crop_stage": "Seedbed",
+    "rainfall_mm": 51.0,
+    "max_temp_c": 33.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 30.0,
+    "rh_max_percent": 95.4,
+    "rh_min_percent": 67.9,
+    "wind_speed_kmh": 6.7
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 25,
+    "month": "June",
+    "crop_stage": "Seedbed",
+    "rainfall_mm": 78.0,
+    "max_temp_c": 33.1,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 71.1,
+    "wind_speed_kmh": 6.8
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 26,
+    "month": "June",
+    "crop_stage": "Seedbed",
+    "rainfall_mm": 72.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.6,
+    "rh_min_percent": 73.4,
+    "wind_speed_kmh": 6.8
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 27,
+    "month": "July",
+    "crop_stage": "Transplanting",
+    "rainfall_mm": 66.0,
+    "max_temp_c": 32.7,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.4,
+    "rh_max_percent": 96.6,
+    "rh_min_percent": 73.7,
+    "wind_speed_kmh": 5.7
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 28,
+    "month": "July",
+    "crop_stage": "Transplanting",
+    "rainfall_mm": 71.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.9,
+    "rh_min_percent": 74.3,
+    "wind_speed_kmh": 6.1
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 29,
+    "month": "July",
+    "crop_stage": "Transplanting",
+    "rainfall_mm": 75.0,
+    "max_temp_c": 32.3,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.2,
+    "rh_max_percent": 97.0,
+    "rh_min_percent": 75.3,
+    "wind_speed_kmh": 6.3
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 30,
+    "month": "July",
+    "crop_stage": "Tillering",
+    "rainfall_mm": 72.0,
+    "max_temp_c": 32.6,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.3,
+    "rh_max_percent": 96.9,
+    "rh_min_percent": 73.9,
+    "wind_speed_kmh": 6.7
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 31,
+    "month": "August",
+    "crop_stage": "Tillering",
+    "rainfall_mm": 52.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 72.6,
+    "wind_speed_kmh": 6.3
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 32,
+    "month": "August",
+    "crop_stage": "Tillering",
+    "rainfall_mm": 57.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.1,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.6,
+    "rh_min_percent": 72.6,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 33,
+    "month": "August",
+    "crop_stage": "Tillering",
+    "rainfall_mm": 64.0,
+    "max_temp_c": 32.7,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.4,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 74.1,
+    "wind_speed_kmh": 5.7
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 34,
+    "month": "August",
+    "crop_stage": "Tillering",
+    "rainfall_mm": 53.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.1,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 72.0,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 35,
+    "month": "September",
+    "crop_stage": "Tillering",
+    "rainfall_mm": 57.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.4,
+    "rh_min_percent": 70.9,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 36,
+    "month": "September",
+    "crop_stage": "Heading",
+    "rainfall_mm": 54.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.3,
+    "rh_min_percent": 71.3,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 37,
+    "month": "September",
+    "crop_stage": "Heading",
+    "rainfall_mm": 59.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 71.0,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 38,
+    "month": "September",
+    "crop_stage": "Flowe ring",
+    "rainfall_mm": 52.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 96.3,
+    "rh_min_percent": 69.6,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 39,
+    "month": "October",
+    "crop_stage": "Grain Formation",
+    "rainfall_mm": 83.0,
+    "max_temp_c": 32.9,
+    "min_temp_c": 25.3,
+    "mean_temp_c": 29.1,
+    "rh_max_percent": 96.7,
+    "rh_min_percent": 68.9,
+    "wind_speed_kmh": 5.4
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 40,
+    "month": "October",
+    "crop_stage": "Grain Formation",
+    "rainfall_mm": 44.0,
+    "max_temp_c": 32.7,
+    "min_temp_c": 25.0,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 96.3,
+    "rh_min_percent": 67.4,
+    "wind_speed_kmh": 4.8
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 41,
+    "month": "October",
+    "crop_stage": "Maturity to Harvesting",
+    "rainfall_mm": 35.0,
+    "max_temp_c": 32.3,
+    "min_temp_c": 24.1,
+    "mean_temp_c": 28.2,
+    "rh_max_percent": 96.4,
+    "rh_min_percent": 64.3,
+    "wind_speed_kmh": 3.9
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "week_number": 42,
+    "month": "October",
+    "crop_stage": "Maturity to Harvesting",
+    "rainfall_mm": 23.0,
+    "max_temp_c": 31.7,
+    "min_temp_c": 23.1,
+    "mean_temp_c": 27.4,
+    "rh_max_percent": 96.1,
+    "rh_min_percent": 60.9,
+    "wind_speed_kmh": 3.9
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Bacterial Leaf Blight",
+    "description": "Temperature 28-300C, Relative Humidity 80-90%, Cloudiness, Rainfall >30mm",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Bacterial Leaf Blight: Temperature 28-300C, Relative Humidity 80-90%, Cloudiness, Rainfall >30mm",
+    "when": {
+      "temperature_mean": {
+        "min": 28.0,
+        "max": 30.0
+      },
+      "humidity": {
+        "min": 80.0,
+        "max": 90.0
+      },
+      "rainfall_mm": {
+        "min": 30.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Sheath Blight",
+    "description": "Temperature 28-320C, high Relative Humidity, Cloudy weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Sheath Blight: Temperature 28-320C, high Relative Humidity, Cloudy weather",
+    "when": {
+      "temperature_mean": {
+        "min": 28.0,
+        "max": 32.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Blast",
+    "description": "Night temperature 16-200C, for 07 hours day temperature 25-300C, for 07 hours day night temperature >100C, Relative Humidity >90%, Cloudy",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Blast: Night temperature 16-200C, for 07 hours day temperature 25-300C, for 07 hours day night temperature >100C, Relative Humidity >90%, Cloudy",
+    "when": {
+      "temperature_min": {
+        "min": 16.0,
+        "max": 20.0
+      },
+      "humidity": {
+        "min": 90.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Sheath Rot",
+    "description": "Temperature 25-280C, Cloudy weather, high Relative Humidity>9 0%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Sheath rot: Temperature 25-280C, Cloudy weather, high Relative Humidity>9 0%",
+    "when": {
+      "temperature_mean": {
+        "min": 25.0,
+        "max": 28.0
+      },
+      "humidity": {
+        "min": 90.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Stem Borer",
+    "description": "Minimum Temperature > 20.3 0C, Maximum Temperature: 29.5- 34.70C, Optimum temperature: 24-290C, Higher morning Relative Humidity > 84%, Afternoon Relative Humidity >38.7%, Dry weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Stem borer: Minimum Temperature > 20.3 0C, Maximum Temperature: 29.5- 34.70C, Optimum temperature: 24-290C, Higher morning Relative Humidity > 84%, Afternoon Relative Humidity >38.7%, Dry weather",
+    "when": {
+      "temperature_min": {
+        "min": 20.3
+      },
+      "humidity": {
+        "min": 84.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Leaf Roller",
+    "description": "Maximum Temperature: 32-330C, Relative Humidity 92-95%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Leaf roller: Maximum Temperature: 32-330C, Relative Humidity 92-95%",
+    "when": {
+      "temperature_max": {
+        "min": 32.0,
+        "max": 33.0
+      },
+      "humidity": {
+        "min": 92.0,
+        "max": 95.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Brown Plant Hopper",
+    "description": "High temperature >320C, , high Relative Humidity:80-90%, drizzle, wet spell, rainfall less than 75 mm",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Brown plant hopper: High temperature >320C, , high Relative Humidity:80-90%, drizzle, wet spell, rainfall less than 75 mm",
+    "when": {
+      "temperature_max": {
+        "min": 32.0
+      },
+      "humidity": {
+        "min": 80.0,
+        "max": 90.0
+      },
+      "rainfall_mm": {
+        "max": 75.0
+      }
+    },
+    "requires_additional_variables": [
+      "wet_spell_duration",
+      "precipitation_intensity"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Rice Bug",
+    "description": "Higher maximum temperature >31.90C, Morning Relative Humidity > 93.9%, Bright Sunshine Hours> 5.9 hrs Lower Minimum temperature less than 22.10C, Afternoon Relative Humidity less than 66.4%, Dry, or intermittent rain Weekly total rainfall less than 40.9 mm",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Rice bug: Higher maximum temperature >31.90C, Morning Relative Humidity > 93.9%, Bright Sunshine Hours> 5.9 hrs Lower Minimum temperature less than 22.10C, Afternoon Relative Humidity less than 66.4%, Dry, or intermittent rain Weekly total rainfall less than 40.9 mm",
+    "when": {
+      "temperature_max": {
+        "min": 31.9
+      },
+      "humidity": {
+        "min": 93.9
+      },
+      "rainfall_mm": {
+        "max": 40.9
+      }
+    },
+    "requires_additional_variables": [
+      "sunshine_hours"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Rain",
+    "description": ">50 mm/day >100 mm/day >50 mm/day",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Rain: >50 mm/day >100 mm/day >50 mm/day",
+    "when": {
+      "rainfall_mm": {
+        "min": 50.0
+      }
+    },
+    "evaluable_with_current_feeds": true,
+    "thresholds": {
+      "rainfall_mm": [
+        50.0,
+        100.0,
+        50.0
+      ]
+    }
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Duration Of Wet Spell",
+    "description": ">25 mm for 3 days >50 mm for 4 days 20 mm for 4 days",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Duration of wet spell: >25 mm for 3 days >50 mm for 4 days 20 mm for 4 days",
+    "requires_additional_variables": [
+      "wet_spell_duration"
+    ],
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Cloudy Weather",
+    "description": "Cloudy weather Cloudy weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Cloudy weather: Cloudy weather Cloudy weather",
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "High Wind",
+    "description": ">50 km/hr >40 km/hr >30 km/hr",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "High wind: >50 km/hr >40 km/hr >30 km/hr",
+    "evaluable_with_current_feeds": false,
+    "thresholds": {
+      "wind_speed_kmh": [
+        50.0,
+        40.0,
+        30.0
+      ]
+    }
+  },
+  {
+    "crop": "rice_aman",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Temperature",
+    "description": "Minimum Temperature <10 o C Minimum Temperature <10o C Minimum Temperature <10 o C",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Temperature: Minimum Temperature <10 o C Minimum Temperature <10o C Minimum Temperature <10 o C",
+    "when": {
+      "temperature_min": {
+        "max": 10.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  }
+]

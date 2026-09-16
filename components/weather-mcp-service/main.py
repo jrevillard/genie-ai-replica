@@ -5,7 +5,9 @@ Routes
   GET  /health                           — liveness check
   POST /query                            — on-demand natural-language weather query
   GET  /risk/latest?location=&horizon=   — latest stored risk assessment (written by Warning_system_engine)
-  GET  /potato/risk/latest?location=     — latest stored potato risk (written by Warning_system_engine)
+  GET  /potato/risk/latest?location=     — latest stored crop risks, one per EWS_CROPS entry
+                                           (legacy path name; written by Warning_system_engine)
+  GET  /context?location=&days=&crop=    — curated plain-text context for the chat LLM
   GET  /geocode?location=                — resolve district name to lat/lon
 
   POST /mcp/tools/list                   — MCP tool registry (called by gov-chat-backend)
@@ -33,6 +35,9 @@ from defaults import (
 )
 from defaults import (
     DEFAULT_LOCATION as _DEFAULT_DISTRICT,
+)
+from defaults import (
+    EWS_CROPS,
 )
 from defaults import (
     ensure_default_district as _ensure_default_district,
@@ -1186,10 +1191,20 @@ async def get_flood_risk(
 @app.get("/potato/risk/latest")
 async def get_potato_risk(
     location: str = Query(..., description="Bangladesh district name (e.g. 'Dhaka')"),
+    crop: str = Query(
+        "", description="Single crop to report; default = worst of EWS_CROPS"
+    ),
 ):
     """
-    Return the most recent stored potato risk assessment for a district.
-    Returns tier=0 (Normal) if no assessment has been stored yet.
+    Return the most recent stored crop risk assessments for a district.
+
+    The warning_system_engine writes one assessment per crop. `crops` carries
+    every one of them, most severe first, so a client can show a card per crop.
+    The top-level fields repeat the most severe crop, which keeps older clients
+    (and the original single-crop contract of this path) working unchanged.
+
+    Pass `crop` to restrict the answer to one crop. Returns tier=0 (Normal)
+    when nothing is stored yet.
     """
     if storage_layer is None:
         return JSONResponse(
@@ -1197,21 +1212,35 @@ async def get_potato_risk(
             content={"error": "Storage unavailable"},
         )
 
-    assessment = storage_layer.get_latest_crop_risk(location, "potato")
-    if assessment is None:
+    wanted = [crop] if crop else EWS_CROPS
+
+    stored = []
+    for candidate in wanted:
+        found = storage_layer.get_latest_crop_risk(location, candidate)
+        if found is not None:
+            # Strip internal ArangoDB fields before returning
+            for field in ("_key", "_id", "_rev"):
+                found.pop(field, None)
+            stored.append(found)
+
+    # Most severe first; ties go to the most recently assessed
+    stored.sort(
+        key=lambda a: (int(a.get("tier", 0) or 0), str(a.get("assessed_at", ""))),
+        reverse=True,
+    )
+
+    if not stored:
         return {
             "location": location,
-            "crop": "potato",
+            "crop": wanted[0] if wanted else "",
             "tier": 0,
             "tier_label": "Normal",
             "triggers": [],
             "message": "",
+            "crops": [],
         }
 
-    # Strip internal ArangoDB fields before returning
-    for field in ("_key", "_id", "_rev"):
-        assessment.pop(field, None)
-    return assessment
+    return {**stored[0], "crops": stored}
 
 
 # ── Curated context for the chat LLM ──────────────────────────────────────
@@ -1237,11 +1266,16 @@ def _month_label(ym: str) -> str:
         return ym
 
 
+def _crop_label(crop: str) -> str:
+    """'rice_aman' -> 'Rice Aman'. Profile keys are snake_case; prose is not."""
+    return crop.replace("_", " ").title()
+
+
 def _season_lines(assessments: list[dict], today, crop: str) -> list[str]:
     """
     Crop calendar months with their growth stages, plus where today falls.
 
-    The stages come from the stored seasonal assessments (LongTermPotatoEWS
+    The stages come from the stored seasonal assessments (LongTermCropEWS
     maps each forecast month to the crop profile's stages), so this reflects
     the crop calendar the engine actually uses rather than a fixed date range.
     """
@@ -1269,47 +1303,54 @@ def _season_lines(assessments: list[dict], today, crop: str) -> list[str]:
         first_day = date(y, m, 1)
     except Exception:
         return lines
+    label = _crop_label(crop)
     if this_month in months:
         current = next(a for a in assessments if a.get("target_month") == this_month)
         stages = ", ".join(current.get("stages") or []) or "—"
-        lines.append(f"  Today falls inside the {crop} season: stage(s) {stages}.")
+        lines.append(f"  Today falls inside the {label} season: stage(s) {stages}.")
     elif today < first_day:
         lines.append(
-            f"  The {crop} season has not started: the first calendar month is "
+            f"  The {label} season has not started: the first calendar month is "
             f"{_month_label(first)}, in {(first_day - today).days} days."
         )
     else:
         lines.append(
-            f"  The {crop} season's last calendar month was {_month_label(months[-1])}."
+            f"  The {label} season's last calendar month was {_month_label(months[-1])}."
         )
     return lines
 
 
-def _build_weather_context(district: str, days: int = 7, crop: str = "potato") -> str:
+def _build_weather_context(
+    district: str, days: int = 7, crops: list[str] | None = None
+) -> str:
     """Plain-text context block for ``district``; "" when nothing is stored."""
     from datetime import datetime, timezone
 
     if storage_layer is None:
         return ""
+    wanted = list(crops) if crops else list(EWS_CROPS)
     now = datetime.now(timezone.utc)
     today = now.date()
     sections: list[str] = [
         f"Today is {now:%A %d %B %Y} (UTC), ISO week {today.isocalendar()[1]}. District: {district}."
     ]
 
-    # Crop season calendar + seasonal assessments (Copernicus vs crop thresholds)
-    try:
-        assessments = storage_layer.get_seasonal_assessments(district, crop)
-    except Exception:
-        assessments = []
-    season = _season_lines(assessments, today, crop)
-    if season:
-        sections.append(
-            f"{crop.capitalize()} season calendar for {district} (crop profile):\n"
-            + "\n".join(season)
-        )
+    # Crop season calendar + seasonal assessments (Copernicus vs crop thresholds),
+    # one block per crop the engine watches.
+    for crop in wanted:
+        try:
+            assessments = storage_layer.get_seasonal_assessments(district, crop)
+        except Exception:
+            assessments = []
+        season = _season_lines(assessments, today, crop)
+        if season:
+            sections.append(
+                f"{_crop_label(crop)} season calendar for {district} (crop profile):\n"
+                + "\n".join(season)
+            )
 
     # Short-term forecast
+    forecast_horizon = ""
     stored = None
     try:
         stored = storage_layer.get_latest_forecast(
@@ -1362,19 +1403,38 @@ def _build_weather_context(district: str, days: int = 7, crop: str = "potato") -
             f"{len(fc)}-day forecast for {district} ({source}{check}; ingested {stored.ingested_at[:16]} UTC):\n"
             + "\n".join(lines)
         )
+        forecast_horizon = (
+            f"Daily forecasts stop after these {len(fc)} days, on {fc[-1].date}. "
+            "There is no day-by-day data beyond that date: for any question reaching "
+            "further ahead, use the monthly seasonal outlook instead and say plainly "
+            "that the answer comes from a monthly outlook, not a daily forecast. "
+            "Never extend a daily total (for example a 7-day rainfall figure) over a "
+            "longer period than the days listed above."
+        )
 
-    # Stored crop risk for today (crop thresholds vs the same forecast)
-    try:
-        risk = storage_layer.get_latest_crop_risk(district, crop)
-    except Exception:
-        risk = None
-    if risk:
+    # Stored crop risk for today (crop thresholds vs the same forecast),
+    # one line per crop the engine watches.
+    for crop in wanted:
+        try:
+            risk = storage_layer.get_latest_crop_risk(district, crop)
+        except Exception:
+            risk = None
+        if not risk:
+            continue
         triggers = "; ".join(str(t) for t in (risk.get("triggers") or []))
-        sections.append(
-            f"{crop.capitalize()} risk today for {district} (crop thresholds, assessed {str(risk.get('assessed_at', ''))[:10]}): "
-            f"{risk.get('tier_label', 'Normal')}"
+        line = (
+            f"{_crop_label(crop)} risk today for {district} (crop thresholds, assessed "
+            f"{str(risk.get('assessed_at', ''))[:10]}): {risk.get('tier_label', 'Normal')}"
             + (f" — {triggers}." if triggers else ".")
         )
+        # The engine already matched the forecast against the profile's pest and
+        # disease thresholds; without these the model named pests from memory.
+        diseases = "; ".join(str(d) for d in (risk.get("disease_risks") or []))
+        if diseases:
+            line += (
+                f" Pest and disease risks flagged for {_crop_label(crop)}: {diseases}."
+            )
+        sections.append(line)
 
     # Seasonal outlook
     try:
@@ -1443,10 +1503,13 @@ def _build_weather_context(district: str, days: int = 7, crop: str = "potato") -
     else:
         sections.append(f"Official BMD warnings in force for {district}: none.")
 
-    sections.append(
+    limits = (
         "Not available in this system: observed rainfall records for past weeks or months, "
         "and alert subscriptions (the assistant cannot notify anyone later)."
     )
+    if forecast_horizon:
+        limits += " " + forecast_horizon
+    sections.append(limits)
     return "\n\n".join(sections)
 
 
@@ -1461,7 +1524,9 @@ async def get_weather_context(
         "", description="District name, or the user's whole message to scan for one"
     ),
     days: int = Query(7, ge=1, le=7, description="Forecast days to include"),
-    crop: str = Query("potato", description="Crop whose assessments to include"),
+    crop: str = Query(
+        "", description="Single crop to include; default = every crop in EWS_CROPS"
+    ),
 ):
     """
     Curated plain-text context for the chat LLM (see _build_weather_context).
@@ -1469,10 +1534,17 @@ async def get_weather_context(
     ``location`` may be the raw message: it is scanned for a district name the
     same way the query endpoint does, and falls back to the default district.
     Returns {"text": ""} when storage is offline so the caller can skip it.
+
+    Without ``crop`` the block covers every crop the engine watches, so the
+    model never sees a crop the deployment stopped assessing.
     """
     district_info = _find_district_64(location) or _find_drought_district(location)
     district = district_info[0] if district_info else _DEFAULT_DISTRICT
-    return {"location": district, "text": _build_weather_context(district, days, crop)}
+    wanted = [crop] if crop else list(EWS_CROPS)
+    return {
+        "location": district,
+        "text": _build_weather_context(district, days, wanted),
+    }
 
 
 @app.get("/drought/risk/latest")

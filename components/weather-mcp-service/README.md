@@ -54,7 +54,7 @@ FastAPI service that owns **weather data ingestion**, **natural-language query h
 | NL query handling | **weather-mcp-service** (WeatherAgent) |
 | MCP tool interface | **weather-mcp-service** (FastMCP) |
 | Copernicus SEAS5 seasonal forecasts | **warning_system_engine** |
-| Crop-specific EWS (potato, rice, …) | **warning_system_engine** |
+| Crop-specific EWS (eggplant, rice aman, …) | **warning_system_engine** |
 | Drought monitoring | **warning_system_engine** / drought_monitoring |
 | SMS / voice alerts | **warning_system_engine** (Twilio) |
 
@@ -393,10 +393,34 @@ GET /risk/latest?location=Dhaka&horizon=short
 
 ### `GET /potato/risk/latest`
 
-Retrieve the latest crop-specific risk for potato at a given location.
+Retrieve the latest crop-specific risks for a location: one entry per crop in
+`EWS_CROPS`, most severe first, under `crops`. The top-level fields repeat the
+most severe crop. Pass `crop=` to restrict the answer to a single crop. The
+path name is kept for backwards compatibility with existing clients.
 
 ```
 GET /potato/risk/latest?location=Dhaka
+GET /potato/risk/latest?location=Dhaka&crop=rice_aman
+```
+
+---
+
+### `GET /context`
+
+Curated plain-text block of everything this service knows about a district —
+date, crop season calendars, the short-term forecast, today's crop risks, the
+Copernicus seasonal outlook, drought and flood assessments, BMD warnings and an
+explicit statement of what the data does **not** cover. The backend prepends it
+to every knowledge-base chat question.
+
+`location` may be the user's whole message: it is scanned for a district name
+and falls back to `DEFAULT_LOCATION`. Without `crop`, the block covers every
+crop in `EWS_CROPS`, so the model never sees a crop the deployment stopped
+assessing.
+
+```
+GET /context?location=Naogaon
+GET /context?location=Naogaon&days=5&crop=eggplant
 ```
 
 ---

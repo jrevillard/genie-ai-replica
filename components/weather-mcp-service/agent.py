@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Literal, Optional
 
 from defaults import DEFAULT_LOCATION as _DEFAULT_DISTRICT
+from defaults import EWS_CROPS as _EWS_CROPS
 from mcp_client import MCPClientManager
 from models import (
     DayForecast,
@@ -85,7 +86,8 @@ def _district_in_text(text: str) -> str | None:
 
 # Crop whose stored assessment grounds the agricultural tip. Only crops with a
 # profile in the warning_system_engine produce assessments; the rest return "".
-_ADVISORY_CROP = os.getenv("WEATHER_ADVISORY_CROP", "potato")
+# Defaults to the first crop the engine watches (EWS_CROPS).
+_ADVISORY_CROP = os.getenv("WEATHER_ADVISORY_CROP", "").strip() or _EWS_CROPS[0]
 
 
 class WeatherIntent(BaseModel):

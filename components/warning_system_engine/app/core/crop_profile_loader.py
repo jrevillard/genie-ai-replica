@@ -2,14 +2,16 @@
 CropProfileLoader — reads example_crop_profile.json and provides typed
 accessors for the long-term assessment pipeline.
 """
+
 from __future__ import annotations
 
 import json
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
 
-_DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "example_crop_profile.json"
+_DEFAULT_PATH = (
+    Path(__file__).resolve().parents[2] / "data" / "example_crop_profile.json"
+)
 
 
 class CropProfileLoader:
@@ -23,6 +25,14 @@ class CropProfileLoader:
 
     def get_profile(self, crop: str, region: str) -> dict:
         return self._profiles.get(f"{crop}_{region}".lower(), {})
+
+    def regions_for_crop(self, crop: str) -> list[str]:
+        """Regions that have a published calendar for this crop."""
+        return [
+            profile["region"]
+            for profile in self._profiles.values()
+            if profile.get("crop") == crop and profile.get("region")
+        ]
 
     def get_crop_rules(self, crop: str, region: str) -> dict:
         return self.get_profile(crop, region).get("crop_rules", {})
@@ -46,13 +56,13 @@ class CropProfileLoader:
     # Week-level lookups
     # ------------------------------------------------------------------
 
-    def get_stage_for_week(self, crop: str, region: str, week: int) -> Optional[str]:
+    def get_stage_for_week(self, crop: str, region: str, week: int) -> str | None:
         for entry in self.get_weekly_calendar(crop, region):
             if entry.get("week") == week:
                 return entry.get("stage")
         return None
 
-    def get_weekly_baseline(self, crop: str, region: str, week: int) -> Optional[dict]:
+    def get_weekly_baseline(self, crop: str, region: str, week: int) -> dict | None:
         for entry in self.get_weekly_calendar(crop, region):
             if entry.get("week") == week:
                 return entry
@@ -77,7 +87,7 @@ class CropProfileLoader:
     def stages_for_month(
         self, crop: str, region: str, year: int, month: int
     ) -> list[str]:
-        """Distinct stage names that potato is in during a calendar month."""
+        """Distinct stage names that the crop is in during a calendar month."""
         season_weeks = set(self.get_season_weeks(crop, region))
         stages: list[str] = []
         for week in self.weeks_in_month(year, month):
@@ -87,13 +97,11 @@ class CropProfileLoader:
                     stages.append(stage)
         return stages
 
-    def baseline_for_month(
-        self, crop: str, region: str, year: int, month: int
-    ) -> dict:
+    def baseline_for_month(self, crop: str, region: str, year: int, month: int) -> dict:
         """
-        Average weekly baseline values (temp, rainfall, RH) for all potato
+        Average weekly baseline values (temp, rainfall, RH) for all crop
         weeks that fall inside a calendar month.
-        Returns empty dict if the month is outside the potato season.
+        Returns empty dict if the month is outside the crop season.
         """
         season_weeks = set(self.get_season_weeks(crop, region))
         entries: list[dict] = []
@@ -106,9 +114,18 @@ class CropProfileLoader:
         if not entries:
             return {}
 
-        keys = ("temp_min_c", "temp_max_c", "temp_mean_c", "rainfall_mm",
-                "rh_max_pct", "rh_min_pct")
-        result: dict = {"week_count": len(entries), "weeks_in_season": [e["week"] for e in entries]}
+        keys = (
+            "temp_min_c",
+            "temp_max_c",
+            "temp_mean_c",
+            "rainfall_mm",
+            "rh_max_pct",
+            "rh_min_pct",
+        )
+        result: dict = {
+            "week_count": len(entries),
+            "weeks_in_season": [e["week"] for e in entries],
+        }
         for k in keys:
             vals = [e[k] for e in entries if e.get(k) is not None]
             if vals:
@@ -129,8 +146,10 @@ class CropProfileLoader:
     def rainfall_thresholds(self, crop: str, region: str) -> dict:
         rules = self.get_crop_rules(crop, region)
         rain_rules = rules.get("rainfall_daily", [])
-        medium   = next((r["min"] for r in rain_rules if r["severity"] == "medium"),   25)
-        critical = next((r["min"] for r in rain_rules if r["severity"] == "critical"), 100)
+        medium = next((r["min"] for r in rain_rules if r["severity"] == "medium"), 25)
+        critical = next(
+            (r["min"] for r in rain_rules if r["severity"] == "critical"), 100
+        )
         return {"rain_medium": float(medium), "rain_critical": float(critical)}
 
     def wind_threshold(self, crop: str, region: str) -> float:

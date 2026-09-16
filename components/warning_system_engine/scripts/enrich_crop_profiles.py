@@ -25,9 +25,9 @@ Schema per key:
   risk_by_stage        — which weeks exceed crop_rules thresholds
   source_chunks        — retained for compatibility; no chunk IDs are generated
 """
+
 import argparse
 import json
-import math
 import re
 import statistics
 from collections import defaultdict
@@ -44,9 +44,18 @@ _OUTPUT_FILE = _HERE / "data" / "example_crop_profile.json"
 # Week/month ordering helpers
 # ---------------------------------------------------------------------------
 _MONTH_ORDER = {
-    "January": 1, "February": 2, "March": 3, "April": 4,
-    "May": 5, "June": 6, "July": 7, "August": 8,
-    "September": 9, "October": 10, "November": 11, "December": 12,
+    "January": 1,
+    "February": 2,
+    "March": 3,
+    "April": 4,
+    "May": 5,
+    "June": 6,
+    "July": 7,
+    "August": 8,
+    "September": 9,
+    "October": 10,
+    "November": 11,
+    "December": 12,
 }
 
 
@@ -64,19 +73,21 @@ def _week_sort_key(week: int) -> int:
 # ---------------------------------------------------------------------------
 _STAGE_ALIASES: dict[str, str] = {
     # Typos / variant spellings found in the raw data
-    "spouting":                        "Sprouting",
-    "harve sting":                     "Harvesting",
-    "harves ting":                     "Harvesting",
-    "harvetsing":                      "Harvesting",
-    "vegetative growth":               "Vegetative Growth",
-    "tuber bulking/ development":      "Tuber Bulking/Development",
-    "tuber bulking/development":       "Tuber Bulking/Development",
-    "tuber set/ initiation":           "Tuber Set/Initiation",
-    "tuber set/initiation":            "Tuber Set/Initiation",
-    "flowering and fruting":           "Flowering & Fruiting",
-    "flowering& fruiting":             "Flowering & Fruiting",
+    "spouting": "Sprouting",
+    "harve sting": "Harvesting",
+    "harves ting": "Harvesting",
+    "harvetsing": "Harvesting",
+    "vegetative growth": "Vegetative Growth",
+    "tuber bulking/ development": "Tuber Bulking/Development",
+    "tuber bulking/development": "Tuber Bulking/Development",
+    "tuber set/ initiation": "Tuber Set/Initiation",
+    "tuber set/initiation": "Tuber Set/Initiation",
+    "flowering and fruting": "Flowering & Fruiting",
+    "flowering& fruiting": "Flowering & Fruiting",
     "germination and seedling planting": "Germination & Seedling",
-    "spouting & seedling":             "Sprouting & Seedling",
+    "spouting & seedling": "Sprouting & Seedling",
+    "flowe ring": "Flowering",
+    "maturity to harvesting": "Maturity to Harvesting",
 }
 
 
@@ -89,6 +100,7 @@ def _normalise_stage(raw: str) -> str:
 # Per-variable statistics
 # ---------------------------------------------------------------------------
 
+
 def _stats(values: list) -> dict:
     values = [v for v in values if v is not None]
     if not values:
@@ -100,9 +112,9 @@ def _stats(values: list) -> dict:
     mean = round(total / n, 2)
     result = {
         "mean": mean,
-        "min":  round(mn, 2),
-        "max":  round(mx, 2),
-        "sum":  round(total, 2),
+        "min": round(mn, 2),
+        "max": round(mx, 2),
+        "sum": round(total, 2),
     }
     if n > 1:
         result["stdev"] = round(statistics.stdev(values), 2)
@@ -230,7 +242,11 @@ _POTATO_DISEASE_RISKS = [
             "humidity": {"min": 90},
             "precipitation": {"min": 1},
         },
-        "applicable_stages": ["Tuber Set/Initiation", "Tuber Bulking/Development", "Maturity"],
+        "applicable_stages": [
+            "Tuber Set/Initiation",
+            "Tuber Bulking/Development",
+            "Maturity",
+        ],
         "source_section": "Pest/Disease",
         "message": "Cool, humid conditions favour late blight (Phytophthora infestans). Monitor leaf symptoms closely.",
     },
@@ -280,6 +296,7 @@ _POTATO_DISEASE_RISKS = [
 # ---------------------------------------------------------------------------
 # Crop rule derivation from observed climate data
 # ---------------------------------------------------------------------------
+
 
 def _derive_crop_rules(all_values: dict[str, list[float]]) -> dict:
     """
@@ -348,9 +365,71 @@ def _derive_crop_rules(all_values: dict[str, list[float]]) -> dict:
     return rules
 
 
+def _apply_weather_warning_rules(rules: dict, advisory_records: list[dict]) -> dict:
+    """
+    Overlay the daily alert thresholds printed in the PDF "Weather warning"
+    section on top of the statistically derived ones.
+
+    The derived values come from *weekly* climate normals, so they are far too
+    high to use as daily triggers for monsoon crops. Whenever the calendar
+    states the thresholds explicitly, those win.
+    """
+    warnings = [a for a in advisory_records if a.get("category") == "Weather Warning"]
+    if not warnings:
+        return rules
+
+    rain: list[float] = []
+    wind: list[float] = []
+    heat: float | None = None
+    cold: float | None = None
+
+    for adv in warnings:
+        thresholds = adv.get("thresholds", {})
+        rain.extend(thresholds.get("rainfall_mm", []))
+        wind.extend(thresholds.get("wind_speed_kmh", []))
+
+        when = adv.get("when", {})
+        # "Minimum Temperature <10 °C" → cold limit; "32.5 to 35.5 °C" → heat limit
+        low = when.get("temperature_min", {})
+        if "max" in low:
+            cold = low["max"] if cold is None else max(cold, low["max"])
+        for key in ("temperature_mean", "temperature_max"):
+            high = when.get(key, {})
+            if "min" in high:
+                heat = high["min"] if heat is None else min(heat, high["min"])
+
+    if rain:
+        medium = min(rain)
+        critical = max(rain)
+        rules["rainfall_daily"] = [
+            {
+                "severity": "medium",
+                "min": round(medium, 1),
+                "source_section": "Weather Warning",
+            },
+            {
+                "severity": "critical",
+                "min": round(critical if critical > medium else medium * 2, 1),
+                "source_section": "Weather Warning",
+            },
+        ]
+    if wind:
+        rules["wind_speed_kmh"] = {
+            "max": round(min(wind), 1),
+            "source_section": "Weather Warning",
+        }
+    if heat is not None:
+        rules["temperature_max"] = {"max": heat, "source_section": "Weather Warning"}
+    if cold is not None:
+        rules["temperature_min"] = {"min": cold, "source_section": "Weather Warning"}
+
+    return rules
+
+
 # ---------------------------------------------------------------------------
 # Risk-by-stage computation
 # ---------------------------------------------------------------------------
+
 
 def _compute_risk_by_stage(
     weekly_calendar: list[dict],
@@ -373,46 +452,60 @@ def _compute_risk_by_stage(
             if tmax is not None and "temperature_max" in crop_rules:
                 threshold = crop_rules["temperature_max"]["max"]
                 if tmax > threshold:
-                    alerts.append({
-                        "type": "high_temperature",
-                        "threshold": threshold,
-                        "observed": tmax,
-                        "severity": "critical" if tmax > threshold + 3 else "warning",
-                    })
+                    alerts.append(
+                        {
+                            "type": "high_temperature",
+                            "threshold": threshold,
+                            "observed": tmax,
+                            "severity": "critical"
+                            if tmax > threshold + 3
+                            else "warning",
+                        }
+                    )
 
             if tmin is not None and "temperature_min" in crop_rules:
                 threshold = crop_rules["temperature_min"]["min"]
                 if tmin < threshold:
-                    alerts.append({
-                        "type": "cold_stress",
-                        "threshold": threshold,
-                        "observed": tmin,
-                        "severity": "critical" if tmin < threshold - 3 else "warning",
-                    })
+                    alerts.append(
+                        {
+                            "type": "cold_stress",
+                            "threshold": threshold,
+                            "observed": tmin,
+                            "severity": "critical"
+                            if tmin < threshold - 3
+                            else "warning",
+                        }
+                    )
 
             if rain is not None and "rainfall_daily" in crop_rules:
                 for rule in crop_rules["rainfall_daily"]:
                     if rain >= rule["min"]:
-                        alerts.append({
-                            "type": "excess_rainfall",
-                            "threshold": rule["min"],
-                            "observed": rain,
-                            "severity": rule["severity"],
-                        })
+                        alerts.append(
+                            {
+                                "type": "excess_rainfall",
+                                "threshold": rule["min"],
+                                "observed": rain,
+                                "severity": rule["severity"],
+                            }
+                        )
 
             if alerts:
-                risk_weeks.append({
-                    "week": w["week"],
-                    "month": w["month"],
-                    "alerts": alerts,
-                })
+                risk_weeks.append(
+                    {
+                        "week": w["week"],
+                        "month": w["month"],
+                        "alerts": alerts,
+                    }
+                )
 
-        result.append({
-            "stage": stage,
-            "has_manual_rules": True,
-            "risk_weeks": risk_weeks,
-            "risk_week_count": len(risk_weeks),
-        })
+        result.append(
+            {
+                "stage": stage,
+                "has_manual_rules": True,
+                "risk_weeks": risk_weeks,
+                "risk_week_count": len(risk_weeks),
+            }
+        )
 
     return result
 
@@ -420,6 +513,7 @@ def _compute_risk_by_stage(
 # ---------------------------------------------------------------------------
 # Core builder: one crop × region
 # ---------------------------------------------------------------------------
+
 
 def _build_profile(
     crop: str,
@@ -444,18 +538,22 @@ def _build_profile(
         stage = _normalise_stage(rec["crop_stage"])
         temp_min = rec.get("min_temp_c")
         temp_max = rec.get("max_temp_c")
-        temp_mean = round((temp_min + temp_max) / 2, 2) if temp_min is not None and temp_max is not None else None
+        temp_mean = (
+            round((temp_min + temp_max) / 2, 2)
+            if temp_min is not None and temp_max is not None
+            else None
+        )
 
         entry = {
-            "week":         week,
-            "month":        rec["month"],
-            "stage":        stage,
-            "temp_min_c":   temp_min,
-            "temp_max_c":   temp_max,
-            "temp_mean_c":  temp_mean,
-            "rainfall_mm":  rec.get("rainfall_mm"),
-            "rh_max_pct":   rec.get("rh_max_percent"),
-            "rh_min_pct":   rec.get("rh_min_percent"),
+            "week": week,
+            "month": rec["month"],
+            "stage": stage,
+            "temp_min_c": temp_min,
+            "temp_max_c": temp_max,
+            "temp_mean_c": temp_mean,
+            "rainfall_mm": rec.get("rainfall_mm"),
+            "rh_max_pct": rec.get("rh_max_percent"),
+            "rh_min_pct": rec.get("rh_min_percent"),
         }
         weekly_calendar.append(entry)
 
@@ -465,15 +563,27 @@ def _build_profile(
         stage = entry["stage"]
         if stage not in stage_buckets:
             stage_buckets[stage] = {
-                "weeks": [], "months": set(),
-                "temp_min_c": [], "temp_max_c": [], "temp_mean_c": [],
-                "rainfall_mm": [], "rh_max_pct": [], "rh_min_pct": [],
+                "weeks": [],
+                "months": set(),
+                "temp_min_c": [],
+                "temp_max_c": [],
+                "temp_mean_c": [],
+                "rainfall_mm": [],
+                "rh_max_pct": [],
+                "rh_min_pct": [],
             }
         b = stage_buckets[stage]
         b["weeks"].append(entry["week"])
         b["months"].add(entry["month"])
         # Only append non-None values so _stats works cleanly
-        for field in ("temp_min_c", "temp_max_c", "temp_mean_c", "rainfall_mm", "rh_max_pct", "rh_min_pct"):
+        for field in (
+            "temp_min_c",
+            "temp_max_c",
+            "temp_mean_c",
+            "rainfall_mm",
+            "rh_max_pct",
+            "rh_min_pct",
+        ):
             v = entry.get(field)
             if v is not None:
                 b[field].append(v)
@@ -490,29 +600,33 @@ def _build_profile(
             b["months"],
             key=lambda m: _MONTH_ORDER.get(m, 99),
         )
-        growth_stages.append({
-            "stage":       stage,
-            "weeks":       b["weeks"],
-            "months":      months_ordered,
-            "week_count":  len(b["weeks"]),
-            "climate_stats": {
-                "temp_min_c":   _stats(b["temp_min_c"]),
-                "temp_max_c":   _stats(b["temp_max_c"]),
-                "temp_mean_c":  _stats(b["temp_mean_c"]),
-                "rainfall_mm":  _stats(b["rainfall_mm"]),
-                "rh_max_pct":   _stats(b["rh_max_pct"]),
-                "rh_min_pct":   _stats(b["rh_min_pct"]),
-            },
-        })
+        growth_stages.append(
+            {
+                "stage": stage,
+                "weeks": b["weeks"],
+                "months": months_ordered,
+                "week_count": len(b["weeks"]),
+                "climate_stats": {
+                    "temp_min_c": _stats(b["temp_min_c"]),
+                    "temp_max_c": _stats(b["temp_max_c"]),
+                    "temp_mean_c": _stats(b["temp_mean_c"]),
+                    "rainfall_mm": _stats(b["rainfall_mm"]),
+                    "rh_max_pct": _stats(b["rh_max_pct"]),
+                    "rh_min_pct": _stats(b["rh_min_pct"]),
+                },
+            }
+        )
 
     # ── 4. Season span ───────────────────────────────────────────────────────
-    all_weeks  = [e["week"]  for e in weekly_calendar]
-    all_months = list(dict.fromkeys(e["month"] for e in weekly_calendar))  # preserve order
+    all_weeks = [e["week"] for e in weekly_calendar]
+    all_months = list(
+        dict.fromkeys(e["month"] for e in weekly_calendar)
+    )  # preserve order
     unique_months = sorted(set(all_months), key=lambda m: _MONTH_ORDER.get(m, 99))
 
     season_span = {
-        "weeks":          all_weeks,
-        "months":         unique_months,
+        "weeks": all_weeks,
+        "months": unique_months,
         "duration_weeks": len(all_weeks),
     }
 
@@ -521,12 +635,12 @@ def _build_profile(
         return [e[key] for e in weekly_calendar if e.get(key) is not None]
 
     all_vals: dict[str, list[float]] = {
-        "temp_min_c":  _notnull("temp_min_c"),
-        "temp_max_c":  _notnull("temp_max_c"),
+        "temp_min_c": _notnull("temp_min_c"),
+        "temp_max_c": _notnull("temp_max_c"),
         "temp_mean_c": _notnull("temp_mean_c"),
         "rainfall_mm": _notnull("rainfall_mm"),
-        "rh_max_pct":  _notnull("rh_max_pct"),
-        "rh_min_pct":  _notnull("rh_min_pct"),
+        "rh_max_pct": _notnull("rh_max_pct"),
+        "rh_min_pct": _notnull("rh_min_pct"),
     }
 
     rain_vals = all_vals["rainfall_mm"]
@@ -537,31 +651,33 @@ def _build_profile(
         derived_thresholds["temp_min_observed_c"] = {
             "absolute_min": round(min(all_vals["temp_min_c"]), 2),
             "absolute_max": round(max(all_vals["temp_min_c"]), 2),
-            "mean":         round(statistics.mean(all_vals["temp_min_c"]), 2),
+            "mean": round(statistics.mean(all_vals["temp_min_c"]), 2),
         }
     if all_vals["temp_max_c"]:
         derived_thresholds["temp_max_observed_c"] = {
             "absolute_min": round(min(all_vals["temp_max_c"]), 2),
             "absolute_max": round(max(all_vals["temp_max_c"]), 2),
-            "mean":         round(statistics.mean(all_vals["temp_max_c"]), 2),
+            "mean": round(statistics.mean(all_vals["temp_max_c"]), 2),
         }
     if rain_vals:
         derived_thresholds["rainfall_mm"] = {
-            "weekly_mean":  round(statistics.mean(rain_vals), 2),
-            "weekly_max":   round(max(rain_vals), 2),
-            "weekly_min":   round(min(rain_vals), 2),
+            "weekly_mean": round(statistics.mean(rain_vals), 2),
+            "weekly_max": round(max(rain_vals), 2),
+            "weekly_min": round(min(rain_vals), 2),
             "season_total": season_total_rain,
         }
     if all_vals["rh_max_pct"] and all_vals["rh_min_pct"]:
         derived_thresholds["relative_humidity_pct"] = {
-            "rh_max_mean":   round(statistics.mean(all_vals["rh_max_pct"]), 2),
-            "rh_min_mean":   round(statistics.mean(all_vals["rh_min_pct"]), 2),
-            "rh_max_peak":   round(max(all_vals["rh_max_pct"]), 2),
+            "rh_max_mean": round(statistics.mean(all_vals["rh_max_pct"]), 2),
+            "rh_min_mean": round(statistics.mean(all_vals["rh_min_pct"]), 2),
+            "rh_max_peak": round(max(all_vals["rh_max_pct"]), 2),
             "rh_min_trough": round(min(all_vals["rh_min_pct"]), 2),
         }
 
     # ── 6. Crop rules ────────────────────────────────────────────────────────
-    crop_rules = _derive_crop_rules(all_vals)
+    crop_rules = _apply_weather_warning_rules(
+        _derive_crop_rules(all_vals), advisory_records
+    )
 
     # ── 7. Disease risks ─────────────────────────────────────────────────────
     if crop == "potato":
@@ -578,16 +694,27 @@ def _build_profile(
             if slug in seen_names:
                 continue
             seen_names.add(slug)
-            conditions = _DISEASE_CONDITIONS.get(name.lower(), {})
+            # Thresholds mined from the PDF win over the generic knowledge map
+            when = adv.get("when") or _DISEASE_CONDITIONS.get(name.lower(), {}).get(
+                "when", {}
+            )
             entry = {
-                "name":           slug,
+                "name": slug,
                 "source_section": "Pest/Disease",
-                "description":    adv.get("description", ""),
+                "description": adv.get("description", ""),
                 "applicable_period": adv.get("applicable_period", ""),
-                "message":        adv.get("raw_text", ""),
+                "message": adv.get("raw_text", ""),
             }
-            if conditions:
-                entry["when"] = conditions.get("when", {})
+            if when:
+                entry["when"] = when
+            if "evaluable_with_current_feeds" in adv:
+                entry["evaluable_with_current_feeds"] = adv[
+                    "evaluable_with_current_feeds"
+                ]
+            if adv.get("requires_additional_variables"):
+                entry["requires_additional_variables"] = adv[
+                    "requires_additional_variables"
+                ]
             disease_risks.append(entry)
 
     # ── 8. Weather warnings & pest/disease advisories ────────────────────────
@@ -601,10 +728,10 @@ def _build_profile(
         name = adv.get("name", "Unknown")
         slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
         entry = {
-            "name":              name,
-            "description":       adv.get("description", ""),
+            "name": name,
+            "description": adv.get("description", ""),
             "applicable_period": adv.get("applicable_period", ""),
-            "raw_text":          adv.get("raw_text", ""),
+            "raw_text": adv.get("raw_text", ""),
         }
         conditions = _DISEASE_CONDITIONS.get(name.lower())
         if conditions:
@@ -622,22 +749,22 @@ def _build_profile(
 
     # ── Assemble ─────────────────────────────────────────────────────────────
     return {
-        "crop":              crop,
-        "region":            region,
+        "crop": crop,
+        "region": region,
         "crop_display_name": crop.replace("_", " ").title(),
-        "season_span":       season_span,
-        "growth_stages":     growth_stages,
-        "weekly_calendar":   weekly_calendar,
+        "season_span": season_span,
+        "growth_stages": growth_stages,
+        "weekly_calendar": weekly_calendar,
         "derived_thresholds": derived_thresholds,
-        "crop_rules":        crop_rules,
-        "disease_risks":     disease_risks,
-        "weather_warnings":  weather_warnings,
+        "crop_rules": crop_rules,
+        "disease_risks": disease_risks,
+        "weather_warnings": weather_warnings,
         "pest_disease_advisories": pest_disease_advisories,
-        "risk_by_stage":     risk_by_stage,
+        "risk_by_stage": risk_by_stage,
         "source_chunks": {
-            "climate_count":      0,
-            "advisory_count":     0,
-            "climate_chunk_ids":  [],
+            "climate_count": 0,
+            "advisory_count": 0,
+            "climate_chunk_ids": [],
             "advisory_chunk_ids": [],
         },
     }
@@ -647,10 +774,15 @@ def _build_profile(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Enrich crop profiles from BAMIS data")
-    parser.add_argument("--crop",   default=None, help="Only process this crop (default: all)")
-    parser.add_argument("--region", default=None, help="Only process this region (default: all)")
+    parser.add_argument(
+        "--crop", default=None, help="Only process this crop (default: all)"
+    )
+    parser.add_argument(
+        "--region", default=None, help="Only process this region (default: all)"
+    )
     parser.add_argument("--output", default=str(_OUTPUT_FILE), help="Output JSON path")
     args = parser.parse_args()
 
@@ -692,7 +824,10 @@ def main() -> None:
     print(f"[INFO] Building profiles for {len(keys)} crop×region combinations ...")
 
     for key in keys:
-        crop, region = key.split("_", 1)
+        # Read crop/region from the records — splitting the key on the first
+        # underscore would break multi-word crop names such as "rice_aman".
+        first = climate_by_key[key][0]
+        crop, region = first["crop"], first["region"]
         adv_records = advisory_by_key.get(key, [])
         # Also include advisories that apply globally to this crop (any region)
         global_adv = advisory_by_key.get(f"{crop}_all", [])
@@ -704,7 +839,9 @@ def main() -> None:
             advisory_records=adv_records + global_adv,
         )
         profiles[key] = profile
-        print(f"  [OK] {key:40s} weeks={profile['season_span']['duration_weeks']:3d}  stages={len(profile['growth_stages'])}")
+        print(
+            f"  [OK] {key:40s} weeks={profile['season_span']['duration_weeks']:3d}  stages={len(profile['growth_stages'])}"
+        )
 
     # ── Write output ──────────────────────────────────────────────────────────
     output_path = Path(args.output)

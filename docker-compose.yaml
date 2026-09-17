@@ -81,6 +81,9 @@ x-logging: &fluent-logging
   options:
     fluentd-address: "localhost:24224"
     fluentd-async: "true"
+    fluentd-buffer-limit: 8MB       # was implicit 1MB default; bumped because single-channel load
+    fluentd-max-retries: 5          # was implicit 1 retry
+    fluentd-retry-wait: 2s          # was implicit 1s
     tag: "genie.{{.Name}}"
     # Forward the Compose-managed `com.docker.compose.service` label as a
     # log attribute. The OTel Collector then reads it to stamp the

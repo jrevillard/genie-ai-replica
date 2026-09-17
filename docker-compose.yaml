@@ -50,8 +50,6 @@
 #
 # All nodes:
 #   ./data/logs/kong            (Kong gateway logs)
-#   ./data/logs/backend         (Backend API logs)
-#   ./data/logs/doc-repo        (Document Repository logs)
 #   ./data/database_backups     (Backend DB dumps)
 #   ./data/huggingface          (TEI model cache, GPU nodes only)
 #   ./secrets/ssl/              (server.crt, server.key)
@@ -515,7 +513,6 @@ services:
     #   - "${BACKEND_PORT:-3000}:3000"
     volumes:
       - "${DATA_DIR:-./data}/database_backups:/app/database_backups"
-      - "${DATA_DIR:-./data}/logs/backend:/app/logs"
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
     # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
@@ -676,7 +673,6 @@ services:
     networks:
       - genieai_network
     volumes:
-      - "${DATA_DIR:-./data}/logs/doc-repo:/app/logs"
       - doc_repo_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]

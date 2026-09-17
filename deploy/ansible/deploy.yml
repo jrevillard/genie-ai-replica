@@ -377,8 +377,6 @@
         mode: '0755'
       loop:
         - "{{ data_dir }}/logs/kong"
-        - "{{ data_dir }}/logs/backend"
-        - "{{ data_dir }}/logs/doc-repo"
         - "{{ data_dir }}/database_backups"
         - "{{ data_dir }}/huggingface"
         - secrets/ssl

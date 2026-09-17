@@ -57,13 +57,12 @@ RUN chmod +x /docker-entrypoint.sh
 # The app runs as the unprivileged `node` user, so every directory it writes to
 # must be writable by uid 1000. transformers.js downloads its translation model
 # into a cache directory INSIDE node_modules (copied from the root-owned builder
-# stage), and the winston logger opens ./logs relative to WORKDIR — pre-create
-# and chown both, or the CPU translation fallback crashes with EACCES the first
-# time it engages (e.g. GPU endpoint unreachable). Uploads and data get the same
-# treatment because named volumes inherit the ownership of the image directory
-# they are first mounted on.
-RUN mkdir -p /app/node_modules/@xenova/transformers/.cache /app/logs /app/Uploads /app/data && \
-    chown -R node:node /app/node_modules/@xenova /app/logs /app/Uploads /app/data
+# stage) — pre-create and chown, or the CPU translation fallback crashes with
+# EACCES the first time it engages (e.g. GPU endpoint unreachable). Uploads and
+# data get the same treatment because named volumes inherit the ownership of
+# the image directory they are first mounted on.
+RUN mkdir -p /app/node_modules/@xenova/transformers/.cache /app/Uploads /app/data && \
+    chown -R node:node /app/node_modules/@xenova /app/Uploads /app/data
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "index.js"]

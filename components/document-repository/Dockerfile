@@ -58,8 +58,8 @@ COPY document-repository/src/ ./src/
 COPY document-repository/scripts/clamav-node.sh ./
 RUN chmod +x clamav-node.sh
 
-# Create directories for uploads and logs
-RUN mkdir -p uploads logs
+# Create directory for uploads
+RUN mkdir -p uploads
 
 # Expose ports
 EXPOSE 3001 3310

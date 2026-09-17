@@ -749,9 +749,10 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # Falls back to worker_threads file scan if set to file.
 # SECURITY_SCAN_BACKEND=victorialogs
 
-# Enables Winston DailyRotateFile + tailable File transports.
-# Escape hatch for first 30 days post-cutover.
-# LOG_TO_FILE=0
+# (LOG_TO_FILE deployment propagation removed — see
+# `booleanEnv('LOG_TO_FILE')` in components/shared/lib/logger.js for the
+# runtime audit-retention gate. Volume mounts to /app/logs were dropped
+# from docker-compose.yaml per Task 7.)
 
 # Grafana admin password (required secret, no default)
 # Used by: grafana service

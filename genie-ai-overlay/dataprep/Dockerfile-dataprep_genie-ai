@@ -132,9 +132,6 @@ COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src
 
 # Step F.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
-# Copy the OTel log PII redactor (imported by tracing.py at runtime — no-op
-# if not present, but missing it disables the OTel LoggerProvider at startup).
-COPY genie-ai-overlay/tracing_pii.py /app/tracing_pii.py
 
 # Copy shared TTL-cached model probe (importable as core.model_cache from PYTHONPATH=/app)
 COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py

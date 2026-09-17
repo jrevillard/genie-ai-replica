@@ -52,9 +52,6 @@ COPY genie-ai-overlay/build-patches/docarray_alias_shim.py /app/docarray_alias_s
 
 # Step D.5: Copy shared OTel tracing module (importable from PYTHONPATH=/app)
 COPY genie-ai-overlay/tracing.py /app/tracing.py
-# Copy the OTel log PII redactor (imported by tracing.py at runtime — no-op
-# if not present, but missing it disables the OTel LoggerProvider at startup).
-COPY genie-ai-overlay/tracing_pii.py /app/tracing_pii.py
 
 # Step E: "Overlay" custom GENIE-AI files
 # 1. Place the custom reranker class into the integrations folder

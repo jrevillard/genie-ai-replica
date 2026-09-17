@@ -25,14 +25,8 @@ from contextlib import contextmanager
 from urllib.parse import urlparse
 
 from opentelemetry import metrics, trace
-
-# `set_logger_provider` lives in the API package, not the SDK
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
@@ -42,7 +36,6 @@ from opentelemetry.trace import Status, StatusCode
 
 _provider = None
 _meter_provider = None
-_logger_provider = None
 
 # Shared PII keys — import from here in all services to avoid duplication
 # PII key patterns — case-insensitive regex. Mirrors the Node side
@@ -196,17 +189,20 @@ def get_trace_context():
 
 class TraceContextFilter(logging.Filter):
     """Python logging Filter that stamps trace_id, span_id, and service on
-    every log record. The OTel Python SDK's `LoggingHandler` propagates
-    those record attributes into the OTel `LogRecord.trace_id` /
-    `LogRecord.span_id` / `LogRecord.resource.attributes['service.name']`
-    fields — VictoriaLogs indexes them as first-class stream fields.
+    every log record. After the admin-logs SDK revert the OTel SDK logs
+    path is gone (no SDK log provider / handler) — the single log emit
+    path is python logging -> stdout -> fluentd driver -> OTel
+    collector -> VictoriaLogs. The collector reads these record
+    attributes (`trace_id`, `span_id`, `service`) from the JSON envelope
+    and indexes them as first-class stream fields. The OTel Context API
+    (used by `get_trace_context`) is the canonical correlation surface
+    — no SDK logs dependency required.
 
     The PREVIOUS implementation prepended `trace_id="..."` /
     `span_id="..."` into `record.msg` itself. That corrupted the message
     body (every `_msg:` filter matched the prefix first instead of the
-    real text) and wasted bandwidth on every log emit. The OTel SDK's
-    structured fields are the canonical correlation surface — drop the
-    body prepend.
+    real text) and wasted bandwidth on every log emit. Drop the body
+    prepend — set the structured record attributes instead.
     """
 
     def __init__(self, service_name="unknown"):
@@ -235,11 +231,12 @@ def setup_trace_logging(logger_name):
     # `comps.cores.mega.logger.CustomLogger` constructs its underlying
     # Python logger with `propagate=False` (comps owns its own stdout
     # handler and avoids walking up the hierarchy to prevent duplicate
-    # log lines). Side effect: any OTel LoggingHandler attached at the
-    # root by `setup_logging()` never sees a single log record from this
-    # service. Re-enable propagation so the OTel pipeline picks them up
-    # — the comps CustomLogger's own stdout handler is untouched (logs
-    # still reach docker stdout + fluentd via the dual-logging driver).
+    # log lines). Side effect: the root logger (and any future
+    # configuration that adds handlers there) cannot see records from
+    # this logger. Re-enable propagation so records flow up the
+    # hierarchy — the comps CustomLogger's own stdout handler is
+    # untouched (logs still reach docker stdout + fluentd via the
+    # dual-logging driver).
     if logger.propagate is False:
         logger.propagate = True
 
@@ -410,37 +407,6 @@ def setup_tracing(service_name: str) -> None:
     except Exception as exc:
         logging.getLogger(__name__).warning("Failed to initialize OTel MeterProvider — metrics disabled: %s", exc)
 
-    # --- Logs ---
-    # Upstream OPEA GenAIComps telemetry scope is metrics + tracing only
-    # (see https://github.com/opea-project/GenAIComps/comps/cores/telemetry).
-    # Our overlay adds LOG export so Python services' log records reach
-    # VictoriaLogs via OTLP with indexed `service.name` and correlated
-    # `trace_id`. Without this, OPEA logs only arrive in VL via the Docker
-    # fluentd driver → Collector fluentd receiver, which leaves the OTel
-    # resource empty and trace correlation impossible.
-    #
-    # Mirrors the Node.js backend's approach (`components/gov-chat-backend/tracing.js`):
-    # LoggerProvider + OTLPLogExporter + BatchLogRecordProcessor. OPEA's
-    # Python `comps` library does NOT install a logging handler — the
-    # `TraceContextFilter` reads `trace.get_current_span()` to inject
-    # `trace_id` / `span_id` into every Python LogRecord.
-    #
-    # `OTEL_LOGS_ENABLED` opt-out: operators can disable ONLY the log
-    # export path (keeping traces + metrics) by setting
-    # `OTEL_LOGS_ENABLED=0` in their `.env`. The failure path is
-    # non-silent by default (the exception is logged at WARNING level
-    # so a misconfigured OTel stack is visible in `docker logs`) but
-    # does NOT crash the service — trace/metric export remains active.
-    try:
-        setup_logging(service_name, resource=resource, endpoint_base=endpoint_base)
-    except Exception as exc:
-        if os.getenv("OTEL_LOGS_ENABLED", "1") == "0":
-            logging.getLogger(__name__).debug("OTel log export disabled via OTEL_LOGS_ENABLED=0 (init error: %s)", exc)
-        else:
-            logging.getLogger(__name__).warning(
-                "Failed to initialize OTel LoggerProvider — log export disabled: %s", exc
-            )
-
     atexit.register(shutdown)
 
     # Handle SIGTERM (Docker/Swarm sends SIGTERM on stop) and SIGINT
@@ -469,126 +435,6 @@ def get_tracer(name: str = __name__):
     Safe to call before ``setup_tracing()`` — returns a no-op tracer.
     """
     return trace.get_tracer(name)
-
-
-def setup_logging(
-    service_name: str,
-    resource: Resource | None = None,
-    endpoint_base: str | None = None,
-) -> LoggerProvider:
-    """Initialize the OTel LoggerProvider with an OTLP HTTP exporter.
-
-    Adds an OTel log SDK path parallel to the existing fluentd path.
-    Python `LogRecord`s flow through this exporter (after the
-    `comps`-supplied `TraceContextFilter` annotates them with
-    `trace_id`/`span_id`) and out via OTLP to the Collector, then on to
-    VictoriaLogs — where they land with the OTel resource attached
-    (``service.name=genieai-X``, ``deployment.environment=...``, etc.).
-
-    Without this, OPEA Python logs only reach VL via the fluentd path
-    (no indexed OTel fields, no trace correlation). Upstream OPEA's
-    GenAIComps telemetry scope is metrics + traces only (see
-    https://github.com/opea-project/GenAIComps/comps/cores/telemetry).
-
-    Called automatically by ``setup_tracing()``; may also be called
-    independently if a service wants log export without spans/metrics.
-
-    @param service_name  Service name stamped on every log record
-                         (``service.name`` resource attribute). Must
-                         match the name passed to ``setup_tracing()``
-                         so log + trace correlation joins cleanly.
-    @param resource      Optional pre-built Resource. If None, built
-                         from the same env vars as ``setup_tracing()``
-                         (``SERVICE_VERSION``, ``NODE_ENV``).
-    @param endpoint_base OTLP base URL. If None, read from
-                         ``OTEL_EXPORTER_OTLP_ENDPOINT``. Empty /
-                         unset string → function is a no-op (same
-                         observability-disabled semantics as
-                         ``setup_tracing()``).
-    @returns the registered ``LoggerProvider`` (or ``None`` when
-             observability is disabled / endpoint missing).
-    """
-    global _logger_provider
-
-    if os.getenv("ENABLE_OBSERVABILITY") != "1":
-        return None
-
-    if endpoint_base is None:
-        endpoint_base = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
-    if not endpoint_base:
-        return None
-
-    if resource is None:
-        # `OTEL_SERVICE_NAME` is the canonical OTel-spec env var.
-        # Same priority as `setup_tracing()` so log + trace correlation
-        # joins cleanly under one filter.
-        service_name_resolved = os.getenv("OTEL_SERVICE_NAME") or service_name
-        service_namespace = os.getenv("OTEL_SERVICE_NAMESPACE", "genieai")
-        resource = Resource.create(
-            {
-                "service.name": service_name_resolved,
-                "service.namespace": service_namespace,
-                "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
-                "deployment.environment": os.getenv("NODE_ENV", "development"),
-            }
-        )
-
-    log_endpoint = f"{endpoint_base.rstrip('/')}/v1/logs"
-    log_exporter = OTLPLogExporter(endpoint=log_endpoint)
-    # Wrap the inner BatchLogRecordProcessor with the PII redactor so
-    # every LogRecord is scrubbed of sensitive attributes + body text
-    # BEFORE the OTel exporter serialises it for VictoriaLogs. Without
-    # this, user queries / emails / tokens / session IDs flow verbatim
-    # to the log store — mirroring the Node.js `PIIRedactingLogRecordProcessor`
-    # we ship on the backend + doc-repo side.
-    from tracing_pii import PIIRedactingLogRecordProcessor  # local import — keeps
-
-    # module-level import graph light; the file has no heavy deps.
-    pii_safe_processor = PIIRedactingLogRecordProcessor(BatchLogRecordProcessor(log_exporter))
-
-    _logger_provider = LoggerProvider(resource=resource)
-    _logger_provider.add_log_record_processor(pii_safe_processor)
-    set_logger_provider(_logger_provider)
-
-    # Attach the OTel LoggingHandler to the root Python logger so every
-    # `logger.info(...)` call (including OPEA `comps`' CustomLogger)
-    # emits a `LogRecord` through the LoggerProvider → OTLPLogExporter
-    # → Collector → VictoriaLogs. Without this, the LoggerProvider sits
-    # idle — Python's stdlib logging has no awareness of OTel logs
-    # unless we wire a handler that converts `LogRecord`s.
-    #
-    # Default INFO (matches Python's stdlib default) — DEBUG would flood
-    # OPEA's `comps` CustomLogger at production scale (~5-10x volume).
-    # Operators can override with `LOG_LEVEL=DEBUG` (the env var
-    # compose sets for backend + doc-repo, kept consistent for OPEA).
-    handler_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
-    handler_level = getattr(logging, handler_level_name, logging.INFO)
-    handler = LoggingHandler(level=handler_level, logger_provider=_logger_provider)
-
-    # Attach at the ROOT logger so every child logger (comps CustomLogger
-    # included) propagates to us. `force=False` to avoid clobbering
-    # existing handlers (e.g. Uvicorn's stdout handler) — the OTel
-    # handler is additive.
-    root_logger = logging.getLogger()
-    if not any(isinstance(h, LoggingHandler) for h in root_logger.handlers):
-        root_logger.addHandler(handler)
-    # The OTel LoggingHandler carries its own `level=handler_level`, but
-    # Python's logging hierarchy ALSO checks the LOGGERS' level before
-    # dispatching to handlers. Python's stdlib default for the root
-    # logger is WARNING — which would silently drop every `logger.info()`
-    # call from chatqna / dataprep / retriever / reranker before it
-    # ever reached the OTel handler. Lift the root level to match the
-    # handler so the env-driven LOG_LEVEL actually takes effect end-to-end.
-    if root_logger.level == logging.NOTSET or root_logger.level > handler_level:
-        root_logger.setLevel(handler_level)
-
-    logging.getLogger(__name__).debug(
-        "OTel LoggerProvider enabled for %s → %s (handler level=%s)",
-        service_name,
-        log_endpoint,
-        handler_level_name,
-    )
-    return _logger_provider
 
 
 def with_span(name: str, tracer_name: str = __name__, attributes: dict | None = None):
@@ -686,10 +532,10 @@ def get_meter() -> metrics.Meter:
 
 
 def shutdown() -> None:
-    """Flush and shut down the global TracerProvider, MeterProvider, and
-    LoggerProvider (best-effort)."""
-    global _provider, _meter_provider, _logger_provider
-    if _provider is None and _meter_provider is None and _logger_provider is None:
+    """Flush and shut down the global TracerProvider and MeterProvider
+    (best-effort)."""
+    global _provider, _meter_provider
+    if _provider is None and _meter_provider is None:
         return
     # Use a 15 s force_flush budget on both sides — matches the JS-side
     # `SHUTDOWN_TIMEOUT_MS=15000` so the JS + Python services flush
@@ -707,19 +553,13 @@ def shutdown() -> None:
     with contextlib.suppress(Exception):
         _meter_provider.shutdown()
     _meter_provider = None
-    with contextlib.suppress(Exception):
-        _logger_provider.force_flush(force_flush_timeout_ms)
-    with contextlib.suppress(Exception):
-        _logger_provider.shutdown()
-    _logger_provider = None
 
 
 def _reset() -> None:
     """Reset module state. Only for testing."""
-    global _provider, _meter_provider, _logger_provider
+    global _provider, _meter_provider
     _provider = None
     _meter_provider = None
-    _logger_provider = None
 
 
 def _sigterm_handler(signum, frame):

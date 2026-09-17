@@ -104,7 +104,9 @@ class AgriScheduler {
         // (2026-09-17: fetch log said ok, collections stayed empty).
         const chunk = docs.slice(i, i + 500).map((d) => ({ ...d }));
         const res = await coll.import(chunk, { type: 'array', onDuplicate: 'update' });
-        written += (res && (res.imported || res.updated || 0)) || 0;
+        // Arango import API returns {created, ignored, errors} — 'ignored'
+        // counts onDuplicate updates, so both count as persisted.
+        written += (res && (res.created || 0) + (res.ignored || 0)) || 0;
       }
       if (docs.length > 0 && written === 0) {
         // A 0-doc write with a non-empty parse is as much a failure as a

@@ -79,23 +79,16 @@ const MARKET_CATEGORIES = {
   vegetables: {
     title: 'Fruits & Vegetables',
     seriesDefs: [
+      // Commodities verified against the WFP VAM feeds actually publishing
+      // for these markets (NIC has NO tomatoes/onions; GT La Terminal has
+      // no tomatoes at all) — matched to the real GT wholesale list.
       {
         type: 'wfp',
-        adapter: 'wfp-nic',
-        country: 'Nicaragua',
-        commodity: 'Tomatoes',
-        pricetype: 'retail',
-        name: 'Tomatoes, Nicaragua national average [regional]',
-        unit: QUINTAL,
-        regional: true
-      },
-      {
-        type: 'wfp',
-        adapter: 'wfp-nic',
-        country: 'Nicaragua',
-        commodity: 'Onions',
-        pricetype: 'retail',
-        name: 'Onions, Nicaragua national average [regional]',
+        adapter: 'wfp-gtm',
+        country: 'Guatemala',
+        commodity: 'Cabbage',
+        pricetype: 'wholesale',
+        name: 'Cabbage, Guatemala La Terminal wholesale [regional]',
         unit: QUINTAL,
         regional: true
       },
@@ -103,9 +96,19 @@ const MARKET_CATEGORIES = {
         type: 'wfp',
         adapter: 'wfp-gtm',
         country: 'Guatemala',
-        commodity: 'Tomatoes (big size)',
+        commodity: 'Carrots',
         pricetype: 'wholesale',
-        name: 'Tomatoes, Guatemala La Terminal wholesale [regional]',
+        name: 'Carrots, Guatemala La Terminal wholesale [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-gtm',
+        country: 'Guatemala',
+        commodity: 'Watermelons',
+        pricetype: 'wholesale',
+        name: 'Watermelons, Guatemala La Terminal wholesale [regional]',
         unit: QUINTAL,
         regional: true
       },
@@ -430,6 +433,9 @@ class AgriService {
     if (Array.isArray(d)) return d.length === 0;
     if (Array.isArray(d.series)) return d.series.length === 0;
     if (Array.isArray(d.departments)) return d.departments.length === 0;
+    // pest-alerts shape: advisories/regional/sightings
+    if (Array.isArray(d.advisories))
+      return d.advisories.length + (d.regional || []).length + (d.sightings || []).length === 0;
     return false;
   }
 

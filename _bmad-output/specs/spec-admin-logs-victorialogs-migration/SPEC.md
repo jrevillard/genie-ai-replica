@@ -28,7 +28,7 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
 ## Capabilities
 
 - **CAP-1 Producer emits structured log records to VictoriaLogs**
-  - **intent:** Winston logger writes each record to VictoriaLogs via OTel `LoggerProvider` + `OTLPLogExporter` + `BatchLogRecordProcessor`, gated on `LOG_TO_VICTORIALOGS=1 && ENABLE_OBSERVABILITY=1`.
+  - **intent:** Winston logger emits structured records to stdout; OTel collector ingests via the fluentd driver and forwards to VictoriaLogs.
   - **success:** `logger.info('hello')` produces a POST to `otel-collector:4318/v1/logs` within 5 s; `curl http://victorialogs:9428/select/logsql/query?q=service:genie-backend` returns the record; killing VL does not block any Node service (drop counter visible; console mirror preserves records).
 - **CAP-2 Winston format is JSON, not printf**
   - **intent:** Replace the printf format with `winston.format.combine(timestamp(), errors({stack:true}), json())`; `trace_id` / `span_id` become JSON keys, not printf substrings.
@@ -43,7 +43,7 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
   - **intent:** Wrap VL client calls in `LogsService` and `securityScanService`; when 5xx / ECONNREFUSED / ENOTFOUND / timeout, return empty results + `degraded: true` flag (gated on `VL_FAIL_OPEN=true`); rate-limit the error log to 1 per minute.
   - **success:** With `VL_FAIL_OPEN=true`, `docker stop victorialogs` + `GET /api/admin/logs` returns `{logs:[], total:0, degraded:true}` AND `POST /api/admin/security-scan` returns `{vulnerabilities:{critical:[],medium:[],low:[]}, degraded:true, error:'vl_unreachable'}` within 5 s; `backend.logger.error` fires at most once per minute; rate-limit state persists across backend restarts via `/tmp/vl-fail-open-ts`.
 - **CAP-6 Per-phase rollback escape hatches**
-  - **intent:** Each phase ships with a tested env switch that re-enables the previous behaviour: `LOG_TO_VICTORIALOGS=0` (P1a), `ADMIN_LOGS_SOURCE=file` (P2), `VL_FAIL_OPEN=true` (P3), `LOG_TO_FILE=1` (P4).
+  - **intent:** Each phase ships with a tested env switch that re-enables the previous behaviour: `ADMIN_LOGS_SOURCE=file` (P2), `VL_FAIL_OPEN=true` (P3), `LOG_TO_FILE=1` (P4).
   - **success:** Each switch tested with smoke on the deployed release branch before merge to `main`; `ADMIN_LOGS_SOURCE=file` is permanent and never removed.
 - **CAP-7 VictoriaLogs + OTel Collector always-on core stack (D1)**
   - **intent:** Remove `profiles: [observability]` from `victorialogs`, `otel-collector`, and `otel-collector-init` in `docker-compose.yaml` so they start by default in `docker compose up`; pin `victorialogs.deploy.replicas: 1` so Swarm always runs one replica regardless of `ENABLE_OBSERVABILITY`. Non-Node services (Python OPEA, Kong, nginx, postgres) keep `fluentd → collector → VL`.

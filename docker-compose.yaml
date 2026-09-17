@@ -599,11 +599,6 @@ services:
       # (service.version attribute). Defaults to the consuming component's
       # package.json — override only for canary / compliance runs.
       - SERVICE_VERSION=${SERVICE_VERSION:-}
-      # VictoriaLogs transport default-on. Pin to 1 in compose so
-      # deployments that forget to set the env var still ship structured logs
-      # to VL with proper OTel trace_id/span_id fields (not buried in _msg).
-      # Escape hatch: set LOG_TO_VICTORIALOGS=0 in .env.
-      - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     networks:
       - genieai_network
     deploy:
@@ -671,8 +666,6 @@ services:
       # Override the version stamped on every emitted OTel resource
       # (service.version attribute). Defaults to doc-repo/package.json.
       - SERVICE_VERSION=${SERVICE_VERSION:-}
-      # VictoriaLogs transport default-on — see backend block for rationale.
-      - LOG_TO_VICTORIALOGS=${LOG_TO_VICTORIALOGS:-1}
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the
     # Docker host, so OIDC discovery and JWKS fetches reach NGINX for JWT validation.
     extra_hosts:

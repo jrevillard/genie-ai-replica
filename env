@@ -679,9 +679,6 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # OpenTelemetry OTLP endpoint — backend (Node.js) and OPEA services (Python) export traces here
 # Default in docker-compose: http://otel-collector:4318 — override only for external collectors
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-# OTLP logs endpoint — backend + doc-repo + OPEA export logs to Collector
-# Distinct from OTEL_EXPORTER_OTLP_ENDPOINT above (base URL, used for traces + metrics)
-# OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://otel-collector:4318/v1/logs
 
 # OTel-spec service name override — read by backend (Node.js tracing.js) +
 # doc-repo (tracing.js) + OPEA overlay (tracing.py) AS THE CANONICAL source.
@@ -737,12 +734,6 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # VL_QUERY_TIMEOUT_MS=30000
 
 # Enables VictoriaLogsTransport in components/shared/lib/logger.js.
-# Boolean coercion: 1 | true | TRUE | yes activates transport.
-# Default in docker-compose.yaml backend + document-repository: 1
-# (booleanEnv defaultValue=true). Uncomment to override the default
-# (set to 0 to disable the VL writer transport while keeping observability on).
-# LOG_TO_VICTORIALOGS=1
-
 # MELT backend selector (single implementation today).
 # Whitelisted in tests/config-validator/.
 # MELT_PROVIDER=victorialogs

@@ -19,10 +19,9 @@
 # the swarm).
 #
 # Endpoint resolution precedence (highest wins):
-#   1. OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  (full URL, must end in /v1/logs)
-#   2. VICTORIALOGS_URL                  (base URL; the script appends the
+#   1. VICTORIALOGS_URL                  (base URL; the script appends the
 #                                        OTLP insert path)
-#   3. http://otel-collector:4318/v1/logs  (swarm default per D6)
+#   2. http://otel-collector:4318/v1/logs  (swarm default per D6)
 #
 # Fixture path:
 #   $1                                  absolute or relative path
@@ -71,7 +70,6 @@ Options:
   -h, --help      Show this help and exit.
 
 Environment variables:
-  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  Full URL ending in /v1/logs (highest priority)
   VICTORIALOGS_URL                  Base URL; /insert/opentelemetry/v1/logs is appended
   INGEST_SCOPE_NAME                 OTLP scope name           (default: fixture-ingestion)
   INGEST_SCOPE_VERSION              OTLP scope version        (default: 1.0.0)
@@ -146,24 +144,11 @@ for cmd in jq curl; do
 done
 
 # ----- endpoint resolution (D6) ----------------------------------------------
-# 1) OTEL_EXPORTER_OTLP_LOGS_ENDPOINT (full URL, must end in /v1/logs)
-# 2) VICTORIALOGS_URL                 (base URL; append OTLP insert path)
-# 3) http://otel-collector:4318/v1/logs (swarm default)
-if [[ -n "${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-}" ]]; then
-  # Trim leading/trailing whitespace: operators frequently paste URLs with
-  # trailing newlines or stray spaces, and curl treats them as part of the URL.
-  ENDPOINT="$(printf '%s' "$OTEL_EXPORTER_OTLP_LOGS_ENDPOINT" | xargs)"
-  # Reject non-http(s) schemes (file://, ftp://, javascript://, ...) — curl
-  # would silently accept them and either upload the payload as a local file
-  # or no-op the POST. Same scheme gate as VICTORIALOGS_URL.
-  if ! [[ "$ENDPOINT" =~ ^https?:// ]]; then
-    echo "[post-fixture-to-vl-otlp] OTEL_EXPORTER_OTLP_LOGS_ENDPOINT must use http:// or https://, got: $ENDPOINT" >&2
-    exit 1
-  fi
-  ENDPOINT_SOURCE="OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"
-elif [[ -n "${VICTORIALOGS_URL:-}" ]]; then
-  # Trim leading/trailing whitespace (symmetric with the OTEL endpoint branch
-  # above) before stripping slashes / validating the scheme.
+# 1) VICTORIALOGS_URL                 (base URL; append OTLP insert path)
+# 2) http://otel-collector:4318/v1/logs (swarm default)
+if [[ -n "${VICTORIALOGS_URL:-}" ]]; then
+  # Trim leading/trailing whitespace before stripping slashes / validating
+  # the scheme.
   VL_BASE="$(printf '%s' "$VICTORIALOGS_URL" | xargs)"
   # Strip ALL trailing slashes (parameter expansion ${var%/} only removes one
   # pass; loop until stable). Multiple trailing slashes would otherwise produce

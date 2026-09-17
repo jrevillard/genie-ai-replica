@@ -2083,12 +2083,7 @@ export default {
 .message-bubble :deep(h5),
 .message-bubble :deep(h6) {
   font-weight: 600;
-  /* Aggressive zero-all: no margin/padding on headings so the heading
-   * flows immediately into the next block. Line-height is the only
-   * vertical rhythm. The browser default ~21px (1.5 × 14px) on the
-   * heading line creates the visible heading→content breathing. */
-  margin: 0.5em 0 0;
-  padding: 0;
+  margin: 0.5em 0;
   color: var(--fg);
 }
 
@@ -2112,53 +2107,19 @@ export default {
 }
 
 .message-bubble :deep(p) {
-  /* Zero everything — adjacent paragraphs sit flush, line-height is the
-   * only rhythm. */
-  margin: 0.2em 0 0;
-  padding: 0;
+  margin: 0.5em 0;
   color: var(--fg);
 }
 
 .message-bubble :deep(ul),
 .message-bubble :deep(ol) {
-  /* Zero bottom margin: the gap between a sub-list and the next parent
-   * label was the main bug. padding-left still provides visual indent.
-   * Tightened line-height to match <li>; default 1.5 on a nested <ul>
-   * inside an already-tightened parent <li> caused visible inter-item
-   * gaps larger than necessary. */
-  margin: 0.15em 0 0;
+  margin: 0.5em 0;
   padding-left: 1.5em;
-  line-height: 1.3;
 }
 
 .message-bubble :deep(li) {
-  /* Zero margin/padding — line-height is the only inter-item rhythm. */
-  /* Tightened from default 1.5 to 1.3 to compact verbose lists visually
-   * without making text illegible — the only remaining vertical air in
-   * verbose lists was the natural line-height on stacked <li>s. */
-  margin: 0;
-  padding: 0;
-  line-height: 1.3;
+  margin-bottom: 0.3em;
   color: var(--fg);
-}
-
-/* Chat output pattern: `<li><p><strong>Label:</strong></p><ul>...</ul></li>`.
- * GFM `marked` wraps each list item's text in a `<p>` even when the source
- * is structurally tight (parent label + nested sub-list on the next line).
- * The `<p>` adds a block-level margin between the label and its sub-list,
- * which reads as an extra blank line. Inline the label paragraph so it
- * flows flush with its content, and shrink the top margin of the nested
- * list that immediately follows — keeping the surrounding HTML semantically
- * intact (no DOM mutation). */
-.message-bubble :deep(li > p) {
-  display: inline;
-  margin: 0;
-  padding: 0;
-}
-.message-bubble :deep(li > p + ul),
-.message-bubble :deep(li > p + ol) {
-  margin-top: 0.05em;
-  padding-left: 1.2em;
 }
 
 .message-bubble :deep(a) {

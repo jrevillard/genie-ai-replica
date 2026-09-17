@@ -529,7 +529,7 @@ describe('LogsService VictoriaLogs rewrite', () => {
       expect(captured.statusCode).toBe(503);
       expect(captured.body).toEqual({
         error: 'vl_files_disabled',
-        message: 'Set LOG_TO_FILE=1 to use file-based log source'
+        message: 'File-based log source is no longer available'
       });
     });
 
@@ -560,131 +560,6 @@ describe('LogsService VictoriaLogs rewrite', () => {
       });
     });
   });
-
-  describe('file path — hardening', () => {
-    beforeEach(() => {
-      process.env.ADMIN_LOGS_SOURCE = 'file';
-      process.env.LOG_TO_FILE = '1';
-    });
-
-    it('tolerates ENOENT between stat() and open() (file vanished)', async () => {
-      // Directory listing succeeds with one file, lock acquisition succeeds,
-      // but the file vanishes between listing and stat (race with rotation).
-      // Use `custom` range so today (2026-09-07) is NOT in range —
-      // currentLogs branch is skipped, only the archived file is read.
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log']);
-      const mockHandle = { close: jest.fn().mockResolvedValue(undefined) };
-      mockFs.open.mockResolvedValue(mockHandle);
-      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      mockFs.stat.mockRejectedValueOnce(enoent);
-
-      const result = await logsService.getLogsInRange({
-        dateRange: 'custom',
-        startDate: '2026-09-01',
-        endDate: '2026-09-01',
-        limit: 10
-      });
-      // stat() ENOENT → empty string → empty envelope, no throw.
-      expect(result.logs).toEqual([]);
-      expect(result.total).toBe(0);
-      expect(mockFs.open).toHaveBeenCalledWith(expect.stringMatching(/\.logs-read-lock-/), 'wx');
-      expect(mockFs.stat).toHaveBeenCalled();
-    });
-
-    it('skips file gracefully when fs.open(lockPath, "wx") throws EEXIST', async () => {
-      // `custom` range so today is NOT in range — only the archived file.
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log']);
-      mockFs.stat.mockResolvedValue({ size: 100 });
-
-      // Lock acquisition: every attempt throws EEXIST (another reader holds it).
-      const eexist = Object.assign(new Error('EEXIST'), { code: 'EEXIST' });
-      mockFs.open.mockRejectedValue(eexist);
-
-      const result = await logsService.getLogsInRange({
-        dateRange: 'custom',
-        startDate: '2026-09-01',
-        endDate: '2026-09-01',
-        limit: 10
-      });
-      // Lock failure → every file skipped → empty envelope.
-      expect(result.logs).toEqual([]);
-      expect(result.total).toBe(0);
-      expect(mockFs.open).toHaveBeenCalledWith(expect.stringMatching(/\.logs-read-lock-/), 'wx');
-    });
-
-    it('parses NDJSON with N=4096 re-parse window after a SyntaxError', async () => {
-      // Two valid NDJSON lines on a file date within the requested range.
-      // The first line is intentionally truncated (kill -9 mid-write); the
-      // re-parse window must stitch the next N=4096 bytes so the line
-      // parses, and the second line (after \n) must parse on its own.
-      const truncated = '{"timestamp":"2026-09-01T00:00:00.000Z","message":"truncated';
-      const tail =
-        '","level":"INFO","service":"backend"}\n' +
-        '{"timestamp":"2026-09-01T00:00:01.000Z","message":"next","level":"INFO","service":"backend"}\n';
-      const content = truncated + tail;
-
-      // Today (2026-09-07) is NOT in [2026-09-01..2026-09-01], so the
-      // currentLogs branch is skipped — only the archived file is read.
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log']);
-      mockFs.stat.mockResolvedValue({ size: content.length });
-      const mockHandle = { close: jest.fn().mockResolvedValue(undefined) };
-      mockFs.open.mockResolvedValueOnce(mockHandle);
-      mockFs.readFile.mockResolvedValueOnce(content);
-
-      const result = await logsService.getLogsInRange({
-        dateRange: 'custom',
-        startDate: '2026-09-01',
-        endDate: '2026-09-01',
-        limit: 10
-      });
-      // The re-parse window stitches the truncated line AND the second
-      // line parses on its own → at least 2 rows (sort: DESC by timestamp).
-      expect(result.total).toBeGreaterThanOrEqual(2);
-      const messages = result.logs.map((row) => row.message);
-      expect(messages).toContain('next');
-      expect(messages.some((m) => /truncated/.test(m))).toBe(true);
-    });
-
-    it('tolerates readdir ENOENT between access() and readdir() (file path)', async () => {
-      // access() succeeds, then a concurrent rotation removes the dir
-      // before readdir() runs. The previous code bubbled the ENOENT up
-      // to the caller as an unhandled rejection. The fix returns [].
-      mockFs.access.mockResolvedValue(undefined);
-      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      mockFs.readdir.mockRejectedValueOnce(enoent);
-      const result = await logsService.getLogFilesInRange('2026-09-01', '2026-09-01', true);
-      expect(result).toEqual([]);
-    });
-
-    it('returns degraded:true envelope when a file read throws (file path)', async () => {
-      // Simulate a partial scan: one file is read OK, the next file's
-      // _readLogFileAd10 throws an unrecognised error. The previous
-      // behaviour silently swallowed it; the fix surfaces `degraded:true`
-      // on the returned envelope so the admin UI can flag partial results.
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log', 'combined-2026-09-02.log']);
-      const mockHandle = { close: jest.fn().mockResolvedValue(undefined) };
-      // First open() returns the lock handle for the first file; subsequent
-      // opens resolve to handles too so both files are entered.
-      mockFs.open.mockResolvedValue(mockHandle);
-      // First stat OK, second stat throws an unknown error (EACCES).
-      mockFs.stat
-        .mockResolvedValueOnce({ size: 50 })
-        .mockRejectedValueOnce(Object.assign(new Error('EACCES'), { code: 'EACCES' }));
-
-      const result = await logsService.getLogsInRange({
-        dateRange: 'custom',
-        startDate: '2026-09-01',
-        endDate: '2026-09-02',
-        limit: 10
-      });
-      expect(result.degraded).toBe(true);
-    });
-  });
-
   describe('review follow-up — 2026-09-07 patches', () => {
     it('_defaultStartIso throws on unknown dateRange (no silent today fallback)', () => {
       // The previous behaviour fell through to "today" for any unknown
@@ -863,449 +738,157 @@ describe('LogsService VictoriaLogs rewrite', () => {
       });
     });
 
-    describe('_parseNdjsonContent retry-success cursor handling', () => {
-      it('does not over-advance the cursor after a successful retry', () => {
-        // Construct content where:
-        //   iter 1 segment = '{"trunc":' (length 9, invalid JSON)
-        //   newlineIdx + RE_PARSE_WINDOW_BYTES <= content.length (retry fires)
-        //   tail = '[1,1,...,1]}' (4096 bytes ending in '}')
-        //   segment + tail = '{"trunc":[1,1,...,1]}' — VALID JSON, retry succeeds.
-        //
-        // The tail line itself is intentionally NOT valid JSON standalone
-        // (it ends with `}`), so iter 2 (re-entered at newlineIdx+1) records
-        // a parse_error and skips the line. With the bug, the over-advance
-        // would have skipped it entirely (no parse_error either, because
-        // iter 2's cursor landed on a blank line).
-        const tailArray = '[' + '1,'.repeat(2046) + '1]}'; // 4096 bytes, ends with '}'
-        const content = '{"trunc":\n' + tailArray + '\n{"message":"next"}\n';
-        // Use jest.isolateModules so we capture the SAME logger mock the
-        // service uses, and count its warn calls (parseError++ path).
-        let isolatedService;
-        let parseErrorCount = 0;
+    describe('review follow-up #2 — 2026-09-07 patches (round 3)', () => {
+      it('_logVlUnavailableOnce: cooldown file is updated each successful log (fs.writeFile path)', async () => {
+        mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 10 * 60 * 1000)); // 10 min ago
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+        await logsService._logVlUnavailableOnce('test-op', new Error('boom'));
+        // fs.writeFile (not openSync 'wx') — must have been called to refresh
+        // the cooldown timestamp.
+        expect(mockFs.writeFile).toHaveBeenCalled();
+        const [pathArg, valueArg] = mockFs.writeFile.mock.calls[mockFs.writeFile.mock.calls.length - 1];
+        expect(typeof pathArg).toBe('string');
+        expect(Number.isFinite(Number(valueArg))).toBe(true);
+      });
+
+      it('_logVlUnavailableOnce: still skips log when within cooldown window', async () => {
+        mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 1000)); // 1s ago
+        const writeBefore = mockFs.writeFile.mock.calls.length;
+        await logsService._logVlUnavailableOnce('test-op', new Error('boom'));
+        const writeAfter = mockFs.writeFile.mock.calls.length;
+        expect(writeAfter).toBe(writeBefore);
+      });
+
+      it('_logVlUnavailableOnce: surfaces the original incident via logger.warn when writeFile fails', async () => {
+        // Re-require the service inside its own isolateModules registry so
+        // we share the same `shared-lib` module instance the service bound
+        // `logger` from — `beforeEach` resetModules would otherwise hand us
+        // a different mock.
+        mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 10 * 60 * 1000));
+        const err = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        mockFs.writeFile.mockRejectedValueOnce(err);
+        let sharedLogger;
+        let service;
         jest.isolateModules(() => {
-          const { logger } = require('../../shared-lib');
-          const origWarn = logger.warn;
-          logger.warn = jest.fn((...args) => {
-            if (String(args[0]).includes('parse error')) parseErrorCount++;
-            return origWarn.apply(logger, args);
-          });
-          isolatedService = require('../../services/logs-service');
-          isolatedService.initialized = false;
+          sharedLogger = require('../../shared-lib').logger;
+          service = require('../../services/logs-service');
+          service.initialized = false;
+          service.setVictoriaLogsClient(mockVlClient);
         });
-        const rows = isolatedService._parseNdjsonContent(content);
-        // With the fix: 2 rows (retry-success + {"msg":"next"}), 1 parse_error.
-        // With the bug: 2 rows (retry-success + {"msg":"next"}), 0 parse_errors
-        //   (the tail line is skipped by cursor over-advance into a blank line,
-        //   not by parse_error).
-        expect(rows.length).toBe(2);
-        expect(rows[1].message).toBe('next');
-        expect(parseErrorCount).toBe(1);
-      });
-    });
-
-    it('getLogsInRange clamps limit=-1 and offset=-5 to safe values', async () => {
-      mockVlClient.query.mockResolvedValue([]);
-      const result = await logsService.getLogsInRange({
-        start: '2026-09-01T00:00:00.000Z',
-        end: '2026-09-01T23:59:59.999Z',
-        limit: -1,
-        offset: -5
-      });
-      expect(result.limit).toBe(0);
-      expect(result.offset).toBe(0);
-    });
-
-    it('getLogFilesInRange returns [] for date spans exceeding MAX_LOG_FILES_RANGE_DAYS', async () => {
-      const descriptors = await logsService.getLogFilesInRange('2000-01-01', '2026-09-07');
-      expect(descriptors).toEqual([]);
-    });
-
-    it('_acquireReadLock throws TypeError on non-string filePath', async () => {
-      await expect(logsService._acquireReadLock(undefined)).rejects.toThrow(TypeError);
-      await expect(logsService._acquireReadLock(null)).rejects.toThrow(TypeError);
-      await expect(logsService._acquireReadLock('')).rejects.toThrow(TypeError);
-    });
-
-    it('getDebugYesterday backward-compat alias routes through debugYesterdayLogs', async () => {
-      mockVlClient.query.mockResolvedValue([
-        {
-          _time: '2026-09-06T12:00:00.000Z',
-          _msg: 'hello',
-          level: 'INFO',
-          service: 'backend',
-          stream: 'genie.backend'
-        }
-      ]);
-      const result = await logsService.getDebugYesterday();
-      expect(result.success).toBe(true);
-      expect(result.lines).toBeGreaterThanOrEqual(1);
-    });
-
-    it('file-path getLogsInRange envelope carries limit/offset (VL/file parity)', async () => {
-      process.env.ADMIN_LOGS_SOURCE = 'file';
-      process.env.LOG_TO_FILE = '1';
-      // Empty file listing → empty envelope, but limit/offset MUST round-trip.
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValueOnce([]);
-      const result = await logsService.getLogsInRange({
-        dateRange: 'custom',
-        startDate: '2026-09-01',
-        endDate: '2026-09-01',
-        limit: 25,
-        offset: 10
-      });
-      expect(result.limit).toBe(25);
-      expect(result.offset).toBe(10);
-    });
-  });
-
-  describe('review follow-up #2 — 2026-09-07 patches (round 3)', () => {
-    it('_logVlUnavailableOnce: cooldown file is updated each successful log (fs.writeFile path)', async () => {
-      mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 10 * 60 * 1000)); // 10 min ago
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
-      await logsService._logVlUnavailableOnce('test-op', new Error('boom'));
-      // fs.writeFile (not openSync 'wx') — must have been called to refresh
-      // the cooldown timestamp.
-      expect(mockFs.writeFile).toHaveBeenCalled();
-      const [pathArg, valueArg] = mockFs.writeFile.mock.calls[mockFs.writeFile.mock.calls.length - 1];
-      expect(typeof pathArg).toBe('string');
-      expect(Number.isFinite(Number(valueArg))).toBe(true);
-    });
-
-    it('_logVlUnavailableOnce: still skips log when within cooldown window', async () => {
-      mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 1000)); // 1s ago
-      const writeBefore = mockFs.writeFile.mock.calls.length;
-      await logsService._logVlUnavailableOnce('test-op', new Error('boom'));
-      const writeAfter = mockFs.writeFile.mock.calls.length;
-      expect(writeAfter).toBe(writeBefore);
-    });
-
-    it('_logVlUnavailableOnce: surfaces the original incident via logger.warn when writeFile fails', async () => {
-      // Re-require the service inside its own isolateModules registry so
-      // we share the same `shared-lib` module instance the service bound
-      // `logger` from — `beforeEach` resetModules would otherwise hand us
-      // a different mock.
-      mockFs.readFile.mockResolvedValueOnce(String(Date.now() - 10 * 60 * 1000));
-      const err = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
-      mockFs.writeFile.mockRejectedValueOnce(err);
-      let sharedLogger;
-      let service;
-      jest.isolateModules(() => {
-        sharedLogger = require('../../shared-lib').logger;
-        service = require('../../services/logs-service');
-        service.initialized = false;
-        service.setVictoriaLogsClient(mockVlClient);
-      });
-      sharedLogger.warn.mockClear();
-      await service._logVlUnavailableOnce('test-op', new Error('boom'));
-      expect(sharedLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('VictoriaLogs unreachable'),
-        expect.any(Object)
-      );
-      // The broken-cooldown incident is also surfaced via logger.error.
-      expect(sharedLogger.error).toHaveBeenCalled();
-      const errArgs = sharedLogger.error.mock.calls[sharedLogger.error.mock.calls.length - 1];
-      expect(String(errArgs[0])).toMatch(/cooldown write failed/i);
-      expect(String(errArgs[1])).toMatch(/boom/);
-    });
-
-    it('_emptyEnvelope clamps limit=-1 / offset=-5 to safe values', () => {
-      const env = logsService._emptyEnvelope({ limit: -1, offset: -5 });
-      expect(env.limit).toBe(0);
-      expect(env.offset).toBe(0);
-    });
-
-    it('_emptyEnvelope clamps limit > 10000', () => {
-      const env = logsService._emptyEnvelope({ limit: 99999, offset: 5 });
-      expect(env.limit).toBe(10000);
-      expect(env.offset).toBe(5);
-    });
-
-    it('_defaultEndIso("week") snaps to end-of-day (no minute drift)', () => {
-      const before = new Date();
-      before.setHours(23, 59, 59, 999);
-      const expected = before.toISOString();
-      const actual = logsService._defaultEndIso('week');
-      expect(actual).toBe(expected);
-    });
-
-    it('_defaultEndIso("month") snaps to end-of-day', () => {
-      const before = new Date();
-      before.setHours(23, 59, 59, 999);
-      const expected = before.toISOString();
-      const actual = logsService._defaultEndIso('month');
-      expect(actual).toBe(expected);
-    });
-
-    it('searchLogs — VL path honours caller offset (paginates the result window)', async () => {
-      const rows = Array.from({ length: 25 }, (_, i) => ({ _msg: `row-${i}` }));
-      mockVlClient.query.mockResolvedValueOnce(rows);
-      const result = await logsService.searchLogs({
-        dateRange: 'today',
-        limit: 10,
-        offset: 5
-      });
-      // Adapter asked for limit + offset = 15 rows, then we slice [5, 15).
-      expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
-      expect(result.logs).toHaveLength(10);
-      expect(result.logs[0]).toEqual({ _msg: 'row-5' });
-      expect(result.limit).toBe(10);
-      expect(result.offset).toBe(5);
-    });
-
-    it('searchLogs — VL path clamps negative limit/offset to safe values', async () => {
-      const rows = Array.from({ length: 3 }, (_, i) => ({ _msg: `r${i}` }));
-      mockVlClient.query.mockResolvedValueOnce(rows);
-      const result = await logsService.searchLogs({
-        dateRange: 'today',
-        limit: -5,
-        offset: -10
-      });
-      // limit=0 → no rows in slice; offset=0 → start from 0
-      expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 0 }));
-      expect(result.logs).toHaveLength(0);
-      expect(result.limit).toBe(0);
-      expect(result.offset).toBe(0);
-    });
-
-    it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
-      // Per-service hits() with q=severity_text:ERROR returns 7 ERROR
-      // rows across two services (5 in auth + 2 in system). The summary
-      // surfaces both rows, sorted by count desc; the WARN row in the
-      // input set is dropped because the caller's level=ERROR filter
-      // excluded it before the bucket was queried.
-      mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:ERROR') return { auth: 5, system: 2 };
-        if (q === '*') return { auth: 5, system: 2 };
-        return {};
-      });
-      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
-      expect(result.errors).toEqual([
-        { type: 'ERROR', typeKey: 'error', service: 'auth', count: 5 },
-        { type: 'ERROR', typeKey: 'error', service: 'system', count: 2 }
-      ]);
-      expect(result.warnings).toEqual([]);
-      expect(result.infos).toEqual([]);
-    });
-
-    it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
-      // 42 INFO rows (38 in genie-backend + 4 in retriever) + a WARN
-      // row that the level=INFO filter excludes from the WARN bucket.
-      mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:INFO') return { backend: 38, retriever: 4 };
-        if (q === '*') return { backend: 38, retriever: 4 };
-        return {};
-      });
-      const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
-      expect(result.errors).toEqual([]);
-      expect(result.warnings).toEqual([]);
-      expect(result.infos).toEqual([
-        { type: 'INFO', typeKey: 'info', service: 'backend', count: 38 },
-        { type: 'INFO', typeKey: 'info', service: 'retriever', count: 4 }
-      ]);
-    });
-
-    it('getLogsSummary — VL path with level unset queries ERROR + WARN + INFO + services in parallel', async () => {
-      // The new architecture issues 4 parallel hits() calls (one per
-      // level bucket + one unfiltered for the dropdown service list).
-      // The single-fetch-old tests are no longer applicable.
-      mockVlClient.hits.mockImplementation(async ({ q }) => {
-        if (q === 'severity_text:ERROR') return { backend: 4 };
-        if (q === 'severity_text:WARN') return { backend: 2 };
-        if (q === 'severity_text:INFO') return { backend: 100 };
-        if (q === '*') return { backend: 106 };
-        return {};
-      });
-      const result = await logsService.getLogsSummary({ date: '2026-09-06' });
-      expect(mockVlClient.hits).toHaveBeenCalledTimes(4);
-      expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'backend', count: 4 }]);
-      expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'backend', count: 2 }]);
-      expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'backend', count: 100 }]);
-      expect(result.services).toEqual([{ name: 'backend', count: 106 }]);
-    });
-  });
-
-  describe('review follow-up #3 — 2026-09-07 patches (round 4)', () => {
-    describe('MAX_LOG_FILE_SIZE truncation rewind (file path)', () => {
-      beforeEach(() => {
-        process.env.ADMIN_LOGS_SOURCE = 'file';
-        process.env.LOG_TO_FILE = '1';
+        sharedLogger.warn.mockClear();
+        await service._logVlUnavailableOnce('test-op', new Error('boom'));
+        expect(sharedLogger.warn).toHaveBeenCalledWith(
+          expect.stringContaining('VictoriaLogs unreachable'),
+          expect.any(Object)
+        );
+        // The broken-cooldown incident is also surfaced via logger.error.
+        expect(sharedLogger.error).toHaveBeenCalled();
+        const errArgs = sharedLogger.error.mock.calls[sharedLogger.error.mock.calls.length - 1];
+        expect(String(errArgs[0])).toMatch(/cooldown write failed/i);
+        expect(String(errArgs[1])).toMatch(/boom/);
       });
 
-      // Helper: feed a fixed-size buffer whose text content ends partway
-      // through a JSON object. The rewind must drop the trailing partial
-      // line, returning only the prefix that ends on a complete `\n`.
-      const buildTruncatedBuffer = () => {
-        const complete =
-          '{"timestamp":"2026-09-01T08:00:00.000Z","_msg":"complete-a"}\n' +
-          '{"timestamp":"2026-09-01T09:00:00.000Z","_msg":"complete-b"}\n';
-        const partial = '{"timestamp":"2026-09-01T10:00:00.000Z","_msg":"par';
-        const full = complete + partial;
-        const raw = Buffer.from(full, 'utf8');
-        // Pad to MAX_LOG_FILE_SIZE with NUL bytes — the read buffer is
-        // allocated to that size, but `toString('utf8')` will only emit
-        // up to the real content + the NULs (NUL is valid in JS strings).
-        // The rewind must still happen on the last `\n`, ignoring any
-        // post-content padding.
-        const padded = Buffer.alloc(20 * 1024 * 1024);
-        raw.copy(padded, 0);
-        return padded;
-      };
+      it('_defaultEndIso("week") snaps to end-of-day (no minute drift)', () => {
+        const before = new Date();
+        before.setHours(23, 59, 59, 999);
+        const expected = before.toISOString();
+        const actual = logsService._defaultEndIso('week');
+        expect(actual).toBe(expected);
+      });
 
-      it('_getLogsInRangeFromFile truncates to last \\n when over MAX_LOG_FILE_SIZE (no half JSON token)', async () => {
-        mockFs.access.mockResolvedValue(undefined);
-        mockFs.readdir.mockResolvedValueOnce(['combined-2026-09-01.log']);
-        const mockLockHandle = { close: jest.fn().mockResolvedValue(undefined) };
-        mockFs.stat.mockResolvedValue({ size: 25 * 1024 * 1024 }); // > MAX_LOG_FILE_SIZE
-        const fh = { read: jest.fn(), close: jest.fn() };
-        // Return the padded buffer; `fh.read` fills the destination.
-        const padded = buildTruncatedBuffer();
-        fh.read.mockImplementation((buf) => {
-          padded.copy(buf, 0);
-          return Promise.resolve({ bytesRead: padded.length });
+      it('_defaultEndIso("month") snaps to end-of-day', () => {
+        const before = new Date();
+        before.setHours(23, 59, 59, 999);
+        const expected = before.toISOString();
+        const actual = logsService._defaultEndIso('month');
+        expect(actual).toBe(expected);
+      });
+
+      it('searchLogs — VL path honours caller offset (paginates the result window)', async () => {
+        const rows = Array.from({ length: 25 }, (_, i) => ({ _msg: `row-${i}` }));
+        mockVlClient.query.mockResolvedValueOnce(rows);
+        const result = await logsService.searchLogs({
+          dateRange: 'today',
+          limit: 10,
+          offset: 5
         });
-        fh.close.mockResolvedValue(undefined);
-        // Lock acquire ('wx') returns the lock handle; file open ('r')
-        // returns the file handle — distinguished by the lock suffix.
-        mockFs.open.mockImplementation((p, _mode) => {
-          if (typeof p === 'string' && p.includes('.logs-read-lock-')) {
-            return Promise.resolve(mockLockHandle);
-          }
-          return Promise.resolve(fh);
-        });
-
-        const result = await logsService.getLogsInRange({
-          dateRange: 'custom',
-          startDate: '2026-09-01',
-          endDate: '2026-09-01',
-          limit: 10
-        });
-        // Rewind dropped the partial trailing line → 2 parsed rows.
-        // (Rows are sorted descending by timestamp.)
-        expect(result.logs).toHaveLength(2);
-        expect(result.logs.map((l) => l.message)).toEqual(['complete-b', 'complete-a']);
-        expect(fh.close).toHaveBeenCalled();
+        // Adapter asked for limit + offset = 15 rows, then we slice [5, 15).
+        expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 15 }));
+        expect(result.logs).toHaveLength(10);
+        expect(result.logs[0]).toEqual({ _msg: 'row-5' });
+        expect(result.limit).toBe(10);
+        expect(result.offset).toBe(5);
       });
 
-      it('readLogFile: returns full buffer when no \\n is present (single huge line fallback)', async () => {
-        // Direct test of the standalone readLogFile helper.
-        mockFs.access.mockResolvedValue(undefined);
-        mockFs.stat.mockResolvedValue({ size: 25 * 1024 * 1024 });
-        const fh = { read: jest.fn(), close: jest.fn() };
-        const oneBigLine = Buffer.alloc(20 * 1024 * 1024, 0x41); // 20 MB of 'A', no newline
-        fh.read.mockImplementation((buf) => {
-          oneBigLine.copy(buf, 0);
-          return Promise.resolve({ bytesRead: oneBigLine.length });
+      it('searchLogs — VL path clamps negative limit/offset to safe values', async () => {
+        const rows = Array.from({ length: 3 }, (_, i) => ({ _msg: `r${i}` }));
+        mockVlClient.query.mockResolvedValueOnce(rows);
+        const result = await logsService.searchLogs({
+          dateRange: 'today',
+          limit: -5,
+          offset: -10
         });
-        fh.close.mockResolvedValue(undefined);
-        mockFs.open.mockResolvedValue(fh);
-
-        const out = await logsService.readLogFile('/var/log/combined-2026-09-01.log');
-        // lastIndexOf returns -1 → keeps whole buffer; length preserved.
-        expect(out.length).toBe(20 * 1024 * 1024);
-        expect(out[0]).toBe('A');
-      });
-    });
-
-    describe('MAX_LINES_TO_PROCESS per-file cap (file path)', () => {
-      beforeEach(() => {
-        process.env.ADMIN_LOGS_SOURCE = 'file';
-        process.env.LOG_TO_FILE = '1';
+        // limit=0 → no rows in slice; offset=0 → start from 0
+        expect(mockVlClient.query).toHaveBeenCalledWith(expect.objectContaining({ limit: 0 }));
+        expect(result.logs).toHaveLength(0);
+        expect(result.limit).toBe(0);
+        expect(result.offset).toBe(0);
       });
 
-      it('_getLogsInRangeFromFile caps each file to MAX_LINES_TO_PROCESS rows', async () => {
-        // The per-file cap fires inside `_getLogsInRangeFromFile` BEFORE the
-        // `withinWindow` date-string filter — so it is observable on the
-        // raw rows the parser emits, regardless of the yyyy-MM-dd vs ISO
-        // mismatch we know about in that filter. We assert on the spy
-        // result to confirm the slice trimmed to MAX_LINES_TO_PROCESS.
-        const lineCount = 200_001; // MAX_LINES_TO_PROCESS = 200_000
-        const lines = [];
-        for (let i = 0; i < lineCount; i += 1) {
-          const ts = `2026-09-01T08:${String(Math.floor(i / 60) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}.000Z`;
-          lines.push(`{"timestamp":"${ts}","_msg":"m-${i}"}`);
-        }
-        const content = `${lines.join('\n')}\n`;
-        jest.spyOn(logsService, '_readLogFileAd10').mockResolvedValue(content);
-        jest.spyOn(logsService, 'getLogFilesInRange').mockResolvedValue(['/var/log/combined-2026-09-01.log']);
-        const mockLockHandle = { close: jest.fn().mockResolvedValue(undefined) };
-        mockFs.open.mockResolvedValue(mockLockHandle);
-        mockFs.unlink.mockResolvedValue(undefined);
-
-        // Spy on the internal cap slice: wrap the real parser so we can
-        // observe what it returned BEFORE the cap fired (the spy invokes
-        // the real method, then asserts downstream the row count is the
-        // post-cap value). Simpler: hook into `_parseNdjsonContent` and
-        // count, then assert that the cap was applied by reading the
-        // service's observed rows via a separate spy on _parseNdjsonContent.
-        let observed = -1;
-        const origParse = logsService._parseNdjsonContent.bind(logsService);
-        jest.spyOn(logsService, '_parseNdjsonContent').mockImplementation((c) => {
-          const rows = origParse(c);
-          observed = rows.length;
-          return rows;
+      it('getLogsSummary — VL path with level=ERROR returns only errors bucket', async () => {
+        // Per-service hits() with q=severity_text:ERROR returns 7 ERROR
+        // rows across two services (5 in auth + 2 in system). The summary
+        // surfaces both rows, sorted by count desc; the WARN row in the
+        // input set is dropped because the caller's level=ERROR filter
+        // excluded it before the bucket was queried.
+        mockVlClient.hits.mockImplementation(async ({ q }) => {
+          if (q === 'severity_text:ERROR') return { auth: 5, system: 2 };
+          if (q === '*') return { auth: 5, system: 2 };
+          return {};
         });
-
-        try {
-          await logsService.getLogsInRange({
-            dateRange: 'custom',
-            startDate: '2026-09-01',
-            endDate: '2026-09-01',
-            limit: 10000
-          });
-          // Parser saw all 200_001 rows. The per-file cap is applied
-          // inside the service between parse and the yyyy-MM-dd date
-          // filter (which never matches our ISO-only row dates, so the
-          // envelope returns logs=[]). The cap's downstream effect —
-          // `result.total` reflects post-cap + post-filter rows — is
-          // observable on any future fix to the date filter; for now we
-          // assert observed=200_001 + degraded=falsey to confirm the
-          // service reached the cap path without throwing.
-          expect(observed).toBe(200_001);
-          // Without the cap patch, this would still pass (the date
-          // filter zeroes things out), so we additionally assert the
-          // cap SLICE was reached by checking the un-capped rows would
-          // have flowed through. The slice in production is verifiable
-          // by running a follow-up query on a service instance whose
-          // `_parseNdjsonContent` reports a smaller-than-cap length —
-          // confirming the slice is indeed a no-op below the threshold
-          // (covered by the second assertion below).
-        } finally {
-          logsService._readLogFileAd10.mockRestore();
-          logsService.getLogFilesInRange.mockRestore();
-          logsService._parseNdjsonContent.mockRestore();
-        }
+        const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'ERROR' });
+        expect(result.errors).toEqual([
+          { type: 'ERROR', typeKey: 'error', service: 'auth', count: 5 },
+          { type: 'ERROR', typeKey: 'error', service: 'system', count: 2 }
+        ]);
+        expect(result.warnings).toEqual([]);
+        expect(result.infos).toEqual([]);
       });
 
-      it('_getLogsInRangeFromFile leaves a sub-cap row set untouched (cap is a no-op below threshold)', async () => {
-        // 50 lines < MAX_LINES_TO_PROCESS → service must return all of them
-        // downstream. We assert via a result.logs of length 50 (after the
-        // date filter is bypassed by giving the rows yyyy-MM-dd-compatible
-        // timestamps parsed to the same date the range asks for).
-        const lineCount = 50;
-        const lines = [];
-        for (let i = 0; i < lineCount; i += 1) {
-          lines.push(`{"timestamp":"2026-09-01T08:00:${String(i).padStart(2, '0')}.000Z","_msg":"small-${i}"}`);
-        }
-        const content = `${lines.join('\n')}\n`;
-        jest.spyOn(logsService, '_readLogFileAd10').mockResolvedValue(content);
-        jest.spyOn(logsService, 'getLogFilesInRange').mockResolvedValue(['/var/log/combined-2026-09-01.log']);
-        const mockLockHandle = { close: jest.fn().mockResolvedValue(undefined) };
-        mockFs.open.mockResolvedValue(mockLockHandle);
-        mockFs.unlink.mockResolvedValue(undefined);
-        try {
-          const result = await logsService.getLogsInRange({
-            dateRange: 'custom',
-            startDate: '2026-09-01',
-            endDate: '2026-09-01',
-            limit: 10000
-          });
-          expect(result.total).toBeGreaterThanOrEqual(50);
-          expect(result.logs.length).toBeGreaterThanOrEqual(50);
-        } finally {
-          logsService._readLogFileAd10.mockRestore();
-          logsService.getLogFilesInRange.mockRestore();
-        }
+      it('getLogsSummary — VL path with level=INFO returns only infos bucket', async () => {
+        // 42 INFO rows (38 in genie-backend + 4 in retriever) + a WARN
+        // row that the level=INFO filter excludes from the WARN bucket.
+        mockVlClient.hits.mockImplementation(async ({ q }) => {
+          if (q === 'severity_text:INFO') return { backend: 38, retriever: 4 };
+          if (q === '*') return { backend: 38, retriever: 4 };
+          return {};
+        });
+        const result = await logsService.getLogsSummary({ date: '2026-09-06', level: 'INFO' });
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toEqual([]);
+        expect(result.infos).toEqual([
+          { type: 'INFO', typeKey: 'info', service: 'backend', count: 38 },
+          { type: 'INFO', typeKey: 'info', service: 'retriever', count: 4 }
+        ]);
+      });
+
+      it('getLogsSummary — VL path with level unset queries ERROR + WARN + INFO + services in parallel', async () => {
+        // The new architecture issues 4 parallel hits() calls (one per
+        // level bucket + one unfiltered for the dropdown service list).
+        // The single-fetch-old tests are no longer applicable.
+        mockVlClient.hits.mockImplementation(async ({ q }) => {
+          if (q === 'severity_text:ERROR') return { backend: 4 };
+          if (q === 'severity_text:WARN') return { backend: 2 };
+          if (q === 'severity_text:INFO') return { backend: 100 };
+          if (q === '*') return { backend: 106 };
+          return {};
+        });
+        const result = await logsService.getLogsSummary({ date: '2026-09-06' });
+        expect(mockVlClient.hits).toHaveBeenCalledTimes(4);
+        expect(result.errors).toEqual([{ type: 'ERROR', typeKey: 'error', service: 'backend', count: 4 }]);
+        expect(result.warnings).toEqual([{ type: 'WARN', typeKey: 'warn', service: 'backend', count: 2 }]);
+        expect(result.infos).toEqual([{ type: 'INFO', typeKey: 'info', service: 'backend', count: 100 }]);
+        expect(result.services).toEqual([{ name: 'backend', count: 106 }]);
       });
     });
   });

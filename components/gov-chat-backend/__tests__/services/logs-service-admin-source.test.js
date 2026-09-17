@@ -178,15 +178,15 @@ describe('admin-source no-restart path switch', () => {
 
     it('flips back to VL when env is cleared, again with NO module reload', async () => {
       // Start in file mode so the dispatch flips twice within the test.
+      // T8: file-source branch dropped — file mode now raises
+      // VlFilesDisabledError (503 contract). The "we routed to file"
+      // signal is the throw, not an empty envelope.
       process.env.ADMIN_LOGS_SOURCE = 'file';
-      process.env.LOG_TO_FILE = '1';
-      // File path needs at least one file discoverable; return an empty
-      // directory so the file path returns the empty envelope rather
-      // than throwing. The "we routed to file" signal is the absence
-      // of any VL client call.
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValue([]);
-      await logsService.getLogsInRange(queryOpts);
+      await expect(logsService.getLogsInRange(queryOpts)).rejects.toMatchObject({
+        name: 'VlFilesDisabledError',
+        statusCode: 503
+      });
+      // The VL client must NOT have been hit.
       expect(mockVlClient.query).not.toHaveBeenCalled();
 
       // Toggle back to VL.
@@ -201,6 +201,8 @@ describe('admin-source no-restart path switch', () => {
       // Walk through several VL → file → VL → file transitions and
       // verify each one is honoured without any module reload or
       // singleton swap. This is the "no-restart" guarantee.
+      // T8: file-source branch dropped — file mode raises
+      // VlFilesDisabledError (503 contract).
       const sequence = ['vl', 'file', 'vl', 'file', 'vl'];
       const callSignatures = [];
 
@@ -212,19 +214,19 @@ describe('admin-source no-restart path switch', () => {
           callSignatures.push(['vl', result.logs.length]);
         } else {
           process.env.ADMIN_LOGS_SOURCE = 'file';
-          process.env.LOG_TO_FILE = '1';
-          mockFs.access.mockResolvedValue(undefined);
-          mockFs.readdir.mockResolvedValue([]);
-          const result = await logsService.getLogsInRange(queryOpts);
-          callSignatures.push(['file', result.logs.length]);
+          await expect(logsService.getLogsInRange(queryOpts)).rejects.toMatchObject({
+            name: 'VlFilesDisabledError',
+            statusCode: 503
+          });
+          callSignatures.push(['file', '503']);
         }
       }
 
       expect(callSignatures).toEqual([
         ['vl', 1],
-        ['file', 0],
+        ['file', '503'],
         ['vl', 1],
-        ['file', 0],
+        ['file', '503'],
         ['vl', 1]
       ]);
       expect(mockVlClient.query).toHaveBeenCalledTimes(3);
@@ -260,7 +262,7 @@ describe('admin-source no-restart path switch', () => {
       expect(result).toEqual({ logs: vlRows, total: 1, limit: 100, offset: 0 });
     });
 
-    it('subsequent call after flipping to file routes the admin request to the file path', async () => {
+    it('subsequent call after flipping to file throws VlFilesDisabledError (file-source dropped in T8)', async () => {
       // Default VL call.
       delete process.env.ADMIN_LOGS_SOURCE;
       mockVlClient.query.mockResolvedValueOnce(vlRows);
@@ -268,27 +270,22 @@ describe('admin-source no-restart path switch', () => {
       expect(mockVlClient.query).toHaveBeenCalledTimes(1);
 
       // Toggle without restarting the singleton or reloading modules.
+      // T8: file-source branch dropped — the dispatch raises
+      // VlFilesDisabledError instead of routing to a file reader.
       process.env.ADMIN_LOGS_SOURCE = 'file';
-      process.env.LOG_TO_FILE = '1';
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValue([]);
-
-      const result = await adminDashboardService.getLogs(queryOpts);
-      // VL was NOT consulted for the second call.
+      await expect(adminDashboardService.getLogs(queryOpts)).rejects.toMatchObject({
+        name: 'VlFilesDisabledError',
+        statusCode: 503
+      });
+      // VL was NOT consulted for the second call (only the first).
       expect(mockVlClient.query).toHaveBeenCalledTimes(1);
-      // File path produced an envelope (empty here, since no log files
-      // matched the mocked date range).
-      expect(result.logs).toEqual([]);
-      expect(result.total).toBe(0);
     });
 
-    it('preserves the admin envelope shape across the source toggle', async () => {
-      // The contract is `{logs, total, limit, offset}` regardless of
-      // source. The file path may additionally surface a `degraded`
-      // flag when the on-disk read hit a non-fatal error (AD-10);
-      // what matters here is that the canonical envelope keys are
-      // always present so the route layer does not need a branch on
-      // source.
+    it('vl envelope shape is canonical {logs, total, limit, offset} (file-source dropped in T8)', async () => {
+      // The contract is `{logs, total, limit, offset}` for the VL path
+      // (the only source left). T8 drops the file path entirely, so the
+      // envelope-shape assertion no longer needs to walk both branches —
+      // the route layer never has to branch on source.
       const CANONICAL_KEYS = ['limit', 'logs', 'offset', 'total'];
 
       delete process.env.ADMIN_LOGS_SOURCE;
@@ -296,15 +293,6 @@ describe('admin-source no-restart path switch', () => {
       const vlResult = await adminDashboardService.getLogs(queryOpts);
       for (const key of CANONICAL_KEYS) {
         expect(vlResult).toHaveProperty(key);
-      }
-
-      process.env.ADMIN_LOGS_SOURCE = 'file';
-      process.env.LOG_TO_FILE = '1';
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readdir.mockResolvedValue([]);
-      const fileResult = await adminDashboardService.getLogs(queryOpts);
-      for (const key of CANONICAL_KEYS) {
-        expect(fileResult).toHaveProperty(key);
       }
     });
   });

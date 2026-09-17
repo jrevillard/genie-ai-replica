@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
@@ -116,6 +117,25 @@ class _CropHealthChartState extends State<CropHealthChart> {
                     tooltip: _translate('charts.refresh') ?? 'Refresh',
                   ),
               ],
+            ),
+            // Data caveats + About-this-data panel (user requirement)
+            AgriCaveatBanner(
+              data: _cropData == null
+                  ? null
+                  : {
+                      'caveats':
+                          (_cropData!['meta']
+                              as Map<String, dynamic>?)?['caveats'],
+                      'coverage':
+                          (_cropData!['meta']
+                              as Map<String, dynamic>?)?['coverage'],
+                      'estimation':
+                          (_cropData!['meta']
+                              as Map<String, dynamic>?)?['estimation'],
+                      'dataSource':
+                          (_cropData!['meta']
+                              as Map<String, dynamic>?)?['source'],
+                    },
             ),
             const SizedBox(height: 20),
 

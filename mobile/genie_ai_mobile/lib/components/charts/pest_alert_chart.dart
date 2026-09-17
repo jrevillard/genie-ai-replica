@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -147,6 +148,22 @@ class _PestAlertChartState extends State<PestAlertChart> {
                     tooltip: _translate('charts.refresh') ?? 'Refresh',
                   ),
               ],
+            ),
+            // Data caveats + About-this-data panel (user requirement)
+            AgriCaveatBanner(
+              data: _pestData == null
+                  ? null
+                  : {
+                      'caveats':
+                          (_pestData!['meta']
+                              as Map<String, dynamic>?)?['caveats'],
+                      'coverage':
+                          (_pestData!['meta']
+                              as Map<String, dynamic>?)?['coverage'],
+                      'dataSource':
+                          (_pestData!['meta']
+                              as Map<String, dynamic>?)?['source'],
+                    },
             ),
             const SizedBox(height: 16),
 

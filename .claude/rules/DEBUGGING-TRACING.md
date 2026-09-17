@@ -126,11 +126,15 @@ This is the single most reliable way to run analysis on a remote swarm node.
 
 ## 6. Gotchas
 
-1. **Dataprep's Python logger does NOT reach docker stdout / VictoriaLogs** in the
-   standard deployment (only uvicorn access logs do). For diagnostics that must be
-   visible, route through `_write_ingestion_log(...)` (the backend ingestion_log,
-   shown in the UI) — **not** `logger.warning/info`. (This hid exception reasons
-   from me for several iterations.)
+1. **Dataprep's Python logger now reaches docker stdout / VictoriaLogs** via the
+   single-channel chain (`CustomLogger` from `comps` → stdout → fluentd driver →
+   OTel Collector → VL). The pre-revert `setup_logging()` OTel SDK binding was
+   dropped in T2b (2026-09-17). **For diagnostics that should be visible in the
+   admin UI** (rather than only in the VL stream), still route through
+   `_write_ingestion_log(...)` — the backend `ingestion_log` collection is the
+   canonical UI-visible channel; `logger.warning/info` go to stdout and require a
+   VL pull to view. (The pre-revert gotcha — that `_write_ingestion_log` was the
+   ONLY visible path — no longer applies.)
 2. **Image `git_sha` label ≠ commit on the branch.** The deployed image's baked-in
    `git_sha` can lag or differ from the branch tip (build pipeline artifacts).
    Verify deployed code by `docker exec ... grep <marker> <file>` rather than

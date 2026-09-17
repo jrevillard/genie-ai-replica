@@ -1,15 +1,12 @@
 # Rollback Matrix
 
-Per-phase rollback triggers, actions, and time-to-rollback. `ADMIN_LOGS_SOURCE=file` (D2) is the master escape hatch — permanent, never removed. Validate each switch on the deployed release branch before merging the matching MR to `main` (per `feedback_release_validate_before_promote`).
+Per-phase rollback triggers, actions, and time-to-rollback. **`ADMIN_LOGS_SOURCE` env contract is preserved** (`_sourceMode()` per-call read in `logs-service.js`) even though the file-body implementation was dropped in T8 — the escape hatch returns 503 `VlFilesDisabledError` when `ADMIN_LOGS_SOURCE=file` is set with `LOG_TO_FILE=0`, honouring SPEC D2. Validate each switch on the deployed release branch before merging the matching MR to `main` (per `feedback_release_validate_before_promote`).
 
 | Phase | Trigger | Action | Time | Notes |
 |---|---|---|---|---|
 | **P0** | VL healthcheck fails on stack start | Re-add `profiles: [observability]` to `docker-compose.yaml:1650,1671,1749` and revert `victorialogs.deploy.replicas` to `${ENABLE_OBSERVABILITY:-0}`. Re-run `docker compose --profile observability up -d`. | < 2 min | No data migration; pure compose flip. |
-| **P1a** | OTel logs exporter errors flood backend logs | `LOG_TO_VICTORIALOGS=0` env. Restart backend. New transport short-circuits. File logging remains. | < 5 min | Logs still flow via Console + DailyRotateFile; admin endpoints keep file path (until P2). |
-| **P1c** | Backend logs disappear after driver switch | Revert YAML anchor `x-local-logging` at `docker-compose.yaml:75` AND the per-service overrides at `:484, :596` (anchor + both refs are required). Restart backend. | < 3 min | Fluentd pipeline preserved; OTel exporter still writes to VL in parallel. |
-| **P2** | Admin endpoints return empty/wrong shape | `ADMIN_LOGS_SOURCE=file` env. Old `LogsService` path activates on next request — no restart (per-call env read in P2). | < 1 min | D2 master switch. Permanent. |
-| **P3** | Security scan times out (>30 s on 7-day window) | `SECURITY_SCAN_BACKEND=file` env. Old `worker_threads` path activates. Clear `/app/data/security/last-scan-results.json` cache. | < 2 min | The file-based scanner still works; P1a's VL transport keeps filling the disk log even though the scanner reads it. |
-| **P4** | File fallback needed by ops (e.g., audit retention investigation) | `LOG_TO_FILE=1` env. Re-adds `DailyRotateFile` + tailable `File` transports. Restart. | < 5 min | Disk fills at the historical 10 MB × 30 d cadence. |
+| **P3** | Security scan times out (>30 s on 7-day window) | `SECURITY_SCAN_BACKEND=file` env. Old `worker_threads` path activates. Clear `/app/data/security/last-scan-results.json` cache. | < 2 min | The file-based scanner still works; the security-scan code path did NOT change in the OTel-SDK-revert initiative (only the admin-logs path did). |
+| **P4** | File fallback needed by ops (e.g., audit retention investigation) | `LOG_TO_FILE=1` env. Re-adds `DailyRotateFile` + tailable `File` transports. Restart. | < 5 min | Disk fills at the historical 10 MB × 30 d cadence. `booleanEnv('LOG_TO_FILE')` gate at `components/shared/lib/logger.js:107` is preserved per Story 7-1. Note: the `/app/logs` host bind-mount was dropped from `docker-compose.yaml` in T7, so the operator must re-add the volume mount manually (see `env` cross-reference comment). |
 
 ## Pre-merge validation (per phase MR)
 
@@ -27,12 +24,11 @@ Before merging the MR for each phase:
 If the multi-MR rollout needs a global revert:
 
 ```bash
-# 1. Flip the master switch (no restart)
-ADMIN_LOGS_SOURCE=file
+# 1. Flip the surviving master switches
+ADMIN_LOGS_SOURCE=file    # SPEC D2 escape — returns 503 VlFilesDisabledError with LOG_TO_FILE=0
 SECURITY_SCAN_BACKEND=file
-LOG_TO_VICTORIALOGS=0
-VL_FAIL_OPEN=true
-LOG_TO_FILE=1
+VL_FAIL_OPEN=true         # graceful degradation when VL is unreachable
+LOG_TO_FILE=1             # re-enable file transports (audit retention escape hatch)
 
 # 2. Restart backend + document-repository
 docker service update genieai_gov-chat-backend
@@ -42,4 +38,4 @@ docker service update genieai_document-repository
 # (P0 only; re-add profiles:[observability] on :1650,1671,1749 and revert VL replicas to ${ENABLE_OBSERVABILITY:-0})
 ```
 
-System returns to pre-migration behaviour; P0's CI stub stays in place; subsequent MRs can resume from P0 forward.
+System returns to pre-migration behaviour. `LOG_TO_VICTORIALOGS` and `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` are no longer accepted (the OTel SDK LoggerProvider path is gone) — instead, log egress flows through `Winston → stdout → Docker fluentd driver → OTel Collector → VictoriaLogs` regardless of any env var setting.

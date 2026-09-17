@@ -30,7 +30,7 @@ One MR per phase. Branch `feat/admin-logs-victorialogs`; never commit to `main`.
 
 **Tests:** `components/shared/lib/__tests__/victorialogs-transport.test.js` (severity mapping, trace_id flow, error swallow); `components/gov-chat-backend/__tests__/logger-vl-integration.test.js` (fake OTLPLogExporter, assert POST); extend `logger-otel-trace.test.js` — drop printf-substring assertions, add JSON-key assertions. New: `p-l-lig-pii-scrubbing.test.js` asserting `body` field is redacted when it contains email / JWT / password substrings (not just attributes — see C-5).
 
-**Effort:** 2 SP. **Rollback:** `LOG_TO_VICTORIALOGS=0` env (restart).
+**Effort:** 2 SP. **Rollback (OBSOLETE post-OTel-SDK-revert):** `LOG_TO_VICTORIALOGS=0` env was the original escape hatch — the env var is no longer read (T6 dropped the propagation); the OTel SDK LoggerProvider is gone (T2/T3/T2b). Egress is single-channel (`Winston → stdout → fluentd → collector → VL`); no per-env switch is possible. Re-enabling file transports uses the surviving `LOG_TO_FILE=1` escape hatch (P4).
 
 ## P1b — Consumer: shared/lib/melt/ provider
 
@@ -85,7 +85,7 @@ One MR per phase. Branch `feat/admin-logs-victorialogs`; never commit to `main`.
 
 **Frontend scope (P2)**: a single MR touch on `LogSearchDialog.vue` adds a `computed.banner` derived from `response.degraded`; render via existing alert component; i18n keys under `src/i18n/locales/*.js`. Vue 3 Options API preserved.
 
-**Effort:** 2 SP. **Rollback:** `ADMIN_LOGS_SOURCE=file` (no restart, per-call env read).
+**Effort:** 2 SP. **Rollback (PARTIAL post-OTel-SDK-revert):** `ADMIN_LOGS_SOURCE=file` env contract is preserved (SPEC D2) — per-call env read in `_sourceMode()`. With the post-T8 single-channel invariant, the file-source code path is dropped; `ADMIN_LOGS_SOURCE=file` with default `LOG_TO_FILE=0` returns HTTP 503 `VlFilesDisabledError` with body `{"error":"vl_files_disabled","message":"Set LOG_TO_FILE=1 to use file-based log source"}` — i.e. the escape hatch is honored, just as a loud failure rather than a behavioural switch. Re-enabling file-source behaviour requires the surviving `LOG_TO_FILE=1` escape hatch (P4) AND re-adding the `/app/logs` host bind-mount (T7 dropped it; see `env` cross-reference comment).
 
 ## P3 — Security scanner rewire
 

@@ -29,7 +29,7 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
 
 - **CAP-1 Producer emits structured log records to VictoriaLogs**
   - **intent:** Winston logger emits structured records to stdout; OTel collector ingests via the fluentd driver and forwards to VictoriaLogs.
-  - **success:** `logger.info('hello')` produces a POST to `otel-collector:4318/v1/logs` within 5 s; `curl http://victorialogs:9428/select/logsql/query?q=service:genie-backend` returns the record; killing VL does not block any Node service (drop counter visible; console mirror preserves records).
+  - **success:** `logger.info('hello')` produces a record visible in VictoriaLogs within 5 s via `curl http://victorialogs:9428/select/logsql/query?q=service:genie-backend`; killing VL does not block any Node service (PII redaction runs at the collector edge — see C-5).
 - **CAP-2 Winston format is JSON, not printf**
   - **intent:** Replace the printf format with `winston.format.combine(timestamp(), errors({stack:true}), json())`; `trace_id` / `span_id` become JSON keys, not printf substrings.
   - **success:** File lines are valid JSON (one record per line) when `LOG_TO_FILE=1`; `LogSearchDialog.test.js` Story 7.6 describe block parses JSON instead of regex; existing `logger-otel-trace.test.js` extends to assert `info.trace_id` / `info.span_id` are JSON keys.
@@ -43,8 +43,8 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
   - **intent:** Wrap VL client calls in `LogsService` and `securityScanService`; when 5xx / ECONNREFUSED / ENOTFOUND / timeout, return empty results + `degraded: true` flag (gated on `VL_FAIL_OPEN=true`); rate-limit the error log to 1 per minute.
   - **success:** With `VL_FAIL_OPEN=true`, `docker stop victorialogs` + `GET /api/admin/logs` returns `{logs:[], total:0, degraded:true}` AND `POST /api/admin/security-scan` returns `{vulnerabilities:{critical:[],medium:[],low:[]}, degraded:true, error:'vl_unreachable'}` within 5 s; `backend.logger.error` fires at most once per minute; rate-limit state persists across backend restarts via `/tmp/vl-fail-open-ts`.
 - **CAP-6 Per-phase rollback escape hatches**
-  - **intent:** Each phase ships with a tested env switch that re-enables the previous behaviour: `ADMIN_LOGS_SOURCE=file` (P2), `VL_FAIL_OPEN=true` (P3), `LOG_TO_FILE=1` (P4).
-  - **success:** Each switch tested with smoke on the deployed release branch before merge to `main`; `ADMIN_LOGS_SOURCE=file` is permanent and never removed.
+  - **intent:** Each phase ships with a tested env switch that re-enables the previous behaviour: `ADMIN_LOGS_SOURCE=file` (P2 — returns 503 `VlFilesDisabledError` when `LOG_TO_FILE=0` since the file-source code path is dropped in T8 per SPEC D2), `VL_FAIL_OPEN=true` (P3 — graceful degradation), `LOG_TO_FILE=1` (P4 — re-enables file transports), `SECURITY_SCAN_BACKEND=file` (P3 — security-scan file fallback).
+  - **success:** Each surviving switch tested with smoke on the deployed release branch before merge to `main`; `ADMIN_LOGS_SOURCE` env contract is permanent (per-call env read in `_sourceMode()`), even though the file-body code path is gone.
 - **CAP-7 VictoriaLogs + OTel Collector always-on core stack (D1)**
   - **intent:** Remove `profiles: [observability]` from `victorialogs`, `otel-collector`, and `otel-collector-init` in `docker-compose.yaml` so they start by default in `docker compose up`; pin `victorialogs.deploy.replicas: 1` so Swarm always runs one replica regardless of `ENABLE_OBSERVABILITY`. Non-Node services (Python OPEA, Kong, nginx, postgres) keep `fluentd → collector → VL`.
   - **success:** `docker compose config --services` lists VL + Collector + init alongside the always-on core services; `curl http://victorialogs:9428/health` returns `{"status":"ok"}`; `ENABLE_OBSERVABILITY=0` deployments keep the admin endpoints functional.
@@ -55,9 +55,10 @@ Migration runs producer-first across 7 phases (P0–P4 with sub-phases). D1 lift
 - **C-2 Response shape contract preservation** — `LogsService` and `securityScanService` public methods return JSON identical to pre-migration. Contract tests gate MRs.
 - **C-3 Logs egress via OTel Collector (D6)** — apps POST to `:4318/v1/logs`; direct VL is allowed only as env override.
 - **C-4 VL stream fields pinned** — `service.name`, `deployment.environment` only; `trace_id` / `span_id` are attributes, not stream fields (cardinality control).
-- **C-5 PII scrubbing on OTel LogRecord attributes** — never log raw tokens, passwords, or user PII in span/log attributes; reuse `PIIRedactionProcessor` pattern from `tracing.js:52-96,160`.
+- **C-5 PII scrubbing at OTel Collector edge (post-OTel-SDK-revert)** — never log raw tokens, passwords, or user PII in span/log attributes; redaction now lives in the `transform/pii_redact` statements of `configs/otel/otel-collector-config.yaml` (covers BOTH OTel OTLP logs and the docker fluentd driver path that previously bypassed in-process SDK redaction). The `PIIRedactingLogRecordProcessor` in-process pattern is dropped (T2/T3/T2b of the OTel-SDK-revert initiative).
 - **C-6 Retention aligned at 30 days** — VL `VICTORIALOGS_RETENTION=30d` matches existing Winston DailyRotateFile 30 d.
 - **C-7 Git workflow** — never commit to `main` or `release/*` directly; one worktree + dedicated branch (`feat/admin-logs-victorialogs`) + one MR per phase; wait for CI pipeline green before merge.
+- **C-8 Single-channel invariant (post-OTel-SDK-revert)** — every log record traverses `Winston/python-logging → stdout → Docker fluentd driver → OTel Collector → VictoriaLogs`. The dual-channel `LOG_TO_VICTORIALOGS` (SDK-direct) path is gone; `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` is no longer read.
 
 ## Non-goals
 

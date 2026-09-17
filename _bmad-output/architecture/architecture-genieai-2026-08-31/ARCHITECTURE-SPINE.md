@@ -44,13 +44,7 @@ The other direction (application `MELT_PROVIDER` env):
 
 - **Binds:** CAP-1, CAP-2
 - **Prevents:** ad-hoc transports bypassing the OTel context; mixed format/console/file-only emitters
-- **Rule:** Winston logger emits through Console (always) + VictoriaLogsTransport (OTel `LoggerProvider`, default on) + `DailyRotateFile` (gated on `LOG_TO_FILE=1`). Single Winston pipeline; new transport is a `TransportStream` subclass. Producer-side lazy-init buffers up to 100 records before `LoggerProvider` is set, then flushes.
-
-### AD-2 — VL stream field pinning
-
-- **Binds:** CAP-1, CAP-7
-- **Prevents:** VL cardinality blowup if `trace_id` / `span_id` treated as stream fields
-- **Rule:** VL stream fields = `{service.name, deployment.environment}` only. `trace_id`, `span_id` are `LogRecord` attributes, not stream fields. Empty/absent `trace_id` is dropped before adding to attributes. **Pinned values**: backend `service.name=genie-backend`, document-repository `service.name=genie-document-repository`. Both consumers MUST hardcode these literals (no env-var indirection).
+- **Rule:** Winston logger emits through Console (always) + `DailyRotateFile` (gated on `LOG_TO_FILE=1`). The OTel SDK `LoggerProvider` / `VictoriaLogsTransport` dual-channel path is dropped (T2/T3/T2b of the OTel-SDK-revert initiative, 2026-09-17). The single-channel invariant (C-8) is: every log record traverses `Winston → stdout → Docker fluentd driver → OTel Collector (fluent_forward receiver) → VictoriaLogs`. PII redaction now lives in the OTel Collector edge (`transform/pii_redact` in `configs/otel/otel-collector-config.yaml`); the in-process `PIIRedactingLogRecordProcessor` is gone.
 
 ### AD-3 — `VictoriaLogsRow` canonical shape (port contract)
 
@@ -68,35 +62,29 @@ The other direction (application `MELT_PROVIDER` env):
 
   Application consumers (`LogsService`, `securityScanService`) MUST consume via the **port** (`require('shared/lib/melt').VictoriaLogsClient`) — NOT via raw axios. Any change to `VictoriaLogsRow` breaks the contract-test gate in CAP-3 + CAP-4 acceptance.
 
-### AD-4 — PII scrubbing scope
+### AD-4 — PII scrubbing scope (post-OTel-SDK-revert)
 
 - **Binds:** CAP-1, CAP-5, constraint C-5
 - **Prevents:** PII leaks via `logger.info(\`Login failed for ${email}\`)` — body contains user input
-- **Rule:** PII scrubbing applies to BOTH OTel span attributes (existing `PIIRedactionProcessor` at `tracing.js:52-96`) AND OTel log record `body` field (new `PIIRedactingLogRecordProcessor extends BatchLogRecordProcessor` with `onEmit`). Do NOT reuse the `SpanProcessor` pattern for `LogRecord` — different lifecycle (`onEnd` vs `onEmit`). **Mandatory registration**: every `LoggerProvider` (backend + document-repository) MUST register `PIIRedactingLogRecordProcessor` BEFORE `logs.setGlobalLoggerProvider`. Component without the processor fails integration smoke.
+- **Rule:** PII scrubbing now lives at the **OTel Collector edge** in `transform/pii_redact` (`configs/otel/otel-collector-config.yaml`). Both OTel OTLP logs and the docker fluentd driver path pass through it before export to VictoriaLogs. The 19-key PII list (`configs/otel/pii-key-list.md`) is enforced at the export boundary. **Why**: the previous in-process `PIIRedactingLogRecordProcessor extends BatchLogRecordProcessor` (AD-4 v1) only covered the OTel SDK path; logs arriving via the docker fluentd driver never went through it and reached VL unredacted. The collector-edge placement closes that gap. The transform redacts both `body` strings and `attributes` Maps with anchored `IsString`/`IsMap` guards. `error_mode: propagate` for the first 30 days (then `ignore` per a follow-up MR — tracked in CHANGELOG `[Unreleased]`).
 
-### AD-5 — Dual-emit window handling
+### AD-5 — Dual-emit window handling (OBSOLETE post-T5)
 
 - **Binds:** CAP-1, CAP-3
 - **Prevents:** duplicate log records in admin UI during P1a→P1c overlap; 2x storage cost; double-counted security-scan vulnerabilities
-- **Rule:** Between P1a merge and P1c merge, backend + document-repository logs land in VL twice (OTel + fluentd driver). `LogsService.getLogsInRange` filters with `service:genie-backend AND NOT (_stream:genie.backend OR _stream:genie.document-repository)`. Filter removed in P1c MR. **Lint rule**: forbid `*fluent-logging` anchor references in any `logging:` block for services whose `image:` starts with `node:` — enforced via `.gitlab-ci.yml` `lint:compose` job that parses compose YAML and greps for the anchor + node image co-occurrence.
+- **Rule:** _No longer applicable._ The P1a→P1c dual-emit window closed when the OTel SDK LoggerProvider was dropped (T2/T3/T2b) — there is no OTel-direct emit to dedup. The `_vlFilter` dedup at `logs-service.js:413-435` was deleted in T5; read-side filters no longer carry the `NOT fluent.tag:*` discriminator. (The original rule during the migration window was: `LogsService.getLogsInRange` filters with `service:genie-backend AND NOT (_stream:genie.backend OR _stream:genie.document-repository)`.)
 
 ### AD-6 — Permanent escape hatches (per-call env read)
 
 - **Binds:** CAP-6, rollback-matrix
 - **Prevents:** rollback matrix lying (env flip without restart); last-wins module-load cache
-- **Rule:** `ADMIN_LOGS_SOURCE=file|victorialogs` and `SECURITY_SCAN_BACKEND=file|victorialogs` are permanent. Consumers read `process.env.*` **per call** inside `getLogs` / `getLogsSummary` / `searchLogs` / `getDebugYesterday` / `runSecurityScan` — NEVER at module load. When `ADMIN_LOGS_SOURCE='file'` is set while `LOG_TO_FILE !== '1'` (post-P4 default), return 503 with recovery hint `"set LOG_TO_FILE=1"` instead of throwing `ENOENT`.
+- **Rule:** `ADMIN_LOGS_SOURCE=file|victorialogs` and `SECURITY_SCAN_BACKEND=file|victorialogs` are permanent. Consumers read `process.env.*` **per call** inside `getLogs` / `getLogsSummary` / `searchLogs` / `getDebugYesterday` / `runSecurityScan` — NEVER at module load. The file-source body implementation is dropped in T8 per SPEC D2, but the env contract is preserved: when `ADMIN_LOGS_SOURCE='file'` is set while `LOG_TO_FILE !== '1'` (post-P4 default), the consumer returns HTTP 503 with body `{"error":"vl_files_disabled","message":"Set LOG_TO_FILE=1 to use file-based log source"}` instead of throwing `ENOENT`. Re-enabling file-source behaviour requires the surviving `LOG_TO_FILE=1` escape hatch (P4).
 
 ### AD-7 — Configuration split (profiles)
 
 - **Binds:** CAP-7
 - **Prevents:** cloud deployments with `ENABLE_OBSERVABILITY=0` returning empty admin logs by policy
-- **Rule:** VL + OTel Collector run unconditionally — `profiles: [observability]` removed from `docker-compose.yaml:1650, :1671, :1749`, `victorialogs.deploy.replicas` pinned to `1`. Observability profile keeps `victoriametrics`, `victoriatraces`, `grafana` only. `LOG_TO_VICTORIALOGS=1` is still AND-gated with `ENABLE_OBSERVABILITY=1` so disabled observability does not emit into absent collector; a Prometheus counter `log_record_dropped_total{reason="observability_disabled"}` exposes the policy state.
-
-### AD-8 — OTel global setter pattern
-
-- **Binds:** CAP-1
-- **Prevents:** doc-repo logs flowing through backend's `LoggerProvider` with backend's resource attributes (last-wins setter collision)
-- **Rule:** Use `logs.setGlobalLoggerProvider(provider)` from `tracing.js` init. NO custom `setOtelLoggerProvider` setter in `components/shared/lib/logger.js`. Multi-process safe; per-service init wins for its own process. **Provider MUST include the PII processor per AD-4** before `setGlobalLoggerProvider` is called.
+- **Rule:** VL + OTel Collector run unconditionally — `profiles: [observability]` removed from `docker-compose.yaml:1650, :1671, :1749`, `victorialogs.deploy.replicas` pinned to `1`. Observability profile keeps `victoriametrics`, `victoriatraces`, `grafana` only. The OTel SDK LoggerProvider path is gone (T2/T3/T2b); `LOG_TO_VICTORIALOGS` and `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` env vars are no longer read — egress flows through the docker fluentd driver regardless of `ENABLE_OBSERVABILITY`.
 
 ### AD-9 — JSON log format
 
@@ -104,17 +92,17 @@ The other direction (application `MELT_PROVIDER` env):
 - **Prevents:** F4 regex mismatch; OTel transport needing printf substring parsing
 - **Rule:** Winston format = `winston.format.combine(timestamp(), errors({stack:true}), json())`. Replaces printf + `traceFormat` at `logger.js:24-30`. `trace_id`/`span_id` are JSON keys, not printf substrings. File-fallback NDJSON parser uses `JSON.parse(line)`, not regex.
 
-### AD-10 — File rotation + concurrent-writer invariants
+### AD-10 — File rotation + concurrent-writer invariants (OBSOLETE post-T8)
 
 - **Binds:** CAP-6 (escape hatch)
 - **Prevents:** empty logs after `kill -9` mid-write; torn-line `SyntaxError`; ENOENT during `DailyRotateFile` rename
-- **Rule:** `ADMIN_LOGS_SOURCE=file` path: re-read directory listing before each file; tolerate `ENOENT` between `stat()` and `open()`. Concurrent writers use `O_EXCL` PID lock via `fs.open(path, 'wx')` (Node 22 native — do NOT use `posix_fadvise`, not exposed). NDJSON parse wraps `JSON.parse` in try/catch; on `SyntaxError` (truncated line) read next **N=4096 bytes**, append, attempt re-parse, else skip with `parse_error` counter. `error.stack` newlines handled via `winston.format.json({replacer})` (verified supported in `logform/json.js`).
+- **Rule:** _No longer applicable to the read path._ The `ADMIN_LOGS_SOURCE=file` body implementation was dropped in T8 (~1100 LOC: 22 method bodies + 5 `LOG_TO_FILE` early-return guards). The env contract is preserved (SPEC D2 + AD-6) — consumers still honour `ADMIN_LOGS_SOURCE` per-call and return HTTP 503 when set without `LOG_TO_FILE=1`. The write-side invariants (NDJSON format, `DailyRotateFile` rotation, `O_EXCL` PID lock) only apply when the operator activates the surviving `LOG_TO_FILE=1` escape hatch (P4) AND manually re-adds the `/app/logs` host bind-mount (T7 dropped it from `docker-compose.yaml`).
 
 ### AD-11 — Rate-limit state persistence
 
 - **Binds:** CAP-5
 - **Prevents:** 1-per-minute-cadence becoming 1-per-restart during extended VL outage; concurrent writers corrupting state file
-- **Rule:** VL outage error logs capped at 1/min; state persisted to `/tmp/vl-fail-open-ts` as **Unix milliseconds** (single integer line) so backend restarts do not reset the counter. Both `LogsService` and `securityScanService` share the rate-limiter state file. Concurrent writers use `fs.open(path, 'wx')` for atomic claim; loser backs off 50 ms.
+- **Rule:** VL outage error logs capped at 1/min; state persisted to `/tmp/vl-fail-open-ts` as **Unix milliseconds** (single integer line) so backend restarts do not reset the counter. Both `LogsService` and `securityScanService` share the rate-limiter state file. **Implementation note (post-T8)**: the implementation now uses `fs.promises.writeFile` (atomic-truncate on POSIX for small files) rather than `fs.open(path, 'wx')` — the previous O_EXCL pattern always threw `EEXIST` after the first successful write and silently muted every subsequent incident for the host lifetime. The `cooldownWrite` assertion in `logs-vl-degradation.test.js` Property 3 pins the file-write integration.
 
 ### AD-12 — Cache schema validation
 
@@ -156,14 +144,14 @@ The other direction (application `MELT_PROVIDER` env):
 
 - **Binds:** CAP-1, project-context rule 1
 - **Prevents:** broken Winston load in document-repository (cross-component require chain); coupling backend ↔ shared/lib; divergent `BatchLogRecordProcessor` config across components
-- **Rule:** `components/gov-chat-backend/tracing.js` owns the `LoggerProvider`, exports it via OTel `logs.setGlobalLoggerProvider`. `components/shared/lib/logger.js` consumes via the OTel global API — NEVER requires `gov-chat-backend` paths. Document-repository instantiates its own `LoggerProvider` in its own `tracing.js` and calls `setGlobalLoggerProvider` itself. **Shared batch tuning** (in `components/shared/lib/otel-batch-config.js`): `BatchLogRecordProcessor` constructed via the new 0.220+ signature `{ exporter, maxExportBatchSize: 512, scheduledDelayMillis: 5000, maxQueueSize: 2048 }`. Both components require the same config — no per-component drift. **PIIRedactingLogRecordProcessor** is also required by every `LoggerProvider` (AD-4).
+- **Rule:** _Updated post-OTel-SDK-revert (T2/T3/T2b)._ `components/gov-chat-backend/tracing.js` no longer instantiates a `LoggerProvider`; the OTel **logs** signal chain is removed. Trace + metrics signal chains (Express + FastAPI instrumentations, db-arango, pii filters) are unchanged. `components/shared/lib/logger.js` is now purely a Winston pipeline (Console + optional `DailyRotateFile`) — it NEVER requires `gov-chat-backend` paths. Document-repository's `src/tracing.js` mirrors backend's trace + metrics init with the same simplification (no `OTLPLogExporter`). **PII redaction** (AD-4) is now collector-edge only — the `PIIRedactingLogRecordProcessor` / `BatchLogRecordProcessor` chain that this AD previously described is gone.
 
-**Document-repository init pattern (P1a follow-up)**: `components/document-repository/src/tracing.js` mirrors backend's `tracing.js:104-117` pattern with the following differences:
+**Document-repository init pattern (post-T3)**: `components/document-repository/src/tracing.js` mirrors backend's `tracing.js` pattern with the following differences:
 - Resource `service.name` = `'genie-document-repository'` (per AD-2)
-- **Logs-only**: NO `OTLPTraceExporter`, NO `OTLPMetricExporter`, NO `PeriodicExportingMetricReader`. Only `OTLPLogExporter`.
-- **Processor order mandatory**: `addLogRecordProcessor(new PIIRedactingLogRecordProcessor())` THEN `addLogRecordProcessor(new BatchLogRecordProcessor(exporter, sharedBatchConfig))` — PII first, batching second.
+- **Logs-only entry point removed**: NO `OTLPLogExporter`, NO `LoggerProvider`, NO `BatchLogRecordProcessor`. PII redaction runs at the collector edge.
+- **Trace + metrics stay**: `OTLPTraceExporter` + `OTLPMetricExporter` + `PeriodicExportingMetricReader` continue as before.
 - Wire at `src/app.js:1` via `require('./tracing')`, mirroring backend's `index.js:14`.
-- Document-repository `package.json` deps: `@opentelemetry/api`, `@opentelemetry/api-logs`, `@opentelemetry/sdk-logs`, `@opentelemetry/exporter-logs-otlp-http` — pinned exact 0.221.0 per Stack table.
+- Document-repository `package.json` deps: `@opentelemetry/api`, `@opentelemetry/sdk-node` (pinned exact 0.221.0 per Stack table) — `@opentelemetry/api-logs`, `@opentelemetry/sdk-logs`, `@opentelemetry/exporter-logs-otlp-http` removed.
 
 ### AD-19 — Security-scan dedupe + truncation + retention
 
@@ -190,30 +178,29 @@ The other direction (application `MELT_PROVIDER` env):
 ```mermaid
 graph LR
   subgraph Node service process
-    LOGGER[shared/lib/logger.js<br/>Winston pipeline]
+    LOGGER[shared/lib/logger.js<br/>Winston pipeline<br/>Console + DailyRotateFile]
     LOGS_SVC[gov-chat-backend/services/logs-service.js]
     SCAN_SVC[gov-chat-backend/services/security-scan-service.js]
-    TRACING[gov-chat-backend/tracing.js<br/>OTel SDK init]
     MELT[shared/lib/melt/<br/>VictoriaLogsClient]
   end
 
-  LOGGER -->|OTel global API| TRACING
-  TRACING -->|logs.setGlobalLoggerProvider| OTEL[(otel-collector:4318)]
+  LOGGER -->|stdout| DOCKER[Docker fluentd driver]
+  DOCKER -->|fluent_forward| OTEL[(otel-collector:4318)]
+  OTEL -->|transform/pii_redact + batch OTLP /v1/logs| VL[(victorialogs:9428)]
   LOGS_SVC --> MELT
   SCAN_SVC --> MELT
-  MELT -->|axios /select/logsql/*| VL[(victorialogs:9428)]
-  OTEL -->|OTLP /v1/logs batch| VL
+  MELT -->|axios /select/logsql/*| VL
 ```
 
-`logger.js` MUST NOT require `tracing.js` (AD-18). `logs-service.js` + `security-scan-service.js` MUST NOT require `tracing.js` either; both reach OTel via `logs-service.js` reading VL only.
+`logger.js` MUST NOT require `tracing.js` (AD-18). `logs-service.js` + `security-scan-service.js` reach VictoriaLogs only through the MELT client (axios / `select/logsql/*`) — NOT through any in-process OTel logs signal chain (the OTel SDK `LoggerProvider` is gone per the OTel-SDK-revert initiative).
 
 ## Consistency Conventions
 
 | Concern | Convention |
 | --- | --- |
-| Naming (entities, files, interfaces, events) | `victorialogs-*` prefix for new files in `shared/lib/` and `shared/lib/melt/`. `boolean-env.js` / `otel-batch-config.js` for cross-component helpers. `MELT_PROVIDER` for future-provider seam. `LogRecord` over `LogMessage` for OTel-side types. |
-| Data & formats (ids, dates, error shapes, envelopes) | NDJSON one record per line for file fallback. LogSQL row shape = `VictoriaLogsClient._normalizeRows` output (AD-3). VL stream fields = `{service.name: genie-backend\|genie-document-repository, deployment.environment: <NODE_ENV>}` (AD-2). Env vars: snake_case, `1`/`true`/`yes` boolean coercion via `boolean-env.js` (AD-14). Timestamps in rate-limit file = Unix milliseconds (AD-11). |
-| State & cross-cutting (mutation, errors, logging, config, auth) | Winston logger is the ONLY logger entrypoint in Node services. Per-call env read for escape hatches (AD-6). Rate-limit state in `/tmp/vl-fail-open-ts` with `O_EXCL` claim (AD-11). Cache files schema-validated on read via AJV 8.17+ (AD-12). PII scrubbed on attributes AND body via `PIIRedactingLogRecordProcessor` (AD-4). Batch tuning shared via `otel-batch-config.js` (AD-18). External-dependency events use `_msg:` prefix convention (e.g. `clamav.scan.*`) for queryable observation (AD-20). |
+| Naming (entities, files, interfaces, events) | `victorialogs-*` prefix for new files in `shared/lib/` and `shared/lib/melt/`. `boolean-env.js` for the cross-component helper. `MELT_PROVIDER` for future-provider seam. |
+| Data & formats (ids, dates, error shapes, envelopes) | LogSQL row shape = `VictoriaLogsClient._normalizeRows` output (AD-3). VL stream fields = `{service.name: genie-backend\|genie-document-repository, deployment.environment: <NODE_ENV>}` (AD-2). Env vars: snake_case, `1`/`true`/`yes` boolean coercion via `boolean-env.js` (AD-14). Timestamps in rate-limit file = Unix milliseconds (AD-11). |
+| State & cross-cutting (mutation, errors, logging, config, auth) | Winston logger is the ONLY logger entrypoint in Node services. Per-call env read for escape hatches (AD-6). Rate-limit state in `/tmp/vl-fail-open-ts` (atomic-truncate writeFile) (AD-11). Cache files schema-validated on read via AJV 8.17+ (AD-12). PII scrubbed at OTel Collector edge via `transform/pii_redact` (AD-4). External-dependency events use `_msg:` prefix convention (e.g. `clamav.scan.*`) for queryable observation (AD-20). |
 
 ## Stack
 
@@ -221,16 +208,16 @@ graph LR
 | --- | --- |
 | Node.js | 22.x (Docker image `node:22`) |
 | Winston | 3.x |
-| winston-daily-rotate-file | latest |
+| winston-daily-rotate-file | latest (audit-retention escape hatch, `LOG_TO_FILE=1`) |
 | `@opentelemetry/api` | `0.221.0` (already in `gov-chat-backend/package.json`) |
-| `@opentelemetry/sdk-node` | `0.221.0` |
-| `@opentelemetry/sdk-logs` | `0.221.0` (already transitive via `sdk-node`; pin explicitly in `package.json`) |
-| `@opentelemetry/exporter-logs-otlp-http` | `0.221.0` (pin explicitly) |
-| `@opentelemetry/api-logs` | `0.221.0` (peer of `sdk-logs` + `exporter-logs-otlp-http`, not of `api`) |
+| `@opentelemetry/sdk-node` | `0.221.0` (trace + metrics only — logs signal removed in T2/T3) |
+| ~~`@opentelemetry/sdk-logs`~~ | _Removed_ in T2/T3 — OTel logs signal chain is gone |
+| ~~`@opentelemetry/exporter-logs-otlp-http`~~ | _Removed_ in T2/T3 — no in-process OTel logs exporter |
+| ~~`@opentelemetry/api-logs`~~ | _Removed_ in T2/T3 |
 | axios | `^1.7.0` (unified with backend + frontend per project-context.md) |
 | `victoriametrics/victoria-logs` | `v1.50.0` (verified at `docker-compose.yaml:1752`) |
-| `otel/opentelemetry-collector-contrib` | `0.152.0` (verified at `docker-compose.yaml:1673`) |
-| OTel Collector receivers | `fluent_forward` + `otlp` (after P0) on `:4318` / `:24224` |
+| `otel/opentelemetry-collector-contrib` | `0.152.0` (verified at `docker-compose.yaml:1673`) — now hosts `transform/pii_redact` + `transform/set_trace_id_from_body` |
+| OTel Collector receivers | `fluent_forward` + `otlp` on `:4318` / `:24224` |
 | `ajv` | `^8.17.0` (cache schema validator, AD-12) |
 
 ## Structural Seed
@@ -254,104 +241,122 @@ graph TB
       GRAF[grafana:3000]
     end
   end
-  BE -->|OTel OTLP logs| OC
-  BE -->|shared Winston transport| VL
-  DR -->|shared Winston transport| VL
-  OC -->|batch OTLP /v1/logs| VL
-  BE -.->|future metrics/traces| VM
-  BE -.->|future traces| VT
+  BE -->|stdout → fluentd| OC
+  DR -->|stdout → fluentd| OC
+  OC -->|transform/pii_redact + batch OTLP /v1/logs| VL
+  BE -.->|metrics/traces| VM
+  BE -.->|traces| VT
   GRAF -.->|queries| VL
   GRAF -.->|queries| VM
   GRAF -.->|queries| VT
 ```
 
-Non-Node services (Python OPEA, Kong, nginx, postgres) keep `fluentd → collector → VL`; not shown. `victorialogs` data volume: `vlogs-data` (`docker-compose.yaml:65`).
+Non-Node services (Python OPEA, Kong, nginx, postgres) keep `fluentd → collector → VL`; not shown. `victorialogs` data volume: `vlogs-data` (`docker-compose.yaml:65`). **The previous `BE -->|OTel OTLP logs| OC` direct-emit edge is removed** — backend + document-repository emit exclusively via the docker fluentd driver (T2/T3 OTel-SDK-revert).
 
 ### Source tree (touched files)
 
 ```text
 components/shared/lib/
-  logger.js                                 # MODIFY: format=json, drop traceFormat, add VL transport
-  victorialogs-transport.js                 # NEW: Winston TransportStream → OTel LoggerProvider
+  logger.js                                 # MODIFY (post-OTel-SDK-revert): drop VictoriaLogsTransport,
+                                            #   keep Console + DailyRotateFile (LOG_TO_FILE=1 escape)
   melt/
     index.js                                # NEW: exports VictoriaLogsClient + MELT_PROVIDER
     victorialogs-client.js                  # NEW: axios HTTP client
   index.js                                  # MODIFY: re-export melt/
 
 components/gov-chat-backend/
-  tracing.js                                # MODIFY: LoggerProvider + setGlobalLoggerProvider + metrics
+  tracing.js                                # MODIFY (post-T2): drop LoggerProvider + setGlobalLoggerProvider
+                                            #   + PIIRedactingLogRecordProcessor; trace + metrics stay
+  tracing-pii-logs.js                       # DELETED (T4)
   services/
-    logs-service.js                         # REWRITE: getLogsInRange via VictoriaLogsClient
+    logs-service.js                         # REWRITE (T8): drop 22 file-source method bodies
+                                            #   (~1100 LOC); keep _sourceMode() + VlFilesDisabledError
+                                            #   for SPEC D2 503 contract
     admin-dashboard-service.js              # MODIFY: drop F4 regex, delegate getLogs
-    security-scan-service.js                  # REWRITE: worker_threads → VL bulk query + dedupe
+    security-scan-service.js                # REWRITE: worker_threads → VL bulk query + dedupe
   routes/
     admin-routes.js                         # MODIFY: rolloverLogs deprecation (P4)
     logger-routes.js                        # MODIFY: import internal ./logger not shared/lib (P4)
 
 components/document-repository/
+  src/tracing.js                            # MODIFY (post-T3): drop LoggerProvider + OTLPLogExporter
+  src/tracing-pii-logs.js                   # DELETED (T4)
   src/app.js                                # MINOR: producer-side Winston (no admin endpoints)
 
-configs/otel/
-  otel-collector-config.yaml                # MODIFY: add otlp to logs receivers
+components/shared/lib/victorialogs-transport.js   # DELETED (T4 — OTel SDK logs signal chain removed)
 
-docker-compose.yaml                        # MODIFY: 3 profile changes + 2 logging driver switches
+genie-ai-overlay/
+  tracing.py                                # MODIFY (post-T2b): drop setup_logging() — Python logging
+                                            #   now flows via stdout → fluentd → collector → VL
+
+configs/otel/
+  otel-collector-config.yaml                # MODIFY (post-T1): add `transform/pii_redact` (covers all
+                                            #   ingestion paths) and `transform/set_trace_id_from_body`
+                                            #   for the fluentd path's trace correlation
+
+docker-compose.yaml                        # MODIFY (T6/T7/T-fluentd-buffer): drop LOG_TO_VICTORIALOGS
+                                            #   + OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, drop /app/logs
+                                            #   bind mounts, add fluentd-buffer-limit 8MB +
+                                            #   fluentd-max-retries 5 + fluentd-retry-wait 2s
 deploy/ansible/
-  templates/env.j2                          # MODIFY: render 3 new vars unconditionally
+  templates/env.j2                          # MODIFY (T6/T7): drop LOG_TO_VICTORIALOGS,
+                                            #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, LOG_TO_FILE
   group_vars/all.yml                        # NO CHANGE
   group_vars/cloud_deploy/vars.yml          # NO CHANGE
 
-env                                         # MODIFY: commented templates for 8 new vars
+env                                         # MODIFY (T6/T7): drop commented templates for
+                                            #   LOG_TO_VICTORIALOGS + LOG_TO_FILE;
+                                            #   LOG_TO_FILE kept as a cross-reference comment
 
 tests/
   test-fixtures/logs/combined-2026-08-15.log # NEW: NDJSON fixture
-  config-validator/                         # MODIFY: whitelist MELT_PROVIDER, validate new envs
+  config-validator/                         # NO CHANGE: never asserted presence of dropped vars
   melt-correlation/                         # NEW (P0 stub only)
-  smoke/docker-log-driver.sh                # NEW: P1c verification shell
 
 components/gov-chat-backend/__tests__/
-  logger-functions.test.js                  # EXTEND: JSON format assertions
+  logger-functions.test.js                  # EXTEND: JSON format assertions; LOG_TO_FILE gate block
   logger-otel-trace.test.js                 # EXTEND: JSON-key assertions (drop printf)
   routes/admin.test.js                      # EXTEND: degraded banner + contract responses
   routes/logger-routes.test.js              # EXTEND: deprecated endpoints
   services/logs-service.test.js             # EXTEND: per-call env read tests
   services/security-scan-service.test.js    # REPLACE: Worker mock → VictoriaLogsClient mock
   services/logs-vl-contract.test.js         # NEW: contract parity
-  services/logs-vl-degradation.test.js      # NEW: graceful degradation
+  services/logs-vl-degradation.test.js      # NEW: graceful degradation (1/min cadence, etc.)
   services/security-scan-vl-bulk.test.js    # NEW: shape parity
   services/security-scan-vl-degradation.test.js # NEW: security-scan degradation
-  logger-vl-integration.test.js             # NEW: fake OTLPLogExporter
-  p-l-lig-pii-scrubbing.test.js             # NEW: PII body redaction
+  services/logs-service-no-vlfilter.test.js # NEW (T5): _vlFilter dedup removed regression pin
+  services/logs-service-no-file-branches.test.js # NEW (T8): file-source drop regression pin
+  services/logs-service-admin-source.test.js # NEW: ADMIN_LOGS_SOURCE toggle contract
   linter-shared-lib-re-exports.test.js      # NEW: triggerLogRollover refactor guard
+  # DELETED (T4b): logger-vl-integration.test.js, pii-body-scrubbing.test.js, pi-scrubbing tests
+  #   (OTel SDK path no longer exists)
 
 components/shared/lib/__tests__/
-  victorialogs-transport.test.js            # NEW: severity mapping, trace_id flow
   melt/victorialogs-client.test.js          # NEW: AccountID/ProjectID headers, normalization
+  # DELETED (T4): victorialogs-transport.test.js (transport removed)
 ```
 
 ## Capability → Architecture Map
 
 | Capability | Lives in | Governed by |
 | --- | --- | --- |
-| CAP-1 Producer emits structured records | `shared/lib/logger.js` + `victorialogs-transport.js` | AD-1, AD-2, AD-8, AD-9, AD-20 |
+| CAP-1 Producer emits structured records | `shared/lib/logger.js` + Docker fluentd driver + OTel Collector | AD-1, AD-2, AD-4 (collector edge), AD-9, AD-20 |
 | CAP-2 JSON format | `shared/lib/logger.js` format config | AD-9 |
-| CAP-3 Admin Logs endpoints | `gov-chat-backend/services/logs-service.js` + `melt/victorialogs-client.js` | AD-3, AD-5, AD-10, AD-17 |
+| CAP-3 Admin Logs endpoints | `gov-chat-backend/services/logs-service.js` + `melt/victorialogs-client.js` | AD-3, AD-6, AD-10 (OBSOLETE), AD-17 |
 | CAP-4 Security scanner | `gov-chat-backend/services/security-scan-service.js` | AD-3, AD-12, AD-19 |
 | CAP-5 Graceful degradation | `LogsService` + `securityScanService` VL wrappers | AD-6, AD-11, AD-14, AD-16 |
 | CAP-6 Rollback escape hatches | Env-driven per-call reads + `rollback-matrix.md` | AD-6, AD-13, AD-14 |
 | CAP-7 VL + Collector core stack | `docker-compose.yaml` profiles + `otel-collector-config.yaml` | AD-7 |
-| CAP-8 CI stub for `tests/melt-correlation/` | `tests/melt-correlation/{run-melt-test.sh,README.md}` | NG-4 (deferred) |
 
 ## Deferred
 
 - **ELK / Loki MELT adapter** — `LogQueryRepository` port ready; only `VictoriaLogsAdapter` shipped today. New adapter = `ElasticsearchAdapter` or `LokiAdapter` implementing the same port, plus `MELT_PROVIDER` discriminator logic in `VictoriaLogsClient` factory. Revisit when a second backend is requested.
-- **`tests/melt-correlation/` full implementation** — P0 MR ships `exit-0` stub only. Tracked as `DW-325` in `_bmad-output/implementation-artifacts/deferred-work.md`. Chaos/correlation suite (OTel trace↔log↔metric correlation, controlled VL/Collector/fluentd failures) is a separate epic. Triggers for revisit: any MR touching VL/OTel collector deployment, observability reliability question, or Grafana dashboard rework.
-- **Document-repository OTel SDK init (logs-only path)** — AD-18 documents the full init pattern; implementation deferred to a P1a follow-up MR. Not blocking P1a backend MR.
+- **`tests/melt-correlation/` full implementation** — P0 MR ships `exit-0` stub only. Tracked in `_bmad-output/implementation-artifacts/deferred-work.md`. Chaos/correlation suite (OTel trace↔log↔metric correlation, controlled VL/Collector/fluentd failures) is a separate epic. Triggers for revisit: any MR touching VL/OTel collector deployment, observability reliability question, or Grafana dashboard rework.
 - **Multi-tenant VL isolation** — `VICTORIALOGS_TENANT_ID` env kept as port seam (default `0:0`, single-tenant hardcoded in current `VictoriaLogsAdapter`). Multi-tenant deployment out of scope for this rollout. Revisit if GENIE.AI moves to multi-tenant.
 - **VL collector/Collector version drift automation** — versions pinned (Stack table); no automated version-bump policy in this rollout. Manual upgrades via MR with smoke verification.
 
 ## Open Questions
 
-- **Q-1** OTel deps location — `components/shared/lib/package.json` (shared) OR only `components/gov-chat-backend/package.json` + `document-repository`'s own? Confirm before P1a MR. (project-context.md prefers deps with consumer.)
-- **Q-2** `VL_FAIL_OPEN` rate-limit cadence — 1/min (drafted) vs 1/5min (less log flood during extended outage). Confirm before P2 MR.
-- **Q-3** Multi-tenant readiness — `VICTORIALOGS_TENANT_ID` env reserved but multi-tenant not planned. Confirm tenant isolation is out-of-scope.
-- **Q-4** `log_record_dropped_total` cardinality — labels proposed `{queue_full, otlp_unreachable, observability_disabled}`. Confirm no per-service labels (cardinality blowup risk).
+- **Q-1** OTel SDK **logs** signal location — RESOLVED 2026-09-17 (OTel-SDK-revert). Removed entirely; the in-process `LoggerProvider` is no longer instantiated by `components/gov-chat-backend/tracing.js`, `components/document-repository/src/tracing.js`, or `genie-ai-overlay/tracing.py`. Trace + metrics signal chains unchanged.
+- **Q-2** `VL_FAIL_OPEN` rate-limit cadence — RESOLVED 1/min (per AD-11, pinned by `logs-vl-degradation.test.js` Property 1 + T8.5 fake-timer smoke).
+- **Q-3** Multi-tenant readiness — `VICTORIALOGS_TENANT_ID` env reserved but multi-tenant not planned. Tenant isolation is out-of-scope.

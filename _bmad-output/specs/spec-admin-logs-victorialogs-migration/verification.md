@@ -69,8 +69,15 @@ curl -sk "http://localhost:3000/api/admin/logs?limit=5" -H "Authorization: Beare
 # → {"logs":[],"degraded":true}
 docker start victorialogs
 
-# D2 master switch (no restart, per-call env read)
+# D2 master switch (no restart, per-call env read) — returns 503 with LOG_TO_FILE=0 (SPEC D2)
 ADMIN_LOGS_SOURCE=file docker compose up -d backend
+curl -sk -w "\nHTTP %{http_code}" "http://localhost:3000/api/admin/logs?limit=5" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{error: .error, message: .message, status: "HTTP_503"}'
+# → HTTP 503 + {"error":"vl_files_disabled","message":"Set LOG_TO_FILE=1 to use file-based log source"}
+# (file-source body implementation was dropped in T8; the env contract is preserved via _sourceMode() per-call read)
+
+# D2 with LOG_TO_FILE=1 — re-enables file transports (P4 escape hatch)
+ADMIN_LOGS_SOURCE=file LOG_TO_FILE=1 docker compose up -d backend
 curl -sk "http://localhost:3000/api/admin/logs?limit=5" -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.logs | length'
 # → non-zero (file path active)
 
@@ -131,7 +138,7 @@ After P4 ships and the deployed release branch passes smoke:
 3. `POST /api/admin/security-scan` completes in < 2 s on a 7-day window with the same `vulnerabilities.{critical,medium,low}[]` shape.
 4. `du -sh components/shared/lib/logs/*.log` returns 0 after one rotation cycle with `LOG_TO_FILE=0`.
 5. Killing VL with `VL_FAIL_OPEN=true` returns empty results + `degraded: true` flag.
-6. `ADMIN_LOGS_SOURCE=file` env switch restores pre-migration behaviour without restart.
+6. `ADMIN_LOGS_SOURCE=file` env contract is preserved per SPEC D2 (per-call env read in `_sourceMode()`); with the default `LOG_TO_FILE=0` it returns HTTP 503 `vl_files_disabled` (file-source code path is dropped in T8). Re-enabling file transports requires `LOG_TO_FILE=1` (the surviving P4 escape hatch).
 
 ## Local lint / format / test gates
 

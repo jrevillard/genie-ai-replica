@@ -413,4 +413,55 @@ describe('VL degradation', () => {
       ).rejects.toBe(typeErr);
     });
   });
+
+  // ====================================================================
+  // T8.5 smoke — fake-timer don't-double-emit guard. Complementary to
+  // Property 1 (which mocks Date.now manually) — this case drives the
+  // clock via `jest.advanceTimersByTime` so the path is exercised the
+  // same way it would be in a real run where incidents land tens of
+  // milliseconds apart. Pinned because a regression that drops the
+  // cooldown re-check would re-emit on every outage and spam operator
+  // logs at the rate VL queries fail.
+  // ====================================================================
+  describe('T8.5 smoke — fake-timer 1/min cadence (does not double-emit within the cooldown)', () => {
+    it('two consecutive VL failures within the 60s window produce exactly one warn', async () => {
+      jest.useFakeTimers();
+      try {
+        // Pin the clock to a known epoch so Date.now() returns 1_700_000_000_000.
+        jest.setSystemTime(1_700_000_000_000);
+
+        const { service, sharedLogger } = mountService();
+
+        // First incident at t=0 — fresh state. readFile ENOENT, writeFile OK.
+        mockFs.readFile.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+        mockFs.writeFile.mockResolvedValueOnce(undefined);
+
+        await service._logVlUnavailableOnce(
+          'fake-timer-incident-1',
+          Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' })
+        );
+        expect(sharedLogger.warn).toHaveBeenCalledTimes(1);
+        expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+
+        // Advance 10s — still well within the 60_000 ms cooldown. The
+        // second readFile must observe the freshly-written timestamp
+        // and the call must early-return without a second warn or write.
+        jest.advanceTimersByTime(10_000);
+        mockFs.readFile.mockResolvedValueOnce(String(1_700_000_000_000));
+
+        await service._logVlUnavailableOnce(
+          'fake-timer-incident-2',
+          Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' })
+        );
+
+        // Guard: still exactly ONE warn + ONE write — the second incident
+        // was suppressed by the rate-limit. This is the don't-double-emit
+        // contract the brief requires.
+        expect(sharedLogger.warn).toHaveBeenCalledTimes(1);
+        expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
 });

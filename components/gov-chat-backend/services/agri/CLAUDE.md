@@ -25,8 +25,8 @@ working on the pluggable agricultural data harness. Human-oriented overview:
 
 1. Create `services/agri/adapters/<id>.js` implementing:
    `{id, configPrefix, cadence ('1h'|'24h'|'1w'), defaults, endpoints,
-     async resolve(cfg), async fetch(resolved, cfg), parse(raw),
-     normalize(parsed) -> {collection, docs}}`
+  async resolve(cfg), async fetch(resolved, cfg), parse(raw),
+  normalize(parsed) -> {collection, docs}}`
 2. Docs need deterministic `_key` (sha1 of a logical key via
    `node:crypto`) and go to `agri_series` (prices/indexes),
    `agri_ndvi`, `agri_alerts` (pest) or `agri_news`.

@@ -875,6 +875,11 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
 # when set. Unset = Arango + bundled-seed tiers only (still never-fail).
 #AGRI_REDIS_URL=
 
+# Verbose agri pipeline tracing (1/0): per-adapter resolve/fetch/parse/
+# normalize/import-chunk lines, cache-tier hits, serve origins, rebuild
+# decisions, and due-skip reasons. Pairs with LOG_LEVEL=debug for full detail.
+#AGRI_VERBOSE=
+
 # Run the first prefetch pass at startup (default: 1). Disable on test
 # stacks that must not call external APIs.
 #AGRI_PREFETCH_ON_START=1

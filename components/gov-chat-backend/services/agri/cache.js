@@ -30,6 +30,7 @@ class ServingCache {
       try {
         const raw = await this.redis.get(`agri:${key}`);
         if (raw) {
+          if (process.env.AGRI_VERBOSE === '1') logger.info(`[agri-v] cache get ${key}: redis hit`);
           return { envelope: JSON.parse(raw), origin: 'redis' };
         }
       } catch (error) {
@@ -42,6 +43,7 @@ class ServingCache {
         const coll = this.db.collection('agri_cache');
         const doc = await coll.document(key).catch(() => null);
         if (doc && doc.envelope) {
+          if (process.env.AGRI_VERBOSE === '1') logger.info(`[agri-v] cache get ${key}: arango hit`);
           return { envelope: doc.envelope, origin: 'arango' };
         }
       } catch (error) {

@@ -380,12 +380,14 @@ class AgriService {
    * @param {Function} builder - async () => envelope (reads local DB only)
    */
   async serve(key, builder) {
+    const started = Date.now();
     const ttl = this.endpointTtlMs(key);
     let { envelope, origin } = await this.cache.get(key);
 
     // A cached empty envelope ('pending' from a failed pass) must not mask
     // a usable seed — the seed floor wins until a real rebuild lands.
     if (this.constructor.isEmptyEnvelope(envelope) && seeds[key]) {
+      logger.info(`agri serve ${key}: cached envelope empty — falling back to seed`);
       envelope = seeds[key];
       origin = 'seed';
     }
@@ -398,6 +400,12 @@ class AgriService {
         envelope.meta.seeded = origin === 'seed';
         envelope.meta.caveats = [...(envelope.meta.caveats || []), caveat.staleCache(Math.round(ageHours))];
       }
+      logger.info(
+        `agri serve ${key}: origin=${origin} stale=${!!envelope.meta.stale} ` +
+          `${envelope.data && envelope.data.departments ? `depts=${envelope.data.departments.length} ` : ''}` +
+          `${envelope.data && envelope.data.series ? `series=${envelope.data.series.length} ` : ''}` +
+          `(${Date.now() - started}ms)`
+      );
       if (origin !== 'redis' && envelope.meta && !envelope.meta.seeded) {
         // Arango LKG served while a refresh is due — nudge the scheduler
         setImmediate(() => this.scheduler && this.scheduler.runOnce().catch(() => {}));
@@ -410,7 +418,7 @@ class AgriService {
       await this.cache.set(key, fresh, ttl);
       return fresh;
     } catch (error) {
-      logger.error(`agri serve: builder failed for ${key}: ${error.message}`);
+      logger.error(`agri serve: builder failed for ${key}: ${error.message} | ${error.stack}`);
       return buildEnvelope({}, { source: 'unavailable', stale: true, coverage: 'No data available yet' });
     }
   }
@@ -447,9 +455,16 @@ class AgriService {
             continue;
           }
         }
+        const detail =
+          envelope.data && envelope.data.departments
+            ? `${envelope.data.departments.length} depts`
+            : envelope.data && envelope.data.series
+              ? `${envelope.data.series.length} series`
+              : 'empty';
+        logger.info(`agri rebuild ${key}: wrote ${detail} (source=${envelope.meta.source})`);
         await this.cache.set(key, envelope, this.endpointTtlMs(key));
       } catch (error) {
-        logger.warn(`agri rebuild failed for ${key}: ${error.message}`);
+        logger.warn(`agri rebuild failed for ${key}: ${error.message} | ${error.stack}`);
       }
     }
   }

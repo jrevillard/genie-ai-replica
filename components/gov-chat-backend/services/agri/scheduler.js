@@ -11,6 +11,15 @@
 const { logger } = require('../../shared-lib');
 const { adapterConfig, cadenceMs } = require('./config');
 
+// Verbose pipeline tracing — set AGRI_VERBOSE=1 in the deployment env.
+// All detail is stringified INTO the message: this app's winston format
+// silently drops meta objects, which cost an hour of blind debugging on
+// 2026-09-17 (crash logs showed empty "Service initialization failed:").
+const VERBOSE = process.env.AGRI_VERBOSE === '1';
+const vlog = (msg) => {
+  if (VERBOSE) logger.info(`[agri-v] ${msg}`);
+};
+
 class AgriScheduler {
   /**
    * @param {Object} deps
@@ -85,10 +94,15 @@ class AgriScheduler {
     const started = Date.now();
     try {
       const resolved = await adapter.resolve(cfg);
+      vlog(`${adapter.id} resolved: ${JSON.stringify(resolved)}`);
       const raw = await adapter.fetch(resolved, cfg);
+      const bytes = raw && raw.length !== undefined ? raw.length : (raw && raw.byteLength) || '?';
+      vlog(`${adapter.id} fetched: ${bytes} bytes in ${Date.now() - started}ms`);
       // parse may be sync OR async (zip/xlsx extractors) — always await
       const parsed = await adapter.parse(raw);
+      vlog(`${adapter.id} parsed: ${Array.isArray(parsed) ? `${parsed.length} rows` : typeof parsed}`);
       const { collection, docs } = adapter.normalize(parsed);
+      vlog(`${adapter.id} normalized: ${docs ? docs.length : 0} docs -> ${collection}`);
 
       if (!docs || docs.length === 0) {
         throw new Error('normalize produced 0 documents (schema change?)');
@@ -104,6 +118,7 @@ class AgriScheduler {
         // (2026-09-17: fetch log said ok, collections stayed empty).
         const chunk = docs.slice(i, i + 500).map((d) => ({ ...d }));
         const res = await coll.import(chunk, { type: 'array', onDuplicate: 'update' });
+        vlog(`${adapter.id} import chunk ${i / 500 + 1}/${Math.ceil(docs.length / 500)} -> ${JSON.stringify(res)}`);
         // Arango import API returns {created, ignored, errors} — 'ignored'
         // counts onDuplicate updates, so both count as persisted.
         written += (res && (res.created || 0) + (res.ignored || 0)) || 0;
@@ -128,6 +143,9 @@ class AgriScheduler {
       });
       return { ok: true, docs: docs.length, latestDataDate };
     } catch (error) {
+      logger.error(
+        `agri adapter ${adapter.id} failed after ${Date.now() - started}ms: ${error.message} | ${error.stack}`
+      );
       await this.log({
         adapterId: adapter.id,
         ok: false,
@@ -141,9 +159,17 @@ class AgriScheduler {
   /** One pass over all enabled adapters that are due. */
   async runOnce() {
     const touched = [];
+    let skipped = 0;
     for (const adapter of this.adapters) {
-      const due = (await this.lastSuccess(adapter.id)) + cadenceMs(adapter) <= Date.now();
-      if (!due) continue;
+      const lastOk = await this.lastSuccess(adapter.id);
+      const dueAt = lastOk + cadenceMs(adapter);
+      if (dueAt > Date.now()) {
+        skipped += 1;
+        vlog(
+          `skip ${adapter.id}: last ok ${lastOk ? new Date(lastOk).toISOString() : 'never'}, next due ${new Date(dueAt).toISOString()}`
+        );
+        continue;
+      }
 
       const lockTtl = cadenceMs(adapter) + 10 * 60 * 1000;
       if (!(await this.acquireLock(adapter.id, lockTtl))) continue;
@@ -165,9 +191,12 @@ class AgriScheduler {
       try {
         await this.onAdaptersRun(touched);
       } catch (error) {
-        logger.error(`agri scheduler: endpoint rebuild failed: ${error.message}`);
+        logger.error(`agri scheduler: endpoint rebuild failed: ${error.message} | ${error.stack}`);
       }
     }
+    logger.info(
+      `agri pass complete: ${touched.length} ok, ${this.adapters.length - touched.length - skipped} failed, ${skipped} not-due`
+    );
     return touched;
   }
 

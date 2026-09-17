@@ -216,7 +216,11 @@ class VictoriaLogsAdapter extends LogQueryRepository {
     }
     if (!parsed || !Array.isArray(parsed.hits)) return {};
 
-    const result = {};
+    // Use a null-prototype map so field values named `__proto__`,
+    // `constructor`, or `hasOwnProperty` are stored as ordinary string
+    // keys instead of triggering the `__proto__` setter or shadowing
+    // the inherited methods on `Object.prototype`.
+    const result = Object.create(null);
     for (const entry of parsed.hits) {
       if (!entry || !entry.fields || typeof entry.fields !== 'object') continue;
       // The bucket key is the requested field's value (`fields[field]`).

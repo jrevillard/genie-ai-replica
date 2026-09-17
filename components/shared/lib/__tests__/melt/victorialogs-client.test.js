@@ -440,3 +440,34 @@ describe('VictoriaLogsAdapter — _parseJsonlResponse', () => {
     expect(out[1]._msg).toBe('row2');
   });
 });
+
+// ----- hits() — prototype pollution guard ------------------------------------
+
+describe('VictoriaLogsAdapter — hits() prototype pollution guard', () => {
+  // A VL row may carry a field value of "__proto__", "constructor", or
+  // "hasOwnProperty" (the fluentd driver writes whatever the producer
+  // sent). With a plain `{}` result map, `result[String(value)] = count`
+  // is silently dropped by the `__proto__` setter (it only accepts
+  // object/null) and `result['__proto__']` returns Object.prototype
+  // instead of the count — silently corrupting the returned bucket map.
+  // The fix uses `Object.create(null)` so the returned bucket map has
+  // no inherited keys and can hold arbitrary string field values.
+
+  it('preserves the count when a row field value is "__proto__"', async () => {
+    const { adapter, mockGet } = makeAdapter({ baseURL: 'http://vl.local', skipHealthProbe: true });
+    mockGet.mockResolvedValue({
+      data: JSON.stringify({
+        hits: [{ fields: { service: '__proto__' }, timestamps: [], values: [1], total: 1 }]
+      })
+    });
+
+    const result = await adapter.hits({ ...baseQuery, field: 'service' });
+
+    // The legitimate count must be retrievable via the '__proto__' key.
+    // With `result = {}` (plain object), this assignment is silently
+    // dropped and `result['__proto__']` returns Object.prototype
+    // instead of the count.
+    expect(result['__proto__']).toBe(1);
+    expect(Object.getPrototypeOf(result)).toBeNull();
+  });
+});

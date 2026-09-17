@@ -14,7 +14,6 @@
 
 const mockGetTracer = jest.fn().mockReturnValue({ startSpan: jest.fn() });
 const mockSetTracerProvider = jest.fn();
-const mockSetLoggerProvider = jest.fn();
 const mockSetContextManager = jest.fn();
 // Capture the constructor args of TracerProvider so the round-3 fix
 // verification (service.name must be hardcoded, NOT env-var-driven) can
@@ -78,30 +77,6 @@ jest.mock('@opentelemetry/api', () => ({
   }
 }));
 
-jest.mock('@opentelemetry/api-logs', () => ({
-  logs: { setGlobalLoggerProvider: mockSetLoggerProvider }
-}));
-
-jest.mock('@opentelemetry/exporter-logs-otlp-http', () => ({
-  OTLPLogExporter: jest.fn().mockImplementation(() => ({}))
-}));
-
-jest.mock('@opentelemetry/sdk-logs', () => {
-  const fakeProcessor = {
-    onEmit: jest.fn(),
-    shutdown: jest.fn().mockResolvedValue(),
-    forceFlush: jest.fn().mockResolvedValue()
-  };
-  return {
-    LoggerProvider: jest.fn().mockImplementation(() => ({
-      shutdown: jest.fn().mockResolvedValue(),
-      addLogRecordProcessor: jest.fn()
-    })),
-    BatchLogRecordProcessor: jest.fn().mockImplementation(() => fakeProcessor),
-    LogRecordProcessor: jest.fn()
-  };
-});
-
 jest.mock('@opentelemetry/resources', () => ({
   // Production SDK builds a `Resource` instance carrying the attributes map.
   // The default mock (`{ attributes: { mocked: true } }`) discards the input
@@ -121,14 +96,6 @@ jest.mock('../../shared-lib/otel-batch-config', () => ({
   maxExportBatchSize: 512,
   scheduledDelayMillis: 5000,
   maxQueueSize: 2048
-}));
-
-jest.mock('../tracing-pii-logs', () => ({
-  PIIRedactingLogRecordProcessor: jest.fn().mockImplementation(() => ({
-    onEmit: jest.fn(),
-    shutdown: jest.fn(),
-    forceFlush: jest.fn()
-  }))
 }));
 
 jest.mock('../tracing-pii-spans', () => ({

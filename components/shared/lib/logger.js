@@ -5,7 +5,6 @@ const path = require('path');
 
 const { trace, context, metrics: otelMetrics } = require('@opentelemetry/api');
 const { booleanEnv } = require('./boolean-env');
-const { VictoriaLogsTransport } = require('./victorialogs-transport');
 
 // observability_disabled call-site: module-load counter.
 // AD-18 forbids shared/lib → backend require; the meter scope matches
@@ -88,11 +87,6 @@ const traceFormat = format((info) => {
   return info;
 });
 
-// Gate the VictoriaLogs transport on both flags so VL only fans out when the
-// observability stack is on AND the deployment opts in. Re-evaluated on every
-// reconfigure so env-var toggles take effect without restart.
-const victoriaLogsEnabled = () => booleanEnv('LOG_TO_VICTORIALOGS', true) && booleanEnv('ENABLE_OBSERVABILITY');
-
 // Single source of truth for the transport list — used by both the initial
 // `loggerConfig` and `reconfigureLogger`, so toggling env vars between
 // successive reconfigures (or between restart and first reconfig) is honoured.
@@ -136,13 +130,6 @@ const buildTransports = (config = {}) => {
       })
     );
   }
-  if (victoriaLogsEnabled()) {
-    list.push(
-      new VictoriaLogsTransport({
-        service: 'backend'
-      })
-    );
-  }
   return list;
 };
 
@@ -165,9 +152,9 @@ const logger = createLogger(loggerConfig);
 const reconfigureLogger = (newConfig) => {
   // Update the configuration with new values (if provided)
   loggerConfig.level = newConfig.level || loggerConfig.level;
-  // Re-build the transport list via the same helper so the VL gate runs again
-  // — toggling the env vars between restarts (or between successive
-  // reconfigures) is honoured.
+  // Re-build the transport list via the same helper so toggling the
+  // env vars between restarts (or between successive reconfigures) is
+  // honoured.
   loggerConfig.transports = buildTransports(newConfig);
 
   // Clear existing transports
@@ -217,7 +204,6 @@ module.exports = {
   reconfigureLogger,
   cleanupCombinedLog,
   flushLogs,
-  victoriaLogsEnabled,
   // Exposed for parity assertions in tests; canonical source of truth lives
   // in components/gov-chat-backend/metrics.js (AD-18 forbids a shared
   // helper crossing shared/lib → backend).

@@ -66,43 +66,6 @@ jest.mock('@opentelemetry/sdk-metrics', () => ({
   PeriodicExportingMetricReader: jest.fn().mockImplementation(() => ({}))
 }));
 
-// The OTel logs deps require the LoggerProvider block in tracing.js
-// at module load. Mock here to keep the non-test-branch tests
-// hermetic — the dedicated 2-10 test file (victorialogs-transport.test.js)
-// exercises the transport; this file only asserts sdk + tracer + signals.
-jest.mock('@opentelemetry/api-logs', () => ({
-  logs: { setGlobalLoggerProvider: jest.fn() }
-}));
-
-jest.mock('@opentelemetry/exporter-logs-otlp-http', () => ({
-  OTLPLogExporter: jest.fn().mockImplementation(() => ({}))
-}));
-
-jest.mock('@opentelemetry/sdk-logs', () => {
-  const noopBatch = jest.fn().mockImplementation(() => ({
-    onEmit: jest.fn(),
-    shutdown: jest.fn().mockResolvedValue(),
-    forceFlush: jest.fn().mockResolvedValue()
-  }));
-  return {
-    LoggerProvider: jest.fn().mockImplementation(() => ({
-      shutdown: jest.fn().mockResolvedValue(),
-      addLogRecordProcessor: noopBatch
-    })),
-    BatchLogRecordProcessor: noopBatch
-  };
-});
-
-// 2-6 also added tracing-pii-logs.js (PIIRedactingLogRecordProcessor).
-// Provide a stub so require does not throw if the LoggerProvider block runs.
-jest.mock('../tracing-pii-logs', () => ({
-  PIIRedactingLogRecordProcessor: jest.fn().mockImplementation(() => ({
-    onEmit: jest.fn(),
-    shutdown: jest.fn(),
-    forceFlush: jest.fn()
-  }))
-}));
-
 // 2-5 + 2-7 introduced shared/lib/boolean-env + otel-batch-config. The
 // require chain at tracing.js:59-62 must resolve cleanly under the mock.
 jest.mock('../../shared/lib/boolean-env', () => ({

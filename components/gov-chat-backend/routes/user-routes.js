@@ -47,7 +47,7 @@ module.exports = (userService) => {
 
   /**
    * @swagger
-   * /api/me:
+   * "/api/me":
    *   get:
    *     summary: Get current user profile
    *     description: Returns the full profile of the authenticated user. User is resolved from the JWT — no ID parameter needed.
@@ -79,7 +79,7 @@ module.exports = (userService) => {
 
   /**
    * @swagger
-   * /api/me/context:
+   * "/api/me/context":
    *   get:
    *     summary: Get user context for AI enrichment
    *     description: Returns a sanitized subset of user data for OPEA AI context enrichment. User is resolved from the JWT.
@@ -126,7 +126,7 @@ module.exports = (userService) => {
 
   /**
    * @swagger
-   * /api/me/reset-data:
+   * "/api/me/reset-data":
    *   post:
    *     summary: Reset user profile data
    *     description: Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
@@ -166,7 +166,7 @@ module.exports = (userService) => {
 
   /**
    * @swagger
-   * /api/me/delete:
+   * "/api/me/delete":
    *   post:
    *     summary: Delete user account (GDPR right to erasure)
    *     description: Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete with nullification). This action is irreversible.
@@ -200,7 +200,7 @@ module.exports = (userService) => {
 
   /**
    * @swagger
-   * /api/me:
+   * "/api/me":
    *   put:
    *     summary: Update current user profile
    *     description: Self-service profile update. JIT fields (email, name) forwarded to Keycloak Account API, custom fields saved to ArangoDB.

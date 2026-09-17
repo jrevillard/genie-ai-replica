@@ -6,9 +6,9 @@ const { logger } = require('../shared-lib');
 module.exports = () => {
   /**
    * @swagger
-   * /api/logger/configure:
+   * "/api/logger/configure":
    *   post:
-   *     summary: Deprecated: logger configuration
+   *     summary: "Deprecated: logger configuration"
    *     description: |
    *       Deprecated. Log level and file transports are managed via the
    *       LOG_LEVEL and LOG_TO_FILE environment variables; runtime

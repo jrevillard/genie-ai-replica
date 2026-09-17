@@ -14,7 +14,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/categories:
+   * "/api/service-categories/categories":
    *   get:
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
@@ -68,7 +68,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/categories/detailed:
+   * "/api/service-categories/categories/detailed":
    *   get:
    *     summary: Get all categories with detailed services for admin
    *     description: Retrieves all categories with their associated services as objects (including keys)
@@ -107,7 +107,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/categories/{categoryId}:
+   * "/api/service-categories/categories/{categoryId}":
    *   get:
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
@@ -167,7 +167,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/{categoryId}/translations:
+   * "/api/service-categories/{categoryId}/translations":
    *   get:
    *     summary: Get all translations for a category
    *     description: Retrieves all available translations for a specific service category
@@ -219,7 +219,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/services/{serviceId}/translations:
+   * "/api/service-categories/services/{serviceId}/translations":
    *   get:
    *     summary: Get all translations for a service
    *     description: Retrieves all available translations for a specific service
@@ -258,7 +258,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/search:
+   * "/api/service-categories/search":
    *   get:
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string
@@ -342,7 +342,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories:
+   * "/api/service-categories":
    *   post:
    *     summary: Create a new category
    *     description: Creates a new service category with translations
@@ -385,7 +385,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/{categoryId}:
+   * "/api/service-categories/{categoryId}":
    *   delete:
    *     summary: Delete a category
    *     description: Deletes a service category and its associated services
@@ -430,7 +430,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/services/{serviceId}:
+   * "/api/service-categories/services/{serviceId}":
    *   delete:
    *     summary: Delete a service
    *     description: Deletes a service and its associated translations
@@ -475,7 +475,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/init:
+   * "/api/service-categories/init":
    *   post:
    *     summary: Initialize default categories
    *     description: Initializes the system with default categories and services
@@ -515,7 +515,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/{categoryId}/services:
+   * "/api/service-categories/{categoryId}/services":
    *   post:
    *     summary: Create a new service for a category
    *     description: Creates a new service with translations under a specific category
@@ -568,7 +568,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/{categoryId}:
+   * "/api/service-categories/{categoryId}":
    *   put:
    *     summary: Update an existing category
    *     description: Updates a category's name and translations
@@ -621,7 +621,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/service-categories/services/{serviceId}:
+   * "/api/service-categories/services/{serviceId}":
    *   put:
    *     summary: Update an existing service
    *     description: Updates a service's name and its associated translations

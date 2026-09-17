@@ -15,7 +15,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}/responsetime:
+   * "/api/queries/{queryId}/responsetime":
    *   patch:
    *     summary: Update query response time
    *     description: Updates the response time of a specific query.
@@ -90,10 +90,11 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries/stream:
+   * "/queries/stream":
    *   post:
    *     summary: Stream a query response via SSE
-   *     description: Creates a query and streams the LLM response as SSE events.
+   *     description: |
+   *       Creates a query and streams the LLM response as SSE events.
    *       Events: chunk, metadata, translation, done, error.
    *     tags: [Queries]
    *     security:
@@ -442,7 +443,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /queries:
+   * "/queries":
    *   post:
    *     summary: Create a new query
    *     description: Creates a new query and records it in analytics. Supports single-message or full conversation modes.
@@ -556,7 +557,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}:
+   * "/api/queries/{queryId}":
    *   get:
    *     summary: Get query by ID
    *     description: Retrieves a query by its unique identifier
@@ -618,7 +619,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}/feedback:
+   * "/api/queries/{queryId}/feedback":
    *   post:
    *     summary: Add feedback to a query
    *     description: Adds user feedback to a query and records it in analytics
@@ -706,7 +707,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}/answered:
+   * "/api/queries/{queryId}/answered":
    *   patch:
    *     summary: Mark query as answered
    *     description: Marks a query as answered and updates response time
@@ -775,7 +776,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries:
+   * "/api/queries":
    *   get:
    *     summary: Search queries
    *     description: Searches queries based on various criteria with pagination
@@ -904,7 +905,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}/conversations:
+   * "/api/queries/{queryId}/conversations":
    *   get:
    *     summary: Get conversations for a query
    *     description: Retrieves all conversations associated with a specific query
@@ -957,7 +958,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}/conversation:
+   * "/api/queries/{queryId}/conversation":
    *   post:
    *     summary: Create conversation from query
    *     description: Creates a new conversation based on an existing query
@@ -1022,7 +1023,7 @@ module.exports = (queryService) => {
 
   /**
    * @swagger
-   * /api/queries/{queryId}/link/{messageId}:
+   * "/api/queries/{queryId}/link/{messageId}":
    *   post:
    *     summary: Link query to message
    *     description: Creates a link between a query and an existing message

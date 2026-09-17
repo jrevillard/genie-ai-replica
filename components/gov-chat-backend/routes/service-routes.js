@@ -18,7 +18,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/services/categories:
+   * "/api/services/categories":
    *   get:
    *     summary: Get all categories with services
    *     description: Retrieves all service categories with their associated services
@@ -87,7 +87,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/services/categories/{categoryId}:
+   * "/api/services/categories/{categoryId}":
    *   get:
    *     summary: Get category with services
    *     description: Retrieves a specific service category with its associated services
@@ -162,7 +162,7 @@ module.exports = (serviceCategoryService) => {
 
   /**
    * @swagger
-   * /api/services/search:
+   * "/api/services/search":
    *   get:
    *     summary: Search categories and services
    *     description: Searches for categories and services based on a query string

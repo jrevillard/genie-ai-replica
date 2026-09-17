@@ -725,26 +725,20 @@ describe('LogsService VictoriaLogs rewrite', () => {
       expect(logsService._isVlUnavailable({ response: { status: '500' } })).toBe(false);
     });
 
-    it('_vlFilter falls back to "*" when called with empty/whitespace q', () => {
-      expect(logsService._vlFilter('')).toBe('*');
-      expect(logsService._vlFilter('   ')).toBe('*');
-    });
-
-    it('_vlFilter appends dual-emit dedup when LOG_TO_VICTORIALOGS=true and LOG_TO_FILE unset', () => {
-      process.env.LOG_TO_VICTORIALOGS = '1';
-      delete process.env.LOG_TO_FILE;
-      // Dual-emit dedup: while OTLP is the canonical writer, the Docker
-      // fluentd driver ALSO forwards container stdout to VL. The two
-      // emission paths used to be distinguishable by the `service.name`
-      // value (`genie-backend` from the OTel SDK vs `backend` from the
-      // Compose label forwarded by fluentd). After the service-name
-      // unification (logger.js + tracing.js now hardcode the same
-      // Compose-block name across both ingestion paths), both produce
-      // the SAME `service.name` — so the dedup key switched to a
-      // fluentd-specific signal: `NOT fluent.tag:*` (fluentd-sourced
-      // rows carry the `fluent.tag` attribute, OTel-instrumented rows
-      // do NOT).
-      expect(logsService._vlFilter('level:INFO')).toBe('level:INFO AND NOT fluent.tag:*');
+    it('passes the user-supplied q through to VL without a dedup suffix', () => {
+      // After the OTel SDK revert (T1-T4b) there is a single emit path
+      // (Winston -> stdout -> fluentd -> collector -> VL). The legacy
+      // `NOT fluent.tag:*` dedup discriminator served dual-channel
+      // reconciliation and is now dead code — the dispatcher passes `q`
+      // straight through to the VL adapter.
+      mockVlClient.query.mockResolvedValueOnce([]);
+      return logsService
+        .getLogsInRange({ start: '2026-09-01T00:00:00.000Z', end: '2026-09-01T23:59:59.999Z', limit: 1 })
+        .then(() => {
+          const callArg = mockVlClient.query.mock.calls[0][0];
+          expect(callArg.q).toBe('*');
+          expect(callArg.q).not.toMatch(/NOT\s+fluent\.tag/);
+        });
     });
 
     it('_sourceMode trims and lowercases ADMIN_LOGS_SOURCE (escapes " FILE " typo)', () => {

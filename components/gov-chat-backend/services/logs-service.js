@@ -386,9 +386,8 @@ class LogsService {
     return this._withVlFailOpen(
       async () => {
         const client = this._getVlClient();
-        const filter = this._vlFilter(q);
         const window = limitN + offsetN;
-        const rows = await client.query({ q: filter, start: startIso, end: endIso, limit: window });
+        const rows = await client.query({ q, start: startIso, end: endIso, limit: window });
         const pageRows = Array.isArray(rows) ? rows.slice(offsetN, offsetN + limitN) : [];
         return {
           logs: pageRows,
@@ -400,38 +399,6 @@ class LogsService {
       'getLogsInRange',
       fallback
     );
-  }
-
-  /**
-   * Apply dual-emit dedup filter while the dual-emit window is open.
-   * Once the production fluentd logging driver for backend +
-   * document-repository is removed, the filter becomes a no-op.
-   *
-   * @param {string} q
-   * @returns {string}
-   */
-  _vlFilter(q) {
-    const baseQ = typeof q === 'string' && q.trim() !== '' ? q : '*';
-    if (booleanEnv('LOG_TO_VICTORIALOGS', true) && !booleanEnv('LOG_TO_FILE')) {
-      // Dual-emit dedup: while OTLP is the canonical writer, the Docker
-      // fluentd driver ALSO forwards container stdout to VL — same JSON
-      // content, different ingestion path. fluentd-sourced rows carry a
-      // `fluent.tag` attribute (e.g. `genie.admin-logs-prd-backend-1`)
-      // that OTel-instrumented records do NOT have. Exclude the
-      // fluentd duplicates by requiring `NOT fluent.tag:*` so only the
-      // canonical OTel records land in the admin panel + Grafana.
-      //
-      // The previous filter `service.name:genie-*` was based on a stale
-      // assumption that OTel records carry `genie-backend` /
-      // `genie-document-repository` while fluentd records carry `backend`
-      // / `document-repository`. After the service-name unification
-      // (service.name is now hardcoded to match the Compose block name
-      // across all ingestion paths), both paths produce the SAME
-      // service.name — the dedup key had to switch from `service.name`
-      // to a fluentd-specific signal (`fluent.tag`).
-      return `${baseQ} AND NOT fluent.tag:*`;
-    }
-    return baseQ;
   }
 
   async _getLogsInRangeFromFile(options = {}) {
@@ -934,7 +901,7 @@ class LogsService {
       async () => {
         const client = this._getVlClient();
         const rows = await client.query({
-          q: this._vlFilter(q),
+          q,
           start: startIso,
           end: endIso,
           // Honour the caller's window exactly — VL filters at the

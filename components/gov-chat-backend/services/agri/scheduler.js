@@ -122,7 +122,7 @@ class AgriScheduler {
         // Arango import API returns {created, updated, ignored, errors} —
         // re-importing existing docs lands in 'updated'/'ignored', so all
         // three count as persisted.
-        written += (res && ((res.created || 0) + (res.updated || 0) + (res.ignored || 0))) || 0;
+        written += (res && (res.created || 0) + (res.updated || 0) + (res.ignored || 0)) || 0;
       }
       if (docs.length > 0 && written === 0) {
         // A 0-doc write with a non-empty parse is as much a failure as a

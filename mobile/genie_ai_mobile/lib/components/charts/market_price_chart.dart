@@ -934,9 +934,8 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                     ),
                     _NewsPickerSection(
                       scope: 'global',
-                      onInsert: (text) => _appendToController(
-                        _worldNewsController, text,
-                      ),
+                      onInsert: (text) =>
+                          _appendToController(_worldNewsController, text),
                     ),
                     const SizedBox(height: 16),
 
@@ -959,9 +958,8 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                     ),
                     _NewsPickerSection(
                       scope: 'local',
-                      onInsert: (text) => _appendToController(
-                        _localNewsController, text,
-                      ),
+                      onInsert: (text) =>
+                          _appendToController(_localNewsController, text),
                     ),
                   ],
                 ),
@@ -1328,12 +1326,13 @@ class _NewsPickerSectionState extends State<_NewsPickerSection> {
     final lines = _items
         .where((i) => _selected.contains('${i['url'] ?? i['title']}'))
         .map((i) {
-      final date = (i['publishedAt'] as String?)?.split('T').first ?? '';
-      final snippet = (i['snippet'] as String?)?.isNotEmpty == true
-          ? ' — ${i['snippet']}'
-          : '';
-      return '[${i['title']} — ${i['source']}${date.isNotEmpty ? ', $date' : ''}]$snippet';
-    }).join('\n');
+          final date = (i['publishedAt'] as String?)?.split('T').first ?? '';
+          final snippet = (i['snippet'] as String?)?.isNotEmpty == true
+              ? ' — ${i['snippet']}'
+              : '';
+          return '[${i['title']} — ${i['source']}${date.isNotEmpty ? ', $date' : ''}]$snippet';
+        })
+        .join('\n');
     if (lines.isNotEmpty) widget.onInsert(lines);
     setState(() => _open = false);
   }
@@ -1383,53 +1382,54 @@ class _NewsPickerSectionState extends State<_NewsPickerSection> {
                     ),
                   )
                 : _items.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          tr('market.noNewsItems'),
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      )
-                    : ListView(
-                        shrinkWrap: true,
-                        children: [
-                          ..._items.map((item) {
-                            final key = '${item['url'] ?? item['title']}';
-                            return CheckboxListTile(
-                              dense: true,
-                              value: _selected.contains(key),
-                              title: Text(
-                                item['title']?.toString() ?? '',
-                                style: theme.textTheme.bodySmall,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                '${item['source'] ?? ''}'
-                                '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(fontSize: 11),
-                              ),
-                              onChanged: (v) => setState(() {
-                                if (v == true) {
-                                  _selected.add(key);
-                                } else {
-                                  _selected.remove(key);
-                                }
-                              }),
-                            );
-                          }),
-                          if (_selected.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: ElevatedButton.icon(
-                                onPressed: _insert,
-                                icon: const Icon(Icons.add, size: 16),
-                                label: Text(tr('market.insertSelected')),
-                              ),
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      tr('market.noNewsItems'),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  )
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      ..._items.map((item) {
+                        final key = '${item['url'] ?? item['title']}';
+                        return CheckboxListTile(
+                          dense: true,
+                          value: _selected.contains(key),
+                          title: Text(
+                            item['title']?.toString() ?? '',
+                            style: theme.textTheme.bodySmall,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${item['source'] ?? ''}'
+                            '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
                             ),
-                        ],
-                      ),
+                          ),
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _selected.add(key);
+                            } else {
+                              _selected.remove(key);
+                            }
+                          }),
+                        );
+                      }),
+                      if (_selected.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: ElevatedButton.icon(
+                            onPressed: _insert,
+                            icon: const Icon(Icons.add, size: 16),
+                            label: Text(tr('market.insertSelected')),
+                          ),
+                        ),
+                    ],
+                  ),
           ),
       ],
     );

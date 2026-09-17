@@ -29,13 +29,18 @@ class AgriApiService {
       }
       throw Exception('HTTP ${response.statusCode}');
     } catch (e) {
-      debugPrint('[AgriApiService] fetch failed for $endpoint: $e — using cache');
+      debugPrint(
+        '[AgriApiService] fetch failed for $endpoint: $e — using cache',
+      );
       final cached = await _readCache(endpoint);
       if (cached != null) {
         final meta = (cached['meta'] as Map<String, dynamic>?) ?? {};
         meta['stale'] = true;
         final caveats = (meta['caveats'] as List?) ?? [];
-        caveats.add({'code': 'STALE_CACHE', 'params': {'source': 'offline'}});
+        caveats.add({
+          'code': 'STALE_CACHE',
+          'params': {'source': 'offline'},
+        });
         meta['caveats'] = caveats;
         cached['meta'] = meta;
         return cached;
@@ -73,12 +78,14 @@ class AgriApiService {
       'unit': primary['unit'] ?? data['unit'],
       'dataSource': meta['source'],
       'data': points
-          .map((p) => {
-                'year': p['date'],
-                'value': p['value'],
-                'decimal': p['value'],
-                'quality': p['quality'],
-              })
+          .map(
+            (p) => {
+              'year': p['date'],
+              'value': p['value'],
+              'decimal': p['value'],
+              'quality': p['quality'],
+            },
+          )
           .toList(),
       'trend': data['trend'],
       'caveats': meta['caveats'] ?? <dynamic>[],
@@ -95,16 +102,18 @@ class AgriApiService {
     final departments = (data['departments'] as List?) ?? [];
     return {
       'data': departments
-          .map((d) => {
-                'department': d['name'],
-                'ndvi': d['ndvi'],
-                'trend': d['trend'],
-                'change': d['changePct'],
-                'health': d['health'],
-                'date': d['date'],
-                'baseline': d['baseline'],
-                'source': d['source'],
-              })
+          .map(
+            (d) => {
+              'department': d['name'],
+              'ndvi': d['ndvi'],
+              'trend': d['trend'],
+              'change': d['changePct'],
+              'health': d['health'],
+              'date': d['date'],
+              'baseline': d['baseline'],
+              'source': d['source'],
+            },
+          )
           .toList(),
       'average': data['average'] ?? {},
       'meta': envelope['meta'],
@@ -119,54 +128,63 @@ class AgriApiService {
     final isEs = I18nService().currentLocale.languageCode == 'es';
 
     final advisories = ((d['advisories'] as List?) ?? [])
-        .map((a) => {
-              'id': 'advisory-${a['scientificName']}',
-              'pest': _localized(a['pest'], isEs) ?? a['scientificName'],
-              'scientificName': a['scientificName'],
-              'severity': 'advisory',
-              'affectedCrops': _localized(a['affectedCrops'], isEs) ?? <dynamic>[],
-              'departments': a['departments'] ?? <dynamic>[],
-              'description': _localized(a['advisory'], isEs) ?? '',
-              'recommendations': '',
-              'firstDetected': null,
-              'source': a['source'],
-              'link': null,
-              'seasonal': true,
-            })
+        .map(
+          (a) => {
+            'id': 'advisory-${a['scientificName']}',
+            'pest': _localized(a['pest'], isEs) ?? a['scientificName'],
+            'scientificName': a['scientificName'],
+            'severity': 'advisory',
+            'affectedCrops':
+                _localized(a['affectedCrops'], isEs) ?? <dynamic>[],
+            'departments': a['departments'] ?? <dynamic>[],
+            'description': _localized(a['advisory'], isEs) ?? '',
+            'recommendations': '',
+            'firstDetected': null,
+            'source': a['source'],
+            'link': null,
+            'seasonal': true,
+          },
+        )
         .toList();
 
     final regional = ((d['regional'] as List?) ?? [])
-        .map((r) => {
-              'id': 'regional-${r['link'] ?? r['title']}',
-              'pest': r['title'],
-              'scientificName': '',
-              'severity': 'info',
-              'affectedCrops': <dynamic>[],
-              'departments': <dynamic>[],
-              'description': ((r['matchedKeywords'] as List?) ?? []).join(', '),
-              'recommendations': '',
-              'firstDetected': r['publishedAt'],
-              'source': r['source'] ?? 'OIRSA',
-              'link': r['link'],
-              'seasonal': false,
-            })
+        .map(
+          (r) => {
+            'id': 'regional-${r['link'] ?? r['title']}',
+            'pest': r['title'],
+            'scientificName': '',
+            'severity': 'info',
+            'affectedCrops': <dynamic>[],
+            'departments': <dynamic>[],
+            'description': ((r['matchedKeywords'] as List?) ?? []).join(', '),
+            'recommendations': '',
+            'firstDetected': r['publishedAt'],
+            'source': r['source'] ?? 'OIRSA',
+            'link': r['link'],
+            'seasonal': false,
+          },
+        )
         .toList();
 
     final sightings = ((d['sightings'] as List?) ?? [])
-        .map((s) => {
-              'id': 'sighting-${s['scientificName']}-${s['observedOn']}',
-              'pest': _localized(s['commonName'], isEs) ?? s['scientificName'],
-              'scientificName': s['scientificName'],
-              'severity': 'sighting',
-              'affectedCrops': <dynamic>[],
-              'departments': s['placeGuess'] != null ? [s['placeGuess']] : <dynamic>[],
-              'description': '',
-              'recommendations': '',
-              'firstDetected': s['observedOn'],
-              'source': 'iNaturalist (community)',
-              'link': s['uri'],
-              'seasonal': false,
-            })
+        .map(
+          (s) => {
+            'id': 'sighting-${s['scientificName']}-${s['observedOn']}',
+            'pest': _localized(s['commonName'], isEs) ?? s['scientificName'],
+            'scientificName': s['scientificName'],
+            'severity': 'sighting',
+            'affectedCrops': <dynamic>[],
+            'departments': s['placeGuess'] != null
+                ? [s['placeGuess']]
+                : <dynamic>[],
+            'description': '',
+            'recommendations': '',
+            'firstDetected': s['observedOn'],
+            'source': 'iNaturalist (community)',
+            'link': s['uri'],
+            'seasonal': false,
+          },
+        )
         .toList();
 
     final alerts = [...advisories, ...regional, ...sightings];
@@ -196,19 +214,28 @@ class AgriApiService {
   String dataDisclosureText(Map<String, dynamic> envelope) {
     final meta = (envelope['meta'] as Map<String, dynamic>?) ?? {};
     final lines = <String>[];
-    if (meta['coverage'] != null) lines.add('Data coverage: ${meta['coverage']}');
-    if (meta['estimation'] != null) lines.add('Estimation note: ${meta['estimation']}');
+    if (meta['coverage'] != null) {
+      lines.add('Data coverage: ${meta['coverage']}');
+    }
+    if (meta['estimation'] != null) {
+      lines.add('Estimation note: ${meta['estimation']}');
+    }
     return lines.join('\n');
   }
 
   dynamic _localized(dynamic bilingual, bool isEs) {
     if (bilingual is Map<String, dynamic>) {
-      return bilingual[isEs ? 'es' : 'en'] ?? bilingual['en'] ?? bilingual['es'];
+      return bilingual[isEs ? 'es' : 'en'] ??
+          bilingual['en'] ??
+          bilingual['es'];
     }
     return bilingual;
   }
 
-  Future<void> _writeCache(String endpoint, Map<String, dynamic> envelope) async {
+  Future<void> _writeCache(
+    String endpoint,
+    Map<String, dynamic> envelope,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('$_cachePrefix$endpoint', jsonEncode(envelope));

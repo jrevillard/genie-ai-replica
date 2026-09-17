@@ -119,9 +119,10 @@ class AgriScheduler {
         const chunk = docs.slice(i, i + 500).map((d) => ({ ...d }));
         const res = await coll.import(chunk, { type: 'array', onDuplicate: 'update' });
         vlog(`${adapter.id} import chunk ${i / 500 + 1}/${Math.ceil(docs.length / 500)} -> ${JSON.stringify(res)}`);
-        // Arango import API returns {created, ignored, errors} — 'ignored'
-        // counts onDuplicate updates, so both count as persisted.
-        written += (res && (res.created || 0) + (res.ignored || 0)) || 0;
+        // Arango import API returns {created, updated, ignored, errors} —
+        // re-importing existing docs lands in 'updated'/'ignored', so all
+        // three count as persisted.
+        written += (res && ((res.created || 0) + (res.updated || 0) + (res.ignored || 0))) || 0;
       }
       if (docs.length > 0 && written === 0) {
         // A 0-doc write with a non-empty parse is as much a failure as a

@@ -494,7 +494,8 @@ class AgriService {
    */
   async wfpSeries(def, cpi) {
     const rows = await this.querySeries(
-      'FOR d IN agri_series FILTER d.key LIKE @prefix AND d.commodity == @commodity AND d.pricetype == @pricetype ' +
+      'FOR d IN agri_series FILTER d.key LIKE @prefix AND d.commodity == @commodity ' +
+        'AND UPPER(d.pricetype) == UPPER(@pricetype) ' +
         'AND (@market == null OR d.market == @market) SORT d.date RETURN KEEP(d, "date", "usdPerKg", "country", "market")',
       {
         prefix: `${def.country}:%`,

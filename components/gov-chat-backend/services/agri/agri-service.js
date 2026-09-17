@@ -585,6 +585,25 @@ class AgriService {
     );
     if (rows.length === 0) return null;
 
+    // Monthly/period-keyed series (e.g. BLS PPI stores date, not year) —
+    // emit date points directly; annual CPI estimation does not apply.
+    if (!rows.some((r) => r.year != null)) {
+      const monthly = rows
+        .filter((r) => Number.isFinite(r.value))
+        .map((r) => ({ date: r.date, value: r.value, quality: 'actual' }));
+      if (monthly.length > 0) {
+        return {
+          name: def.name,
+          source: keyPrefix.startsWith('BLS:') ? 'bls' : 'agri',
+          country: def.country || 'El Salvador',
+          data: monthly,
+          trend: computeTrend(monthly, { dense: true }),
+          latest: monthly[monthly.length - 1].value
+        };
+      }
+      return null;
+    }
+
     const actuals = rows
       .filter((r) => r.year != null && Number.isFinite(r.usdPerKg ?? r.value))
       .map((r) => ({ year: r.year, value: r.usdPerKg ?? r.value }));

@@ -1,16 +1,12 @@
-// tracing.js — OpenTelemetry SDK initialization (LOGS-ONLY path) for document-repository.
+// tracing.js — OpenTelemetry SDK initialization (TRACES-ONLY path) for document-repository.
 // PARALLEL of components/gov-chat-backend/tracing.js with these differences:
 //
 // - Resource `service.name` = 'document-repository' (pinned, matches Compose block).
-// - Logs-only: NO OTLPTraceExporter, NO OTLPMetricExporter,
-//   NO PeriodicExportingMetricReader. Only OTLPLogExporter.
-// - No NodeSDK / no auto-instrumentations / no span processor — doc-repo ships
-//   no traces, no metrics.
-// - LoggerProvider processor order: PIIRedactingLogRecordProcessor (which
-//   wraps an inner BatchLogRecordProcessor). The PII processor wraps the
-//   batch processor internally, so `processors: [new PIIRedactingLogRecordProcessor({ exporter, ...sharedBatchConfig })]`
-//   preserves the "PII first, batching second" invariant in a single
-//   registration.
+// - Traces-only: no SDK logs/metrics modules. Single emit path for logs is
+//   winston -> stdout -> fluentd driver -> OTel collector -> VL (mirrors
+//   backend after admin-logs SDK revert).
+// - No NodeSDK / no auto-instrumentations. PII redaction happens at the
+//   collector edge (admin-logs/T1-pii-redactor transform).
 //
 // Test environment guard OR observability disabled — no-op (must be before any
 // OTel requires). ENABLE_OBSERVABILITY is the single gate: when disabled the
@@ -20,11 +16,7 @@
 
 if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1') {
   module.exports = {
-    sdk: null,
-    // Logs-only: no withSpan/getTracer (no traces). loggerProvider is the only
-    // SDK surface doc-repo exposes; the no-op branch returns `null` so test
-    // files can destructure uniformly without conditional checks.
-    loggerProvider: null
+    sdk: null
   };
 } else {
   // stream field pinning — `service.name` is a hardcoded literal
@@ -38,22 +30,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const ATTR_SERVICE_VERSION = semconv.ATTR_SERVICE_VERSION;
   const ATTR_DEPLOYMENT_ENVIRONMENT = semconv.ATTR_DEPLOYMENT_ENVIRONMENT;
   const { trace } = require('@opentelemetry/api');
-  const { logs } = require('@opentelemetry/api-logs');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
-  const { OTLPLogExporter } = require('@opentelemetry/exporter-logs-otlp-http');
-  const { LoggerProvider } = require('@opentelemetry/sdk-logs');
-  const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
-  // single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
-  // Note: tracing.js lives at components/document-repository/src/tracing.js —
-  // in the Docker runtime image this maps to /app/src/tracing.js, so the
-  // shared-lib barrel sits ONE level up (`/app/shared-lib`). The source tree
-  // path (`../shared/lib/boolean-env`) and the runtime path
-  // (`../shared-lib/boolean-env`) both resolve to the same file via the
-  // Jest moduleNameMapper (see package.json).
-  const { booleanEnv } = require('../shared-lib/boolean-env');
-  // shared batch tuning — both backend and document-repository require this file
-  // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
-  const sharedBatchConfig = require('../shared-lib/otel-batch-config');
   // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
   // below so the emitted shutdown logs inherit a real trace_id instead of
   // being orphaned. Deep import matches the existing shared-lib/X pattern
@@ -68,11 +45,12 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   // declaration, throwing ReferenceError at module load).
   const endpointBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-  // Resource attributes — the SAME resource is used for the TracerProvider
-  // (so spans carry service.name in VictoriaTraces) AND for the
-  // LoggerProvider (so logs carry the same name). Building two separate
-  // resources with the same content would drift over time; share via a
-  // single Resource instance.
+  // Resource attributes — stamped on every span this TracerProvider emits
+  // (so spans carry service.name in VictoriaTraces). Logs no longer flow
+  // through the OTel SDK (single emit path is winston -> stdout -> fluentd
+  // -> collector -> VL); the collector stamps the Compose-derived
+  // service.name on log records, so the SDK log path is no longer needed
+  // to keep the two channels aligned.
   const fs = require('fs');
   const path = require('path');
   function _readPackageVersion() {
@@ -160,41 +138,7 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { AsyncLocalStorageContextManager } = require('@opentelemetry/context-async-hooks');
   context.setGlobalContextManager(new AsyncLocalStorageContextManager());
 
-  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS AND
-  // ENABLE_OBSERVABILITY. Already inside the ENABLE_OBSERVABILITY gate
-  // above (the whole else branch is skipped when observability is disabled),
-  // so the inner gate reduces to `LOG_TO_VICTORIALOGS`.
-  //
-  // PIIRedactingLogRecordProcessor (tracing-pii-logs.js) wraps an inner
-  // BatchLogRecordProcessor constructed with the sdk-logs 0.221.x single-options
-  // signature { exporter, ...sharedBatchConfig } (NOT positional `(exporter, config)`).
-  // sharedBatchConfig (otel-batch-config.js) pins maxExportBatchSize /
-  // scheduledDelayMillis / maxQueueSize for both backend + document-repository.
-  // PII first, batching second is preserved by the wrapper
-  // composition — onEmit redacts before delegating to the inner batch.
-  //
-  // Same `resource` instance as the TracerProvider above — shared so spans
-  // and logs both stamp `service.name=document-repository` and
-  // Grafana filter `service.name:document-repository` matches both.
-  let loggerProvider = null;
-  if (booleanEnv('LOG_TO_VICTORIALOGS', true)) {
-    const logExporter = new OTLPLogExporter({
-      url: `${endpointBase}/v1/logs`
-    });
-    loggerProvider = new LoggerProvider({
-      resource,
-      // sdk-logs 0.221.x reads `config.processors` (NOT `logRecordProcessors`).
-      processors: [
-        new PIIRedactingLogRecordProcessor({
-          exporter: logExporter,
-          ...sharedBatchConfig
-        })
-      ]
-    });
-    logs.setGlobalLoggerProvider(loggerProvider);
-  }
-
-  // Graceful shutdown — flush the LoggerProvider on SIGTERM/SIGINT.
+  // Graceful shutdown — flush the TracerProvider on SIGTERM/SIGINT.
   // Doc-repo has no NodeSDK (logs-only), so no sdk.shutdown() to call.
   // The signal name is captured as a span attribute (low-cardinality
   // span name, high-cardinality detail per OTel semconv guidance).
@@ -205,15 +149,10 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
       if (!flushed) process.exit(0);
     }, SHUTDOWN_TIMEOUT_MS);
     // Flush + shut down the trace provider FIRST so span batches don't
-    // get cut off when the 15 s budget hits. Then the logger provider.
+    // get cut off when the 15 s budget hits.
     try {
       await _docRepoTracerProvider?.shutdown();
       flushed = true;
-    } catch {
-      // Shutdown errors are non-fatal — best-effort flush
-    }
-    try {
-      await loggerProvider?.shutdown();
     } catch {
       // Shutdown errors are non-fatal — best-effort flush
     }
@@ -243,5 +182,5 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   process.on('SIGTERM', () => _registerShutdown('SIGTERM'));
   process.on('SIGINT', () => _registerShutdown('SIGINT'));
 
-  module.exports = { sdk: null, loggerProvider };
+  module.exports = { sdk: null };
 }

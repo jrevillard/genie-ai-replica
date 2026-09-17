@@ -97,20 +97,29 @@ class AdminDashboardService {
         `System Uptime Calculation: totalTimeSeconds=${totalTimeSeconds}, currentUptimeSeconds=${currentUptimeSeconds}, totalDowntimeSeconds=${totalDowntimeSeconds}, systemUptime=${systemUptime}%`
       );
 
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
-      logger.debug(`Reading log file for error rate: ${logFile}`);
+      const yesterdayStart = new Date(now);
+      yesterdayStart.setHours(0, 0, 0, 0);
+      yesterdayStart.setDate(now.getDate() - 1);
+      const yesterdayEnd = new Date(yesterdayStart);
+      yesterdayEnd.setDate(yesterdayStart.getDate() + 1);
+      logger.debug(`Error Rate window: start=${yesterdayStart.toISOString()}, end=${yesterdayEnd.toISOString()}`);
       try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
-        const totalLogs = logLines.length;
-        const errorLogs = logLines.filter((line) => line.toUpperCase().includes('[ERROR]')).length;
-        errorRate = totalLogs > 0 ? ((errorLogs / totalLogs) * 100).toFixed(2) : 0;
-        logger.debug(`Error Rate Calculation: totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`);
-      } catch (error) {
-        logger.error(`Error reading log file for error rate: ${error.message}`);
+        const counts = await this._getVlClient().hits({
+          q: 'service.name:genie-*',
+          field: 'severity_text',
+          start: yesterdayStart.toISOString(),
+          end: yesterdayEnd.toISOString()
+        });
+        const totalLogs = Object.values(counts).reduce((a, b) => a + b, 0);
+        const errorLogs = (counts.ERROR || counts.error || counts.FATAL || counts.fatal || 0) >>> 0;
+        errorRate = totalLogs > 0 ? Number(((errorLogs / totalLogs) * 100).toFixed(2)) : 0;
+        logger.debug(
+          `Error Rate Calculation (VL): totalLogs=${totalLogs}, errorLogs=${errorLogs}, errorRate=${errorRate}%`
+        );
+      } catch (vlErr) {
+        // VL outage degrades gracefully: errorRate stays 0. Caller still gets a
+        // well-formed response; the warn line is the operator's signal.
+        logger.warn(`VL unavailable for error-rate metric: ${vlErr.message}`);
       }
 
       logger.debug('Fetching unique monthly active users from sessions collection (last 30 days)');
@@ -516,34 +525,31 @@ class AdminDashboardService {
     logger.info('Getting debug logs for yesterday');
 
     try {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      const logFile = path.join(__dirname, `../logs/combined-${yesterdayStr}.log`);
-      logger.debug(`Reading yesterday's log file: ${logFile}`);
+      const { start, end } = this._yesterdayRange();
+      logger.debug(`Querying VL debug+error logs: start=${start}, end=${end}`);
 
       let logs = [];
       try {
-        const logContent = await fs.readFile(logFile, 'utf8');
-        const logLines = logContent.split('\n').filter((line) => line.trim() !== '');
-
-        logs = logLines
-          .filter((line) => line.includes('[DEBUG]') || line.includes('[ERROR]'))
-          .map((line) => {
-            const match = line.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)/);
-            if (!match) return null;
-            const [, timestamp, level, service, message] = match;
-            return {
-              date: new Date(timestamp).toISOString().split('T')[0],
-              time: new Date(timestamp).toLocaleTimeString(),
-              level: level.toUpperCase(),
-              service,
-              message
-            };
-          })
-          .filter((log) => log !== null);
-      } catch (error) {
-        logger.error(`Error reading log file ${logFile}: ${error.message}`);
+        const results = await this._getVlClient().query({
+          q: 'severity_text:(DEBUG OR ERROR) service.name:genie-*',
+          start,
+          end,
+          limit: 1000
+        });
+        logs = (Array.isArray(results) ? results : []).map((entry) => {
+          const ts = entry._time || entry.time || entry.timestamp || entry['@timestamp'];
+          const tsDate = ts ? new Date(ts) : new Date();
+          const level = (entry.severity_text || entry.level || '').toString().toUpperCase();
+          return {
+            date: tsDate.toISOString().split('T')[0],
+            time: tsDate.toLocaleTimeString(),
+            level,
+            service: entry['service.name'] || entry.service || 'unknown',
+            message: entry._msg || entry.message || ''
+          };
+        });
+      } catch (vlErr) {
+        logger.warn(`VL unavailable for debugYesterdayLogs: ${vlErr.message}`);
       }
 
       const response = {
@@ -557,6 +563,38 @@ class AdminDashboardService {
       logger.error(`Error in debugYesterdayLogs: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  }
+
+  /**
+   * Lazy MELT seam accessor for the shared VictoriaLogsClient.
+   * Mirrors `LogsService._getVlClient()` so both services build clients
+   * identically from `../shared-lib/melt`.
+   */
+  _getVlClient() {
+    if (this._vlClient) return this._vlClient;
+    const melt = require('../shared-lib/melt');
+    if (!melt || !melt.VictoriaLogsClient) {
+      throw new Error('VictoriaLogsClient is not available on the MELT seam');
+    }
+    this._vlClient = new melt.VictoriaLogsClient({
+      skipHealthProbe: process.env.NODE_ENV === 'test'
+    });
+    return this._vlClient;
+  }
+
+  /**
+   * Yesterday window as ISO strings (start at 00:00:00 local, end at
+   * 00:00:00 today). Reused by getSystemHealth (error rate) and
+   * debugYesterdayLogs.
+   */
+  _yesterdayRange() {
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(now.getDate() - 1);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+    return { start: start.toISOString(), end: end.toISOString() };
   }
 
   /**

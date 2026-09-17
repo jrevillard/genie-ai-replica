@@ -22,6 +22,21 @@ jest.mock('arangojs', () => ({
   aql: (strings, ...values) => ({ _aql: true, strings, values })
 }));
 
+// VictoriaLogsClient is lazily required from '../shared-lib/melt' the
+// first time AdminDashboardService needs yesterday's log/error counts.
+// Mock the whole seam so we never reach the network in tests.
+const mockVlClient = {
+  hits: jest.fn().mockResolvedValue({}),
+  query: jest.fn().mockResolvedValue([])
+};
+jest.mock(
+  '../../shared-lib/melt',
+  () => ({
+    VictoriaLogsClient: jest.fn().mockImplementation(() => mockVlClient)
+  }),
+  { virtual: true }
+);
+
 const mockFs = {
   readFile: jest.fn(),
   access: jest.fn(),
@@ -436,20 +451,56 @@ describe('AdminDashboardService', () => {
   });
 
   describe('debugYesterdayLogs', () => {
-    it('should return debug and error logs from yesterday', async () => {
-      const logContent = [
-        '[2026-05-25T10:00:00.000Z] [DEBUG] [TestService] Debug message',
-        '[2026-05-25T10:01:00.000Z] [ERROR] [TestService] Error message',
-        '[2026-05-25T10:02:00.000Z] [INFO] [TestService] Info message'
-      ].join('\n');
-      mockFs.readFile.mockResolvedValueOnce(logContent);
-      const result = await adminDashboardService.debugYesterdayLogs();
-      expect(result.logs).toHaveLength(2);
-      expect(result.total).toBe(2);
+    beforeEach(() => {
+      mockVlClient.query.mockReset();
+      mockVlClient.query.mockResolvedValue([]);
     });
 
-    it('should handle missing log file', async () => {
-      mockFs.readFile.mockRejectedValueOnce(new Error('ENOENT'));
+    it('should return debug and error logs from yesterday via VictoriaLogs', async () => {
+      mockVlClient.query.mockResolvedValueOnce([
+        {
+          _time: '2026-05-25T10:00:00.000Z',
+          severity_text: 'DEBUG',
+          'service.name': 'genie-backend',
+          _msg: 'Debug message'
+        },
+        {
+          _time: '2026-05-25T10:01:00.000Z',
+          severity_text: 'ERROR',
+          'service.name': 'genie-backend',
+          _msg: 'Error message'
+        },
+        {
+          _time: '2026-05-25T10:02:00.000Z',
+          severity_text: 'INFO',
+          'service.name': 'genie-backend',
+          _msg: 'Info message (filtered out by query)'
+        }
+      ]);
+      const result = await adminDashboardService.debugYesterdayLogs();
+      // INFO entry comes back from VL because the test isn't actually filtering
+      // it out at the source — assert everything that came back is mapped.
+      expect(result.total).toBe(3);
+      expect(result.logs[0].level).toBe('DEBUG');
+      expect(result.logs[1].level).toBe('ERROR');
+      expect(result.logs[0].message).toBe('Debug message');
+      expect(mockVlClient.query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          q: expect.stringContaining('severity_text:(DEBUG OR ERROR)'),
+          limit: 1000
+        })
+      );
+    });
+
+    it('should degrade gracefully when VictoriaLogs is unreachable', async () => {
+      mockVlClient.query.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      const result = await adminDashboardService.debugYesterdayLogs();
+      expect(result.logs).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it('should return empty when VL has no records for yesterday', async () => {
+      mockVlClient.query.mockResolvedValueOnce([]);
       const result = await adminDashboardService.debugYesterdayLogs();
       expect(result.logs).toEqual([]);
       expect(result.total).toBe(0);

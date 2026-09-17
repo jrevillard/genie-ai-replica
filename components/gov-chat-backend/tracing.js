@@ -28,9 +28,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   module.exports = {
     sdk: null,
     getTracer: () => noOpTracer,
-    // No-op branches export `null` loggerProvider + droppedCounter so test files can
+    // No-op branches export `null` droppedCounter so test files can
     // destructure them uniformly without conditional checks.
-    loggerProvider: null,
     droppedCounter: null
   };
 } else {
@@ -48,17 +47,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
   const { BatchSpanProcessor } = require('@opentelemetry/sdk-trace-base');
   const { W3CTraceContextPropagator } = require('@opentelemetry/core');
   const { trace } = require('@opentelemetry/api');
-  const { logs } = require('@opentelemetry/api-logs');
   const { resourceFromAttributes } = require('@opentelemetry/resources');
   const { redactAttributes } = require('./tracing-pii');
-  const { OTLPLogExporter } = require('@opentelemetry/exporter-logs-otlp-http');
-  const { LoggerProvider } = require('@opentelemetry/sdk-logs');
-  const { PIIRedactingLogRecordProcessor } = require('./tracing-pii-logs');
-  // Single boolean-env.js helper, accepts 1/true/TRUE/yes — NOT strict `=== '1'`.
-  const { booleanEnv } = require('./shared-lib/boolean-env');
-  // Shared batch tuning — both backend and document-repository require this file
-  // to avoid per-component drift in BatchLogRecordProcessor queue / batch / delay config.
-  const sharedBatchConfig = require('./shared-lib/otel-batch-config');
   // Background-task tracing helpers — used by the SIGTERM/SIGINT handlers
   // below so the emitted shutdown logs inherit a real trace_id instead of
   // being orphaned. Deep import matches the existing shared-lib/X pattern.
@@ -262,55 +252,8 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     throw err;
   }
 
-  // LoggerProvider for OTel logs — gated on LOG_TO_VICTORIALOGS AND
-  // ENABLE_OBSERVABILITY. NodeSDK owns traces/metrics; log export sits
-  // outside the SDK config so the gate stays local to this module.
-  // logRecordProcessors redact PII on every emitted record via the span-side
-  // redactAttributes contract.
-  //
-  // PIIRedactingLogRecordProcessor (tracing-pii-logs.js) wraps an inner
-  // BatchLogRecordProcessor constructed with the sdk-logs 0.221.x positional
-  // (exporter, config) signature. sharedBatchConfig (otel-batch-config.js)
-  // pins maxExportBatchSize / scheduledDelayMillis / maxQueueSize for both
-  // backend + document-repository.
-  let loggerProvider = null;
-  if (booleanEnv('LOG_TO_VICTORIALOGS', true) && booleanEnv('ENABLE_OBSERVABILITY')) {
-    try {
-      const logExporter = new OTLPLogExporter({
-        url: `${endpointBase}/v1/logs`
-      });
-      loggerProvider = new LoggerProvider({
-        resource: resourceFromAttributes({
-          [ATTR_SERVICE_NAME]: serviceName,
-          [ATTR_SERVICE_NAMESPACE]: serviceNamespace,
-          [ATTR_SERVICE_VERSION]: serviceVersion,
-          ...(ATTR_DEPLOYMENT_ENVIRONMENT !== undefined
-            ? { [ATTR_DEPLOYMENT_ENVIRONMENT]: deploymentEnvironment }
-            : { 'deployment.environment': deploymentEnvironment })
-        }),
-        // sdk-logs 0.221.x reads `config.processors` (NOT `logRecordProcessors`).
-        // The 2-6 merge was reading the wrong config key; the processor list
-        // was silently dropped. See review findings on commit 251f99d57.
-        processors: [
-          new PIIRedactingLogRecordProcessor({
-            exporter: logExporter,
-            ...sharedBatchConfig
-          })
-        ]
-      });
-      logs.setGlobalLoggerProvider(loggerProvider);
-    } catch (err) {
-      try {
-        droppedCounter.add(1, { reason: LOG_DROPPED_REASON.OTLP_UNREACHABLE });
-      } catch {
-        // metric failure must never mask the underlying LoggerProvider init error
-      }
-      throw err;
-    }
-  }
-
   // Graceful shutdown — bump the timeout to 15s to give the
-  // BatchLogRecordProcessor + sdk force_flush enough time to drain
+  // sdk force_flush enough time to drain
   // under load (the Collector may also be tearing down concurrently in
   // Swarm, adding latency to OTLP exports). The signal name is captured
   // as a span attribute (low-cardinality span name, high-cardinality
@@ -324,11 +267,6 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     try {
       await sdk.shutdown();
       flushed = true;
-    } catch {
-      // Shutdown errors are non-fatal — best-effort flush
-    }
-    try {
-      await loggerProvider?.shutdown();
     } catch {
       // Shutdown errors are non-fatal — best-effort flush
     }
@@ -373,5 +311,5 @@ if (process.env.NODE_ENV === 'test' || process.env.ENABLE_OBSERVABILITY !== '1')
     return trace.getTracer(serviceName, serviceVersion);
   }
 
-  module.exports = { sdk, getTracer, loggerProvider, droppedCounter };
+  module.exports = { sdk, getTracer, droppedCounter };
 }

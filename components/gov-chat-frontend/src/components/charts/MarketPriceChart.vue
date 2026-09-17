@@ -456,10 +456,6 @@ export default {
           strokeWidth: 2,
           hover: { size: 7 }
         },
-          strokeColors: cssVars.backgroundColor,
-          strokeWidth: 2,
-          hover: { size: 7 }
-        },
         // ApexCharts 'dark' theme uses hardcoded dark colors that don't contrast
         // well with our --bg in dark mode. Use 'light' (high contrast always)
         // and let the global DS-token CSS in theme-components.css override the

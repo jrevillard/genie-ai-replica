@@ -1326,7 +1326,9 @@ class DatabaseService {
         () => this._performHealthCheck(name),
         { 'db.connection': name, 'db.system': this._dbType },
         { kind: 3 /* SpanKind.CLIENT */ }
-      );
+      ).catch((err) => {
+        logger.error('db healthcheck background span failed', { error: err && err.message });
+      });
     }, this.HEALTH_CHECK_INTERVAL);
 
     this._healthCheckIntervals.set(name, interval);
@@ -1419,7 +1421,9 @@ class DatabaseService {
         },
         { 'db.system': this._dbType },
         { kind: 3 /* SpanKind.CLIENT */ }
-      );
+      ).catch((err) => {
+        logger.error('db cleanup_tick background span failed', { error: err && err.message });
+      });
     }, this.HEALTH_CHECK_INTERVAL);
   }
 

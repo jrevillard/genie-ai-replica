@@ -18,6 +18,51 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# --- Discover compose project + key service names from the live stack ---
+# Hardcoded compose names (`admin-logs-prd_genieai_network`,
+# `admin-logs-prd-victorialogs-1`) would break CI: the worktree directory
+# may be checked out under a different name (e.g. `build` on the shared
+# runner, any user override of `--project-name`). Discover the actual
+# project + container at runtime instead.
+COMPOSE_PROJECT=$(docker compose -f "${ROOT}/docker-compose.yaml" ps --format json 2>/dev/null \
+  | python3 -c "
+import sys, json
+try:
+    services = json.load(sys.stdin)
+    for s in services:
+        n = s.get('Name', '')
+        if n.endswith('-victorialogs-1'):
+            # Strip the trailing -victorialogs-1 to get the project name
+            print(n[: -len('-victorialogs-1')])
+            sys.exit(0)
+except Exception:
+    pass
+" 2>/dev/null)
+# Fallback to the directory basename (compose default convention) when
+# the live-stack probe returned empty — e.g. when the smoke is run with
+# the stack already up under a docker-compose project that doesn't
+# follow the `<project>-victorialogs-1` shape (custom service names).
+if [ -z "${COMPOSE_PROJECT}" ]; then
+  COMPOSE_PROJECT="$(basename "${ROOT}")"
+fi
+VL_CONTAINER="${COMPOSE_PROJECT}-victorialogs-1"
+# Find the compose-managed genieai network: it's `<project>_genieai_network`
+# under default Compose naming, or any single existing match.
+NETWORK=$(docker network ls --filter "name=_genieai_network" --format '{{.Name}}' \
+  | grep -E "^${COMPOSE_PROJECT}_genieai_network$" || true)
+if [ -z "${NETWORK}" ]; then
+  # Fallback: any genieai network belonging to the project (handles
+  # --project-name overrides that don't produce the default name).
+  NETWORK=$(docker network ls --filter "name=_genieai_network" --format '{{.Name}}' | head -1)
+fi
+if [ -z "${NETWORK}" ]; then
+  echo "FAIL: could not locate the compose-managed genieai network."
+  echo "  COMPOSE_PROJECT=${COMPOSE_PROJECT}"
+  docker network ls --format '{{.Name}}' | head -20
+  exit 1
+fi
+echo "INFO: COMPOSE_PROJECT=${COMPOSE_PROJECT}  VL_CONTAINER=${VL_CONTAINER}  NETWORK=${NETWORK}" >&2
+
 # 1. Generate a STANDALONE test config that includes the production
 #    transforms inline (no merge) plus a filelog receiver and a VL exporter.
 #    Standalone avoids the OTel config-merge quirk where the base
@@ -41,19 +86,21 @@ processors:
     log_statements:
       - context: log
         statements:
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
           - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
           - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
           - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+          # Map-body fallback: same logic as production.
+          - 'replace_all_patterns(body, "value", "(?i)^(password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text)$", "[REDACTED]") where IsMap(body)'
       - context: log
         statements:
-          - 'replace_all_patterns(attributes, "value", "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsMap(attributes)'
+          - 'replace_all_patterns(attributes, "value", "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsMap(attributes)'
   transform/set_trace_id_from_body:
-    error_mode: propagate
+    error_mode: ignore
     log_statements:
       - context: log
         statements:
@@ -90,12 +137,12 @@ YAML
 # (NOT included here — see comment above) does not overwrite body with
 # just the message; the redacted JSON survives into VL as `_msg`.
 cat > "$TMP/in.log" <<LOG
-{"level":"info","session_id":"abc-123","email":"u@x.com","trace_id":"deadbeefcafebabe1234567890abcdef"}
+{"level":"info","session_id":"abc-123","email":"u@x.com","mail":"v@y.z","trace_id":"deadbeefcafebabe1234567890abcdef"}
 LOG
 
 # 2. Start a one-shot collector container with the test config
 docker run --rm --name "pii-redact-test-$$" \
-    --network admin-logs-prd_genieai_network \
+    --network "${NETWORK}" \
     -v "$TMP:/tmp" \
     -v "$TMP/collector-test.yaml:/etc/otel/collector-test.yaml:ro" \
     otel/opentelemetry-collector-contrib:0.152.0 \
@@ -123,7 +170,7 @@ wait $COLLECTOR_PID 2>/dev/null || true
 # — including the redacted trace_id — ends up in `_msg`, not as a
 # top-level VL stream field. Production fluentd path uses Map bodies.
 # We query `_msg:REDACTED` (full-text on the body content).
-docker exec admin-logs-prd-victorialogs-1 \
+docker exec "${VL_CONTAINER}" \
   wget -qO- 'http://127.0.0.1:9428/select/logsql/query?query=_msg:REDACTED&limit=1' > "$TMP/vl.json"
 
 if ! grep -q '"_msg"' "$TMP/vl.json"; then
@@ -144,6 +191,13 @@ fi
 # email must be redacted
 if grep -q '"email":"u@x.com"' "$TMP/vl.json"; then
   echo "FAIL: email not redacted in VL row"
+  cat "$TMP/vl.json"
+  exit 1
+fi
+
+# mail (alias of email per configs/otel/pii-key-list.md) must be redacted
+if grep -q '"mail":"v@y.z"' "$TMP/vl.json"; then
+  echo "FAIL: mail alias not redacted in VL row (regex missing |mail alternative)"
   cat "$TMP/vl.json"
   exit 1
 fi

@@ -141,29 +141,51 @@ processors:
           # quote. Replacement `"$1":"[REDACTED]"` re-adds both quotes around
           # the placeholder so the body remains valid JSON for downstream
           # ParseJSON (stamp_log_metadata_from_msg).
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
-          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
           # Bearer / API key / JWT embedded in strings (e.g. Authorization header).
           - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
           - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
           - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+          # Map-body fallback: when fluentd has parsed the message into a
+          # Map (e.g. services that ship in_json-parsed fluentd records),
+          # the JSON-string regex above never matches (values are typed,
+          # not JSON-quoted). replace_all_patterns(Map, "value", ...)
+          # walks every value and redacts those that exactly equal a PII
+          # key name (the documented leak path: body={"password":
+          # "password"} or {"secret": "secret"}). Key-aware redaction
+          # (per-key OTTL loops) is not supported at the transform
+          # statement level — this anchored form is the practical floor.
+          # bearer/sk-/eyJ token-shape checks remain covered by the
+          # String-body statements above (Map-typed values that look
+          # like those tokens would still be caught by the downstream
+          # attribute-level replace_all_patterns when the field is
+          # forwarded as an attribute).
+          - 'replace_all_patterns(body, "value", "(?i)^(password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text)$", "[REDACTED]") where IsMap(body)'
       # Redact attribute values for services that put PII at the attribute
       # layer (e.g. span_id, user_id on OTel SDK LogRecords). Maps DO have
       # the real `replace_all_patterns` (4-arg with mode), so a single call
       # replaces all matches.
       - context: log
         statements:
-          - 'replace_all_patterns(attributes, "value", "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsMap(attributes)'
+          - 'replace_all_patterns(attributes, "value", "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|mail|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsMap(attributes)'
   # Body-level trace_id stamping. Replaces the auto-injection that
   # disappeared with the OTel SDK LoggerProvider removal (T2/T3): SDK-side
   # `trace_id` attributes no longer arrive on fluentd-sourced rows, so
   # the value is read from the body JSON envelope and lifted to an
   # attribute for trace correlation.
   transform/set_trace_id_from_body:
-    error_mode: propagate
+    # error_mode: ignore (not propagate): the guard `IsMap(body) and
+    # IsString(body["trace_id"])` already filters odd shapes, but a body
+    # whose `trace_id` is itself a Map would crash propagate — and this
+    # transform is in the always-run chain for every fluentd-sourced
+    # log, so it must not break the pipeline. Matches the
+    # stamp_log_metadata_from_msg / stamp_service_name_from_container
+    # convention.
+    error_mode: ignore
     log_statements:
       - context: log
         statements:

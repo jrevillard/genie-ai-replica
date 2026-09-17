@@ -2491,8 +2491,6 @@ otel-pii-smoke:
     - docker compose --profile observability up -d otel-collector victorialogs
     - sleep 15
     - docker compose exec -T victorialogs wget -qO- http://127.0.0.1:9428/health > /dev/null
-    - docker compose restart otel-collector
-    - sleep 5
     - bash tests/otel-collector/test-pii-redactor.sh
   rules:
     - changes:

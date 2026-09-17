@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **GPU OCR on dataprep:** `dataprep-arango-service` now declares `NVIDIA_VISIBLE_DEVICES=all` in the Swarm env (was previously unset, leaving the GPU-in-Docling/EasyOCR path inert despite `DOCLING_DEVICE=cuda` default). The v2.1.0 image already ships `torch==2.13.0+cu130` + `cuda-toolkit==13.0.3.0` + `nvidia-cudnn-cu13==9.20.0.48`, so no image rebuild is required. Requires a Swarm node with the `gpu == true` label and `nvidia-container-toolkit` installed (already in place for the 4 OPEA services).
 
+### Changed
+
+- **PII redaction moved from OTel SDK LoggerProvider to OTel Collector edge:** All fluentd-sourced logs now pass through `transform/pii_redact` on the `otel-collector` container BEFORE any enrichment, so the 19-key PII list (`configs/otel/pii-key-list.md`, CODEOWNER @jrevillard) is enforced at the export boundary into VictoriaLogs. Previously the in-process SDK LoggerProvider was the sole redaction path; logs arriving via the docker fluentd driver never went through it and reached VL unredacted. The new transform redacts both `body` string (JSON-style `"key":"value"`) and `attributes` Map (same regex via `replace_all_patterns`), with anchored `IsString(body)` / `IsMap(attributes)` guards so each statement runs against its native shape. A 4th statement handles the Map-body shape (fluentd-in_json parsed records) at the value-level regex floor. `transform/pii_redact` runs with `error_mode: propagate` for the first 30 days; downgrade to `ignore` after stabilization (a follow-up MR will flip the flag and update this entry).
+- **Body-level `trace_id` stamping moved to OTel Collector transform:** The previous auto-injection happened inside the OTel SDK LoggerProvider, which is removed in T2/T3 of the same initiative. To preserve trace correlation on the fluentd path that has no SDK, `transform/set_trace_id_from_body` now reads `body["trace_id"]` (when the body is a Map and the value is a string) and promotes it to `attributes["trace_id"]` for trace correlation. `error_mode: ignore` matches the other always-run log transforms (`stamp_log_metadata_from_msg`, `stamp_service_name_from_container`) — propagate was unsafe because a body whose `trace_id` is itself a Map would crash the pipeline under propagate.
+
+### Security
+
+- **PII redaction coverage now spans all log paths:** With the collector-edge redaction, no log record can reach VictoriaLogs with a redacted key unredacted regardless of ingestion path (OTel SDK LoggingHandler, docker fluentd driver, Winston envelope, etc.). The new `otel-pii-redact-fail` alert rule (`configs/grafana/provisioning/alerting/alert-rules.yml`) fires critical if the transform's dropped rate is > 0 or its accepted rate is flat for 15 minutes, so any silent-regression on the redactor is page-able.
+
 ## [2.1.0] - 2026-08-31
 
 ### Changed

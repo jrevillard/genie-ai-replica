@@ -1069,14 +1069,19 @@ async function initializeServices() {
       './services/database-operations-service'
     );
     weatherService = await importService('WeatherService', './services/weather-service');
-    const { AgriService } = await importService('AgriService', './services/agri/agri-service');
-    agriService = AgriService.getInstance();
     try {
+      // agri-service exports the class directly (like weather-service); the
+      // `|| module` fallback keeps this wiring valid if the export shape moves
+      const agriModule = await importService('AgriService', './services/agri/agri-service');
+      const AgriServiceClass = agriModule.AgriService || agriModule;
+      agriService = AgriServiceClass.getInstance();
       await agriService.init();
     } catch (agriError) {
-      // Never-fail design: agri data is supplementary — a broken init must
-      // not take the backend down (routes will serve seed/stale envelopes)
-      logger.error(`AgriService init failed (continuing without live data): ${agriError.message}`);
+      // Never-fail design: agri data is supplementary — a broken module or
+      // init must not take the backend down. /api/agri routes are skipped
+      // when the service is absent; clients fall back to cached envelopes.
+      logger.error(`AgriService unavailable (continuing without /api/agri): ${agriError.message}`);
+      agriService = null;
     }
     securityScanService = await importService('SecurityScanService', './services/security-scan-service');
     translationService = await importService('TranslationService', './services/translation-service');
@@ -1096,7 +1101,9 @@ async function initializeServices() {
       chatHistoryService: { instance: chatHistoryService, name: 'ChatHistoryService' },
       logsService: { instance: logsService, name: 'LogsService' },
       weatherService: { instance: weatherService, name: 'WeatherService' },
-      agriService: { instance: agriService, name: 'AgriService' },
+      // Omitted entirely when agri failed to load — the validation loop
+      // rejects undefined instances, and registerRoutes skips /api/agri
+      ...(agriService ? { agriService: { instance: agriService, name: 'AgriService' } } : {}),
       securityScanService: { instance: securityScanService, name: 'SecurityScanService' },
       translationService: { instance: translationService, name: 'TranslationService' }
     };

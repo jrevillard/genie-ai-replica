@@ -202,3 +202,15 @@ describe('agri RSS parsing', () => {
     expect(items[1].link).toBeNull();
   });
 });
+
+describe('agri-service module wiring', () => {
+  test('exports a shape index.js can resolve to a getInstance-capable class', () => {
+    // Regression: index.js destructured `{ AgriService }` while the module
+    // exported the class directly, crash-looping the deployed backend
+    // (TypeError: Cannot read properties of undefined (reading 'getInstance')).
+    const agriModule = require('../../../services/agri/agri-service');
+    const AgriServiceClass = agriModule.AgriService || agriModule;
+    expect(typeof AgriServiceClass).toBe('function');
+    expect(typeof AgriServiceClass.getInstance).toBe('function');
+  });
+});

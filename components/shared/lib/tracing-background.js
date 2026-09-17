@@ -27,8 +27,27 @@ function getScopeName() {
 // version) — `npm_package_version` is undefined in Docker runtime.
 let SCOPE_VERSION = process.env.SERVICE_VERSION || '1.0.0';
 try {
-  const _pkg = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'package.json'), 'utf8');
-  SCOPE_VERSION = JSON.parse(_pkg).version || SCOPE_VERSION;
+  // Walk up from CWD looking for the nearest package.json — covers
+  // monorepo layouts where components share a root package.json.
+  // The previous path `components/shared/lib/package.json` (resolved
+  // via `path.join(__dirname, '..', '..')`) was a non-existent file
+  // for every consumer, so the catch swallowed the error and every
+  // span landed with otel.scope.version='1.0.0'.
+  const fs = require('fs');
+  const path = require('path');
+  let dir = process.cwd();
+  for (let i = 0; i < 6 && dir !== path.dirname(dir); i++) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+      if (pkg.version) {
+        SCOPE_VERSION = pkg.version;
+        break;
+      }
+    } catch {
+      // continue walking up
+    }
+    dir = path.dirname(dir);
+  }
 } catch {
   // keep fallback
 }
@@ -189,5 +208,8 @@ module.exports = {
   // defaulting to `'backend'`. getScopeName is exported for test
   // assertions and downstream consumers that need to read it back.
   setScopeName,
-  getScopeName
+  getScopeName,
+  // Test-only handle on the resolved SCOPE_VERSION — the test suite
+  // asserts the env-walk-up behaviour without re-reading the module.
+  _SCOPE_VERSION_FOR_TEST: SCOPE_VERSION
 };

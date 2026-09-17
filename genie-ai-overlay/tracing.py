@@ -149,11 +149,20 @@ class RedactingSpanProcessor(SpanProcessor):
         if raw:
             redacted = redact_attributes(dict(raw))
             for key, value in redacted.items():
-                # Redaction failure must not break span export; the
-                # Node side swallows too. Logged elsewhere by the
-                # attribute-limit / batch processors.
-                with contextlib.suppress(Exception):
+                try:
                     span.set_attribute(key, value)
+                except Exception as exc:
+                    # PII redaction failure must surface — silently
+                    # suppressing would mean a leaked attribute lands
+                    # in VictoriaTraces. Log loudly and re-raise so the
+                    # SDK's batch processor records the exception on
+                    # the span (visible in the trace UI).
+                    logging.getLogger(__name__).warning(
+                        "PII redaction set_attribute failed for %r: %s",
+                        key,
+                        exc,
+                    )
+                    raise
         self._delegate.on_start(span, parent_context)
 
     def on_end(self, span) -> None:

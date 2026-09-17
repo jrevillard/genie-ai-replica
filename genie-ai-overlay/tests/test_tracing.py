@@ -1,5 +1,6 @@
 # Copyright (c) 2025-2026 International Telecommunication Union (ITU)
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -268,3 +269,66 @@ class TestMeterShutdown:
         tracing.setup_tracing("test-service")
         tracing.shutdown()
         assert tracing._meter_provider is None
+
+
+# ---------------------------------------------------------------------------
+# RedactingSpanProcessor PII fail-open guard
+# ---------------------------------------------------------------------------
+
+
+class TestRedactingSpanProcessor:
+    """Tests for RedactingSpanProcessor PII redaction behavior.
+
+    The processor's `on_start` reads `span._attributes` (the OTel SDK
+    internal mutable dict) and re-writes each key/value via
+    `span.set_attribute(...)`. Any exception during that re-write
+    indicates a PII contract violation: the raw (un-redacted) attribute
+    would otherwise leak into VictoriaTraces via the inner exporter.
+    Silent suppression is a real security concern — these tests pin the
+    contract that failures must surface.
+    """
+
+    def test_redacting_span_processor_surfaces_attribute_set_failure(self, caplog):
+        """`on_start` must NOT silently swallow redaction failures.
+
+        When `span.set_attribute` raises, the processor must log a WARNING
+        with the offending key and propagate the exception (so the SDK's
+        batch processor records it on the span via `record_exception`).
+        Silent suppression would mean a leaked attribute lands in
+        VictoriaTraces.
+        """
+        from tracing import RedactingSpanProcessor
+
+        class _FailingSpan:
+            # `on_start` reads `getattr(span, "_attributes", None) or {}`
+            # and only runs the redaction loop when the result is truthy.
+            # Without a truthy `_attributes`, the loop is skipped and the
+            # code path under test never runs — the test must populate it.
+            _attributes = {"safe_key": "safe_value"}
+
+            def set_attribute(self, key, value):
+                raise ValueError(f"set_attribute failed for {key}")
+
+            def get_span_context(self):
+                class _Ctx:
+                    trace_id = 0
+                    span_id = 0
+                    is_valid = False
+
+                return _Ctx()
+
+        delegate = MagicMock()
+        delegate.on_start = MagicMock()
+        proc = RedactingSpanProcessor(delegate)
+
+        span = _FailingSpan()
+        with caplog.at_level(logging.WARNING), pytest.raises(ValueError, match="set_attribute failed"):
+            proc.on_start(span, parent_context=None)
+
+        # A WARNING must have been logged with the offending key name so
+        # operators see the PII contract violation in VictoriaLogs.
+        assert any("set_attribute failed" in r.getMessage() for r in caplog.records)
+        # The exception must have propagated (NOT been suppressed) — the
+        # delegate was never reached because the redaction step itself
+        # raised, so no un-redacted attribute reaches the inner exporter.
+        delegate.on_start.assert_not_called()

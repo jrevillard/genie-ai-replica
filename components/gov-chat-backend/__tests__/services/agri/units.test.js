@@ -214,3 +214,36 @@ describe('agri-service module wiring', () => {
     expect(typeof AgriServiceClass.getInstance).toBe('function');
   });
 });
+
+describe('agri-service init db wiring', () => {
+  test('awaits the async shared-lib getConnection (real API returns a Promise)', async () => {
+    // Regression: init stored the un-awaited Promise from the REAL
+    // dbService.getConnection() (the mock returns synchronously), so every
+    // this.db.collection() call failed on the deployed stack with
+    // "this.db.collection is not a function".
+    const { dbService } = require('../../../shared-lib');
+    const stubColl = { document: jest.fn().mockResolvedValue(null), save: jest.fn().mockResolvedValue({}) };
+    const stubDb = {
+      createCollection: jest.fn().mockResolvedValue(undefined),
+      collection: jest.fn().mockReturnValue(stubColl)
+    };
+    dbService.getConnection.mockImplementationOnce(() => Promise.resolve(stubDb));
+
+    const prevPrefetch = process.env.AGRI_PREFETCH_ON_START;
+    process.env.AGRI_PREFETCH_ON_START = '0'; // no upstream fetches from a unit test
+    const AgriServiceCtor = require('../../../services/agri/agri-service');
+    const svc = new AgriServiceCtor();
+    try {
+      await svc.init({});
+      // this.db must be the resolved database handle, never a Promise
+      expect(svc.db).toBe(stubDb);
+      expect(typeof svc.db.then).not.toBe('function');
+      expect(svc.db.createCollection).toHaveBeenCalled();
+    } finally {
+      process.env.AGRI_PREFETCH_ON_START = prevPrefetch;
+      if (svc.scheduler) svc.scheduler.stop();
+      if (svc.redis) svc.redis.disconnect();
+      svc.initialized = false;
+    }
+  });
+});

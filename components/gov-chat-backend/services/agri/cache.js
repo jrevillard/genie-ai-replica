@@ -37,14 +37,16 @@ class ServingCache {
       }
     }
 
-    try {
-      const coll = this.db.collection('agri_cache');
-      const doc = await coll.document(key).catch(() => null);
-      if (doc && doc.envelope) {
-        return { envelope: doc.envelope, origin: 'arango' };
+    if (this.db) {
+      try {
+        const coll = this.db.collection('agri_cache');
+        const doc = await coll.document(key).catch(() => null);
+        if (doc && doc.envelope) {
+          return { envelope: doc.envelope, origin: 'arango' };
+        }
+      } catch (error) {
+        logger.warn(`agri cache: arango get failed for ${key}: ${error.message}`);
       }
-    } catch (error) {
-      logger.warn(`agri cache: arango get failed for ${key}: ${error.message}`);
     }
 
     if (this.seeds[key]) {
@@ -71,12 +73,14 @@ class ServingCache {
       }
     }
 
-    try {
-      await this.db
-        .collection('agri_cache')
-        .save({ _key: key, envelope, updatedAt: new Date().toISOString() }, { overwriteMode: 'replace' });
-    } catch (error) {
-      logger.warn(`agri cache: arango set failed for ${key}: ${error.message}`);
+    if (this.db) {
+      try {
+        await this.db
+          .collection('agri_cache')
+          .save({ _key: key, envelope, updatedAt: new Date().toISOString() }, { overwriteMode: 'replace' });
+      } catch (error) {
+        logger.warn(`agri cache: arango set failed for ${key}: ${error.message}`);
+      }
     }
   }
 }

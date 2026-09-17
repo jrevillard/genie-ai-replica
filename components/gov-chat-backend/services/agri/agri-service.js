@@ -256,6 +256,25 @@ const TAXA_NAMES = {
   'Hypothenemus hampei': { en: 'Coffee Berry Borer', es: 'Broca del Café' }
 };
 
+/**
+ * Redis URL for the hot cache tier. Explicit AGRI_REDIS_URL/REDIS_URL win;
+ * otherwise reuse the stack's existing cache instance — the TRANSLATION_CACHE_*
+ * vars point at the shared redis-cache service (password included), so the
+ * default engages the top tier on deployments that define no agri-specific URL.
+ * @returns {string|null} redis:// URL or null when nothing is configured
+ */
+function resolveRedisUrl() {
+  if (process.env.AGRI_REDIS_URL) return process.env.AGRI_REDIS_URL;
+  if (process.env.REDIS_URL) return process.env.REDIS_URL;
+  const host = process.env.TRANSLATION_CACHE_HOST;
+  if (!host) return null;
+  const port = process.env.TRANSLATION_CACHE_PORT || 6379;
+  const password = process.env.TRANSLATION_CACHE_PASSWORD
+    ? `:${encodeURIComponent(process.env.TRANSLATION_CACHE_PASSWORD)}@`
+    : '';
+  return `redis://${password}${host}:${port}`;
+}
+
 class AgriService {
   constructor() {
     if (AgriService.instance) return AgriService.instance;
@@ -277,12 +296,22 @@ class AgriService {
   async init(deps = {}) {
     if (this.initialized) return;
     const { dbService } = require('../../shared-lib');
-    this.db = deps.db || dbService.getConnection();
+    // Real shared-lib getConnection() is async (the Jest mock returns
+    // synchronously) — without the await this.db was a Promise and every
+    // .collection() call failed (found on the 10.0.0.101 deploy)
+    this.db = deps.db || null;
+    if (!this.db) {
+      try {
+        this.db = await dbService.getConnection();
+      } catch (error) {
+        logger.warn(`agri: Arango connection failed (${error.message}) — seed tier only`);
+      }
+    }
 
     // Optional Redis — degrade gracefully (never-fail design)
     try {
       const Redis = require('ioredis');
-      const url = process.env.AGRI_REDIS_URL || process.env.REDIS_URL;
+      const url = resolveRedisUrl();
       if (url) {
         this.redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
         await this.redis.connect();
@@ -295,11 +324,13 @@ class AgriService {
       this.redis = null;
     }
 
-    for (const name of COLLECTIONS) {
-      try {
-        await this.db.createCollection(name);
-      } catch {
-        /* already exists */
+    if (this.db) {
+      for (const name of COLLECTIONS) {
+        try {
+          await this.db.createCollection(name);
+        } catch {
+          /* already exists */
+        }
       }
     }
 

@@ -489,3 +489,43 @@ groups:
         severity: critical
         component: otel-collector
         pipeline: logs
+    - uid: otel-pii-redact-fail
+      title: OTel Collector — pii_redact transform failing
+      condition: C
+      data:
+        - refId: A
+          relativeTimeRange:
+            from: 600
+            to: 0
+          datasourceUid: victoriametrics
+          model:
+            expr: rate(otelcol_processor_dropped_log_records_total{processor="transform/pii_redact"}[5m]) > 0
+            instant: true
+            intervalMs: 1000
+            refId: A
+        - refId: B
+          relativeTimeRange:
+            from: 900
+            to: 0
+          datasourceUid: victoriametrics
+          model:
+            expr: increase(otelcol_processor_accepted_log_records_total{processor="transform/pii_redact"}[15m]) == 0
+            instant: true
+            intervalMs: 1000
+            refId: B
+        - refId: C
+          datasourceUid: __expr__
+          model:
+            expression: $A || $B
+            refId: C
+            type: math
+      noDataState: OK
+      execErrState: Alerting
+      for: 10m
+      annotations:
+        description: "OTel Collector transform processor `transform/pii_redact` is dropping records OR has not accepted any in 15 min. PII may leak to VictoriaLogs unredacted. Check Collector config in `configs/otel/otel-collector-config.yaml` (regex syntax, PII key list at `configs/otel/pii-key-list.md`)."
+        summary: "PII redactor transform broken or silent"
+      labels:
+        severity: critical
+        component: otel-collector
+        pipeline: logs

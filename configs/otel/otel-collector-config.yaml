@@ -104,6 +104,70 @@ receivers:
           metrics_path: "/metrics"
 
 processors:
+  # PII redactor — runs at the COLLECTOR edge so all fluentd-sourced logs
+  # are scrubbed before reaching VictoriaLogs. Today the OTel SDK LoggerProvider
+  # (Node + Python) does this in-process; T2/T3/T2b drop that provider, so
+  # the fluentd path (which has no SDK) becomes the only ingest — redaction
+  # MUST live at the collector to preserve PII integrity.
+  #
+  # Key list sourced from configs/otel/pii-key-list.md (single source of
+  # truth — any change requires CODEOWNER @jrevillard approval).
+  #
+  # Guards: replace_all_patterns/replace_pattern silently no-op on Maps, so
+  # every body statement is guarded by `where IsString(body)` and every
+  # attributes statement by `where IsMap(attributes)` — v1 plan shipped
+  # without these guards and the redactor appeared to run but did nothing.
+  #
+  # error_mode: propagate for 30 days; downgrade to ignore after
+  # stabilization. Documented in CHANGELOG.
+  transform/pii_redact:
+    error_mode: propagate
+    log_statements:
+      # Redact JSON-style `key":"value"` pairs in string bodies (Node Winston
+      # envelopes, raw JSON strings from the fluentd receiver).
+      #
+      # OTTL has only ONE Map-targeted `replace_all_patterns` (4-arg form,
+      # mode="key"|"value"). For String targets the only documented regex
+      # replacer is `replace_pattern` (3-arg), which replaces the FIRST match
+      # per call — RE2 has no `g` flag. To redact up to N occurrences per
+      # body we chain N identical statements: each sees the output of the
+      # previous call and replaces the next match. The `where IsString(body)`
+      # guard makes any excess calls a cheap no-op once redaction is done.
+      # 5 calls covers the test (2 occurrences) and any realistic prod log.
+      - context: log
+        statements:
+          # JSON-style `"key":"value"`. Group 1 captures only the key name
+          # (no surrounding quotes); the match consumes the value's closing
+          # quote. Replacement `"$1":"[REDACTED]"` re-adds both quotes around
+          # the placeholder so the body remains valid JSON for downstream
+          # ParseJSON (stamp_log_metadata_from_msg).
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          - 'replace_pattern(body, "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsString(body)'
+          # Bearer / API key / JWT embedded in strings (e.g. Authorization header).
+          - 'replace_pattern(body, "(?i)bearer\\s+[a-z0-9\\-_]{20,}", "bearer [REDACTED_BEARER]") where IsString(body)'
+          - 'replace_pattern(body, "sk-[a-z0-9]{20,}", "[REDACTED_APIKEY]") where IsString(body)'
+          - 'replace_pattern(body, "eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+", "[REDACTED_JWT]") where IsString(body)'
+      # Redact attribute values for services that put PII at the attribute
+      # layer (e.g. span_id, user_id on OTel SDK LogRecords). Maps DO have
+      # the real `replace_all_patterns` (4-arg with mode), so a single call
+      # replaces all matches.
+      - context: log
+        statements:
+          - 'replace_all_patterns(attributes, "value", "(?i)\"((?:password|api[_-]?key|apikey|session[_-]?id|user[_-]?id|email|auth[_-]?token|bearer[_-]?token|authorization|token|secret|api[_-]?secret|credential|openai[_-]?api[_-]?key|anthropic[_-]?api[_-]?key|private[_-]?key|secret[_-]?value|user[_-]?query|llm[_-]?response|document[_-]?text))\"\\s*[:=]\\s*\"[^\"]*\"", "\"$1\":\"[REDACTED]\"") where IsMap(attributes)'
+  # Body-level trace_id stamping. Replaces the auto-injection that
+  # disappeared with the OTel SDK LoggerProvider removal (T2/T3): SDK-side
+  # `trace_id` attributes no longer arrive on fluentd-sourced rows, so
+  # the value is read from the body JSON envelope and lifted to an
+  # attribute for trace correlation.
+  transform/set_trace_id_from_body:
+    error_mode: propagate
+    log_statements:
+      - context: log
+        statements:
+          - 'set(attributes["trace_id"], body["trace_id"]) where IsMap(body) and IsString(body["trace_id"])'
   batch:
     timeout: 5s
     send_batch_size: 1024
@@ -433,6 +497,8 @@ service:
         - otlp
         - fluent_forward
       processors:
+        - transform/pii_redact
+        - transform/set_trace_id_from_body
         - transform/stamp_service_name_from_container
         - transform/stamp_log_metadata_from_msg
         - transform/normalize_log_body

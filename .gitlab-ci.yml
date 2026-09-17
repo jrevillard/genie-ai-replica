@@ -2474,6 +2474,32 @@ docs:validate:
 
 # --- Test jobs ---
 
+# Smoke test: PII redactor transform at OTel Collector edge.
+# Spins up otel-collector + victorialogs from the test profile,
+# feeds a known-PII log line through the production transform/pii_redact
+# pipeline, asserts VL row contains the [REDACTED] placeholder and
+# the original PII value is absent.
+otel-pii-smoke:
+  stage: test
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    COMPOSE_PROFILES: observability
+  script:
+    - docker compose --profile observability up -d otel-collector victorialogs
+    - sleep 15
+    - docker compose exec -T victorialogs wget -qO- http://127.0.0.1:9428/health > /dev/null
+    - docker compose restart otel-collector
+    - sleep 5
+    - bash tests/otel-collector/test-pii-redactor.sh
+  rules:
+    - changes:
+        - configs/otel/**
+        - tests/otel-collector/**
+        - .gitlab-ci.yml
+
 test:backend:
   extends: .test_node
   # sharp's install downloads libvips + its native binary from GitHub release

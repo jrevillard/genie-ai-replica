@@ -318,8 +318,18 @@ const marketSeeds = {
   )
 };
 
+// CI-generated envelopes (scripts/export-agri-seeds.js) override the
+// hand-maintained seeds above when present — fresher real data wins.
+let generatedSeeds = {};
+try {
+  generatedSeeds = require('./generated.json');
+} catch {
+  /* not generated yet — hand-maintained seeds are the floor */
+}
+
 module.exports = {
   'crop-health': ndviSeed,
   'pest-alerts': null, // built from curated advisories file + DB; seed via buildPestAlerts
-  ...Object.fromEntries(Object.entries(marketSeeds).map(([cat, env]) => [`market-prices:${cat}`, env]))
+  ...Object.fromEntries(Object.entries(marketSeeds).map(([cat, env]) => [`market-prices:${cat}`, env])),
+  ...generatedSeeds
 };

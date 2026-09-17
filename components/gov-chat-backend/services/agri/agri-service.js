@@ -52,7 +52,8 @@ const MARKET_CATEGORIES = {
         name: 'Maize (white), Guatemala City (La Terminal) [regional]',
         unit: QUINTAL,
         regional: true
-      }
+      },
+      { type: 'wb', key: 'WB:MAIZE_INTL', name: 'Maize (US #2, US Gulf intl benchmark)', unit: 'USD/mt' }
     ],
     estimate: true
   },
@@ -107,6 +108,21 @@ const MARKET_CATEGORIES = {
         name: 'Tomatoes, Guatemala La Terminal wholesale [regional]',
         unit: QUINTAL,
         regional: true
+      },
+      {
+        type: 'faostat',
+        key: 'FAOSTAT:PP:El Salvador:Tomatoes',
+        name: 'Tomatoes producer price (El Salvador)',
+        unit: KG,
+        annual: true
+      },
+      {
+        type: 'faostat',
+        key: 'FAOSTAT:PP:Honduras:Tomatoes',
+        name: 'Tomatoes producer price (Honduras) [regional]',
+        unit: KG,
+        annual: true,
+        regional: true
       }
     ],
     estimate: true
@@ -143,13 +159,19 @@ const MARKET_CATEGORIES = {
         name: 'Eggs, Nicaragua national average [regional]',
         unit: 'USD/dozen',
         regional: true
-      }
+      },
+      { type: 'wb', key: 'WB:CHICKEN_INTL', name: 'Chicken (Brazil wholesale, intl benchmark)', unit: 'USD/kg' },
+      { type: 'wb', key: 'WB:BEEF_INTL', name: 'Beef (intl benchmark)', unit: 'USD/kg' }
     ],
     estimate: true
   },
   fertilizer: {
     title: 'Fertilizer & Soil',
     seriesDefs: [
+      { type: 'wb', key: 'WB:UREA', name: 'Urea (Middle East f.o.b.)', unit: 'USD/mt' },
+      { type: 'wb', key: 'WB:DAP', name: 'DAP (US Gulf spot)', unit: 'USD/mt' },
+      { type: 'wb', key: 'WB:TSP', name: 'TSP (US Gulf)', unit: 'USD/mt' },
+      { type: 'wb', key: 'WB:MOP', name: 'MOP (Brazil CFR granular)', unit: 'USD/mt' },
       {
         type: 'trade',
         key: 'COMTRADE:urea-import-parity',
@@ -163,6 +185,13 @@ const MARKET_CATEGORIES = {
   apiary: {
     title: 'Apiary & Honey',
     seriesDefs: [
+      {
+        type: 'faostat',
+        key: 'FAOSTAT:PP:El Salvador:Natural honey',
+        name: 'Honey producer price (El Salvador)',
+        unit: KG,
+        annual: true
+      },
       {
         type: 'trade',
         key: 'COMTRADE:honey-export-uv',
@@ -191,13 +220,24 @@ const MARKET_CATEGORIES = {
         unit: KG,
         annual: true,
         regional: true
-      }
+      },
+      { type: 'wb', key: 'WB:FISHMEAL', name: 'Fish meal feed cost (intl benchmark)', unit: 'USD/mt' }
     ],
     estimate: true
   },
   harvestStorage: {
     title: 'Harvest & Storage',
-    seriesDefs: [], // curated stat only — no feed exists (interview decision)
+    seriesDefs: [
+      {
+        type: 'sdg',
+        key: 'FAOSTAT:SDG:Central America',
+        name: 'Central America post-harvest food loss (FAO SDG 12.3.1)',
+        unit: '% of production',
+        annual: true
+      }
+    ],
+    // Fallback when the faostat-sdg adapter has not run yet (interview decision:
+    // curated stat — no live feed exists)
     curated: {
       value: 16.5,
       asOf: '2023',
@@ -438,7 +478,7 @@ class AgriService {
     };
   }
 
-  /** Annual trade unit-value / index series (e.g. Comtrade, BLS). */
+  /** Annual trade unit-value / index / producer-price series (Comtrade, BLS, FAOSTAT). */
   async annualSeries(keyPrefix, def) {
     const rows = await this.querySeries(
       'FOR d IN agri_series FILTER d.key == @key AND (d.year != null OR d.date != null) ' +
@@ -462,13 +502,41 @@ class AgriService {
       data = actuals.map((a) => ({ date: String(a.year), value: a.value, quality: 'actual' }));
     }
 
+    const sourceByPrefix = {
+      COMTRADE: 'un-comtrade',
+      FAOSTAT: keyPrefix.includes(':SDG:') ? 'faostat-sdg' : 'faostat',
+      BLS: 'bls'
+    };
+    const prefix = Object.keys(sourceByPrefix).find((p) => keyPrefix.startsWith(p));
+
     return {
       name: def.name,
-      source: keyPrefix.startsWith('COMTRADE') ? 'un-comtrade' : 'bls',
-      country: def.country || 'El Salvador',
+      source: sourceByPrefix[prefix] || 'agri',
+      country: def.country || (keyPrefix.includes('Honduras') ? 'Honduras' : 'El Salvador'),
       data,
       trend: computeTrend(data),
       estimation
+    };
+  }
+
+  /** Monthly international benchmark series (Pink Sheet / IMF keyed docs). */
+  async keyedSeries(keyPrefix, def) {
+    const rows = await this.querySeries(
+      'FOR d IN agri_series FILTER d.key == @key AND d.date != null SORT d.date ' + 'RETURN KEEP(d, "date", "value")',
+      { key: keyPrefix }
+    );
+    if (rows.length === 0) return null;
+
+    const data = rows
+      .filter((r) => Number.isFinite(r.value))
+      .map((r) => ({ date: r.date, value: r.value, quality: 'actual' }));
+
+    return {
+      name: def.name,
+      source: keyPrefix.startsWith('WB:') ? 'world-bank-cmo' : 'imf-pcps',
+      country: 'World',
+      data,
+      trend: computeTrend(data, { dense: true })
     };
   }
 
@@ -570,32 +638,11 @@ class AgriService {
     const def = MARKET_CATEGORIES[category];
     if (!def) return null;
 
-    // Curated-stat category (harvestStorage)
-    if (def.curated) {
-      const c = def.curated;
-      return buildEnvelope(
-        {
-          title: def.title,
-          unit: c.unit,
-          series: [
-            {
-              name: c.name,
-              source: 'faostat-sdg',
-              country: 'Central America (regional aggregate)',
-              data: [{ date: `${c.asOf}-01-01`, value: c.value, quality: 'actual' }],
-              trend: 'stable',
-              latest: c.value
-            }
-          ],
-          trend: 'stable',
-          latest: c.value
-        },
-        {
-          source: 'FAOSTAT SDG 12.3.1 (regional aggregate)',
-          coverage: 'Modeled regional aggregate; curated contextual statistic',
-          caveats: [caveat.curatedStat(c.asOf)]
-        }
-      );
+    // Categories with a curated fallback (harvestStorage): use live series
+    // when the adapter has run, else the curated stat
+    let usedCurated = false;
+    if (def.curated && def.seriesDefs.length === 0) {
+      usedCurated = true;
     }
 
     const cpi = await this.cpiByYear();
@@ -607,8 +654,10 @@ class AgriService {
       let built = null;
       if (sdef.type === 'wfp') {
         built = await this.wfpSeries(sdef, cpi);
-      } else if (sdef.type === 'index' || sdef.type === 'trade') {
+      } else if (sdef.type === 'index' || sdef.type === 'trade' || sdef.type === 'faostat' || sdef.type === 'sdg') {
         built = await this.annualSeries(sdef.key, sdef);
+      } else if (sdef.type === 'wb') {
+        built = await this.keyedSeries(sdef.key, sdef);
       }
       if (!built) continue; // degradation order: next def fills the slot
 
@@ -631,6 +680,22 @@ class AgriService {
       }
       series.push(entry);
     }
+
+    if (series.length === 0 && def.curated) {
+      // Curated fallback when no live series exists yet
+      const c = def.curated;
+      series.push({
+        name: c.name,
+        source: 'faostat-sdg',
+        country: 'Central America (regional aggregate)',
+        unit: c.unit,
+        data: [{ date: `${c.asOf}-01-01`, value: c.value, quality: 'actual' }],
+        trend: 'stable'
+      });
+      usedCurated = true;
+    }
+
+    if (usedCurated) caveats.push(caveat.curatedStat(def.curated.asOf));
 
     if (series.length === 0) {
       return buildEnvelope(

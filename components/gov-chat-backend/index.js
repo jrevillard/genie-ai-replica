@@ -500,7 +500,6 @@ const ROUTE_CONFIGS = [
     keycloakAuth: true
   },
   { file: 'auth-routes', paths: ['/api/auth'], serviceName: null },
-  { file: 'logger-routes', paths: ['/api/logger'], serviceName: null, keycloakAuth: true },
   {
     file: 'database-operations-routes',
     paths: ['/api/database'],
@@ -919,8 +918,6 @@ function registerRoutes(app, services) {
       } else if (config.file === 'auth-routes') {
         // auth-routes exports a plain router (no factory function)
         routeInstance = routeModule;
-      } else if (config.file === 'logger-routes') {
-        routeInstance = routeModule();
       } else {
         routeInstance = routeModule(service);
       }

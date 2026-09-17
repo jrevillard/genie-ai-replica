@@ -369,6 +369,24 @@ class AgriService {
     }
     const shortest = Math.min(...this.adapters.map((a) => cadenceMs(a)), 3600 * 1000);
     this.scheduler.start(shortest);
+
+    // Envelope rebuilds run on their OWN cadence, independent of fetch
+    // outcomes: a pass where only dead adapters are due (0 ok) must not
+    // leave new series mappings or recovered data unwritten for a full
+    // cadence cycle (found live 2026-09-17: vegetables stayed 'pending'
+    // for hours after its mapping fix deployed).
+    this.rebuildTimer = setInterval(
+      () => {
+        this.rebuildAllEndpoints().catch((e) => logger.error(`agri periodic rebuild failed: ${e.message}`));
+      },
+      15 * 60 * 1000
+    );
+    this.rebuildTimer.unref();
+    // First periodic rebuild shortly after the startup pass begins —
+    // rebuilds are cheap local queries and idempotent.
+    setTimeout(() => {
+      this.rebuildAllEndpoints().catch(() => {});
+    }, 90 * 1000).unref();
   }
 
   // ==================== SERVING ====================

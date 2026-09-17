@@ -6,11 +6,38 @@
 
     <DsStateDisplay v-else-if="error" type="error" :message="error" />
 
-    <DsStateDisplay v-else-if="!chartData || !chartData.data || chartData.data.length === 0" type="empty">
+    <DsStateDisplay v-else-if="!hasData" type="empty">
       {{ $t('charts.market.noData', 'No data available') }}
     </DsStateDisplay>
 
     <div v-else class="chart-content">
+      <!-- Data caveats (visible, not buried — user requirement) -->
+      <div v-if="caveatChips.length > 0 || freshnessLabel" class="caveat-row">
+        <DsPill v-for="(chip, i) in caveatChips" :key="'caveat-' + i" :variant="chip.severity" class="caveat-chip">
+          {{ chip.label }}
+        </DsPill>
+        <DsPill v-if="freshnessLabel" :variant="freshnessVariant" class="caveat-chip">
+          {{ freshnessLabel }}
+        </DsPill>
+        <DsButton variant="ghost" small class="about-toggle" @click="showAbout = !showAbout">
+          {{ $t('charts.caveats.aboutData', 'About this data') }}
+        </DsButton>
+      </div>
+
+      <!-- About this data panel -->
+      <DsCard v-if="showAbout" variant="flat" padding="md" class="about-panel">
+        <div v-if="meta.source" class="about-row">
+          <span class="about-label">{{ $t('charts.caveats.source', 'Source') }}:</span> {{ meta.source }}
+        </div>
+        <div v-if="meta.coverage" class="about-row">
+          <span class="about-label">{{ $t('charts.caveats.coverage', 'Coverage') }}:</span> {{ meta.coverage }}
+        </div>
+        <div v-if="meta.estimation" class="about-row">
+          <span class="about-label">{{ $t('charts.caveats.estimation', 'Estimates') }}:</span> {{ meta.estimation }}
+        </div>
+        <div v-if="meta.attribution" class="about-row about-attribution">{{ meta.attribution }}</div>
+      </DsCard>
+
       <!-- Summary Cards -->
       <div class="summary-grid">
         <DsCard variant="elevated">
@@ -32,9 +59,6 @@
         </DsCard>
       </div>
 
-      <!-- Source Badge -->
-      <span v-if="chartData.dataSource" class="source-badge">{{ chartData.dataSource }}</span>
-
       <!-- Get Predictions Button -->
       <DsButton variant="primary" class="predict-btn" @click="getPredictions">
         {{ $t('charts.market.getPredictions', 'Get AI Predictions') }}
@@ -43,7 +67,7 @@
       <!-- Price History Chart -->
       <h3 class="section-title">{{ $t('charts.market.priceHistory', 'Price History') }}</h3>
       <DsCard variant="elevated" padding="lg">
-        <apexchart type="line" height="300" :options="chartOptions" :series="chartSeries" />
+        <apexchart type="line" height="320" :options="chartOptions" :series="chartSeries" />
       </DsCard>
 
       <!-- Data Table -->
@@ -52,14 +76,21 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>{{ $t('charts.market.year', 'Year') }}</th>
+              <th>{{ $t('charts.market.period', 'Period') }}</th>
               <th>{{ $t('charts.market.value', 'Value') }}</th>
+              <th>{{ $t('charts.caveats.quality', 'Quality') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, index) in timeSeries" :key="index">
-              <td>{{ item.year }}</td>
+              <td>{{ item.date }}</td>
               <td class="value-cell">{{ formatValue(item.value) }}</td>
+              <td>
+                <span v-if="item.quality === 'estimated'" class="quality-estimated">
+                  {{ $t('charts.caveats.estimated', 'Estimated') }}
+                </span>
+                <span v-else class="quality-actual">{{ $t('charts.caveats.actual', 'Actual') }}</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -93,6 +124,28 @@
             :rows="3"
             :placeholder="$t('charts.market.worldNewsHint', 'E.g., Global supply chain issues, trade policies...')"
           />
+          <div class="news-picker">
+            <button type="button" class="news-picker__toggle" @click="toggleNewsPicker('global')">
+              {{ $t('charts.news.addFromNews', 'Add from recent news') }}
+              <span class="news-picker__count" v-if="newsGlobal.length">({{ newsGlobal.length }})</span>
+            </button>
+            <div v-if="newsPickerOpen === 'global'" class="news-picker__list">
+              <DsSpinner v-if="newsLoading" size="sm" />
+              <p v-else-if="newsGlobal.length === 0" class="news-picker__empty">
+                {{ $t('charts.news.noItems', 'No recent items') }}
+              </p>
+              <label v-for="item in newsGlobal" :key="item.id || item.url" class="news-picker__item">
+                <input v-model="selectedNewsGlobal" type="checkbox" :value="item" />
+                <span class="news-picker__text">
+                  <span class="news-picker__title">{{ item.title }}</span>
+                  <span class="news-picker__meta">{{ item.source }} · {{ formatDate(item.publishedAt) }}</span>
+                </span>
+              </label>
+              <DsButton v-if="selectedNewsGlobal.length > 0" variant="secondary" small @click="insertNews('global')">
+                {{ $t('charts.news.insert', 'Insert selected') }}
+              </DsButton>
+            </div>
+          </div>
         </DsFormGroup>
 
         <DsFormGroup :label="$t('charts.market.localNewsFactors', 'El Salvador News Factors (Optional)')">
@@ -102,6 +155,28 @@
             :rows="3"
             :placeholder="$t('charts.market.localNewsHint', 'E.g., Local regulations, weather events...')"
           />
+          <div class="news-picker">
+            <button type="button" class="news-picker__toggle" @click="toggleNewsPicker('local')">
+              {{ $t('charts.news.addFromNews', 'Add from recent news') }}
+              <span class="news-picker__count" v-if="newsLocal.length">({{ newsLocal.length }})</span>
+            </button>
+            <div v-if="newsPickerOpen === 'local'" class="news-picker__list">
+              <DsSpinner v-if="newsLoading" size="sm" />
+              <p v-else-if="newsLocal.length === 0" class="news-picker__empty">
+                {{ $t('charts.news.noItems', 'No recent items') }}
+              </p>
+              <label v-for="item in newsLocal" :key="item.id || item.url" class="news-picker__item">
+                <input v-model="selectedNewsLocal" type="checkbox" :value="item" />
+                <span class="news-picker__text">
+                  <span class="news-picker__title">{{ item.title }}</span>
+                  <span class="news-picker__meta">{{ item.source }} · {{ formatDate(item.publishedAt) }}</span>
+                </span>
+              </label>
+              <DsButton v-if="selectedNewsLocal.length > 0" variant="secondary" small @click="insertNews('local')">
+                {{ $t('charts.news.insert', 'Insert selected') }}
+              </DsButton>
+            </div>
+          </div>
         </DsFormGroup>
       </div>
 
@@ -138,7 +213,7 @@
 </template>
 
 <script>
-import worldBankService from '../../services/worldBankService.js';
+import agriApiService from '../../services/agriApiService.js';
 import chatbotService from '../../services/chatbotService.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -184,10 +259,11 @@ export default {
   },
   data() {
     return {
-      chartData: null,
+      envelope: null,
       loading: true,
       error: null,
       refreshTimer: null,
+      showAbout: false,
       showPredictionDialog: false,
       showResponseDialog: false,
       showPredictionLoading: false,
@@ -195,13 +271,31 @@ export default {
       selectedTimeFrame: '6 months',
       worldNewsInput: '',
       localNewsInput: '',
-      predictionResponse: null
+      predictionResponse: null,
+      newsPickerOpen: null,
+      newsLoading: false,
+      newsGlobal: [],
+      newsLocal: [],
+      selectedNewsGlobal: [],
+      selectedNewsLocal: []
     };
   },
   computed: {
     renderedPrediction() {
       if (!this.predictionResponse) return '';
       return DOMPurify.sanitize(marked.parse(this.predictionResponse));
+    },
+    meta() {
+      return (this.envelope && this.envelope.meta) || {};
+    },
+    hasData() {
+      return this.series.length > 0;
+    },
+    series() {
+      return (this.envelope && this.envelope.data && this.envelope.data.series) || [];
+    },
+    primarySeries() {
+      return this.series[0] || { data: [], name: '', unit: '' };
     },
     categoryConfig() {
       const configs = {
@@ -254,16 +348,17 @@ export default {
       return this.categoryConfig.i18nKey ? this.$t(this.categoryConfig.i18nKey) : this.category;
     },
     timeSeries() {
-      return this.chartData?.data || [];
+      return this.primarySeries.data || [];
     },
     trend() {
-      return this.chartData?.trend || 'unknown';
+      return (this.envelope && this.envelope.data && this.envelope.data.trend) || 'unknown';
     },
     unit() {
-      return this.chartData?.unit || '';
+      // Prefer the primary series' unit; fall back to the envelope unit
+      return this.primarySeries.unit || (this.envelope && this.envelope.data && this.envelope.data.unit) || '';
     },
     lastUpdated() {
-      return this.chartData?.lastUpdated || new Date().toISOString();
+      return this.meta.fetchedAt || new Date().toISOString();
     },
     latestValue() {
       if (this.timeSeries.length === 0) return '--';
@@ -280,6 +375,27 @@ export default {
       };
       return map[this.trend] || map.unknown;
     },
+    caveatChips() {
+      return (this.meta.caveats || []).map((c) => ({
+        label: this.caveatLabel(c),
+        severity: c.code === 'ESTIMATED_CPI' || c.code === 'PROXY_INDEX' ? 'warning' : 'info'
+      }));
+    },
+    freshnessLabel() {
+      if (!this.meta.fetchedAt) return '';
+      const ageHours = (Date.now() - new Date(this.meta.fetchedAt).getTime()) / 3600000;
+      if (this.meta.seeded) return this.$t('charts.caveats.bundledSnapshot', 'Bundled snapshot');
+      if (this.meta.stale) {
+        return this.$t('charts.caveats.savedDataAge', 'Saved data — {age} old', {
+          age: this.humanizeAge(ageHours)
+        });
+      }
+      return this.$t('charts.caveats.updatedAgo', 'Updated {age} ago', { age: this.humanizeAge(ageHours) });
+    },
+    freshnessVariant() {
+      if (this.meta.stale || this.meta.seeded) return 'warning';
+      return 'success';
+    },
     timeFrameOptions() {
       return [
         { value: '3 months', label: this.$t('charts.market.timeFrame3Months', '3 months') },
@@ -289,10 +405,10 @@ export default {
       ];
     },
     chartOptions() {
-      const years = this.timeSeries.map((d) => d.year);
-      const values = this.timeSeries.map((d) => d.value);
-      const minVal = Math.min(...values);
-      const maxVal = Math.max(...values);
+      const periods = this.timeSeries.map((d) => d.date);
+      const values = this.timeSeries.map((d) => d.value).filter((v) => Number.isFinite(v));
+      const minVal = values.length > 0 ? Math.min(...values) : 0;
+      const maxVal = values.length > 0 ? Math.max(...values) : 1;
       const range = maxVal - minVal || 1;
       const cssVars = this.resolvedCssVars;
       const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
@@ -305,7 +421,7 @@ export default {
           background: 'transparent'
         },
         xaxis: {
-          categories: years,
+          categories: periods,
           labels: { rotate: -45, style: { fontSize: '11px', colors: cssVars.mutedColor } },
           axisBorder: { show: false },
           axisTicks: { show: false }
@@ -315,8 +431,16 @@ export default {
           max: Math.ceil((maxVal + range * 0.05) / 10) * 10,
           labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) }
         },
-        colors: [seriesColor],
-        stroke: { curve: 'smooth', width: 4 },
+        // Primary line uses the resolved --fg token (guaranteed contrast in
+        // both themes); the remaining entries color the estimated overlay
+        // and the secondary regional/benchmark series.
+        colors: [
+          seriesColor,
+          cssVars.warningColor || 'var(--warning)',
+          cssVars.mutedColor,
+          cssVars.infoColor || 'var(--info)',
+          cssVars.dangerColor || 'var(--danger)'
+        ],
         // Solid fill (light opacity) instead of gradient — the gradient
         // version made the line stroke appear to fade because ApexCharts
         // applies the fill opacity to the line border as well.
@@ -324,22 +448,49 @@ export default {
           type: 'solid',
           opacity: 0.15
         },
+        // Width 4 for visibility; series 2 (estimated overlay) renders dashed
+        stroke: { curve: 'smooth', width: 4, dashArray: [0, 6, 0, 0, 0] },
         markers: {
           size: 6,
-          colors: [seriesColor],
           strokeColors: cssVars.backgroundColor,
-          strokeWidth: 2
+          strokeWidth: 2,
+          hover: { size: 7 }
+        },
+          strokeColors: cssVars.backgroundColor,
+          strokeWidth: 2,
+          hover: { size: 7 }
         },
         // ApexCharts 'dark' theme uses hardcoded dark colors that don't contrast
         // well with our --bg in dark mode. Use 'light' (high contrast always)
-        // and let scoped CSS below override the tooltip bg/text to use our
-        // DS tokens, so the tooltip stays readable and theme-consistent.
+        // and let the global DS-token CSS in theme-components.css override the
+        // tooltip bg/text so it stays readable and theme-consistent.
         tooltip: { y: { formatter: (v) => this.formatValue(v) } },
-        grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 }
+        grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 },
+        legend: { show: this.series.length > 1, labels: { colors: cssVars.mutedColor } }
       };
     },
     chartSeries() {
-      return [{ name: this.commodityName, data: this.timeSeries.map((d) => d.value) }];
+      // Primary series split into actual (solid) + estimated (dashed overlay);
+      // secondary regional/benchmark series appended after
+      const primary = this.primarySeries;
+      const actual = primary.data.map((d) => (d.quality === 'estimated' ? null : d.value));
+      const estimated = primary.data.map((d) => (d.quality === 'estimated' ? d.value : null));
+
+      const out = [
+        { name: primary.name || this.commodityName, data: actual },
+        {
+          name: this.$t('charts.caveats.estimatedSeries', '{name} (estimated)', {
+            name: primary.name || this.commodityName
+          }),
+          data: estimated
+        }
+      ];
+      // Skip empty estimated overlay when everything is actual
+      if (!estimated.some((v) => v !== null)) out.splice(1, 1);
+      for (const extra of this.series.slice(1, 4)) {
+        out.push({ name: extra.name, data: extra.data.map((d) => d.value) });
+      }
+      return out;
     }
   },
   mounted() {
@@ -352,42 +503,126 @@ export default {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
   },
   methods: {
+    toggleNewsPicker(scope) {
+      this.newsPickerOpen = this.newsPickerOpen === scope ? null : scope;
+      if (this.newsPickerOpen && !this.newsLoading && this.newsGlobal.length === 0 && this.newsLocal.length === 0) {
+        this.loadNews();
+      }
+    },
+    async loadNews() {
+      this.newsLoading = true;
+      try {
+        const [globalRes, localRes] = await Promise.all([
+          agriApiService.getNews('global'),
+          agriApiService.getNews('local')
+        ]);
+        this.newsGlobal = (globalRes.data && globalRes.data.items) || [];
+        this.newsLocal = (localRes.data && localRes.data.items) || [];
+      } catch {
+        // News is optional context — silent failure keeps the dialog usable
+        this.newsGlobal = [];
+        this.newsLocal = [];
+      } finally {
+        this.newsLoading = false;
+      }
+    },
+    insertNews(scope) {
+      const selected = scope === 'global' ? this.selectedNewsGlobal : this.selectedNewsLocal;
+      if (selected.length === 0) return;
+      const lines = selected.map((item) => {
+        const date = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString() : '';
+        const snippet = item.snippet ? ` — ${item.snippet}` : '';
+        return `[${item.title} — ${item.source}${date ? `, ${date}` : ''}]${snippet}`;
+      });
+      const target = scope === 'global' ? 'worldNewsInput' : 'localNewsInput';
+      this[target] = this[target] ? `${this[target]}\n${lines.join('\n')}` : lines.join('\n');
+      if (scope === 'global') {
+        this.selectedNewsGlobal = [];
+      } else {
+        this.selectedNewsLocal = [];
+      }
+      this.newsPickerOpen = null;
+    },
+    caveatLabel(c) {
+      const key = `charts.caveats.codes.${c.code}`;
+      const fallbacks = {
+        REGIONAL_DATA: 'Regional data',
+        ESTIMATED_CPI: 'Inflation-adjusted estimate',
+        GAP_YEARS: 'Missing years',
+        ANNUAL_ONLY: 'Annual data',
+        SINGLE_MARKET: 'Single market',
+        COMMUNITY_DATA: 'Community data',
+        CURATED_STAT: 'Curated statistic',
+        PROXY_INDEX: 'Proxy index',
+        STALE_CACHE: 'Cached data'
+      };
+      const fallback = fallbacks[c.code] || c.code;
+      const params = c.params || {};
+      const label = this.$t(key, fallback);
+      if (c.code === 'REGIONAL_DATA' && params.country) {
+        return this.$t('charts.caveats.regionalWith', '{label}: {country}', {
+          label: this.$t(key, fallback),
+          country: params.country
+        });
+      }
+      if (c.code === 'ESTIMATED_CPI' && params.years) {
+        return this.$t('charts.caveats.estimatedWith', '{label} ({years})', {
+          label: this.$t(key, fallback),
+          years: params.years
+        });
+      }
+      if (c.code === 'ANNUAL_ONLY' && params.lastYear) {
+        return this.$t('charts.caveats.annualWith', '{label} (through {year})', {
+          label: this.$t(key, fallback),
+          year: params.lastYear
+        });
+      }
+      return label;
+    },
+    humanizeAge(hours) {
+      if (hours < 1) return this.$t('charts.caveats.ageMinutes', '{n} min', { n: Math.max(1, Math.round(hours * 60)) });
+      if (hours < 48) return this.$t('charts.caveats.ageHours', '{n} h', { n: Math.round(hours) });
+      return this.$t('charts.caveats.ageDays', '{n} d', { n: Math.round(hours / 24) });
+    },
     formatValue(value) {
       if (value === null || value === undefined) return '--';
-      if (this.category === 'aquaculture') return value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toFixed(0);
-      if (this.category === 'fertilizer') return value.toFixed(0);
-      if (['harvestStorage', 'cropProtection'].includes(this.category)) return `${value.toFixed(1)}%`;
-      return value.toFixed(0);
+      if (this.category === 'aquaculture' && value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+      if (this.category === 'fertilizer' && value >= 100) return value.toFixed(0);
+      if (['harvestStorage', 'cropProtection'].includes(this.category)) {
+        return value >= 10 ? value.toFixed(1) : value.toFixed(2);
+      }
+      return value >= 100 ? value.toFixed(0) : value.toFixed(2);
     },
     formatAxisValue(value) {
       if (this.category === 'aquaculture' && value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-      return value.toFixed(0);
+      return value >= 100 ? value.toFixed(0) : value.toFixed(1);
     },
     formatDate(dateStr) {
+      if (!dateStr) return '--';
       return new Date(dateStr).toLocaleDateString();
     },
     async loadChartData() {
       this.loading = true;
       this.error = null;
       try {
-        const loaders = {
-          maize: () => worldBankService.getMaizePrices(),
-          cropProtection: () => worldBankService.getCropProtectionCosts(),
-          vegetables: () => worldBankService.getVegetablePrices(),
-          livestock: () => worldBankService.getPoultryPorkFeedCosts(),
-          fertilizer: () => worldBankService.getFertilizerPrices(),
-          apiary: () => worldBankService.getHoneyMarketData(),
-          aquaculture: () => worldBankService.getTilapiaMarketData(),
-          harvestStorage: () => worldBankService.getHarvestStorageData()
-        };
-        const loader = loaders[this.category];
-        if (loader) this.chartData = await loader();
+        this.envelope = await agriApiService.getMarketPrices(this.category);
       } catch (err) {
         this.error = this.$t('charts.loadDataError', 'Failed to load data');
         console.error('Error loading market price data:', err);
       } finally {
         this.loading = false;
       }
+    },
+    /** The same caveats the user sees are injected into the AI prompt. */
+    dataDisclosureText() {
+      const lines = [];
+      if (this.meta.coverage) lines.push(`Data coverage: ${this.meta.coverage}`);
+      if (this.meta.estimation) lines.push(`Estimation note: ${this.meta.estimation}`);
+      for (const chip of this.caveatChips) lines.push(`Caveat: ${chip.label}`);
+      if (this.series.length > 1) {
+        lines.push(`Series shown: ${this.series.map((s) => `${s.name} (${s.unit || 'n/a'})`).join('; ')}`);
+      }
+      return lines.join('\n');
     },
     getPredictions() {
       this.showPredictionDialog = true;
@@ -408,14 +643,20 @@ export default {
       this.showPredictionLoading = true;
 
       try {
-        const historyData = this.timeSeries.map((item) => `  ${item.year}: ${this.formatValue(item.value)}`).join('\n');
+        const disclosure = this.dataDisclosureText();
+        const historyData = this.timeSeries
+          .map((item) => {
+            const quality = item.quality === 'estimated' ? ' (est.)' : '';
+            return `  ${item.date}: ${this.formatValue(item.value)}${quality}`;
+          })
+          .join('\n');
         const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
         const currentDate = new Date();
 
         const prompt =
           currentLanguage === 'es'
-            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nProducto: ${this.commodityName}\nMarco Temporal: ${this.selectedTimeFrame}\n\nDatos Actuales:\n• Último Valor: ${this.latestValue} ${this.unit}\n• Tendencia: ${this.trendLabel}\n\nDatos Históricos:\n${historyData}\n\n${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n` : ''}\nProporcione análisis y predicción para ${this.selectedTimeFrame}.`
-            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCommodity: ${this.commodityName}\nTime Frame: ${this.selectedTimeFrame}\n\nCurrent Data:\n• Latest: ${this.latestValue} ${this.unit}\n• Trend: ${this.trendLabel}\n\nHistorical Data:\n${historyData}\n\n${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n` : ''}\nProvide price forecast and analysis for ${this.selectedTimeFrame}.`;
+            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nProducto: ${this.commodityName}\nMarco Temporal: ${this.selectedTimeFrame}\n\nDatos Actuales:\n• Último Valor: ${this.latestValue} ${this.unit}\n• Tendencia: ${this.trendLabel}\n\n${disclosure ? `Transparencia de Datos:\n${disclosure}\n\n` : ''}Datos Históricos:\n${historyData}\n\n${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n` : ''}Proporcione análisis y predicción para ${this.selectedTimeFrame}. Trate los valores marcados "est." como estimaciones, no observaciones de mercado.`
+            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCommodity: ${this.commodityName}\nTime Frame: ${this.selectedTimeFrame}\n\nCurrent Data:\n• Latest: ${this.latestValue} ${this.unit}\n• Trend: ${this.trendLabel}\n\n${disclosure ? `Data Transparency:\n${disclosure}\n\n` : ''}Historical Data:\n${historyData}\n\n${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n` : ''}Provide price forecast and analysis for ${this.selectedTimeFrame}. Treat values marked "(est.)" as estimates, not market observations.`;
 
         const response = await chatbotService.submitQuery({
           userId: this.userId,
@@ -450,15 +691,52 @@ export default {
 
 <style scoped>
 .market-price-chart {
-  position: relative;
   width: 100%;
+}
+
+.chart-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.caveat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.caveat-chip {
+  font-size: var(--text-xs);
+}
+
+.about-toggle {
+  margin-left: auto;
+}
+
+.about-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.about-row .about-label {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.about-attribution {
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-md);
-  margin-bottom: var(--space-md);
 }
 
 .summary-item {
@@ -474,6 +752,7 @@ export default {
 
 .summary-value {
   font-size: var(--text-xl);
+  color: var(--fg);
 }
 
 .summary-unit {
@@ -481,24 +760,12 @@ export default {
   color: var(--muted);
 }
 
-.source-badge {
-  display: inline-block;
-  font-size: var(--text-xs);
-  color: var(--muted);
-  background: var(--accent-muted);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  margin-bottom: var(--space-md);
-}
-
 .predict-btn {
-  display: block;
-  width: 100%;
-  margin-bottom: var(--space-lg);
+  align-self: flex-start;
 }
 
 .section-title {
-  margin: var(--space-lg) 0 var(--space-md);
+  margin: var(--space-sm) 0 0;
   font-size: var(--text-md);
   color: var(--fg);
 }
@@ -509,27 +776,97 @@ export default {
   font-size: var(--text-sm);
 }
 
-.data-table th {
-  text-align: left;
-  padding: var(--space-sm) var(--space-md);
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  font-weight: 600;
-}
-
+.data-table th,
 .data-table td {
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+  text-align: left;
   border-bottom: 1px solid var(--border-light);
 }
 
-.value-cell {
+.data-table th {
+  color: var(--muted);
   font-weight: 600;
 }
 
+.value-cell {
+  font-family: var(--font-mono);
+}
+
+.quality-estimated {
+  color: var(--warning);
+  font-size: var(--text-xs);
+}
+
+.quality-actual {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 .last-updated {
-  margin-top: var(--space-md);
   font-size: var(--text-xs);
   color: var(--muted);
+  margin: 0;
+}
+
+.news-picker {
+  margin-top: var(--space-xs);
+}
+
+.news-picker__toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 0;
+}
+
+.news-picker__toggle:hover {
+  text-decoration: underline;
+}
+
+.news-picker__count {
+  color: var(--muted);
+}
+
+.news-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+  padding: var(--space-sm);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.news-picker__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  cursor: pointer;
+}
+
+.news-picker__text {
+  display: flex;
+  flex-direction: column;
+}
+
+.news-picker__title {
+  font-size: var(--text-sm);
+  color: var(--fg);
+}
+
+.news-picker__meta {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.news-picker__empty {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin: 0;
 }
 
 .prediction-form {
@@ -539,13 +876,15 @@ export default {
 }
 
 .prediction-response {
+  max-height: 50vh;
+  overflow-y: auto;
   line-height: 1.6;
-  color: var(--fg);
 }
 
 .prediction-response :deep(h1),
 .prediction-response :deep(h2),
 .prediction-response :deep(h3) {
+  color: var(--fg);
   margin-top: var(--space-md);
 }
 
@@ -557,6 +896,10 @@ export default {
 @media (max-width: 640px) {
   .summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .about-toggle {
+    margin-left: 0;
   }
 }
 </style>

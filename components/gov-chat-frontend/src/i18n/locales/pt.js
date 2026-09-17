@@ -534,6 +534,43 @@ export default {
     }
   },
   charts: {
+    news: {
+      addFromNews: 'Adicionar de notícias recentes',
+      insert: 'Inserir selecionadas',
+      noItems: 'Nenhum item recente'
+    },
+
+    caveats: {
+      aboutData: 'Sobre estes dados',
+      source: 'Fonte',
+      coverage: 'Cobertura',
+      estimation: 'Estimativas',
+      quality: 'Qualidade',
+      estimated: 'Estimado',
+      actual: 'Real',
+      estimatedSeries: '{name} (estimado)',
+      bundledSnapshot: 'Instantâneo incluído',
+      savedDataAge: 'Dados salvos — há {age}',
+      updatedAgo: 'Atualizado há {age}',
+      ageMinutes: '{n} min',
+      ageHours: '{n} h',
+      ageDays: '{n} d',
+      regionalWith: '{label}: {country}',
+      estimatedWith: '{label} ({years})',
+      annualWith: '{label} (até {year})',
+      codes: {
+        REGIONAL_DATA: 'Dados regionais',
+        ESTIMATED_CPI: 'Estimativa ajustada pela inflação',
+        GAP_YEARS: 'Anos ausentes',
+        ANNUAL_ONLY: 'Dados anuais',
+        SINGLE_MARKET: 'Mercado único',
+        COMMUNITY_DATA: 'Dados da comunidade',
+        CURATED_STAT: 'Estatística curada',
+        PROXY_INDEX: 'Índice proxy',
+        STALE_CACHE: 'Dados em cache'
+      }
+    },
+
     loading: 'Carregando dados...',
     loadDataError: 'Falha ao carregar dados',
     insights: 'Insights',

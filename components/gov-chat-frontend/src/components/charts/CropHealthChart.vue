@@ -78,7 +78,7 @@
 </template>
 
 <script>
-import agriculturalService from '../../services/agriculturalService.js';
+import agriApiService from '../../services/agriApiService.js';
 import { useChartTheme } from '../../composables/useChartTheme.js';
 import DsCard from '../ds/Card.vue';
 import DsPill from '../ds/Pill.vue';
@@ -240,8 +240,8 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await agriculturalService.getCropHealth(this.region);
-        this.cropData = { ...data, lastUpdated: new Date().toISOString() };
+        const data = await agriApiService.getCropHealth();
+        this.cropData = { ...data, lastUpdated: (data.meta && data.meta.fetchedAt) || new Date().toISOString() };
       } catch (err) {
         this.error = this.$t('charts.loadDataError', 'Failed to load data');
         console.error('Error loading crop health data:', err);

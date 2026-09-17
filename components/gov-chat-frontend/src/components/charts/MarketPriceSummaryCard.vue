@@ -32,7 +32,7 @@
 import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsPill from '../ds/Pill.vue';
-import worldBankService from '../../services/worldBankService.js';
+import agriApiService from '../../services/agriApiService.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
@@ -264,40 +264,16 @@ export default {
     async loadPriceData() {
       this.loading = true;
       try {
-        let data;
-        switch (this.category) {
-          case 'maize':
-            data = await worldBankService.getMaizePrices();
-            break;
-          case 'cropProtection':
-            data = await worldBankService.getCropProtectionCosts();
-            break;
-          case 'vegetables':
-            data = await worldBankService.getVegetablePrices();
-            break;
-          case 'livestock':
-            data = await worldBankService.getPoultryPorkFeedCosts();
-            break;
-          case 'fertilizer':
-            data = await worldBankService.getFertilizerPrices();
-            break;
-          case 'apiary':
-            data = await worldBankService.getHoneyMarketData();
-            break;
-          case 'aquaculture':
-            data = await worldBankService.getTilapiaMarketData();
-            break;
-          case 'harvestStorage':
-            data = await worldBankService.getHarvestStorageData();
-            break;
-          default:
-            console.warn(`Unknown category: ${this.category}`);
-            data = null;
-        }
-
-        if (data && data.data) {
-          this.priceData = data;
-          this.timeSeries = data.data;
+        const envelope = await agriApiService.getMarketPrices(this.category);
+        const primary = envelope.data && envelope.data.series && envelope.data.series[0];
+        if (primary && primary.data && primary.data.length > 0) {
+          // Legacy shape: {title, unit, data:[{year, value}], trend, dataSource}
+          this.priceData = {
+            ...envelope.data,
+            dataSource: envelope.meta.source,
+            data: primary.data.map((p) => ({ year: p.date, value: p.value }))
+          };
+          this.timeSeries = this.priceData.data;
         }
       } catch (error) {
         console.error(`Error loading price data for ${this.category}:`, error);

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
+import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'crop_health_chart.dart';
 
@@ -16,7 +16,7 @@ class CropHealthSummaryCard extends StatefulWidget {
 }
 
 class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
-  final AgriculturalProxy _agriculturalProxy = AgriculturalProxy();
+  final AgriApiService _agriService = AgriApiService();
   Map<String, dynamic>? _healthData;
   bool _isLoading = true;
   String _currentLangCode = '';
@@ -46,9 +46,7 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriculturalProxy.getCropHealth(
-        region: widget.region,
-      );
+      final data = await _agriService.getCropHealth(); // region is server-side
       if (mounted) {
         setState(() {
           _healthData = data;

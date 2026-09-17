@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -647,18 +648,39 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
       final worldNews = result['worldNews'] as String? ?? '';
       final localNews = result['localNews'] as String? ?? '';
 
-      // Build historical data string
+      // Build historical data string — estimated points marked (est.) so
+      // the model never treats them as market observations
       final historyData = _timeSeries
           .map((item) {
             final year = item['year'] as String;
             final value = _formatValue(item['value'] as double?);
-            return '  $year: $value';
+            final est = item['quality'] == 'estimated' ? ' (est.)' : '';
+            return '  $year: $value$est';
           })
           .join('\n');
+
+      // Data transparency disclosure (correctness mandate — same caveats
+      // the user sees on screen are injected into the prompt)
+      final disclosureLines = <String>[];
+      final coverage = widget.data?['coverage'] as String?;
+      final estimation = widget.data?['estimation'] as String?;
+      if (coverage != null && coverage.isNotEmpty) {
+        disclosureLines.add('Data coverage: $coverage');
+      }
+      if (estimation != null && estimation.isNotEmpty) {
+        disclosureLines.add('Estimation note: $estimation');
+      }
+      final disclosure = disclosureLines.join('\n');
 
       // Call chatbot proxy API
       final currentLocale = I18nService().currentLocale;
       final currentLanguage = currentLocale.languageCode;
+      final esDisclosure = disclosure.isNotEmpty
+          ? 'Transparencia de Datos:\n$disclosure\n\n'
+          : '';
+      final enDisclosure = disclosure.isNotEmpty
+          ? 'Data Transparency:\n$disclosure\n\n'
+          : '';
 
       // Generate prompt in Spanish or English based on language
       final prompt = currentLanguage == 'es'
@@ -674,6 +696,7 @@ Datos Actuales del Mercado:
 • Tendencia: $_trendLabel
 • Fuente de Datos: $_dataSource
 
+$esDisclosure
 Datos Históricos de Precios:
 $historyData
 
@@ -706,6 +729,7 @@ Current Market Data:
 • Trend: $_trendLabel
 • Data Source: $_dataSource
 
+$enDisclosure
 Historical Price Data:
 $historyData
 
@@ -891,7 +915,7 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                     ),
                     const SizedBox(height: 16),
 
-                    // World News Input
+                    // World News Input + picker
                     Text(
                       tr('market.worldNewsFactors'),
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -908,9 +932,15 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                       maxLines: 3,
                       textInputAction: TextInputAction.next,
                     ),
+                    _NewsPickerSection(
+                      scope: 'global',
+                      onInsert: (text) => _appendToController(
+                        _worldNewsController, text,
+                      ),
+                    ),
                     const SizedBox(height: 16),
 
-                    // Local News Input
+                    // Local News Input + picker
                     Text(
                       tr('market.localNewsFactors'),
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -926,6 +956,12 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
                       ),
                       maxLines: 3,
                       textInputAction: TextInputAction.done,
+                    ),
+                    _NewsPickerSection(
+                      scope: 'local',
+                      onInsert: (text) => _appendToController(
+                        _localNewsController, text,
+                      ),
                     ),
                   ],
                 ),
@@ -983,6 +1019,12 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
         ),
       ),
     );
+  }
+
+  /// Append picked news headlines to a text controller.
+  void _appendToController(TextEditingController controller, String text) {
+    final existing = controller.text.trim();
+    controller.text = existing.isEmpty ? text : '$existing\n$text';
   }
 
   Widget _buildTimeFrameChip(String label, String value, ThemeData theme) {
@@ -1238,6 +1280,158 @@ ${tr('market.sharedVia')}
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Collapsible recent-news picker for the prediction dialog
+/// (user-confirmed design: checkbox list, insert selected into the field).
+class _NewsPickerSection extends StatefulWidget {
+  const _NewsPickerSection({required this.scope, required this.onInsert});
+
+  final String scope; // 'global' | 'local'
+  final void Function(String text) onInsert;
+
+  @override
+  State<_NewsPickerSection> createState() => _NewsPickerSectionState();
+}
+
+class _NewsPickerSectionState extends State<_NewsPickerSection> {
+  final AgriApiService _agriService = AgriApiService();
+  List<Map<String, dynamic>> _items = [];
+  final Set<String> _selected = {};
+  bool _loading = false;
+  bool _open = false;
+
+  Future<void> _load() async {
+    if (_loading || _items.isNotEmpty) return;
+    setState(() => _loading = true);
+    try {
+      final envelope = await _agriService.getNews(widget.scope);
+      final data = envelope['data'] as Map<String, dynamic>? ?? {};
+      if (mounted) {
+        setState(() {
+          _items = ((data['items'] as List?) ?? [])
+              .take(5)
+              .map((i) => i as Map<String, dynamic>)
+              .toList();
+        });
+      }
+    } catch (_) {
+      // News is optional context — silent failure keeps the dialog usable
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _insert() {
+    final lines = _items
+        .where((i) => _selected.contains('${i['url'] ?? i['title']}'))
+        .map((i) {
+      final date = (i['publishedAt'] as String?)?.split('T').first ?? '';
+      final snippet = (i['snippet'] as String?)?.isNotEmpty == true
+          ? ' — ${i['snippet']}'
+          : '';
+      return '[${i['title']} — ${i['source']}${date.isNotEmpty ? ', $date' : ''}]$snippet';
+    }).join('\n');
+    if (lines.isNotEmpty) widget.onInsert(lines);
+    setState(() => _open = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: () {
+            setState(() => _open = !_open);
+            if (_open) _load();
+          },
+          icon: Icon(
+            _open ? Icons.expand_less : Icons.article_outlined,
+            size: 16,
+          ),
+          label: Text(
+            tr('market.addFromNews'),
+            style: theme.textTheme.bodySmall,
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        if (_open)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 180),
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.dividerColor),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: _loading
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                : _items.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          tr('market.noNewsItems'),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        children: [
+                          ..._items.map((item) {
+                            final key = '${item['url'] ?? item['title']}';
+                            return CheckboxListTile(
+                              dense: true,
+                              value: _selected.contains(key),
+                              title: Text(
+                                item['title']?.toString() ?? '',
+                                style: theme.textTheme.bodySmall,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '${item['source'] ?? ''}'
+                                '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
+                                style: theme.textTheme.bodySmall
+                                    ?.copyWith(fontSize: 11),
+                              ),
+                              onChanged: (v) => setState(() {
+                                if (v == true) {
+                                  _selected.add(key);
+                                } else {
+                                  _selected.remove(key);
+                                }
+                              }),
+                            );
+                          }),
+                          if (_selected.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: ElevatedButton.icon(
+                                onPressed: _insert,
+                                icon: const Icon(Icons.add, size: 16),
+                                label: Text(tr('market.insertSelected')),
+                              ),
+                            ),
+                        ],
+                      ),
+          ),
+      ],
     );
   }
 }

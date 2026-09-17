@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:genie_ai_mobile/services/world_bank_service.dart';
+import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'market_price_chart.dart';
 
@@ -18,7 +18,7 @@ class MarketPriceSummaryCard extends StatefulWidget {
 }
 
 class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
-  final WorldBankService _worldBankService = WorldBankService();
+  final AgriApiService _agriService = AgriApiService();
   Map<String, dynamic>? _priceData;
   bool _isLoading = true;
   String _currentLangCode = '';
@@ -78,7 +78,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   @override
   void dispose() {
     I18nService().removeListener(_onLanguageChange);
-    _worldBankService.dispose();
+    // AgriApiService holds no disposable resources
     super.dispose();
   }
 
@@ -93,34 +93,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      Map<String, dynamic>? data;
-
-      switch (widget.category) {
-        case 'maize':
-          data = await _worldBankService.getMaizePrices();
-          break;
-        case 'cropProtection':
-          data = await _worldBankService.getCropProtectionCosts();
-          break;
-        case 'vegetables':
-          data = await _worldBankService.getVegetablePrices();
-          break;
-        case 'livestock':
-          data = await _worldBankService.getPoultryPorkFeedCosts();
-          break;
-        case 'fertilizer':
-          data = await _worldBankService.getFertilizerPrices();
-          break;
-        case 'apiary':
-          data = await _worldBankService.getHoneyMarketData();
-          break;
-        case 'aquaculture':
-          data = await _worldBankService.getTilapiaMarketData();
-          break;
-        case 'harvestStorage':
-          data = await _worldBankService.getHarvestStorageData();
-          break;
-      }
+      final data = await _agriService.getMarketPricesLegacy(widget.category);
 
       if (mounted) {
         setState(() {
@@ -345,7 +318,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                       tooltip: 'Refresh data',
                       onPressed: () async {
                         // Clear cache and reload
-                        _worldBankService.clearCache();
+                        _agriService.get('agri/health');
                         await _loadData();
                         if (mounted) {
                           setState(() {});

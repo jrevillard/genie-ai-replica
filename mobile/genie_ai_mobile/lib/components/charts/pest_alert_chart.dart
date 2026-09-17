@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
+import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:share_plus/share_plus.dart';
@@ -31,7 +31,7 @@ class PestAlertChart extends StatefulWidget {
 }
 
 class _PestAlertChartState extends State<PestAlertChart> {
-  final AgriculturalProxy _agriculturalProxy = AgriculturalProxy();
+  final AgriApiService _agriService = AgriApiService();
   final ChatbotProxy _chatbotProxy = ChatbotProxy();
   final TextEditingController _userContextController = TextEditingController();
   Map<String, dynamic>? _pestData;
@@ -64,9 +64,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
     });
 
     try {
-      final data = await _agriculturalProxy.getPestAlerts(
-        region: widget.region,
-      );
+      final data = await _agriService.getPestAlerts(); // region is server-side
       setState(() {
         _pestData = data;
         _loading = false;

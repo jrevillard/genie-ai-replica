@@ -86,7 +86,8 @@ class AgriScheduler {
     try {
       const resolved = await adapter.resolve(cfg);
       const raw = await adapter.fetch(resolved, cfg);
-      const parsed = adapter.parse(raw);
+      // parse may be sync OR async (zip/xlsx extractors) — always await
+      const parsed = await adapter.parse(raw);
       const { collection, docs } = adapter.normalize(parsed);
 
       if (!docs || docs.length === 0) {
@@ -94,14 +95,21 @@ class AgriScheduler {
       }
 
       const coll = this.db.collection(collection);
+      let written = 0;
       for (let i = 0; i < docs.length; i += 500) {
-        await coll.import(
-          Array.from(docs.slice(i, i + 500), (d) => JSON.stringify(d)),
-          {
-            type: 'array',
-            onDuplicate: 'update'
-          }
-        );
+        // arangojs import() takes an ARRAY OF OBJECTS (type 'array') or an
+        // NDJSON string (type 'list'). Passing an array of JSON strings is
+        // accepted by the server but imports 0 documents — which is how a
+        // full pass of wfp/hdx data silently vanished on the deployed box
+        // (2026-09-17: fetch log said ok, collections stayed empty).
+        const chunk = docs.slice(i, i + 500).map((d) => ({ ...d }));
+        const res = await coll.import(chunk, { type: 'array', onDuplicate: 'update' });
+        written += (res && (res.imported || res.updated || 0)) || 0;
+      }
+      if (docs.length > 0 && written === 0) {
+        // A 0-doc write with a non-empty parse is as much a failure as a
+        // 0-doc parse — surface it instead of logging a green fetch.
+        throw new Error(`import wrote 0 of ${docs.length} documents (type mismatch?)`);
       }
 
       const latestDataDate = docs.reduce((max, d) => {

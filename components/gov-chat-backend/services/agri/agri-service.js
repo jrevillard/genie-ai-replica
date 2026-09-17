@@ -381,7 +381,14 @@ class AgriService {
    */
   async serve(key, builder) {
     const ttl = this.endpointTtlMs(key);
-    const { envelope, origin } = await this.cache.get(key);
+    let { envelope, origin } = await this.cache.get(key);
+
+    // A cached empty envelope ('pending' from a failed pass) must not mask
+    // a usable seed — the seed floor wins until a real rebuild lands.
+    if (this.constructor.isEmptyEnvelope(envelope) && seeds[key]) {
+      envelope = seeds[key];
+      origin = 'seed';
+    }
 
     if (envelope) {
       const ageHours = (Date.now() - Date.parse(envelope.meta.fetchedAt)) / 3600000;
@@ -408,6 +415,16 @@ class AgriService {
     }
   }
 
+  /** True when an envelope carries no usable payload. */
+  static isEmptyEnvelope(envelope) {
+    if (!envelope || !envelope.data) return true;
+    const d = envelope.data;
+    if (Array.isArray(d)) return d.length === 0;
+    if (Array.isArray(d.series)) return d.series.length === 0;
+    if (Array.isArray(d.departments)) return d.departments.length === 0;
+    return false;
+  }
+
   /** Rebuild + persist every endpoint (called by scheduler after prefetch). */
   async rebuildAllEndpoints() {
     const keys = ['crop-health', 'pest-alerts', ...Object.keys(MARKET_CATEGORIES).map((c) => `market-prices:${c}`)];
@@ -420,6 +437,16 @@ class AgriService {
               ? () => this.buildPestAlerts()
               : () => this.buildMarketPrices(key.replace('market-prices:', ''));
         const envelope = await builder();
+        // Never-fail floor: an empty rebuild ('pending' placeholder) must not
+        // overwrite data already cached or seeded — e.g. when a pass fails
+        // mid-way. Keep what we have; the next good pass replaces it.
+        if (this.constructor.isEmptyEnvelope(envelope)) {
+          const { envelope: existing } = await this.cache.get(key);
+          if (existing && !this.constructor.isEmptyEnvelope(existing)) {
+            logger.warn(`agri rebuild: empty result for ${key} — keeping cached data`);
+            continue;
+          }
+        }
         await this.cache.set(key, envelope, this.endpointTtlMs(key));
       } catch (error) {
         logger.warn(`agri rebuild failed for ${key}: ${error.message}`);
@@ -585,7 +612,7 @@ class AgriService {
         '  AND RIGHT(g.date, 5) == RIGHT(chosen.date, 5) COLLECT AGGREGATE avgVim = AVG(g.vim) RETURN avgVim) > 0 ' +
         '  ? FIRST(FOR g IN groups FILTER g.source == chosen.source AND g.date != chosen.date ' +
         '  AND RIGHT(g.date, 5) == RIGHT(chosen.date, 5) COLLECT AGGREGATE avgVim = AVG(g.vim) RETURN avgVim) : null ' +
-        'RETURN MERGE(KEEP(chosen, "department", "vim", "date", "source"), { baseline }',
+        'RETURN MERGE(KEEP(chosen, "department", "vim", "date", "source"), { baseline })',
       {}
     );
 

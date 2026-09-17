@@ -51,7 +51,8 @@ module.exports = {
   },
 
   async fetch(url) {
-    const res = await fetchUrl(url, { timeoutMs: 180000, responseType: 'arraybuffer' });
+    // Prices_E_All_Data zip is ~12 MB — larger than the default 5 MB guard
+    const res = await fetchUrl(url, { timeoutMs: 180000, responseType: 'arraybuffer', maxBytes: 20 * 1024 * 1024 });
     return Buffer.from(res.data);
   },
 

@@ -33,7 +33,10 @@ async function fetchUrl(url, opts = {}) {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxRetries = MAX_RETRIES,
     retryOnStatus = [429, 502, 503, 504],
-    responseType
+    responseType,
+    // Per-call cap override for known-large bulk archives (FAOSTAT zips
+    // run ~12 MB). Default stays at the BMAD 5 MB guard.
+    maxBytes = MAX_BYTES
   } = opts;
 
   let lastError = null;
@@ -57,8 +60,8 @@ async function fetchUrl(url, opts = {}) {
       // Response-size guard
       const size =
         typeof response.data === 'string' ? response.data.length : (response.data && response.data.byteLength) || 0;
-      if (size > MAX_BYTES) {
-        throw new Error(`Payload too large: ${size} bytes > ${MAX_BYTES} (url: ${url})`);
+      if (size > maxBytes) {
+        throw new Error(`Payload too large: ${size} bytes > ${maxBytes} (url: ${url})`);
       }
 
       return {

@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class ApiQueriesGet200ResponseQueriesInner {
-  /// Returns a new [ApiQueriesGet200ResponseQueriesInner] instance.
-  ApiQueriesGet200ResponseQueriesInner({
+class QueriesPost201Response {
+  /// Returns a new [QueriesPost201Response] instance.
+  QueriesPost201Response({
     this.key,
     this.userId,
     this.sessionId,
@@ -115,7 +115,7 @@ class ApiQueriesGet200ResponseQueriesInner {
   String? response;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesGet200ResponseQueriesInner &&
+  bool operator ==(Object other) => identical(this, other) || other is QueriesPost201Response &&
     other.key == key &&
     other.userId == userId &&
     other.sessionId == sessionId &&
@@ -144,7 +144,7 @@ class ApiQueriesGet200ResponseQueriesInner {
     (response == null ? 0 : response!.hashCode);
 
   @override
-  String toString() => 'ApiQueriesGet200ResponseQueriesInner[key=$key, userId=$userId, sessionId=$sessionId, timestamp=$timestamp, isAnswered=$isAnswered, categoryId=$categoryId, serviceId=$serviceId, responseTime=$responseTime, contextOption=$contextOption, text=$text, response=$response]';
+  String toString() => 'QueriesPost201Response[key=$key, userId=$userId, sessionId=$sessionId, timestamp=$timestamp, isAnswered=$isAnswered, categoryId=$categoryId, serviceId=$serviceId, responseTime=$responseTime, contextOption=$contextOption, text=$text, response=$response]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -206,10 +206,10 @@ class ApiQueriesGet200ResponseQueriesInner {
     return json;
   }
 
-  /// Returns a new [ApiQueriesGet200ResponseQueriesInner] instance and imports its values from
+  /// Returns a new [QueriesPost201Response] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static ApiQueriesGet200ResponseQueriesInner? fromJson(dynamic value) {
+  static QueriesPost201Response? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -220,7 +220,7 @@ class ApiQueriesGet200ResponseQueriesInner {
         return true;
       }());
 
-      return ApiQueriesGet200ResponseQueriesInner(
+      return QueriesPost201Response(
         key: mapValueOfType<String>(json, r'_key'),
         userId: mapValueOfType<String>(json, r'userId'),
         sessionId: mapValueOfType<String>(json, r'sessionId'),
@@ -237,11 +237,11 @@ class ApiQueriesGet200ResponseQueriesInner {
     return null;
   }
 
-  static List<ApiQueriesGet200ResponseQueriesInner> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <ApiQueriesGet200ResponseQueriesInner>[];
+  static List<QueriesPost201Response> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <QueriesPost201Response>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = ApiQueriesGet200ResponseQueriesInner.fromJson(row);
+        final value = QueriesPost201Response.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -250,12 +250,12 @@ class ApiQueriesGet200ResponseQueriesInner {
     return result.toList(growable: growable);
   }
 
-  static Map<String, ApiQueriesGet200ResponseQueriesInner> mapFromJson(dynamic json) {
-    final map = <String, ApiQueriesGet200ResponseQueriesInner>{};
+  static Map<String, QueriesPost201Response> mapFromJson(dynamic json) {
+    final map = <String, QueriesPost201Response>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = ApiQueriesGet200ResponseQueriesInner.fromJson(entry.value);
+        final value = QueriesPost201Response.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -264,14 +264,14 @@ class ApiQueriesGet200ResponseQueriesInner {
     return map;
   }
 
-  // maps a json object with a list of ApiQueriesGet200ResponseQueriesInner-objects as value to a dart map
-  static Map<String, List<ApiQueriesGet200ResponseQueriesInner>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<ApiQueriesGet200ResponseQueriesInner>>{};
+  // maps a json object with a list of QueriesPost201Response-objects as value to a dart map
+  static Map<String, List<QueriesPost201Response>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<QueriesPost201Response>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = ApiQueriesGet200ResponseQueriesInner.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = QueriesPost201Response.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

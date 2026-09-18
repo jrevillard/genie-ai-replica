@@ -29,7 +29,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<Response> apiServiceCategoriesCategoriesCategoryIdGetWithHttpInfo(String categoryId, { String? locale, }) async {
+  Future<Response> apiServiceCategoriesCategoriesCategoryIdGetWithHttpInfo(String categoryId, { String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/categories/{categoryId}'
       .replaceAll('{categoryId}', categoryId);
@@ -56,6 +56,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -70,8 +71,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<ApiServiceCategoriesCategoriesGet200ResponseInner?> apiServiceCategoriesCategoriesCategoryIdGet(String categoryId, { String? locale, }) async {
-    final response = await apiServiceCategoriesCategoriesCategoryIdGetWithHttpInfo(categoryId,  locale: locale, );
+  Future<ApiServiceCategoriesCategoriesGet200ResponseInner?> apiServiceCategoriesCategoriesCategoryIdGet(String categoryId, { String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoriesCategoryIdGetWithHttpInfo(categoryId, locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -95,7 +96,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<Response> apiServiceCategoriesCategoriesDetailedGetWithHttpInfo({ String? locale, }) async {
+  Future<Response> apiServiceCategoriesCategoriesDetailedGetWithHttpInfo({ String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/categories/detailed';
 
@@ -121,6 +122,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -132,8 +134,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<void> apiServiceCategoriesCategoriesDetailedGet({ String? locale, }) async {
-    final response = await apiServiceCategoriesCategoriesDetailedGetWithHttpInfo( locale: locale, );
+  Future<void> apiServiceCategoriesCategoriesDetailedGet({ String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoriesDetailedGetWithHttpInfo(locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -149,7 +151,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<Response> apiServiceCategoriesCategoriesGetWithHttpInfo({ String? locale, }) async {
+  Future<Response> apiServiceCategoriesCategoriesGetWithHttpInfo({ String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/categories';
 
@@ -175,6 +177,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -186,8 +189,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<List<ApiServiceCategoriesCategoriesGet200ResponseInner>?> apiServiceCategoriesCategoriesGet({ String? locale, }) async {
-    final response = await apiServiceCategoriesCategoriesGetWithHttpInfo( locale: locale, );
+  Future<List<ApiServiceCategoriesCategoriesGet200ResponseInner>?> apiServiceCategoriesCategoriesGet({ String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoriesGetWithHttpInfo(locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -214,7 +217,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] categoryId (required):
   ///   Category key
-  Future<Response> apiServiceCategoriesCategoryIdDeleteWithHttpInfo(String categoryId,) async {
+  Future<Response> apiServiceCategoriesCategoryIdDeleteWithHttpInfo(String categoryId, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/{categoryId}'
       .replaceAll('{categoryId}', categoryId);
@@ -237,6 +240,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -248,8 +252,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] categoryId (required):
   ///   Category key
-  Future<void> apiServiceCategoriesCategoryIdDelete(String categoryId,) async {
-    final response = await apiServiceCategoriesCategoryIdDeleteWithHttpInfo(categoryId,);
+  Future<void> apiServiceCategoriesCategoryIdDelete(String categoryId, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoryIdDeleteWithHttpInfo(categoryId, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -267,7 +271,7 @@ class ServiceCategoriesApi {
   ///   The key of the category to update
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<Response> apiServiceCategoriesCategoryIdPutWithHttpInfo(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
+  Future<Response> apiServiceCategoriesCategoryIdPutWithHttpInfo(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/{categoryId}'
       .replaceAll('{categoryId}', categoryId);
@@ -290,6 +294,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -303,8 +308,8 @@ class ServiceCategoriesApi {
   ///   The key of the category to update
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<void> apiServiceCategoriesCategoryIdPut(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
-    final response = await apiServiceCategoriesCategoryIdPutWithHttpInfo(categoryId, apiServiceCategoriesPostRequest,);
+  Future<void> apiServiceCategoriesCategoryIdPut(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoryIdPutWithHttpInfo(categoryId, apiServiceCategoriesPostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -322,7 +327,7 @@ class ServiceCategoriesApi {
   ///   The key of the parent category
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<Response> apiServiceCategoriesCategoryIdServicesPostWithHttpInfo(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
+  Future<Response> apiServiceCategoriesCategoryIdServicesPostWithHttpInfo(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/{categoryId}/services'
       .replaceAll('{categoryId}', categoryId);
@@ -345,6 +350,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -358,8 +364,8 @@ class ServiceCategoriesApi {
   ///   The key of the parent category
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<void> apiServiceCategoriesCategoryIdServicesPost(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
-    final response = await apiServiceCategoriesCategoryIdServicesPostWithHttpInfo(categoryId, apiServiceCategoriesPostRequest,);
+  Future<void> apiServiceCategoriesCategoryIdServicesPost(String categoryId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoryIdServicesPostWithHttpInfo(categoryId, apiServiceCategoriesPostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -375,7 +381,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] categoryId (required):
   ///   The key of the category
-  Future<Response> apiServiceCategoriesCategoryIdTranslationsGetWithHttpInfo(String categoryId,) async {
+  Future<Response> apiServiceCategoriesCategoryIdTranslationsGetWithHttpInfo(String categoryId, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/{categoryId}/translations'
       .replaceAll('{categoryId}', categoryId);
@@ -398,6 +404,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -409,8 +416,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] categoryId (required):
   ///   The key of the category
-  Future<List<ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner>?> apiServiceCategoriesCategoryIdTranslationsGet(String categoryId,) async {
-    final response = await apiServiceCategoriesCategoryIdTranslationsGetWithHttpInfo(categoryId,);
+  Future<List<ApiServiceCategoriesCategoryIdTranslationsGet200ResponseInner>?> apiServiceCategoriesCategoryIdTranslationsGet(String categoryId, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesCategoryIdTranslationsGetWithHttpInfo(categoryId, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -432,7 +439,7 @@ class ServiceCategoriesApi {
   /// Initializes the system with default categories and services
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiServiceCategoriesInitPostWithHttpInfo() async {
+  Future<Response> apiServiceCategoriesInitPostWithHttpInfo({ Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/init';
 
@@ -454,14 +461,15 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
   /// Initialize default categories
   ///
   /// Initializes the system with default categories and services
-  Future<ApiServiceCategoriesInitPost200Response?> apiServiceCategoriesInitPost() async {
-    final response = await apiServiceCategoriesInitPostWithHttpInfo();
+  Future<ApiServiceCategoriesInitPost200Response?> apiServiceCategoriesInitPost({ Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesInitPostWithHttpInfo(abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -484,7 +492,7 @@ class ServiceCategoriesApi {
   /// Parameters:
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<Response> apiServiceCategoriesPostWithHttpInfo(ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
+  Future<Response> apiServiceCategoriesPostWithHttpInfo(ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories';
 
@@ -506,6 +514,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -516,8 +525,8 @@ class ServiceCategoriesApi {
   /// Parameters:
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<void> apiServiceCategoriesPost(ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
-    final response = await apiServiceCategoriesPostWithHttpInfo(apiServiceCategoriesPostRequest,);
+  Future<void> apiServiceCategoriesPost(ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesPostWithHttpInfo(apiServiceCategoriesPostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -536,7 +545,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for search results
-  Future<Response> apiServiceCategoriesSearchGetWithHttpInfo(String query, { String? locale, }) async {
+  Future<Response> apiServiceCategoriesSearchGetWithHttpInfo(String query, { String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/search';
 
@@ -563,6 +572,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -577,8 +587,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] locale:
   ///   Language locale for search results
-  Future<ApiServiceCategoriesSearchGet200Response?> apiServiceCategoriesSearchGet(String query, { String? locale, }) async {
-    final response = await apiServiceCategoriesSearchGetWithHttpInfo(query,  locale: locale, );
+  Future<ApiServiceCategoriesSearchGet200Response?> apiServiceCategoriesSearchGet(String query, { String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesSearchGetWithHttpInfo(query, locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -602,7 +612,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] serviceId (required):
   ///   The key of the service to delete
-  Future<Response> apiServiceCategoriesServicesServiceIdDeleteWithHttpInfo(String serviceId,) async {
+  Future<Response> apiServiceCategoriesServicesServiceIdDeleteWithHttpInfo(String serviceId, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/services/{serviceId}'
       .replaceAll('{serviceId}', serviceId);
@@ -625,6 +635,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -636,8 +647,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] serviceId (required):
   ///   The key of the service to delete
-  Future<void> apiServiceCategoriesServicesServiceIdDelete(String serviceId,) async {
-    final response = await apiServiceCategoriesServicesServiceIdDeleteWithHttpInfo(serviceId,);
+  Future<void> apiServiceCategoriesServicesServiceIdDelete(String serviceId, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesServicesServiceIdDeleteWithHttpInfo(serviceId, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -655,7 +666,7 @@ class ServiceCategoriesApi {
   ///   The key of the service to update
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<Response> apiServiceCategoriesServicesServiceIdPutWithHttpInfo(String serviceId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
+  Future<Response> apiServiceCategoriesServicesServiceIdPutWithHttpInfo(String serviceId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/services/{serviceId}'
       .replaceAll('{serviceId}', serviceId);
@@ -678,6 +689,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -691,8 +703,8 @@ class ServiceCategoriesApi {
   ///   The key of the service to update
   ///
   /// * [ApiServiceCategoriesPostRequest] apiServiceCategoriesPostRequest (required):
-  Future<void> apiServiceCategoriesServicesServiceIdPut(String serviceId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest,) async {
-    final response = await apiServiceCategoriesServicesServiceIdPutWithHttpInfo(serviceId, apiServiceCategoriesPostRequest,);
+  Future<void> apiServiceCategoriesServicesServiceIdPut(String serviceId, ApiServiceCategoriesPostRequest apiServiceCategoriesPostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesServicesServiceIdPutWithHttpInfo(serviceId, apiServiceCategoriesPostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -708,7 +720,7 @@ class ServiceCategoriesApi {
   ///
   /// * [String] serviceId (required):
   ///   The key of the service
-  Future<Response> apiServiceCategoriesServicesServiceIdTranslationsGetWithHttpInfo(String serviceId,) async {
+  Future<Response> apiServiceCategoriesServicesServiceIdTranslationsGetWithHttpInfo(String serviceId, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/service-categories/services/{serviceId}/translations'
       .replaceAll('{serviceId}', serviceId);
@@ -731,6 +743,7 @@ class ServiceCategoriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -742,8 +755,8 @@ class ServiceCategoriesApi {
   ///
   /// * [String] serviceId (required):
   ///   The key of the service
-  Future<void> apiServiceCategoriesServicesServiceIdTranslationsGet(String serviceId,) async {
-    final response = await apiServiceCategoriesServicesServiceIdTranslationsGetWithHttpInfo(serviceId,);
+  Future<void> apiServiceCategoriesServicesServiceIdTranslationsGet(String serviceId, { Future<void>? abortTrigger, }) async {
+    final response = await apiServiceCategoriesServicesServiceIdTranslationsGetWithHttpInfo(serviceId, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

@@ -11,18 +11,18 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for ApiQueriesGet200Response
+// tests for ApiWeatherPost400Response
 void main() {
-  // final instance = ApiQueriesGet200Response();
+  // final instance = ApiWeatherPost400Response();
 
-  group('test ApiQueriesGet200Response', () {
-    // List<QueriesPost201Response> queries (default value: const [])
-    test('to test the property `queries`', () async {
+  group('test ApiWeatherPost400Response', () {
+    // String error
+    test('to test the property `error`', () async {
       // TODO
     });
 
-    // ApiQueriesGet200ResponsePagination pagination
-    test('to test the property `pagination`', () async {
+    // String message
+    test('to test the property `message`', () async {
       // TODO
     });
 

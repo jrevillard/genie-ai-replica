@@ -11,11 +11,11 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for ApiQueriesPostRequestContext
+// tests for QueriesPostRequestContext
 void main() {
-  // final instance = ApiQueriesPostRequestContext();
+  // final instance = QueriesPostRequestContext();
 
-  group('test ApiQueriesPostRequestContext', () {
+  group('test QueriesPostRequestContext', () {
     // String categoryLabel
     test('to test the property `categoryLabel`', () async {
       // TODO

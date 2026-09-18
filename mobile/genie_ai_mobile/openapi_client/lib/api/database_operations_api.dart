@@ -21,7 +21,7 @@ class DatabaseOperationsApi {
   /// Creates a full backup of the database
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiDatabaseBackupPostWithHttpInfo() async {
+  Future<Response> apiDatabaseBackupPostWithHttpInfo({ Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/database/backup';
 
@@ -43,14 +43,15 @@ class DatabaseOperationsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
   /// Backup Database
   ///
   /// Creates a full backup of the database
-  Future<ApiDatabaseBackupPost200Response?> apiDatabaseBackupPost() async {
-    final response = await apiDatabaseBackupPostWithHttpInfo();
+  Future<ApiDatabaseBackupPost200Response?> apiDatabaseBackupPost({ Future<void>? abortTrigger, }) async {
+    final response = await apiDatabaseBackupPostWithHttpInfo(abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -69,7 +70,7 @@ class DatabaseOperationsApi {
   /// Performs database optimization including compacting collections
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiDatabaseOptimizePostWithHttpInfo() async {
+  Future<Response> apiDatabaseOptimizePostWithHttpInfo({ Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/database/optimize';
 
@@ -91,14 +92,15 @@ class DatabaseOperationsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
   /// Optimize Database
   ///
   /// Performs database optimization including compacting collections
-  Future<ApiDatabaseOptimizePost200Response?> apiDatabaseOptimizePost() async {
-    final response = await apiDatabaseOptimizePostWithHttpInfo();
+  Future<ApiDatabaseOptimizePost200Response?> apiDatabaseOptimizePost({ Future<void>? abortTrigger, }) async {
+    final response = await apiDatabaseOptimizePostWithHttpInfo(abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

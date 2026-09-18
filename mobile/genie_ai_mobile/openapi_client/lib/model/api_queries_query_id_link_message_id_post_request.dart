@@ -60,7 +60,9 @@ class ApiQueriesQueryIdLinkMessageIdPostRequest {
 
       return ApiQueriesQueryIdLinkMessageIdPostRequest(
         responseType: mapValueOfType<String>(json, r'responseType') ?? 'primary',
-        confidenceScore: num.parse('${json[r'confidenceScore']}'),
+        confidenceScore: json[r'confidenceScore'] == null
+            ? 1
+            : num.parse('${json[r'confidenceScore']}'),
       );
     }
     return null;

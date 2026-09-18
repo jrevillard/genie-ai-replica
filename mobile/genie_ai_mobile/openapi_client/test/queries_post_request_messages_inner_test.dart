@@ -11,11 +11,11 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for ApiQueriesPostRequestMessagesInner
+// tests for QueriesPostRequestMessagesInner
 void main() {
-  // final instance = ApiQueriesPostRequestMessagesInner();
+  // final instance = QueriesPostRequestMessagesInner();
 
-  group('test ApiQueriesPostRequestMessagesInner', () {
+  group('test QueriesPostRequestMessagesInner', () {
     // String role
     test('to test the property `role`', () async {
       // TODO

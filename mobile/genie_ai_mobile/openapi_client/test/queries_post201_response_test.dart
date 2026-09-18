@@ -11,11 +11,11 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for ApiQueriesGet200ResponseQueriesInner
+// tests for QueriesPost201Response
 void main() {
-  // final instance = ApiQueriesGet200ResponseQueriesInner();
+  // final instance = QueriesPost201Response();
 
-  group('test ApiQueriesGet200ResponseQueriesInner', () {
+  group('test QueriesPost201Response', () {
     // String key
     test('to test the property `key`', () async {
       // TODO

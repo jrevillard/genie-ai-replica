@@ -25,7 +25,7 @@ class WeatherApi {
   /// Parameters:
   ///
   /// * [ApiWeatherPostRequest] apiWeatherPostRequest (required):
-  Future<Response> apiWeatherPostWithHttpInfo(ApiWeatherPostRequest apiWeatherPostRequest,) async {
+  Future<Response> apiWeatherPostWithHttpInfo(ApiWeatherPostRequest apiWeatherPostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/weather';
 
@@ -47,6 +47,7 @@ class WeatherApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -57,8 +58,8 @@ class WeatherApi {
   /// Parameters:
   ///
   /// * [ApiWeatherPostRequest] apiWeatherPostRequest (required):
-  Future<ApiWeatherPost200Response?> apiWeatherPost(ApiWeatherPostRequest apiWeatherPostRequest,) async {
-    final response = await apiWeatherPostWithHttpInfo(apiWeatherPostRequest,);
+  Future<ApiWeatherPost200Response?> apiWeatherPost(ApiWeatherPostRequest apiWeatherPostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiWeatherPostWithHttpInfo(apiWeatherPostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

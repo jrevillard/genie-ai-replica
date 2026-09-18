@@ -78,7 +78,9 @@ class ApiAnalyticsMetricMetricGet200Response {
 
       return ApiAnalyticsMetricMetricGet200Response(
         metric: mapValueOfType<String>(json, r'metric'),
-        value: num.parse('${json[r'value']}'),
+        value: json[r'value'] == null
+            ? null
+            : num.parse('${json[r'value']}'),
       );
     }
     return null;

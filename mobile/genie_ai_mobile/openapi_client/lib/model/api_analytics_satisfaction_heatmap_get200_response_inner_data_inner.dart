@@ -78,7 +78,9 @@ class ApiAnalyticsSatisfactionHeatmapGet200ResponseInnerDataInner {
 
       return ApiAnalyticsSatisfactionHeatmapGet200ResponseInnerDataInner(
         x: mapValueOfType<String>(json, r'x'),
-        y: num.parse('${json[r'y']}'),
+        y: json[r'y'] == null
+            ? null
+            : num.parse('${json[r'y']}'),
       );
     }
     return null;

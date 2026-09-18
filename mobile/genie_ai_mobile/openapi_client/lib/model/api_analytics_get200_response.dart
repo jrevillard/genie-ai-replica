@@ -133,7 +133,9 @@ class ApiAnalyticsGet200Response {
       return ApiAnalyticsGet200Response(
         queryCount: mapValueOfType<int>(json, r'queryCount'),
         feedbackCount: mapValueOfType<int>(json, r'feedbackCount'),
-        avgRating: num.parse('${json[r'avgRating']}'),
+        avgRating: json[r'avgRating'] == null
+            ? null
+            : num.parse('${json[r'avgRating']}'),
         timeDistribution: mapValueOfType<Object>(json, r'timeDistribution'),
         categoryDistribution: mapValueOfType<Object>(json, r'categoryDistribution'),
         raw: json[r'raw'] is Iterable

@@ -129,7 +129,9 @@ class ApiServicesSearchGet200ResponseServicesInner {
         nameEN: mapValueOfType<String>(json, r'nameEN'),
         descriptionEN: mapValueOfType<String>(json, r'descriptionEN'),
         categoryId: mapValueOfType<String>(json, r'categoryId'),
-        relevance: num.parse('${json[r'relevance']}'),
+        relevance: json[r'relevance'] == null
+            ? null
+            : num.parse('${json[r'relevance']}'),
       );
     }
     return null;

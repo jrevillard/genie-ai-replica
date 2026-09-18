@@ -32,7 +32,7 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<Response> apiAnalyticsDashboardGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
+  Future<Response> apiAnalyticsDashboardGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/dashboard';
 
@@ -64,6 +64,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -81,8 +82,8 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<ApiAnalyticsDashboardGet200Response?> apiAnalyticsDashboardGet({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
-    final response = await apiAnalyticsDashboardGetWithHttpInfo( startDate: startDate, endDate: endDate, locale: locale, );
+  Future<ApiAnalyticsDashboardGet200Response?> apiAnalyticsDashboardGet({ DateTime? startDate, DateTime? endDate, String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsDashboardGetWithHttpInfo(startDate: startDate, endDate: endDate, locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -109,7 +110,7 @@ class AnalyticsApi {
   ///
   /// * [int] offset:
   ///   Number of results to skip for pagination
-  Future<Response> apiAnalyticsEventsGetWithHttpInfo({ int? limit, int? offset, }) async {
+  Future<Response> apiAnalyticsEventsGetWithHttpInfo({ int? limit, int? offset, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/events';
 
@@ -138,6 +139,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -152,8 +154,8 @@ class AnalyticsApi {
   ///
   /// * [int] offset:
   ///   Number of results to skip for pagination
-  Future<List<Event>?> apiAnalyticsEventsGet({ int? limit, int? offset, }) async {
-    final response = await apiAnalyticsEventsGetWithHttpInfo( limit: limit, offset: offset, );
+  Future<List<Event>?> apiAnalyticsEventsGet({ int? limit, int? offset, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsEventsGetWithHttpInfo(limit: limit, offset: offset, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -179,7 +181,7 @@ class AnalyticsApi {
   /// Parameters:
   ///
   /// * [ApiAnalyticsEventsPostRequest] apiAnalyticsEventsPostRequest (required):
-  Future<Response> apiAnalyticsEventsPostWithHttpInfo(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest,) async {
+  Future<Response> apiAnalyticsEventsPostWithHttpInfo(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/events';
 
@@ -201,6 +203,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -211,8 +214,8 @@ class AnalyticsApi {
   /// Parameters:
   ///
   /// * [ApiAnalyticsEventsPostRequest] apiAnalyticsEventsPostRequest (required):
-  Future<Event?> apiAnalyticsEventsPost(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest,) async {
-    final response = await apiAnalyticsEventsPostWithHttpInfo(apiAnalyticsEventsPostRequest,);
+  Future<Event?> apiAnalyticsEventsPost(ApiAnalyticsEventsPostRequest apiAnalyticsEventsPostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsEventsPostWithHttpInfo(apiAnalyticsEventsPostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -245,7 +248,7 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<Response> apiAnalyticsGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? filters, String? locale, }) async {
+  Future<Response> apiAnalyticsGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? filters, String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics';
 
@@ -280,6 +283,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -300,8 +304,8 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale for category names (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<ApiAnalyticsGet200Response?> apiAnalyticsGet({ DateTime? startDate, DateTime? endDate, String? filters, String? locale, }) async {
-    final response = await apiAnalyticsGetWithHttpInfo( startDate: startDate, endDate: endDate, filters: filters, locale: locale, );
+  Future<ApiAnalyticsGet200Response?> apiAnalyticsGet({ DateTime? startDate, DateTime? endDate, String? filters, String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsGetWithHttpInfo(startDate: startDate, endDate: endDate, filters: filters, locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -331,7 +335,7 @@ class AnalyticsApi {
   ///
   /// * [DateTime] endDate (required):
   ///   End date (ISO format)
-  Future<Response> apiAnalyticsMetricMetricGetWithHttpInfo(String metric, DateTime startDate, DateTime endDate,) async {
+  Future<Response> apiAnalyticsMetricMetricGetWithHttpInfo(String metric, DateTime startDate, DateTime endDate, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/metric/{metric}'
       .replaceAll('{metric}', metric);
@@ -357,6 +361,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -374,8 +379,8 @@ class AnalyticsApi {
   ///
   /// * [DateTime] endDate (required):
   ///   End date (ISO format)
-  Future<ApiAnalyticsMetricMetricGet200Response?> apiAnalyticsMetricMetricGet(String metric, DateTime startDate, DateTime endDate,) async {
-    final response = await apiAnalyticsMetricMetricGetWithHttpInfo(metric, startDate, endDate,);
+  Future<ApiAnalyticsMetricMetricGet200Response?> apiAnalyticsMetricMetricGet(String metric, DateTime startDate, DateTime endDate, { Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsMetricMetricGetWithHttpInfo(metric, startDate, endDate, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -402,7 +407,7 @@ class AnalyticsApi {
   ///
   /// * [int] offset:
   ///   Number of results to skip for pagination
-  Future<Response> apiAnalyticsRecordsGetWithHttpInfo({ int? limit, int? offset, }) async {
+  Future<Response> apiAnalyticsRecordsGetWithHttpInfo({ int? limit, int? offset, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/records';
 
@@ -431,6 +436,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -445,8 +451,8 @@ class AnalyticsApi {
   ///
   /// * [int] offset:
   ///   Number of results to skip for pagination
-  Future<List<Analytics>?> apiAnalyticsRecordsGet({ int? limit, int? offset, }) async {
-    final response = await apiAnalyticsRecordsGetWithHttpInfo( limit: limit, offset: offset, );
+  Future<List<Analytics>?> apiAnalyticsRecordsGet({ int? limit, int? offset, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsRecordsGetWithHttpInfo(limit: limit, offset: offset, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -479,7 +485,7 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<Response> apiAnalyticsSatisfactionGaugeGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
+  Future<Response> apiAnalyticsSatisfactionGaugeGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/satisfaction/gauge';
 
@@ -511,6 +517,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -528,8 +535,8 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<ApiAnalyticsSatisfactionGaugeGet200Response?> apiAnalyticsSatisfactionGaugeGet({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
-    final response = await apiAnalyticsSatisfactionGaugeGetWithHttpInfo( startDate: startDate, endDate: endDate, locale: locale, );
+  Future<ApiAnalyticsSatisfactionGaugeGet200Response?> apiAnalyticsSatisfactionGaugeGet({ DateTime? startDate, DateTime? endDate, String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsSatisfactionGaugeGetWithHttpInfo(startDate: startDate, endDate: endDate, locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -559,7 +566,7 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<Response> apiAnalyticsSatisfactionHeatmapGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
+  Future<Response> apiAnalyticsSatisfactionHeatmapGetWithHttpInfo({ DateTime? startDate, DateTime? endDate, String? locale, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/satisfaction/heatmap';
 
@@ -591,6 +598,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -608,8 +616,8 @@ class AnalyticsApi {
   ///
   /// * [String] locale:
   ///   Language locale (e.g. en, fr, sw, ar, id, es, etc.)
-  Future<List<ApiAnalyticsSatisfactionHeatmapGet200ResponseInner>?> apiAnalyticsSatisfactionHeatmapGet({ DateTime? startDate, DateTime? endDate, String? locale, }) async {
-    final response = await apiAnalyticsSatisfactionHeatmapGetWithHttpInfo( startDate: startDate, endDate: endDate, locale: locale, );
+  Future<List<ApiAnalyticsSatisfactionHeatmapGet200ResponseInner>?> apiAnalyticsSatisfactionHeatmapGet({ DateTime? startDate, DateTime? endDate, String? locale, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsSatisfactionHeatmapGetWithHttpInfo(startDate: startDate, endDate: endDate, locale: locale, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -645,7 +653,7 @@ class AnalyticsApi {
   ///
   /// * [DateTime] endDate:
   ///   End date (ISO format)
-  Future<Response> apiAnalyticsTimeseriesMetricTypeGetWithHttpInfo(String metricType, { String? interval, DateTime? startDate, DateTime? endDate, }) async {
+  Future<Response> apiAnalyticsTimeseriesMetricTypeGetWithHttpInfo(String metricType, { String? interval, DateTime? startDate, DateTime? endDate, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/analytics/timeseries/{metricType}'
       .replaceAll('{metricType}', metricType);
@@ -678,6 +686,7 @@ class AnalyticsApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -698,8 +707,8 @@ class AnalyticsApi {
   ///
   /// * [DateTime] endDate:
   ///   End date (ISO format)
-  Future<List<ApiAnalyticsTimeseriesMetricTypeGet200ResponseInner>?> apiAnalyticsTimeseriesMetricTypeGet(String metricType, { String? interval, DateTime? startDate, DateTime? endDate, }) async {
-    final response = await apiAnalyticsTimeseriesMetricTypeGetWithHttpInfo(metricType,  interval: interval, startDate: startDate, endDate: endDate, );
+  Future<List<ApiAnalyticsTimeseriesMetricTypeGet200ResponseInner>?> apiAnalyticsTimeseriesMetricTypeGet(String metricType, { String? interval, DateTime? startDate, DateTime? endDate, Future<void>? abortTrigger, }) async {
+    final response = await apiAnalyticsTimeseriesMetricTypeGetWithHttpInfo(metricType, interval: interval, startDate: startDate, endDate: endDate, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

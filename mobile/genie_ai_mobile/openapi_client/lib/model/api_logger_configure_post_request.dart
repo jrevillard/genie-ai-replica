@@ -198,33 +198,31 @@ class ApiLoggerConfigurePostRequest {
 }
 
 /// Logging level to apply
-class ApiLoggerConfigurePostRequestLevelEnum {
-  /// Instantiate a new enum with the provided [value].
-  const ApiLoggerConfigurePostRequestLevelEnum._(this.value);
+enum ApiLoggerConfigurePostRequestLevelEnum {
+  error._(r'error'),
+  warn._(r'warn'),
+  info._(r'info'),
+  debug._(r'debug'),
+  ;
+
+  /// Instantiate a new enum with the provided value.
+  const ApiLoggerConfigurePostRequestLevelEnum._(this._value);
 
   /// The underlying value of this enum member.
-  final String value;
+  final String _value;
 
   @override
-  String toString() => value;
+  String toString() => _value;
 
-  String toJson() => value;
+  /// Encodes this enum as a value suitable for JSON.
+  String toJson() => _value;
 
-  static const error = ApiLoggerConfigurePostRequestLevelEnum._(r'error');
-  static const warn = ApiLoggerConfigurePostRequestLevelEnum._(r'warn');
-  static const info = ApiLoggerConfigurePostRequestLevelEnum._(r'info');
-  static const debug = ApiLoggerConfigurePostRequestLevelEnum._(r'debug');
-
-  /// List of all possible values in this [enum][ApiLoggerConfigurePostRequestLevelEnum].
-  static const values = <ApiLoggerConfigurePostRequestLevelEnum>[
-    error,
-    warn,
-    info,
-    debug,
-  ];
-
+  /// Returns the instance of [ApiLoggerConfigurePostRequestLevelEnum] that was successfully decoded
+  /// from the passed [value] on success, null otherwise.
   static ApiLoggerConfigurePostRequestLevelEnum? fromJson(dynamic value) => ApiLoggerConfigurePostRequestLevelEnumTypeTransformer().decode(value);
 
+  /// Returns a [List] containing instances of [ApiLoggerConfigurePostRequestLevelEnum]
+  /// that were successfully decoded from the passed [JSON][json].
   static List<ApiLoggerConfigurePostRequestLevelEnum> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <ApiLoggerConfigurePostRequestLevelEnum>[];
     if (json is List && json.isNotEmpty) {
@@ -246,9 +244,10 @@ class ApiLoggerConfigurePostRequestLevelEnumTypeTransformer {
 
   const ApiLoggerConfigurePostRequestLevelEnumTypeTransformer._();
 
-  String encode(ApiLoggerConfigurePostRequestLevelEnum data) => data.value;
+  String encode(ApiLoggerConfigurePostRequestLevelEnum data) => data._value;
 
-  /// Decodes a [dynamic value][data] to a ApiLoggerConfigurePostRequestLevelEnum.
+  /// Returns the instance of [ApiLoggerConfigurePostRequestLevelEnum] that was successfully decoded
+  /// from the passed [data] value on success, null otherwise.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
   /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
@@ -257,6 +256,9 @@ class ApiLoggerConfigurePostRequestLevelEnumTypeTransformer {
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
   ApiLoggerConfigurePostRequestLevelEnum? decode(dynamic data, {bool allowNull = true}) {
+    if (data is ApiLoggerConfigurePostRequestLevelEnum) {
+      return data;
+    }
     if (data != null) {
       switch (data) {
         case r'error': return ApiLoggerConfigurePostRequestLevelEnum.error;
@@ -272,7 +274,7 @@ class ApiLoggerConfigurePostRequestLevelEnumTypeTransformer {
     return null;
   }
 
-  /// Singleton [ApiLoggerConfigurePostRequestLevelEnumTypeTransformer] instance.
+  /// The singleton instance of this transformer.
   static ApiLoggerConfigurePostRequestLevelEnumTypeTransformer? _instance;
 }
 

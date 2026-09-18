@@ -77,7 +77,9 @@ class ApiQueriesQueryIdFeedbackPost200ResponseFeedback {
       }());
 
       return ApiQueriesQueryIdFeedbackPost200ResponseFeedback(
-        rating: num.parse('${json[r'rating']}'),
+        rating: json[r'rating'] == null
+            ? null
+            : num.parse('${json[r'rating']}'),
         comment: mapValueOfType<String>(json, r'comment'),
       );
     }

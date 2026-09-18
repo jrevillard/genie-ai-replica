@@ -95,7 +95,9 @@ class ApiAnalyticsDashboardGet200ResponseTopQueriesInner {
       return ApiAnalyticsDashboardGet200ResponseTopQueriesInner(
         text: mapValueOfType<String>(json, r'text'),
         count: mapValueOfType<int>(json, r'count'),
-        avgTime: num.parse('${json[r'avgTime']}'),
+        avgTime: json[r'avgTime'] == null
+            ? null
+            : num.parse('${json[r'avgTime']}'),
       );
     }
     return null;

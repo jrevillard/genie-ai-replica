@@ -1,4 +1,4 @@
-# openapi.model.ApiQueriesGet200Response
+# openapi.model.ApiWeatherPost400Response
 
 ## Load the model package
 ```dart
@@ -8,8 +8,8 @@ import 'package:openapi/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**queries** | [**List<QueriesPost201Response>**](QueriesPost201Response.md) |  | [optional] [default to const []]
-**pagination** | [**ApiQueriesGet200ResponsePagination**](ApiQueriesGet200ResponsePagination.md) |  | [optional] 
+**error** | **String** |  | 
+**message** | **String** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

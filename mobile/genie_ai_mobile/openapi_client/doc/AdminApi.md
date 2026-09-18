@@ -9,6 +9,8 @@ All URIs are relative to *https://localhost*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
+[**adminQueriesInspectGet**](AdminApi.md#adminqueriesinspectget) | **GET** /admin/queries/inspect | Get recent queries for admin inspection (Query Inspector)
+[**adminQueriesInspectQueryIdGet**](AdminApi.md#adminqueriesinspectqueryidget) | **GET** /admin/queries/inspect/{queryId} | Get full query details for admin inspection
 [**apiAdminDatabaseOperationsBackupPost**](AdminApi.md#apiadmindatabaseoperationsbackuppost) | **POST** /api/admin/database-operations/backup | Backup database
 [**apiAdminDatabaseOperationsOptimizePost**](AdminApi.md#apiadmindatabaseoperationsoptimizepost) | **POST** /api/admin/database-operations/optimize | Optimize database
 [**apiAdminDatabaseStatsGet**](AdminApi.md#apiadmindatabasestatsget) | **GET** /api/admin/database/stats | Get database statistics
@@ -25,6 +27,100 @@ Method | HTTP request | Description
 [**apiAdminUserStatsGet**](AdminApi.md#apiadminuserstatsget) | **GET** /api/admin/user-stats | Get user statistics
 [**apiAdminUsersSearchGet**](AdminApi.md#apiadminuserssearchget) | **GET** /api/admin/users/search | Search users with filtering
 
+
+# **adminQueriesInspectGet**
+> adminQueriesInspectGet(limit, offset, userId, searchText, startDate, endDate, minConfidence, maxConfidence)
+
+Get recent queries for admin inspection (Query Inspector)
+
+### Example
+```dart
+import 'package:openapi/api.dart';
+
+final api_instance = AdminApi();
+final limit = 56; // int | Maximum number of queries to return (default 50)
+final offset = 56; // int | Offset for pagination
+final userId = userId_example; // String | Filter by user ID
+final searchText = searchText_example; // String | Search in query text
+final startDate = startDate_example; // String | Filter from date (ISO string)
+final endDate = endDate_example; // String | Filter to date (ISO string)
+final minConfidence = 8.14; // num | Minimum confidence score (0-1)
+final maxConfidence = 8.14; // num | Maximum confidence score (0-1)
+
+try {
+    api_instance.adminQueriesInspectGet(limit, offset, userId, searchText, startDate, endDate, minConfidence, maxConfidence);
+} catch (e) {
+    print('Exception when calling AdminApi->adminQueriesInspectGet: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **int**| Maximum number of queries to return (default 50) | [optional] 
+ **offset** | **int**| Offset for pagination | [optional] 
+ **userId** | **String**| Filter by user ID | [optional] 
+ **searchText** | **String**| Search in query text | [optional] 
+ **startDate** | **String**| Filter from date (ISO string) | [optional] 
+ **endDate** | **String**| Filter to date (ISO string) | [optional] 
+ **minConfidence** | **num**| Minimum confidence score (0-1) | [optional] 
+ **maxConfidence** | **num**| Maximum confidence score (0-1) | [optional] 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **adminQueriesInspectQueryIdGet**
+> adminQueriesInspectQueryIdGet(queryId)
+
+Get full query details for admin inspection
+
+### Example
+```dart
+import 'package:openapi/api.dart';
+
+final api_instance = AdminApi();
+final queryId = queryId_example; // String | The query ID to inspect
+
+try {
+    api_instance.adminQueriesInspectQueryIdGet(queryId);
+} catch (e) {
+    print('Exception when calling AdminApi->adminQueriesInspectQueryIdGet: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **queryId** | **String**| The query ID to inspect | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **apiAdminDatabaseOperationsBackupPost**
 > apiAdminDatabaseOperationsBackupPost()

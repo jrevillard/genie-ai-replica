@@ -25,7 +25,7 @@ class LoggerApi {
   /// Parameters:
   ///
   /// * [ApiLoggerConfigurePostRequest] apiLoggerConfigurePostRequest (required):
-  Future<Response> apiLoggerConfigurePostWithHttpInfo(ApiLoggerConfigurePostRequest apiLoggerConfigurePostRequest,) async {
+  Future<Response> apiLoggerConfigurePostWithHttpInfo(ApiLoggerConfigurePostRequest apiLoggerConfigurePostRequest, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/logger/configure';
 
@@ -47,6 +47,7 @@ class LoggerApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
@@ -57,8 +58,8 @@ class LoggerApi {
   /// Parameters:
   ///
   /// * [ApiLoggerConfigurePostRequest] apiLoggerConfigurePostRequest (required):
-  Future<ApiLoggerConfigurePost200Response?> apiLoggerConfigurePost(ApiLoggerConfigurePostRequest apiLoggerConfigurePostRequest,) async {
-    final response = await apiLoggerConfigurePostWithHttpInfo(apiLoggerConfigurePostRequest,);
+  Future<ApiLoggerConfigurePost200Response?> apiLoggerConfigurePost(ApiLoggerConfigurePostRequest apiLoggerConfigurePostRequest, { Future<void>? abortTrigger, }) async {
+    final response = await apiLoggerConfigurePostWithHttpInfo(apiLoggerConfigurePostRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -77,7 +78,7 @@ class LoggerApi {
   /// Forces an immediate log rotation regardless of current file sizes
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiLoggerRolloverPostWithHttpInfo() async {
+  Future<Response> apiLoggerRolloverPostWithHttpInfo({ Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/logger/rollover';
 
@@ -99,14 +100,15 @@ class LoggerApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
     );
   }
 
   /// Trigger log rollover
   ///
   /// Forces an immediate log rotation regardless of current file sizes
-  Future<ApiLoggerRolloverPost200Response?> apiLoggerRolloverPost() async {
-    final response = await apiLoggerRolloverPostWithHttpInfo();
+  Future<ApiLoggerRolloverPost200Response?> apiLoggerRolloverPost({ Future<void>? abortTrigger, }) async {
+    final response = await apiLoggerRolloverPostWithHttpInfo(abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

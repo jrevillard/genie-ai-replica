@@ -2042,38 +2042,8 @@ export default {
   border: 1px solid var(--border);
   font-size: var(--text-base);
   line-height: 1.5;
-  /* Collapse the \n whitespace text nodes between rendered markdown
-   * blocks (e.g. between </p> and <ol>) instead of treating them as
-   * line breaks — that collapse is what removes the phantom ~21px gap
-   * the chat used to render between sections. The intra-block content
-   * (a single <p>...</p> or <li>...</li>) still wraps normally because
-   * marked wraps each paragraph in its own <p>. */
-  white-space: normal;
+  white-space: pre-wrap;
   word-wrap: break-word;
-}
-
-/* Collapse all block-level descendants' margins to 0 so adjacent
- * blocks don't add their 0.5em UA default. :deep() pierces the v-html
- * children the marked output is inserted as; !important wins the
- * specificity tie with Vue's scoped CSS in 366.f6f23984.css
- * (which sets margin: 0.5em 0 on h3/p/ol/ul). A single
- * `* + *` rule then grants a small top gap to every adjacent-sibling
- * pair for breathing room. */
-.message-bubble :deep(p),
-.message-bubble :deep(ol),
-.message-bubble :deep(ul),
-.message-bubble :deep(h1),
-.message-bubble :deep(h2),
-.message-bubble :deep(h3),
-.message-bubble :deep(h4),
-.message-bubble :deep(h5),
-.message-bubble :deep(h6),
-.message-bubble :deep(blockquote),
-.message-bubble :deep(pre) {
-  margin: 0 !important;
-}
-.message-bubble :deep(* + *) {
-  margin-top: 6px !important;
 }
 
 .chat-message.user .message-bubble {

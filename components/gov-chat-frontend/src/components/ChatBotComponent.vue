@@ -2046,6 +2046,24 @@ export default {
   word-wrap: break-word;
 }
 
+/* Tight markdown list rendering — pencil-and-paper rule by the CSS
+ * specialist subagent: rendering <ol>/<ul> with a trailing `\n` whitespace
+ * text node creates an anonymous empty inline box whose line-height
+ * adds ~21px of phantom vertical space at the bottom of every list. Kill
+ * it with line-height: 0 + negative margin-bottom on the list container,
+ * then restore normal line-height on direct <li> children so item text
+ * isn't collapsed to height 0. :deep() pierces the v-html children
+ * since the markdown output is inserted via DOMPurify-bound innerHTML. */
+.message-bubble :deep(ol),
+.message-bubble :deep(ul) {
+  margin-bottom: calc(-1em * 1.5) !important;
+  line-height: 0 !important;
+}
+.message-bubble :deep(ol > li),
+.message-bubble :deep(ul > li) {
+  line-height: 1.5;
+}
+
 .chat-message.user .message-bubble {
   background: var(--accent);
   color: var(--accent-fg);

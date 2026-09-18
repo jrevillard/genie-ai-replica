@@ -566,6 +566,7 @@ export default {
 
     loading: '正在加载数据...',
     loadDataError: '加载数据失败',
+    filterSeverity: 'Filter by severity',
     insights: '洞察',
     fastActions: '快速操作',
     cropHealth: '作物健康',
@@ -639,6 +640,8 @@ export default {
       trend: '趋势',
       priceHistory: '价格历史',
       dataTable: '数据表',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: '最后更新',
       commodity: '商品',
       noData: '无数据',
@@ -1443,6 +1446,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: '回复已中断。请重试。',
     aiGeneratedNoDocs: 'AI 生成 — 不基于文库文档',
     welcomeMessage: 'Welcome! How can I assist you today?',

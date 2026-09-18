@@ -570,6 +570,7 @@ export default {
 
     loading: 'جاري تحميل البيانات...',
     loadDataError: 'فشل تحميل البيانات',
+    filterSeverity: 'Filter by severity',
     insights: 'رؤى',
     fastActions: 'إجراءات سريعة',
     cropHealth: 'صحة المحاصيل',
@@ -643,6 +644,8 @@ export default {
       trend: 'الاتجاه',
       priceHistory: 'سجل الأسعار',
       dataTable: 'جدول البيانات',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'آخر تحديث',
       commodity: 'سلعة',
       noData: 'لا تتوفر بيانات',
@@ -1494,6 +1497,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'تمت مقاطعة الاستجابة. يرجى المحاولة مرة أخرى.',
     aiGeneratedNoDocs: 'مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة',
     welcomeMessage: 'Welcome! How can I assist you today?',

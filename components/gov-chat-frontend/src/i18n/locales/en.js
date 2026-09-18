@@ -541,6 +541,7 @@ export default {
     usageTrend: 'Usage Trend',
     loading: 'Loading data...',
     loadDataError: 'Failed to load data',
+    filterSeverity: 'Filter by severity',
 
     news: {
       addFromNews: 'Add from recent news',
@@ -659,6 +660,8 @@ export default {
       trend: 'Trend',
       priceHistory: 'Price History',
       dataTable: 'Data Table',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Last updated',
       commodity: 'Commodity',
       noData: 'No data available',
@@ -1512,6 +1515,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     configMismatchWarning:

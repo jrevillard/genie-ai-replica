@@ -573,6 +573,7 @@ export default {
 
     loading: 'Carregando dados...',
     loadDataError: 'Falha ao carregar dados',
+    filterSeverity: 'Filtrar por gravidade',
     insights: 'Insights',
     fastActions: 'Ações Rápidas',
     cropHealth: 'Saúde das Culturas',
@@ -646,6 +647,8 @@ export default {
       trend: 'Tendência',
       priceHistory: 'Histórico de Preços',
       dataTable: 'Tabela de Dados',
+      period: 'Período',
+      exportCsv: 'Exportar CSV',
       lastUpdated: 'Última atualização',
       commodity: 'Produto',
       noData: 'Sem dados disponíveis',
@@ -1515,6 +1518,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Pensando...',
     streamingError: 'A resposta foi interrompida. Tente novamente.',
     aiGeneratedNoDocs: 'Gerado por IA — não baseado nos documentos da biblioteca',
     welcomeMessage: 'Welcome! How can I assist you today?',

@@ -574,6 +574,7 @@ export default {
 
     loading: 'Chargement des données...',
     loadDataError: 'Échec du chargement des données',
+    filterSeverity: 'Filtrer par gravité',
     insights: 'Aperçus',
     fastActions: 'Actions rapides',
     cropHealth: 'Santé des cultures',
@@ -647,6 +648,8 @@ export default {
       trend: 'Tendance',
       priceHistory: 'Historique des prix',
       dataTable: 'Tableau de données',
+      period: 'Période',
+      exportCsv: 'Exporter en CSV',
       lastUpdated: 'Dernière mise à jour',
       commodity: 'Produit',
       noData: 'Aucune donnée disponible',
@@ -1519,6 +1522,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Réflexion...',
     serviceLabelMismatch:
       "Le service « {label} » utilise une étiquette d'interface qui peut ne pas correspondre à la hiérarchie de connaissances",
     noFilterWarning: 'Aucun filtre de contexte actif — la requête sera non filtrée.',

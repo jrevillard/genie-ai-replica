@@ -92,10 +92,20 @@ class AgriApiService {
    * section provenance: advisories (curated, seasonal), regional (OIRSA
    * news, severity 'info'), sightings (community, severity 'sighting').
    */
+  /**
+   * Selected UI language normalized to the backend news enum (es/en).
+   * Reads the `userLocale` key the LanguageSelector persists; callers that
+   * hold a live locale (components with $i18n) pass it explicitly instead.
+   */
+  _uiLang(explicit) {
+    const raw = explicit || localStorage.getItem('userLocale') || 'en';
+    return String(raw).toLowerCase().startsWith('es') ? 'es' : 'en';
+  }
+
   async getPestAlerts() {
     const envelope = await this.get('agri/pest-alerts');
     const d = envelope.data || {};
-    const lang = (localStorage.getItem('preferredLanguage') || 'es').startsWith('es') ? 'es' : 'en';
+    const lang = this._uiLang();
 
     const alerts = [
       ...(d.advisories || []).map((a) => ({
@@ -159,8 +169,7 @@ class AgriApiService {
   }
 
   getNews(scope = 'global', lang = null) {
-    const language = lang || localStorage.getItem('preferredLanguage') || 'es';
-    return this.get(`agri/news?scope=${scope}&lang=${language}`);
+    return this.get(`agri/news?scope=${scope}&lang=${this._uiLang(lang)}`);
   }
 
   // ==================== LAST-KNOWN-GOOD CACHE ====================

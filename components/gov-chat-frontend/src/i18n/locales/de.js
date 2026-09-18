@@ -574,6 +574,7 @@ export default {
 
     loading: 'Daten werden geladen...',
     loadDataError: 'Daten konnten nicht geladen werden',
+    filterSeverity: 'Filter by severity',
     insights: 'Einblicke',
     fastActions: 'Schnellaktionen',
     cropHealth: 'Pflanzengesundheit',
@@ -647,6 +648,8 @@ export default {
       trend: 'Trend',
       priceHistory: 'Preisverlauf',
       dataTable: 'Datentabelle',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Zuletzt aktualisiert',
       commodity: 'Ware',
       noData: 'Keine Daten verfügbar',
@@ -1514,6 +1517,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     welcomeMessage: 'Welcome! How can I assist you today?',

@@ -896,7 +896,9 @@ class AgriService {
         attribution: 'Global news via the GDELT Project (gdeltproject.org)',
         coverage:
           (scope === 'local'
-            ? 'MAG El Salvador, Presidencia, Diario CoLatino (official/local feeds)'
+            ? lang === 'en'
+              ? 'English-language coverage of El Salvador via GDELT (no English-language local outlet feeds exist)'
+              : 'MAG El Salvador, Presidencia, Diario CoLatino + GDELT Spanish coverage of El Salvador'
             : 'GDELT DOC 2.0 + FAO newsroom') +
           (windowHours > 48 ? ` — widened to the last ${windowHours / 24} days (feeds quiet or rate-limited)` : '')
       }

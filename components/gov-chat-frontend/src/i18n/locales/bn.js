@@ -560,6 +560,7 @@ export default {
 
     loading: 'ডেটা লোড হচ্ছে...',
     loadDataError: 'ডেটা লোড করতে ব্যর্থ',
+    filterSeverity: 'Filter by severity',
     insights: 'অন্তর্দৃষ্টি',
     fastActions: 'দ্রুত ক্রিয়া',
     cropHealth: 'ফসলের স্বাস্থ্য',
@@ -633,6 +634,8 @@ export default {
       trend: 'প্রবণতা',
       priceHistory: 'মূল্যের ইতিহাস',
       dataTable: 'ডেটা টেবিল',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'সর্বশেষ আপডেট',
       commodity: 'পণ্য',
       noData: 'কোনো ডেটা নেই',
@@ -1481,6 +1484,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'প্রতিক্রিয়া ব্যাহত হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     aiGeneratedNoDocs: 'এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়',
     welcomeMessage: 'Welcome! How can I assist you today?',

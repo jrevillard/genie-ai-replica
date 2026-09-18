@@ -571,6 +571,7 @@ export default {
 
     loading: 'Memuat data...',
     loadDataError: 'Gagal memuat data',
+    filterSeverity: 'Filter by severity',
     insights: 'Wawasan',
     fastActions: 'Aksi Cepat',
     cropHealth: 'Kesehatan Tanaman',
@@ -644,6 +645,8 @@ export default {
       trend: 'Tren',
       priceHistory: 'Riwayat Harga',
       dataTable: 'Tabel Data',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Terakhir diperbarui',
       commodity: 'Komoditas',
       noData: 'Tidak ada data',
@@ -1502,6 +1505,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Respons terputus. Silakan coba lagi.',
     aiGeneratedNoDocs: 'Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan',
     welcomeMessage: 'Welcome! How can I assist you today?',

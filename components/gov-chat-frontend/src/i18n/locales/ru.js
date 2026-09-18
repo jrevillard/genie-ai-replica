@@ -569,6 +569,7 @@ export default {
 
     loading: 'Загрузка данных...',
     loadDataError: 'Не удалось загрузить данные',
+    filterSeverity: 'Filter by severity',
     insights: 'Аналитика',
     fastActions: 'Быстрые действия',
     cropHealth: 'Здоровье посевов',
@@ -642,6 +643,8 @@ export default {
       trend: 'Тренд',
       priceHistory: 'История цен',
       dataTable: 'Таблица данных',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Последнее обновление',
       commodity: 'Товар',
       noData: 'Данные недоступны',
@@ -1511,6 +1514,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Ответ был прерван. Повторите попытку.',
     aiGeneratedNoDocs: 'Сгенерировано ИИ — не основано на документах библиотеки',
     welcomeMessage: 'Welcome! How can I assist you today?',

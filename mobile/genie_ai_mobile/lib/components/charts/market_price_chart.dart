@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +8,7 @@ import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -340,12 +342,23 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
             },
           ),
           const SizedBox(height: 16),
-          // Data Table
-          Text(
-            tr('market.dataTable'),
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+          // Data Table (exportable — CSV via the system share sheet,
+          // spreadsheet-ready: opens in Excel/Sheets)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                tr('market.dataTable'),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _exportCsv,
+                icon: const Icon(Icons.file_download, size: 18),
+                label: Text(tr('market.exportCsv')),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           _buildDataTable(theme, isDark),
@@ -514,6 +527,53 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
         fontSize: 10,
       ),
     );
+  }
+
+  /// Download the table as spreadsheet-ready CSV via the system share sheet.
+  /// Same layout as the web export: period, value (+ unit), quality. UTF-8
+  /// BOM so spreadsheet apps render accents; CRLF for widest compatibility.
+  Future<void> _exportCsv() async {
+    if (_timeSeries.isEmpty) return;
+    String esc(Object? v) {
+      final s = v == null ? '' : v.toString();
+      return RegExp(r'[",\n;]').hasMatch(s)
+          ? '"${s.replaceAll('"', '""')}"'
+          : s;
+    }
+
+    final unitSuffix = _unit.isEmpty ? '' : ' ($_unit)';
+    final rows = <List<String>>[
+      [
+        tr('market.period'),
+        '${tr('market.value')}$unitSuffix',
+        tr('market.quality'),
+      ],
+      for (final item in _timeSeries)
+        [
+          (item['year'] ?? item['date'] ?? '').toString(),
+          item['value']?.toString() ?? '',
+          item['quality'] == 'estimated'
+              ? tr('market.estimated')
+              : tr('market.actual'),
+        ],
+    ];
+    final csv = '﻿${rows.map((r) => r.map(esc).join(',')).join('\r\n')}';
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final stamp = DateTime.now().toIso8601String().split('T').first;
+      final file = File(
+        '${dir.path}/market-prices-${widget.category}-$stamp.csv',
+      );
+      await file.writeAsString(csv, flush: true);
+      await Share.shareXFiles([XFile(file.path, mimeType: 'text/csv')]);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${tr('market.shareError')}: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildDataTable(ThemeData theme, bool isDark) {

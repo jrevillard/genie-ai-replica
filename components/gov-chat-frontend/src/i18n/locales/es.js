@@ -546,6 +546,7 @@ export default {
     usageTrend: 'Tendencia de Uso',
     loading: 'Cargando datos...',
     loadDataError: 'Error al cargar datos',
+    filterSeverity: 'Filtrar por gravedad',
 
     news: {
       addFromNews: 'Añadir de noticias recientes',
@@ -660,6 +661,8 @@ export default {
       trend: 'Tendencia',
       priceHistory: 'Historial de Precios',
       dataTable: 'Tabla de Datos',
+      period: 'Periodo',
+      exportCsv: 'Exportar CSV',
       lastUpdated: 'Última actualización',
       commodity: 'Producto',
       noData: 'Sin datos disponibles',
@@ -1519,6 +1522,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Pensando...',
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',

@@ -559,6 +559,7 @@ export default {
 
     loading: 'Dɛta bɛ mɛn na...',
     loadDataError: 'Dɛta bɛ mɛn ma ɲɛ',
+    filterSeverity: 'Filter by severity',
     insights: 'Sɔŋɔ',
     fastActions: 'Layasira Kɛ',
     cropHealth: 'Sɛnɛ Bonya',
@@ -632,6 +633,8 @@ export default {
       trend: 'Sira',
       priceHistory: 'Jago ɲɛnɛ',
       dataTable: 'Dɛta tabali',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Labato ɲɛ',
       commodity: 'Dɛtɔ',
       noData: 'Dɛta ma ɲini',
@@ -1455,6 +1458,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Jɛɛmɔgɔya labɛnnen na. A ñaa ma ñɔɔrɔ.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',

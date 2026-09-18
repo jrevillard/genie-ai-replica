@@ -72,12 +72,24 @@
       <h3 class="section-title">{{ $t('charts.market.priceHistory', 'Price History') }}</h3>
       <DsCard variant="elevated" padding="lg">
         <div ref="chartScroll" class="chart-scroll">
-          <apexchart type="line" height="320" :width="chartPixelWidth" :options="chartOptions" :series="chartSeries" />
+          <apexchart
+            type="line"
+            :height="chartHeight"
+            :width="chartPixelWidth"
+            :options="chartOptions"
+            :series="chartSeries"
+          />
         </div>
       </DsCard>
 
-      <!-- Data Table -->
-      <h3 class="section-title">{{ $t('charts.market.dataTable', 'Data Table') }}</h3>
+      <!-- Data Table (exportable — CSV opens in Excel/Sheets/LibreOffice) -->
+      <div class="section-header">
+        <h3 class="section-title">{{ $t('charts.market.dataTable', 'Data Table') }}</h3>
+        <DsButton variant="secondary" small @click="exportCsv">
+          <i class="fas fa-file-csv" aria-hidden="true"></i>
+          {{ $t('charts.market.exportCsv', 'Export CSV') }}
+        </DsButton>
+      </div>
       <DsCard variant="flat" padding="none">
         <table class="data-table">
           <thead>
@@ -188,6 +200,10 @@
 
       <template #footer>
         <DsButton variant="secondary" @click="closePredictionDialog">{{ $t('common.cancel', 'Cancel') }}</DsButton>
+        <DsButton variant="secondary" @click="exportCsv">
+          <i class="fas fa-file-csv" aria-hidden="true"></i>
+          {{ $t('charts.market.exportCsv', 'Export CSV') }}
+        </DsButton>
         <DsButton variant="primary" :disabled="isSubmittingPrediction" @click="submitPrediction">
           {{ $t('common.submit', 'Submit') }}
         </DsButton>
@@ -467,12 +483,26 @@ export default {
       const minSpacing = 14; // px per data point — keeps markers readable
       return Math.max(this.scrollWidth, this.pointCount * minSpacing);
     },
+    /** The panel sizes itself to the series count — fixed 320 px cropped
+     *  multi-series charts (vegetables/fertilizer) at the top (user req
+     *  2026-09-18). */
+    chartHeight() {
+      return Math.max(320, 240 + 45 * this.chartSeries.length);
+    },
     chartOptions() {
       const periods = this.timeSeries.map((d) => d.date);
-      const values = this.timeSeries.map((d) => d.value).filter((v) => Number.isFinite(v));
+      // Scale across EVERY visible series (multi-series charts like
+      // Livestock chicken+beef must span all lines, not just the primary)
+      const values = this.chartSeries
+        .flatMap((s) => s.data)
+        .filter((v) => v !== null && v !== undefined && Number.isFinite(v));
       const minVal = values.length > 0 ? Math.min(...values) : 0;
       const maxVal = values.length > 0 ? Math.max(...values) : 1;
       const range = maxVal - minVal || 1;
+      // Round the axis to a step sized to the data range — a fixed multiple
+      // of 10 forced small-value charts (Livestock USD 2-8/kg) onto a 0-10
+      // axis that hid the price variation entirely (user req 2026-09-18).
+      const step = Math.pow(10, Math.floor(Math.log10(range / 4))) || 1;
       const cssVars = this.resolvedCssVars;
       const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
       const dense = this.pointCount > 300;
@@ -493,8 +523,8 @@ export default {
           axisTicks: { show: false }
         },
         yaxis: {
-          min: Math.floor((minVal - range * 0.05) / 10) * 10,
-          max: Math.ceil((maxVal + range * 0.05) / 10) * 10,
+          min: Math.floor((minVal - range * 0.05) / step) * step,
+          max: Math.ceil((maxVal + range * 0.05) / step) * step,
           labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) }
         },
         // Primary line uses the resolved --fg token (guaranteed contrast in
@@ -565,6 +595,16 @@ export default {
       return out;
     }
   },
+  watch: {
+    // News language follows the selected UI locale — drop the cached lists
+    // so the next picker open refetches in the new language (user req
+    // 2026-09-18), reloading immediately when the picker is open.
+    '$i18n.locale'() {
+      this.newsGlobal = [];
+      this.newsLocal = [];
+      if (this.newsPickerOpen) this.loadNews();
+    }
+  },
   mounted() {
     this.measureScrollWidth();
     this.resizeHandler = () => this.measureScrollWidth();
@@ -608,9 +648,11 @@ export default {
     async loadNews() {
       this.newsLoading = true;
       try {
+        // News language follows the selected UI locale (user req 2026-09-18)
+        const locale = this.$i18n ? this.$i18n.locale : null;
         const [globalRes, localRes] = await Promise.all([
-          agriApiService.getNews('global'),
-          agriApiService.getNews('local')
+          agriApiService.getNews('global', locale),
+          agriApiService.getNews('local', locale)
         ]);
         this.newsGlobal = (globalRes.data && globalRes.data.items) || [];
         this.newsLocal = (localRes.data && localRes.data.items) || [];
@@ -638,6 +680,48 @@ export default {
         this.selectedNewsLocal = [];
       }
       this.newsPickerOpen = null;
+    },
+    /**
+     * Download the table (and every plotted series) as CSV for spreadsheets.
+     * One column per series — index-aligned exactly like the chart — plus a
+     * Quality column for the primary series. UTF-8 BOM so Excel renders
+     * accents; CRLF line endings for widest spreadsheet compatibility.
+     */
+    exportCsv() {
+      if (!this.timeSeries.length) return;
+      const unit = this.unit ? ` (${this.unit})` : '';
+      const esc = (v) => {
+        const s = v === null || v === undefined ? '' : String(v);
+        return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = [
+        this.$t('charts.market.period', 'Period'),
+        ...this.series.map((s) => `${s.name || this.commodityName}${unit}`),
+        this.$t('charts.caveats.quality', 'Quality')
+      ];
+      const lines = [header.map(esc).join(',')];
+      for (let i = 0; i < this.timeSeries.length; i += 1) {
+        lines.push(
+          [
+            this.timeSeries[i].date,
+            ...this.series.map((s) => (s.data[i] ? s.data[i].value : '')),
+            this.timeSeries[i].quality === 'estimated'
+              ? this.$t('charts.caveats.estimated', 'Estimated')
+              : this.$t('charts.caveats.actual', 'Actual')
+          ]
+            .map(esc)
+            .join(',')
+        );
+      }
+      const blob = new Blob([`\uFEFF${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `market-prices-${this.category}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
     },
     caveatLabel(c) {
       const key = `charts.caveats.codes.${c.code}`;
@@ -746,7 +830,7 @@ export default {
             return `  ${item.date}: ${this.formatValue(item.value)}${quality}`;
           })
           .join('\n');
-        const currentLanguage = localStorage.getItem('preferredLanguage') || 'en';
+        const currentLanguage = this.$i18n ? this.$i18n.locale : localStorage.getItem('userLocale') || 'en';
         const currentDate = new Date();
 
         const prompt =
@@ -803,6 +887,14 @@ export default {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+/* Data Table heading row with the CSV export action */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
 }
 
 .caveat-row {

@@ -127,10 +127,11 @@ describe('oirsa adapter', () => {
 });
 
 describe('gdelt adapter', () => {
-  test('normalizes artlist JSON, converts seendate, tags language', () => {
+  test('normalizes artlist JSON, converts seendate, tags language + scope', () => {
     const results = [
       {
         lang: 'es',
+        scope: 'global',
         json: {
           articles: [
             {
@@ -148,14 +149,44 @@ describe('gdelt adapter', () => {
           ]
         }
       },
-      { lang: 'en', error: '429' } // one variant failing must not break the other
+      {
+        lang: 'en',
+        scope: 'local',
+        json: {
+          articles: [
+            {
+              url: 'https://reuters.com/world/el-salvador-coffee',
+              title: 'El Salvador coffee exports rise on firmer prices',
+              seendate: '20260913T100000Z',
+              domain: 'reuters.com'
+            }
+          ]
+        }
+      },
+      { lang: 'en', scope: 'global', error: '429' } // one variant failing must not break the others
     ];
     const { collection, docs } = gdelt.normalize(results);
     expect(collection).toBe('agri_news');
-    expect(docs).toHaveLength(1);
-    expect(docs[0].publishedAt).toBe('2026-09-13T09:00:00Z');
-    expect(docs[0].language).toBe('es');
-    expect(docs[0].scope).toBe('global');
+    expect(docs).toHaveLength(2);
+    const wheat = docs.find((d) => d.language === 'es');
+    expect(wheat.publishedAt).toBe('2026-09-13T09:00:00Z');
+    expect(wheat.scope).toBe('global');
+    // English LOCAL variant: international English coverage of El Salvador
+    const coffee = docs.find((d) => d.title.includes('coffee'));
+    expect(coffee.scope).toBe('local');
+    expect(coffee.language).toBe('en');
+  });
+
+  test('resolve returns 4 variants (global/local × en/es) with scoped URLs', async () => {
+    const urls = await gdelt.resolve({ maxRecords: 25 });
+    expect(urls).toHaveLength(4);
+    expect(urls.map((u) => `${u.scope}:${u.lang}`).sort()).toEqual(['global:en', 'global:es', 'local:en', 'local:es']);
+    for (const u of urls) {
+      expect(u.url).toContain('api.gdeltproject.org');
+      expect(decodeURIComponent(u.url)).toContain('sourcelang:');
+    }
+    // Local variants must scope the query to El Salvador
+    expect(decodeURIComponent(urls.find((u) => u.scope === 'local' && u.lang === 'en').url)).toContain('"El Salvador"');
   });
 });
 

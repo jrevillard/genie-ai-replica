@@ -569,6 +569,7 @@ export default {
 
     loading: 'กำลังโหลดข้อมูล...',
     loadDataError: 'โหลดข้อมูลไม่สำเร็จ',
+    filterSeverity: 'Filter by severity',
     insights: 'ข้อมูลเชิงลึก',
     fastActions: 'การดำเนินการด่วน',
     cropHealth: 'สุขภาพพืชผล',
@@ -642,6 +643,8 @@ export default {
       trend: 'แนวโน้ม',
       priceHistory: 'ประวัติราคา',
       dataTable: 'ตารางข้อมูล',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'อัปเดตล่าสุด',
       commodity: 'สินค้า',
       noData: 'ไม่มีข้อมูล',
@@ -1499,6 +1502,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     welcomeMessage: 'Welcome! How can I assist you today?',

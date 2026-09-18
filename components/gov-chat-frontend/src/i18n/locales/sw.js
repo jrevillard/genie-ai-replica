@@ -569,6 +569,7 @@ export default {
 
     loading: 'Inapakia data...',
     loadDataError: 'Imeshindwa kupakia data',
+    filterSeverity: 'Filter by severity',
     insights: 'Mambo ya msingi',
     fastActions: 'Vitendo vya Haraka',
     cropHealth: 'Afya ya Mazao',
@@ -642,6 +643,8 @@ export default {
       trend: 'Mwenendo',
       priceHistory: 'Historia ya Bei',
       dataTable: 'Jedwali la Data',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Ilisasishwa mwisho',
       commodity: 'Bidhaa',
       noData: 'Hakuna data',
@@ -1504,6 +1507,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Jibu lilikatika. Tafadhali jaribu tena.',
     aiGeneratedNoDocs: 'Imezalishwa na AI — haizingatii nyaraka za maktaba',
     welcomeMessage: 'Welcome! How can I assist you today?',

@@ -564,6 +564,7 @@ export default {
 
     loading: 'Hlahisa data...',
     loadDataError: 'Ho hlolehile ho hlahisa data',
+    filterSeverity: 'Filter by severity',
     insights: 'Mehlolo',
     fastActions: 'Tiriso tse Potlakileng',
     cropHealth: 'Bophelo ba Dijo',
@@ -637,6 +638,8 @@ export default {
       trend: 'Mokhoa',
       priceHistory: 'Histori ya Theko',
       dataTable: 'Tafole ya Data',
+      period: 'Period',
+      exportCsv: 'Export CSV',
       lastUpdated: 'Holisitsoe ho feta',
       commodity: 'Thepa',
       noData: 'Ha ho data',
@@ -1509,6 +1512,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Karabo e emisetsoe. Re leke hape.',
     aiGeneratedNoDocs: 'AI-generated — not based on library documents',
     welcomeMessage: 'Welcome! How can I assist you today?',

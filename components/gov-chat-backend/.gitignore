@@ -2,15 +2,3 @@
 # Keeping these out of git means each build pulls a fresh copy from upstream
 # (GeoNames publishes regular exports).
 data/
-
-# Node
-node_modules/
-coverage/
-
-# Test artifacts
-*.log
-*.test-cache
-
-# Local env overrides (real secrets must NEVER be committed)
-.env
-.env.local

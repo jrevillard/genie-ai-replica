@@ -981,7 +981,9 @@ class AgriService {
       ]);
       const docs = items
         .map((item, i) => ({
-          _key: `${item._key}~${toLang}`,
+          // `_tr<lang>` suffix — `~` is not a legal ArangoDB key character
+          // (found live: the import silently rejected all 10 translated docs)
+          _key: `${item._key}_tr${toLang}`,
           kind: 'news',
           scope: item.scope,
           language: toLang,

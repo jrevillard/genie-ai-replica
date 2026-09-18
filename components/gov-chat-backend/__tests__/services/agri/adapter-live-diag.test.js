@@ -52,6 +52,10 @@ describeLive('agri adapter LIVE diagnostics', () => {
             log(`row${i}: ${JSON.stringify(head)}`);
           });
         }
+        if (process.env.DUMP_FULL_ROW !== undefined && Array.isArray(parsed)) {
+          const idx = parseInt(process.env.DUMP_FULL_ROW, 10);
+          log(`FULL row${idx}: ${JSON.stringify(parsed[idx])}`);
+        }
         const { docs } = await adapter.normalize(parsed, cfg);
         log(`normalized: ${docs ? docs.length : 0} docs`);
       } catch (error) {

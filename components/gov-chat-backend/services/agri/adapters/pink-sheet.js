@@ -36,7 +36,8 @@ const SERIES_MAP = {
   'Beef ': { key: 'WB:BEEF_INTL', name: 'Beef (Australia/NZ)', unit: 'USD/kg' },
   'Sugar, world ': { key: 'WB:SUGAR_INTL', name: 'Sugar (world)', unit: 'USD/kg' },
   'Coffee, Arabicas ': { key: 'WB:COFFEE_INTL', name: 'Coffee (Arabicas)', unit: 'USD/kg' },
-  'Bananas, Europe ': { key: 'WB:BANANA_INTL', name: 'Bananas (Europe)', unit: 'USD/kg' }
+  // 2026 sheet renamed the label to the singular "Banana"
+  'Banana, Europe ': { key: 'WB:BANANA_INTL', name: 'Bananas (Europe)', unit: 'USD/kg' }
 };
 
 module.exports = {
@@ -75,7 +76,11 @@ module.exports = {
 
     const colDefs = [];
     for (let col = 1; col < namesRow.length; col += 1) {
-      const label = `${String(namesRow[col] || '').trim()} `;
+      // Strip the sheet's `**` markers (flagged/discontinued series) and
+      // any trailing spaces before matching map labels.
+      const label = `${String(namesRow[col] || '')
+        .replace(/\*+$/, '')
+        .trim()} `;
       const match = mapKeys.find((k) => k === label);
       if (match && !colDefs.some((d) => d.def.key === SERIES_MAP[match].key)) {
         colDefs.push({ col, def: SERIES_MAP[match] });

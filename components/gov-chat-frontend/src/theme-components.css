@@ -263,3 +263,32 @@ a transparent box under the date title, reported on dark mode). */
   background: transparent !important;
   box-shadow: none !important;
 }
+
+/* ApexCharts zoom toolbar (native +/−/reset/pan): DS-token styling so the
+   chart controls match the theme in light and dark (user req 2026-09-18). */
+.apexcharts-toolbar {
+  background: var(--bg, transparent) !important;
+  border: none !important;
+}
+.apexcharts-toolbar .apexcharts-menu-icon,
+.apexcharts-toolbar .apexcharts-zoom-icon,
+.apexcharts-toolbar .apexcharts-zoomin-icon,
+.apexcharts-toolbar .apexcharts-zoomout-icon,
+.apexcharts-toolbar .apexcharts-pan-icon,
+.apexcharts-toolbar .apexcharts-reset-icon {
+  color: var(--fg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm, 6px) !important;
+  background: var(--bg-elevated, transparent) !important;
+}
+.apexcharts-toolbar .apexcharts-menu-icon:hover,
+.apexcharts-toolbar .apexcharts-zoom-icon:hover,
+.apexcharts-toolbar .apexcharts-zoomin-icon:hover,
+.apexcharts-toolbar .apexcharts-zoomout-icon:hover,
+.apexcharts-toolbar .apexcharts-pan-icon:hover,
+.apexcharts-toolbar .apexcharts-reset-icon:hover {
+  background: var(--bg) !important;
+}
+.apexcharts-toolbar svg {
+  fill: var(--fg) !important;
+}

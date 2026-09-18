@@ -558,7 +558,16 @@ export default {
       return {
         chart: {
           type: 'line',
-          toolbar: { show: false },
+          // Wheel-zoom + pan + native +/−/reset toolbar (user req 2026-09-18:
+          // wheel users zoom, everyone needs buttons; pan is auto-selected so
+          // drag scrolls the zoomed surface). autoScaleYaxis keeps each zoom
+          // level reading true against the data in view.
+          zoom: { enabled: true, type: 'x', autoScaleYaxis: true, allowMouseWheelZoom: true },
+          toolbar: {
+            show: true,
+            tools: { zoom: false, zoomin: true, zoomout: true, pan: true, reset: true, download: false },
+            autoSelected: 'pan'
+          },
           // Dense charts animate 2000+ points through 30k px of scroll width —
           // the main-thread cost showed up as '[Violation] setTimeout' in the
           // browser log; animate only the light ones

@@ -279,6 +279,14 @@ _CONV_MARKER_PREFIXES = (_CONV_MSG_SEPARATOR, "USER:", "ASSISTANT:")
 # emits a very long run of whitespace (the excess is flushed as plain content,
 # which only costs a few cosmetic trailing spaces before the next newline).
 _MAX_TRAILING_WS_WITHHOLD = 32
+# Collapse runs of 3+ newlines down to a single paragraph break (\\n\\n).
+# Granit's chat-tuned markdown style tends to emit 3+ newlines between
+# sections (header → list, list → next header), which renders as extra
+# visual blank lines in the chat. A single markdown paragraph only needs
+# one blank line to separate it from the next; anything beyond that is
+# cosmetic noise from the model's formatting style and gets squashed here
+# so the user sees clean, compact markdown.
+_EXCESS_BLANK_RE = re.compile(r"\n{3,}")
 
 
 def _streaming_marker_tail_len(buffer: str) -> int:
@@ -1474,6 +1482,10 @@ class ChatQnAService:
         # streaming path (_stream_with_metadata) — see _CONV_SEP_RE / _CONV_ROLE_RE.
         llm_response = _CONV_SEP_RE.sub("\n", llm_response)
         llm_response = _CONV_ROLE_RE.sub("", llm_response)
+        # Same excess-blank collapse the streaming path applies (see _stream_with_metadata).
+        # Keeps the non-streaming branch consistent and removes the visual gaps the user
+        # sees in stored/displayed answers.
+        llm_response = _EXCESS_BLANK_RE.sub("\n\n", llm_response)
 
         # Strip the self-grade sentinel before translation so it never reaches the
         # user or the translation pipeline; capture its value for metadata.
@@ -1716,6 +1728,13 @@ class ChatQnAService:
             buffer += content
             buffer = _CONV_SEP_RE.sub("\n", buffer)
             buffer = _CONV_ROLE_RE.sub("", buffer)
+            # Collapse runs of 3+ newlines down to a single paragraph break.
+            # Granit's chat style over-separates sections in its markdown output;
+            # without this the user sees extra visual blank lines between blocks
+            # (header→list, list→next header). Collapsing here keeps the held-back
+            # marker tail consistent with what has already been emitted, so cross-
+            # chunk newlines cannot re-form a multi-blank run after release.
+            buffer = _EXCESS_BLANK_RE.sub("\n\n", buffer)
             # Strip a complete self-grade sentinel and capture its value so it
             # never reaches the user (or the downstream translation pipeline).
             if LLM_SELF_CONFIDENCE_ENABLED:
@@ -1748,6 +1767,7 @@ class ChatQnAService:
         if buffer:
             buffer = _CONV_SEP_RE.sub("\n", buffer)
             buffer = _CONV_ROLE_RE.sub("", buffer)
+            buffer = _EXCESS_BLANK_RE.sub("\n\n", buffer)
             if LLM_SELF_CONFIDENCE_ENABLED:
                 # Capture any sentinel that completed on the final chunk, and drop
                 # a malformed trailing partial sentinel so it never leaks as text.

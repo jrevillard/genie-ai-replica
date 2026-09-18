@@ -74,10 +74,15 @@ jest.mock('../../main.js', () => ({
 }));
 
 // Mock heavy libraries
-jest.mock('marked', () => ({
-  __esModule: true,
-  marked: { parse: jest.fn((c) => c) }
-}));
+// Re-use the real `Renderer` class from marked so the SFC's tight-list
+// renderer override (`Object.assign(new Renderer(), { listitem(token) {...} })`)
+// can load. Mocking the whole module without exposing `Renderer` makes the
+// import resolve to undefined and crashes the suite at module-evaluation time.
+// marked: leave the real library in place so the SFC's tight-list
+// renderer override (registered through `marked.use({ renderer: ... })`)
+// runs against the real parser. Earlier the file mocked `marked.parse`
+// to identity, which kept the rest of the suite happy but broke the
+// Markdown rendering tests that inspect the rendered HTML.
 jest.mock('dompurify', () => ({ sanitize: jest.fn((c) => c) }));
 jest.mock('jspdf', () => {
   return jest.fn().mockImplementation(() => ({
@@ -680,6 +685,68 @@ describe('ChatBotComponent', () => {
       expect(result).toContain('Item 1');
       expect(result).toContain('Item 2');
       expect(result).toContain('Item 3');
+    });
+
+    it('renders nested lists with tight listitems (no <p> wrap around label)', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // GFM marked emits <li><p>...</p><ul>...</ul></li> by default when a list
+      // item contains a label + nested list with a blank line between them.
+      // The chat-tuned model emits this pattern; without an override the
+      // render shows a visible vertical gap between the label and its
+      // sub-list. The renderer override in renderMarkdown() flattens that
+      // to <li><label><ul>...</ul></li>, matching the source's tight layout.
+      const markdown = [
+        '- **Soil Preparation:**',
+        '',
+        '  - **Soil Type:** Sandy loam.',
+        '  - **Fertilization:** Apply 30-40 kg/ha N.',
+        '',
+        '- **Seed Selection:**',
+        '',
+        '  - Varieties A, B.'
+      ].join('\n');
+      const result = vm.renderMarkdown(markdown);
+
+      // Outer <p> wrap around the label is removed.
+      expect(result).not.toContain('<li><p>');
+      expect(result).not.toContain('<p><strong>');
+      // Label and its nested sub-list live in the same <li>.
+      expect(result).toMatch(/<li><strong>Soil Preparation:<\/strong><ul>/);
+      // Nested items still render correctly under the parent label.
+      expect(result).toContain('<strong>Soil Type:</strong> Sandy loam.');
+      expect(result).toContain('<strong>Fertilization:</strong> Apply 30-40 kg/ha N.');
+      // Subsequent parent label still wraps a nested <ul>.
+      expect(result).toMatch(/<li><strong>Seed Selection:<\/strong><ul>/);
+      expect(result).toContain('Varieties A, B.');
+    });
+
+    it('renders listitem block tokens (headings, paragraphs) without crashing', () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // LLM output occasionally places a heading inside a listitem (lazy
+      // continuation). Earlier the renderer override routed every
+      // non-list child through `parseInline`, which throws
+      // "Token with 'heading' type was not found." on block tokens. The
+      // override now routes block tokens through `parse` instead.
+      const markdown = [
+        '- Parent label',
+        '',
+        '  ### Heading inside listitem',
+        '',
+        '  - Sub item A',
+        '  - Sub item B',
+        '',
+        '- Another parent'
+      ].join('\n');
+      expect(() => vm.renderMarkdown(markdown)).not.toThrow();
+      const result = vm.renderMarkdown(markdown);
+      expect(result).not.toContain('<li><p>');
+      expect(result).toMatch(/<h\d[^>]*>Heading inside listitem<\/h\d>/);
+      expect(result).toContain('Sub item A');
+      expect(result).toContain('Sub item B');
     });
   });
 

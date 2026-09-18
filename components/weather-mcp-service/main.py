@@ -19,11 +19,13 @@ ArangoDB instance but does not write it.
 """
 
 import asyncio
+import json
 import logging
 import os
 import pathlib
 import re
 from contextlib import asynccontextmanager
+from functools import lru_cache
 
 from agent import WeatherAgent
 
@@ -38,8 +40,6 @@ from defaults import (
 )
 from defaults import (
     EWS_CROPS,
-    REGION_CROPS,
-    UNPROFILED_CROPS,
 )
 from defaults import (
     ensure_default_district as _ensure_default_district,
@@ -1247,9 +1247,8 @@ async def get_potato_risk(
 
 # ── Curated context for the chat LLM ──────────────────────────────────────
 # Everything this service knows about a district, as one plain-text block:
-# today's date and where it falls in the crop season, the short-term forecast,
-# the stored crop risk, the Copernicus seasonal outlook with its per-month crop
-# assessments, the drought and flood assessments and any official BMD warning.
+# today's date, the short-term forecast, the Copernicus seasonal outlook,
+# drought and flood assessments and any official BMD warning.
 # The backend prepends it to every knowledge-base question so the chat LLM
 # reasons over real numbers next to the retrieved documents. Nothing here
 # decides what the answer is — that is the model's job.
@@ -1271,6 +1270,86 @@ def _month_label(ym: str) -> str:
 def _crop_label(crop: str) -> str:
     """'rice_aman' -> 'Rice Aman'. Profile keys are snake_case; prose is not."""
     return crop.replace("_", " ").title()
+
+
+_CROP_QUERY_PATTERNS = {
+    "rice_aman": r"\brice\b",
+    "eggplant": r"\b(?:eggplant|brinjal)s?\b",
+    "mango": r"\bmango(?:es)?\b",
+}
+_CROP_PROFILE_PATH = (
+    pathlib.Path(os.getenv("WARNING_SYSTEM_ENGINE_DIR", "/warning_system_engine"))
+    / "data"
+    / "example_crop_profile.json"
+)
+
+
+def _requested_crops(query: str) -> list[str]:
+    """Return only explicitly named, configured crops from the user query."""
+    normalized = re.sub(r"[_-]+", " ", query.casefold())
+    return [
+        crop
+        for crop, pattern in _CROP_QUERY_PATTERNS.items()
+        if crop in EWS_CROPS and re.search(pattern, normalized)
+    ]
+
+
+@lru_cache(maxsize=1)
+def _crop_profiles() -> dict:
+    try:
+        with _CROP_PROFILE_PATH.open(encoding="utf-8") as profile_file:
+            return json.load(profile_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("[CONTEXT] Crop profile load failed: %s", exc)
+        return {}
+
+
+def _crop_profile_context(district: str, crops: list[str]) -> list[str]:
+    """Source-backed deterministic profile context for requested crops."""
+    profiles = _crop_profiles()
+    sections: list[str] = []
+    for crop in crops:
+        profile = next(
+            (item for item in profiles.values() if item.get("crop") == crop), None
+        )
+        if not profile:
+            continue
+        label = profile.get("crop_display_name") or _crop_label(crop)
+        region = str(profile.get("region") or "unknown").title()
+        source_profile = {
+            "crop": profile.get("crop"),
+            "published_source_region": profile.get("region"),
+            "season_calendar": {
+                "season_span": profile.get("season_span", {}),
+                "growth_stages": [
+                    {
+                        "stage": stage.get("stage"),
+                        "weeks": stage.get("weeks", []),
+                        "months": stage.get("months", []),
+                    }
+                    for stage in profile.get("growth_stages") or []
+                ],
+            },
+            "historical_weekly_climate_normals": profile.get("weekly_calendar", []),
+            "favorable_conditions_by_stage": profile.get(
+                "favorable_conditions_by_stage", []
+            ),
+            "weather_warnings": profile.get("weather_warnings", []),
+            "pest_and_disease_conditions": profile.get("pest_disease_advisories", []),
+            "source_coverage": profile.get("source_coverage", {}),
+        }
+        sections.append(
+            f"Deterministic {label} crop profile for {district} "
+            f"(published source region: {region}).\n"
+            "This selected crop profile is authoritative for crop facts. If a "
+            "retrieved document is unclear or conflicts with it, use this profile. "
+            "Use favorable_conditions_by_stage only for questions about favorable "
+            "or ideal requirements. historical_weekly_climate_normals are calendar "
+            "observations, not favorable requirements. Empty or absent values mean "
+            "the source does not provide that fact.\n"
+            + json.dumps(source_profile, ensure_ascii=False, separators=(",", ":"))
+        )
+    return sections
 
 
 def _season_lines(assessments: list[dict], today, crop: str) -> list[str]:
@@ -1325,47 +1404,17 @@ def _season_lines(assessments: list[dict], today, crop: str) -> list[str]:
 def _build_weather_context(
     district: str, days: int = 7, crops: list[str] | None = None
 ) -> str:
-    """Plain-text context block for ``district``; "" when nothing is stored."""
+    """Plain-text weather context with profiles only for requested crops."""
     from datetime import datetime, timezone
 
     if storage_layer is None:
         return ""
-    wanted = list(crops) if crops else list(EWS_CROPS)
     now = datetime.now(timezone.utc)
     today = now.date()
     sections: list[str] = [
         f"Today is {now:%A %d %B %Y} (UTC), ISO week {today.isocalendar()[1]}. District: {district}."
     ]
-
-    # Which crops the region grows, and which of them this system has detailed
-    # data for. Without this the model picked a crop from the documents (potato).
-    profiled = [c for c in REGION_CROPS if c in wanted]
-    crops_line = (
-        f"Crops grown in this region: {', '.join(_crop_label(c) for c in REGION_CROPS)}. "
-        f"Detailed crop profiles (thresholds, growth-stage calendar, pest and disease "
-        f"conditions) exist for: {', '.join(_crop_label(c) for c in profiled) or 'none'}."
-    )
-    if UNPROFILED_CROPS:
-        crops_line += (
-            f" No crop profile exists yet for: {', '.join(_crop_label(c) for c in UNPROFILED_CROPS)}"
-            " — for these give general weather guidance only and say that detailed crop "
-            "data is not available. Do not bring in crops that are not grown in this region."
-        )
-    sections.append(crops_line)
-
-    # Crop season calendar + seasonal assessments (Copernicus vs crop thresholds),
-    # one block per crop the engine watches.
-    for crop in wanted:
-        try:
-            assessments = storage_layer.get_seasonal_assessments(district, crop)
-        except Exception:
-            assessments = []
-        season = _season_lines(assessments, today, crop)
-        if season:
-            sections.append(
-                f"{_crop_label(crop)} season calendar for {district} (crop profile):\n"
-                + "\n".join(season)
-            )
+    sections.extend(_crop_profile_context(district, list(crops or [])))
 
     # Short-term forecast
     forecast_horizon = ""
@@ -1442,30 +1491,6 @@ def _build_weather_context(
             "longer period than the days listed above."
         )
 
-    # Stored crop risk for today (crop thresholds vs the same forecast),
-    # one line per crop the engine watches.
-    for crop in wanted:
-        try:
-            risk = storage_layer.get_latest_crop_risk(district, crop)
-        except Exception:
-            risk = None
-        if not risk:
-            continue
-        triggers = "; ".join(str(t) for t in (risk.get("triggers") or []))
-        line = (
-            f"{_crop_label(crop)} risk today for {district} (crop thresholds, assessed "
-            f"{str(risk.get('assessed_at', ''))[:10]}): {risk.get('tier_label', 'Normal')}"
-            + (f" — {triggers}." if triggers else ".")
-        )
-        # The engine already matched the forecast against the profile's pest and
-        # disease thresholds; without these the model named pests from memory.
-        diseases = "; ".join(str(d) for d in (risk.get("disease_risks") or []))
-        if diseases:
-            line += (
-                f" Pest and disease risks flagged for {_crop_label(crop)}: {diseases}."
-            )
-        sections.append(line)
-
     # Seasonal outlook
     try:
         seasonal = storage_layer.get_seasonal_forecast(district)
@@ -1537,11 +1562,6 @@ def _build_weather_context(
         "Not available in this system: observed rainfall records for past weeks or months, "
         "and alert subscriptions (the assistant cannot notify anyone later)."
     )
-    if UNPROFILED_CROPS:
-        limits += (
-            " Also not available: crop profiles for "
-            f"{', '.join(_crop_label(c) for c in UNPROFILED_CROPS)}."
-        )
     if forecast_horizon:
         limits += " " + forecast_horizon
     sections.append(limits)
@@ -1560,7 +1580,8 @@ async def get_weather_context(
     ),
     days: int = Query(7, ge=1, le=7, description="Forecast days to include"),
     crop: str = Query(
-        "", description="Single crop to include; default = every crop in EWS_CROPS"
+        "",
+        description="Optional crop name override; otherwise detected from location text",
     ),
 ):
     """
@@ -1570,12 +1591,12 @@ async def get_weather_context(
     same way the query endpoint does, and falls back to the default district.
     Returns {"text": ""} when storage is offline so the caller can skip it.
 
-    Without ``crop`` the block covers every crop the engine watches, so the
-    model never sees a crop the deployment stopped assessing.
+    Crop profiles are included only when ``crop`` is supplied or a supported
+    crop is explicitly named in ``location`` (normally the full user query).
     """
     district_info = _find_district_64(location) or _find_drought_district(location)
     district = district_info[0] if district_info else _DEFAULT_DISTRICT
-    wanted = [crop] if crop else list(EWS_CROPS)
+    wanted = _requested_crops(crop or location)
     return {
         "location": district,
         "text": _build_weather_context(district, days, wanted),

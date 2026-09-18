@@ -127,14 +127,9 @@
           </div>
           <!-- Feedback and confidence score for bot messages -->
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore != null && msg.isGrounded !== false" class="confidence-score">
+            <div v-if="msg.confidenceScore != null" class="confidence-score">
               <Brain :size="16" />
               <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
-            </div>
-            <!-- Not grounded: the answer came from the LLM's own knowledge, not library documents -->
-            <div v-else-if="msg.isGrounded === false" class="grounding-flag">
-              <Sparkles :size="16" />
-              <span>{{ translate('chatbot.aiGeneratedNoDocs', 'AI-generated — not based on library documents') }}</span>
             </div>
             <div class="feedback-trigger">
               <DsPill>
@@ -281,7 +276,7 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText, Sparkles } from '@lucide/vue';
+import { Brain, Loader2, Plus, Save, FileText } from '@lucide/vue';
 import { fillLocationPlaceholder } from '@/config/defaultLocation';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
@@ -325,7 +320,6 @@ export default {
     Plus,
     Save,
     FileText,
-    Sparkles,
     ChatResponseFeedbackDialog,
     ModalDialog,
     RightSideBarComponent,
@@ -1052,9 +1046,6 @@ export default {
             if (metadata.confidence_score != null) {
               this.chatMessages[lastMessageIndex].confidenceScore = metadata.confidence_score;
             }
-            // is_grounded: true = answer backed by retrieved document chunks;
-            // false = generated from the LLM's own knowledge (no document basis).
-            this.chatMessages[lastMessageIndex].isGrounded = metadata.is_grounded;
             if (metadata.responseTime) {
               this.systemStatus.lastResponseTime = metadata.responseTime;
             }
@@ -2210,18 +2201,6 @@ export default {
   font-size: var(--text-sm);
   color: var(--muted-soft);
   background: var(--surface);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-/* Shown when the answer is not backed by retrieved documents (LLM-only). */
-.grounding-flag {
-  font-size: var(--text-sm);
-  color: var(--warning);
-  background: var(--warning-bg);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   display: flex;

@@ -305,13 +305,20 @@ function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext)
     `Question: ${question}\n\n` +
     'Answer only this question. Use the parts of the live data and the retrieved documents it needs ' +
     'and leave the rest out; do not state weather values that are not listed above. ' +
+    'The live data lists every topic this system tracks, not the topics that were asked about: ' +
+    'a question about the weather is answered with the weather alone. Unless the question itself ' +
+    'asks about them, do not mention crops, pests, diseases, irrigation or drought anywhere in the ' +
+    'answer — not as a section, not as a closing sentence, not as an aside. ' +
     'When you quote a threshold range, check the value against it before judging it: a value ' +
     'inside the range is within it, not above or below it. ' +
     'Write for a farmer: short plain sentences, and when a pest, disease or unit has to be named, ' +
     'add a few plain words saying what it is. ' +
-    'If the question is about drought and the live data above has a "Drought assessment" line with a ' +
-    '"Full report:" link, you MUST end your answer with that link formatted as a markdown link, ' +
-    'exactly like this on its own line: [View full drought report](THE_LINK_URL).';
+    'For a weather forecast, use emojis sparingly beside matching facts: 🌡️ temperature, 🌧️ rain, ' +
+    '💨 wind, 💧 humidity and ⚠️ warnings. Do not add decorative emojis. ' +
+    'Only when the question itself asks about drought or water shortage, and the live data above has ' +
+    'a "Drought assessment" line with a "Full report:" link, end your answer with that link on its ' +
+    'own line, exactly like this: [View full drought report](THE_LINK_URL). ' +
+    'For every other question, do not mention or link the drought report.';
   if (backendMode === 'single-message') {
     return { ...opeaPayload, messages: wrap(queryText) };
   }

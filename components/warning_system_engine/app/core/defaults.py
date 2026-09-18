@@ -6,7 +6,7 @@ The same variables are used by the backend, weather-mcp-service,
 drought-monitoring and geo-inference-worker so every service falls back to one
 place. The fallback district is always registered in the engine's district
 tables so every pipeline (crop, flood, seasonal, drought) assesses it.
-Unset = Dhaka.
+Unset = Sapahar.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ import os
 
 logger = logging.getLogger(__name__)
 
-_BUILT_IN_LOCATION = "Dhaka"
-_BUILT_IN_LAT = 23.8103
-_BUILT_IN_LON = 90.4125
+_BUILT_IN_LOCATION = "Sapahar"
+_BUILT_IN_LAT = 25.12580020810921
+_BUILT_IN_LON = 88.59002708909819
 
 
 def _coord(name: str, fallback: float, limit: float) -> float:

@@ -124,6 +124,7 @@ describe('withWeatherContext', () => {
     expect(out.messages).toContain('Question: When should I plant potato?');
     expect(out.messages).toContain(context);
     expect(out.messages).toContain('do not state weather values that are not listed above.');
+    expect(out.messages).toContain('🌡️ temperature, 🌧️ rain, 💨 wind, 💧 humidity and ⚠️ warnings');
     // The instruction is weighted most when it follows the question, not the data block.
     expect(out.messages.indexOf('Answer only this question')).toBeGreaterThan(
       out.messages.indexOf('Question: When should I plant potato?')

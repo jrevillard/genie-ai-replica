@@ -2,73 +2,83 @@
   {
     "category": "Weather Forecasts",
     "services": [
-      "Short-term Forecast (1-7 days)",
-      "Extended Forecast (8-15 days)",
-      "Seasonal Outlook (1-6 months)"
+      "Short-Term Forecast",
+      "Extended Forecast",
+      "Seasonal Outlook",
+      "Climate Normals"
     ]
   },
   {
     "category": "Extreme Weather Alerts",
     "services": [
-      "Drought Alerts",
+      "Drought & Dry Spell Alerts",
       "Flood & Waterlogging Alerts",
-      "Heat Wave Alerts",
-      "Cold Spell & Frost Alerts",
-      "Cyclone & Storm Surge Alerts",
+      "Heat Alerts",
+      "Cold & Frost Alerts",
+      "Cyclone & High-Wind Alerts",
       "Heavy Rainfall Alerts"
     ]
   },
   {
-    "category": "Crop Alert Thresholds",
+    "category": "Rice Aman Knowledge",
     "services": [
-      "Cotton Threshold Profiles",
-      "Cucumber Threshold Profiles",
-      "Garlic Threshold Profiles",
-      "Gourd Threshold Profiles",
-      "Green Gram Kharif Threshold Profiles",
-      "Green Gram Robi Threshold Profiles",
-      "Groundnut Threshold Profiles",
-      "Groundnut Kharif Threshold Profiles",
-      "Groundnut Robi Threshold Profiles",
-      "Guava Threshold Profiles",
-      "Jackfruit Threshold Profiles",
-      "Jujube Threshold Profiles",
-      "Jute Threshold Profiles",
-      "Lentil Threshold Profiles",
-      "Litchi Threshold Profiles",
-      "Maize Threshold Profiles",
-      "Maize Kharif Threshold Profiles",
-      "Maize Rabi Threshold Profiles",
-      "Mango Threshold Profiles",
-      "Mustard Threshold Profiles",
-      "Onion Threshold Profiles",
-      "Papaya Threshold Profiles",
-      "Pepper Threshold Profiles",
-      "Pineapple Threshold Profiles",
-      "Pointed Gourd Threshold Profiles",
-      "Potato Threshold Profiles",
-      "Pumpkin Threshold Profiles",
-      "Rice Aman Threshold Profiles",
-      "Rice Aus Threshold Profiles",
-      "Rice Boro Threshold Profiles",
-      "Soybean Threshold Profiles",
-      "Sugarcane Threshold Profiles",
-      "Tomato Threshold Profiles",
-      "Wheat Threshold Profiles"
+      "Rice Aman Calendar & Growth Stages",
+      "Rice Aman Climate Normals",
+      "Rice Aman Weather & Water Requirements",
+      "Rice Aman Pest & Disease Risks",
+      "Rice Aman Warning Thresholds",
+      "Rice Aman Management"
     ]
   },
   {
-    "category": "Agricultural Guidance",
+    "category": "Eggplant Knowledge",
     "services": [
-      "Crop Management",
-      "Irrigation & Water Management",
-      "Pest & Disease Management"
+      "Eggplant Calendar & Growth Stages",
+      "Eggplant Climate Normals",
+      "Eggplant Weather & Water Requirements",
+      "Eggplant Pest & Disease Risks",
+      "Eggplant Warning Thresholds",
+      "Eggplant Management"
     ]
   },
   {
-    "category": "Geospatial Risk Profiles",
+    "category": "Mango Knowledge",
     "services": [
-      "Geospatial Model Interpretation"
+      "Mango Calendar & Growth Stages",
+      "Mango Climate Normals",
+      "Mango Weather & Water Requirements",
+      "Mango Pest & Disease Risks",
+      "Mango Warning Thresholds",
+      "Mango Management"
+    ]
+  },
+  {
+    "category": "Turmeric Knowledge",
+    "services": [
+      "Turmeric Calendar & Growth Stages",
+      "Turmeric Climate Normals",
+      "Turmeric Weather & Water Requirements",
+      "Turmeric Pest & Disease Risks",
+      "Turmeric Warning Thresholds",
+      "Turmeric Management"
+    ]
+  },
+  {
+    "category": "Cross-Crop Farm Guidance",
+    "services": [
+      "Crop Selection & Suitability",
+      "Planting Guidance",
+      "Irrigation & Water Conservation",
+      "Harvest Guidance",
+      "Climate Adaptation"
+    ]
+  },
+  {
+    "category": "Geospatial Services",
+    "services": [
+      "Field Boundary Mapping",
+      "Flood Extent Mapping",
+      "Geospatial Risk Interpretation"
     ]
   },
   {

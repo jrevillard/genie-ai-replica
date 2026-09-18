@@ -397,7 +397,7 @@ def main():
         help="Threshold scenario (default: heat)",
     )
     parser.add_argument(
-        "--district", default="Dhaka", help="Bangladesh district (default: Dhaka)"
+        "--district", default="Sapahar", help="Bangladesh district (default: Sapahar)"
     )
     parser.add_argument(
         "--weather-mcp-url",

@@ -449,10 +449,10 @@ describe('ChatBotComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Grounding flag: grounded vs AI-generated responses
+  // Confidence bar: shown whenever a confidence score is present
   // -----------------------------------------------------------------------
-  describe('Grounding flag — grounded vs AI-generated', () => {
-    it('shows the AI-generated flag when metadata reports is_grounded=false', async () => {
+  describe('Confidence bar', () => {
+    it('shows the confidence bar regardless of grounding metadata', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -467,11 +467,7 @@ describe('ChatBotComponent', () => {
       });
       await wrapper.vm.$nextTick();
 
-      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
-      expect(lastBot.isGrounded).toBe(false);
-      // Ungrounded responses show the warning flag, not the confidence bar.
-      expect(wrapper.find('.grounding-flag').exists()).toBe(true);
-      expect(wrapper.find('.confidence-score').exists()).toBe(false);
+      expect(wrapper.find('.confidence-score').exists()).toBe(true);
     });
 
     it('shows the confidence bar when metadata reports is_grounded=true', async () => {
@@ -490,10 +486,8 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
-      expect(lastBot.isGrounded).toBe(true);
       expect(lastBot.confidenceScore).toBe(0.92);
       expect(wrapper.find('.confidence-score').exists()).toBe(true);
-      expect(wrapper.find('.grounding-flag').exists()).toBe(false);
     });
   });
 

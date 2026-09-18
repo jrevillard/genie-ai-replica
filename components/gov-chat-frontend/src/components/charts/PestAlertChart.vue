@@ -433,7 +433,7 @@ export default {
       this.error = null;
 
       try {
-        const data = await agriApiService.getPestAlerts();
+        const data = await agriApiService.getPestAlerts(this.$i18n ? this.$i18n.locale : null);
         this.pestData = data;
       } catch (err) {
         console.error('[PestAlertChart] Failed to load pest alerts:', err);

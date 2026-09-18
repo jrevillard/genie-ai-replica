@@ -88,11 +88,6 @@ class AgriApiService {
   }
 
   /**
-   * Pest alerts mapped to the chart's legacy alert shape, with honest
-   * section provenance: advisories (curated, seasonal), regional (OIRSA
-   * news, severity 'info'), sightings (community, severity 'sighting').
-   */
-  /**
    * Selected UI language normalized to the backend news enum (es/en).
    * Reads the `userLocale` key the LanguageSelector persists; callers that
    * hold a live locale (components with $i18n) pass it explicitly instead.
@@ -102,20 +97,25 @@ class AgriApiService {
     return String(raw).toLowerCase().startsWith('es') ? 'es' : 'en';
   }
 
-  async getPestAlerts() {
+  /**
+   * Pest alerts mapped to the chart's legacy alert shape, with honest
+   * section provenance: advisories (curated, seasonal), regional (OIRSA
+   * news, severity 'info'), sightings (community, severity 'sighting').
+   */
+  async getPestAlerts(lang = null) {
     const envelope = await this.get('agri/pest-alerts');
     const d = envelope.data || {};
-    const lang = this._uiLang();
+    const uiLang = this._uiLang(lang);
 
     const alerts = [
       ...(d.advisories || []).map((a) => ({
         id: `advisory-${a.scientificName}`,
-        pest: a.pest ? a.pest[lang] || a.pest.en : a.scientificName,
+        pest: a.pest ? a.pest[uiLang] || a.pest.en : a.scientificName,
         scientificName: a.scientificName,
         severity: 'advisory',
-        affectedCrops: a.affectedCrops ? a.affectedCrops[lang] || a.affectedCrops.en : [],
+        affectedCrops: a.affectedCrops ? a.affectedCrops[uiLang] || a.affectedCrops.en : [],
         departments: a.departments || [],
-        description: a.advisory ? a.advisory[lang] || a.advisory.en : '',
+        description: a.advisory ? a.advisory[uiLang] || a.advisory.en : '',
         recommendations: '',
         firstDetected: null,
         source: a.source,
@@ -138,7 +138,7 @@ class AgriApiService {
       })),
       ...(d.sightings || []).map((s) => ({
         id: `sighting-${s.scientificName}-${s.observedOn}`,
-        pest: s.commonName ? s.commonName[lang] || s.commonName.en : s.scientificName,
+        pest: s.commonName ? s.commonName[uiLang] || s.commonName.en : s.scientificName,
         scientificName: s.scientificName,
         severity: 'sighting',
         affectedCrops: [],

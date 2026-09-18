@@ -94,7 +94,7 @@ export default {
     async fetchPestAlerts() {
       this.loading = true;
       try {
-        this.pestData = await agriApiService.getPestAlerts();
+        this.pestData = await agriApiService.getPestAlerts(this.$i18n ? this.$i18n.locale : null);
       } catch (error) {
         console.error('Failed to fetch pest alerts:', error);
         this.pestData = null;

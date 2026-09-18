@@ -66,9 +66,33 @@ module.exports = (weatherService) => {
    *                       lowTemp:
    *                         type: integer
    *       400:
-   *         description: Invalid location data
+   *         description: Missing or invalid coordinates — no silent fallback to a default location.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [LOCATION_REQUIRED]
+   *                 message:
+   *                   type: string
+   *               required: [error, message]
    *       401:
    *         description: Unauthorized - Invalid or missing authentication token
+   *       503:
+   *         description: Transient upstream failure — the dashboard renders the weatherErrorDefault i18n key.
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                   enum: [WEATHER_UPSTREAM_UNAVAILABLE, CITY_NOT_FOUND]
+   *                 message:
+   *                   type: string
+   *               required: [error, message]
    *       500:
    *         description: Server error
    */
@@ -76,15 +100,19 @@ module.exports = (weatherService) => {
     try {
       const { latitude, longitude } = req.body;
 
-      // Validate coordinates if provided
-      if ((latitude && !longitude) || (!latitude && longitude)) {
-        return res.status(400).json({ message: 'Both latitude and longitude must be provided' });
-      }
-      if (latitude && (latitude < -90 || latitude > 90)) {
-        return res.status(400).json({ message: 'Invalid latitude' });
-      }
-      if (longitude && (longitude < -180 || longitude > 180)) {
-        return res.status(400).json({ message: 'Invalid longitude' });
+      // Coordinates are required — we never invent a position for the
+      // user. The browser supplies them via navigator.geolocation; if the
+      // user denied geolocation, the frontend surfaces that as an error
+      // before it ever reaches this route. Empty bodies and legacy callers
+      // get an explicit 400 instead of a silently-mislocated forecast.
+      // Range + type validation lives in the service (typed error path) so
+      // backend and frontend stay aligned on a single LOCATION_REQUIRED
+      // contract.
+      if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
+        return res.status(400).json({
+          error: 'LOCATION_REQUIRED',
+          message: 'Valid latitude and longitude are required'
+        });
       }
 
       const userId = req.user?.iss_sub;
@@ -97,6 +125,15 @@ module.exports = (weatherService) => {
       const weatherData = await weatherService.getWeather({ latitude, longitude, userId });
       res.json(weatherData);
     } catch (error) {
+      // Typed errors (carrying statusCode/code) propagate as their declared
+      // status instead of generic 500.
+      if (error.statusCode && error.code) {
+        logger.warn(`Weather service unavailable: ${error.message}`, { code: error.code });
+        return res.status(error.statusCode).json({
+          error: error.code,
+          message: error.message
+        });
+      }
       logger.error(`Error fetching weather: ${error.message}`, { stack: error.stack });
       res.status(500).json({ message: error.message });
     }

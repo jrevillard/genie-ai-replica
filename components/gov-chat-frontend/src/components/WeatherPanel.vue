@@ -159,11 +159,6 @@ export default {
     }
   },
 
-  created() {
-    // FIX: Removed this.getWeather() from here.
-    // The isAuthenticated watcher will now handle the initial call.
-  },
-
   methods: {
     async getWeather() {
       // Extra safety check
@@ -180,14 +175,15 @@ export default {
       try {
         if (navigator.geolocation) {
           const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+            // Geolocation timeout matches the backend's axios timeout (4s).
+            // The backend only has one external call now (Open-Meteo), so
+            // the worst-case wait on a reload is bounded by one timeout
+            // window plus browser geolocation.
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
           });
           const { latitude, longitude } = position.coords;
 
-          // FIX: Get userId from the Vuex store 'user' object
-          const locale = this.$i18n.locale;
-
-          const weatherData = await weatherService.getWeather({ latitude, longitude, locale });
+          const weatherData = await weatherService.getWeather({ latitude, longitude });
           this.location = weatherData.location;
           this.currentWeather = weatherData.current;
           this.forecast = weatherData.forecast;
@@ -195,6 +191,12 @@ export default {
           this.errorKey = 'weatherGeolocationUnsupported';
         }
       } catch {
+        // Backend returns 503 + structured body on any failure. The user-
+        // facing message is the same across all weather fetch failures —
+        // there is no actionable difference for the end user between a
+        // network blip, an upstream outage, or a coords-with-no-nearby-city
+        // case — so we collapse to a single i18n key. Backend logs retain
+        // the specific reason.
         this.errorKey = 'weatherErrorDefault';
       } finally {
         this.isLoading = false;

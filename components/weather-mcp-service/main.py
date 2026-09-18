@@ -1277,6 +1277,11 @@ _CROP_QUERY_PATTERNS = {
     "eggplant": r"\b(?:eggplant|brinjal)s?\b",
     "mango": r"\bmango(?:es)?\b",
 }
+_CROP_PLANTING_COMPARISON = re.compile(
+    r"(?=.*\bcrops?\b)(?=.*\b(?:plant|planting|sow|sowing)\b)"
+    r"(?=.*\b(?:which|what|recommend|best)\b)",
+    re.IGNORECASE,
+)
 _CROP_PROFILE_PATH = (
     pathlib.Path(os.getenv("WARNING_SYSTEM_ENGINE_DIR", "/warning_system_engine"))
     / "data"
@@ -1285,8 +1290,10 @@ _CROP_PROFILE_PATH = (
 
 
 def _requested_crops(query: str) -> list[str]:
-    """Return only explicitly named, configured crops from the user query."""
+    """Return named crops, or all configured crops for a planting comparison."""
     normalized = re.sub(r"[_-]+", " ", query.casefold())
+    if _CROP_PLANTING_COMPARISON.search(normalized):
+        return list(EWS_CROPS)
     return [
         crop
         for crop, pattern in _CROP_QUERY_PATTERNS.items()
@@ -1346,7 +1353,11 @@ def _crop_profile_context(district: str, crops: list[str]) -> list[str]:
             "Use favorable_conditions_by_stage only for questions about favorable "
             "or ideal requirements. historical_weekly_climate_normals are calendar "
             "observations, not favorable requirements. Empty or absent values mean "
-            "the source does not provide that fact.\n"
+            "the source does not provide that fact. Before recommending that a crop "
+            "be planted or started now, compare today's ISO week above with its "
+            "season calendar. Recommend starting only when the current week is in a "
+            "seedbed, germination, seedling, or planting stage. A later growth stage "
+            "or a date outside the season is not a valid time to start that crop.\n"
             + json.dumps(source_profile, ensure_ascii=False, separators=(",", ":"))
         )
     return sections

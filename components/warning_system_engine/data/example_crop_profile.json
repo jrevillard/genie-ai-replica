@@ -1527,9 +1527,9 @@
       "favorable_conditions_by_stage": "Provided in the source PDF; only printed values are included."
     }
   },
-  "mango_dinajpur": {
+  "mango_rajshahi": {
     "crop": "mango",
-    "region": "dinajpur",
+    "region": "rajshahi",
     "crop_display_name": "Mango",
     "season_span": {
       "weeks": [

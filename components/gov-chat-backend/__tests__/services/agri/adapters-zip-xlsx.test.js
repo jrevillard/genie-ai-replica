@@ -141,13 +141,7 @@ describe('imf-pcps adapter', () => {
   // row1 = descriptions, then data rows with "YYYYMm" months in col0.
   const rows = [
     ['Commodity', 'PURE', 'PDAP', 'PFOOD', 'PUNTRACKED'],
-    [
-      'Commodity.Description',
-      'Urea',
-      'DAP',
-      'Food Price Index',
-      'Something else entirely'
-    ],
+    ['Commodity.Description', 'Urea', 'DAP', 'Food Price Index', 'Something else entirely'],
     ['Data Type', 'Price', 'Price', 'Index', 'Price'],
     ['Frequency', 'Monthly', 'Monthly', 'Monthly', 'Monthly'],
     ['2026M7', 232.37, 610, 130.5, 999],

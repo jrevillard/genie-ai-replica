@@ -111,12 +111,8 @@ class ApiAnalyticsDashboardGet200ResponseQueries {
       return ApiAnalyticsDashboardGet200ResponseQueries(
         total: mapValueOfType<int>(json, r'total'),
         unanswered: mapValueOfType<int>(json, r'unanswered'),
-        answeredPercentage: json[r'answeredPercentage'] == null
-            ? null
-            : num.parse('${json[r'answeredPercentage']}'),
-        avgResponseTime: json[r'avgResponseTime'] == null
-            ? null
-            : num.parse('${json[r'avgResponseTime']}'),
+        answeredPercentage: num.parse('${json[r'answeredPercentage']}'),
+        avgResponseTime: num.parse('${json[r'avgResponseTime']}'),
       );
     }
     return null;

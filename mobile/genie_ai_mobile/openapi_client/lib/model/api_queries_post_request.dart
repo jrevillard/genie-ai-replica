@@ -10,14 +10,14 @@
 
 part of openapi.api;
 
-class QueriesPostRequest {
-  /// Returns a new [QueriesPostRequest] instance.
-  QueriesPostRequest({
+class ApiQueriesPostRequest {
+  /// Returns a new [ApiQueriesPostRequest] instance.
+  ApiQueriesPostRequest({
     required this.sessionId,
     this.text,
     this.messages = const [],
     this.context,
-    this.contextOption = const QueriesPostRequestContextOptionEnum._('single-message'),
+    this.contextOption = const ApiQueriesPostRequestContextOptionEnum._('single-message'),
     this.categoryId,
     this.serviceId,
     this.timestamp,
@@ -36,7 +36,7 @@ class QueriesPostRequest {
   String? text;
 
   /// Full conversation history (required for conversation mode)
-  List<QueriesPostRequestMessagesInner> messages;
+  List<ApiQueriesPostRequestMessagesInner> messages;
 
   ///
   /// Please note: This property should have been non-nullable! Since the specification file
@@ -44,10 +44,10 @@ class QueriesPostRequest {
   /// source code must fall back to having a nullable type.
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
-  QueriesPostRequestContext? context;
+  ApiQueriesPostRequestContext? context;
 
   /// Query mode (defaults to env or single-message)
-  QueriesPostRequestContextOptionEnum contextOption;
+  ApiQueriesPostRequestContextOptionEnum contextOption;
 
   /// Category ID for the query
   ///
@@ -77,7 +77,7 @@ class QueriesPostRequest {
   DateTime? timestamp;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is QueriesPostRequest &&
+  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesPostRequest &&
     other.sessionId == sessionId &&
     other.text == text &&
     _deepEquality.equals(other.messages, messages) &&
@@ -100,7 +100,7 @@ class QueriesPostRequest {
     (timestamp == null ? 0 : timestamp!.hashCode);
 
   @override
-  String toString() => 'QueriesPostRequest[sessionId=$sessionId, text=$text, messages=$messages, context=$context, contextOption=$contextOption, categoryId=$categoryId, serviceId=$serviceId, timestamp=$timestamp]';
+  String toString() => 'ApiQueriesPostRequest[sessionId=$sessionId, text=$text, messages=$messages, context=$context, contextOption=$contextOption, categoryId=$categoryId, serviceId=$serviceId, timestamp=$timestamp]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -135,10 +135,10 @@ class QueriesPostRequest {
     return json;
   }
 
-  /// Returns a new [QueriesPostRequest] instance and imports its values from
+  /// Returns a new [ApiQueriesPostRequest] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static QueriesPostRequest? fromJson(dynamic value) {
+  static ApiQueriesPostRequest? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -146,17 +146,17 @@ class QueriesPostRequest {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'sessionId'), 'Required key "QueriesPostRequest[sessionId]" is missing from JSON.');
-        assert(json[r'sessionId'] != null, 'Required key "QueriesPostRequest[sessionId]" has a null value in JSON.');
+        assert(json.containsKey(r'sessionId'), 'Required key "ApiQueriesPostRequest[sessionId]" is missing from JSON.');
+        assert(json[r'sessionId'] != null, 'Required key "ApiQueriesPostRequest[sessionId]" has a null value in JSON.');
         return true;
       }());
 
-      return QueriesPostRequest(
+      return ApiQueriesPostRequest(
         sessionId: mapValueOfType<String>(json, r'sessionId')!,
         text: mapValueOfType<String>(json, r'text'),
-        messages: QueriesPostRequestMessagesInner.listFromJson(json[r'messages']),
-        context: QueriesPostRequestContext.fromJson(json[r'context']),
-        contextOption: QueriesPostRequestContextOptionEnum.fromJson(json[r'contextOption']) ?? const QueriesPostRequestContextOptionEnum._('single-message'),
+        messages: ApiQueriesPostRequestMessagesInner.listFromJson(json[r'messages']),
+        context: ApiQueriesPostRequestContext.fromJson(json[r'context']),
+        contextOption: ApiQueriesPostRequestContextOptionEnum.fromJson(json[r'contextOption']) ?? const ApiQueriesPostRequestContextOptionEnum._('single-message'),
         categoryId: mapValueOfType<String>(json, r'categoryId'),
         serviceId: mapValueOfType<String>(json, r'serviceId'),
         timestamp: mapDateTime(json, r'timestamp', r''),
@@ -165,11 +165,11 @@ class QueriesPostRequest {
     return null;
   }
 
-  static List<QueriesPostRequest> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesPostRequest>[];
+  static List<ApiQueriesPostRequest> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesPostRequest>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesPostRequest.fromJson(row);
+        final value = ApiQueriesPostRequest.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -178,12 +178,12 @@ class QueriesPostRequest {
     return result.toList(growable: growable);
   }
 
-  static Map<String, QueriesPostRequest> mapFromJson(dynamic json) {
-    final map = <String, QueriesPostRequest>{};
+  static Map<String, ApiQueriesPostRequest> mapFromJson(dynamic json) {
+    final map = <String, ApiQueriesPostRequest>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = QueriesPostRequest.fromJson(entry.value);
+        final value = ApiQueriesPostRequest.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -192,14 +192,14 @@ class QueriesPostRequest {
     return map;
   }
 
-  // maps a json object with a list of QueriesPostRequest-objects as value to a dart map
-  static Map<String, List<QueriesPostRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<QueriesPostRequest>>{};
+  // maps a json object with a list of ApiQueriesPostRequest-objects as value to a dart map
+  static Map<String, List<ApiQueriesPostRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<ApiQueriesPostRequest>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = QueriesPostRequest.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = ApiQueriesPostRequest.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;
@@ -212,34 +212,34 @@ class QueriesPostRequest {
 }
 
 /// Query mode (defaults to env or single-message)
-enum QueriesPostRequestContextOptionEnum {
-  singleMessage._(r'single-message'),
-  conversationWithContextLabels._(r'conversation-with-context-labels'),
-  ;
-
-  /// Instantiate a new enum with the provided value.
-  const QueriesPostRequestContextOptionEnum._(this._value);
+class ApiQueriesPostRequestContextOptionEnum {
+  /// Instantiate a new enum with the provided [value].
+  const ApiQueriesPostRequestContextOptionEnum._(this.value);
 
   /// The underlying value of this enum member.
-  final String _value;
+  final String value;
 
   @override
-  String toString() => _value;
+  String toString() => value;
 
-  /// Encodes this enum as a value suitable for JSON.
-  String toJson() => _value;
+  String toJson() => value;
 
-  /// Returns the instance of [QueriesPostRequestContextOptionEnum] that was successfully decoded
-  /// from the passed [value] on success, null otherwise.
-  static QueriesPostRequestContextOptionEnum? fromJson(dynamic value) => QueriesPostRequestContextOptionEnumTypeTransformer().decode(value);
+  static const singleMessage = ApiQueriesPostRequestContextOptionEnum._(r'single-message');
+  static const conversationWithContextLabels = ApiQueriesPostRequestContextOptionEnum._(r'conversation-with-context-labels');
 
-  /// Returns a [List] containing instances of [QueriesPostRequestContextOptionEnum]
-  /// that were successfully decoded from the passed [JSON][json].
-  static List<QueriesPostRequestContextOptionEnum> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesPostRequestContextOptionEnum>[];
+  /// List of all possible values in this [enum][ApiQueriesPostRequestContextOptionEnum].
+  static const values = <ApiQueriesPostRequestContextOptionEnum>[
+    singleMessage,
+    conversationWithContextLabels,
+  ];
+
+  static ApiQueriesPostRequestContextOptionEnum? fromJson(dynamic value) => ApiQueriesPostRequestContextOptionEnumTypeTransformer().decode(value);
+
+  static List<ApiQueriesPostRequestContextOptionEnum> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesPostRequestContextOptionEnum>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesPostRequestContextOptionEnum.fromJson(row);
+        final value = ApiQueriesPostRequestContextOptionEnum.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -249,17 +249,16 @@ enum QueriesPostRequestContextOptionEnum {
   }
 }
 
-/// Transformation class that can [encode] an instance of [QueriesPostRequestContextOptionEnum] to String,
-/// and [decode] dynamic data back to [QueriesPostRequestContextOptionEnum].
-class QueriesPostRequestContextOptionEnumTypeTransformer {
-  factory QueriesPostRequestContextOptionEnumTypeTransformer() => _instance ??= const QueriesPostRequestContextOptionEnumTypeTransformer._();
+/// Transformation class that can [encode] an instance of [ApiQueriesPostRequestContextOptionEnum] to String,
+/// and [decode] dynamic data back to [ApiQueriesPostRequestContextOptionEnum].
+class ApiQueriesPostRequestContextOptionEnumTypeTransformer {
+  factory ApiQueriesPostRequestContextOptionEnumTypeTransformer() => _instance ??= const ApiQueriesPostRequestContextOptionEnumTypeTransformer._();
 
-  const QueriesPostRequestContextOptionEnumTypeTransformer._();
+  const ApiQueriesPostRequestContextOptionEnumTypeTransformer._();
 
-  String encode(QueriesPostRequestContextOptionEnum data) => data._value;
+  String encode(ApiQueriesPostRequestContextOptionEnum data) => data.value;
 
-  /// Returns the instance of [QueriesPostRequestContextOptionEnum] that was successfully decoded
-  /// from the passed [data] value on success, null otherwise.
+  /// Decodes a [dynamic value][data] to a ApiQueriesPostRequestContextOptionEnum.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
   /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
@@ -267,14 +266,11 @@ class QueriesPostRequestContextOptionEnumTypeTransformer {
   ///
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
-  QueriesPostRequestContextOptionEnum? decode(dynamic data, {bool allowNull = true}) {
-    if (data is QueriesPostRequestContextOptionEnum) {
-      return data;
-    }
+  ApiQueriesPostRequestContextOptionEnum? decode(dynamic data, {bool allowNull = true}) {
     if (data != null) {
       switch (data) {
-        case r'single-message': return QueriesPostRequestContextOptionEnum.singleMessage;
-        case r'conversation-with-context-labels': return QueriesPostRequestContextOptionEnum.conversationWithContextLabels;
+        case r'single-message': return ApiQueriesPostRequestContextOptionEnum.singleMessage;
+        case r'conversation-with-context-labels': return ApiQueriesPostRequestContextOptionEnum.conversationWithContextLabels;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
@@ -284,8 +280,8 @@ class QueriesPostRequestContextOptionEnumTypeTransformer {
     return null;
   }
 
-  /// The singleton instance of this transformer.
-  static QueriesPostRequestContextOptionEnumTypeTransformer? _instance;
+  /// Singleton [ApiQueriesPostRequestContextOptionEnumTypeTransformer] instance.
+  static ApiQueriesPostRequestContextOptionEnumTypeTransformer? _instance;
 }
 
 

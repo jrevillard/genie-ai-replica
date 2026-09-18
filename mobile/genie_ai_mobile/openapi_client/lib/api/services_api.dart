@@ -29,7 +29,7 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<Response> apiServicesCategoriesCategoryIdGetWithHttpInfo(String categoryId, { String? locale, Future<void>? abortTrigger, }) async {
+  Future<Response> apiServicesCategoriesCategoryIdGetWithHttpInfo(String categoryId, { String? locale, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/services/categories/{categoryId}'
       .replaceAll('{categoryId}', categoryId);
@@ -56,7 +56,6 @@ class ServicesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -71,8 +70,8 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<ApiServicesCategoriesGet200ResponseInner?> apiServicesCategoriesCategoryIdGet(String categoryId, { String? locale, Future<void>? abortTrigger, }) async {
-    final response = await apiServicesCategoriesCategoryIdGetWithHttpInfo(categoryId, locale: locale, abortTrigger: abortTrigger,);
+  Future<ApiServicesCategoriesGet200ResponseInner?> apiServicesCategoriesCategoryIdGet(String categoryId, { String? locale, }) async {
+    final response = await apiServicesCategoriesCategoryIdGetWithHttpInfo(categoryId,  locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -96,7 +95,7 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<Response> apiServicesCategoriesGetWithHttpInfo({ String? locale, Future<void>? abortTrigger, }) async {
+  Future<Response> apiServicesCategoriesGetWithHttpInfo({ String? locale, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/services/categories';
 
@@ -122,7 +121,6 @@ class ServicesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -134,8 +132,8 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for category and service names
-  Future<List<ApiServicesCategoriesGet200ResponseInner>?> apiServicesCategoriesGet({ String? locale, Future<void>? abortTrigger, }) async {
-    final response = await apiServicesCategoriesGetWithHttpInfo(locale: locale, abortTrigger: abortTrigger,);
+  Future<List<ApiServicesCategoriesGet200ResponseInner>?> apiServicesCategoriesGet({ String? locale, }) async {
+    final response = await apiServicesCategoriesGetWithHttpInfo( locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -165,7 +163,7 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for search results
-  Future<Response> apiServicesSearchGetWithHttpInfo(String query, { String? locale, Future<void>? abortTrigger, }) async {
+  Future<Response> apiServicesSearchGetWithHttpInfo(String query, { String? locale, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/services/search';
 
@@ -192,7 +190,6 @@ class ServicesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -207,8 +204,8 @@ class ServicesApi {
   ///
   /// * [String] locale:
   ///   Language locale for search results
-  Future<ApiServicesSearchGet200Response?> apiServicesSearchGet(String query, { String? locale, Future<void>? abortTrigger, }) async {
-    final response = await apiServicesSearchGetWithHttpInfo(query, locale: locale, abortTrigger: abortTrigger,);
+  Future<ApiServicesSearchGet200Response?> apiServicesSearchGet(String query, { String? locale, }) async {
+    final response = await apiServicesSearchGetWithHttpInfo(query,  locale: locale, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

@@ -17,20 +17,6 @@ void main() {
   // final instance = AdminApi();
 
   group('tests for AdminApi', () {
-    // Get recent queries for admin inspection (Query Inspector)
-    //
-    //Future adminQueriesInspectGet({ int limit, int offset, String userId, String searchText, String startDate, String endDate, num minConfidence, num maxConfidence }) async
-    test('test adminQueriesInspectGet', () async {
-      // TODO
-    });
-
-    // Get full query details for admin inspection
-    //
-    //Future adminQueriesInspectQueryIdGet(String queryId) async
-    test('test adminQueriesInspectQueryIdGet', () async {
-      // TODO
-    });
-
     // Backup database
     //
     //Future apiAdminDatabaseOperationsBackupPost() async

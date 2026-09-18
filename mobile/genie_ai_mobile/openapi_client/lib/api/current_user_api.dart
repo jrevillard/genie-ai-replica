@@ -21,7 +21,7 @@ class CurrentUserApi {
   /// Returns a sanitized subset of user data for OPEA AI context enrichment. User is resolved from the JWT.
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiMeContextGetWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> apiMeContextGetWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/api/me/context';
 
@@ -43,15 +43,14 @@ class CurrentUserApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
   /// Get user context for AI enrichment
   ///
   /// Returns a sanitized subset of user data for OPEA AI context enrichment. User is resolved from the JWT.
-  Future<void> apiMeContextGet({ Future<void>? abortTrigger, }) async {
-    final response = await apiMeContextGetWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<void> apiMeContextGet() async {
+    final response = await apiMeContextGetWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -62,7 +61,7 @@ class CurrentUserApi {
   /// Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete with nullification). This action is irreversible.
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiMeDeletePostWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> apiMeDeletePostWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/api/me/delete';
 
@@ -84,15 +83,14 @@ class CurrentUserApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
   /// Delete user account (GDPR right to erasure)
   ///
   /// Deletes the user from Keycloak and erases all PII from ArangoDB (soft-delete with nullification). This action is irreversible.
-  Future<void> apiMeDeletePost({ Future<void>? abortTrigger, }) async {
-    final response = await apiMeDeletePostWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<void> apiMeDeletePost() async {
+    final response = await apiMeDeletePostWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -103,7 +101,7 @@ class CurrentUserApi {
   /// Returns the full profile of the authenticated user. User is resolved from the JWT — no ID parameter needed.
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiMeGetWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> apiMeGetWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/api/me';
 
@@ -125,15 +123,14 @@ class CurrentUserApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
   /// Get current user profile
   ///
   /// Returns the full profile of the authenticated user. User is resolved from the JWT — no ID parameter needed.
-  Future<void> apiMeGet({ Future<void>? abortTrigger, }) async {
-    final response = await apiMeGetWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<void> apiMeGet() async {
+    final response = await apiMeGetWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -152,7 +149,7 @@ class CurrentUserApi {
   ///
   /// * [List<MultipartFile>] files:
   ///   Files to upload (optional)
-  Future<Response> apiMePutWithHttpInfo({ String? data, List<MultipartFile>? files, Future<void>? abortTrigger, }) async {
+  Future<Response> apiMePutWithHttpInfo({ String? data, List<MultipartFile>? files, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/me';
 
@@ -173,8 +170,7 @@ class CurrentUserApi {
     }
     if (files != null) {
       hasFields = true;
-      mp.fields[r'files'] = files.field;
-      mp.files.add(files);
+      mp.files.addAll(files);
     }
     if (hasFields) {
       postBody = mp;
@@ -188,7 +184,6 @@ class CurrentUserApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -203,8 +198,8 @@ class CurrentUserApi {
   ///
   /// * [List<MultipartFile>] files:
   ///   Files to upload (optional)
-  Future<void> apiMePut({ String? data, List<MultipartFile>? files, Future<void>? abortTrigger, }) async {
-    final response = await apiMePutWithHttpInfo(data: data, files: files, abortTrigger: abortTrigger,);
+  Future<void> apiMePut({ String? data, List<MultipartFile>? files, }) async {
+    final response = await apiMePutWithHttpInfo( data: data, files: files, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -215,7 +210,7 @@ class CurrentUserApi {
   /// Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiMeResetDataPostWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> apiMeResetDataPostWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/api/me/reset-data';
 
@@ -237,15 +232,14 @@ class CurrentUserApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
   /// Reset user profile data
   ///
   /// Resets the authenticated user's profile data while preserving essential account information (credentials, email, creation date). JIT-provisioned fields (name, roles) are restored on next login.
-  Future<void> apiMeResetDataPost({ Future<void>? abortTrigger, }) async {
-    final response = await apiMeResetDataPostWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<void> apiMeResetDataPost() async {
+    final response = await apiMeResetDataPostWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

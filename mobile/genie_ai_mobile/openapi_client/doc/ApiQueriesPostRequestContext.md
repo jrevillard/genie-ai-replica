@@ -1,4 +1,4 @@
-# openapi.model.QueriesPostRequestContext
+# openapi.model.ApiQueriesPostRequestContext
 
 ## Load the model package
 ```dart

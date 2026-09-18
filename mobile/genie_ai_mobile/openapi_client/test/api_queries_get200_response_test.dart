@@ -16,7 +16,7 @@ void main() {
   // final instance = ApiQueriesGet200Response();
 
   group('test ApiQueriesGet200Response', () {
-    // List<QueriesPost201Response> queries (default value: const [])
+    // List<ApiQueriesGet200ResponseQueriesInner> queries (default value: const [])
     test('to test the property `queries`', () async {
       // TODO
     });

@@ -21,7 +21,7 @@ class AuthenticationApi {
   /// Logout endpoint (Keycloak handles session invalidation server-side)
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiAuthLogoutPostWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> apiAuthLogoutPostWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/api/auth/logout';
 
@@ -43,15 +43,14 @@ class AuthenticationApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
   /// User logout
   ///
   /// Logout endpoint (Keycloak handles session invalidation server-side)
-  Future<void> apiAuthLogoutPost({ Future<void>? abortTrigger, }) async {
-    final response = await apiAuthLogoutPostWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<void> apiAuthLogoutPost() async {
+    final response = await apiAuthLogoutPostWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

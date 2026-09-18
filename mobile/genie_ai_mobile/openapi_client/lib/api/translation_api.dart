@@ -25,7 +25,7 @@ class TranslationApi {
   /// Parameters:
   ///
   /// * [ApiTranslateMarkdownPostRequest] apiTranslateMarkdownPostRequest (required):
-  Future<Response> apiTranslateMarkdownPostWithHttpInfo(ApiTranslateMarkdownPostRequest apiTranslateMarkdownPostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiTranslateMarkdownPostWithHttpInfo(ApiTranslateMarkdownPostRequest apiTranslateMarkdownPostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/translate/markdown';
 
@@ -47,7 +47,6 @@ class TranslationApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -58,8 +57,8 @@ class TranslationApi {
   /// Parameters:
   ///
   /// * [ApiTranslateMarkdownPostRequest] apiTranslateMarkdownPostRequest (required):
-  Future<ApiTranslateMarkdownPost200Response?> apiTranslateMarkdownPost(ApiTranslateMarkdownPostRequest apiTranslateMarkdownPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiTranslateMarkdownPostWithHttpInfo(apiTranslateMarkdownPostRequest, abortTrigger: abortTrigger,);
+  Future<ApiTranslateMarkdownPost200Response?> apiTranslateMarkdownPost(ApiTranslateMarkdownPostRequest apiTranslateMarkdownPostRequest,) async {
+    final response = await apiTranslateMarkdownPostWithHttpInfo(apiTranslateMarkdownPostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -82,7 +81,7 @@ class TranslationApi {
   /// Parameters:
   ///
   /// * [ApiTranslatePostRequest] apiTranslatePostRequest (required):
-  Future<Response> apiTranslatePostWithHttpInfo(ApiTranslatePostRequest apiTranslatePostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiTranslatePostWithHttpInfo(ApiTranslatePostRequest apiTranslatePostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/translate';
 
@@ -104,7 +103,6 @@ class TranslationApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -115,8 +113,8 @@ class TranslationApi {
   /// Parameters:
   ///
   /// * [ApiTranslatePostRequest] apiTranslatePostRequest (required):
-  Future<ApiTranslatePost200Response?> apiTranslatePost(ApiTranslatePostRequest apiTranslatePostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiTranslatePostWithHttpInfo(apiTranslatePostRequest, abortTrigger: abortTrigger,);
+  Future<ApiTranslatePost200Response?> apiTranslatePost(ApiTranslatePostRequest apiTranslatePostRequest,) async {
+    final response = await apiTranslatePostWithHttpInfo(apiTranslatePostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

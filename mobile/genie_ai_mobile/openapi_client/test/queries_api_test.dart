@@ -26,6 +26,15 @@ void main() {
       // TODO
     });
 
+    // Create a new query
+    //
+    // Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+    //
+    //Future<ApiQueriesGet200ResponseQueriesInner> apiQueriesPost(ApiQueriesPostRequest apiQueriesPostRequest) async
+    test('test apiQueriesPost', () async {
+      // TODO
+    });
+
     // Mark query as answered
     //
     // Marks a query as answered and updates response time
@@ -66,7 +75,7 @@ void main() {
     //
     // Retrieves a query by its unique identifier
     //
-    //Future<QueriesPost201Response> apiQueriesQueryIdGet(String queryId) async
+    //Future<ApiQueriesGet200ResponseQueriesInner> apiQueriesQueryIdGet(String queryId) async
     test('test apiQueriesQueryIdGet', () async {
       // TODO
     });
@@ -86,15 +95,6 @@ void main() {
     //
     //Future<ApiQueriesQueryIdResponsetimePatch200Response> apiQueriesQueryIdResponsetimePatch(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest) async
     test('test apiQueriesQueryIdResponsetimePatch', () async {
-      // TODO
-    });
-
-    // Create a new query
-    //
-    // Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-    //
-    //Future<QueriesPost201Response> queriesPost(QueriesPostRequest queriesPostRequest) async
-    test('test queriesPost', () async {
       // TODO
     });
 

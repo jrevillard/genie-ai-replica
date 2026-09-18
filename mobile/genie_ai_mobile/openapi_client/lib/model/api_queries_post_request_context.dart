@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class QueriesPostRequestContext {
-  /// Returns a new [QueriesPostRequestContext] instance.
-  QueriesPostRequestContext({
+class ApiQueriesPostRequestContext {
+  /// Returns a new [ApiQueriesPostRequestContext] instance.
+  ApiQueriesPostRequestContext({
     this.categoryLabel,
     this.serviceLabels = const [],
     this.language = 'EN',
@@ -31,7 +31,7 @@ class QueriesPostRequestContext {
   String language;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is QueriesPostRequestContext &&
+  bool operator ==(Object other) => identical(this, other) || other is ApiQueriesPostRequestContext &&
     other.categoryLabel == categoryLabel &&
     _deepEquality.equals(other.serviceLabels, serviceLabels) &&
     other.language == language;
@@ -44,7 +44,7 @@ class QueriesPostRequestContext {
     (language.hashCode);
 
   @override
-  String toString() => 'QueriesPostRequestContext[categoryLabel=$categoryLabel, serviceLabels=$serviceLabels, language=$language]';
+  String toString() => 'ApiQueriesPostRequestContext[categoryLabel=$categoryLabel, serviceLabels=$serviceLabels, language=$language]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -58,10 +58,10 @@ class QueriesPostRequestContext {
     return json;
   }
 
-  /// Returns a new [QueriesPostRequestContext] instance and imports its values from
+  /// Returns a new [ApiQueriesPostRequestContext] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static QueriesPostRequestContext? fromJson(dynamic value) {
+  static ApiQueriesPostRequestContext? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -72,7 +72,7 @@ class QueriesPostRequestContext {
         return true;
       }());
 
-      return QueriesPostRequestContext(
+      return ApiQueriesPostRequestContext(
         categoryLabel: mapValueOfType<String>(json, r'categoryLabel'),
         serviceLabels: json[r'serviceLabels'] is Iterable
             ? (json[r'serviceLabels'] as Iterable).cast<String>().toList(growable: false)
@@ -83,11 +83,11 @@ class QueriesPostRequestContext {
     return null;
   }
 
-  static List<QueriesPostRequestContext> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <QueriesPostRequestContext>[];
+  static List<ApiQueriesPostRequestContext> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <ApiQueriesPostRequestContext>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = QueriesPostRequestContext.fromJson(row);
+        final value = ApiQueriesPostRequestContext.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -96,12 +96,12 @@ class QueriesPostRequestContext {
     return result.toList(growable: growable);
   }
 
-  static Map<String, QueriesPostRequestContext> mapFromJson(dynamic json) {
-    final map = <String, QueriesPostRequestContext>{};
+  static Map<String, ApiQueriesPostRequestContext> mapFromJson(dynamic json) {
+    final map = <String, ApiQueriesPostRequestContext>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = QueriesPostRequestContext.fromJson(entry.value);
+        final value = ApiQueriesPostRequestContext.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -110,14 +110,14 @@ class QueriesPostRequestContext {
     return map;
   }
 
-  // maps a json object with a list of QueriesPostRequestContext-objects as value to a dart map
-  static Map<String, List<QueriesPostRequestContext>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<QueriesPostRequestContext>>{};
+  // maps a json object with a list of ApiQueriesPostRequestContext-objects as value to a dart map
+  static Map<String, List<ApiQueriesPostRequestContext>> mapListFromJson(dynamic json, {bool growable = false,}) {
+    final map = <String, List<ApiQueriesPostRequestContext>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = QueriesPostRequestContext.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = ApiQueriesPostRequestContext.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

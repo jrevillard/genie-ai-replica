@@ -78,9 +78,7 @@ class ApiAnalyticsTimeseriesMetricTypeGet200ResponseInner {
 
       return ApiAnalyticsTimeseriesMetricTypeGet200ResponseInner(
         timestamp: mapDateTime(json, r'timestamp', r''),
-        value: json[r'value'] == null
-            ? null
-            : num.parse('${json[r'value']}'),
+        value: num.parse('${json[r'value']}'),
       );
     }
     return null;

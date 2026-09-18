@@ -145,12 +145,8 @@ class ApiAnalyticsDashboardGet200ResponseFeedback {
         positive: mapValueOfType<int>(json, r'positive'),
         neutral: mapValueOfType<int>(json, r'neutral'),
         negative: mapValueOfType<int>(json, r'negative'),
-        positivePercentage: json[r'positivePercentage'] == null
-            ? null
-            : num.parse('${json[r'positivePercentage']}'),
-        negativePercentage: json[r'negativePercentage'] == null
-            ? null
-            : num.parse('${json[r'negativePercentage']}'),
+        positivePercentage: num.parse('${json[r'positivePercentage']}'),
+        negativePercentage: num.parse('${json[r'negativePercentage']}'),
       );
     }
     return null;

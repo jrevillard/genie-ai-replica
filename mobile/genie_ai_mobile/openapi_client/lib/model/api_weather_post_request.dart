@@ -79,12 +79,8 @@ class ApiWeatherPostRequest {
       }());
 
       return ApiWeatherPostRequest(
-        latitude: json[r'latitude'] == null
-            ? null
-            : num.parse('${json[r'latitude']}'),
-        longitude: json[r'longitude'] == null
-            ? null
-            : num.parse('${json[r'longitude']}'),
+        latitude: num.parse('${json[r'latitude']}'),
+        longitude: num.parse('${json[r'longitude']}'),
       );
     }
     return null;

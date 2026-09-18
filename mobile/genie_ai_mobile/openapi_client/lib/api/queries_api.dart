@@ -50,7 +50,7 @@ class QueriesApi {
   ///
   /// * [DateTime] endDate:
   ///   Filter by end date
-  Future<Response> apiQueriesGetWithHttpInfo({ int? limit, int? offset, String? sessionId, String? text, String? categoryId, String? serviceId, bool? isAnswered, DateTime? startDate, DateTime? endDate, Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesGetWithHttpInfo({ int? limit, int? offset, String? sessionId, String? text, String? categoryId, String? serviceId, bool? isAnswered, DateTime? startDate, DateTime? endDate, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries';
 
@@ -100,7 +100,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -136,8 +135,8 @@ class QueriesApi {
   ///
   /// * [DateTime] endDate:
   ///   Filter by end date
-  Future<ApiQueriesGet200Response?> apiQueriesGet({ int? limit, int? offset, String? sessionId, String? text, String? categoryId, String? serviceId, bool? isAnswered, DateTime? startDate, DateTime? endDate, Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesGetWithHttpInfo(limit: limit, offset: offset, sessionId: sessionId, text: text, categoryId: categoryId, serviceId: serviceId, isAnswered: isAnswered, startDate: startDate, endDate: endDate, abortTrigger: abortTrigger,);
+  Future<ApiQueriesGet200Response?> apiQueriesGet({ int? limit, int? offset, String? sessionId, String? text, String? categoryId, String? serviceId, bool? isAnswered, DateTime? startDate, DateTime? endDate, }) async {
+    final response = await apiQueriesGetWithHttpInfo( limit: limit, offset: offset, sessionId: sessionId, text: text, categoryId: categoryId, serviceId: serviceId, isAnswered: isAnswered, startDate: startDate, endDate: endDate, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -146,6 +145,62 @@ class QueriesApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesGet200Response',) as ApiQueriesGet200Response;
+    
+    }
+    return null;
+  }
+
+  /// Create a new query
+  ///
+  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [ApiQueriesPostRequest] apiQueriesPostRequest (required):
+  Future<Response> apiQueriesPostWithHttpInfo(ApiQueriesPostRequest apiQueriesPostRequest,) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/queries';
+
+    // ignore: prefer_final_locals
+    Object? postBody = apiQueriesPostRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+    );
+  }
+
+  /// Create a new query
+  ///
+  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
+  ///
+  /// Parameters:
+  ///
+  /// * [ApiQueriesPostRequest] apiQueriesPostRequest (required):
+  Future<ApiQueriesGet200ResponseQueriesInner?> apiQueriesPost(ApiQueriesPostRequest apiQueriesPostRequest,) async {
+    final response = await apiQueriesPostWithHttpInfo(apiQueriesPostRequest,);
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesGet200ResponseQueriesInner',) as ApiQueriesGet200ResponseQueriesInner;
     
     }
     return null;
@@ -163,7 +218,7 @@ class QueriesApi {
   ///   ID of the query to update.
   ///
   /// * [ApiQueriesQueryIdResponsetimePatchRequest] apiQueriesQueryIdResponsetimePatchRequest (required):
-  Future<Response> apiQueriesQueryIdAnsweredPatchWithHttpInfo(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdAnsweredPatchWithHttpInfo(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}/answered'
       .replaceAll('{queryId}', queryId);
@@ -186,7 +241,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -200,8 +254,8 @@ class QueriesApi {
   ///   ID of the query to update.
   ///
   /// * [ApiQueriesQueryIdResponsetimePatchRequest] apiQueriesQueryIdResponsetimePatchRequest (required):
-  Future<ApiQueriesQueryIdAnsweredPatch200Response?> apiQueriesQueryIdAnsweredPatch(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdAnsweredPatchWithHttpInfo(queryId, apiQueriesQueryIdResponsetimePatchRequest, abortTrigger: abortTrigger,);
+  Future<ApiQueriesQueryIdAnsweredPatch200Response?> apiQueriesQueryIdAnsweredPatch(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest,) async {
+    final response = await apiQueriesQueryIdAnsweredPatchWithHttpInfo(queryId, apiQueriesQueryIdResponsetimePatchRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -227,7 +281,7 @@ class QueriesApi {
   ///   Query ID
   ///
   /// * [ApiChatQueryQueryIdConversationPostRequest] apiChatQueryQueryIdConversationPostRequest:
-  Future<Response> apiQueriesQueryIdConversationPostWithHttpInfo(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdConversationPostWithHttpInfo(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}/conversation'
       .replaceAll('{queryId}', queryId);
@@ -250,7 +304,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -264,8 +317,8 @@ class QueriesApi {
   ///   Query ID
   ///
   /// * [ApiChatQueryQueryIdConversationPostRequest] apiChatQueryQueryIdConversationPostRequest:
-  Future<ApiQueriesQueryIdConversationPost201Response?> apiQueriesQueryIdConversationPost(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdConversationPostWithHttpInfo(queryId, apiChatQueryQueryIdConversationPostRequest: apiChatQueryQueryIdConversationPostRequest, abortTrigger: abortTrigger,);
+  Future<ApiQueriesQueryIdConversationPost201Response?> apiQueriesQueryIdConversationPost(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, }) async {
+    final response = await apiQueriesQueryIdConversationPostWithHttpInfo(queryId,  apiChatQueryQueryIdConversationPostRequest: apiChatQueryQueryIdConversationPostRequest, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -289,7 +342,7 @@ class QueriesApi {
   ///
   /// * [String] queryId (required):
   ///   Query ID
-  Future<Response> apiQueriesQueryIdConversationsGetWithHttpInfo(String queryId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdConversationsGetWithHttpInfo(String queryId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}/conversations'
       .replaceAll('{queryId}', queryId);
@@ -312,7 +365,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -324,8 +376,8 @@ class QueriesApi {
   ///
   /// * [String] queryId (required):
   ///   Query ID
-  Future<List<Object>?> apiQueriesQueryIdConversationsGet(String queryId, { Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdConversationsGetWithHttpInfo(queryId, abortTrigger: abortTrigger,);
+  Future<List<Object>?> apiQueriesQueryIdConversationsGet(String queryId,) async {
+    final response = await apiQueriesQueryIdConversationsGetWithHttpInfo(queryId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -354,7 +406,7 @@ class QueriesApi {
   ///   Query ID
   ///
   /// * [ApiQueriesQueryIdFeedbackPostRequest] apiQueriesQueryIdFeedbackPostRequest (required):
-  Future<Response> apiQueriesQueryIdFeedbackPostWithHttpInfo(String queryId, ApiQueriesQueryIdFeedbackPostRequest apiQueriesQueryIdFeedbackPostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdFeedbackPostWithHttpInfo(String queryId, ApiQueriesQueryIdFeedbackPostRequest apiQueriesQueryIdFeedbackPostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}/feedback'
       .replaceAll('{queryId}', queryId);
@@ -377,7 +429,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -391,8 +442,8 @@ class QueriesApi {
   ///   Query ID
   ///
   /// * [ApiQueriesQueryIdFeedbackPostRequest] apiQueriesQueryIdFeedbackPostRequest (required):
-  Future<ApiQueriesQueryIdFeedbackPost200Response?> apiQueriesQueryIdFeedbackPost(String queryId, ApiQueriesQueryIdFeedbackPostRequest apiQueriesQueryIdFeedbackPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdFeedbackPostWithHttpInfo(queryId, apiQueriesQueryIdFeedbackPostRequest, abortTrigger: abortTrigger,);
+  Future<ApiQueriesQueryIdFeedbackPost200Response?> apiQueriesQueryIdFeedbackPost(String queryId, ApiQueriesQueryIdFeedbackPostRequest apiQueriesQueryIdFeedbackPostRequest,) async {
+    final response = await apiQueriesQueryIdFeedbackPostWithHttpInfo(queryId, apiQueriesQueryIdFeedbackPostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -416,7 +467,7 @@ class QueriesApi {
   ///
   /// * [String] queryId (required):
   ///   Query ID
-  Future<Response> apiQueriesQueryIdGetWithHttpInfo(String queryId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdGetWithHttpInfo(String queryId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}'
       .replaceAll('{queryId}', queryId);
@@ -439,7 +490,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -451,8 +501,8 @@ class QueriesApi {
   ///
   /// * [String] queryId (required):
   ///   Query ID
-  Future<QueriesPost201Response?> apiQueriesQueryIdGet(String queryId, { Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdGetWithHttpInfo(queryId, abortTrigger: abortTrigger,);
+  Future<ApiQueriesGet200ResponseQueriesInner?> apiQueriesQueryIdGet(String queryId,) async {
+    final response = await apiQueriesQueryIdGetWithHttpInfo(queryId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -460,7 +510,7 @@ class QueriesApi {
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'QueriesPost201Response',) as QueriesPost201Response;
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesGet200ResponseQueriesInner',) as ApiQueriesGet200ResponseQueriesInner;
     
     }
     return null;
@@ -481,7 +531,7 @@ class QueriesApi {
   ///   Message ID
   ///
   /// * [ApiQueriesQueryIdLinkMessageIdPostRequest] apiQueriesQueryIdLinkMessageIdPostRequest:
-  Future<Response> apiQueriesQueryIdLinkMessageIdPostWithHttpInfo(String queryId, String messageId, { ApiQueriesQueryIdLinkMessageIdPostRequest? apiQueriesQueryIdLinkMessageIdPostRequest, Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdLinkMessageIdPostWithHttpInfo(String queryId, String messageId, { ApiQueriesQueryIdLinkMessageIdPostRequest? apiQueriesQueryIdLinkMessageIdPostRequest, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}/link/{messageId}'
       .replaceAll('{queryId}', queryId)
@@ -505,7 +555,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -522,8 +571,8 @@ class QueriesApi {
   ///   Message ID
   ///
   /// * [ApiQueriesQueryIdLinkMessageIdPostRequest] apiQueriesQueryIdLinkMessageIdPostRequest:
-  Future<Object?> apiQueriesQueryIdLinkMessageIdPost(String queryId, String messageId, { ApiQueriesQueryIdLinkMessageIdPostRequest? apiQueriesQueryIdLinkMessageIdPostRequest, Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdLinkMessageIdPostWithHttpInfo(queryId, messageId, apiQueriesQueryIdLinkMessageIdPostRequest: apiQueriesQueryIdLinkMessageIdPostRequest, abortTrigger: abortTrigger,);
+  Future<Object?> apiQueriesQueryIdLinkMessageIdPost(String queryId, String messageId, { ApiQueriesQueryIdLinkMessageIdPostRequest? apiQueriesQueryIdLinkMessageIdPostRequest, }) async {
+    final response = await apiQueriesQueryIdLinkMessageIdPostWithHttpInfo(queryId, messageId,  apiQueriesQueryIdLinkMessageIdPostRequest: apiQueriesQueryIdLinkMessageIdPostRequest, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -549,7 +598,7 @@ class QueriesApi {
   ///   ID of the query to update.
   ///
   /// * [ApiQueriesQueryIdResponsetimePatchRequest] apiQueriesQueryIdResponsetimePatchRequest (required):
-  Future<Response> apiQueriesQueryIdResponsetimePatchWithHttpInfo(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiQueriesQueryIdResponsetimePatchWithHttpInfo(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/queries/{queryId}/responsetime'
       .replaceAll('{queryId}', queryId);
@@ -572,7 +621,6 @@ class QueriesApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -586,8 +634,8 @@ class QueriesApi {
   ///   ID of the query to update.
   ///
   /// * [ApiQueriesQueryIdResponsetimePatchRequest] apiQueriesQueryIdResponsetimePatchRequest (required):
-  Future<ApiQueriesQueryIdResponsetimePatch200Response?> apiQueriesQueryIdResponsetimePatch(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiQueriesQueryIdResponsetimePatchWithHttpInfo(queryId, apiQueriesQueryIdResponsetimePatchRequest, abortTrigger: abortTrigger,);
+  Future<ApiQueriesQueryIdResponsetimePatch200Response?> apiQueriesQueryIdResponsetimePatch(String queryId, ApiQueriesQueryIdResponsetimePatchRequest apiQueriesQueryIdResponsetimePatchRequest,) async {
+    final response = await apiQueriesQueryIdResponsetimePatchWithHttpInfo(queryId, apiQueriesQueryIdResponsetimePatchRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -596,63 +644,6 @@ class QueriesApi {
     // FormatException when trying to decode an empty string.
     if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'ApiQueriesQueryIdResponsetimePatch200Response',) as ApiQueriesQueryIdResponsetimePatch200Response;
-    
-    }
-    return null;
-  }
-
-  /// Create a new query
-  ///
-  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-  ///
-  /// Note: This method returns the HTTP [Response].
-  ///
-  /// Parameters:
-  ///
-  /// * [QueriesPostRequest] queriesPostRequest (required):
-  Future<Response> queriesPostWithHttpInfo(QueriesPostRequest queriesPostRequest, { Future<void>? abortTrigger, }) async {
-    // ignore: prefer_const_declarations
-    final path = r'/queries';
-
-    // ignore: prefer_final_locals
-    Object? postBody = queriesPostRequest;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    const contentTypes = <String>['application/json'];
-
-
-    return apiClient.invokeAPI(
-      path,
-      'POST',
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
-    );
-  }
-
-  /// Create a new query
-  ///
-  /// Creates a new query and records it in analytics. Supports single-message or full conversation modes.
-  ///
-  /// Parameters:
-  ///
-  /// * [QueriesPostRequest] queriesPostRequest (required):
-  Future<QueriesPost201Response?> queriesPost(QueriesPostRequest queriesPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await queriesPostWithHttpInfo(queriesPostRequest, abortTrigger: abortTrigger,);
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    // When a remote server returns no body with a status of 204, we shall not decode it.
-    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
-    // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'QueriesPost201Response',) as QueriesPost201Response;
     
     }
     return null;

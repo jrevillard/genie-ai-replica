@@ -115,18 +115,10 @@ class ApiAnalyticsSatisfactionGaugeGet200Response {
       }());
 
       return ApiAnalyticsSatisfactionGaugeGet200Response(
-        currentValue: json[r'currentValue'] == null
-            ? null
-            : num.parse('${json[r'currentValue']}'),
-        previousValue: json[r'previousValue'] == null
-            ? null
-            : num.parse('${json[r'previousValue']}'),
-        changePercentage: json[r'changePercentage'] == null
-            ? null
-            : num.parse('${json[r'changePercentage']}'),
-        target: json[r'target'] == null
-            ? null
-            : num.parse('${json[r'target']}'),
+        currentValue: num.parse('${json[r'currentValue']}'),
+        previousValue: num.parse('${json[r'previousValue']}'),
+        changePercentage: num.parse('${json[r'changePercentage']}'),
+        target: num.parse('${json[r'target']}'),
         historicalData: ApiAnalyticsSatisfactionGaugeGet200ResponseHistoricalDataInner.listFromJson(json[r'historicalData']),
       );
     }

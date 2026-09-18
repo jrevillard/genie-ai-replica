@@ -77,6 +77,10 @@ part 'model/api_logger_rollover_post200_response.dart';
 part 'model/api_logger_rollover_post500_response.dart';
 part 'model/api_queries_get200_response.dart';
 part 'model/api_queries_get200_response_pagination.dart';
+part 'model/api_queries_get200_response_queries_inner.dart';
+part 'model/api_queries_post_request.dart';
+part 'model/api_queries_post_request_context.dart';
+part 'model/api_queries_post_request_messages_inner.dart';
 part 'model/api_queries_query_id_answered_patch200_response.dart';
 part 'model/api_queries_query_id_conversation_post201_response.dart';
 part 'model/api_queries_query_id_feedback_post200_response.dart';
@@ -104,14 +108,8 @@ part 'model/api_translate_post_request.dart';
 part 'model/api_weather_post200_response.dart';
 part 'model/api_weather_post200_response_current.dart';
 part 'model/api_weather_post200_response_forecast_inner.dart';
-part 'model/api_weather_post400_response.dart';
-part 'model/api_weather_post503_response.dart';
 part 'model/api_weather_post_request.dart';
 part 'model/event.dart';
-part 'model/queries_post201_response.dart';
-part 'model/queries_post_request.dart';
-part 'model/queries_post_request_context.dart';
-part 'model/queries_post_request_messages_inner.dart';
 part 'model/user.dart';
 
 

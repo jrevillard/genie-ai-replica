@@ -26,7 +26,7 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to delete
-  Future<Response> apiChatConversationsConversationIdDeleteWithHttpInfo(String conversationId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdDeleteWithHttpInfo(String conversationId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}'
       .replaceAll('{conversationId}', conversationId);
@@ -49,7 +49,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -61,8 +60,8 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to delete
-  Future<void> apiChatConversationsConversationIdDelete(String conversationId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdDeleteWithHttpInfo(conversationId, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdDelete(String conversationId,) async {
+    final response = await apiChatConversationsConversationIdDeleteWithHttpInfo(conversationId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -78,7 +77,7 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation
-  Future<Response> apiChatConversationsConversationIdFolderGetWithHttpInfo(String conversationId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdFolderGetWithHttpInfo(String conversationId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}/folder'
       .replaceAll('{conversationId}', conversationId);
@@ -101,7 +100,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -113,8 +111,8 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation
-  Future<void> apiChatConversationsConversationIdFolderGet(String conversationId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdFolderGetWithHttpInfo(conversationId, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdFolderGet(String conversationId,) async {
+    final response = await apiChatConversationsConversationIdFolderGetWithHttpInfo(conversationId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -130,7 +128,7 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to retrieve
-  Future<Response> apiChatConversationsConversationIdGetWithHttpInfo(String conversationId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdGetWithHttpInfo(String conversationId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}'
       .replaceAll('{conversationId}', conversationId);
@@ -153,7 +151,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -165,8 +162,8 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to retrieve
-  Future<void> apiChatConversationsConversationIdGet(String conversationId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdGetWithHttpInfo(conversationId, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdGet(String conversationId,) async {
+    final response = await apiChatConversationsConversationIdGetWithHttpInfo(conversationId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -191,7 +188,7 @@ class ChatHistoryApi {
   ///
   /// * [bool] newestFirst:
   ///   Sort messages with newest first
-  Future<Response> apiChatConversationsConversationIdMessagesGetWithHttpInfo(String conversationId, { int? limit, int? offset, bool? newestFirst, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdMessagesGetWithHttpInfo(String conversationId, { int? limit, int? offset, bool? newestFirst, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}/messages'
       .replaceAll('{conversationId}', conversationId);
@@ -224,7 +221,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -245,8 +241,8 @@ class ChatHistoryApi {
   ///
   /// * [bool] newestFirst:
   ///   Sort messages with newest first
-  Future<void> apiChatConversationsConversationIdMessagesGet(String conversationId, { int? limit, int? offset, bool? newestFirst, Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdMessagesGetWithHttpInfo(conversationId, limit: limit, offset: offset, newestFirst: newestFirst, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdMessagesGet(String conversationId, { int? limit, int? offset, bool? newestFirst, }) async {
+    final response = await apiChatConversationsConversationIdMessagesGetWithHttpInfo(conversationId,  limit: limit, offset: offset, newestFirst: newestFirst, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -264,7 +260,7 @@ class ChatHistoryApi {
   ///   ID of the conversation
   ///
   /// * [ApiChatConversationsConversationIdMessagesPostRequest] apiChatConversationsConversationIdMessagesPostRequest (required):
-  Future<Response> apiChatConversationsConversationIdMessagesPostWithHttpInfo(String conversationId, ApiChatConversationsConversationIdMessagesPostRequest apiChatConversationsConversationIdMessagesPostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdMessagesPostWithHttpInfo(String conversationId, ApiChatConversationsConversationIdMessagesPostRequest apiChatConversationsConversationIdMessagesPostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}/messages'
       .replaceAll('{conversationId}', conversationId);
@@ -287,7 +283,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -301,8 +296,8 @@ class ChatHistoryApi {
   ///   ID of the conversation
   ///
   /// * [ApiChatConversationsConversationIdMessagesPostRequest] apiChatConversationsConversationIdMessagesPostRequest (required):
-  Future<void> apiChatConversationsConversationIdMessagesPost(String conversationId, ApiChatConversationsConversationIdMessagesPostRequest apiChatConversationsConversationIdMessagesPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdMessagesPostWithHttpInfo(conversationId, apiChatConversationsConversationIdMessagesPostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdMessagesPost(String conversationId, ApiChatConversationsConversationIdMessagesPostRequest apiChatConversationsConversationIdMessagesPostRequest,) async {
+    final response = await apiChatConversationsConversationIdMessagesPostWithHttpInfo(conversationId, apiChatConversationsConversationIdMessagesPostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -320,7 +315,7 @@ class ChatHistoryApi {
   ///   ID of the conversation
   ///
   /// * [ApiChatConversationsConversationIdMessagesReadPostRequest] apiChatConversationsConversationIdMessagesReadPostRequest:
-  Future<Response> apiChatConversationsConversationIdMessagesReadPostWithHttpInfo(String conversationId, { ApiChatConversationsConversationIdMessagesReadPostRequest? apiChatConversationsConversationIdMessagesReadPostRequest, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdMessagesReadPostWithHttpInfo(String conversationId, { ApiChatConversationsConversationIdMessagesReadPostRequest? apiChatConversationsConversationIdMessagesReadPostRequest, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}/messages/read'
       .replaceAll('{conversationId}', conversationId);
@@ -343,7 +338,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -357,8 +351,8 @@ class ChatHistoryApi {
   ///   ID of the conversation
   ///
   /// * [ApiChatConversationsConversationIdMessagesReadPostRequest] apiChatConversationsConversationIdMessagesReadPostRequest:
-  Future<void> apiChatConversationsConversationIdMessagesReadPost(String conversationId, { ApiChatConversationsConversationIdMessagesReadPostRequest? apiChatConversationsConversationIdMessagesReadPostRequest, Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdMessagesReadPostWithHttpInfo(conversationId, apiChatConversationsConversationIdMessagesReadPostRequest: apiChatConversationsConversationIdMessagesReadPostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdMessagesReadPost(String conversationId, { ApiChatConversationsConversationIdMessagesReadPostRequest? apiChatConversationsConversationIdMessagesReadPostRequest, }) async {
+    final response = await apiChatConversationsConversationIdMessagesReadPostWithHttpInfo(conversationId,  apiChatConversationsConversationIdMessagesReadPostRequest: apiChatConversationsConversationIdMessagesReadPostRequest, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -376,7 +370,7 @@ class ChatHistoryApi {
   ///   ID of the conversation to move
   ///
   /// * [ApiChatConversationsConversationIdMovePostRequest] apiChatConversationsConversationIdMovePostRequest (required):
-  Future<Response> apiChatConversationsConversationIdMovePostWithHttpInfo(String conversationId, ApiChatConversationsConversationIdMovePostRequest apiChatConversationsConversationIdMovePostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdMovePostWithHttpInfo(String conversationId, ApiChatConversationsConversationIdMovePostRequest apiChatConversationsConversationIdMovePostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}/move'
       .replaceAll('{conversationId}', conversationId);
@@ -399,7 +393,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -413,8 +406,8 @@ class ChatHistoryApi {
   ///   ID of the conversation to move
   ///
   /// * [ApiChatConversationsConversationIdMovePostRequest] apiChatConversationsConversationIdMovePostRequest (required):
-  Future<void> apiChatConversationsConversationIdMovePost(String conversationId, ApiChatConversationsConversationIdMovePostRequest apiChatConversationsConversationIdMovePostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdMovePostWithHttpInfo(conversationId, apiChatConversationsConversationIdMovePostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdMovePost(String conversationId, ApiChatConversationsConversationIdMovePostRequest apiChatConversationsConversationIdMovePostRequest,) async {
+    final response = await apiChatConversationsConversationIdMovePostWithHttpInfo(conversationId, apiChatConversationsConversationIdMovePostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -432,7 +425,7 @@ class ChatHistoryApi {
   ///   ID of the conversation to update
   ///
   /// * [ApiChatConversationsConversationIdPatchRequest] apiChatConversationsConversationIdPatchRequest (required):
-  Future<Response> apiChatConversationsConversationIdPatchWithHttpInfo(String conversationId, ApiChatConversationsConversationIdPatchRequest apiChatConversationsConversationIdPatchRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsConversationIdPatchWithHttpInfo(String conversationId, ApiChatConversationsConversationIdPatchRequest apiChatConversationsConversationIdPatchRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations/{conversationId}'
       .replaceAll('{conversationId}', conversationId);
@@ -455,7 +448,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -469,8 +461,8 @@ class ChatHistoryApi {
   ///   ID of the conversation to update
   ///
   /// * [ApiChatConversationsConversationIdPatchRequest] apiChatConversationsConversationIdPatchRequest (required):
-  Future<void> apiChatConversationsConversationIdPatch(String conversationId, ApiChatConversationsConversationIdPatchRequest apiChatConversationsConversationIdPatchRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsConversationIdPatchWithHttpInfo(conversationId, apiChatConversationsConversationIdPatchRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsConversationIdPatch(String conversationId, ApiChatConversationsConversationIdPatchRequest apiChatConversationsConversationIdPatchRequest,) async {
+    final response = await apiChatConversationsConversationIdPatchWithHttpInfo(conversationId, apiChatConversationsConversationIdPatchRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -498,7 +490,7 @@ class ChatHistoryApi {
   ///
   /// * [String] searchTerm:
   ///   Text to search for in conversation titles or messages
-  Future<Response> apiChatConversationsGetWithHttpInfo({ int? limit, int? offset, bool? includeArchived, bool? filterStarred, String? searchTerm, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsGetWithHttpInfo({ int? limit, int? offset, bool? includeArchived, bool? filterStarred, String? searchTerm, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations';
 
@@ -536,7 +528,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -560,8 +551,8 @@ class ChatHistoryApi {
   ///
   /// * [String] searchTerm:
   ///   Text to search for in conversation titles or messages
-  Future<void> apiChatConversationsGet({ int? limit, int? offset, bool? includeArchived, bool? filterStarred, String? searchTerm, Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsGetWithHttpInfo(limit: limit, offset: offset, includeArchived: includeArchived, filterStarred: filterStarred, searchTerm: searchTerm, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsGet({ int? limit, int? offset, bool? includeArchived, bool? filterStarred, String? searchTerm, }) async {
+    final response = await apiChatConversationsGetWithHttpInfo( limit: limit, offset: offset, includeArchived: includeArchived, filterStarred: filterStarred, searchTerm: searchTerm, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -576,7 +567,7 @@ class ChatHistoryApi {
   /// Parameters:
   ///
   /// * [ApiChatConversationsPostRequest] apiChatConversationsPostRequest (required):
-  Future<Response> apiChatConversationsPostWithHttpInfo(ApiChatConversationsPostRequest apiChatConversationsPostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatConversationsPostWithHttpInfo(ApiChatConversationsPostRequest apiChatConversationsPostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/conversations';
 
@@ -598,7 +589,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -609,8 +599,8 @@ class ChatHistoryApi {
   /// Parameters:
   ///
   /// * [ApiChatConversationsPostRequest] apiChatConversationsPostRequest (required):
-  Future<void> apiChatConversationsPost(ApiChatConversationsPostRequest apiChatConversationsPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatConversationsPostWithHttpInfo(apiChatConversationsPostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatConversationsPost(ApiChatConversationsPostRequest apiChatConversationsPostRequest,) async {
+    final response = await apiChatConversationsPostWithHttpInfo(apiChatConversationsPostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -629,7 +619,7 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to remove
-  Future<Response> apiChatFoldersFolderIdConversationsConversationIdDeleteWithHttpInfo(String folderId, String conversationId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersFolderIdConversationsConversationIdDeleteWithHttpInfo(String folderId, String conversationId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/{folderId}/conversations/{conversationId}'
       .replaceAll('{folderId}', folderId)
@@ -653,7 +643,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -668,8 +657,8 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to remove
-  Future<void> apiChatFoldersFolderIdConversationsConversationIdDelete(String folderId, String conversationId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersFolderIdConversationsConversationIdDeleteWithHttpInfo(folderId, conversationId, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersFolderIdConversationsConversationIdDelete(String folderId, String conversationId,) async {
+    final response = await apiChatFoldersFolderIdConversationsConversationIdDeleteWithHttpInfo(folderId, conversationId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -688,7 +677,7 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to add
-  Future<Response> apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(String folderId, String conversationId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(String folderId, String conversationId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/{folderId}/conversations/{conversationId}'
       .replaceAll('{folderId}', folderId)
@@ -712,7 +701,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -727,8 +715,8 @@ class ChatHistoryApi {
   ///
   /// * [String] conversationId (required):
   ///   ID of the conversation to add
-  Future<void> apiChatFoldersFolderIdConversationsConversationIdPost(String folderId, String conversationId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(folderId, conversationId, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersFolderIdConversationsConversationIdPost(String folderId, String conversationId,) async {
+    final response = await apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(folderId, conversationId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -747,7 +735,7 @@ class ChatHistoryApi {
   ///
   /// * [bool] deleteContents:
   ///   Whether to delete contained conversations and subfolders
-  Future<Response> apiChatFoldersFolderIdDeleteWithHttpInfo(String folderId, { bool? deleteContents, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersFolderIdDeleteWithHttpInfo(String folderId, { bool? deleteContents, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/{folderId}'
       .replaceAll('{folderId}', folderId);
@@ -774,7 +762,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -789,8 +776,8 @@ class ChatHistoryApi {
   ///
   /// * [bool] deleteContents:
   ///   Whether to delete contained conversations and subfolders
-  Future<void> apiChatFoldersFolderIdDelete(String folderId, { bool? deleteContents, Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersFolderIdDeleteWithHttpInfo(folderId, deleteContents: deleteContents, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersFolderIdDelete(String folderId, { bool? deleteContents, }) async {
+    final response = await apiChatFoldersFolderIdDeleteWithHttpInfo(folderId,  deleteContents: deleteContents, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -806,7 +793,7 @@ class ChatHistoryApi {
   ///
   /// * [String] folderId (required):
   ///   ID of the folder to retrieve
-  Future<Response> apiChatFoldersFolderIdGetWithHttpInfo(String folderId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersFolderIdGetWithHttpInfo(String folderId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/{folderId}'
       .replaceAll('{folderId}', folderId);
@@ -829,7 +816,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -841,8 +827,8 @@ class ChatHistoryApi {
   ///
   /// * [String] folderId (required):
   ///   ID of the folder to retrieve
-  Future<void> apiChatFoldersFolderIdGet(String folderId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersFolderIdGetWithHttpInfo(folderId, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersFolderIdGet(String folderId,) async {
+    final response = await apiChatFoldersFolderIdGetWithHttpInfo(folderId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -860,7 +846,7 @@ class ChatHistoryApi {
   ///   ID of the folder to update
   ///
   /// * [ApiChatFoldersFolderIdPatchRequest] apiChatFoldersFolderIdPatchRequest (required):
-  Future<Response> apiChatFoldersFolderIdPatchWithHttpInfo(String folderId, ApiChatFoldersFolderIdPatchRequest apiChatFoldersFolderIdPatchRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersFolderIdPatchWithHttpInfo(String folderId, ApiChatFoldersFolderIdPatchRequest apiChatFoldersFolderIdPatchRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/{folderId}'
       .replaceAll('{folderId}', folderId);
@@ -883,7 +869,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -897,8 +882,8 @@ class ChatHistoryApi {
   ///   ID of the folder to update
   ///
   /// * [ApiChatFoldersFolderIdPatchRequest] apiChatFoldersFolderIdPatchRequest (required):
-  Future<void> apiChatFoldersFolderIdPatch(String folderId, ApiChatFoldersFolderIdPatchRequest apiChatFoldersFolderIdPatchRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersFolderIdPatchWithHttpInfo(folderId, apiChatFoldersFolderIdPatchRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersFolderIdPatch(String folderId, ApiChatFoldersFolderIdPatchRequest apiChatFoldersFolderIdPatchRequest,) async {
+    final response = await apiChatFoldersFolderIdPatchWithHttpInfo(folderId, apiChatFoldersFolderIdPatchRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -914,7 +899,7 @@ class ChatHistoryApi {
   ///
   /// * [String] folderId (required):
   ///   ID of the folder
-  Future<Response> apiChatFoldersFolderIdPathGetWithHttpInfo(String folderId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersFolderIdPathGetWithHttpInfo(String folderId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/{folderId}/path'
       .replaceAll('{folderId}', folderId);
@@ -937,7 +922,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -949,8 +933,8 @@ class ChatHistoryApi {
   ///
   /// * [String] folderId (required):
   ///   ID of the folder
-  Future<void> apiChatFoldersFolderIdPathGet(String folderId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersFolderIdPathGetWithHttpInfo(folderId, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersFolderIdPathGet(String folderId,) async {
+    final response = await apiChatFoldersFolderIdPathGetWithHttpInfo(folderId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -969,7 +953,7 @@ class ChatHistoryApi {
   ///
   /// * [String] parentFolderId:
   ///   ID of parent folder to get subfolders (omit for root folders)
-  Future<Response> apiChatFoldersGetWithHttpInfo({ bool? includeArchived, String? parentFolderId, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersGetWithHttpInfo({ bool? includeArchived, String? parentFolderId, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders';
 
@@ -998,7 +982,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1013,8 +996,8 @@ class ChatHistoryApi {
   ///
   /// * [String] parentFolderId:
   ///   ID of parent folder to get subfolders (omit for root folders)
-  Future<void> apiChatFoldersGet({ bool? includeArchived, String? parentFolderId, Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersGetWithHttpInfo(includeArchived: includeArchived, parentFolderId: parentFolderId, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersGet({ bool? includeArchived, String? parentFolderId, }) async {
+    final response = await apiChatFoldersGetWithHttpInfo( includeArchived: includeArchived, parentFolderId: parentFolderId, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1029,7 +1012,7 @@ class ChatHistoryApi {
   /// Parameters:
   ///
   /// * [ApiChatFoldersPostRequest] apiChatFoldersPostRequest (required):
-  Future<Response> apiChatFoldersPostWithHttpInfo(ApiChatFoldersPostRequest apiChatFoldersPostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersPostWithHttpInfo(ApiChatFoldersPostRequest apiChatFoldersPostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders';
 
@@ -1051,7 +1034,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1062,8 +1044,8 @@ class ChatHistoryApi {
   /// Parameters:
   ///
   /// * [ApiChatFoldersPostRequest] apiChatFoldersPostRequest (required):
-  Future<void> apiChatFoldersPost(ApiChatFoldersPostRequest apiChatFoldersPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersPostWithHttpInfo(apiChatFoldersPostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersPost(ApiChatFoldersPostRequest apiChatFoldersPostRequest,) async {
+    final response = await apiChatFoldersPostWithHttpInfo(apiChatFoldersPostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1078,7 +1060,7 @@ class ChatHistoryApi {
   /// Parameters:
   ///
   /// * [ApiChatFoldersReorderPostRequest] apiChatFoldersReorderPostRequest (required):
-  Future<Response> apiChatFoldersReorderPostWithHttpInfo(ApiChatFoldersReorderPostRequest apiChatFoldersReorderPostRequest, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersReorderPostWithHttpInfo(ApiChatFoldersReorderPostRequest apiChatFoldersReorderPostRequest,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/reorder';
 
@@ -1100,7 +1082,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1111,8 +1092,8 @@ class ChatHistoryApi {
   /// Parameters:
   ///
   /// * [ApiChatFoldersReorderPostRequest] apiChatFoldersReorderPostRequest (required):
-  Future<void> apiChatFoldersReorderPost(ApiChatFoldersReorderPostRequest apiChatFoldersReorderPostRequest, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersReorderPostWithHttpInfo(apiChatFoldersReorderPostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersReorderPost(ApiChatFoldersReorderPostRequest apiChatFoldersReorderPostRequest,) async {
+    final response = await apiChatFoldersReorderPostWithHttpInfo(apiChatFoldersReorderPostRequest,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1131,7 +1112,7 @@ class ChatHistoryApi {
   ///
   /// * [bool] includeArchived:
   ///   Whether to include archived folders
-  Future<Response> apiChatFoldersSearchGetWithHttpInfo(String q, { bool? includeArchived, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatFoldersSearchGetWithHttpInfo(String q, { bool? includeArchived, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/folders/search';
 
@@ -1158,7 +1139,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1173,8 +1153,8 @@ class ChatHistoryApi {
   ///
   /// * [bool] includeArchived:
   ///   Whether to include archived folders
-  Future<void> apiChatFoldersSearchGet(String q, { bool? includeArchived, Future<void>? abortTrigger, }) async {
-    final response = await apiChatFoldersSearchGetWithHttpInfo(q, includeArchived: includeArchived, abortTrigger: abortTrigger,);
+  Future<void> apiChatFoldersSearchGet(String q, { bool? includeArchived, }) async {
+    final response = await apiChatFoldersSearchGetWithHttpInfo(q,  includeArchived: includeArchived, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1190,7 +1170,7 @@ class ChatHistoryApi {
   ///
   /// * [String] messageId (required):
   ///   ID of the message
-  Future<Response> apiChatMessagesMessageIdQueryGetWithHttpInfo(String messageId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatMessagesMessageIdQueryGetWithHttpInfo(String messageId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/messages/{messageId}/query'
       .replaceAll('{messageId}', messageId);
@@ -1213,7 +1193,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1225,8 +1204,8 @@ class ChatHistoryApi {
   ///
   /// * [String] messageId (required):
   ///   ID of the message
-  Future<void> apiChatMessagesMessageIdQueryGet(String messageId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatMessagesMessageIdQueryGetWithHttpInfo(messageId, abortTrigger: abortTrigger,);
+  Future<void> apiChatMessagesMessageIdQueryGet(String messageId,) async {
+    final response = await apiChatMessagesMessageIdQueryGetWithHttpInfo(messageId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1244,7 +1223,7 @@ class ChatHistoryApi {
   ///   ID of the query
   ///
   /// * [ApiChatQueryQueryIdConversationPostRequest] apiChatQueryQueryIdConversationPostRequest:
-  Future<Response> apiChatQueryQueryIdConversationPostWithHttpInfo(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatQueryQueryIdConversationPostWithHttpInfo(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/query/{queryId}/conversation'
       .replaceAll('{queryId}', queryId);
@@ -1267,7 +1246,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1281,8 +1259,8 @@ class ChatHistoryApi {
   ///   ID of the query
   ///
   /// * [ApiChatQueryQueryIdConversationPostRequest] apiChatQueryQueryIdConversationPostRequest:
-  Future<void> apiChatQueryQueryIdConversationPost(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, Future<void>? abortTrigger, }) async {
-    final response = await apiChatQueryQueryIdConversationPostWithHttpInfo(queryId, apiChatQueryQueryIdConversationPostRequest: apiChatQueryQueryIdConversationPostRequest, abortTrigger: abortTrigger,);
+  Future<void> apiChatQueryQueryIdConversationPost(String queryId, { ApiChatQueryQueryIdConversationPostRequest? apiChatQueryQueryIdConversationPostRequest, }) async {
+    final response = await apiChatQueryQueryIdConversationPostWithHttpInfo(queryId,  apiChatQueryQueryIdConversationPostRequest: apiChatQueryQueryIdConversationPostRequest, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1298,7 +1276,7 @@ class ChatHistoryApi {
   ///
   /// * [String] queryId (required):
   ///   ID of the query
-  Future<Response> apiChatQueryQueryIdMessagesGetWithHttpInfo(String queryId, { Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatQueryQueryIdMessagesGetWithHttpInfo(String queryId,) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/query/{queryId}/messages'
       .replaceAll('{queryId}', queryId);
@@ -1321,7 +1299,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1333,8 +1310,8 @@ class ChatHistoryApi {
   ///
   /// * [String] queryId (required):
   ///   ID of the query
-  Future<void> apiChatQueryQueryIdMessagesGet(String queryId, { Future<void>? abortTrigger, }) async {
-    final response = await apiChatQueryQueryIdMessagesGetWithHttpInfo(queryId, abortTrigger: abortTrigger,);
+  Future<void> apiChatQueryQueryIdMessagesGet(String queryId,) async {
+    final response = await apiChatQueryQueryIdMessagesGetWithHttpInfo(queryId,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1350,7 +1327,7 @@ class ChatHistoryApi {
   ///
   /// * [int] limit:
   ///   Maximum number of conversations to return
-  Future<Response> apiChatRecentGetWithHttpInfo({ int? limit, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatRecentGetWithHttpInfo({ int? limit, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/recent';
 
@@ -1376,7 +1353,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1388,8 +1364,8 @@ class ChatHistoryApi {
   ///
   /// * [int] limit:
   ///   Maximum number of conversations to return
-  Future<void> apiChatRecentGet({ int? limit, Future<void>? abortTrigger, }) async {
-    final response = await apiChatRecentGetWithHttpInfo(limit: limit, abortTrigger: abortTrigger,);
+  Future<void> apiChatRecentGet({ int? limit, }) async {
+    final response = await apiChatRecentGetWithHttpInfo( limit: limit, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1414,7 +1390,7 @@ class ChatHistoryApi {
   ///
   /// * [bool] includeArchived:
   ///   Whether to include archived conversations
-  Future<Response> apiChatSearchGetWithHttpInfo(String q, { int? limit, int? offset, bool? includeArchived, Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatSearchGetWithHttpInfo(String q, { int? limit, int? offset, bool? includeArchived, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/search';
 
@@ -1447,7 +1423,6 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
@@ -1468,8 +1443,8 @@ class ChatHistoryApi {
   ///
   /// * [bool] includeArchived:
   ///   Whether to include archived conversations
-  Future<void> apiChatSearchGet(String q, { int? limit, int? offset, bool? includeArchived, Future<void>? abortTrigger, }) async {
-    final response = await apiChatSearchGetWithHttpInfo(q, limit: limit, offset: offset, includeArchived: includeArchived, abortTrigger: abortTrigger,);
+  Future<void> apiChatSearchGet(String q, { int? limit, int? offset, bool? includeArchived, }) async {
+    final response = await apiChatSearchGetWithHttpInfo(q,  limit: limit, offset: offset, includeArchived: includeArchived, );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
@@ -1480,7 +1455,7 @@ class ChatHistoryApi {
   /// Retrieves statistics about the user's conversations
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> apiChatStatsGetWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> apiChatStatsGetWithHttpInfo() async {
     // ignore: prefer_const_declarations
     final path = r'/api/chat/stats';
 
@@ -1502,15 +1477,14 @@ class ChatHistoryApi {
       headerParams,
       formParams,
       contentTypes.isEmpty ? null : contentTypes.first,
-      abortTrigger: abortTrigger,
     );
   }
 
   /// Get conversation statistics
   ///
   /// Retrieves statistics about the user's conversations
-  Future<void> apiChatStatsGet({ Future<void>? abortTrigger, }) async {
-    final response = await apiChatStatsGetWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<void> apiChatStatsGet() async {
+    final response = await apiChatStatsGetWithHttpInfo();
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }

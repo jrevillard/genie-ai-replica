@@ -11,11 +11,11 @@
 import 'package:openapi/api.dart';
 import 'package:test/test.dart';
 
-// tests for QueriesPostRequest
+// tests for ApiQueriesPostRequest
 void main() {
-  // final instance = QueriesPostRequest();
+  // final instance = ApiQueriesPostRequest();
 
-  group('test QueriesPostRequest', () {
+  group('test ApiQueriesPostRequest', () {
     // ID of the current session
     // String sessionId
     test('to test the property `sessionId`', () async {
@@ -29,12 +29,12 @@ void main() {
     });
 
     // Full conversation history (required for conversation mode)
-    // List<QueriesPostRequestMessagesInner> messages (default value: const [])
+    // List<ApiQueriesPostRequestMessagesInner> messages (default value: const [])
     test('to test the property `messages`', () async {
       // TODO
     });
 
-    // QueriesPostRequestContext context
+    // ApiQueriesPostRequestContext context
     test('to test the property `context`', () async {
       // TODO
     });

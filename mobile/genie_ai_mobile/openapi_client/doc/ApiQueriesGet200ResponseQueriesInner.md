@@ -1,4 +1,4 @@
-# openapi.model.QueriesPost201Response
+# openapi.model.ApiQueriesGet200ResponseQueriesInner
 
 ## Load the model package
 ```dart

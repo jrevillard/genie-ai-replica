@@ -30,12 +30,12 @@ const QUERIES = [
   {
     lang: 'en',
     scope: 'local',
-    q: '"El Salvador" (maize OR fertilizer OR coffee OR sugar OR harvest OR "commodity prices" OR "food prices") (market OR prices OR exports OR trade OR economy) sourcelang:eng'
+    q: '"El Salvador" (maize OR fertilizer OR coffee OR sugar OR harvest OR "commodity prices" OR "food prices" OR "coffee exports") sourcelang:eng'
   },
   {
     lang: 'es',
     scope: 'local',
-    q: '"El Salvador" (maíz OR fertilizantes OR café OR azúcar OR granos OR cosecha OR "precios de alimentos") (mercado OR precios OR exportaciones OR comercio OR economía) sourcelang:spa'
+    q: '"El Salvador" (maíz OR fertilizantes OR café OR azúcar OR granos OR cosecha OR "precios de alimentos" OR "exportaciones de café") sourcelang:spa'
   }
 ];
 

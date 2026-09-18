@@ -518,10 +518,17 @@ export default {
         const range = maxVal - minVal || 1;
         const step = Math.pow(10, Math.floor(Math.log10(range / 4))) || 1;
         const floor = Math.floor((minVal - range * 0.05) / step) * step;
+        // USD axes get the $ marker on every tick (all price series are
+        // USD-denominated — also El Salvador's own currency since 2001);
+        // non-currency axes (index, %) stay bare
+        const isUsd = /USD/i.test(g.unit || '');
         return {
           min: minVal >= 0 ? Math.max(0, floor) : floor,
           max: Math.round(maxVal * 1.5 * 100) / 100,
-          labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) },
+          labels: {
+            style: { colors: cssVars.mutedColor },
+            formatter: (v) => (isUsd && Number.isFinite(v) ? `$${this.formatAxisValue(v)}` : this.formatAxisValue(v))
+          },
           title:
             groups.length > 1 && g.unit
               ? { text: g.unit, style: { color: cssVars.mutedColor, fontSize: '11px', fontWeight: 500 } }

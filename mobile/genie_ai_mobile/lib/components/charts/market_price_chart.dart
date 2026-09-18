@@ -682,38 +682,44 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
     return (standardInterval * magnitude).toDouble();
   }
 
+  /// All price series are USD-denominated (also El Salvador's own currency
+  /// since 2001) — currency axes/values carry the $ marker; non-currency
+  /// units (index, %) stay bare.
+  bool get _isUsd => _unit.toUpperCase().contains('USD');
+  String _usd(String s) => _isUsd ? '\$$s' : s;
+
   String _formatValue(double? value) {
     if (value == null) return '--';
 
     if (widget.category == 'aquaculture') {
       if (value >= 1000) {
-        return '${(value / 1000).toStringAsFixed(1)}K';
+        return _usd('${(value / 1000).toStringAsFixed(1)}K');
       }
-      return value.toStringAsFixed(0);
+      return _usd(value.toStringAsFixed(0));
     } else if (widget.category == 'fertilizer') {
-      return value.toStringAsFixed(0);
+      return _usd(value.toStringAsFixed(0));
     } else if (widget.category == 'harvestStorage') {
       return '${value.toStringAsFixed(1)}%';
     } else if (widget.category == 'cropProtection') {
       return '${value.toStringAsFixed(1)}%';
     } else {
-      return value.toStringAsFixed(0);
+      return _usd(value.toStringAsFixed(0));
     }
   }
 
   String _formatAxisValue(double value) {
     if (widget.category == 'aquaculture') {
       if (value >= 1000) {
-        return '${(value / 1000).toStringAsFixed(0)}K';
+        return _usd('${(value / 1000).toStringAsFixed(0)}K');
       }
-      return value.toStringAsFixed(0);
+      return _usd(value.toStringAsFixed(0));
     } else if (widget.category == 'fertilizer') {
-      return value.toStringAsFixed(0);
+      return _usd(value.toStringAsFixed(0));
     } else if (widget.category == 'harvestStorage' ||
         widget.category == 'cropProtection') {
       return '${value.toStringAsFixed(0)}%';
     } else {
-      return value.toStringAsFixed(0);
+      return _usd(value.toStringAsFixed(0));
     }
   }
 

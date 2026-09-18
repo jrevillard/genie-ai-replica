@@ -19,7 +19,7 @@ const { fillMissingYears } = require('./estimation');
 const { computeTrend, usdPerKgToQuintal } = require('./series');
 const seeds = require('./seeds/index');
 const { activeAdvisories } = require('./seeds/pest-advisories');
-const { isRelevantNews } = require('./newsfilter');
+const { isRelevantNews, dedupeByTitle } = require('./newsfilter');
 
 const COLLECTIONS = ['agri_series', 'agri_ndvi', 'agri_alerts', 'agri_news', 'agri_cache', 'agri_fetch_log'];
 
@@ -875,6 +875,10 @@ class AgriService {
     // Relevance gate at serve time too — filters items landed before the
     // ingest gate existed (economics/agriculture only, user req 2026-09-18)
     items = items.filter((n) => isRelevantNews(n));
+
+    // Wire stories syndicate under many domains (verified live 2026-09-18:
+    // one Reuters piece ×3 sources) — keep a single copy, newest first
+    items = dedupeByTitle(items);
 
     // Top 5 per feed source, newest first
     const perSource = new Map();

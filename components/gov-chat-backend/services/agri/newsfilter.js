@@ -26,4 +26,21 @@ function isRelevantNews(item) {
   return RELEVANT.some((re) => re.test(text));
 }
 
-module.exports = { isRelevantNews };
+/**
+ * Drop syndicated copies of the same wire story (verified live 2026-09-18:
+ * one Reuters piece surfaced under three domains). First occurrence wins —
+ * callers pass items sorted newest-first.
+ * @param {Array<{title?:string}>} items
+ * @returns {Array} items with duplicate normalized titles removed
+ */
+function dedupeByTitle(items) {
+  const seen = new Set();
+  return (items || []).filter((n) => {
+    const k = (n && n.title ? n.title : '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+module.exports = { isRelevantNews, dedupeByTitle };

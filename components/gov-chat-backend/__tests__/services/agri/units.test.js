@@ -249,7 +249,7 @@ describe('agri-service init db wiring', () => {
 });
 
 describe('agri news relevance gate', () => {
-  const { isRelevantNews } = require('../../../services/agri/newsfilter');
+  const { isRelevantNews, dedupeByTitle } = require('../../../services/agri/newsfilter');
 
   test('drops entertainment headlines (reported live: "Jay Music y Jimmy Bad Boy…")', () => {
     expect(isRelevantNews({ title: 'Jay Music y Jimmy Bad Boy unen Guatemala y Panamá en “Contigo Me Voy”' })).toBe(
@@ -265,5 +265,18 @@ describe('agri news relevance gate', () => {
     expect(isRelevantNews({ title: 'El Salvador coffee exports rise 12% in August' })).toBe(true);
     expect(isRelevantNews({ title: 'Banco Central ajusta proyección de inflación' })).toBe(true);
     expect(isRelevantNews({ title: 'Iranian vessel hit near Qeshm', snippet: 'oil prices and shipping' })).toBe(true);
+  });
+
+  test('dedupeByTitle collapses syndicated wire copies (Reuters ×3 live)', () => {
+    const items = [
+      { title: 'Before its peak, El Nino brings failed crops', source: 'reuters.com' },
+      { title: 'Before its peak,  El Nino brings failed crops', source: 'news.sky.com' }, // whitespace differs
+      { title: 'BEFORE ITS PEAK, EL NINO BRINGS FAILED CROPS', source: 'yahoo.com' }, // case differs
+      { title: 'El Salvador coffee exports rise 12% in August', source: 'es.at' }
+    ];
+    const out = dedupeByTitle(items);
+    expect(out).toHaveLength(2);
+    expect(out[0].source).toBe('reuters.com'); // first occurrence wins
+    expect(out[1].title).toContain('coffee exports');
   });
 });

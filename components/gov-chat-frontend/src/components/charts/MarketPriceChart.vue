@@ -559,7 +559,10 @@ export default {
         chart: {
           type: 'line',
           toolbar: { show: false },
-          animations: { enabled: true, easing: 'easeinout', speed: 800 },
+          // Dense charts animate 2000+ points through 30k px of scroll width —
+          // the main-thread cost showed up as '[Violation] setTimeout' in the
+          // browser log; animate only the light ones
+          animations: dense ? { enabled: false } : { enabled: true, easing: 'easeinout', speed: 800 },
           background: 'transparent'
         },
         xaxis: {

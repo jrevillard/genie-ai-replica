@@ -887,30 +887,38 @@ class AgriService {
       );
     };
 
+    // Relevance gate at serve time too — filters items landed before the
+    // ingest gate existed (economics/agriculture only, user req 2026-09-18).
+    // Wire stories syndicate under many domains (verified live 2026-09-18:
+    // one Reuters piece ×3 sources) — keep a single copy, newest first.
+    const gateAndDedupe = (arr) => dedupeByTitle(arr.filter((n) => isRelevantNews(n)));
+
     // Widening window: 48 h normally; 7 d, then 14 d when the feeds have
     // been quiet/rate-limited — an older-but-relevant list beats an empty
     // picker (user req: never show nothing while major events unfold).
     let windowHours = 48;
-    let items = await fetch(windowHours);
+    let items = gateAndDedupe(await fetch(windowHours));
     if (items.length < 3) {
       windowHours = 168;
-      items = await fetch(windowHours);
+      items = gateAndDedupe(await fetch(windowHours));
     }
     if (items.length < 3) {
       windowHours = 336;
-      items = await fetch(windowHours);
+      items = gateAndDedupe(await fetch(windowHours));
     }
 
     // AI translation fallback: when the requested language has (almost)
     // nothing for this scope, serve the OTHER language's items translated
     // (user req 2026-09-18). Translations persist in agri_news keyed
-    // `<orig>~<lang>` so each item is translated once, ever.
+    // `<orig>_tr<lang>` so each item is translated once, ever. The pool is
+    // GATED first — translating the newest-then-gating order burned GPU
+    // calls on crime/politics headlines that could never serve.
     let translatedNote = '';
     if (items.length < 3) {
       const other = lang === 'en' ? 'es' : 'en';
-      const pool = await fetch(windowHours, other);
+      const pool = gateAndDedupe(await fetch(windowHours, other)).slice(0, 10);
       if (pool.length > 0) {
-        const translated = await this.translateNewsItems(pool.slice(0, 10), other, lang);
+        const translated = (await this.translateNewsItems(pool, other, lang)).filter((n) => isRelevantNews(n));
         if (translated.length > 0) {
           translatedNote = ` — ${translated.length} item${translated.length === 1 ? '' : 's'} AI-translated from ${
             other === 'es' ? 'Spanish' : 'English'
@@ -919,14 +927,6 @@ class AgriService {
         }
       }
     }
-
-    // Relevance gate at serve time too — filters items landed before the
-    // ingest gate existed (economics/agriculture only, user req 2026-09-18)
-    items = items.filter((n) => isRelevantNews(n));
-
-    // Wire stories syndicate under many domains (verified live 2026-09-18:
-    // one Reuters piece ×3 sources) — keep a single copy, newest first
-    items = dedupeByTitle(items);
 
     // Top 5 per feed source, newest first
     const perSource = new Map();

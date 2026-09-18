@@ -255,3 +255,11 @@ a transparent box under the date title, reported on dark mode). */
 .apexcharts-tooltip-marker {
   background: var(--fg) !important;
 }
+
+/* Modal close (X): bare glyph — kills the border that survived scoped-rule
+   injection order on the deployed build (reported twice, 2026-09-18). */
+.ds-modal .ds-modal__close {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}

@@ -494,19 +494,21 @@ export default {
       const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
       const dense = this.pointCount > 300;
 
-      // Group visible series by unit: irreducibly-mixed units (e.g. a PPI
-      // index co-plotted with USD/kg) each get their own y-axis scaled
-      // relative to THEIR data — floor hugs the minimum (clamped at 0 for
-      // positive prices), top sits at 1.5× the highest value.
+      // Group visible series by unit. Series stay in chartSeries order and
+      // each group's series are contiguous (primary's group is built first),
+      // so ApexCharts' INDEX mapping assigns yaxis[i] to the right series —
+      // the `seriesName` array form is not supported by this ApexCharts
+      // build and silently hid every array-bound series (vegetables showed
+      // only Tomato after that mistake).
       const groups = [];
-      for (const s of this.chartSeries) {
+      for (const [idx, s] of this.chartSeries.entries()) {
         const unit = (s.unit || this.unit || '').toString();
         let g = groups.find((x) => x.unit === unit);
         if (!g) {
-          g = { unit, names: [], values: [] };
+          g = { unit, seriesIdx: [], values: [] };
           groups.push(g);
         }
-        g.names.push(s.name);
+        g.seriesIdx.push(idx);
         for (const point of s.data) {
           if (point && point[1] !== null && point[1] !== undefined && Number.isFinite(point[1]))
             g.values.push(point[1]);
@@ -529,16 +531,29 @@ export default {
             style: { colors: cssVars.mutedColor },
             formatter: (v) => (isUsd && Number.isFinite(v) ? `$${this.formatAxisValue(v)}` : this.formatAxisValue(v))
           },
-          title:
-            groups.length > 1 && g.unit
-              ? { text: g.unit, style: { color: cssVars.mutedColor, fontSize: '11px', fontWeight: 500 } }
-              : undefined
+          // title must ALWAYS be a real object — `title: undefined` crashed
+          // ApexCharts' getyAxisTitleCoords and blanked every single-unit
+          // chart (found live 2026-09-18). Empty text renders nothing.
+          title: {
+            text: groups.length > 1 && g.unit ? g.unit : '',
+            style: { color: cssVars.mutedColor, fontSize: '11px', fontWeight: 500 }
+          }
         };
       };
-      const yaxis =
-        groups.length <= 1
-          ? [axisFor(groups[0] || { unit: '', names: [], values: [] })]
-          : groups.map((g, i) => ({ ...axisFor(g), seriesName: g.names, opposite: i > 0 }));
+      const yaxis = groups.map((g, i) => ({ ...axisFor(g), opposite: i > 0 }));
+      // Tooltip lookup: series index → its unit group
+      const groupOfSeries = new Map();
+      groups.forEach((g, gi) => g.seriesIdx.forEach((i) => groupOfSeries.set(i, gi)));
+      console.debug(
+        `[MarketPriceChart:${this.category}] series=${this.chartSeries.length} groups=${groups.length}`,
+        groups.map((g, i) => ({
+          axis: i,
+          unit: g.unit,
+          series: g.seriesIdx.length,
+          yMin: yaxis[i].min,
+          yMax: yaxis[i].max
+        }))
+      );
 
       return {
         chart: {
@@ -602,7 +617,8 @@ export default {
           },
           y: {
             formatter: (v, opts) => {
-              const g = groups[opts && opts.seriesIndex !== undefined ? opts.seriesIndex : 0];
+              const gi = groupOfSeries.get(opts && opts.seriesIndex !== undefined ? opts.seriesIndex : 0) || 0;
+              const g = groups[gi];
               const unit = (g && g.unit) || this.unit || '';
               return `${this.formatValue(v)}${unit ? ` ${unit}` : ''}`;
             }
@@ -845,9 +861,18 @@ export default {
       this.error = null;
       try {
         this.envelope = await agriApiService.getMarketPrices(this.category);
+        // Debuggability: one line per load — what the backend actually sent
+        const series = (this.envelope && this.envelope.data && this.envelope.data.series) || [];
+        console.debug(
+          `[MarketPriceChart:${this.category}] loaded ${series.length} series, ${series.reduce(
+            (n, s) => n + (s.data || []).length,
+            0
+          )} points, unit=${this.unit}, stale=${!!(this.envelope.meta && this.envelope.meta.stale)}`,
+          series.map((s) => ({ name: s.name, unit: s.unit, n: (s.data || []).length }))
+        );
       } catch (err) {
         this.error = this.$t('charts.loadDataError', 'Failed to load data');
-        console.error('Error loading market price data:', err);
+        console.error(`[MarketPriceChart:${this.category}] load failed:`, err);
       } finally {
         this.loading = false;
       }

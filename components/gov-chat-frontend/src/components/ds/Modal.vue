@@ -200,10 +200,13 @@ export default {
   padding: 0;
   font-size: var(--text-lg);
   line-height: 1;
-  /* Bare × glyph — no button chrome (user req 2026-09-18) */
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  /* Bare × glyph — no button chrome. !important: the base .ds-btn border
+     (1px solid) out-ranked this rule on stylesheet injection order and the
+     border survived on the deployed build (reported twice, 2026-09-18). */
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none;
   appearance: none;
 }
 

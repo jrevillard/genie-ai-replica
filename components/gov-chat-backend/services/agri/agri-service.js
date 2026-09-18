@@ -840,7 +840,8 @@ class AgriService {
     const MT = 'USD/mt';
     const UNIT_FACTORS = {
       [`${MT}|${QUINTAL}`]: 46 / 1000, // 1 quintal = 46 kg
-      [`${MT}|USD/kg`]: 1 / 1000
+      [`${MT}|USD/kg`]: 1 / 1000,
+      [`${KG}|${QUINTAL}`]: 46 // vegetables: FAOSTAT tomatoes USD/kg → quintal axis
     };
     for (const s of series) {
       if (s.unit === targetUnit) continue;

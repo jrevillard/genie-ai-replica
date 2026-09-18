@@ -7,6 +7,7 @@
  * descriptions, size capped upstream by http.js.
  */
 const { fetchUrl } = require('../http');
+const { isRelevantNews } = require('../newsfilter');
 const nodeCrypto = require('node:crypto');
 
 const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'" };
@@ -72,6 +73,10 @@ function createRssAdapter(opts) {
     normalize(items) {
       const docs = [];
       for (const item of items) {
+        // Relevance gate: economics/agriculture only — general-purpose
+        // outlet feeds (CoLatino et al.) carry entertainment that must
+        // never reach the picker (user req 2026-09-18).
+        if (!isRelevantNews(item)) continue;
         const url = item.link || '';
         const logical = `${opts.id}:${url || item.title}`;
         docs.push({

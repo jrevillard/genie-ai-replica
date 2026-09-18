@@ -247,3 +247,23 @@ describe('agri-service init db wiring', () => {
     }
   });
 });
+
+describe('agri news relevance gate', () => {
+  const { isRelevantNews } = require('../../../services/agri/newsfilter');
+
+  test('drops entertainment headlines (reported live: "Jay Music y Jimmy Bad Boy…")', () => {
+    expect(isRelevantNews({ title: 'Jay Music y Jimmy Bad Boy unen Guatemala y Panamá en “Contigo Me Voy”' })).toBe(
+      false
+    );
+    expect(isRelevantNews({ title: 'Concierto benéfico reúne a miles en San Salvador' })).toBe(false);
+    expect(isRelevantNews({ title: 'Resultado del clásico: equipo local gana 2-1' })).toBe(false);
+  });
+
+  test('keeps agriculture and economics headlines in EN and ES', () => {
+    expect(isRelevantNews({ title: 'Wheat prices surge as Black Sea exports stall' })).toBe(true);
+    expect(isRelevantNews({ title: 'Precios del fertilizante suben en Centroamérica' })).toBe(true);
+    expect(isRelevantNews({ title: 'El Salvador coffee exports rise 12% in August' })).toBe(true);
+    expect(isRelevantNews({ title: 'Banco Central ajusta proyección de inflación' })).toBe(true);
+    expect(isRelevantNews({ title: 'Iranian vessel hit near Qeshm', snippet: 'oil prices and shipping' })).toBe(true);
+  });
+});

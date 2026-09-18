@@ -19,6 +19,7 @@ const { fillMissingYears } = require('./estimation');
 const { computeTrend, usdPerKgToQuintal } = require('./series');
 const seeds = require('./seeds/index');
 const { activeAdvisories } = require('./seeds/pest-advisories');
+const { isRelevantNews } = require('./newsfilter');
 
 const COLLECTIONS = ['agri_series', 'agri_ndvi', 'agri_alerts', 'agri_news', 'agri_cache', 'agri_fetch_log'];
 
@@ -857,9 +858,23 @@ class AgriService {
       );
     };
 
-    // 48 h window; widen to 7 d when quiet (plan §7)
-    let items = await fetch(48);
-    if (items.length < 3) items = await fetch(168);
+    // Widening window: 48 h normally; 7 d, then 14 d when the feeds have
+    // been quiet/rate-limited — an older-but-relevant list beats an empty
+    // picker (user req: never show nothing while major events unfold).
+    let windowHours = 48;
+    let items = await fetch(windowHours);
+    if (items.length < 3) {
+      windowHours = 168;
+      items = await fetch(windowHours);
+    }
+    if (items.length < 3) {
+      windowHours = 336;
+      items = await fetch(windowHours);
+    }
+
+    // Relevance gate at serve time too — filters items landed before the
+    // ingest gate existed (economics/agriculture only, user req 2026-09-18)
+    items = items.filter((n) => isRelevantNews(n));
 
     // Top 5 per feed source, newest first
     const perSource = new Map();
@@ -880,9 +895,10 @@ class AgriService {
         source: 'GDELT + official RSS feeds',
         attribution: 'Global news via the GDELT Project (gdeltproject.org)',
         coverage:
-          scope === 'local'
+          (scope === 'local'
             ? 'MAG El Salvador, Presidencia, Diario CoLatino (official/local feeds)'
-            : 'GDELT DOC 2.0 + FAO newsroom'
+            : 'GDELT DOC 2.0 + FAO newsroom') +
+          (windowHours > 48 ? ` — widened to the last ${windowHours / 24} days (feeds quiet or rate-limited)` : '')
       }
     );
   }

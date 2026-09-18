@@ -135,7 +135,13 @@ describe('gdelt adapter', () => {
           articles: [
             {
               url: 'https://rurales.elpais.com.uy/a1',
-              title: 'Una primavera movida',
+              title: 'Mercado de trigo: una primavera movida',
+              seendate: '20260913T090000Z',
+              domain: 'rurales.elpais.com.uy'
+            },
+            {
+              url: 'https://rurales.elpais.com.uy/a2',
+              title: 'Concierto benéfico reúne a miles', // irrelevant — filtered
               seendate: '20260913T090000Z',
               domain: 'rurales.elpais.com.uy'
             }

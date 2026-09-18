@@ -8,6 +8,7 @@
  * Title-only results (no snippet field in artlist mode).
  */
 const { fetchJson } = require('../http');
+const { isRelevantNews } = require('../newsfilter');
 const nodeCrypto = require('node:crypto');
 
 const QUERIES = {
@@ -17,6 +18,10 @@ const QUERIES = {
 
 const GDELT_MIN_SPACING_MS = 10500; // measured sticky limiter (gap-check §5)
 let lastCallAt = 0;
+// Hard backoff after a 429: the limiter is sticky for hours, and retrying
+// into it extends the block. One 429 → quiet for 2 h (found live 2026-09-18:
+// every pass failed "0 documents" while the picker went empty).
+let backoffUntil = 0;
 
 module.exports = {
   id: 'gdelt',
@@ -38,6 +43,9 @@ module.exports = {
   },
 
   async fetch(urls) {
+    if (Date.now() < backoffUntil) {
+      throw new Error(`GDELT rate-limited (429) — backing off until ${new Date(backoffUntil).toISOString()}`);
+    }
     const out = [];
     for (const { lang, url } of urls) {
       const wait = lastCallAt + GDELT_MIN_SPACING_MS - Date.now();
@@ -46,6 +54,10 @@ module.exports = {
       try {
         out.push({ lang, json: await fetchJson(url, { timeoutMs: 25000, maxRetries: 1 }) });
       } catch (error) {
+        if (/429/.test(error.message)) {
+          backoffUntil = Date.now() + 2 * 3600 * 1000;
+          throw new Error(`GDELT 429 rate-limited — backing off until ${new Date(backoffUntil).toISOString()}`);
+        }
         out.push({ lang, error: error.message });
       }
     }
@@ -61,6 +73,8 @@ module.exports = {
     for (const { lang, json, error } of results) {
       if (error) continue;
       for (const article of (json && json.articles) || []) {
+        // Relevance gate: economics/agriculture only (user req 2026-09-18)
+        if (!isRelevantNews({ title: article.title })) continue;
         const publishedAt = article.seendate
           ? article.seendate.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, '$1-$2-$3T$4:$5:$6Z')
           : null;

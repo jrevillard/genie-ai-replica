@@ -410,25 +410,52 @@ class AgriService {
     let { envelope, origin } = await this.cache.get(key);
 
     // A cached empty envelope ('pending' from a failed pass) must not mask
-    // a usable seed — the seed floor wins until a real rebuild lands.
-    if (this.constructor.isEmptyEnvelope(envelope) && seeds[key]) {
-      logger.info(`agri serve ${key}: cached envelope empty — falling back to seed`);
-      envelope = seeds[key];
-      origin = 'seed';
+    // a usable seed — the seed floor wins until a real rebuild lands. With
+    // no seed (news endpoints), an empty cache is a MISS: rebuild now
+    // instead of serving an empty list until the TTL lapses (found live:
+    // empty news LKG envelopes served for hours).
+    if (this.constructor.isEmptyEnvelope(envelope)) {
+      if (seeds[key]) {
+        logger.info(`agri serve ${key}: cached envelope empty — falling back to seed`);
+        envelope = seeds[key];
+        origin = 'seed';
+      } else {
+        logger.info(`agri serve ${key}: cached envelope empty — rebuilding`);
+        envelope = null;
+        origin = null;
+      }
     }
 
     if (envelope) {
-      const ageHours = (Date.now() - Date.parse(envelope.meta.fetchedAt)) / 3600000;
-      const isStale = origin === 'seed' || ageHours * 3600000 > ttl * 2;
-      if (isStale) {
+      const fetchedAt = Date.parse(envelope.meta.fetchedAt);
+      const ageHours = Number.isFinite(fetchedAt) ? (Date.now() - fetchedAt) / 3600000 : 0;
+      const beyondRefresh = ageHours * 3600000 > ttl * 2;
+      if (beyondRefresh) {
+        // LKG older than 2× TTL is OBSOLETE, not merely stale — rebuild
+        // synchronously and serve fresh (found live: a pre-fix news
+        // envelope served unchanged for 13 h from the Arango tier). The
+        // stale copy remains the fallback when the rebuild fails.
+        try {
+          const fresh = await builder();
+          if (!this.constructor.isEmptyEnvelope(fresh)) {
+            await this.cache.set(key, fresh, ttl);
+            logger.info(`agri serve ${key}: LKG ${Math.round(ageHours)}h old — rebuilt (${Date.now() - started}ms)`);
+            return fresh;
+          }
+        } catch (error) {
+          logger.warn(`agri serve ${key}: stale-refresh rebuild failed (${error.message}) — serving LKG`);
+        }
         envelope.meta.stale = true;
-        envelope.meta.seeded = origin === 'seed';
         envelope.meta.caveats = [...(envelope.meta.caveats || []), caveat.staleCache(Math.round(ageHours))];
+      } else if (origin === 'seed') {
+        envelope.meta.stale = true;
+        envelope.meta.seeded = true;
       }
       logger.info(
         `agri serve ${key}: origin=${origin} stale=${!!envelope.meta.stale} ` +
           `${envelope.data && envelope.data.departments ? `depts=${envelope.data.departments.length} ` : ''}` +
           `${envelope.data && envelope.data.series ? `series=${envelope.data.series.length} ` : ''}` +
+          `${envelope.data && envelope.data.items ? `items=${envelope.data.items.length} ` : ''}` +
           `(${Date.now() - started}ms)`
       );
       if (origin !== 'redis' && envelope.meta && !envelope.meta.seeded) {
@@ -455,6 +482,8 @@ class AgriService {
     if (Array.isArray(d)) return d.length === 0;
     if (Array.isArray(d.series)) return d.series.length === 0;
     if (Array.isArray(d.departments)) return d.departments.length === 0;
+    // news shape: items
+    if (Array.isArray(d.items)) return d.items.length === 0;
     // pest-alerts shape: advisories/regional/sightings
     if (Array.isArray(d.advisories))
       return d.advisories.length + (d.regional || []).length + (d.sightings || []).length === 0;
@@ -463,7 +492,17 @@ class AgriService {
 
   /** Rebuild + persist every endpoint (called by scheduler after prefetch). */
   async rebuildAllEndpoints() {
-    const keys = ['crop-health', 'pest-alerts', ...Object.keys(MARKET_CATEGORIES).map((c) => `market-prices:${c}`)];
+    // News keys included since 2026-09-18: without a periodic rebuild the
+    // Arango LKG tier served pre-fix news envelopes for hours.
+    const keys = [
+      'crop-health',
+      'pest-alerts',
+      ...Object.keys(MARKET_CATEGORIES).map((c) => `market-prices:${c}`),
+      'news:local:es',
+      'news:local:en',
+      'news:global:es',
+      'news:global:en'
+    ];
     for (const key of keys) {
       try {
         const builder =
@@ -471,7 +510,9 @@ class AgriService {
             ? () => this.buildCropHealth()
             : key === 'pest-alerts'
               ? () => this.buildPestAlerts()
-              : () => this.buildMarketPrices(key.replace('market-prices:', ''));
+              : key.startsWith('news:')
+                ? () => this.buildNews(key.split(':')[1], key.split(':')[2])
+                : () => this.buildMarketPrices(key.replace('market-prices:', ''));
         const envelope = await builder();
         // Never-fail floor: an empty rebuild ('pending' placeholder) must not
         // overwrite data already cached or seeded — e.g. when a pass fails
@@ -488,7 +529,9 @@ class AgriService {
             ? `${envelope.data.departments.length} depts`
             : envelope.data && envelope.data.series
               ? `${envelope.data.series.length} series`
-              : 'empty';
+              : envelope.data && envelope.data.items
+                ? `${envelope.data.items.length} items`
+                : 'empty';
         logger.info(`agri rebuild ${key}: wrote ${detail} (source=${envelope.meta.source})`);
         await this.cache.set(key, envelope, this.endpointTtlMs(key));
       } catch (error) {

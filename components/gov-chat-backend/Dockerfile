@@ -12,10 +12,11 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY gov-chat-backend/package*.json ./
+COPY gov-chat-backend/.npmrc ./
 COPY shared/lib ./shared-lib
 
 RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --verbose --fetch-timeout 600000
+    npm ci --verbose --fetch-timeout 600000 --legacy-peer-deps
 RUN rm -rf /app/node_modules/shared-lib
 
 COPY gov-chat-backend/ ./

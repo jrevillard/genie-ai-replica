@@ -56,7 +56,9 @@ module.exports = {
       } catch (error) {
         if (/429/.test(error.message)) {
           backoffUntil = Date.now() + 2 * 3600 * 1000;
-          throw new Error(`GDELT 429 rate-limited — backing off until ${new Date(backoffUntil).toISOString()}`);
+          throw new Error(`GDELT 429 rate-limited — backing off until ${new Date(backoffUntil).toISOString()}`, {
+            cause: error
+          });
         }
         out.push({ lang, error: error.message });
       }

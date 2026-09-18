@@ -159,83 +159,140 @@ describe('POST /api/weather', () => {
     expect(response.status).toBe(200);
   });
 
-  it('should work with zero coordinates', async () => {
+  it('should return 503 CITY_NOT_FOUND for (0, 0) — mid-ocean coords have no city within 25km', async () => {
+    // Post-Issue-8 contract: the service no longer falls back to a default
+    // location. (0, 0) is in the South Atlantic — no populated place within
+    // the offline index's lookup radius — and the typed 503 surfaces as
+    // weatherErrorDefault in the UI. The service is mocked here so the
+    // contract is asserted at the route layer.
+    weatherService.getWeather.mockRejectedValueOnce(
+      Object.assign(new Error('No city found near the provided coordinates'), {
+        statusCode: 503,
+        code: 'CITY_NOT_FOUND'
+      })
+    );
     const response = await authPost('/api/weather', { latitude: 0, longitude: 0 });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('CITY_NOT_FOUND');
   });
 
   it('should return 400 when only latitude provided', async () => {
     const response = await authPost('/api/weather', { latitude: -6.2088 });
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Both latitude and longitude must be provided');
+    expect(response.body.message).toContain('Valid latitude and longitude are required');
   });
 
   it('should return 400 when only longitude provided', async () => {
     const response = await authPost('/api/weather', { longitude: 106.8456 });
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Both latitude and longitude must be provided');
+    expect(response.body.message).toContain('Valid latitude and longitude are required');
   });
 
-  it('should return 400 for invalid latitude (> 90)', async () => {
-    // Use a non-zero longitude to avoid the "both required" check
+  it('should return 400 LOCATION_REQUIRED for invalid latitude (> 90)', async () => {
+    // Range validation now lives in the service; the route maps the typed
+    // 400 error back to the client. No silent fallback to a default.
+    weatherService.getWeather.mockRejectedValueOnce(
+      Object.assign(new Error('Valid latitude and longitude are required'), {
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      })
+    );
     const response = await authPost('/api/weather', { latitude: 91, longitude: 1 });
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Invalid latitude');
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
   });
 
-  it('should return 400 for invalid latitude (< -90)', async () => {
-    // Use a non-zero longitude to avoid the "both required" check
+  it('should return 400 LOCATION_REQUIRED for invalid latitude (< -90)', async () => {
+    weatherService.getWeather.mockRejectedValueOnce(
+      Object.assign(new Error('Valid latitude and longitude are required'), {
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      })
+    );
     const response = await authPost('/api/weather', { latitude: -91, longitude: 1 });
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Invalid latitude');
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
   });
 
-  it('should return 400 for invalid longitude (> 180)', async () => {
-    // Use a non-zero latitude to avoid the "both required" check
+  it('should return 400 LOCATION_REQUIRED for invalid longitude (> 180)', async () => {
+    weatherService.getWeather.mockRejectedValueOnce(
+      Object.assign(new Error('Valid latitude and longitude are required'), {
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      })
+    );
     const response = await authPost('/api/weather', { latitude: 1, longitude: 181 });
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Invalid longitude');
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
   });
 
-  it('should return 400 for invalid longitude (< -180)', async () => {
-    // Use a non-zero latitude to avoid the "both required" check
+  it('should return 400 LOCATION_REQUIRED for invalid longitude (< -180)', async () => {
+    weatherService.getWeather.mockRejectedValueOnce(
+      Object.assign(new Error('Valid latitude and longitude are required'), {
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      })
+    );
     const response = await authPost('/api/weather', { latitude: 1, longitude: -181 });
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Invalid longitude');
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
   });
 
-  it('should return 400 for invalid coordinate types (string)', async () => {
+  it('should return 400 LOCATION_REQUIRED for invalid coordinate types (string)', async () => {
+    // Strings that do not parse to numbers hit the service's Number.isFinite
+    // check and surface as a typed 400 — no silent default.
+    weatherService.getWeather.mockRejectedValueOnce(
+      Object.assign(new Error('Valid latitude and longitude are required'), {
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      })
+    );
     const response = await authPost('/api/weather', { latitude: 'invalid', longitude: 0 });
     expect(response.status).toBe(400);
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
   });
 
-  it('should return 400 for invalid coordinate types (null)', async () => {
-    // When latitude is null and longitude is a number, the validation triggers
-    // The condition (latitude && !longitude) || (!latitude && longitude) catches this
-    // Actually: null is falsy, so !latitude is true when latitude is null
-    // latitude=null, longitude=0 -> (!null && 0) -> (true && false) -> false
-    // latitude=0, longitude=null -> (!0 && !null) -> (false && true) -> false
-    // So null values are treated as undefined and don't trigger 400
-    // The route defaults to server location when coordinates are null
+  it('should return 400 when latitude is null', async () => {
+    // Null coords are caught by the route's explicit null guard before
+    // the service is invoked — short-circuit, no wasted call.
     const response = await authPost('/api/weather', { latitude: null, longitude: 0 });
-    // This actually works - null is treated as undefined
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
+    expect(weatherService.getWeather).not.toHaveBeenCalled();
   });
 
-  it('should work with no coordinates (defaults to server location)', async () => {
-    // When no coordinates are provided, the service uses server location
+  it('should return 400 LOCATION_REQUIRED when no coordinates are provided', async () => {
+    // Privacy-respectful: the server does not invent a position. Empty
+    // body → explicit 400, never a silently-mislocated forecast.
     const response = await authPost('/api/weather', {});
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('location');
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('LOCATION_REQUIRED');
+    expect(weatherService.getWeather).not.toHaveBeenCalled();
   });
 
-  it('should return 500 when service throws error', async () => {
+  it('should return 500 when service throws a generic error', async () => {
     // Override the service mock for this test
     weatherService.getWeather.mockRejectedValueOnce(new Error('Weather API unavailable'));
 
     const response = await authPost('/api/weather', { latitude: 0, longitude: 0 });
     expect(response.status).toBe(500);
     expect(response.body.message).toContain('Weather API unavailable');
+  });
+
+  it('should return 503 when service throws a typed upstream-unavailable error', async () => {
+    // Mirrors the ea3e08253 graceful-degradation pattern: external upstream
+    // failures surface as 503, not generic 500.
+    const typedError = Object.assign(new Error('Weather service temporarily unavailable'), {
+      statusCode: 503,
+      code: 'WEATHER_UPSTREAM_UNAVAILABLE'
+    });
+    weatherService.getWeather.mockRejectedValueOnce(typedError);
+
+    const response = await authPost('/api/weather', { latitude: 46.2, longitude: 6.15 });
+    expect(response.status).toBe(503);
+    expect(response.body).toMatchObject({
+      error: 'WEATHER_UPSTREAM_UNAVAILABLE'
+    });
   });
 
   // Note: The middleware is mocked to always pass authentication in this test suite.

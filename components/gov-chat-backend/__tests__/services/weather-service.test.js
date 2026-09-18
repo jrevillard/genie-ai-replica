@@ -20,8 +20,37 @@ jest.mock(
   { virtual: true }
 );
 
+jest.mock('fs', () => ({
+  readFileSync: jest.fn()
+}));
+
+jest.mock('kdbush', () => {
+  // Mirror kdbush v4 ESM shape. kdbush v4 exports the constructor as a
+  // named default property of the ESM namespace; the documented CJS
+  // entry point is `require('kdbush').default`.
+  const KDBush = jest.fn().mockImplementation(() => ({
+    add: jest.fn(),
+    finish: jest.fn()
+  }));
+  return { __esModule: true, default: KDBush };
+});
+
+jest.mock('geokdbush', () => ({
+  around: jest.fn()
+}));
+
 const axios = require('axios');
+const fs = require('fs');
+const { around: geokdbushAround } = require('geokdbush');
 const { logger, dbService } = require('../../shared-lib');
+
+// One-line-per-row GeoNames TSV with two populated places so getCityName has
+// data to return from the index without depending on the real 39MB
+// dataset (downloaded by the Dockerfile at build time, not present at test).
+const CITIES_FIXTURE = [
+  '3038832\tVila\tVila\t\t42.53176\t1.56654\tP\tPPL\tAD\t\t\t\t\t0\t\t',
+  '3583360\tSan Salvador\tSan Salvador\t\t13.7942\t-88.8965\tP\tPPLC\tSV\t\t\t\t\t0\t\t'
+].join('\n');
 
 function createMockCollection() {
   return {
@@ -29,7 +58,15 @@ function createMockCollection() {
   };
 }
 
-function setupService() {
+function setupService({ cityIndexLoaded = true } = {}) {
+  if (cityIndexLoaded) {
+    fs.readFileSync.mockReturnValue(CITIES_FIXTURE);
+  } else {
+    fs.readFileSync.mockImplementation(() => {
+      throw new Error('File not found');
+    });
+  }
+
   const mockWeatherRequests = createMockCollection();
   const mockDb = {
     collection: jest.fn().mockReturnValue(mockWeatherRequests)
@@ -48,11 +85,6 @@ async function initService(service) {
   service.initialized = false;
   await service.init();
 }
-
-const ipapiResponse = {
-  status: 200,
-  data: { latitude: 46.2, longitude: 6.15, city: 'Geneva', country_name: 'Switzerland' }
-};
 
 const formatDate = (d) => d.toISOString().split('T')[0];
 const today = new Date();
@@ -78,25 +110,25 @@ const openMeteoResponse = {
 beforeEach(() => {
   jest.clearAllMocks();
   axios.get.mockReset();
+  fs.readFileSync.mockReset();
+  // Default to "first city in the fixture" (idx 1 = San Salvador) so most
+  // tests get a usable city name without per-test setup. Tests that need
+  // no-city / a different lookup result override with mockReturnValueOnce.
+  geokdbushAround.mockReset();
+  geokdbushAround.mockReturnValue([1]);
 });
 
 describe('WeatherService', () => {
   describe('init', () => {
-    it('should initialize with server location from ipapi', async () => {
-      axios.get.mockResolvedValueOnce(ipapiResponse);
+    it('should mark itself initialized', async () => {
       const { service } = setupService();
       await initService(service);
 
-      expect(service.serverLocation).toEqual({
-        latitude: 46.2,
-        longitude: 6.15,
-        city: 'Geneva, Switzerland'
-      });
       expect(service.initialized).toBe(true);
+      expect(service.cityIndex).not.toBeNull();
     });
 
     it('should skip re-initialization if already initialized', async () => {
-      axios.get.mockResolvedValueOnce(ipapiResponse);
       const { service } = setupService();
       await initService(service);
       await service.init();
@@ -104,62 +136,46 @@ describe('WeatherService', () => {
       expect(dbService.getConnection).toHaveBeenCalledTimes(1);
     });
 
-    it('should not throw on ipapi failure (degraded mode)', async () => {
-      // ipapi.co rate-limits with 429 from our datacenter IP; init must not
-      // throw so the rest of the service (DB collection, weather API) can
-      // still come up. Regression test for the 30-day 500 storm on
-      // POST /api/weather (the 429 caused this.weatherRequests to stay null).
-      axios.get.mockRejectedValueOnce(new Error('Network error'));
+    it('should build the offline city index from the bundled dataset', async () => {
       const { service } = setupService();
-      service.initialized = false;
+      await initService(service);
 
-      await expect(service.init()).resolves.toBeUndefined();
-      expect(service.serverLocation).toEqual({ latitude: 0, longitude: 0, city: 'Unknown' });
-      expect(service.initialized).toBe(true);
-      expect(logger.warn).toHaveBeenCalledWith(
-        'WeatherService.server_location_unavailable',
-        expect.objectContaining({ error: 'Network error' })
+      expect(fs.readFileSync).toHaveBeenCalledWith(expect.stringContaining('cities500.txt'), 'utf8');
+      // Real kdbush index built from the fixture: 2 populated places
+      // produce 2 entries in service.cityMeta (in file order).
+      expect(service.cityIndex).not.toBeNull();
+      expect(service.cityMeta).toEqual([
+        { name: 'Vila', country: 'AD' },
+        { name: 'San Salvador', country: 'SV' }
+      ]);
+      expect(logger.info).toHaveBeenCalledWith(
+        'WeatherService.city_index_loaded',
+        expect.objectContaining({ count: 2 })
       );
     });
 
-    it('should not throw on ipapi 429 rate-limit (degraded mode)', async () => {
-      const err = new Error('Request failed with status code 429');
-      err.response = { status: 429 };
-      axios.get.mockRejectedValueOnce(err);
-      const { service } = setupService();
-      service.initialized = false;
+    it('should not throw when the bundled city dataset is missing', async () => {
+      // Mirrors the ea3e08253 pattern: a degraded init must not abort startup.
+      const { service } = setupService({ cityIndexLoaded: false });
 
-      await expect(service.init()).resolves.toBeUndefined();
-      expect(logger.warn).toHaveBeenCalledWith(
-        'WeatherService.server_location_unavailable',
-        expect.objectContaining({ statusCode: 429 })
+      await expect(initService(service)).resolves.toBeUndefined();
+      expect(service.cityIndex).toBeNull();
+      expect(service.cityMeta).toBeNull();
+      expect(service.initialized).toBe(true);
+      expect(logger.error).toHaveBeenCalledWith(
+        'WeatherService.city_index_unavailable',
+        expect.objectContaining({ error: 'File not found' })
       );
     });
 
     it('should not throw on DB collection failure (persistence skipped later)', async () => {
-      axios.get.mockResolvedValueOnce(ipapiResponse);
-      dbService.getConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
       const { service } = setupService();
+      dbService.getConnection.mockRejectedValueOnce(new Error('ArangoDB unreachable'));
       service.initialized = false;
 
       await expect(service.init()).resolves.toBeUndefined();
       expect(service.weatherRequests).toBeNull();
       expect(service.initialized).toBe(true);
-      expect(logger.error).toHaveBeenCalledWith(
-        'WeatherService.weather_requests_collection_unavailable',
-        expect.objectContaining({ error: 'ArangoDB unreachable' })
-      );
-    });
-
-    it('should warn when server location returns 0,0 coordinates', async () => {
-      axios.get.mockResolvedValueOnce({
-        status: 200,
-        data: { latitude: 0, longitude: 0, city: '', country_name: '' }
-      });
-      const { service } = setupService();
-      await initService(service);
-
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Server location fetch failed'));
     });
   });
 
@@ -176,51 +192,36 @@ describe('WeatherService', () => {
     let service;
 
     beforeEach(async () => {
-      axios.get.mockResolvedValueOnce(ipapiResponse);
       const setup = setupService();
       service = setup.service;
       await initService(service);
     });
 
-    it('should return city name from nominatim response', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { address: { city: 'Lausanne', country: 'Switzerland' } }
-      });
-
-      const result = await service.getCityName(46.5, 6.6);
-      expect(result).toBe('Lausanne, Switzerland');
-      expect(axios.get).toHaveBeenCalledWith(
-        'https://nominatim.openstreetmap.org/reverse',
-        expect.objectContaining({
-          params: expect.objectContaining({ lat: 46.5, lon: 6.6, format: 'json', zoom: 10 })
-        })
+    it('should return the closest populated place within the lookup radius', () => {
+      // San Salvador coords (fixture has San Salvador at 13.7942,-88.8965).
+      // beforeEach already mocks geokdbushAround to return [1] (San Salvador).
+      const result = service.getCityName(13.7942, -88.8965);
+      expect(result).toBe('San Salvador, SV');
+      expect(geokdbushAround).toHaveBeenCalledWith(
+        service.cityIndex,
+        -88.8965,
+        13.7942,
+        1,
+        expect.any(Number) // CITY_LOOKUP_RADIUS_KM
       );
     });
 
-    it('should fall back to town when city is not present', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { address: { town: 'Morges', country: 'Switzerland' } }
-      });
-      expect(await service.getCityName(46.5, 6.5)).toBe('Morges, Switzerland');
+    it('should return null when no city is within the lookup radius', () => {
+      geokdbushAround.mockReturnValueOnce([]);
+
+      expect(service.getCityName(0, 0)).toBeNull();
     });
 
-    it('should fall back to village when city and town not present', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { address: { village: 'Nyon', country: 'Switzerland' } }
-      });
-      expect(await service.getCityName(46.4, 6.2)).toBe('Nyon, Switzerland');
-    });
+    it('should return null when the city index failed to load', async () => {
+      const setup = setupService({ cityIndexLoaded: false });
+      await initService(setup.service);
 
-    it('should fall back to county when no city/town/village', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: { address: { county: 'Vaud', country: 'Switzerland' } }
-      });
-      expect(await service.getCityName(46.5, 6.5)).toBe('Vaud, Switzerland');
-    });
-
-    it('should return Unknown on API failure', async () => {
-      axios.get.mockRejectedValueOnce(new Error('Timeout'));
-      expect(await service.getCityName(46.5, 6.5)).toBe('Unknown');
+      expect(setup.service.getCityName(46.2, 6.15)).toBeNull();
     });
   });
 
@@ -229,19 +230,18 @@ describe('WeatherService', () => {
     let mockWeatherRequests;
 
     beforeEach(async () => {
-      axios.get.mockResolvedValueOnce(ipapiResponse);
       const setup = setupService();
       service = setup.service;
       mockWeatherRequests = setup.mockWeatherRequests;
       await initService(service);
     });
 
-    it('should fetch and return weather data for server location', async () => {
+    it('should fetch and return weather data for the given coordinates', async () => {
       axios.get.mockResolvedValueOnce(openMeteoResponse);
 
-      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
 
-      expect(result.location).toBe('Geneva, Switzerland');
+      expect(result.location).toBe('San Salvador, SV');
       expect(result.current).toEqual({
         temperature: 22,
         condition: 'Clear',
@@ -250,24 +250,63 @@ describe('WeatherService', () => {
       });
       expect(result.forecast).toHaveLength(3);
       expect(mockWeatherRequests.save).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'user-1', latitude: 46.2, longitude: 6.15 })
+        expect.objectContaining({ userId: 'user-1', latitude: 13.7942, longitude: -88.8965 })
       );
     });
 
-    it('should use server location when no coordinates provided', async () => {
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
-
-      const result = await service.getWeather({ userId: 'user-1' });
-      expect(result.current).toBeDefined();
-      expect(result.location).toBe('Geneva, Switzerland');
+    it('should throw a typed 400 LOCATION_REQUIRED when coordinates are missing', async () => {
+      // Privacy-respectful: the service refuses to invent a position. The
+      // route layer catches this typed error and returns 400 to the client.
+      await expect(service.getWeather({ userId: 'user-1' })).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      });
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
-    it('should fallback to server location for invalid coordinates', async () => {
+    it('should throw a typed 400 LOCATION_REQUIRED when coordinates are out of range', async () => {
+      await expect(service.getWeather({ latitude: 200, longitude: -300, userId: 'user-1' })).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      });
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    it('should accept a string-numeric coordinate (Number() parses it)', async () => {
+      // Browser code path never sends strings (navigator.geolocation yields
+      // numbers), but JSON-stringified inputs from other clients should
+      // still work. Number("13.7942") = 13.7942 → accepted.
       axios.get.mockResolvedValueOnce(openMeteoResponse);
 
-      await service.getWeather({ latitude: 200, longitude: -300, userId: 'user-1' });
+      const result = await service.getWeather({ latitude: '13.7942', longitude: '-88.8965', userId: 'user-1' });
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('invalid_coordinates'), expect.any(Object));
+      expect(result.location).toBe('San Salvador, SV');
+      expect(mockWeatherRequests.save).toHaveBeenCalledWith(
+        expect.objectContaining({ latitude: 13.7942, longitude: -88.8965 })
+      );
+    });
+
+    it('should reject array coordinates (parseFloat would silently coerce, Number() returns NaN)', async () => {
+      // The parseFloat-coercion gap: parseFloat([13.7942, 0]) === 13.7942
+      // would have produced a response for the wrong coords. Number() rejects
+      // it cleanly.
+      await expect(
+        service.getWeather({ latitude: [13.7942, 0], longitude: [-88.8965, 0], userId: 'user-1' })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      });
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    it('should reject object coordinates', async () => {
+      await expect(
+        service.getWeather({ latitude: { foo: 'bar' }, longitude: { baz: 'qux' }, userId: 'user-1' })
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'LOCATION_REQUIRED'
+      });
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
     it('should accept latitude boundaries (+90, -90)', async () => {
@@ -329,7 +368,7 @@ describe('WeatherService', () => {
           }
         });
 
-        const result = await service.getWeather({ latitude: 46.2, longitude: 6.15 });
+        const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965 });
         expect(result.current.condition).toBe(expected);
       }
     });
@@ -339,10 +378,10 @@ describe('WeatherService', () => {
       service.setAnalyticsService(mockAnalytics);
       axios.get.mockResolvedValueOnce(openMeteoResponse);
 
-      await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+      await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
 
       expect(mockAnalytics.recordWeatherRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ _key: 'wr-1', userId: 'user-1', city: 'Geneva, Switzerland' })
+        expect.objectContaining({ _key: 'wr-1', userId: 'user-1', city: 'San Salvador, SV' })
       );
     });
 
@@ -351,47 +390,68 @@ describe('WeatherService', () => {
       service.setAnalyticsService(mockAnalytics);
       axios.get.mockResolvedValueOnce(openMeteoResponse);
 
-      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15 });
+      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965 });
 
       expect(result).toBeDefined();
       expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('record_analytics_failed'), expect.any(Object));
     });
 
-    it('should throw when weather API fails', async () => {
-      axios.get.mockRejectedValueOnce(new Error('Weather API unavailable'));
+    it('should throw a typed 503 CITY_NOT_FOUND when no city is within the lookup radius', async () => {
+      // Mid-ocean / remote desert coords → no city within 25 km → the
+      // dashboard falls back to weatherErrorDefault instead of rendering
+      // a literal 'Unknown' location.
+      geokdbushAround.mockReturnValueOnce([]);
 
-      await expect(service.getWeather({ latitude: 46.2, longitude: 6.15 })).rejects.toThrow('Weather API unavailable');
+      await expect(service.getWeather({ latitude: 13.7942, longitude: -88.8965 })).rejects.toMatchObject({
+        statusCode: 503,
+        code: 'CITY_NOT_FOUND'
+      });
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
-    it('should use default server location when serverLocation is null', async () => {
-      service.serverLocation = null;
-      axios.get.mockResolvedValueOnce(openMeteoResponse);
+    it('should throw a typed 503 error when Open-Meteo request fails (graceful degradation)', async () => {
+      // Mirrors the ea3e08253 pattern: the only remaining external call
+      // (Open-Meteo) must NOT surface as a generic 500 — the route layer
+      // maps the typed error to a 503 response.
+      axios.get.mockRejectedValueOnce(new Error('timeout of 4000ms exceeded'));
 
-      const result = await service.getWeather({});
-      expect(result).toBeDefined();
+      await expect(service.getWeather({ latitude: 13.7942, longitude: -88.8965 })).rejects.toMatchObject({
+        statusCode: 503,
+        code: 'WEATHER_UPSTREAM_UNAVAILABLE'
+      });
     });
 
-    it('should resolve city name for non-server coordinates', async () => {
-      axios.get
-        .mockResolvedValueOnce({ data: { address: { city: 'Zurich', country: 'Switzerland' } } })
-        .mockResolvedValueOnce(openMeteoResponse);
+    it('should log a structured error when Open-Meteo fails', async () => {
+      axios.get.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
-      const result = await service.getWeather({ latitude: 47.37, longitude: 8.54 });
-      expect(result.location).toBe('Zurich, Switzerland');
+      await expect(service.getWeather({ latitude: 13.7942, longitude: -88.8965 })).rejects.toMatchObject({
+        code: 'WEATHER_UPSTREAM_UNAVAILABLE'
+      });
+      expect(logger.error).toHaveBeenCalledWith(
+        'WeatherService.weather_upstream_unavailable',
+        expect.objectContaining({ error: 'ECONNREFUSED' })
+      );
+    });
+
+    it('should resolve city name from offline index for non-server coordinates', () => {
+      // No external call expected — the bundled GeoNames index handles this.
+      // Direct getCityName test (no axios mock needed)
+      const city = service.getCityName(13.7942, -88.8965);
+      expect(city).toBe('San Salvador, SV');
+      expect(axios.get).not.toHaveBeenCalled();
     });
 
     it('should return weather data even when weatherRequests collection is unavailable', async () => {
-      // Simulates the prod failure mode: init() failed (ipapi 429) and
-      // this.weatherRequests stayed null. Without this guard, every
-      // /api/weather call returned 500 "Cannot read properties of null
-      // (reading 'save')" for 30 days.
+      // Simulates the prod failure mode: init() failed and this.weatherRequests
+      // stayed null. Without this guard, every /api/weather call returned 500
+      // "Cannot read properties of null (reading 'save')" for 30 days.
       service.weatherRequests = null;
       axios.get.mockResolvedValueOnce(openMeteoResponse);
 
-      const result = await service.getWeather({ latitude: 46.2, longitude: 6.15, userId: 'user-1' });
+      const result = await service.getWeather({ latitude: 13.7942, longitude: -88.8965, userId: 'user-1' });
 
       expect(result).toBeDefined();
-      expect(result.location).toBe('Geneva, Switzerland');
+      expect(result.location).toBe('San Salvador, SV');
       expect(result.current).toEqual({
         temperature: 22,
         condition: 'Clear',

@@ -208,6 +208,9 @@ const MARKET_CATEGORIES = {
   },
   aquaculture: {
     title: 'Tilapia & Aquaculture',
+    // Recent window only: the fishmeal benchmark carries 50+ years of
+    // monthly history that would dwarf the Salvadoran-relevant period.
+    fromYears: 10,
     seriesDefs: [
       {
         type: 'trade',
@@ -822,6 +825,13 @@ class AgriService {
       );
     }
 
+    // Recent-years window per category (aquaculture): benchmarks with
+    // decades of history otherwise dwarf the Salvadoran-relevant period.
+    if (def.fromYears) {
+      const cutoff = `${new Date().getFullYear() - def.fromYears}-01-01`;
+      for (const s of series) s.data = s.data.filter((p) => p.date >= cutoff);
+    }
+
     // Normalize every series to the primary's unit. Live bug (2026-09-18):
     // the maize US Gulf benchmark plotted USD/mt values (38-348) against the
     // Salvadoran USD/quintal series (2-53) on one axis — the benchmark
@@ -867,13 +877,13 @@ class AgriService {
 
   async buildNews(scope, lang) {
     const scopes = scope === 'local' ? ['local'] : ['global', 'institutional'];
-    const fetch = async (windowHours) => {
+    const fetch = async (windowHours, langOverride) => {
       const cutoff = new Date(Date.now() - windowHours * 3600000).toISOString();
       return this.querySeries(
         'FOR n IN agri_news FILTER n.scope IN @scopes AND n.language == @lang ' +
           'AND n.publishedAt >= @cutoff SORT n.publishedAt DESC LIMIT 60 ' +
-          'RETURN KEEP(n, "title", "source", "url", "publishedAt", "snippet", "scope")',
-        { scopes, lang, cutoff }
+          'RETURN KEEP(n, "_key", "title", "source", "url", "publishedAt", "snippet", "scope")',
+        { scopes, lang: langOverride || lang, cutoff }
       );
     };
 
@@ -889,6 +899,25 @@ class AgriService {
     if (items.length < 3) {
       windowHours = 336;
       items = await fetch(windowHours);
+    }
+
+    // AI translation fallback: when the requested language has (almost)
+    // nothing for this scope, serve the OTHER language's items translated
+    // (user req 2026-09-18). Translations persist in agri_news keyed
+    // `<orig>~<lang>` so each item is translated once, ever.
+    let translatedNote = '';
+    if (items.length < 3) {
+      const other = lang === 'en' ? 'es' : 'en';
+      const pool = await fetch(windowHours, other);
+      if (pool.length > 0) {
+        const translated = await this.translateNewsItems(pool.slice(0, 10), other, lang);
+        if (translated.length > 0) {
+          translatedNote = ` — ${translated.length} item${translated.length === 1 ? '' : 's'} AI-translated from ${
+            other === 'es' ? 'Spanish' : 'English'
+          }`;
+          items = items.concat(translated);
+        }
+      }
     }
 
     // Relevance gate at serve time too — filters items landed before the
@@ -923,9 +952,69 @@ class AgriService {
               ? 'English-language coverage of El Salvador via GDELT (no English-language local outlet feeds exist)'
               : 'MAG El Salvador, Presidencia, Diario CoLatino + GDELT Spanish coverage of El Salvador'
             : 'GDELT DOC 2.0 + FAO newsroom') +
-          (windowHours > 48 ? ` — widened to the last ${windowHours / 24} days (feeds quiet or rate-limited)` : '')
+          (windowHours > 48 ? ` — widened to the last ${windowHours / 24} days (feeds quiet or rate-limited)` : '') +
+          translatedNote
       }
     );
+  }
+
+  /**
+   * Translate news items into the requested language using the platform's
+   * TranslationService (GPU TranslateGemma with CPU fallback). Persisted to
+   * agri_news under `<origKey>~<lang>` so each item translates exactly once;
+   * on any failure this returns [] and the caller serves without it —
+   * translation must never break news serving.
+   */
+  async translateNewsItems(items, fromLang, toLang) {
+    try {
+      if (!this.translationService) {
+        this.translationService = require('../translation-service');
+      }
+      if (!this.translationService.initialized) {
+        await this.translationService.init();
+      }
+      const titles = items.map((i) => i.title || '');
+      const snippets = items.map((i) => i.snippet || i.description || '');
+      const [outTitles, outSnippets] = await Promise.all([
+        this.translationService.translate(titles, fromLang, toLang),
+        this.translationService.translate(snippets, fromLang, toLang)
+      ]);
+      const docs = items
+        .map((item, i) => ({
+          _key: `${item._key}~${toLang}`,
+          kind: 'news',
+          scope: item.scope,
+          language: toLang,
+          title: outTitles[i] || item.title,
+          snippet: outSnippets[i] || item.snippet || null,
+          source: item.source,
+          url: item.url,
+          publishedAt: item.publishedAt,
+          sourceSystem: 'ai-translation',
+          translatedFrom: item._key
+        }))
+        .filter((d) => d.title && d._key);
+      if (docs.length > 0 && this.db) {
+        const res = await this.db.collection('agri_news').import(docs, { type: 'array', onDuplicate: 'update' });
+        const written = (res && (res.created || 0) + (res.updated || 0) + (res.ignored || 0)) || 0;
+        if (written < docs.length) {
+          throw new Error(`translation import wrote ${written} of ${docs.length}`);
+        }
+      }
+      // Return the serve shape (same fields the AQL query returns)
+      return docs.map((d) => ({
+        _key: d._key,
+        title: d.title,
+        source: d.source,
+        url: d.url,
+        publishedAt: d.publishedAt,
+        snippet: d.snippet,
+        scope: d.scope
+      }));
+    } catch (error) {
+      logger.warn(`agri: news translation fallback failed: ${error.message}`);
+      return [];
+    }
   }
 
   // ==================== PUBLIC API (routes) ====================

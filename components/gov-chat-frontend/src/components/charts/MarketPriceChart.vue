@@ -490,22 +490,48 @@ export default {
       return Math.max(320, 240 + 45 * this.chartSeries.length);
     },
     chartOptions() {
-      const periods = this.timeSeries.map((d) => d.date);
-      // Scale across EVERY visible series (multi-series charts like
-      // Livestock chicken+beef must span all lines, not just the primary)
-      const values = this.chartSeries
-        .flatMap((s) => s.data)
-        .filter((v) => v !== null && v !== undefined && Number.isFinite(v));
-      const minVal = values.length > 0 ? Math.min(...values) : 0;
-      const maxVal = values.length > 0 ? Math.max(...values) : 1;
-      const range = maxVal - minVal || 1;
-      // Round the axis to a step sized to the data range — a fixed multiple
-      // of 10 forced small-value charts (Livestock USD 2-8/kg) onto a 0-10
-      // axis that hid the price variation entirely (user req 2026-09-18).
-      const step = Math.pow(10, Math.floor(Math.log10(range / 4))) || 1;
       const cssVars = this.resolvedCssVars;
       const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
       const dense = this.pointCount > 300;
+
+      // Group visible series by unit: irreducibly-mixed units (e.g. a PPI
+      // index co-plotted with USD/kg) each get their own y-axis scaled
+      // relative to THEIR data — floor hugs the minimum (clamped at 0 for
+      // positive prices), top sits at 1.5× the highest value.
+      const groups = [];
+      for (const s of this.chartSeries) {
+        const unit = (s.unit || this.unit || '').toString();
+        let g = groups.find((x) => x.unit === unit);
+        if (!g) {
+          g = { unit, names: [], values: [] };
+          groups.push(g);
+        }
+        g.names.push(s.name);
+        for (const point of s.data) {
+          if (point && point[1] !== null && point[1] !== undefined && Number.isFinite(point[1]))
+            g.values.push(point[1]);
+        }
+      }
+      const axisFor = (g) => {
+        const minVal = g.values.length > 0 ? Math.min(...g.values) : 0;
+        const maxVal = g.values.length > 0 ? Math.max(...g.values) : 1;
+        const range = maxVal - minVal || 1;
+        const step = Math.pow(10, Math.floor(Math.log10(range / 4))) || 1;
+        const floor = Math.floor((minVal - range * 0.05) / step) * step;
+        return {
+          min: minVal >= 0 ? Math.max(0, floor) : floor,
+          max: Math.round(maxVal * 1.5 * 100) / 100,
+          labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) },
+          title:
+            groups.length > 1 && g.unit
+              ? { text: g.unit, style: { color: cssVars.mutedColor, fontSize: '11px', fontWeight: 500 } }
+              : undefined
+        };
+      };
+      const yaxis =
+        groups.length <= 1
+          ? [axisFor(groups[0] || { unit: '', names: [], values: [] })]
+          : groups.map((g, i) => ({ ...axisFor(g), seriesName: g.names, opposite: i > 0 }));
 
       return {
         chart: {
@@ -515,24 +541,22 @@ export default {
           background: 'transparent'
         },
         xaxis: {
-          categories: periods,
+          // True datetime axis: every series carries its own timestamps, so
+          // mixed cadences (daily WFP + monthly benchmarks + annual trade
+          // values) align by DATE instead of by array index — index mapping
+          // made longer series overflow the primary's categories.
+          type: 'datetime',
           // Cap tick count to the scrollable pixel width so labels never crowd
-          tickAmount: Math.max(4, Math.min(periods.length, Math.floor(this.chartPixelWidth / 90))),
-          labels: { rotate: -45, style: { fontSize: '11px', colors: cssVars.mutedColor }, hideOverlappingLabels: true },
+          tickAmount: Math.max(4, Math.min(this.pointCount, Math.floor(this.chartPixelWidth / 90))),
+          labels: {
+            style: { fontSize: '11px', colors: cssVars.mutedColor },
+            datetimeUTC: false,
+            hideOverlappingLabels: true
+          },
           axisBorder: { show: false },
           axisTicks: { show: false }
         },
-        yaxis: {
-          // Scales relative to the data: floor hugs the minimum (never below
-          // 0 for positive prices), top sits at 1.5× the highest value
-          // (user-prescribed headroom, 2026-09-18)
-          min:
-            minVal >= 0
-              ? Math.max(0, Math.floor((minVal - range * 0.05) / step) * step)
-              : Math.floor((minVal - range * 0.05) / step) * step,
-          max: Math.round(maxVal * 1.5 * 100) / 100,
-          labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) }
-        },
+        yaxis,
         // Primary line uses the resolved --fg token (guaranteed contrast in
         // both themes); the remaining entries color the estimated overlay
         // and the secondary regional/benchmark series.
@@ -565,10 +589,14 @@ export default {
         // tooltip bg/text so it stays readable and theme-consistent.
         // Mouse-over shows BOTH the formatted date and the value (user req).
         tooltip: {
-          x: { formatter: (val) => this.formatTooltipDate(val) },
+          x: {
+            formatter: (val) =>
+              this.formatTooltipDate(typeof val === 'number' ? new Date(val).toISOString().slice(0, 10) : val)
+          },
           y: {
-            formatter: (v) => {
-              const unit = (this.envelope && this.envelope.data && this.envelope.data.unit) || '';
+            formatter: (v, opts) => {
+              const g = groups[opts && opts.seriesIndex !== undefined ? opts.seriesIndex : 0];
+              const unit = (g && g.unit) || this.unit || '';
               return `${this.formatValue(v)}${unit ? ` ${unit}` : ''}`;
             }
           }
@@ -578,25 +606,43 @@ export default {
       };
     },
     chartSeries() {
-      // Primary series split into actual (solid) + estimated (dashed overlay);
-      // secondary regional/benchmark series appended after
+      // [timestamp, value] pairs for the datetime axis — each series carries
+      // its OWN dates so daily/monthly/annual cadences align by time, not by
+      // array index. `unit` rides along for per-unit y-axes.
+      const ts = (date) => {
+        const s = String(date || '');
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T00:00:00Z`).getTime();
+        if (/^\d{4}-\d{2}$/.test(s)) return new Date(`${s}-01T00:00:00Z`).getTime();
+        if (/^\d{4}$/.test(s)) return new Date(`${s}-01-01T00:00:00Z`).getTime();
+        const parsed = Date.parse(s);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
       const primary = this.primarySeries;
-      const actual = primary.data.map((d) => (d.quality === 'estimated' ? null : d.value));
-      const estimated = primary.data.map((d) => (d.quality === 'estimated' ? d.value : null));
+      const actual = primary.data
+        .map((d) => [ts(d.date), d.quality === 'estimated' ? null : d.value])
+        .filter((p) => p[0] !== null);
+      const estimated = primary.data
+        .map((d) => [ts(d.date), d.quality === 'estimated' ? d.value : null])
+        .filter((p) => p[0] !== null);
 
       const out = [
-        { name: primary.name || this.commodityName, data: actual },
+        { name: primary.name || this.commodityName, data: actual, unit: primary.unit || this.unit },
         {
           name: this.$t('charts.caveats.estimatedSeries', '{name} (estimated)', {
             name: primary.name || this.commodityName
           }),
-          data: estimated
+          data: estimated,
+          unit: primary.unit || this.unit
         }
       ];
       // Skip empty estimated overlay when everything is actual
-      if (!estimated.some((v) => v !== null)) out.splice(1, 1);
+      if (!estimated.some((p) => p[1] !== null)) out.splice(1, 1);
       for (const extra of this.series.slice(1, 4)) {
-        out.push({ name: extra.name, data: extra.data.map((d) => d.value) });
+        out.push({
+          name: extra.name,
+          data: extra.data.map((d) => [ts(d.date), d.value]).filter((p) => p[0] !== null),
+          unit: extra.unit || this.unit
+        });
       }
       return out;
     }

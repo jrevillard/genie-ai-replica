@@ -650,6 +650,20 @@ export default {
       lastUpdated: 'Dernière mise à jour',
       commodity: 'Produit',
       noData: 'Aucune donnée disponible',
+      unitQuintal:
+        'Prix en dollars US par quintal, la mesure centro-américaine à la ferme. 1 quintal = 46 kg ; les données sources en USD/kg sont converties à 45,97 kg par quintal.',
+      unitPpi:
+        'Indice des prix à la production américain pour la fabrication de pesticides et de produits chimiques agricoles (BLS). Les valeurs d’indice sont relatives à une période de base, pas des prix absolus — la tendance montre la direction du coût.',
+      unitIndex:
+        'Les valeurs d’indice sont relatives à une période de base (par ex. 2016 = 100), pas des prix absolus — la tendance montre la direction et l’ampleur du changement.',
+      unitPercent:
+        'Pourcentage de la production — statistique régionale modélisée (FAO ODD 12.3.1), pas un prix observé.',
+      unitUsdKg: 'Dollars US par kilogramme.',
+      unitUsdMt: 'Dollars US par tonne métrique (1 000 kg) — marchés de référence internationaux.',
+      unitShortTon: 'Dollars US par tonne courte (907,18 kg) — convention du marché américain.',
+      unitUsdLb: 'Dollars US par livre (0,4536 kg).',
+      unitDozen: 'Dollars US par douzaine.',
+      unitGeneric: 'Unité de mesure de cette série.',
       year: 'Année',
       value: 'Valeur',
       getPredictions: 'Obtenir des prédictions IA',

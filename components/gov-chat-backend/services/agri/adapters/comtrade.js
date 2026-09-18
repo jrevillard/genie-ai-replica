@@ -70,12 +70,16 @@ module.exports = {
     for (const { label, reporter, code, period, json, error } of results) {
       if (error) continue;
       const rows = (json && json.data) || [];
-      // Sum trade value + net weight across partners -> aggregate unit value
+      // Sum trade value + net weight across PARTNER rows -> aggregate unit
+      // value. partnerCode 0 is the pre-aggregated "World" row — including
+      // it would double-count. Weight field is `netWgt` (2026 schema; the
+      // research-era `netWght` spelling silently zeroed every pass).
       let value = 0;
       let weight = 0;
       for (const row of rows) {
+        if (row.partnerCode === 0) continue;
         const v = parseFloat(row.primaryValue);
-        const w = parseFloat(row.netWght);
+        const w = parseFloat(row.netWgt ?? row.netWght);
         if (Number.isFinite(v) && Number.isFinite(w) && w > 0) {
           value += v;
           weight += w;

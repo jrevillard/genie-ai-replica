@@ -98,14 +98,29 @@ class AgriScheduler {
       const raw = await adapter.fetch(resolved, cfg);
       const bytes = raw && raw.length !== undefined ? raw.length : (raw && raw.byteLength) || '?';
       vlog(`${adapter.id} fetched: ${bytes} bytes in ${Date.now() - started}ms`);
-      // parse may be sync OR async (zip/xlsx extractors) — always await
+      // parse AND normalize may be sync or async (zip/xlsx extractors) —
+      // always await both
       const parsed = await adapter.parse(raw);
       vlog(`${adapter.id} parsed: ${Array.isArray(parsed) ? `${parsed.length} rows` : typeof parsed}`);
-      const { collection, docs } = adapter.normalize(parsed);
+      const { collection, docs } = await adapter.normalize(parsed);
       vlog(`${adapter.id} normalized: ${docs ? docs.length : 0} docs -> ${collection}`);
 
       if (!docs || docs.length === 0) {
-        throw new Error('normalize produced 0 documents (schema change?)');
+        // 0-doc is a schema-change failure UNLESS the feed is legitimately
+        // sparse (community sightings, quiet news weeks) — those adapters
+        // declare allowEmpty and log a quiet pass instead of going red.
+        if (!adapter.allowEmpty) {
+          throw new Error('normalize produced 0 documents (schema change?)');
+        }
+        logger.info(`agri scheduler: ${adapter.id} returned 0 docs (allowEmpty — sparse feed)`);
+        await this.log({
+          adapterId: adapter.id,
+          ok: true,
+          docCount: 0,
+          latencyMs: Date.now() - started,
+          latestDataDate: null
+        });
+        return { ok: true, docs: 0, latestDataDate: null };
       }
 
       const coll = this.db.collection(collection);

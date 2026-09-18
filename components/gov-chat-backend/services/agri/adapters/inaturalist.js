@@ -21,6 +21,7 @@ module.exports = {
   id: 'inaturalist',
   configPrefix: 'INATURALIST',
   cadence: '24h',
+  allowEmpty: true, // community sightings are legitimately sparse most weeks
   defaults: {
     placeId: 7563,
     taxa: TAXA.join('|'),

@@ -192,7 +192,21 @@ export default {
           gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] }
         },
         markers: { size: 6, colors: pointColors, strokeColors: cssVars.backgroundColor, strokeWidth: 2 },
-        tooltip: { y: { formatter: (v) => v.toFixed(3) }, theme: this.isDarkMode ? 'dark' : 'light' },
+        // Tooltip shows the NDVI value AND the observation date (user req)
+        tooltip: {
+          y: {
+            formatter: (v, opts) => {
+              const dp = this.departmentData[(opts && opts.dataPointIndex) || 0];
+              if (dp && dp.date) {
+                const when = new Date(`${String(dp.date).slice(0, 10)}T00:00:00`);
+                if (!Number.isNaN(when.getTime())) {
+                  return `${v.toFixed(3)} — ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+                }
+              }
+              return v.toFixed(3);
+            }
+          }
+        },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4 }
       };
     },

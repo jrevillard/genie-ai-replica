@@ -90,33 +90,46 @@ describe('agri zip reader', () => {
 });
 
 describe('pink-sheet adapter', () => {
-  // sheet_to_json(header:1) shape: rows of cells; row 4 = date headers
+  // 2026 layout (verified live 2026-09-18): commodities are COLUMNS —
+  // title rows, then a names row (null col0 + labels), a units row,
+  // then data rows with "YYYYMmm" months in col0 and "…" gaps.
   const rows = [
-    [],
-    [],
-    [],
-    [],
-    [null, '2026M07', '2026M08'],
-    ['Urea ', null, 390],
-    ['DAP ', null, 793.5],
-    ['Potassium chloride ', null, 386.9],
-    ['Chicken ', null, 1.69],
-    ['Oil, Brent ', null, 999] // not tracked -> skipped
+    ['World Bank Commodity Price Data (The Pink Sheet)'],
+    ['monthly prices in nominal US dollars, 1960 to present'],
+    [null, 'Oil, Brent', 'Urea ', 'DAP ', 'Potassium chloride ', 'Chicken '],
+    [null, '($/bbl)', '($/mt)', '($/mt)', '($/mt)', '($/kg)'],
+    ['2026M07', 80, 385, 790, 380.1, 1.68],
+    ['2026M08', 79, 390, 793.5, 386.9, 1.69]
   ];
 
-  test('maps known commodity rows to keyed monthly docs', () => {
+  test('maps known commodity columns to keyed monthly docs', () => {
     const { collection, docs } = pinkSheet.normalize(rows);
     expect(collection).toBe('agri_series');
-    expect(docs).toHaveLength(4);
-    const urea = docs.find((d) => d.key === 'WB:UREA');
-    expect(urea.date).toBe('2026-08-01');
+    expect(docs).toHaveLength(8); // 4 tracked commodities x 2 months (Brent skipped)
+    const urea = docs.find((d) => d.key === 'WB:UREA' && d.date === '2026-08-01');
     expect(urea.value).toBe(390);
     expect(urea.unit).toBe('USD/mt');
-    expect(docs.find((d) => d.key === 'WB:CHICKEN_INTL').value).toBe(1.69);
+    expect(docs.find((d) => d.key === 'WB:CHICKEN_INTL' && d.date === '2026-08-01').value).toBe(1.69);
   });
 
-  test('parses Excel serial date headers too', () => {
-    const serialRows = [[], [], [], [], [null, null, 46235], ['Urea ', null, 400]];
+  test('skips "…" gap cells and untracked commodities', () => {
+    const gapRows = [
+      [null, 'Urea ', 'Oil, Brent'],
+      [null, '($/mt)', '($/bbl)'],
+      ['2026M08', '…', 999],
+      ['2026M07', 385, 80]
+    ];
+    const { docs } = pinkSheet.normalize(gapRows);
+    expect(docs).toHaveLength(1); // only urea 2026-07; "…" skipped, Brent untracked
+    expect(docs[0].value).toBe(385);
+  });
+
+  test('parses Excel serial date cells in col0 too', () => {
+    const serialRows = [
+      [null, 'Urea '],
+      [null, '($/mt)'],
+      [46235, 400]
+    ];
     const { docs } = pinkSheet.normalize(serialRows);
     expect(docs).toHaveLength(1);
     expect(docs[0].date).toMatch(/^\d{4}-\d{2}-01$/);
@@ -124,20 +137,30 @@ describe('pink-sheet adapter', () => {
 });
 
 describe('imf-pcps adapter', () => {
+  // 2026 layout (verified live 2026-09-18): transposed — row0 = PCPS codes,
+  // row1 = descriptions, then data rows with "YYYYMm" months in col0.
   const rows = [
-    ['Commodity', new Date('2026-08-01T00:00:00Z')],
-    ['Urea', 232.37],
-    ['Potassium chloride', 398.2],
-    ['Poultry', 164.9],
-    ['Some untracked index', 500]
+    ['Commodity', 'PURE', 'PDAP', 'PFOOD', 'PUNTRACKED'],
+    [
+      'Commodity.Description',
+      'Urea',
+      'DAP',
+      'Food Price Index',
+      'Something else entirely'
+    ],
+    ['Data Type', 'Price', 'Price', 'Index', 'Price'],
+    ['Frequency', 'Monthly', 'Monthly', 'Monthly', 'Monthly'],
+    ['2026M7', 232.37, 610, 130.5, 999],
+    ['2026M8', 234.11, 615.2, 131.1, 999]
   ];
 
-  test('maps PCPS rows with Date headers', () => {
+  test('maps PCPS code/description columns to keyed monthly docs', () => {
     const { collection, docs } = imfPcps.normalize(rows);
     expect(collection).toBe('agri_series');
-    expect(docs).toHaveLength(3);
-    expect(docs.find((d) => d.key === 'IMF:UREA').date).toBe('2026-08-01');
-    expect(docs.find((d) => d.key === 'IMF:POULTRY').unit).toBe('index 2016=100');
+    expect(docs).toHaveLength(6); // 3 matched columns x 2 months
+    expect(docs.find((d) => d.key === 'IMF:UREA' && d.date === '2026-08-01').value).toBe(234.11);
+    expect(docs.find((d) => d.key === 'IMF:FOOD').unit).toBe('index 2016=100');
+    expect(docs.filter((d) => d.key === 'IMF:DAP')).toHaveLength(2);
   });
 });
 

@@ -67,22 +67,28 @@ module.exports = {
     const docs = [];
     const mapKeys = Object.keys(SERIES_MAP);
 
+    // 2026 layout: commodities are COLUMNS (names row has a null col0 and
+    // string commodity labels), months are ROWS ("1960M01" in col0).
+    // Verified live 2026-09-18: row4 = names, row5 = units, row6+ = data.
+    const namesRow = rows.find((r) => Array.isArray(r) && r.length > 1 && r[0] == null && typeof r[1] === 'string');
+    if (!namesRow) return { collection: 'agri_series', docs };
+
+    const colDefs = [];
+    for (let col = 1; col < namesRow.length; col += 1) {
+      const label = `${String(namesRow[col] || '').trim()} `;
+      const match = mapKeys.find((k) => k === label);
+      if (match && !colDefs.some((d) => d.def.key === SERIES_MAP[match].key)) {
+        colDefs.push({ col, def: SERIES_MAP[match] });
+      }
+    }
+
     for (const row of rows) {
       if (!Array.isArray(row) || row.length < 2) continue;
-      const label = String(row[0] || '').trim() + ' ';
-      const match = mapKeys.find((k) => label === k);
-
-      if (!match) continue;
-      const def = SERIES_MAP[match];
-
-      for (let col = 1; col < row.length; col += 1) {
+      const date = parseMonthCell(row[0]);
+      if (!date) continue;
+      for (const { col, def } of colDefs) {
         const value = row[col];
-        if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-
-        const cell = rows[4] && rows[4][col]; // header row carries dates as serials/strings
-        const date = parseMonthCell(cell);
-        if (!date) continue;
-
+        if (typeof value !== 'number' || !Number.isFinite(value)) continue; // "…" gaps
         const logical = `${def.key}:${date}`;
         docs.push({
           _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),

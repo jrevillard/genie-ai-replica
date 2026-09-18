@@ -44,7 +44,10 @@
           <div class="summary-item">
             <span class="summary-label">{{ $t('charts.market.latest', 'Latest') }}</span>
             <strong class="summary-value">{{ latestValue }}</strong>
-            <span v-if="unit" class="summary-unit">{{ unit }}</span>
+            <span v-if="unit" class="summary-unit summary-unit--info" tabindex="0" :title="unitExplanation"
+              >{{ unit }}
+              <i class="fas fa-circle-info unit-info-icon" aria-hidden="true"></i>
+            </span>
           </div>
         </DsCard>
 
@@ -64,10 +67,13 @@
         {{ $t('charts.market.getPredictions', 'Get AI Predictions') }}
       </DsButton>
 
-      <!-- Price History Chart -->
+      <!-- Price History Chart (dense series scroll horizontally — every
+           data point stays neatly spaced instead of crowding) -->
       <h3 class="section-title">{{ $t('charts.market.priceHistory', 'Price History') }}</h3>
       <DsCard variant="elevated" padding="lg">
-        <apexchart type="line" height="320" :options="chartOptions" :series="chartSeries" />
+        <div ref="chartScroll" class="chart-scroll">
+          <apexchart type="line" height="320" :width="chartPixelWidth" :options="chartOptions" :series="chartSeries" />
+        </div>
       </DsCard>
 
       <!-- Data Table -->
@@ -263,6 +269,7 @@ export default {
       loading: true,
       error: null,
       refreshTimer: null,
+      scrollWidth: 760, // measured from the chart container on mount/resize
       showAbout: false,
       showPredictionDialog: false,
       showResponseDialog: false,
@@ -357,6 +364,53 @@ export default {
       // Prefer the primary series' unit; fall back to the envelope unit
       return this.primarySeries.unit || (this.envelope && this.envelope.data && this.envelope.data.unit) || '';
     },
+    /** Calibration explanation for the Latest-card unit (mouse-over). */
+    unitExplanation() {
+      const u = this.unit.toLowerCase();
+      if (u.includes('quintal')) {
+        return this.$t(
+          'charts.market.unitQuintal',
+          'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.'
+        );
+      }
+      if (u.includes('ppi')) {
+        return this.$t(
+          'charts.market.unitPpi',
+          'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.'
+        );
+      }
+      if (u.includes('index')) {
+        return this.$t(
+          'charts.market.unitIndex',
+          'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.'
+        );
+      }
+      if (u.includes('%')) {
+        return this.$t(
+          'charts.market.unitPercent',
+          'Percentage of production — a modeled regional statistic (FAO SDG 12.3.1), not an observed price.'
+        );
+      }
+      if (u.includes('usd/kg')) {
+        return this.$t('charts.market.unitUsdKg', 'US dollars per kilogram.');
+      }
+      if (u.includes('usd/mt')) {
+        return this.$t(
+          'charts.market.unitUsdMt',
+          'US dollars per metric tonne (1,000 kg) — international benchmark markets.'
+        );
+      }
+      if (u.includes('short ton')) {
+        return this.$t('charts.market.unitShortTon', 'US dollars per short ton (907.18 kg) — US market convention.');
+      }
+      if (u.includes('usd/lb')) {
+        return this.$t('charts.market.unitUsdLb', 'US dollars per pound (0.4536 kg).');
+      }
+      if (u.includes('usd/dozen')) {
+        return this.$t('charts.market.unitDozen', 'US dollars per dozen.');
+      }
+      return this.$t('charts.market.unitGeneric', 'Unit of measurement for this series.');
+    },
     lastUpdated() {
       return this.meta.fetchedAt || new Date().toISOString();
     },
@@ -404,6 +458,15 @@ export default {
         { value: '2 years', label: this.$t('charts.market.timeFrame2Years', '2 years') }
       ];
     },
+    /** Points in the primary series — drives density behavior. */
+    pointCount() {
+      return this.timeSeries.length;
+    },
+    /** Dense charts (many points) render wide and scroll horizontally. */
+    chartPixelWidth() {
+      const minSpacing = 14; // px per data point — keeps markers readable
+      return Math.max(this.scrollWidth, this.pointCount * minSpacing);
+    },
     chartOptions() {
       const periods = this.timeSeries.map((d) => d.date);
       const values = this.timeSeries.map((d) => d.value).filter((v) => Number.isFinite(v));
@@ -412,6 +475,7 @@ export default {
       const range = maxVal - minVal || 1;
       const cssVars = this.resolvedCssVars;
       const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
+      const dense = this.pointCount > 300;
 
       return {
         chart: {
@@ -422,7 +486,9 @@ export default {
         },
         xaxis: {
           categories: periods,
-          labels: { rotate: -45, style: { fontSize: '11px', colors: cssVars.mutedColor } },
+          // Cap tick count to the scrollable pixel width so labels never crowd
+          tickAmount: Math.max(4, Math.min(periods.length, Math.floor(this.chartPixelWidth / 90))),
+          labels: { rotate: -45, style: { fontSize: '11px', colors: cssVars.mutedColor }, hideOverlappingLabels: true },
           axisBorder: { show: false },
           axisTicks: { show: false }
         },
@@ -451,16 +517,26 @@ export default {
         // Width 4 for visibility; series 2 (estimated overlay) renders dashed
         stroke: { curve: 'smooth', width: 4, dashArray: [0, 6, 0, 0, 0] },
         markers: {
-          size: 6,
+          // Dense series shrink markers to points; hover still enlarges
+          size: dense ? 2 : 6,
           strokeColors: cssVars.backgroundColor,
-          strokeWidth: 2,
+          strokeWidth: dense ? 1 : 2,
           hover: { size: 7 }
         },
         // ApexCharts 'dark' theme uses hardcoded dark colors that don't contrast
         // well with our --bg in dark mode. Use 'light' (high contrast always)
         // and let the global DS-token CSS in theme-components.css override the
         // tooltip bg/text so it stays readable and theme-consistent.
-        tooltip: { y: { formatter: (v) => this.formatValue(v) } },
+        // Mouse-over shows BOTH the formatted date and the value (user req).
+        tooltip: {
+          x: { formatter: (val) => this.formatTooltipDate(val) },
+          y: {
+            formatter: (v) => {
+              const unit = (this.envelope && this.envelope.data && this.envelope.data.unit) || '';
+              return `${this.formatValue(v)}${unit ? ` ${unit}` : ''}`;
+            }
+          }
+        },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 },
         legend: { show: this.series.length > 1, labels: { colors: cssVars.mutedColor } }
       };
@@ -490,6 +566,9 @@ export default {
     }
   },
   mounted() {
+    this.measureScrollWidth();
+    this.resizeHandler = () => this.measureScrollWidth();
+    window.addEventListener('resize', this.resizeHandler);
     this.loadChartData();
     if (this.autoRefresh) {
       this.refreshTimer = setInterval(this.loadChartData, this.refreshInterval);
@@ -497,8 +576,29 @@ export default {
   },
   beforeUnmount() {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this.resizeHandler) window.removeEventListener('resize', this.resizeHandler);
   },
   methods: {
+    measureScrollWidth() {
+      const el = this.$refs.chartScroll;
+      if (el && el.clientWidth > 0) this.scrollWidth = el.clientWidth;
+    },
+    /** Human date for tooltips: daily, month-keyed and year-keyed periods. */
+    formatTooltipDate(value) {
+      if (value === null || value === undefined) return '';
+      const s = String(value);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return new Date(`${s}T00:00:00`).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      }
+      if (/^\d{4}-\d{2}$/.test(s)) {
+        return new Date(`${s}-01T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+      }
+      return s;
+    },
     toggleNewsPicker(scope) {
       this.newsPickerOpen = this.newsPickerOpen === scope ? null : scope;
       if (this.newsPickerOpen && !this.newsLoading && this.newsGlobal.length === 0 && this.newsLocal.length === 0) {
@@ -690,6 +790,15 @@ export default {
   width: 100%;
 }
 
+/* Dense series scroll horizontally — every data point keeps ~14px of
+   space instead of crowding into a static view. */
+.chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 .chart-content {
   display: flex;
   flex-direction: column;
@@ -754,6 +863,19 @@ export default {
 .summary-unit {
   font-size: var(--text-xs);
   color: var(--muted);
+}
+
+/* Unit chip carries a calibration explanation on hover/focus */
+.summary-unit--info {
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.unit-info-icon {
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .predict-btn {

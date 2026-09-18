@@ -217,109 +217,127 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
             ),
           ),
           const SizedBox(height: 12),
-          // Line Chart
-          SizedBox(
-            height: 250,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: _calculateYInterval(),
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
-                      strokeWidth: 1,
-                    );
-                  },
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 30,
-                      interval: _calculateXInterval(),
-                      getTitlesWidget: (value, meta) {
-                        return _buildXAxisLabel(value, theme);
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 50,
-                      interval: _calculateYInterval(),
-                      getTitlesWidget: (value, meta) {
-                        return _buildYAxisLabel(value, theme);
-                      },
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                minX: 0,
-                maxX: (_timeSeries.length - 1).toDouble(),
-                minY: _minY,
-                maxY: _maxY,
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: _buildSpots(),
-                    isCurved: true,
-                    curveSmoothness: 0.3,
-                    color: _categoryColor,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) {
-                        return FlDotCirclePainter(
-                          radius: 4,
-                          color: _categoryColor,
-                          strokeWidth: 2,
-                          strokeColor: isDark ? Colors.black : Colors.white,
-                        );
-                      },
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: _categoryColor.withValues(alpha: 0.15),
-                    ),
-                  ),
-                ],
-                lineTouchData: LineTouchData(
-                  enabled: true,
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        final index = spot.x.toInt();
-                        if (index >= 0 && index < _timeSeries.length) {
-                          final dataPoint = _timeSeries[index];
-                          final year = dataPoint['year'] as String? ?? '';
-                          final value = _formatValue(
-                            dataPoint['value'] as double?,
-                          );
-                          return LineTooltipItem(
-                            '$year\n$value',
-                            TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+          // Line Chart — dense series scroll horizontally so every data
+          // point stays neatly spaced instead of crowding (user req).
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final pointCount = _timeSeries.length;
+              final chartWidth = math.max(
+                constraints.maxWidth,
+                pointCount * 14.0,
+              );
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: chartWidth,
+                  height: 250,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        horizontalInterval: _calculateYInterval(),
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.1,
                             ),
+                            strokeWidth: 1,
                           );
-                        }
-                        return null;
-                      }).toList();
-                    },
+                        },
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 30,
+                            interval: _calculateXInterval(),
+                            getTitlesWidget: (value, meta) {
+                              return _buildXAxisLabel(value, theme);
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 50,
+                            interval: _calculateYInterval(),
+                            getTitlesWidget: (value, meta) {
+                              return _buildYAxisLabel(value, theme);
+                            },
+                          ),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      minX: 0,
+                      maxX: (_timeSeries.length - 1).toDouble(),
+                      minY: _minY,
+                      maxY: _maxY,
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: _buildSpots(),
+                          isCurved: true,
+                          curveSmoothness: 0.3,
+                          color: _categoryColor,
+                          barWidth: 3,
+                          isStrokeCapRound: true,
+                          dotData: FlDotData(
+                            show: true,
+                            getDotPainter: (spot, percent, barData, index) {
+                              return FlDotCirclePainter(
+                                radius: 4,
+                                color: _categoryColor,
+                                strokeWidth: 2,
+                                strokeColor: isDark
+                                    ? Colors.black
+                                    : Colors.white,
+                              );
+                            },
+                          ),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: _categoryColor.withValues(alpha: 0.15),
+                          ),
+                        ),
+                      ],
+                      lineTouchData: LineTouchData(
+                        enabled: true,
+                        touchTooltipData: LineTouchTooltipData(
+                          getTooltipItems: (touchedSpots) {
+                            return touchedSpots.map((spot) {
+                              final index = spot.x.toInt();
+                              if (index >= 0 && index < _timeSeries.length) {
+                                final dataPoint = _timeSeries[index];
+                                final year = dataPoint['year'] as String? ?? '';
+                                final value = _formatValue(
+                                  dataPoint['value'] as double?,
+                                );
+                                return LineTooltipItem(
+                                  '$year\n$value',
+                                  TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                );
+                              }
+                              return null;
+                            }).toList();
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
           const SizedBox(height: 16),
           // Data Table
@@ -387,19 +405,88 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
               overflow: TextOverflow.ellipsis,
             ),
             if (unit.isNotEmpty)
-              Text(
-                unit,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  fontSize: 11,
+              // Unit carries a calibration explanation (user req) — long-
+              // press / hover shows what the unit means and how it converts.
+              Tooltip(
+                message: _unitExplanation(unit),
+                triggerMode: TooltipTriggerMode.longPress,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        unit,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.6,
+                          ),
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.info_outline,
+                      size: 12,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
           ],
         ),
       ),
     );
+  }
+
+  /// Calibration explanation for a unit label (matches the web app's
+  /// charts.market.unit* i18n keys; EN/ES per current locale).
+  String _unitExplanation(String unit) {
+    final es = _currentLangCode == 'es';
+    final u = unit.toLowerCase();
+    if (u.contains('quintal')) {
+      return es
+          ? 'Precios en dólares por quintal (46 kg); datos fuente en USD/kg convertidos a 45,97 kg por quintal.'
+          : 'Prices are US dollars per quintal (46 kg); source data in USD/kg is converted at 45.97 kg per quintal.';
+    }
+    if (u.contains('ppi')) {
+      return es
+          ? 'Índice de Precios al Productor de EE. UU. (BLS): valores relativos a un período base — la tendencia muestra la dirección del costo, no un precio.'
+          : 'US Producer Price Index (BLS): values relative to a base period — the trend shows cost direction, not a price level.';
+    }
+    if (u.contains('index')) {
+      return es
+          ? 'Valores de índice relativos a un período base (p. ej. 2016 = 100), no precios absolutos.'
+          : 'Index values relative to a base period (e.g. 2016 = 100), not absolute prices.';
+    }
+    if (u.contains('%')) {
+      return es
+          ? 'Porcentaje de la producción — estadística regional modelada (FAO ODS 12.3.1).'
+          : 'Percentage of production — a modeled regional statistic (FAO SDG 12.3.1).';
+    }
+    if (u.contains('usd/mt')) {
+      return es
+          ? 'Dólares por tonelada métrica (1.000 kg) — mercados internacionales de referencia.'
+          : 'US dollars per metric tonne (1,000 kg) — international benchmark markets.';
+    }
+    if (u.contains('usd/kg')) {
+      return es ? 'Dólares por kilogramo.' : 'US dollars per kilogram.';
+    }
+    if (u.contains('short ton')) {
+      return es
+          ? 'Dólares por tonelada corta (907,18 kg).'
+          : 'US dollars per short ton (907.18 kg).';
+    }
+    if (u.contains('usd/lb')) {
+      return es
+          ? 'Dólares por libra (0,4536 kg).'
+          : 'US dollars per pound (0.4536 kg).';
+    }
+    return es
+        ? 'Unidad de medida de esta serie.'
+        : 'Unit of measurement for this series.';
   }
 
   Widget _buildXAxisLabel(double value, ThemeData theme) {

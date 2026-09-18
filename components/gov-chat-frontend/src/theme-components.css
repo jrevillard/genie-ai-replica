@@ -242,9 +242,15 @@ td {
   border-bottom: 1px solid var(--border) !important;
   font-weight: 600;
 }
-.apexcharts-tooltip-series-group apexcharts-tooltip-text,
-.apexcharts-tooltip-series-group apexcharts-tooltip-text-y-value {
+/* ApexCharts tooltip text nodes use CLASS selectors (the previous element-
+selector spelling never matched, leaving the series/value row invisible —
+a transparent box under the date title, reported on dark mode). */
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text,
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text-y-label,
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text-y-value,
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text-z-value {
   color: var(--fg) !important;
+  opacity: 1 !important;
 }
 .apexcharts-tooltip-marker {
   background: var(--fg) !important;

@@ -184,10 +184,22 @@ export default {
           show: false
         },
         tooltip: {
-          // Disabled on the sparkline (60x60 button) — full chart details
-          // are available by clicking through to the panel. The ApexCharts
-          // dark tooltip on a small surface is also hard to read.
-          enabled: false
+          // Mouse-overs show date + value everywhere (user requirement) —
+          // including the sparkline. Theme/colors come from the global
+          // apexcharts DS-token CSS in theme-components.css.
+          enabled: true,
+          x: {
+            formatter: (val) => {
+              const point = this.timeSeries.find((d) => String(d.year) === String(val));
+              return this.formatSparkTooltipDate(point ? point.year : val);
+            }
+          },
+          y: {
+            formatter: (v) => {
+              const unit = (this.priceData && this.priceData.unit) || '';
+              return `${v}${unit ? ` ${unit}` : ''}`;
+            }
+          }
         },
         dataLabels: {
           enabled: false
@@ -261,6 +273,23 @@ export default {
   },
 
   methods: {
+    /** Sparkline tooltip date — handles daily, monthly and annual keys. */
+    formatSparkTooltipDate(value) {
+      if (value === null || value === undefined) return '';
+      const s = String(value);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return new Date(`${s}T00:00:00`).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      }
+      if (/^\d{4}-\d{2}$/.test(s)) {
+        return new Date(`${s}-01T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+      }
+      if (/^\d{4}$/.test(s)) return s;
+      return s;
+    },
     async loadPriceData() {
       this.loading = true;
       try {

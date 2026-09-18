@@ -11,16 +11,44 @@ const nodeCrypto = require('node:crypto');
 
 const PCPS_URL = 'https://www.imf.org/-/media/files/research/commodityprices/monthly/external-data.xlsx';
 
-// PCPS row labels -> normalized series keys
-const SERIES_MAP = {
-  Urea: { key: 'IMF:UREA', name: 'Urea (NOLA granular)', unit: 'USD/short ton' },
-  'Potassium chloride': { key: 'IMF:POTASH', name: 'Potassium chloride (Vancouver)', unit: 'USD/mt' },
-  DAP: { key: 'IMF:DAP', name: 'DAP (NOLA)', unit: 'USD/mt' },
-  'Phosphate rock': { key: 'IMF:PHOSROCK', name: 'Phosphate rock', unit: 'USD/mt' },
-  Poultry: { key: 'IMF:POULTRY', name: 'Poultry (Georgia docks)', unit: 'index 2016=100' },
-  'Food index': { key: 'IMF:FOOD', name: 'IMF Food Price Index', unit: 'index 2016=100' },
-  'Agriculture index': { key: 'IMF:AGRI', name: 'IMF Agriculture Index', unit: 'index 2016=100' }
-};
+// PCPS column matcher -> normalized series keys. The 2026 layout is
+// TRANSPOSED vs the research era: commodities are COLUMNS (code row +
+// description row) and months are ROWS ("1980M1"). Match by stable PCPS
+// code with a description-regex fallback.
+const COLUMN_MATCHERS = [
+  { code: /^PURE/i, desc: /urea/i, def: { key: 'IMF:UREA', name: 'Urea (NOLA granular)', unit: 'USD/short ton' } },
+  {
+    code: /POTAS/i,
+    desc: /potassium chloride/i,
+    def: { key: 'IMF:POTASH', name: 'Potassium chloride (Vancouver)', unit: 'USD/mt' }
+  },
+  { code: /^PDAP/i, desc: /\bDAP\b/i, def: { key: 'IMF:DAP', name: 'DAP (NOLA)', unit: 'USD/mt' } },
+  {
+    code: /PHOS/i,
+    desc: /phosphate rock/i,
+    def: { key: 'IMF:PHOSROCK', name: 'Phosphate rock', unit: 'USD/mt' }
+  },
+  {
+    code: /POULT/i,
+    desc: /poultry/i,
+    def: { key: 'IMF:POULTRY', name: 'Poultry (Georgia docks)', unit: 'index 2016=100' }
+  },
+  {
+    code: /^PFERT$/i,
+    desc: /fertilizer/i,
+    def: { key: 'IMF:FERT', name: 'IMF Fertilizer Index', unit: 'index 2016=100' }
+  },
+  {
+    code: /^PFOOD$/i,
+    desc: /food price index/i,
+    def: { key: 'IMF:FOOD', name: 'IMF Food Price Index', unit: 'index 2016=100' }
+  },
+  {
+    code: /^PAGRI$/i,
+    desc: /agriculture/i,
+    def: { key: 'IMF:AGRI', name: 'IMF Agriculture Index', unit: 'index 2016=100' }
+  }
+];
 
 module.exports = {
   id: 'imf-pcps',
@@ -46,25 +74,25 @@ module.exports = {
 
   normalize(rows) {
     const docs = [];
-    const mapKeys = Object.keys(SERIES_MAP);
+    const codeRow = rows.find((r) => Array.isArray(r) && r[0] === 'Commodity');
+    const descRow = rows.find((r) => Array.isArray(r) && r[0] === 'Commodity.Description');
+    if (!codeRow) return { collection: 'agri_series', docs };
+
+    const colDefs = [];
+    for (let col = 1; col < codeRow.length; col += 1) {
+      const code = String(codeRow[col] || '');
+      const desc = String((descRow && descRow[col]) || '');
+      const m = COLUMN_MATCHERS.find((c) => c.code.test(code) || (desc && c.desc.test(desc)));
+      if (m && !colDefs.some((d) => d.def.key === m.def.key)) colDefs.push({ col, def: m.def });
+    }
 
     for (const row of rows) {
       if (!Array.isArray(row) || row.length < 2) continue;
-      const label = String(row[0] || '').trim();
-      const match = mapKeys.find((k) => label === k);
-      if (!match) continue;
-      const def = SERIES_MAP[match];
-
-      for (let col = 1; col < row.length; col += 1) {
+      const date = parseMonthCell(row[0]);
+      if (!date) continue;
+      for (const { col, def } of colDefs) {
         const value = row[col];
         if (typeof value !== 'number' || !Number.isFinite(value)) continue;
-
-        // PCPS columns carry date headers on a header row; locate by scanning
-        // the first rows for date-like cells at the same index
-        const header = rows.find((r) => r && (r[col] instanceof Date || /^\d{4}M\d{1,2}$/.test(String(r[col] || ''))));
-        const date = header && parseMonthCell(header[col]);
-        if (!date) continue;
-
         const logical = `${def.key}:${date}`;
         docs.push({
           _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),

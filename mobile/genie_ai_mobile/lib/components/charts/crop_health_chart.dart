@@ -298,8 +298,19 @@ class _CropHealthChartState extends State<CropHealthChart> {
                             final dept = _cropData!['data'][spot.x.toInt()];
                             final name = dept['department'] as String;
                             final ndvi = dept['ndvi'] as double;
+                            // Show the observation date with the value (user req)
+                            final rawDate = dept['date'] as String?;
+                            var dateLine = '';
+                            if (rawDate != null && rawDate.length >= 10) {
+                              final d = DateTime.tryParse(
+                                rawDate.substring(0, 10),
+                              );
+                              if (d != null) {
+                                dateLine = '\n${d.day}/${d.month}/${d.year}';
+                              }
+                            }
                             return LineTooltipItem(
-                              '$name\nNDVI: ${ndvi.toStringAsFixed(3)}',
+                              '$name\nNDVI: ${ndvi.toStringAsFixed(3)}$dateLine',
                               TextStyle(
                                 color: isDark ? Colors.white : Colors.black,
                                 fontWeight: FontWeight.bold,

@@ -649,6 +649,19 @@ export default {
       lastUpdated: 'Última atualização',
       commodity: 'Produto',
       noData: 'Sem dados disponíveis',
+      unitQuintal:
+        'Preços em dólares americanos por quintal, a medida centro-americana de portão de fazenda. 1 quintal = 46 kg; os dados de origem em USD/kg são convertidos a 45,97 kg por quintal.',
+      unitPpi:
+        'Índice de Preços ao Produtor dos EUA para fabricação de pesticidas e produtos químicos agrícolas (BLS). Os valores do índice são relativos a um período-base, não preços absolutos — a tendência mostra a direção do custo.',
+      unitIndex:
+        'Os valores do índice são relativos a um período-base (por exemplo 2016 = 100), não preços absolutos — a tendência mostra direção e magnitude da mudança.',
+      unitPercent: 'Percentagem da produção — estatística regional modelada (FAO ODS 12.3.1), não um preço observado.',
+      unitUsdKg: 'Dólares americanos por quilograma.',
+      unitUsdMt: 'Dólares americanos por tonelada métrica (1.000 kg) — mercados internacionais de referência.',
+      unitShortTon: 'Dólares americanos por tonelada curta (907,18 kg) — convenção do mercado dos EUA.',
+      unitUsdLb: 'Dólares americanos por libra (0,4536 kg).',
+      unitDozen: 'Dólares americanos por dúzia.',
+      unitGeneric: 'Unidade de medida desta série.',
       year: 'Ano',
       value: 'Valor',
       getPredictions: 'Obter Previsões da IA',

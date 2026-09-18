@@ -1,4 +1,0 @@
-# Bundled third-party data downloaded at Docker build time — see Dockerfile.
-# Keeping these out of git means each build pulls a fresh copy from upstream
-# (GeoNames publishes regular exports).
-data/

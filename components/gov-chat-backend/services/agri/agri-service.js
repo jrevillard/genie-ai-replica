@@ -16,7 +16,7 @@ const { enabledAdapters } = require('./registry');
 const { cadenceMs } = require('./config');
 const { buildEnvelope, caveat } = require('./envelope');
 const { fillMissingYears } = require('./estimation');
-const { computeTrend, usdPerKgToQuintal } = require('./series');
+const { computeTrend, usdPerKgToQuintal, monthEndAggregate } = require('./series');
 const seeds = require('./seeds/index');
 const { activeAdvisories } = require('./seeds/pest-advisories');
 const { isRelevantNews, dedupeByTitle } = require('./newsfilter');
@@ -852,6 +852,18 @@ class AgriService {
       s.unit = targetUnit;
     }
 
+    // Rendering cadence: every served series collapses to its month-end
+    // observation (design decision 2026-09-18 — sub-monthly WFP rows are
+    // unreadable noise at chart scale, and a uniform monthly grid makes
+    // daily/monthly/annual series comparable on the datetime axis). Raw
+    // observations remain in agri_series.
+    let aggregatedAny = false;
+    for (const s of series) {
+      const { data, aggregated } = monthEndAggregate(s.data);
+      s.data = data;
+      if (aggregated) aggregatedAny = true;
+    }
+
     const primary = series[0];
     const hasGap = series.some((s) => s.name.includes('San Salvador'));
     if (hasGap) caveats.push(caveat.gapYears('2023–2025'));
@@ -867,9 +879,9 @@ class AgriService {
       },
       {
         source: 'GENIE.AI agri service (composite)',
-        coverage: series
-          .map((s) => `${s.name} (${s.country}, through ${s.data[s.data.length - 1]?.date || '?'})`)
-          .join('; '),
+        coverage:
+          series.map((s) => `${s.name} (${s.country}, through ${s.data[s.data.length - 1]?.date || '?'})`).join('; ') +
+          (aggregatedAny ? ' — monthly aggregates (last observation of each month)' : ''),
         estimation: estimations.length > 0 ? estimations.join(' | ') : null,
         caveats
       }

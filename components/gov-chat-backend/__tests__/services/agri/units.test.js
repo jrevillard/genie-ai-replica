@@ -280,3 +280,44 @@ describe('agri news relevance gate', () => {
     expect(out[1].title).toContain('coffee exports');
   });
 });
+
+describe('agri series month-end aggregation (rendering cadence)', () => {
+  const { monthEndAggregate } = require('../../../services/agri/series');
+
+  test('keeps the LAST observation of each month, sorted', () => {
+    const daily = [
+      { date: '2026-07-01', value: 10 },
+      { date: '2026-07-15', value: 11 },
+      { date: '2026-07-30', value: 12 }, // month-end winner
+      { date: '2026-08-05', value: 13 },
+      { date: '2026-08-28', value: 14 }
+    ];
+    const { data, aggregated } = monthEndAggregate(daily);
+    expect(aggregated).toBe(true);
+    expect(data).toEqual([
+      { date: '2026-07-30', value: 12 },
+      { date: '2026-08-28', value: 14 }
+    ]);
+  });
+
+  test('already-monthly input passes through untouched (aggregated=false)', () => {
+    const monthly = [
+      { date: '2026-07-01', value: 1 },
+      { date: '2026-08-01', value: 2 }
+    ];
+    const { data, aggregated } = monthEndAggregate(monthly);
+    expect(aggregated).toBe(false);
+    expect(data).toEqual(monthly);
+  });
+
+  test('unsorted input with mixed cadence still picks month-end by date', () => {
+    const scrambled = [
+      { date: '2026-08-02', value: 20 },
+      { date: '2026-07-31', value: 15 },
+      { date: '2026-08-31', value: 25 },
+      { date: '2026-07-01', value: 10 }
+    ];
+    const { data } = monthEndAggregate(scrambled);
+    expect(data.map((p) => p.value)).toEqual([15, 25]);
+  });
+});

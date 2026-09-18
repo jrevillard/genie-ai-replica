@@ -81,4 +81,28 @@ function computeTrend(series, opts = {}) {
   return 'stable';
 }
 
-module.exports = { unitToKg, wfpRowToUsdPerKg, usdPerKgToQuintal, computeTrend, KG_PER_QUINTAL };
+/**
+ * Reduce a series to its LAST observation per calendar month (month-end
+ * price, market convention). This is the rendering cadence for every market
+ * chart: sub-monthly WFP market rows are visual noise at chart scale, and a
+ * uniform monthly grid keeps daily/monthly/annual series comparable on the
+ * datetime axis. Raw observations stay in agri_series — only the served
+ * envelope is aggregated. Estimated (CPI) points compete for their month's
+ * slot by date order like any other point.
+ *
+ * @param {Array<{date:string, value:number, quality?:string}>} data
+ * @returns {{data: Array, aggregated: boolean}} aggregated=false when the
+ *   input was already month-spaced (or shorter) — nothing was collapsed
+ */
+function monthEndAggregate(data) {
+  const sorted = (data || [])
+    .filter((p) => p && p.date)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const byMonth = new Map();
+  for (const p of sorted) byMonth.set(p.date.slice(0, 7), p);
+  const out = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, p]) => p);
+  return { data: out, aggregated: out.length !== sorted.length };
+}
+
+module.exports = { unitToKg, wfpRowToUsdPerKg, usdPerKgToQuintal, computeTrend, monthEndAggregate, KG_PER_QUINTAL };

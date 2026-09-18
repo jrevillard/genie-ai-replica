@@ -29,9 +29,6 @@
       "^winston-daily-rotate-file$": "<rootDir>/node_modules/winston-daily-rotate-file",
       "^@opentelemetry/api$": "<rootDir>/node_modules/@opentelemetry/api"
     },
-    "transformIgnorePatterns": [
-      "/node_modules/(?!(kdbush)/)"
-    ],
     "collectCoverageFrom": [
       "routes/**/*.js",
       "services/**/*.js",
@@ -115,7 +112,6 @@
     "yargs": "^18.0.0"
   },
   "devDependencies": {
-    "@babel/preset-env": "^8.0.5",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",

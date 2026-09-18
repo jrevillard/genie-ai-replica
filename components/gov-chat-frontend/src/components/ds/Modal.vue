@@ -200,6 +200,11 @@ export default {
   padding: 0;
   font-size: var(--text-lg);
   line-height: 1;
+  /* Bare × glyph — no button chrome (user req 2026-09-18) */
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  appearance: none;
 }
 
 .ds-modal__body {

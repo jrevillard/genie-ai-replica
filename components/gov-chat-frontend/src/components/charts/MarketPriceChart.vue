@@ -523,8 +523,14 @@ export default {
           axisTicks: { show: false }
         },
         yaxis: {
-          min: Math.floor((minVal - range * 0.05) / step) * step,
-          max: Math.ceil((maxVal + range * 0.05) / step) * step,
+          // Scales relative to the data: floor hugs the minimum (never below
+          // 0 for positive prices), top sits at 1.5× the highest value
+          // (user-prescribed headroom, 2026-09-18)
+          min:
+            minVal >= 0
+              ? Math.max(0, Math.floor((minVal - range * 0.05) / step) * step)
+              : Math.floor((minVal - range * 0.05) / step) * step,
+          max: Math.round(maxVal * 1.5 * 100) / 100,
           labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) }
         },
         // Primary line uses the resolved --fg token (guaranteed contrast in

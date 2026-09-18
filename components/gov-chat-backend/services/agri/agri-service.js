@@ -822,6 +822,25 @@ class AgriService {
       );
     }
 
+    // Normalize every series to the primary's unit. Live bug (2026-09-18):
+    // the maize US Gulf benchmark plotted USD/mt values (38-348) against the
+    // Salvadoran USD/quintal series (2-53) on one axis — the benchmark
+    // towered over the real prices and stretched the y-axis to ~350.
+    const targetUnit = series[0].unit;
+    const MT = 'USD/mt';
+    const UNIT_FACTORS = {
+      [`${MT}|${QUINTAL}`]: 46 / 1000, // 1 quintal = 46 kg
+      [`${MT}|USD/kg`]: 1 / 1000
+    };
+    for (const s of series) {
+      if (s.unit === targetUnit) continue;
+      const factor = UNIT_FACTORS[`${s.unit}|${targetUnit}`];
+      if (!factor) continue; // unknown pairing (e.g. index co-plotted) — leave as-is
+      s.data = s.data.map((p) => ({ ...p, value: Math.round(p.value * factor * 1000) / 1000 }));
+      s.name = `${s.name} [converted to ${targetUnit}]`;
+      s.unit = targetUnit;
+    }
+
     const primary = series[0];
     const hasGap = series.some((s) => s.name.includes('San Salvador'));
     if (hasGap) caveats.push(caveat.gapYears('2023–2025'));

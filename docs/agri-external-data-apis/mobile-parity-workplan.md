@@ -127,6 +127,12 @@ jrevillard.
 > on is tracked here and reflected in the matrix/phases, so the mobile
 > catch-up plan never drifts from the web app.
 
+- 2026-09-19 v4.3: web regression fixes folded into M21/M22 acceptance —
+  display-name helpers must be METHODS (Vue-compat computed crash) and
+  renaming a helper requires grep-checking every call site (stale
+  shortSeriesName reference blanked all cards). Mobile note: Dart has no
+  such computed layer, but keep name helpers in one file (series_display)
+  with tests referencing them.
 - 2026-09-19 v4.2: card dashboard layout + all-series chips (M22),
   commodity-TYPE master toggles (M23, spec S25), fixed card order (M24).
 - 2026-09-19 v4.1: shared short display names + legend layout (new M21,

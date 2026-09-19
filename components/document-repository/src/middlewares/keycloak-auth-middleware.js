@@ -23,7 +23,16 @@ async function getJWKS() {
   if (!jwks) {
     const keycloakUrl = appConfig.security.keycloakUrl;
     const realm = appConfig.security.keycloakRealm;
-    const jwksUri = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
+    // DAVID 2026-09-15: KEYCLOAK_JWKS_URL host override matches okf-server's
+    // shared/lib/keycloak-auth-service.js — Keycloak's discovery hands back
+    // jwks_uri based on KC_HOSTNAME, which in local Docker resolves to
+    // localhost:8080 (unreachable from containers). Operators set this to a
+    // container-reachable host. Falls back to the historical
+    // `${keycloakUrl}/realms/.../certs` derivation when unset.
+    const jwksHostOverride = process.env.KEYCLOAK_JWKS_URL;
+    const jwksUri = jwksHostOverride
+      ? jwksHostOverride
+      : `${keycloakUrl}/realms/${realm}/protocol/openid-connect/certs`;
     expectedIssuer = `${keycloakUrl}/realms/${realm}`;
     // Split internal/public OIDC URLs (same pattern as shared/lib
     // keycloak-auth-service): JWKS is fetched via the internal KEYCLOAK_URL
@@ -38,7 +47,20 @@ async function getJWKS() {
         expectedIssuer = publicIssuer;
       }
     }
+    // DAVID 2026-09-15: browser tokens minted via the nginx /auth path carry
+    // the issuer `https://localhost/auth/realms/genie` — a path-prefix alias
+    // (/auth/realms/<realm>) that neither the internal nor the public URL
+    // produces. jwtVerify checks issuer as a literal string match, so a
+    // mismatched path drops the token with JWTClaimValidationFailed. Honor
+    // KEYCLOAK_BROWSER_ISSUER as a third expected issuer alongside the
+    // already-aliased ones — no-op when unset (single-URL deployments).
+    const browserIssuer = process.env.KEYCLOAK_BROWSER_ISSUER;
+    if (browserIssuer && browserIssuer !== expectedIssuer) {
+      logger.info(`[KEYCLOAK-AUTH] Browser issuer alias: validating ${browserIssuer}`);
+      expectedIssuer = browserIssuer;
+    }
     logger.info(`[KEYCLOAK-AUTH] Initializing JWKS from ${jwksUri}`);
+    logger.info(`[KEYCLOAK-AUTH] Will validate tokens with issuer=${expectedIssuer}`);
     jwks = jose.createRemoteJWKSet(new URL(jwksUri));
   }
   return jwks;
@@ -132,6 +154,22 @@ const authenticateToken = async (req, res, next) => {
       });
       decoded = payload;
     } catch (err) {
+      // [DIAG 2026-09-15] Publish 401 root cause — log full token-vs-expected
+      // mismatch (issuer / signature / expiration) so the next 401 is
+      // diagnosable from the container log alone.
+      logger.error('[KEYCLOAK-AUTH] jwtVerify failed', {
+        path,
+        err_name: err && err.name,
+        err_code: err && err.code,
+        err_message: err && err.message,
+        expected_issuer: expectedIssuer,
+        token_issuer: (() => {
+          try { return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).iss; } catch { return 'unparseable'; }
+        })(),
+        token_exp: (() => {
+          try { return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).exp; } catch { return 0; }
+        })()
+      });
       if (err.name === 'JWTExpired') {
         return res.status(401).json({
           error: 'TOKEN_EXPIRED',

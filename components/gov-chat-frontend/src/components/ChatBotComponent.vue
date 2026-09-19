@@ -2181,14 +2181,23 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Top-aligned + auto-margin centering: justify-content:center CLIPS THE
+     TOP when content overflows a scroll container — the heading became
+     unreachable once the market cards grew (found live 2026-09-19). Auto
+     margins center when short and collapse to 0 (scrollable) when tall. */
+  justify-content: flex-start;
   padding: var(--space-lg);
   overflow-y: auto;
 }
 
 .welcome-header {
   text-align: center;
+  margin-top: auto;
   margin-bottom: var(--space-lg);
+}
+
+.quick-help-overlay > :last-child {
+  margin-bottom: auto;
 }
 
 .quick-help-heading {

@@ -544,6 +544,11 @@ export default {
     commodityName() {
       return this.categoryConfig.i18nKey ? this.$t(this.categoryConfig.i18nKey) : this.category;
     },
+    /** Localized category title for the prediction prompt header. */
+    categoryTitle() {
+      const key = this.categoryConfig && this.categoryConfig.i18nKey;
+      return key ? this.$t(`charts.market.${String(key).split('.').pop()}`, key) : this.category;
+    },
     timeSeries() {
       return this.primarySeries.data || [];
     },
@@ -1235,19 +1240,39 @@ export default {
 
       try {
         const disclosure = this.dataDisclosureText();
-        const historyData = this.timeSeries
-          .map((item) => {
-            const quality = item.quality === 'estimated' ? ' (est.)' : '';
-            return `  ${item.date}: ${this.formatValue(item.value)}${quality}`;
-          })
-          .join('\n');
+        // The prompt covers EXACTLY the commodities the user left selected
+        // (series toggles + start-year filter), each with its own recent
+        // month-end history — the AI must forecast per commodity, never a
+        // category aggregate (user req 2026-09-19).
+        const RECENT = 24; // month-end points per commodity (~2 years)
+        const blocks = this.visibleSeries.map((s) => {
+          const pts = (s.data || []).filter((p) => Number.isFinite(p.value)).slice(-RECENT);
+          const hist = pts
+            .map(
+              (item) =>
+                `  ${item.date}: ${this.formatValue(item.value)}${item.quality === 'estimated' ? ' (est.)' : ''}`
+            )
+            .join('\n');
+          const last = pts[pts.length - 1];
+          return {
+            disp: this.dispName(s.name),
+            full: s.name,
+            unit: s.unit || this.unit,
+            latest: last ? this.formatValue(last.value) : '--',
+            hist
+          };
+        });
+        const scopeList = blocks.map((b) => `${b.disp} — ${b.full}`).join('\n  ');
+        const historySections = blocks
+          .map((b) => `${b.disp} (unit: ${b.unit}; latest: ${b.latest}):\n${b.hist}`)
+          .join('\n\n');
         const currentLanguage = this.$i18n ? this.$i18n.locale : localStorage.getItem('userLocale') || 'en';
         const currentDate = new Date();
 
         const prompt =
           currentLanguage === 'es'
-            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nProducto: ${this.commodityName}\nMarco Temporal: ${this.selectedTimeFrame}\n\nDatos Actuales:\n• Último Valor: ${this.latestValue} ${this.unit}\n• Tendencia: ${this.trendLabel}\n\n${disclosure ? `Transparencia de Datos:\n${disclosure}\n\n` : ''}Datos Históricos:\n${historyData}\n\n${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n` : ''}Proporcione análisis y predicción para ${this.selectedTimeFrame}. Trate los valores marcados "est." como estimaciones, no observaciones de mercado.`
-            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCommodity: ${this.commodityName}\nTime Frame: ${this.selectedTimeFrame}\n\nCurrent Data:\n• Latest: ${this.latestValue} ${this.unit}\n• Trend: ${this.trendLabel}\n\n${disclosure ? `Data Transparency:\n${disclosure}\n\n` : ''}Historical Data:\n${historyData}\n\n${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n` : ''}Provide price forecast and analysis for ${this.selectedTimeFrame}. Treat values marked "(est.)" as estimates, not market observations.`;
+            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCategoría: ${this.categoryTitle}\nMarco Temporal: ${this.selectedTimeFrame}\n\nProductos en alcance (pronostique CADA UNO por separado):\n  ${scopeList}\n\nSituación actual e historial por producto:\n${historySections}\n\n${disclosure ? `Transparencia de Datos:\n${disclosure}\n\n` : ''}${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n\n` : ''}Instrucciones:\n- Proporcione un análisis y predicción SEPARADOS para CADA producto del alcance, encabezados por su nombre.\n- NO agregue ni dé una cifra combinada para la categoría (p. ej., para Ganadería: predicciones separadas de RES y POLLO, nunca un número genérico de "ganado").\n- Base cada pronóstico ÚNICAMENTE en los datos de ese producto.\n- Trate los valores marcados "est." como estimaciones, no observaciones de mercado.`
+            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCategory: ${this.categoryTitle}\nTime Frame: ${this.selectedTimeFrame}\n\nCommodities in scope (forecast EACH separately):\n  ${scopeList}\n\nPer-commodity current status and history:\n${historySections}\n\n${disclosure ? `Data Transparency:\n${disclosure}\n\n` : ''}${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n\n` : ''}Instructions:\n- Provide a SEPARATE forecast and analysis for EACH commodity in scope, each clearly headed by its name.\n- Do NOT aggregate or give a single combined figure for the category (e.g. for Livestock: separate BEEF and CHICKEN predictions — never one generic "livestock" number).\n- Base each forecast ONLY on that commodity's own data above.\n- Treat values marked "(est.)" as estimates, not market observations.`;
 
         const response = await chatbotService.submitQuery({
           userId: this.userId,
@@ -1622,7 +1647,7 @@ export default {
 }
 
 .prediction-response {
-  max-height: 50vh;
+  max-height: 70vh;
   overflow-y: auto;
   line-height: 1.6;
 }

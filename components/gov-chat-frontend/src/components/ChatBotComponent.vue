@@ -746,10 +746,24 @@ export default {
     },
 
     openChart(type, category) {
+      // Market dialogs carry the commodity in the title (user req
+      // 2026-09-19): "Market Prices - Maize & Grains" etc.
+      const categoryNames = {
+        maize: this.translate('charts.market.maizeGrains', 'Maize & Grains'),
+        cropProtection: this.translate('charts.market.cropProtection', 'Crop Protection'),
+        vegetables: this.translate('charts.market.fruitsVeggies', 'Fruits & Vegetables'),
+        livestock: this.translate('charts.market.livestock', 'Livestock'),
+        fertilizer: this.translate('charts.market.fertilizer', 'Fertilizer'),
+        apiary: this.translate('charts.market.apiary', 'Apiary & Honey'),
+        aquaculture: this.translate('charts.market.aquaculture', 'Aquaculture'),
+        harvestStorage: this.translate('charts.market.harvestStorage', 'Harvest & Storage')
+      };
       const titles = {
         'crop-health': this.translate('charts.cropHealthTitle', 'Crop Health - NDVI Index'),
         'pest-alert': this.translate('charts.pestAlertTitle', 'Pest & Disease Alerts'),
-        'market-price': this.translate('charts.market.sectionTitle', 'Market Prices')
+        'market-price': `${this.translate('charts.market.sectionTitle', 'Market Prices')} - ${
+          categoryNames[category] || ''
+        }`
       };
       this.chartDialog = { visible: true, type, title: titles[type] || type, category };
     },

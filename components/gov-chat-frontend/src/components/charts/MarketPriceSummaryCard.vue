@@ -23,16 +23,22 @@
             {{ trendText }}
           </DsPill>
         </div>
-        <!-- Multi-commodity categories list the other commodities' latest
-             figures beneath the headline number (smaller text, user req
-             2026-09-19). -->
-        <ul v-if="subValues.length > 0" class="card-subvalues">
-          <li v-for="item in subValues" :key="item.name" class="card-subvalue">
-            <span class="card-subvalue__dot" :style="{ background: item.color }" aria-hidden="true"></span>
-            <span class="card-subvalue__name">{{ item.shortName }}</span>
-            <span class="card-subvalue__value">{{ item.value }}</span>
-          </li>
-        </ul>
+        <!-- Multi-commodity categories: compact acronym chips (dot + code)
+             keep the button narrow; the native tooltip carries the full
+             description and latest price (user req 2026-09-19). -->
+        <div v-if="codeChips.length > 0" class="card-codes">
+          <span
+            v-for="item in codeChips"
+            :key="item.code"
+            class="card-code"
+            :title="item.tip"
+            tabindex="0"
+            :aria-label="item.tip"
+          >
+            <span class="card-code__dot" :style="{ background: item.color }" aria-hidden="true"></span>
+            {{ item.code }}
+          </span>
+        </div>
       </div>
     </div>
   </DsCard>
@@ -112,19 +118,31 @@ export default {
     },
 
     /**
-     * Latest figure per NON-primary commodity, for multi-commodity category
-     * cards — the headline number stays the primary; the rest list beneath
-     * in smaller text, dot colors following the main chart's palette.
+     * Acronym chips for the NON-primary commodities on multi-commodity
+     * cards — "CAB-GT", "DAP-US", "TIL-HN"… Tooltip carries the full
+     * description + latest price. Codes: first word (≤3 letters) + country
+     * tag when the series name names one; same-base collisions get a
+     * second-word initial (apiary honey producer vs export).
      */
-    subValues() {
+    codeChips() {
       const palette = [this.resolvedCategoryColor, 'var(--warning)', 'var(--muted)', 'var(--info)', 'var(--danger)'];
-      return this.allSeries.slice(1, 5).map((s, i) => {
+      const extras = this.allSeries.slice(1, 5);
+      const codes = extras.map((s) => this.commodityCode(s.name));
+      const counts = new Map();
+      codes.forEach((c) => counts.set(c, (counts.get(c) || 0) + 1));
+      return extras.map((s, i) => {
+        let code = codes[i];
+        if ((counts.get(code) || 0) > 1) {
+          const second = (this.shortSeriesName(s.name).split(/\s+/)[1] || '?')[0].toUpperCase();
+          code = `${code}-${second}`;
+        }
         const points = (s.data || []).filter((p) => Number.isFinite(p.value));
         const last = points[points.length - 1];
+        const value = last ? last.value.toFixed(2) : '--';
+        const unit = this.unit || '';
         return {
-          name: s.name,
-          shortName: this.shortSeriesName(s.name),
-          value: last ? last.value.toFixed(2) : '--',
+          code,
+          tip: `${s.name} — ${value}${unit ? ` ${unit}` : ''}`,
           color: palette[(i + 1) % palette.length]
         };
       });
@@ -303,8 +321,8 @@ export default {
   },
 
   methods: {
-    /** Compact commodity name for the sub-value rows (same trimming rules
-     *  as the main chart's multi-Latest card). Method, NOT computed. */
+    /** Compact commodity name for chip tooltips (same trimming rules as
+     *  the main chart's multi-Latest card). Method, NOT computed. */
     shortSeriesName(name) {
       const raw = typeof name === 'string' ? name : '';
       const short = raw
@@ -313,6 +331,26 @@ export default {
         .split(',')[0]
         .trim();
       return short || raw;
+    },
+    /** ≤3-letter commodity code + country tag, e.g. "CAB-GT", "DAP-US". */
+    commodityCode(name) {
+      const raw = typeof name === 'string' ? name : '';
+      const short = this.shortSeriesName(raw);
+      const base = ((short.split(/\s+/)[0] || '?').slice(0, 3).toUpperCase() || '???').slice(0, 3);
+      const countryMap = [
+        ['EL SALVADOR', 'SV'],
+        ['HONDURAS', 'HN'],
+        ['GUATEMALA', 'GT'],
+        ['COSTA RICA', 'CR'],
+        ['NICARAGUA', 'NI'],
+        ['BRAZIL', 'BR'],
+        ['US GULF', 'US'],
+        ['UNITED STATES', 'US'],
+        ['MIDDLE EAST', 'ME'],
+        ['WORLD', 'INT']
+      ];
+      const hit = countryMap.find(([needle]) => raw.toUpperCase().includes(needle));
+      return hit ? `${base}-${hit[1]}` : base;
     },
     /** Sparkline tooltip date — handles daily, monthly and annual keys. */
     formatSparkTooltipDate(value) {
@@ -432,46 +470,34 @@ export default {
   flex-shrink: 0;
 }
 
-/* Non-primary commodities' latest figures on multi-commodity cards */
-.card-subvalues {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* Commodity acronym chips — keep the card narrow, wrap instead of stretch */
+.card-codes {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 4px;
   overflow: hidden;
 }
 
-.card-subvalue {
-  display: flex;
+.card-code {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 0.7rem;
-  line-height: 1.2;
+  gap: 4px;
+  font-size: 0.65rem;
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 2px 5px;
+  white-space: nowrap;
+  cursor: help;
 }
 
-.card-subvalue__dot {
+.card-code__dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   flex: 0 0 auto;
-}
-
-.card-subvalue__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.card-subvalue__value {
-  flex: 0 0 auto;
-  color: var(--fg);
-  font-weight: 600;
 }
 
 @media (max-width: 768px) {

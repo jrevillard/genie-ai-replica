@@ -205,14 +205,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (btn['hidden'] == true) {
           continue;
         }
-        // Safe parsing: use map access with defaults to prevent null crashes
+        // Safe parsing: use map access with defaults to prevent null crashes.
+        // Config shape (genie-ai-config.json): icon is a top-level
+        // {type, value} object — some drafts nested it under `appearance`;
+        // read both so either shape resolves.
         final appearance = btn['appearance'] as Map<String, dynamic>?;
-        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
+        final iconMap =
+            (btn['icon'] ?? appearance?['icon']) as Map<String, dynamic>?;
         final iconPath = iconMap?['value']?.toString() ?? '';
 
         final String localIconAsset = iconPath.isNotEmpty
             ? 'assets/config/quickhelp/${iconPath.split('/').last}'
-            : 'assets/config/quickhelp/default.svg';
+            : '';
 
         // Resolve text with locale maps
         final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
@@ -1581,13 +1585,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           itemCount: _quickHelpButtons.length,
                           itemBuilder: (context, index) {
                             final button = _quickHelpButtons[index];
+                            // Label: prefer the loader-resolved title
+                            // (config carries {en, es} maps, not i18n keys);
+                            // fall back to the appearance.label.text key for
+                            // older config drafts.
                             final labelMap =
                                 button['appearance']?['label']
                                     as Map<String, dynamic>? ??
                                 {};
                             final String titleKey =
                                 labelMap['text']?.toString() ?? '';
-                            final String translatedTitle = tr(titleKey);
+                            final String resolvedTitle =
+                                button['resolvedTitle']?.toString() ?? '';
+                            final String translatedTitle = resolvedTitle
+                                .isNotEmpty
+                                ? resolvedTitle
+                                : (titleKey.isNotEmpty ? tr(titleKey) : '');
                             final String iconAsset =
                                 button['iconAsset']?.toString() ?? '';
 
@@ -1612,16 +1625,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   ),
                                   child: Row(
                                     children: [
-                                      SvgPicture.asset(
-                                        iconAsset,
-                                        width: 18,
-                                        height: 18,
-                                        placeholderBuilder: (_) => Icon(
+                                      if (iconAsset.isNotEmpty)
+                                        SvgPicture.asset(
+                                          iconAsset,
+                                          width: 18,
+                                          height: 18,
+                                          placeholderBuilder: (_) => Icon(
+                                            Icons.help_outline,
+                                            size: 20,
+                                            color: tokens.accent,
+                                          ),
+                                        )
+                                      else
+                                        Icon(
                                           Icons.help_outline,
                                           size: 20,
                                           color: tokens.accent,
                                         ),
-                                      ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(

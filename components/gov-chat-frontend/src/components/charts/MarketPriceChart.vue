@@ -1269,10 +1269,26 @@ export default {
         const currentLanguage = this.$i18n ? this.$i18n.locale : localStorage.getItem('userLocale') || 'en';
         const currentDate = new Date();
 
+        // News the user selected is MANDATORY context: the instructions
+        // must tell the model to weave it into every commodity forecast.
+        // (Regression: an earlier "ONLY on that commodity's own data"
+        // instruction made the model discard the news and disclaim it.)
+        const newsSections = [
+          this.worldNewsInput
+            ? `SELECTED WORLD NEWS FACTORS (recent events — you MUST reflect these in every commodity forecast):\n${this.worldNewsInput}`
+            : '',
+          this.localNewsInput
+            ? `SELECTED LOCAL NEWS FACTORS (recent events — you MUST reflect these in every commodity forecast):\n${this.localNewsInput}`
+            : ''
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+        const hasNews = Boolean(newsSections);
+
         const prompt =
           currentLanguage === 'es'
-            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCategoría: ${this.categoryTitle}\nMarco Temporal: ${this.selectedTimeFrame}\n\nProductos en alcance (pronostique CADA UNO por separado):\n  ${scopeList}\n\nSituación actual e historial por producto:\n${historySections}\n\n${disclosure ? `Transparencia de Datos:\n${disclosure}\n\n` : ''}${this.worldNewsInput ? `Factores Mundiales:\n${this.worldNewsInput}\n\n` : ''}${this.localNewsInput ? `Factores Locales:\n${this.localNewsInput}\n\n` : ''}Instrucciones:\n- Proporcione un análisis y predicción SEPARADOS para CADA producto del alcance, encabezados por su nombre.\n- NO agregue ni dé una cifra combinada para la categoría (p. ej., para Ganadería: predicciones separadas de RES y POLLO, nunca un número genérico de "ganado").\n- Base cada pronóstico ÚNICAMENTE en los datos de ese producto.\n- Trate los valores marcados "est." como estimaciones, no observaciones de mercado.`
-            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCategory: ${this.categoryTitle}\nTime Frame: ${this.selectedTimeFrame}\n\nCommodities in scope (forecast EACH separately):\n  ${scopeList}\n\nPer-commodity current status and history:\n${historySections}\n\n${disclosure ? `Data Transparency:\n${disclosure}\n\n` : ''}${this.worldNewsInput ? `World Factors:\n${this.worldNewsInput}\n\n` : ''}${this.localNewsInput ? `Local Factors:\n${this.localNewsInput}\n\n` : ''}Instructions:\n- Provide a SEPARATE forecast and analysis for EACH commodity in scope, each clearly headed by its name.\n- Do NOT aggregate or give a single combined figure for the category (e.g. for Livestock: separate BEEF and CHICKEN predictions — never one generic "livestock" number).\n- Base each forecast ONLY on that commodity's own data above.\n- Treat values marked "(est.)" as estimates, not market observations.`;
+            ? `Solicitud de Predicción de Precios de Mercado para El Salvador\n\nFecha: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCategoría: ${this.categoryTitle}\nMarco Temporal: ${this.selectedTimeFrame}\n\nProductos en alcance (pronostique CADA UNO por separado):\n  ${scopeList}\n\nSituación actual e historial por producto:\n${historySections}\n\n${disclosure ? `Transparencia de Datos:\n${disclosure}\n\n` : ''}${newsSections ? `${newsSections}\n\n` : ''}Instrucciones:\n- Proporcione un análisis y predicción SEPARADOS para CADA producto del alcance, encabezados por su nombre.\n- NO agregue ni dé una cifra combinada para la categoría (p. ej., para Ganadería: predicciones separadas de RES y POLLO, nunca un número genérico de "ganado").\n- Combine el historial de precios de cada producto con los FACTORES DE NOTICIAS SELECCIONADOS de arriba: explique cómo esos eventos afectan el pronóstico de cada producto (oferta, demanda, precios). NO presente un pronóstico que ignore las noticias proporcionadas.\n- Base cada pronóstico en el historial de ese producto MÁS los factores de noticias seleccionados — nunca solo en el historial.\n- Trate los valores marcados "est." como estimaciones, no observaciones de mercado.`
+            : `Market Price Prediction Request for El Salvador\n\nDate: ${currentDate.getDate()}/${currentDate.getMonth() + 1}/${currentDate.getFullYear()}\n\nCategory: ${this.categoryTitle}\nTime Frame: ${this.selectedTimeFrame}\n\nCommodities in scope (forecast EACH separately):\n  ${scopeList}\n\nPer-commodity current status and history:\n${historySections}\n\n${disclosure ? `Data Transparency:\n${disclosure}\n\n` : ''}${newsSections ? `${newsSections}\n\n` : ''}Instructions:\n- Provide a SEPARATE forecast and analysis for EACH commodity in scope, each clearly headed by its name.\n- Do NOT aggregate or give a single combined figure for the category (e.g. for Livestock: separate BEEF and CHICKEN predictions — never one generic "livestock" number).\n- Weave the SELECTED NEWS FACTORS above into your analysis: for each commodity, explain how those events affect its forecast (supply, demand, prices). Do NOT present a forecast that ignores the provided news.\n- Base each commodity's forecast on its own price history PLUS the selected news factors — never on the history alone.\n- Treat values marked "(est.)" as estimates, not market observations.${hasNews ? '' : '\n- No news factors were selected: state plainly that the forecast relies on price history only.'}`;
 
         const response = await chatbotService.submitQuery({
           userId: this.userId,

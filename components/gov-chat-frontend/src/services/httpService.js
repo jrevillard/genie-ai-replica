@@ -145,6 +145,26 @@ class HttpService {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // [DIAG 2026-09-15] Publish/lifecycle 502 — David: trace EVERY outgoing
+    // /api/okf request so we can see whether the request left the browser
+    // (CORS pre-flight, baseUrl, URL string, method, payload shape) and what
+    // headers/method actually went on the wire. Side-effect on globalThis so
+    // it CANNOT be tree-shaken away and a global probe stays available.
+    try {
+      if (config && config.url && String(config.url).indexOf('/api/okf') !== -1) {
+        const m = config.method ? config.method.toUpperCase() : 'GET';
+        const u = String(config.url);
+        const auth = config.headers && config.headers.Authorization
+          ? String(config.headers.Authorization).slice(0, 30)
+          : '(none)';
+        const t0 = Date.now();
+        config.__okfT0 = t0;
+        console.warn('[OKF-OUT]', m, u, 'baseURL=' + this.baseUrl, 'auth=' + auth, 't0=' + t0);
+        if (typeof window !== 'undefined') {
+          window.__okfLog = (window.__okfLog || []).concat(['OUT ' + m + ' ' + u + ' t0=' + t0]);
+        }
+      }
+    } catch (e) { /* never throw from a logger */ }
     return config;
   }
 
@@ -164,6 +184,15 @@ class HttpService {
    * @returns {Object} Response object
    */
   handleResponse(response) {
+    // [DIAG 2026-09-15] Companion to the request-side log — captures the FULL
+    // response (status, headers, body) for any /api/okf call. globalThis side
+    // effect so the log survives minification + we can recover it later.
+    try {
+      if (response && response.config && response.config.url && String(response.config.url).indexOf('/api/okf') !== -1) {
+        console.warn('[OKF-IN]', response.status, response.config.url, 'ct=' + (response.headers && response.headers['content-type']));
+        if (typeof window !== 'undefined') { window.__okfLog = (window.__okfLog || []).concat(['IN ' + response.status + ' ' + response.config.url]); }
+      }
+    } catch (e) { /* never throw from a logger */ }
     return response;
   }
 
@@ -213,6 +242,36 @@ class HttpService {
         data: error.response.data,
         message: error.response.data?.message || 'An error occurred'
       };
+      // [DIAG 2026-09-15] Full error trace — print the exact upstream response
+      // so we can see whether 502 came from nginx/Kong/upstream and what body
+      // came back. Never throw from a logger. globalThis side effect so we can
+      // inspect from the browser DevTools even if console is muted.
+      try {
+        if (originalRequest && originalRequest.url && String(originalRequest.url).indexOf('/api/okf') !== -1) {
+          const headers = error.response && error.response.headers;
+          const data = error.response && error.response.data;
+          const t0 = originalRequest.__okfT0;
+          const dt = t0 ? (Date.now() - t0) : -1;
+          console.error('[OKF-ERR]', status, originalRequest.method && originalRequest.method.toUpperCase(), originalRequest.url, {
+            statusText,
+            responseHeaders: headers,
+            responseData: data,
+            message: error.message,
+            code: error.code,
+            durationMs: dt,
+            aborted: !error.response
+          });
+          if (typeof window !== 'undefined') {
+            window.__okfLog = (window.__okfLog || []).concat([
+              'ERR ' + status + ' ' + originalRequest.url +
+              ' dt=' + dt + 'ms' +
+              ' aborted=' + (!error.response) +
+              ' msg=' + (error.message || 'n/a') +
+              ' code=' + (error.code || 'n/a')
+            ]);
+          }
+        }
+      } catch (e) { /* never throw from a logger */ }
 
       // Parse error for structured handling
       const parsedError = parseAuthError(error.response.data);

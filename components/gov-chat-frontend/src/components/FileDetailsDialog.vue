@@ -736,7 +736,12 @@ export default {
       return false;
     },
     isMetadataEditable() {
-      return this.file && this.file.dataprep.status?.toLowerCase() !== 'ingested';
+      // Lock metadata (incl. the File Name rename field) not only once
+      // ingested but ALSO while the ingest is running — dataprep writes
+      // chunks under the file's identity; a mid-ingest rename races it.
+      // Mirrors isFileLocked (which gates Delete) for consistency.
+      const s = this.file?.dataprep?.status?.toLowerCase();
+      return this.file && s !== 'ingested' && s !== 'ingested with warnings' && s !== 'ingesting';
     },
     // Determine what status text to show
     displayStatus() {

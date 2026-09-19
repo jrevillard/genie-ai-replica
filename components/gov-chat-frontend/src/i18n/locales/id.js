@@ -629,7 +629,7 @@ export default {
     shareError: 'Gagal membagikan',
     market: {
       sectionTitle: 'Harga Pasar',
-      maizeGrains: 'Jagung & Biji-bijian',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Proteksi Tanaman',
       fruitsVeggies: 'Buah & Sayuran',
       livestock: 'Ternak',

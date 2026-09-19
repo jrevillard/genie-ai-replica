@@ -617,7 +617,7 @@ export default {
     shareError: 'Bɛnni jɛ',
     market: {
       sectionTitle: 'Jago Sɔgɔ',
-      maizeGrains: 'Kaba ni ga',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Sɛnɛ Laban',
       fruitsVeggies: 'Nanu ni dɛ',
       livestock: 'Misala',

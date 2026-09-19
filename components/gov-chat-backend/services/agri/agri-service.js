@@ -33,7 +33,10 @@ const KG = 'USD/kg';
  */
 const MARKET_CATEGORIES = {
   maize: {
-    title: 'Maize & Basic Grains',
+    title: 'Maize, Beans & Grains',
+    // Full commodity set discovered in the live WFP/GT/NIC + Pink Sheet
+    // data (user req 2026-09-19): every grains/beans series the sources
+    // actually publish, one USD/quintal axis.
     seriesDefs: [
       {
         type: 'wfp',
@@ -46,6 +49,42 @@ const MARKET_CATEGORIES = {
       },
       {
         type: 'wfp',
+        adapter: 'wfp-slv',
+        country: 'El Salvador',
+        commodity: 'Beans (red)',
+        pricetype: 'wholesale',
+        name: 'Beans (red), San Salvador wholesale',
+        unit: QUINTAL
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-slv',
+        country: 'El Salvador',
+        commodity: 'Beans (silk red)',
+        pricetype: 'wholesale',
+        name: 'Beans (silk red), San Salvador wholesale',
+        unit: QUINTAL
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-slv',
+        country: 'El Salvador',
+        commodity: 'Rice',
+        pricetype: 'wholesale',
+        name: 'Rice, San Salvador wholesale',
+        unit: QUINTAL
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-slv',
+        country: 'El Salvador',
+        commodity: 'Sorghum',
+        pricetype: 'wholesale',
+        name: 'Sorghum, San Salvador wholesale',
+        unit: QUINTAL
+      },
+      {
+        type: 'wfp',
         adapter: 'wfp-gtm',
         country: 'Guatemala',
         commodity: 'Maize (white)',
@@ -54,7 +93,70 @@ const MARKET_CATEGORIES = {
         unit: QUINTAL,
         regional: true
       },
-      { type: 'wb', key: 'WB:MAIZE_INTL', name: 'Maize (US #2, US Gulf intl benchmark)', unit: 'USD/mt' }
+      {
+        type: 'wfp',
+        adapter: 'wfp-gtm',
+        country: 'Guatemala',
+        commodity: 'Beans (black)',
+        pricetype: 'wholesale',
+        name: 'Beans (black), Guatemala La Terminal [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-gtm',
+        country: 'Guatemala',
+        commodity: 'Rice (ordinary, first quality)',
+        pricetype: 'wholesale',
+        name: 'Rice (first quality), Guatemala La Terminal [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-nic',
+        country: 'Nicaragua',
+        commodity: 'Maize (white)',
+        pricetype: 'retail',
+        name: 'Maize (white), Nicaragua national average [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-nic',
+        country: 'Nicaragua',
+        commodity: 'Beans (red)',
+        pricetype: 'retail',
+        name: 'Beans (red), Nicaragua national average [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-nic',
+        country: 'Nicaragua',
+        commodity: 'Beans (kidney, pinto)',
+        pricetype: 'retail',
+        name: 'Beans (pinto), Nicaragua national average [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      {
+        type: 'wfp',
+        adapter: 'wfp-nic',
+        country: 'Nicaragua',
+        commodity: 'Sorghum (white)',
+        pricetype: 'retail',
+        name: 'Sorghum, Nicaragua national average [regional]',
+        unit: QUINTAL,
+        regional: true
+      },
+      { type: 'wb', key: 'WB:MAIZE_INTL', name: 'Maize (US #2, US Gulf intl benchmark)', unit: 'USD/mt' },
+      { type: 'wb', key: 'WB:RICE_INTL', name: 'Rice (intl benchmark)', unit: 'USD/mt' },
+      { type: 'wb', key: 'WB:SORGHUM_INTL', name: 'Sorghum (intl benchmark)', unit: 'USD/mt' },
+      { type: 'wb', key: 'WB:WHEAT_INTL', name: 'Wheat (intl benchmark)', unit: 'USD/mt' }
     ],
     estimate: true
   },

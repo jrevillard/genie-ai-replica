@@ -618,7 +618,7 @@ export default {
     shareError: 'শেয়ার করতে ত্রুটি',
     market: {
       sectionTitle: 'বাজার মূল্য',
-      maizeGrains: 'ভুট্টা ও শস্য',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'ফসল সুরক্ষা',
       fruitsVeggies: 'ফল ও শাকসবজি',
       livestock: 'পশুপাল',

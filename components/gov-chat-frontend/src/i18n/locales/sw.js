@@ -627,7 +627,7 @@ export default {
     shareError: 'Kosa kushiriki',
     market: {
       sectionTitle: 'Bei za Soko',
-      maizeGrains: 'Mahindi na Nafaka',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Ulinzi wa Mazao',
       fruitsVeggies: 'Matunda na Mboga',
       livestock: 'Mifugo',

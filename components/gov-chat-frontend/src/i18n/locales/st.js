@@ -622,7 +622,7 @@ export default {
     shareError: 'Phoso ea arolelano',
     market: {
       sectionTitle: 'Theko ea Tšehetso',
-      maizeGrains: 'Polo le Boholo',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Tšireletso ea Dijo',
       fruitsVeggies: 'Fruite le Meroho',
       livestock: 'Diphulo',

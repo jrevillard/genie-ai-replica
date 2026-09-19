@@ -126,7 +126,7 @@ export default {
      */
     codeChips() {
       const palette = [this.resolvedCategoryColor, 'var(--warning)', 'var(--muted)', 'var(--info)', 'var(--danger)'];
-      const extras = this.allSeries.slice(1, 5);
+      const extras = this.allSeries.slice(1, 24); // no cap — grains carries 16
       const codes = extras.map((s) => this.commodityCode(s.name));
       const counts = new Map();
       codes.forEach((c) => counts.set(c, (counts.get(c) || 0) + 1));

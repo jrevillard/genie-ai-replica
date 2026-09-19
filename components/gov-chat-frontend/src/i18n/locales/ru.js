@@ -627,7 +627,7 @@ export default {
     shareError: 'Ошибка при отправке',
     market: {
       sectionTitle: 'Рыночные цены',
-      maizeGrains: 'Кукуруза и злаки',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Защита посевов',
       fruitsVeggies: 'Фрукты и овощи',
       livestock: 'Скот',

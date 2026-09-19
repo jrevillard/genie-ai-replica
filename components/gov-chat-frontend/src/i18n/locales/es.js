@@ -645,7 +645,7 @@ export default {
 
     market: {
       sectionTitle: 'Precios de Mercado',
-      maizeGrains: 'Maíz y Granos',
+      maizeGrains: 'Maíz, Frijoles y Granos',
       cropProtection: 'Protección de Cultivos',
       fruitsVeggies: 'Frutas y Verduras',
       livestock: 'Ganadería',

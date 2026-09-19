@@ -644,7 +644,7 @@ export default {
     // Market Price Charts
     market: {
       sectionTitle: 'Market Prices',
-      maizeGrains: 'Maize & Grains',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Crop Protection',
       fruitsVeggies: 'Fruits & Veggies',
       livestock: 'Livestock',

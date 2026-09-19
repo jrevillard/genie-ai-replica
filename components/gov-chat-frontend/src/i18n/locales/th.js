@@ -627,7 +627,7 @@ export default {
     shareError: 'เกิดข้อผิดพลาดในการแชร์',
     market: {
       sectionTitle: 'ราคาตลาด',
-      maizeGrains: 'ข้าวโพดและธัญพืช',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'การป้องกันพืชผล',
       fruitsVeggies: 'ผลไม้และผัก',
       livestock: 'ปศุสัตว์',

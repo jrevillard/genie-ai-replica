@@ -624,7 +624,7 @@ export default {
     shareError: '分享出错',
     market: {
       sectionTitle: '市场价格',
-      maizeGrains: '玉米和谷物',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: '作物保护',
       fruitsVeggies: '水果和蔬菜',
       livestock: '牲畜',

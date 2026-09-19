@@ -631,7 +631,7 @@ export default {
     shareError: 'Erro ao compartilhar',
     market: {
       sectionTitle: 'Preços de Mercado',
-      maizeGrains: 'Milho e Grãos',
+      maizeGrains: 'Milho, Feijões e Grãos',
       cropProtection: 'Proteção de Culturas',
       fruitsVeggies: 'Frutas e Vegetais',
       livestock: 'Pecuária',

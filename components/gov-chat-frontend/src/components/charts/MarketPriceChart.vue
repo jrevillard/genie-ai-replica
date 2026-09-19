@@ -663,7 +663,10 @@ export default {
           // mixed cadences (daily WFP + monthly benchmarks + annual trade
           // values) align by DATE instead of by array index — index mapping
           // made longer series overflow the primary's categories.
+          // min pins the axis to the start-year filter (no leading padding,
+          // no pre-filter history — user req 2026-09-19).
           type: 'datetime',
+          min: new Date(`${this.startYear}-01-01T00:00:00Z`).getTime(),
           // Cap tick count to the scrollable pixel width so labels never crowd
           tickAmount: Math.max(4, Math.min(this.pointCount, Math.floor(this.chartPixelWidth / 90))),
           labels: {
@@ -749,7 +752,11 @@ export default {
       ];
       // Skip empty estimated overlay when everything is actual
       if (!estimated.some((p) => p[1] !== null)) out.splice(1, 1);
-      for (const extra of this.series.slice(1, 4)) {
+      // Extras MUST flow through visibleSeries too — the unfiltered benchmark
+      // (1960+) dragged the datetime axis back decades past the start-year
+      // filter (found live 2026-09-19). No cap: grains carries 16 series
+      // (every commodity the sources publish, user req 2026-09-19).
+      for (const extra of this.visibleSeries.slice(1, 24)) {
         out.push({
           name: extra.name,
           data: extra.data.map((d) => [ts(d.date), d.value]).filter((p) => p[0] !== null),

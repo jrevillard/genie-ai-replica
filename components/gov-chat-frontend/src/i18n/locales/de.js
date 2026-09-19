@@ -632,7 +632,7 @@ export default {
     shareError: 'Fehler beim Teilen',
     market: {
       sectionTitle: 'Marktpreise',
-      maizeGrains: 'Mais & Getreide',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Pflanzenschutz',
       fruitsVeggies: 'Obst & Gemüse',
       livestock: 'Vieh',

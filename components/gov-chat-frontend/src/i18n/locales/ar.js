@@ -628,7 +628,7 @@ export default {
     shareError: 'خطأ في المشاركة',
     market: {
       sectionTitle: 'أسعار السوق',
-      maizeGrains: 'ذرة وحبوب',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'حماية المحاصيل',
       fruitsVeggies: 'فواكه وخضروات',
       livestock: 'الثروة الحيوانية',

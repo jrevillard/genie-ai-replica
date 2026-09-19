@@ -1,0 +1,176 @@
+# Sprint Status — GENIE.AI OKF Server (prd_key: okf-server)
+# Scoped filename (sprint-status-okf-server.yaml) because this repo runs multiple
+# agentic-enablement pillars; the BMAD mechanical sync assumes a single root
+# sprint-status.yaml + worktree, which does not fit the multi-pillar branch model.
+# GitLab sync is driven directly via glab against the OKF epics.md.
+
+generated: 2026-08-11
+last_updated: 2026-09-14
+project: GENIE.AI OKF Server
+project_key: okf-server
+tracking_system: gitlab
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+# GATING KEY (confirmed with team):
+#   [BUMP]  = blocked by OPEA 1.5 bump !277 (feat/opea-1.5-upgrade/prd) merging to main
+#   [AGENTIC] = blocked by agentic workflows !280 MCP client landing
+#   SST (!279) = pattern only, no gate. Ungated stories build first.
+
+development_status:
+  epic-1: backlog            # [BUMP] Unified Multi-Graph Grounding — whole epic gated
+  1-1-retriever-multigraph-fanout-rrf: backlog      # [BUMP] (+ 2026-08-13: boundary-probe dep, ACL on all search_start, per-graph contribution counts, zero-hit unauthorized)
+  1-2-chatqna-forwards-graph-set: backlog           # [BUMP] (+ 2026-08-13: per-graph label map from 6.1b, isolation test)
+  1-0-retriever-provenance-materialization: backlog # [BUMP] NEW 2026-08-13 — pins as 1.1 dep (G18)
+  1-0b-boundary-probe-graph-names: backlog          # [BUMP] NEW 2026-08-13 — determines transport shape (G2, LG-5)
+  1-3-graph-router-query-aware-selection: backlog   # [BUMP] NEW 2026-08-13 — intelligent selection, MAX_FANOUT_GRAPHS=5, ≤20ms gate (G6, D8-D10/D14)
+  1-4-parallel-fanout-bounded-concurrency: backlog  # [BUMP] NEW 2026-08-13 — Semaphore + per-graph timeout + partial-failure (G14)
+  1-5-two-level-cross-graph-rrf: backlog            # [BUMP] NEW 2026-08-13 — size-normalized 2-level RRF (G21)
+  1-6-fanout-observability-spans: backlog           # [BUMP] NEW 2026-08-13 — selection/fan-out spans (G24, G35)
+  epic-1-retrospective: optional
+
+  epic-2: in-progress            # Mostly ungated — build first
+  2-1-okf-server-skeleton-deploy: done
+  2-2-arangodb-meta-collections-repo-crud: done
+  2-3-okf-parser-frontmatter-links: done
+  2-4-conformance-validation-quality-metrics: done
+  2-5-docrepo-bundle-ingest-route: done            # code-review fixes applied 2026-08-14 (fire-and-forget ingest kick). 416 tests green.
+  2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (ACL-preserve EXTRACTED to ungated 2-6a; this story keeps graph-name body-read, repo-level retract, retractRepoGraph drops 4 OKF_{repo}_* collections — G5)
+  2-7-source-sync-git-s3-change-detection: deferred   # DEFERRED 2026-08-14: v1 inputs = browser file picker (FR-37) + crawler + manual; Git/S3 sync scrapped for v1 (FR-1/FR-2 deferred)
+  2-8-pii-redaction-version-provenance-docrefs: done       # review fixes applied 2026-08-14: 23 findings (incl. critical fail-open) fixed; CI lane added; deployed+verified locally; Ansible/Swarm wired
+  epic-2-retrospective: optional
+
+  epic-2.9: in-progress        # NEW 2026-08-13 — Write-side Orchestration (the trunk). Mostly ungated Node; 2.9.6 gated.
+  2-6a-acl-label-preserve-fix: done                # UNGATED P0 — code-review APPROVED (2026-08-14, 4 low/nit findings non-blocking). 91 tests green, pipeline #6102 green.
+  2-9-1-ingest-service-ingest-endpoint: done         # dev+review 2026-08-16: 10 review patches FIXED + FULL dual-facility live smoke exit 0 (zip bundle → per-repo OKF_{repo} graph, zero default-graph leakage); 2.9.5-zip + 2.9.6-graph-wiring PULLED FORWARD by steward directive (D24 lifted — !277 still draft)
+  2-9-2-concepts-meta-upsert-writer: done           # dev-story 2026-08-14; code-review 2026-08-15: 21 findings FIXED (3783b92a1), red-green 8→134/134, live smoke green + gate OPEN
+  2-9-3-links-to-edge-writer-within-repo: done # G7,G22 (#963) — post-index, within-repo validated, version-stamped edges
+  2-9-4-ingestion-worker-drains-pending: done  # dev 2026-08-16: crawlWorker pattern reused (poll loop, NO Redis — D-D), worker-exclusive indexed|failed transitions, orphan sweeper; live smoke exit 0 (41 PASS) — worker drains unattended + DEDUP fires live; 3 live-caught bugs fixed (concept_id derivation, doc-repo 429-poison, canonical content hash)
+  2-9-5-bundle-zip-format-unzip-dedup: done        # 2026-08-25 cleanup pass (commit 469b13b): atomicity review done — per-concept isolation + partial-202 ACCEPTED semantics; targeted fixes = stuck-parsed reaper (settle/mint unblock), worker-error queue-advance touch, last_ingest_summary surfaced on repo doc + audit. Smoke legacy file_id sections reworked; mint refreshes okf_bundle_manifest. jest 334/334.
+  2-9-6-graph-name-wiring-retract-fix: done        # UNGATED 2026-08-16 (D24 lifted), landed via 2.9.1 fix-pass: graphName payload wiring + unified retract fallback + lazy OKF_{repo} collections + retractRepoGraph CASCADE DROP (gharial dropCollections=true — definition + member tables; ArangoDB 1942 membership rule live-verified) — ALL smoke-asserted physically (collections gone from ArangoDB)
+  2-9-7-okf-versions-mint-version-publish: done # G26 (#962) — repo-level bundle_version, immutable manifest, okf:v{N} tag, chunk-doc threading (ADR-031 + D-V1/D-V4)
+  2-9-8-okf-sources-writer-source-sync: backlog    # G32 — SHRUNK: source-sync deferred; now ingest-health backing only (fold into admin UI later)
+  2-9-9-retention-ttl-sweep-deletion-reason: backlog # G27 — sweep + deletion_reason discriminator
+  # Bundle-graph refactor (Story 4.8-amend, WP-A + WP-B + WP-C, 2026-08-19, commits 5265c8d + b0b28dc + d0db1a13):
+  # WP-A: hard/warning split → rejected at ingest + publish gate enforced in mintVersion (FR-25 made real).
+  # WP-B: rooted named graph (is_index root marker + ENTITY is_index + named gharial graph in _ensure_graph_collections).
+  # WP-C: content-only chunking — only bundle zip is a doc-repo file; concepts are graph content chunked directly from okf-server worker to dataprep (no per-concept files doc); concept_id on chunks; secret-gated internal callback (OKF_INTERNAL_SECRET, fail-closed); compose + env + Ansible env.j2 + CI defaults wired. okf-server jest 327/327, overlay pytest 107/107, ESLint/Prettier/Ruff clean, GitLab pipeline #6270 (MR !278) 75/75 GREEN.
+  4-8-amend-wp-c-content-only-chunking: done  # WP-C landed on feat/okf-server @ d0db1a13; live smoke rework deferred to follow-up context (jest+pytest+CI is the merge gate)
+  epic-2.9-retrospective: optional
+
+  epic-3: backlog            # Vue admin UI — ungated
+  3-1-okf-repositories-tab-service-vuex: backlog
+  3-2-repository-dialog-details-view: backlog
+  3-3-ingestion-progress-i18n: backlog
+  3-4-okf-studio-wizard-shell-stepper-tab: ready-for-dev          # NEW 2026-08-13 (Epic 10 Studio frontend)
+  3-5-okf-studio-dashboard-multi-repo-kanban: ready-for-dev        # NEW 2026-08-13
+  3-6-document-mgmt-create-okf-entry-point: ready-for-dev          # NEW 2026-08-13 (sibling to Ingest Selected); AMENDED 2026-09-14 — gate drops the ingested-doc refusal (amber warning instead); prevention moved to 7.7's SOURCES_NOT_RETRACTED lifecycle gate
+  3-7-crawler-ui-create-okf-entry-point: ready-for-dev             # NEW 2026-08-13 (AddFromLinkDialog + FileDetailsDialog)
+  3-8-okf-concept-curator-validation-panel: ready-for-dev          # NEW 2026-08-13 (Step 5/6; composes conformance-service)
+  3-9-okf-repository-clone-admin-action: backlog          # NEW 2026-08-18 (D-V5; Studio §8.1) — Clone action: repos-tab toolbar/row + details dialog + Studio Step-1 source card; consumes 4.8 clone API
+  epic-3-retrospective: optional
+
+  epic-4: backlog            # Authoring & curation — ungated (Node-side)
+  4-1-concept-crud-incremental-reindex: backlog    # (+ 2026-08-13: optimistic concurrency If-Match/409 — G25)
+  4-1b-concept-label-rematerialization-on-edit: backlog  # NEW 2026-08-13 — recompute chunk_labels/trust_tier on edit (G29)
+  4-2-inapp-markdown-concept-editor: backlog
+  4-2b-okf-markdown-formatter-service: backlog          # NEW 2026-08-18 (authorship directive; Studio §8.2) — validate+auto-format markdown; round-trip-safe formatter (OKF_FORMAT_ON_INGEST opt-in); consumed by the OkfDiffReviewPanel Formatting lane
+  4-3-lifecycle-states: backlog
+  4-4-review-approval-gate: backlog
+  4-5-versioning-provenance: backlog
+  4-6-retention-ttl: backlog
+  4-7-reserved-files-foi-audit-export: backlog
+  4-8-repository-clone-curated-forks: done # #971 — clone repo (new repo_id+graph, cloned_from lineage, lifecycle draft) + meta-copy + isolation smoke; consumed by 3.9. Done 2026-08-18: review 3-layer 10 patches, r6 live exit 0 (71 PASS), 316/316 suites
+  epic-4-retrospective: optional
+
+  epic-5: backlog            # Serving — REST ungated, MCP gated
+  5-1-search-concepts-unified: backlog
+  5-2-get-concept-document: backlog
+  5-3-list-repositories-outline: backlog
+  5-4-trust-lifecycle-provenance-surfacing: backlog
+  5-5-parameterized-neighbors-traversal: backlog
+  5-6-mcp-ready-handlers: backlog                   # [AGENTIC]
+  epic-5-retrospective: optional
+
+  epic-6: in-progress        # Hardening — cross-cutting
+  6-1-authn-authz-rbac: done                    # (+ 2026-08-13 P0: default-deny, requireRepoScope(repo,'admin') replaces global tools-admin — G3/G15)
+  6-1b-authz-resolver-token-to-graph-set: backlog # NEW 2026-08-13 — token→{graph_names,per_graph_labels,domains}, per-session cache (G8)
+  6-2-audit-foi-export: backlog                   # (+ 2026-08-13: write-before-respond governance, hash chain, tenant field, INSERT-only — G16/LG-4)
+  6-3-end-to-end-tracing: backlog
+  6-4-health-readiness-metrics: backlog
+  6-5-supply-chain-airgap: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog            # AI-Driven OKF Producer (Crawl→Draft) — builds AFTER epic-3
+  7-1-model-client-provider-tier-sovereignty-gate: backlog
+  7-2-crawl-to-concept-draft-producer-pipeline: backlog   # depends 2-5; assemble→AI-adjust→cross-link
+  7-3-automated-hierarchy-label-assignment: backlog       # ALL hierarchy/label edits steward-vetted
+  7-4-crawl-integrated-producer-ui: backlog               # depends epic-3; crawl→OKF repo in AddFromLinkDialog + FileDetailsDialog
+  7-5-producer-hardening-injection-eval-cost: backlog
+  7-6-multi-source-crawl-seeding: backlog
+  7-7-produce-okf-from-selected-documents: done            # DONE 2026-09-14 (bd4c9df81 + close-out; #997): multi-select doc-mgmt import into ONE OKF repo; ingest gate = SOURCES_NOT_RETRACTED (live fail-closed re-check on source_documents[], is_bundle immune); ImportDocumentsDialog (heuristics|llm|hybrid); provenance deep links ?tab=documents&file= on cards; i18n ×14; okf-server 628/628 + frontend 1474/1474; live smoke ALL PASS 24/24 (md free-form-ingested → import → publish → 409 gate → retract → drain → v1 serving). Two live defects caught by harness: row deep-link no-op (R1), doc-repo {data:} envelope unwrap → gate would have failed open (R2 — memory reference_doc-repo-api-envelope); pdf-parse pinned ^1.1.4 (R3). Residual → Epic 11: docling-backed adapter, wizard entry point (b).
+  epic-7-retrospective: optional
+
+  epic-8: backlog            # NEW 2026-08-13 — Test Infrastructure & Evaluation (cross-cutting; unblocks launch gates)
+  8-1-static-fixture-site-seed-repos-golden-queries: backlog  # G20 — deterministic fixture trinity
+  8-2-multigraph-retrieval-integration-test: backlog           # G31, LG-2 — cross-graph/provenance/ACL/size-ratio
+  8-3-retrieval-quality-eval-harness: backlog                  # G30 — recall@k/precision@k/MRR (distinct from 7.5)
+  8-4-rrf-parameter-sweep-harness: backlog                     # G21 — tune k + per-graph weights (resolves PRD Q7)
+  8-5-opea-1.5-fallback-shim: backlog                          # CONTINGENCY ONLY — not built unless Epic 1 ungated pre-merge (G19, D25)
+  epic-8-retrospective: optional
+
+  epic-9: backlog            # NEW 2026-08-13 — Label Onboarding (Pre-Ingest Curation). Analyze/apply ungated; ingest leg gated.
+  9-1-gap-mode-labeler-shared-canonicalize-embedding-merge: backlog  # dataprep (FR-36)
+  9-2-label-onboarding-service-proposal-api-collection: backlog       # okf-server (FR-36)
+  9-3-label-onboarding-wizard-ui: backlog                             # Epic 3 frontend (FR-36)
+  9-4-apply-ingest-wiring-two-store-sync-producer-unify: backlog      # cross-cutting (FR-36, ADR-okf-034)
+  9-5-boundedness-config-denylist-mgmt-fixture-tuning-guardrail: backlog  # gated by Story 8.1
+  epic-9-retrospective: optional
+
+  epic-10: backlog           # NEW 2026-08-13 — OKF Studio (creation & curation capstone). Ungated frontend; gated legs flagged.
+  10-1-okf-diff-review-panel-unified-autocorrect: backlog   # the FR-32 reviewable-diff surface (3 lanes)
+  10-2-auto-correct-service-conformance-broken-link: backlog  # conformance remediation (works today) + link (gated 2.3b)
+  10-3-domain-templates-conformance-clean-save-as-template: backlog
+  10-4-cross-repo-auto-correct-inbox: backlog                # gated by Story 6.1b (authz)
+  10-5-studio-service-okf-studio-dashboard: backlog          # multi-repo dashboard + drafts + bulk publish
+  10-6-review-publish-lifecycle-ui: backlog                  # Step 8/9 (gated 2.8 PII, 2.9.7 mintVersion)
+  epic-10-retrospective: optional
+  # B+C+E (2026-08-23, David's directives — the bundle IS a graph + manifest discovery index):
+  # B: author-stated frontmatter links mirrored into _LINKS_TO (source='author', vertex-integrity + G22 enforced)
+  # C: okf_bundle_manifest written at settle (concepts/links/root/stats; LLM summary LAZY on first discovery read)
+  # E: discoverRepos + GET /repos/:id/manifest + POST /repos/discovery — tier 1 of the multi-domain retrieval fan-out
+  # Also: labeling skip REMOVED (bundle labels = candidate pool; per-chunk applicability; LLM recommendations logged);
+  # bundle state machine Pending→Ingesting→Ingested|Error; re-index retract; is_index merge-preserve.
+  # Smoke v10 70/0 baseline; v11 71/2; v12 73/1; v13b 72/2; v14 73/1 (stale-manifest purge gap); v15 FULL PASS 74/0. 3-layer code review: 11 patches (5523da6) + 4 decisions + 2 defers. Course-corrected 2026-08-24 (PRD/architecture/epics/ADR-024 note).
+  bce-bundle-manifest-author-graph-discovery: done   # code complete + CI green through 504b1af; awaiting v12 full-pass + PRD/ADR course-correction
+
+  # ── Steward-directive P0 work (2026-09-13/14, feat/okf-server, all pipelines green, MR !278 documents each) ──
+  # 9e18fa1  Repo-open freeze fix (markdown preview chunked render + lazy graph build) + PII findings
+  #          REUSE (server-side span persistence keyed by content signature — unchanged content never
+  #          re-scans; Re-scan forces live). David's "Page Unresponsive" + "scanned again" directives.
+  # eb45ab1e4 Drain settle reconciliation (the www-gov-uk-full-crawl 31h "not drained" wedge): settle only
+  #          ran as a job side-effect; the reaper wrote the last transitions. _reconcileArmedRepos settles
+  #          armed+empty-queue repos at startup + hourly; 429/timeout claim clears; stale-merge removed
+  #          (_settleIngest owns the terminal rag_ingestion record). LIVE-VERIFIED: wedged repo settled 12s
+  #          after worker restart (922/997 + honest failed record; retract→re-ingest possible again).
+  # b39477692 + 99f95deef + 935105ba7 Graph tab never blocks: async chunked build (400n/800e batches, real %,
+  #          stale-seq guard), fcose animate:false (animated variant never emits layoutstop — wedged at 99%),
+  #          completion guaranteed (dual listener + try/catch + 20s watchdog), selection in one cy.batch,
+  #          bulk opacity transitions removed; honest progress 0→88% ingest + indeterminate Layouting phase.
+  # 773f4536d scripts/check-okf-repo.js — per-repo 4-step health/graph/RAG check (lifecycle, author layer with
+  #          EXACT frontend projection math in AQL, serving graph, chunk/RAG layer), PASS/WARN/FAIL + --json;
+  #          live-verified on 5 repos (David: "turn the graph comparison into a test").
+  # a84ca7793 Ingest-failure hover card: RED failed rows in the concept tree float the VERBATIM last_error +
+  #          mapped recovery (reaper/dataprep/generic) + attempts; listConcepts projection now carries
+  #          last_error/last_worker_error/ingest_attempts. i18n ×14.
+  # c5b6876f9 Documents→OKF import DESIGN + Story 7.7 ready-for-dev (next work item); 3.6 gate amended.
+  # Frontend 1463/1463 · okf-server 618/618 · overlay pytest 107/107 baseline untouched.
+  # bd4c9df81 Story 7.7 IMPLEMENTED: producer-service documents conversion (per-format converters,
+  #          whole-corpus cross-links, index.md last, one curation pass, per-file isolation), xlsx
+  #          sheetjs converter (FR-42), convert-from-documents route, SOURCES_NOT_RETRACTED ingest
+  #          gate, ImportDocumentsDialog + gate amendment + provenance deep links, i18n ×14.
+  #          Close-out: doc-repo {data:} envelope unwrap fix (R2 fail-open gate catch), pdf-parse pin
+  #          ^1.1.4 (R3), smoke run-smoke-import-documents.js + real-PDF fixture + refresh tokens.
+  #          Live smoke ALL PASS 24/24 (double-serving scenario E2E). okf-server 628/628 · frontend 1474/1474.
+  # 6da43f705 Add-concept dialog body now the shared DsOkfMarkdownEditor (David directive 2026-09-14):
+  #          Source | Split | Preview modes + format toolbar + async preview; frontmatter machinery off
+  #          (store normalizes on create). Frontend 1475/1475. UI smoke plan handed to David (Phase 0-7).

@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import 'package:genie_ai_mobile/components/chat/drought_report_screen.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -118,6 +118,17 @@ class _CropAlertBannerState extends State<CropAlertBanner>
     } catch (_) {
       return null;
     }
+  }
+
+  /// "View drought report" (web: `<a target=_blank>` to the PDF). Opened
+  /// in-app through the banner's own client - see [DroughtReportScreen].
+  void _openReport(String filename) {
+    DroughtReportScreen.open(
+      context,
+      client: widget.client,
+      url: '${widget.backendUrl}/api/weather/drought-report/$filename',
+      filename: filename,
+    );
   }
 
   Future<void> _poll() async {
@@ -332,10 +343,10 @@ class _CropAlertBannerState extends State<CropAlertBanner>
             triggers: (a['triggers'] as List?)
                 ?.map((t) => t.toString())
                 .toList(),
-            reportUrl:
+            onReport:
                 a['_type'] == 'drought' &&
                     (a['report_filename']?.toString().isNotEmpty ?? false)
-                ? '${widget.backendUrl}/api/weather/drought-report/${a['report_filename']}'
+                ? () => _openReport(a['report_filename'].toString())
                 : null,
             onDismiss: () => _dismissAlert(a),
           ),
@@ -352,7 +363,7 @@ class _CropAlertBannerState extends State<CropAlertBanner>
     required String message,
     required VoidCallback onDismiss,
     List<String>? triggers,
-    String? reportUrl,
+    VoidCallback? onReport,
   }) {
     final tokens = ThemeManager().tokens;
     return Container(
@@ -436,12 +447,10 @@ class _CropAlertBannerState extends State<CropAlertBanner>
                       ],
                     ),
                   ),
-                if (reportUrl != null)
+                if (onReport != null)
                   TextButton(
-                    onPressed: () => launchUrl(
-                      Uri.parse(reportUrl),
-                      mode: LaunchMode.externalApplication,
-                    ),
+                    key: const Key('crop_alert_report'),
+                    onPressed: onReport,
                     child: Text(tr('cropAlert.viewDroughtReport')),
                   ),
               ],

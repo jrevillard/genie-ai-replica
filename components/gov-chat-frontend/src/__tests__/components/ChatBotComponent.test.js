@@ -256,6 +256,54 @@ describe('ChatBotComponent', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Bare "show me the map" runs the "Map my field" (delineation) flow
+  // -----------------------------------------------------------------------
+  describe('bare map intent', () => {
+    it('sends the field-delineation prompt for the resolved district, shows the user text', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.quickHelpButtons = [{ id: 'field-map', hiddenPrompt: 'Delineate field boundaries around {{location}}' }];
+
+      vm.newMessage = 'show me the map';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      expect(mockSubmitQueryStream).toHaveBeenCalled();
+      const queryData = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      // No geolocation / APP_CONFIG in tests -> built-in default district.
+      expect(queryData.text).toBe('Delineate field boundaries around Dhaka');
+      expect(vm.chatMessages.some((m) => m.sender === 'user' && m.content === 'show me the map')).toBe(true);
+      expect(vm.hiddenPromptForNextMessage).toBeNull();
+    });
+
+    it('falls back to the built-in prompt without a configured button, also for Bengali', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      vm.quickHelpButtons = [];
+
+      vm.newMessage = 'মানচিত্র দেখাও';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      const queryData = mockSubmitQueryStream.mock.calls.at(-1)[0];
+      expect(queryData.text).toBe('Delineate field boundaries around Dhaka');
+    });
+
+    it('still opens the geocoder map when a place is named', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+      const before = mockSubmitQueryStream.mock.calls.length;
+
+      vm.newMessage = 'show me the map Rangpur';
+      await vm.sendMessage();
+      await wrapper.vm.$nextTick();
+
+      // Geocoder path: no LLM query is streamed for a place request.
+      expect(mockSubmitQueryStream.mock.calls.length).toBe(before);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // AC3 — Input cleared after submission
   // -----------------------------------------------------------------------
   describe('AC3 — input cleared after submission', () => {

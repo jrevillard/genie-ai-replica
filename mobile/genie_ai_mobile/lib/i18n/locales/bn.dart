@@ -1024,6 +1024,7 @@ const Map<String, dynamic> bnLocale = {
     "attachFile": "ফাইল যুক্ত করুন",
     "fileTooLarge": "ফাইলটি খুব বড়। সর্বোচ্চ আকার হলো {maxSize}।",
     "saveChat": "চ্যাট সংরক্ষণ করুন",
+    "linkOpenFailed": "লিঙ্কটি খোলা যায়নি।",
     "chatSaved": "চ্যাট সংরক্ষিত হয়েছে",
     "chatUpdated": "চ্যাট আপডেট হয়েছে",
     "chatTitle": "চ্যাটের শিরোনাম",
@@ -1088,6 +1089,7 @@ const Map<String, dynamic> bnLocale = {
   },
   "quickhelp": {},
   "common": {
+    "retry": "আবার চেষ্টা করুন",
     "cancel": "বাতিল",
     "create": "তৈরি করুন",
     "save": "সংরক্ষণ করুন",
@@ -1170,6 +1172,7 @@ const Map<String, dynamic> bnLocale = {
     "flood": "বন্যা",
     "dismiss": "বন্ধ করুন",
     "viewDroughtReport": "খরা প্রতিবেদন দেখুন",
+    "reportUnavailable": "প্রতিবেদনটি লোড করা যায়নি।",
     "allAreas": "সব এলাকা",
     "tier": {
       "normal": "স্বাভাবিক",

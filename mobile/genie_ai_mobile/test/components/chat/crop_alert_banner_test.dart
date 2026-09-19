@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/chat/crop_alert_banner.dart';
+import 'package:genie_ai_mobile/components/chat/drought_report_screen.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/location_service.dart';
 import 'package:http/http.dart' as http;
@@ -161,6 +162,19 @@ void main() {
     final notices = seen.firstWhere((u) => u.path.endsWith('latest'));
     expect(notices.queryParameters['district'], 'Dhaka');
     expect(notices.queryParameters['hours'], '48');
+  });
+
+  testWidgets('the report link opens the in-app PDF viewer', (tester) async {
+    // The mock serves no PDF (404), so the viewer lands on its error state -
+    // proving the tap navigated instead of handing the URL to a browser.
+    await tester.pumpWidget(_banner(_client(drought: 3, seen: <Uri>[])));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('crop_alert_report')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DroughtReportScreen), findsOneWidget);
+    expect(find.byKey(const Key('drought_report_error')), findsOneWidget);
+    expect(find.text('The report could not be loaded.'), findsOneWidget);
   });
 
   testWidgets('crop labels come from i18n with a prettified fallback', (

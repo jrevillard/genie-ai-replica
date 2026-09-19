@@ -1019,6 +1019,7 @@ const Map<String, dynamic> enLocale = {
     "attachFile": "Attach File",
     "fileTooLarge": "File is too large. Maximum size is {maxSize}.",
     "saveChat": "Save Chat",
+    "linkOpenFailed": "Could not open the link.",
     "chatSaved": "Chat Saved",
     "chatUpdated": "Chat updated",
     "chatTitle": "Chat Title",
@@ -1085,6 +1086,7 @@ const Map<String, dynamic> enLocale = {
     // User Prompts (Visible Text - First Person)
   },
   "common": {
+    "retry": "Retry",
     "cancel": "Cancel",
     "create": "Create",
     "save": "Save",
@@ -1166,6 +1168,7 @@ const Map<String, dynamic> enLocale = {
     "flood": "Flood",
     "dismiss": "Dismiss",
     "viewDroughtReport": "View drought report",
+    "reportUnavailable": "The report could not be loaded.",
     "allAreas": "All areas",
     "tier": {
       "normal": "Normal",

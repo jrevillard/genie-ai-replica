@@ -97,6 +97,20 @@ List<GeoLayer> geoLayersFromMetadata(Map<String, dynamic>? metadata) {
   return layers;
 }
 
+/// Bare "show me the map" (no place) in English, Banglish or Bengali. The
+/// user means *their* area: it runs the "Map my field" quick-help flow (field
+/// delineation around the resolved district) instead of asking the LLM, which
+/// has no map. Same patterns as the web `utils/mapIntent.js`.
+bool isBareMapIntent(String content) {
+  return RegExp(
+    r'^(?:(?:please\s+)?(?:show|open)\s+(?:me\s+)?(?:the\s+|a\s+)?map|'
+    r'manchitro\s+dekhao|'
+    r'(?:আমার\s+)?(?:মানচিত্র|ম্যাপ)\s*(?:টা\s*)?দেখা[ওন])'
+    r'\s*[.!?।]*$',
+    caseSensitive: false,
+  ).hasMatch(content.trim());
+}
+
 /// `show me the map <place>` intent (English, Banglish, Bengali) — returns the
 /// place or null. Same patterns as the web `sendMessage` map intercept.
 String? parseMapIntent(String content) {

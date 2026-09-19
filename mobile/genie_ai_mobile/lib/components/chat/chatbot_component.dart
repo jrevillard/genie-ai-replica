@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/shared/inline_modal.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
+import 'package:genie_ai_mobile/components/chat/drought_report_screen.dart';
 import 'package:genie_ai_mobile/components/chat/export_chat_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/map_view_screen.dart';
 import 'package:genie_ai_mobile/components/chat/save_conversation_dialog.dart';
@@ -28,6 +29,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:genie_ai_mobile/utils/chat_links.dart';
+import 'package:genie_ai_mobile/utils/chat_response_emojis.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
 import 'package:genie_ai_mobile/utils/geo_utils.dart';
 
@@ -470,6 +473,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   void _sendMessage(String text, {String? hiddenPrompt}) async {
     if (text.trim().isEmpty || _isLoading || _isStreaming) return;
 
+    // Bare "show me the map" (no place): the user means their own area, so it
+    // runs the "Map my field" quick-help flow - field delineation around the
+    // resolved district, map opened from the response metadata - rather than
+    // asking the LLM, which has no map (parity with web).
+    if (hiddenPrompt == null && isBareMapIntent(text)) {
+      hiddenPrompt = _fieldMapHiddenPrompt();
+    }
     // Map intent (`show me the map <place>` and the Bengali forms) opens the
     // map via the geocoder instead of calling the LLM (parity with web).
     final mapPlace = hiddenPrompt == null ? parseMapIntent(text) : null;
@@ -634,7 +644,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                     setState(() {
-                      msg['content'] = content;
+                      // Web onTranslation: decorateChatResponse(translated).
+                      msg['content'] = decorateChatResponse(content);
                     });
                     _scrollToBottom();
                   case SseDoneEvent(:final queryId):
@@ -672,8 +683,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               final msg = findStreamingMessage();
               if (msg != null) {
                 setState(() {
+                  // Web onDone: deterministic crop / weather emojis.
                   msg['content'] = accumulatedContent.isNotEmpty
-                      ? accumulatedContent
+                      ? decorateChatResponse(accumulatedContent)
                       : 'No response received';
                   msg['queryId'] = streamQueryId;
                   msg['sources'] = sources ?? [];
@@ -784,7 +796,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'id': response['queryId'],
         'queryId': response['queryId'],
         'role': 'assistant',
-        'content': response['response'] ?? 'No response received',
+        'content': decorateChatResponse(
+          response['response']?.toString() ?? 'No response received',
+        ),
         'timestamp': DateTime.now().toIso8601String(),
         'sources': metadata?['sources'] ?? [],
         'confidence': metadata?['confidence_score'],
@@ -916,6 +930,44 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
   /// `show me the map <place>`: geocode through the backend and open the map,
   /// echoing a bot reply so the request shows in the transcript.
+  /// Hidden prompt of the "Map my field" quick-help button (deployment
+  /// config), falling back to the built-in wording. `{{location}}` is filled
+  /// by the caller.
+  String _fieldMapHiddenPrompt() {
+    for (final b in _quickHelpButtons) {
+      final prompt = b['resolvedHiddenPrompt']?.toString();
+      if (b['id'] == 'field-map' && prompt != null && prompt.isNotEmpty) {
+        return prompt;
+      }
+    }
+    return 'Delineate field boundaries around ${LocationService.placeholder}';
+  }
+
+  /// Open a link from an assistant reply (web: `<a target=_blank>`).
+  /// Service links are site-relative (`/api/weather/drought-report/...`), so
+  /// they are resolved against the backend first; the drought report PDF is
+  /// shown in-app (self-signed pilot certificate, no browser PDF handler),
+  /// everything else goes to the external browser.
+  Future<void> _openLink(String? href) async {
+    final String base = streamBaseUrl ?? ref.read(backendUrlProvider);
+    final uri = resolveChatLink(href, base);
+    if (uri == null) return;
+    final report = droughtReportFilename(uri);
+    if (report != null) {
+      final http.Client client =
+          httpClient ?? ref.read(authenticatedHttpClientProvider);
+      await DroughtReportScreen.open(
+        context,
+        client: client,
+        url: uri.toString(),
+        filename: report,
+      );
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) NotificationService.error(tr('chatbot.linkOpenFailed'));
+  }
+
   Future<void> _openMapForPlace(String content, String place) async {
     setState(() {
       _messages.add({
@@ -1690,14 +1742,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   ),
                                 ),
                                 selectable: true,
-                                onTapLink: (text, href, title) {
-                                  if (href != null) {
-                                    launchUrl(
-                                      Uri.parse(href),
-                                      mode: LaunchMode.externalApplication,
-                                    );
-                                  }
-                                },
+                                onTapLink: (text, href, title) =>
+                                    _openLink(href),
                               ),
 
                               if (!isUser &&
@@ -1737,16 +1783,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                             color: tokens.warning,
                                             fontStyle: FontStyle.italic,
                                           ),
-                                        )
-                                      else if (msg['confidence'] != null)
-                                        Text(
-                                          "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                          style: TextStyle(
-                                            fontSize: tokens.textXs,
-                                            color: tokens.fg50,
-                                            fontStyle: FontStyle.italic,
-                                          ),
                                         ),
+                                      // Confidence % is no longer shown (web
+                                      // parity); it stays in metadata for
+                                      // analytics.
                                       // Feedback Button
                                       Tooltip(
                                         message: tr('feedback.title'),

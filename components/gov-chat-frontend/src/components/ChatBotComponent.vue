@@ -183,16 +183,18 @@
             <h3 class="section-title">{{ translate('charts.market.sectionTitle') }}</h3>
           </div>
           <div class="market-cards">
+            <!-- Order per user req 2026-09-19: grains, veg, livestock,
+                 aquaculture, apiary, fertilizer, crop protection, harvest -->
             <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
+            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
+            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
+            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
+            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
+            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
             <MarketPriceSummaryCard
               category="cropProtection"
               @open-chart="openChart('market-price', 'cropProtection')"
             />
-            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
-            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
-            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
-            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
-            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
             <MarketPriceSummaryCard
               category="harvestStorage"
               @open-chart="openChart('market-price', 'harvestStorage')"

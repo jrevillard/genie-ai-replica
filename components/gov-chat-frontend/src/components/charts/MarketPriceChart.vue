@@ -88,6 +88,23 @@
            chart, the data table and the CSV export together (user req
            2026-09-19). The last active series cannot be switched off. -->
       <div
+        v-if="series.length > 1 && groupItems.length > 0"
+        class="series-toggles series-toggles--groups"
+        role="group"
+        :aria-label="$t('charts.market.series', 'Series')"
+      >
+        <label v-for="g in groupItems" :key="g.word" class="series-group" :title="g.names.join(', ')">
+          <input
+            type="checkbox"
+            :checked="g.allOn"
+            :indeterminate="g.someOn && !g.allOn"
+            :disabled="g.disabled"
+            @change="toggleGroup(g)"
+          />
+          {{ g.label }}
+        </label>
+      </div>
+      <div
         v-if="series.length > 1"
         class="series-toggles"
         role="group"
@@ -411,6 +428,40 @@ export default {
         hidden: this.hiddenSeries.includes(s.name),
         lastActive: !this.hiddenSeries.includes(s.name) && activeCount === 1
       }));
+    },
+    /**
+     * Commodity-TYPE master switches (user req 2026-09-19): one checkbox
+     * per family — Beans, Maize, Rice, Sorghum, Wheat, Tomatoes… — toggling
+     * every variety of that commodity at once. Only families with ≥2
+     * series get one. States: checked = all on, unchecked = all off,
+     * indeterminate = mixed.
+     */
+    groupItems() {
+      const groups = new Map();
+      for (const s of this.series) {
+        const word = (this.baseSeriesName(s.name).split(/\s+/)[0] || '').toLowerCase();
+        if (!word) continue;
+        if (!groups.has(word)) groups.set(word, []);
+        groups.get(word).push(s.name);
+      }
+      const activeCount = this.activeSeries.length;
+      const out = [];
+      for (const [word, names] of groups.entries()) {
+        if (names.length < 2) continue;
+        const on = names.filter((n) => !this.hiddenSeries.includes(n));
+        const allOn = on.length === names.length;
+        // Turning the group off must not empty the chart
+        const disabled = allOn && activeCount - on.length === 0;
+        out.push({
+          word,
+          label: `${word[0].toUpperCase()}${word.slice(1)} (${names.length})`,
+          names,
+          allOn,
+          someOn: on.length > 0,
+          disabled
+        });
+      }
+      return out;
     },
     /**
      * Start-year filter (user req 2026-09-19): everything rendered — chart,
@@ -928,6 +979,16 @@ export default {
         this.hiddenSeries = [...this.hiddenSeries, name];
       }
     },
+    /** Commodity-type master switch: if the whole family is on, switch it
+     *  off; otherwise switch every member on. */
+    toggleGroup(group) {
+      if (group.allOn) {
+        // guarded by :disabled when this would empty the chart
+        this.hiddenSeries = [...new Set([...this.hiddenSeries, ...group.names])];
+      } else {
+        this.hiddenSeries = this.hiddenSeries.filter((n) => !group.names.includes(n));
+      }
+    },
     /** Compact commodity name: strips the [regional]/[converted] tags,
      *  benchmark parentheticals and the market qualifier after the first
      *  comma; repairs an unbalanced paren left by the comma cut. MUST live
@@ -1280,6 +1341,23 @@ export default {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: var(--space-sm);
+}
+
+/* Commodity-TYPE masters row (Beans/Maize/…) — visually distinct */
+.series-toggles--groups {
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.series-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
 }
 
 .series-toggle {

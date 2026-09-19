@@ -1,46 +1,51 @@
 <template>
   <DsCard variant="outline" hoverable class="market-price-summary-card" @click="openChart">
     <div class="card-content">
-      <!-- Sparkline Chart -->
-      <div class="sparkline-container">
-        <div v-if="loading" class="sparkline-loading">
-          <DsSpinner size="sm" />
+      <div class="card-main">
+        <!-- Sparkline Chart -->
+        <div class="sparkline-container">
+          <div v-if="loading" class="sparkline-loading">
+            <DsSpinner size="sm" />
+          </div>
+          <div v-else-if="timeSeries.length >= 2" class="sparkline-chart">
+            <apexchart type="line" :height="40" :options="chartOptions" :series="chartSeries" />
+          </div>
+          <div v-else class="sparkline-empty">
+            {{ $t('charts.market.noData', 'No data') }}
+          </div>
         </div>
-        <div v-else-if="timeSeries.length >= 2" class="sparkline-chart">
-          <apexchart type="line" :height="40" :options="chartOptions" :series="chartSeries" />
-        </div>
-        <div v-else class="sparkline-empty">
-          {{ $t('charts.market.noData', 'No data') }}
+
+        <!-- Card Info -->
+        <div class="card-info">
+          <div class="card-label">{{ cardTitle }}</div>
+          <div class="card-value-row">
+            <div class="card-value" :title="latestTooltip" tabindex="0" :aria-label="latestTooltip">
+              {{ latestValue }}
+            </div>
+            <DsPill :variant="trendVariant" size="sm" class="trend-pill">
+              {{ trendText }}
+            </DsPill>
+          </div>
         </div>
       </div>
 
-      <!-- Card Info -->
-      <div class="card-info">
-        <div class="card-label">{{ cardTitle }}</div>
-        <div class="card-value-row">
-          <div class="card-value" :title="latestTooltip" tabindex="0" :aria-label="latestTooltip">
-            {{ latestValue }}
-          </div>
-          <DsPill :variant="trendVariant" size="sm" class="trend-pill">
-            {{ trendText }}
-          </DsPill>
-        </div>
-        <!-- Multi-commodity categories: compact acronym chips (dot + code)
-             keep the button narrow; the native tooltip carries the full
-             description and latest price (user req 2026-09-19). -->
-        <div v-if="codeChips.length > 0" class="card-codes">
-          <span
-            v-for="item in codeChips"
-            :key="item.code"
-            class="card-code"
-            :title="item.tip"
-            tabindex="0"
-            :aria-label="item.tip"
-          >
-            <span class="card-code__dot" :style="{ background: item.color }" aria-hidden="true"></span>
-            {{ item.code }}
-          </span>
-        </div>
+      <!-- Commodity chips: left-aligned UNDER the sparkline on every card
+           (user req 2026-09-19); 3-column grid when numerous (grains) so
+           the card stays short. Includes the primary series — Livestock
+           must show chicken AND beef. -->
+      <div v-if="codeChips.length > 0" class="card-codes" :class="{ 'card-codes--grid': codeChips.length > 4 }">
+        <span
+          v-for="item in codeChips"
+          :key="item.code"
+          class="card-code"
+          :class="{ 'card-code--primary': item.isPrimary }"
+          :title="item.tip"
+          tabindex="0"
+          :aria-label="item.tip"
+        >
+          <span class="card-code__dot" :style="{ background: item.color }" aria-hidden="true"></span>
+          {{ item.code }}
+        </span>
       </div>
     </div>
   </DsCard>
@@ -141,14 +146,16 @@ export default {
      */
     codeChips() {
       const palette = [this.resolvedCategoryColor, 'var(--warning)', 'var(--muted)', 'var(--info)', 'var(--danger)'];
-      const extras = this.allSeries.slice(1, 24); // no cap — grains carries 16
-      const codes = extras.map((s) => this.commodityCode(s.name));
+      // ALL series incl. the primary (user req: Livestock must show chicken
+      // AND beef) — the headline number stays the primary's.
+      const items = this.allSeries.slice(0, 24);
+      const codes = items.map((s) => this.commodityCode(s.name));
       const counts = new Map();
       codes.forEach((c) => counts.set(c, (counts.get(c) || 0) + 1));
-      return extras.map((s, i) => {
+      return items.map((s, i) => {
         let code = codes[i];
         if ((counts.get(code) || 0) > 1) {
-          const second = (this.shortSeriesName(s.name).split(/\s+/)[1] || '?')[0].toUpperCase();
+          const second = (this.baseSeriesName(s.name).split(/\s+/)[1] || '?')[0].toUpperCase();
           code = `${code}-${second}`;
         }
         const points = (s.data || []).filter((p) => Number.isFinite(p.value));
@@ -157,8 +164,9 @@ export default {
         const unit = this.unit || '';
         return {
           code,
+          isPrimary: i === 0,
           tip: `${s.name} — ${value}${unit ? ` ${unit}` : ''}`,
-          color: palette[(i + 1) % palette.length]
+          color: palette[i % palette.length]
         };
       });
     },
@@ -336,16 +344,18 @@ export default {
   },
 
   methods: {
-    /** Compact commodity name for chip tooltips (same trimming rules as
-     *  the main chart's multi-Latest card). Method, NOT computed. */
-    shortSeriesName(name) {
+    /** Compact commodity name — SAME algorithm as the chart's
+     *  baseSeriesName (MarketPriceChart.vue) so codes and legends agree.
+     *  Method, NOT computed. */
+    baseSeriesName(name) {
       const raw = typeof name === 'string' ? name : '';
-      const short = raw
-        .replace(/\s*\[(regional|converted[^\]]*)\]/gi, '')
-        .replace(/\s*\((intl|international|fob|cif)[^)]*\)/gi, '')
-        .split(',')[0]
-        .trim();
-      return short || raw;
+      let s = raw.replace(/\s*\[(regional|converted[^\]]*)\]/gi, '');
+      s = s.replace(/\s*\([^)]*(?:intl|international|benchmark|fob|cif)[^)]*\)/gi, '');
+      s = s.split(',')[0].trim();
+      const opens = (s.match(/\(/g) || []).length;
+      const closes = (s.match(/\)/g) || []).length;
+      if (opens > closes) s = s.replace(/\s*\([^)]*$/, '').trim();
+      return s || raw;
     },
     /** ≤3-letter commodity code + country tag, e.g. "CAB-GT", "DAP-US". */
     commodityCode(name) {
@@ -422,6 +432,13 @@ export default {
 
 .card-content {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.card-main {
+  display: flex;
   gap: var(--space-sm);
   width: 100%;
 }
@@ -485,12 +502,19 @@ export default {
   flex-shrink: 0;
 }
 
-/* Commodity acronym chips — keep the card narrow, wrap instead of stretch */
+/* Commodity acronym chips — left-aligned under the sparkline; grid of 3
+   columns when numerous (grains) so the card never gets tall */
 .card-codes {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   overflow: hidden;
+}
+
+.card-codes--grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: start;
 }
 
 .card-code {
@@ -506,6 +530,13 @@ export default {
   padding: 2px 5px;
   white-space: nowrap;
   cursor: help;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.card-code--primary {
+  border-color: var(--accent);
+  color: var(--fg);
 }
 
 .card-code__dot {

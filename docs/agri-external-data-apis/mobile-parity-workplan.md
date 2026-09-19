@@ -7,7 +7,7 @@ Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 `mobile/genie_ai_mobile` into line with the Vue 3 web app.
 
 **Build contract:** the item-by-item specification lives in
-[`mobile-parity-spec.md`](mobile-parity-spec.md) (S1-S24, exact
+[`mobile-parity-spec.md`](mobile-parity-spec.md) (S1-S26, exact
 algorithms, strings, i18n keys, tests). This file is the tracker; the
 spec is what gets implemented. Binding constraint: the mobile app reuses
 the Vue app's backend adapters/APIs exclusively (spec §0).
@@ -127,6 +127,14 @@ jrevillard.
 > on is tracked here and reflected in the matrix/phases, so the mobile
 > catch-up plan never drifts from the web app.
 
+- 2026-09-19 v4.4: AI-prediction output contract (web) — the backend
+  caps LLM completions at 1024 tokens (comps `LLMParams` default; no
+  client in our chain sends `max_tokens`), which truncated long
+  prediction reports mid-word. The prediction prompt now enforces a
+  summarized per-commodity format (~350-word cap; heading / Outlook /
+  4 month-end projections / Risk). New spec §16 (S26): any mobile
+  AI-answer surface embeds the same contract. No new matrix item —
+  mobile has no market-prediction UI yet.
 - 2026-09-19 v4.3: web regression fixes folded into M21/M22 acceptance —
   display-name helpers must be METHODS (Vue-compat computed crash) and
   renaming a helper requires grep-checking every call site (stale

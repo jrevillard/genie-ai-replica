@@ -380,3 +380,28 @@ colors per series, and light/dark rendering via the app's DS theme.
   ALL 8 categories: series counts, units, colors vs legend vs toggles,
   filter + toggles + zoom composition, table/CSV contents.
 - jrevillard review on the `feat/agri-mobile-parity` MR.
+
+## 16. AI text responses — output budget contract (S26)
+
+The backend caps every LLM completion at 1024 tokens (comps `LLMParams`
+default; chatqna only forwards `max_tokens` when the client sends one —
+ours never does). Web fix (2026-09-19): the Market Prices prediction
+prompt carries a MANDATORY output contract. Any mobile surface that
+renders a generated AI answer (a market-prediction action if/when added,
+Pest Alerts AI assistance) MUST embed the same contract in its prompt:
+
+- Whole report ≤ ~350 words; never reproduce or narrate the provided
+  history (at most one trend sentence per commodity).
+- Per commodity: one-line heading; "Outlook:" 2-3 sentences weaving in
+  the selected news; "Forecast:" four compact month-end projections
+  (`2026-10: ~1.05 USD/quintal ↑`); "Risk:" one line.
+- More than 6 commodities in scope → one-line heading, ONE outlook
+  sentence and the four projections each.
+- No introduction, no closing summary. Both EN and ES prompt variants
+  carry the contract (reference implementation:
+  MarketPriceChart.vue `submitPrediction`).
+
+Rationale: prompt-side limits are soft; the 1024-token cap is hard.
+If truncation reappears despite the contract, the proper lever is the
+client chain sending `max_tokens` (the chatqna API supports it
+natively) — a backend-BFF change, outside the charts scope.

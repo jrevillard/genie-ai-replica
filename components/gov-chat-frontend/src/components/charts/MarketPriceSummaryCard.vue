@@ -360,7 +360,7 @@ export default {
     /** ≤3-letter commodity code + country tag, e.g. "CAB-GT", "DAP-US". */
     commodityCode(name) {
       const raw = typeof name === 'string' ? name : '';
-      const short = this.shortSeriesName(raw);
+      const short = this.baseSeriesName(raw);
       const base = ((short.split(/\s+/)[0] || '?').slice(0, 3).toUpperCase() || '???').slice(0, 3);
       const countryMap = [
         ['EL SALVADOR', 'SV'],

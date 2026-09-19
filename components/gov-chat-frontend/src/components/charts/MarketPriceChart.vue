@@ -46,7 +46,7 @@
                color-matched to its line. -->
           <div v-if="series.length <= 1" class="summary-item">
             <span class="summary-label">{{ $t('charts.market.latest', 'Latest') }}</span>
-            <strong class="summary-value">{{ latestValue }}</strong>
+            <strong class="summary-value" :title="primaryLatestTooltip" tabindex="0">{{ latestValue }}</strong>
             <span v-if="unit" class="summary-unit summary-unit--info" tabindex="0" :title="unitExplanation"
               >{{ unit }}
               <i class="fas fa-circle-info unit-info-icon" aria-hidden="true"></i>
@@ -57,8 +57,8 @@
             <ul class="latest-list">
               <li v-for="item in latestBySeries" :key="item.name" class="latest-list__item">
                 <span class="latest-list__dot" :style="{ background: item.color }" aria-hidden="true"></span>
-                <span class="latest-list__name" :title="item.name">{{ item.shortName }}</span>
-                <strong class="latest-list__value">{{ item.value }}</strong>
+                <span class="latest-list__name" :title="item.tip">{{ item.shortName }}</span>
+                <strong class="latest-list__value" :title="item.tip">{{ item.value }}</strong>
               </li>
             </ul>
             <span v-if="unit" class="summary-unit summary-unit--info" tabindex="0" :title="unitExplanation"
@@ -119,27 +119,31 @@
         </DsButton>
       </div>
       <DsCard variant="flat" padding="none">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ $t('charts.market.period', 'Period') }}</th>
-              <th>{{ $t('charts.market.value', 'Value') }}</th>
-              <th>{{ $t('charts.caveats.quality', 'Quality') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in timeSeries" :key="index">
-              <td>{{ item.date }}</td>
-              <td class="value-cell">{{ formatValue(item.value) }}</td>
-              <td>
-                <span v-if="item.quality === 'estimated'" class="quality-estimated">
-                  {{ $t('charts.caveats.estimated', 'Estimated') }}
-                </span>
-                <span v-else class="quality-actual">{{ $t('charts.caveats.actual', 'Actual') }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ $t('charts.market.period', 'Period') }}</th>
+                <th v-for="s in visibleSeries" :key="s.name" :title="`${s.name} (${s.unit || unit || 'n/a'})`">
+                  {{ shortSeriesName(s.name) }}
+                </th>
+                <th>{{ $t('charts.caveats.quality', 'Quality') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in tableRows" :key="row.date">
+                <td>{{ row.date }}</td>
+                <td v-for="(v, i) in row.values" :key="i" class="value-cell">{{ v === null ? '' : formatValue(v) }}</td>
+                <td>
+                  <span v-if="row.quality === 'estimated'" class="quality-estimated">
+                    {{ $t('charts.caveats.estimated', 'Estimated') }}
+                  </span>
+                  <span v-else class="quality-actual">{{ $t('charts.caveats.actual', 'Actual') }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </DsCard>
 
       <p class="last-updated">{{ $t('charts.market.lastUpdated', 'Last updated') }}: {{ formatDate(lastUpdated) }}</p>
@@ -510,16 +514,45 @@ export default {
      */
     latestBySeries() {
       const palette = this.seriesPalette;
+      const unitSuffix = this.unit ? ` ${this.unit}` : '';
       return this.series.map((s, i) => {
         const points = (s.data || []).filter((p) => Number.isFinite(p.value));
         const last = points[points.length - 1];
+        const value = last ? this.formatValue(last.value) : '--';
         return {
           name: s.name,
           shortName: this.shortSeriesName(s.name),
-          value: last ? this.formatValue(last.value) : '--',
-          color: palette[i % palette.length]
+          value,
+          color: palette[i % palette.length],
+          tip: `Latest month-end price of ${s.name} — ${value}${unitSuffix}`
         };
       });
+    },
+    /** Explains the single-commodity Latest figure (user req 2026-09-19). */
+    primaryLatestTooltip() {
+      const primary = this.series[0];
+      if (!primary) return '';
+      return `Latest month-end price of ${primary.name} — ${this.latestValue}${this.unit ? ` ${this.unit}` : ''}`;
+    },
+    /**
+     * Date-aligned table rows: the UNION of every visible series' dates.
+     * Index alignment (old CSV) mislabels values once histories differ —
+     * a 1960-start benchmark shifted against a 2005-start local series.
+     */
+    tableRows() {
+      const maps = this.visibleSeries.map((s) => new Map((s.data || []).map((p) => [p.date, p])));
+      const dates = new Set();
+      for (const m of maps) for (const d of m.keys()) dates.add(d);
+      const sorted = [...dates].sort();
+      const primaryMap = maps[0] || new Map();
+      return sorted.map((date) => ({
+        date,
+        values: maps.map((m) => {
+          const p = m.get(date);
+          return p && Number.isFinite(p.value) ? p.value : null;
+        }),
+        quality: (primaryMap.get(date) || {}).quality || 'actual'
+      }));
     },
     trendLabel() {
       const map = {
@@ -878,7 +911,7 @@ export default {
      * accents; CRLF line endings for widest spreadsheet compatibility.
      */
     exportCsv() {
-      if (!this.timeSeries.length) return;
+      if (!this.tableRows.length) return;
       const unit = this.unit ? ` (${this.unit})` : '';
       const esc = (v) => {
         const s = v === null || v === undefined ? '' : String(v);
@@ -890,12 +923,14 @@ export default {
         this.$t('charts.caveats.quality', 'Quality')
       ];
       const lines = [header.map(esc).join(',')];
-      for (let i = 0; i < this.timeSeries.length; i += 1) {
+      // DATE-aligned rows (union of every visible series' dates) — index
+      // alignment mislabeled values when histories start in different years.
+      for (const row of this.tableRows) {
         lines.push(
           [
-            this.timeSeries[i].date,
-            ...this.visibleSeries.map((s) => (s.data[i] ? s.data[i].value : '')),
-            this.timeSeries[i].quality === 'estimated'
+            row.date,
+            ...row.values.map((v) => (v === null ? '' : v)),
+            row.quality === 'estimated'
               ? this.$t('charts.caveats.estimated', 'Estimated')
               : this.$t('charts.caveats.actual', 'Actual')
           ]
@@ -1110,6 +1145,17 @@ export default {
 
 .history-controls__select {
   min-width: 84px;
+}
+
+/* Multi-series data table scrolls horizontally when columns exceed width */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll .data-table {
+  min-width: 100%;
 }
 
 /* Multi-commodity Latest list — one row per plotted series */

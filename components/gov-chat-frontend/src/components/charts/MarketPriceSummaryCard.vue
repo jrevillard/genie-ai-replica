@@ -18,7 +18,9 @@
       <div class="card-info">
         <div class="card-label">{{ cardTitle }}</div>
         <div class="card-value-row">
-          <div class="card-value">{{ latestValue }}</div>
+          <div class="card-value" :title="latestTooltip" tabindex="0" :aria-label="latestTooltip">
+            {{ latestValue }}
+          </div>
           <DsPill :variant="trendVariant" size="sm" class="trend-pill">
             {{ trendText }}
           </DsPill>
@@ -115,6 +117,19 @@ export default {
       }
       const latest = this.timeSeries[this.timeSeries.length - 1];
       return latest.value ? latest.value.toFixed(2) : this.$t('charts.market.noData', 'N/A');
+    },
+
+    /** Explains what the headline number IS (user req 2026-09-19): the
+     *  primary commodity's latest month-end observation, not an average,
+     *  sum or index. */
+    latestTooltip() {
+      const primary = this.allSeries[0];
+      if (!primary) return '';
+      const points = (primary.data || []).filter((p) => Number.isFinite(p.value));
+      const last = points[points.length - 1];
+      const value = last ? last.value.toFixed(2) : '--';
+      const unit = this.unit ? ` ${this.unit}` : '';
+      return `Latest month-end price of ${primary.name} — ${value}${unit}`;
     },
 
     /**

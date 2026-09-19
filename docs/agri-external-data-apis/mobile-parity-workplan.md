@@ -1,4 +1,4 @@
-# Flutter Mobile Parity — Comprehensive Work Plan (v2)
+# Flutter Mobile Parity — Comprehensive Work Plan (v3)
 
 Date: 2026-09-19 · Implementation branch: **`feat/agri-mobile-parity`**
 (branch off `feat/agri-external-data-apis` once MR !388 merges; own MR,
@@ -6,99 +6,115 @@ reviewed after !388) · Status: **plan only — not started**
 Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 `mobile/genie_ai_mobile` into line with the Vue 3 web app.
 
-> This plan is deliberately adjustment-friendly: every item is numbered
-> (M#) and independent. Bug fixes and enhancements on the web app before
-> kickoff should be folded in here, not around it.
+> v3 incorporates everything shipped on the web app during the
+> 2026-09-18/19 sessions (news pipeline, chart crash fixes, grains
+> expansion, history filter, multi-series table). The capability matrix
+> is the source of truth; numbered items (M#) are independent so
+> adjustments between now and kickoff stay cheap.
 
 ## 1. Parity matrix — web capability × mobile status
 
-| # | Web capability (as shipped 2026-09-18/19) | Mobile today | Gap |
+### Data & content (server-side — automatically at parity once M1/M2 land)
+
+| # | Web capability (as shipped) | Mobile today | Gap |
 |---|---|---|---|
-| M1 | All series served per category (benchmarks, regional refs, every commodity) with month-end cadence and unit normalization server-side | **Data layer maps `series[0]` only** (`agri_api_service.dart` ~line 73); everything else discarded | **Critical** |
-| M2 | Per-series `name`, `unit`, point `quality` consumed | Point quality + per-series name/unit dropped in mapping | Critical (blocks M5, M8, M13) |
-| M3 | Multi-series chart: palette-matched lines, legend, up to 5 series | Single `LineChartBarData` (primary only) | Critical |
-| M4 | True datetime x-axis (date-keyed points, mixed cadences align) | Index-based `FlSpot(i, v)` | High |
-| M5 | CPI-estimated gap years rendered dashed + "estimated" quality | No quality handling — estimates render as observed | High |
-| M6 | Wheel-zoom + drag-pan + native +/−/fit toolbar buttons | None (fl_chart has none built-in) | High |
-| M7 | Multi-commodity Latest card: per-commodity figures, color-matched | Single figure (primary series only) | High |
-| M8 | Relative y-scales per unit group (floor-hug, 1.5× max, $ markers, axis unit titles, dual left/right axes for irreducible mixes) | 1.5× top + $ done; floor differs; single axis; no unit titles | Medium |
-| M9 | Tooltips: date + value + unit, dense-marker sizing | Date + value (no unit) | Medium |
-| M10 | CSV export with unit headers + translated quality column | **Done** (share sheet) | — |
-| M11 | News: language-follows-locale, relevance gate, AI translation, dedupe | **Done** (same endpoints; picker wired to locale) | — |
-| M12 | Caveat banner + About panel from envelope meta | Banner exists (`AgriCaveatBanner`); About panel absent | Low |
-| M13 | Unit calibration explanations (quintal/PPI/index/SDG %-of-what) on the Latest unit | Exists incl. the new SDG 12.3.1 wording | — |
-| M14 | EN/ES i18n for all chart strings | **Done** (`charts`/`market` maps) | — |
-| M15 | Debug logging (load line + axis build line in console) | Absent | Low |
-| M16 | Crop Health: 14 departments, baseline/trend/health buckets, map pin per dept | Department list renders; verify parity of baseline/change display + tooltips | Verify |
-| M17 | Pest Alerts: advisories/regional/sightings with severity filter + AI-assistance dialog | Exists (list + map + assistance) | Verify |
+| M1 | All series per category — grains now **15 series** (SV wholesale ×5, GT ×2, NIC ×4, intl benchmarks ×4 auto-converted USD/mt→quintal), vegetables 5, fertilizer 5, aquaculture 3 | **Data layer maps `series[0]` only** (`agri_api_service.dart` ~line 73) | **Critical** |
+| M2 | Per-series `name`, `unit`, point `quality` consumed | Dropped in the mapping | Critical (blocks M5/M8/M13) |
+| M3 | Nicaragua defs are wholesale | Server-side — none once M1 lands | (closed by M1) |
+| M4 | Start-year history filter on every dialog (options: earliest→current−5, default 2015, chart+table+CSV re-render; axis pinned to selected year) | Absent | High |
+| M5 | CPI-estimated points rendered dashed | No quality handling | High |
+| M6 | Wheel-zoom + drag-pan + native +/−/fit toolbar | None (fl_chart has none built-in) | High |
+| M7 | Multi-commodity Latest card (per-series figure, color-matched, per-series "latest month-end price of…" tooltips) | Single figure, primary only | High |
+| M8 | Relative per-unit y-axes: floor-hug + 1.5× max, `$` on USD ticks, axis unit titles, left/right axes for irreducible unit mixes (cropProtection) | 1.5× top + `$` done; floor differs; single axis; no unit titles | Medium |
+| M9 | Tooltips: date + value + unit (sparkline too) | Date + value (no unit) | Medium |
+| M10 | Category summary buttons as dashboard: acronym chips (CAB-GT, DAP-US…) with palette dots + full-description/price tooltips; headline number self-explaining tooltip | Rows were dropped for chips on web; mobile has neither — chips needed | Medium |
+| M11 | Data table: one column per series, date-aligned union rows, horizontal scroll | Primary-only rows | Medium |
+| M12 | CSV export: all series, date-aligned, unit headers, translated quality | **Done** — but mobile's export still assumes primary-only; must switch to the date-aligned multi-series shape | Medium |
+| M13 | News: language-follows-locale, relevance gate, AI translation fallback (translate-then-persist `_tr<lang>`), wire dedupe, economía feed | **Done** (same endpoints) | — |
+| M14 | Caveat chips + About panel (source/coverage/estimation) | Banner only; About panel absent | Low |
+| M15 | Unit calibration explanations (quintal/PPI/index/SDG %-of-what incl. the 8-in-100-kg example) | Exists | — |
+| M16 | EN/ES i18n for all chart strings (selector stays EN/ES; other locale files key-complete) | **Done** | — |
+| M17 | Debug logging: per-load line (series/points/units/stale) + per-axis line (groups/min/max) | Absent | Low |
+| M18 | Crop Health: 14 depts, baseline/trend/health buckets | List renders; verify baseline/change display + tooltips | Verify |
+| M19 | Pest Alerts: advisories/regional/sightings, severity filter, AI assistance | Exists | Verify |
 
 ## 2. Phases
 
 ### Phase A — Data layer (M1, M2) · effort S · no UI change
 Map the full envelope: every series (name, unit, data incl. `quality`),
-envelope meta (source/coverage/caveats/estimation) passthrough.
-- Acceptance: an envelope with 3 series/2 units maps 1:1; fixture unit test;
-  existing screens still render from `series[0]` unchanged.
+meta passthrough. Acceptance: 15-series grains envelope maps 1:1 (fixture
+test); existing screens still render from `series[0]`.
 
-### Phase B — Chart core (M3, M4, M5, M7, M8) · effort L
+### Phase B — Chart core (M3, M5, M7, M8) · effort L
 Date-keyed spots (`millisecondsSinceEpoch`), `minX/maxX` from union range,
-bottom-title formatter for month/year ticks. Multi-`LineChartBarData` with
-the web palette semantics (primary = category color; warning = estimated;
-muted/info/danger = extras), custom legend chip row, series-count-scaled
-chart height. Estimated overlay split by `quality` with `dashArray`.
-Axis titles carry units; two unit groups → left/right axes. Multi-commodity
-Latest card mirroring the web card (dot + short name + value per series).
-- Acceptance: vegetables renders all 5 commodities color-matched with
-  legend; maize shows dashed estimates; cropProtection renders dual axes;
-  every category's Latest card lists all its commodities.
+month/year bottom-tick formatter. Multi-`LineChartBarData` with the web
+palette semantics; custom legend chip row; series-count-scaled height.
+Estimated overlay split by `quality` with `dashArray`. Per-unit axes with
+titles; two unit groups → left/right. Multi-commodity Latest card with
+per-series "latest month-end price of…" tooltips (M7), headline-number
+tooltip on the summary cards (M10's tooltip half).
+Acceptance: grains renders 15 color-matched series with legend;
+cropProtection renders dual axes; every Latest row self-explains.
 
-### Phase C — Interaction (M6, M9) · effort M
-`onScaleStart/Update/End` on a `GestureDetector` driving `minX/maxX`
-window state (pinch = zoom, focal delta = pan), clamped to data range, y
-re-scaled to the visible window. `[−] [+] [Fit]` icon-button row on the
-chart header (zoom ×2 around visible center; Fit = full range). Tooltip
-appends the unit.
-- Acceptance: one-hand pinch + drag navigation; buttons work without
-  gestures; Fit restores full range exactly.
+### Phase C — Interaction & filters (M4, M6, M9, M10 chips, M11, M12) · effort M/L
+Start-year dropdown (same contract as web: earliest→current−5, default
+2015, clamped; chart+table+CSV re-render; axis pinned to the selection).
+Pinch-zoom + drag-pan driving a `minX/maxX` window state (y re-scales to
+the visible window) with `[−] [+] [Fit]` buttons. Tooltip gains unit.
+Summary cards gain the acronym chips (dot + code, tooltip = description +
+price). Table: one column per series over date-aligned union rows,
+horizontally scrollable. CSV rebuilt on the same rows.
+Acceptance: filter + zoom compose (zoom respects the filtered range);
+chips and table match the web's information density without widening the
+cards.
 
-### Phase D — Polish, parity verification, logging (M12, M15, M16, M17) · effort S
-About panel (source/coverage/estimation from meta); `debugPrint` load-line
-parity with the web console line; crop-health tooltip/baseline pass;
-pest-alerts regression pass; flutter analyze/format/tests green; manual
-smoke on Android + iOS against 10.0.0.101.
+### Phase D — Polish, parity verification, logging (M14, M17, M18, M19) · effort S
+About panel from meta; `debugPrint` load/axis lines matching the web's
+console lines; crop-health and pest-alerts verification passes; flutter
+analyze/format/tests green; manual smoke on Android + iOS against
+10.0.0.101.
 
 ## 3. Sequencing & estimates
 
-A (S) → B (L) → C (M) → D (S). B and C are separable: B alone already
-fixes the "wrong data on screen" class; C adds navigation. Total: roughly
-2–3 focused days. No backend changes required — mobile consumes the same
-envelopes (month-end cadence, unit conversions, translated news all
-server-side).
+A (S) → B (L) → C (M/L) → D (S). B alone fixes the "wrong data on
+screen" class; C brings the dashboard interactions. Total: roughly 3–4
+focused days (v3 adds the filter, chips, multi-series table/CSV). No
+backend changes required — mobile consumes the same envelopes
+(month-end cadence, unit conversions, translated news, 15-series grains
+all server-side).
 
 ## 4. Risks
 
-- fl_chart version: pinch/pan math is hand-rolled; if the pinned version
-  fights window-state updates, upgrade is contained to Phase C.
-- Performance: 5 series × 800 monthly points is well within fl_chart;
-  dense dailies no longer exist thanks to the month-end cadence.
-- i18n: new UI strings (legend, zoom buttons, About rows) get EN/ES
-  translations in `lib/i18n/locales/{en,es}.dart`; other locale files stay
-  key-complete with EN fallback (locale-consistency CI + branch reuse for
-  other countries). The on-screen language selector stays EN/ES
-  (flavor-driven) — unchanged.
+- fl_chart: pinch/pan math is hand-rolled; if the pinned version fights
+  window-state updates, upgrade is contained to Phase C.
+- Performance: 15 series × ~200-800 monthly points each is the new
+  grains worst case — verify frame timing on a low-end device in Phase B;
+  the month-end cadence keeps totals bounded (~1,700 points/category).
+- Wide table + chips on small screens: follow the web's answers (scroll
+  container, wrapping chips) rather than inventing new layouts.
+- i18n: new strings (filter label, zoom buttons, About rows, chip
+  tooltips) need EN/ES in `lib/i18n/locales/{en,es}.dart`; other locale
+  files stay key-complete with EN fallback (locale-consistency CI +
+  reuse by other countries). On-screen language selector stays EN/ES.
 
 ## 5. Definition of done
 
 Every Crop Health, Pest Alerts and Market Prices screen shows the same
-series, units, cadence, calibration text, caveats and interactive behavior
-as the Vue app; `flutter analyze` clean; widget tests cover the data
-mapping, the palette/legend construction and the zoom-window math; manual
-sign-off against 10.0.0.101; reviewed by jrevillard.
+series set, units, cadence, calibration text, caveats, history filter and
+interactive behavior as the Vue app; `flutter analyze` clean; widget
+tests cover the data mapping, palette/legend, zoom-window math and the
+date-aligned table/CSV; manual sign-off against 10.0.0.101; reviewed by
+jrevillard.
 
 ## 6. Change log (for pre-kickoff adjustments)
 
-- 2026-09-19 v2: comprehensive matrix + phases; added multi-commodity
-  Latest card (M7), zoom toolbar (M6), About panel (M12), debug logging
-  (M15), SDG unit-explanation wording, month-end cadence context.
+- 2026-09-19 v3: session sync — 15-series grains (M1/M3), start-year
+  filter (M4), acronym chips + self-explaining headline (M10), per-series
+  tooltips (M7), date-aligned multi-series table + CSV (M11/M12), serve-path
+  fixes (empty-LKG miss, obsolete-LKG rebuild, news in the periodic
+  rebuild), debug logging (M17). Nicaragua wholesale fix noted (M3).
+- 2026-09-19 v2: comprehensive matrix + phases; multi-commodity Latest
+  card (M7), zoom toolbar (M6), About panel (M12→M14), debug logging
+  (M15→M17), SDG unit-explanation wording, month-end cadence context.
 - 2026-09-18 v1: initial assessment (series[0]-only data layer, chart
   core, interaction, polish).

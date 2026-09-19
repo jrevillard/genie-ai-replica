@@ -481,14 +481,6 @@ export default {
         };
       });
     },
-    shortSeriesName(name) {
-      const short = String(name || '')
-        .replace(/\s*\[(regional|converted[^\]]*)\]/gi, '')
-        .replace(/\s*\((intl|international|fob|cif)[^)]*\)/gi, '')
-        .split(',')[0]
-        .trim();
-      return short || name;
-    },
     trendLabel() {
       const map = {
         up: this.$t('charts.market.trendUp', 'Rising'),
@@ -754,6 +746,20 @@ export default {
     measureScrollWidth() {
       const el = this.$refs.chartScroll;
       if (el && el.clientWidth > 0) this.scrollWidth = el.clientWidth;
+    },
+    /** Compact commodity name for the multi-Latest lists: strips the
+     *  [regional]/[converted] tags, intl-benchmark parentheticals and the
+     *  market qualifier after the first comma. MUST live in methods — as a
+     *  computed it broke rendering under this app's Vue compat mode
+     *  (found live 2026-09-19: "Cannot convert object to primitive value"). */
+    shortSeriesName(name) {
+      const raw = typeof name === 'string' ? name : '';
+      const short = raw
+        .replace(/\s*\[(regional|converted[^\]]*)\]/gi, '')
+        .replace(/\s*\((intl|international|fob|cif)[^)]*\)/gi, '')
+        .split(',')[0]
+        .trim();
+      return short || raw;
     },
     /** Human date for tooltips: daily, month-keyed and year-keyed periods. */
     formatTooltipDate(value) {

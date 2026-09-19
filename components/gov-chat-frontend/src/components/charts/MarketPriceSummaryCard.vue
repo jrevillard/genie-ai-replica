@@ -23,6 +23,16 @@
             {{ trendText }}
           </DsPill>
         </div>
+        <!-- Multi-commodity categories list the other commodities' latest
+             figures beneath the headline number (smaller text, user req
+             2026-09-19). -->
+        <ul v-if="subValues.length > 0" class="card-subvalues">
+          <li v-for="item in subValues" :key="item.name" class="card-subvalue">
+            <span class="card-subvalue__dot" :style="{ background: item.color }" aria-hidden="true"></span>
+            <span class="card-subvalue__name">{{ item.shortName }}</span>
+            <span class="card-subvalue__value">{{ item.value }}</span>
+          </li>
+        </ul>
       </div>
     </div>
   </DsCard>
@@ -73,7 +83,8 @@ export default {
     return {
       priceData: null,
       loading: true,
-      timeSeries: []
+      timeSeries: [],
+      allSeries: []
     };
   },
 
@@ -98,6 +109,25 @@ export default {
       }
       const latest = this.timeSeries[this.timeSeries.length - 1];
       return latest.value ? latest.value.toFixed(2) : this.$t('charts.market.noData', 'N/A');
+    },
+
+    /**
+     * Latest figure per NON-primary commodity, for multi-commodity category
+     * cards — the headline number stays the primary; the rest list beneath
+     * in smaller text, dot colors following the main chart's palette.
+     */
+    subValues() {
+      const palette = [this.resolvedCategoryColor, 'var(--warning)', 'var(--muted)', 'var(--info)', 'var(--danger)'];
+      return this.allSeries.slice(1, 5).map((s, i) => {
+        const points = (s.data || []).filter((p) => Number.isFinite(p.value));
+        const last = points[points.length - 1];
+        return {
+          name: s.name,
+          shortName: this.shortSeriesName(s.name),
+          value: last ? last.value.toFixed(2) : '--',
+          color: palette[(i + 1) % palette.length]
+        };
+      });
     },
 
     unit() {
@@ -273,6 +303,17 @@ export default {
   },
 
   methods: {
+    /** Compact commodity name for the sub-value rows (same trimming rules
+     *  as the main chart's multi-Latest card). Method, NOT computed. */
+    shortSeriesName(name) {
+      const raw = typeof name === 'string' ? name : '';
+      const short = raw
+        .replace(/\s*\[(regional|converted[^\]]*)\]/gi, '')
+        .replace(/\s*\((intl|international|fob|cif)[^)]*\)/gi, '')
+        .split(',')[0]
+        .trim();
+      return short || raw;
+    },
     /** Sparkline tooltip date — handles daily, monthly and annual keys. */
     formatSparkTooltipDate(value) {
       if (value === null || value === undefined) return '';
@@ -294,7 +335,9 @@ export default {
       this.loading = true;
       try {
         const envelope = await agriApiService.getMarketPrices(this.category);
-        const primary = envelope.data && envelope.data.series && envelope.data.series[0];
+        const series = (envelope.data && envelope.data.series) || [];
+        this.allSeries = series;
+        const primary = series[0];
         if (primary && primary.data && primary.data.length > 0) {
           // Legacy shape: {title, unit, data:[{year, value}], trend, dataSource}
           this.priceData = {
@@ -387,6 +430,48 @@ export default {
 .trend-pill {
   font-size: var(--text-xs);
   flex-shrink: 0;
+}
+
+/* Non-primary commodities' latest figures on multi-commodity cards */
+.card-subvalues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.card-subvalue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.card-subvalue__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.card-subvalue__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-subvalue__value {
+  flex: 0 0 auto;
+  color: var(--fg);
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

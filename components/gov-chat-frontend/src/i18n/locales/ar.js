@@ -644,6 +644,7 @@ export default {
       trend: 'الاتجاه',
       priceHistory: 'سجل الأسعار',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'جدول البيانات',
       period: 'Period',
       exportCsv: 'Export CSV',

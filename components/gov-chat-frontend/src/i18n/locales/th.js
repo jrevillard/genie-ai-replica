@@ -643,6 +643,7 @@ export default {
       trend: 'แนวโน้ม',
       priceHistory: 'ประวัติราคา',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'ตารางข้อมูล',
       period: 'Period',
       exportCsv: 'Export CSV',

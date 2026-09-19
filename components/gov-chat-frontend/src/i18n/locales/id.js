@@ -645,6 +645,7 @@ export default {
       trend: 'Tren',
       priceHistory: 'Riwayat Harga',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'Tabel Data',
       period: 'Period',
       exportCsv: 'Export CSV',

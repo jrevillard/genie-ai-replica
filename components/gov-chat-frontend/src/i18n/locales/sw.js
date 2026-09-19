@@ -643,6 +643,7 @@ export default {
       trend: 'Mwenendo',
       priceHistory: 'Historia ya Bei',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'Jedwali la Data',
       period: 'Period',
       exportCsv: 'Export CSV',

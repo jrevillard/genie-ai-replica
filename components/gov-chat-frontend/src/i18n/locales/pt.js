@@ -647,6 +647,7 @@ export default {
       trend: 'Tendência',
       priceHistory: 'Histórico de Preços',
       startYear: 'A partir de',
+      series: 'Series',
       dataTable: 'Tabela de Dados',
       period: 'Período',
       exportCsv: 'Exportar CSV',

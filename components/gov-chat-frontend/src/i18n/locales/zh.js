@@ -640,6 +640,7 @@ export default {
       trend: '趋势',
       priceHistory: '价格历史',
       startYear: 'From',
+      series: 'Series',
       dataTable: '数据表',
       period: 'Period',
       exportCsv: 'Export CSV',

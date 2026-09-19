@@ -634,6 +634,7 @@ export default {
       trend: 'প্রবণতা',
       priceHistory: 'মূল্যের ইতিহাস',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'ডেটা টেবিল',
       period: 'Period',
       exportCsv: 'Export CSV',

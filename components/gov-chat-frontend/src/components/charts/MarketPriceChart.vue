@@ -44,7 +44,7 @@
           <!-- Single commodity: one figure. Multi-commodity charts: the
                Latest card lists every plotted commodity with its own figure,
                color-matched to its line. -->
-          <div v-if="series.length <= 1" class="summary-item">
+          <div v-if="activeSeries.length <= 1" class="summary-item">
             <span class="summary-label">{{ $t('charts.market.latest', 'Latest') }}</span>
             <strong class="summary-value" :title="primaryLatestTooltip" tabindex="0">{{ latestValue }}</strong>
             <span v-if="unit" class="summary-unit summary-unit--info" tabindex="0" :title="unitExplanation"
@@ -83,6 +83,27 @@
       <DsButton variant="primary" class="predict-btn" @click="getPredictions">
         {{ $t('charts.market.getPredictions', 'Get AI Predictions') }}
       </DsButton>
+
+      <!-- Series toggles: GLOBAL — one switch per commodity drives the
+           chart, the data table and the CSV export together (user req
+           2026-09-19). The last active series cannot be switched off. -->
+      <div
+        v-if="series.length > 1"
+        class="series-toggles"
+        role="group"
+        :aria-label="$t('charts.market.series', 'Series')"
+      >
+        <label v-for="item in toggleItems" :key="item.name" class="series-toggle" :title="item.name">
+          <input
+            type="checkbox"
+            :checked="!item.hidden"
+            :disabled="item.lastActive"
+            @change="toggleSeries(item.name)"
+          />
+          <span class="series-toggle__dot" :style="{ background: item.color }" aria-hidden="true"></span>
+          <span class="series-toggle__name">{{ item.shortName }}</span>
+        </label>
+      </div>
 
       <!-- Price History Chart (dense series scroll horizontally — every
            data point stays neatly spaced instead of crowding). The start-year
@@ -319,6 +340,7 @@ export default {
       refreshTimer: null,
       scrollWidth: 760, // measured from the chart container on mount/resize
       startYear: 2015, // history filter (user req 2026-09-19); clamped to data
+      hiddenSeries: [], // series switched off by the global toggles
       showAbout: false,
       showPredictionDialog: false,
       showResponseDialog: false,
@@ -354,6 +376,24 @@ export default {
       return this.visibleSeries[0] || { data: [], name: '', unit: '' };
     },
     /**
+     * Series NOT switched off by the global toggles. Colors are keyed to a
+     * series' ORIGINAL index so toggling never re-colors the survivors.
+     */
+    activeSeries() {
+      return this.series.filter((s) => !this.hiddenSeries.includes(s.name));
+    },
+    toggleItems() {
+      const palette = this.seriesPalette;
+      const activeCount = this.activeSeries.length;
+      return this.series.map((s, i) => ({
+        name: s.name,
+        shortName: this.shortSeriesName(s.name),
+        color: palette[i % palette.length],
+        hidden: this.hiddenSeries.includes(s.name),
+        lastActive: !this.hiddenSeries.includes(s.name) && activeCount === 1
+      }));
+    },
+    /**
      * Start-year filter (user req 2026-09-19): everything rendered — chart,
      * table, CSV — flows through visibleSeries. Options span the data set's
      * earliest year through (current year − 5); default 2015, clamped when
@@ -379,7 +419,7 @@ export default {
     },
     visibleSeries() {
       const cutoff = `${this.startYear}-01-01`;
-      return this.series.map((s) => ({ ...s, data: (s.data || []).filter((p) => p.date >= cutoff) }));
+      return this.activeSeries.map((s) => ({ ...s, data: (s.data || []).filter((p) => p.date >= cutoff) }));
     },
     categoryConfig() {
       const configs = {
@@ -515,15 +555,16 @@ export default {
     latestBySeries() {
       const palette = this.seriesPalette;
       const unitSuffix = this.unit ? ` ${this.unit}` : '';
-      return this.series.map((s, i) => {
+      return this.activeSeries.map((s) => {
         const points = (s.data || []).filter((p) => Number.isFinite(p.value));
         const last = points[points.length - 1];
         const value = last ? this.formatValue(last.value) : '--';
+        const origIdx = this.series.indexOf(s);
         return {
           name: s.name,
           shortName: this.shortSeriesName(s.name),
           value,
-          color: palette[i % palette.length],
+          color: palette[origIdx % palette.length],
           tip: `Latest month-end price of ${s.name} — ${value}${unitSuffix}`
         };
       });
@@ -712,8 +753,14 @@ export default {
         },
         yaxis,
         // Palette is shared with the multi-commodity Latest card so chips
-        // and lines stay color-matched.
-        colors: this.seriesPalette,
+        // and lines stay color-matched. Per-series colorIdx keeps a series'
+        // color STABLE when siblings are toggled off; the dashed estimated
+        // overlay keeps the warning color.
+        colors: this.chartSeries.map((s) =>
+          s.isEstimate
+            ? cssVars.warningColor || 'var(--warning)'
+            : this.seriesPalette[(s.colorIdx || 0) % this.seriesPalette.length]
+        ),
         // Solid fill (light opacity) instead of gradient — the gradient
         // version made the line stroke appear to fade because ApexCharts
         // applies the fill opacity to the line border as well.
@@ -774,13 +821,19 @@ export default {
         .filter((p) => p[0] !== null);
 
       const out = [
-        { name: primary.name || this.commodityName, data: actual, unit: primary.unit || this.unit },
+        {
+          name: primary.name || this.commodityName,
+          data: actual,
+          unit: primary.unit || this.unit,
+          colorIdx: this.series.indexOf(primary)
+        },
         {
           name: this.$t('charts.caveats.estimatedSeries', '{name} (estimated)', {
             name: primary.name || this.commodityName
           }),
           data: estimated,
-          unit: primary.unit || this.unit
+          unit: primary.unit || this.unit,
+          isEstimate: true
         }
       ];
       // Skip empty estimated overlay when everything is actual
@@ -793,7 +846,8 @@ export default {
         out.push({
           name: extra.name,
           data: extra.data.map((d) => [ts(d.date), d.value]).filter((p) => p[0] !== null),
-          unit: extra.unit || this.unit
+          unit: extra.unit || this.unit,
+          colorIdx: this.series.indexOf(extra)
         });
       }
       return out;
@@ -831,6 +885,15 @@ export default {
     measureScrollWidth() {
       const el = this.$refs.chartScroll;
       if (el && el.clientWidth > 0) this.scrollWidth = el.clientWidth;
+    },
+    /** Global series switch (user req 2026-09-19): drives chart, table and
+     *  CSV together. The last active series cannot be switched off. */
+    toggleSeries(name) {
+      if (this.hiddenSeries.includes(name)) {
+        this.hiddenSeries = this.hiddenSeries.filter((n) => n !== name);
+      } else if (this.activeSeries.length > 1) {
+        this.hiddenSeries = [...this.hiddenSeries, name];
+      }
     },
     /** Compact commodity name for the multi-Latest lists: strips the
      *  [regional]/[converted] tags, intl-benchmark parentheticals and the
@@ -1156,6 +1219,46 @@ export default {
 
 .table-scroll .data-table {
   min-width: 100%;
+}
+
+/* Global series toggles — one row of chip checkboxes above the chart */
+.series-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+}
+
+.series-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: none;
+  max-width: 200px;
+}
+
+.series-toggle input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.series-toggle__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.series-toggle__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Multi-commodity Latest list — one row per plotted series */

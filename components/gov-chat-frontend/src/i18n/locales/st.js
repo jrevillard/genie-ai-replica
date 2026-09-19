@@ -638,6 +638,7 @@ export default {
       trend: 'Mokhoa',
       priceHistory: 'Histori ya Theko',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'Tafole ya Data',
       period: 'Period',
       exportCsv: 'Export CSV',

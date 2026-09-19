@@ -633,6 +633,7 @@ export default {
       trend: 'Sira',
       priceHistory: 'Jago ɲɛnɛ',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'Dɛta tabali',
       period: 'Period',
       exportCsv: 'Export CSV',

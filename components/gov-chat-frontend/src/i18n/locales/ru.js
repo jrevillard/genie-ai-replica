@@ -643,6 +643,7 @@ export default {
       trend: 'Тренд',
       priceHistory: 'История цен',
       startYear: 'From',
+      series: 'Series',
       dataTable: 'Таблица данных',
       period: 'Period',
       exportCsv: 'Export CSV',

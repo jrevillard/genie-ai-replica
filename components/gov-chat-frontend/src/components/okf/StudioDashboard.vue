@@ -111,14 +111,24 @@
             <DsButton variant="ghost" small :disabled="exportBusy" @click.stop="onExport(r)">
               {{ translate('okf.dashboard.card.export', 'Export') }}
             </DsButton>
-            <DsButton v-if="!isServing(r)" variant="ghost" small :disabled="actionBusy" @click.stop="onRenameAsk(r)">
+            <!-- Rename/Delete stay disabled while an import (Building) or drain
+              (Ingesting) holds repo identity — same reasoning as the disabled
+              lifecycle chip above: the server refuses mid-flight transitions;
+              renaming/deleting under a running worker races the drain. -->
+            <DsButton
+              v-if="!isServing(r)"
+              variant="ghost"
+              small
+              :disabled="actionBusy || isImporting(r) || isDraining(r)"
+              @click.stop="onRenameAsk(r)"
+            >
               {{ translate('okf.dashboard.card.rename', 'Rename') }}
             </DsButton>
             <DsButton
               v-if="!isServing(r)"
               variant="ghost"
               small
-              :disabled="actionBusy"
+              :disabled="actionBusy || isImporting(r) || isDraining(r)"
               class="okf-dashboard__card-delete"
               @click.stop="onDeleteAsk(r)"
             >
@@ -135,11 +145,17 @@
       :title="translate('okf.dashboard.publish.title', 'Publish')"
       size="sm"
       :actions="publishActions"
-      @close="publishAsk = null"
+      @close="onPublishDialogClose"
       @action="onPublishAction"
     >
       <p>{{ publishBodyText }}</p>
       <p v-if="publishError" class="okf-dashboard__dialog-error">{{ publishError }}</p>
+      <!-- Spinner while the lifecycle publish request is in flight (bundle
+        export + zip transfer to doc-repo can take a while on large repos) —
+        the dialog must show progress, not sit silent. -->
+      <DsSpinner v-if="publishBusy" size="sm" class="okf-dashboard__publish-busy">
+        {{ translate('okf.dashboard.publish.inProgress', 'Publishing — exporting and transferring the bundle…') }}
+      </DsSpinner>
       <div v-if="piiBlocked">
         <p class="okf-dashboard__pii-note">
           {{
@@ -149,7 +165,7 @@
             )
           }}
         </p>
-        <DsButton variant="secondary" small :disabled="actionBusy" @click="onAcknowledgeAndPublish">
+        <DsButton variant="secondary" small :disabled="actionBusy || publishBusy" @click="onAcknowledgeAndPublish">
           {{ translate('okf.dashboard.pii.ack', 'Acknowledge flagged entities & publish') }}
         </DsButton>
       </div>
@@ -312,6 +328,7 @@ export default {
       exportBusy: false,
       actionError: '',
       publishAsk: null,
+      publishBusy: false,
       publishError: '',
       piiBlocked: false,
       deleteAsk: null,
@@ -353,9 +370,17 @@ export default {
         .filter((r) => this.matchesFilters(r));
     },
     publishActions() {
+      // Both actions lock while the bundle transfer is in flight — closing or
+      // re-confirming mid-request gives no feedback and double-fires.
+      const busy = this.publishBusy;
       return [
-        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary' },
-        { key: 'confirm', label: this.translate('okf.dashboard.publish.confirm', 'Publish'), variant: 'primary' }
+        { key: 'cancel', label: this.translate('common.cancel', 'Cancel'), variant: 'secondary', disabled: busy },
+        {
+          key: 'confirm',
+          label: this.translate('okf.dashboard.publish.confirm', 'Publish'),
+          variant: 'primary',
+          disabled: busy
+        }
       ];
     },
     deleteActions() {
@@ -614,27 +639,39 @@ export default {
       this.deleteAsk = null;
       if (!res.ok) this.actionError = res.message || 'Delete failed';
     },
+    onPublishDialogClose() {
+      // While the bundle transfer is in flight the dialog stays visible with
+      // the spinner — esc/X are ignored (the request completes regardless;
+      // dismissing silently would look like a hang).
+      if (this.publishBusy) return;
+      this.publishAsk = null;
+    },
     async onPublishAction(key) {
       if (key === 'cancel') {
         this.publishAsk = null;
         return;
       }
-      if (key !== 'confirm' || !this.publishAsk) return;
+      if (key !== 'confirm' || !this.publishAsk || this.publishBusy) return;
       this.actionBusy = true;
+      this.publishBusy = true; // spinner on: bundle export + transfer can take a while
       this.publishError = '';
       this.piiBlocked = false;
-      const res = await this.$store.dispatch('okf/lifecycleTransition', {
-        repoId: this.publishAsk.repo_id,
-        action: 'publish'
-      });
-      this.actionBusy = false;
-      if (!res.ok) {
-        this.publishError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
-        if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
-        return; // keep the dialog open — the steward decides on the ack
+      try {
+        const res = await this.$store.dispatch('okf/lifecycleTransition', {
+          repoId: this.publishAsk.repo_id,
+          action: 'publish'
+        });
+        if (!res.ok) {
+          this.publishError = okfRepoOps.friendlyLifecycleError(res.code, res.message);
+          if (res.code === 'PII_GATE_BLOCKED') this.piiBlocked = true;
+          return; // keep the dialog open — the steward decides on the ack
+        }
+        this.publishAsk = null;
+        this.refreshAll();
+      } finally {
+        this.publishBusy = false;
+        this.actionBusy = false;
       }
-      this.publishAsk = null;
-      this.refreshAll();
     },
     async onAcknowledgeAndPublish() {
       // The explicit, audited steward decision: reviewed flagged entities.
@@ -806,6 +843,15 @@ export default {
   color: var(--danger);
   font-size: var(--text-sm);
   margin: var(--space-sm) 0 0;
+}
+/* Inline publish-in-flight row: spinner + message side by side (DsSpinner's
+  inline mode stacks children by default; dialogs want a single row). */
+.okf-dashboard__publish-busy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 0;
+  font-size: var(--text-sm);
 }
 .okf-build-pop {
   position: fixed;

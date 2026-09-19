@@ -6,6 +6,12 @@ reviewed after !388) · Status: **plan only — not started**
 Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 `mobile/genie_ai_mobile` into line with the Vue 3 web app.
 
+**Build contract:** the item-by-item specification lives in
+[`mobile-parity-spec.md`](mobile-parity-spec.md) (S1-S24, exact
+algorithms, strings, i18n keys, tests). This file is the tracker; the
+spec is what gets implemented. Binding constraint: the mobile app reuses
+the Vue app's backend adapters/APIs exclusively (spec §0).
+
 > v4 incorporates everything shipped on the web app during the
 > 2026-09-18/19 sessions (news pipeline, chart crash fixes, grains
 > expansion, history filter, multi-series table). The capability matrix
@@ -31,6 +37,7 @@ Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 | M11 | Data table: one column per series, date-aligned union rows, horizontal scroll | Primary-only rows | Medium |
 | M12 | CSV export: all series, date-aligned, unit headers, translated quality | **Done** — but mobile's export still assumes primary-only; must switch to the date-aligned multi-series shape | Medium |
 | M20 | Global series on/off toggles: one checkbox per commodity (color-dotted, short name, full name on hover) driving chart + table + CSV + Latest card together; stable per-series palette slots; last active series cannot be switched off | Absent (depends on M1) | Medium |
+| M21 | Shared short display names + legend layout: compact commodity names (country-tagged on collisions, e.g. "Beans (red) (SV)" vs "(NIC)") used IDENTICALLY by chart legend, toggles, Latest rows and table headers; legend top-left, compact markers; per-series palette slots survive filtering/toggling (no black-marker class bugs) | Absent (depends on M1) | Medium — implement together with M20 |
 | M13 | News: language-follows-locale, relevance gate, AI translation fallback (translate-then-persist `_tr<lang>`), wire dedupe, economía feed | **Done** (same endpoints) | — |
 | M14 | Caveat chips + About panel (source/coverage/estimation) | Banner only; About panel absent | Low |
 | M15 | Unit calibration explanations (quintal/PPI/index/SDG %-of-what incl. the 8-in-100-kg example) | Exists | — |
@@ -117,6 +124,12 @@ jrevillard.
 > on is tracked here and reflected in the matrix/phases, so the mobile
 > catch-up plan never drifts from the web app.
 
+- 2026-09-19 v4.1: shared short display names + legend layout (new M21,
+  pair with M20 in Phase C) — the web's marker-color regression (indexOf
+  on copied series → -1 → black markers) and legend-overlap fix are
+  captured as acceptance criteria: palette slots survive
+  filtering/toggling, and one display-name map feeds legend, toggles,
+  Latest rows and table headers.
 - 2026-09-19 v4: global series on/off toggles (new M20, Phase C) —
   checkbox chips driving chart + table + CSV + Latest card, stable
   palette slots, last-active guard. Plan now under a standing sync rule.

@@ -1,4 +1,4 @@
-# Flutter Mobile Parity — Comprehensive Work Plan (v3)
+# Flutter Mobile Parity — Comprehensive Work Plan (v4)
 
 Date: 2026-09-19 · Implementation branch: **`feat/agri-mobile-parity`**
 (branch off `feat/agri-external-data-apis` once MR !388 merges; own MR,
@@ -30,6 +30,7 @@ Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 | M10 | Category summary buttons as dashboard: acronym chips (CAB-GT, DAP-US…) with palette dots + full-description/price tooltips; headline number self-explaining tooltip | Rows were dropped for chips on web; mobile has neither — chips needed | Medium |
 | M11 | Data table: one column per series, date-aligned union rows, horizontal scroll | Primary-only rows | Medium |
 | M12 | CSV export: all series, date-aligned, unit headers, translated quality | **Done** — but mobile's export still assumes primary-only; must switch to the date-aligned multi-series shape | Medium |
+| M20 | Global series on/off toggles: one checkbox per commodity (color-dotted, short name, full name on hover) driving chart + table + CSV + Latest card together; stable per-series palette slots; last active series cannot be switched off | Absent (depends on M1) | Medium |
 | M13 | News: language-follows-locale, relevance gate, AI translation fallback (translate-then-persist `_tr<lang>`), wire dedupe, economía feed | **Done** (same endpoints) | — |
 | M14 | Caveat chips + About panel (source/coverage/estimation) | Banner only; About panel absent | Low |
 | M15 | Unit calibration explanations (quintal/PPI/index/SDG %-of-what incl. the 8-in-100-kg example) | Exists | — |
@@ -56,17 +57,21 @@ tooltip on the summary cards (M10's tooltip half).
 Acceptance: grains renders 15 color-matched series with legend;
 cropProtection renders dual axes; every Latest row self-explains.
 
-### Phase C — Interaction & filters (M4, M6, M9, M10 chips, M11, M12) · effort M/L
+### Phase C — Interaction & filters (M4, M6, M9, M10 chips, M11, M12, M20) · effort M/L
 Start-year dropdown (same contract as web: earliest→current−5, default
 2015, clamped; chart+table+CSV re-render; axis pinned to the selection).
-Pinch-zoom + drag-pan driving a `minX/maxX` window state (y re-scales to
-the visible window) with `[−] [+] [Fit]` buttons. Tooltip gains unit.
-Summary cards gain the acronym chips (dot + code, tooltip = description +
-price). Table: one column per series over date-aligned union rows,
+Global series toggles (M20): a wrap of checkbox chips above the chart —
+each toggle drives chart, table, CSV and the Latest card together;
+palette slots stay keyed to the series' original index so survivors keep
+their color; the last active series' checkbox disables. Pinch-zoom +
+drag-pan driving a `minX/maxX` window state (y re-scales to the visible
+window) with `[−] [+] [Fit]` buttons. Tooltip gains unit. Summary cards
+gain the acronym chips (dot + code, tooltip = description + price).
+Table: one column per ACTIVE series over date-aligned union rows,
 horizontally scrollable. CSV rebuilt on the same rows.
-Acceptance: filter + zoom compose (zoom respects the filtered range);
-chips and table match the web's information density without widening the
-cards.
+Acceptance: filter + toggles + zoom compose (zoom respects the filtered,
+toggled range); chips and table match the web's information density
+without widening the cards; toggling never leaves an empty chart.
 
 ### Phase D — Polish, parity verification, logging (M14, M17, M18, M19) · effort S
 About panel from meta; `debugPrint` load/axis lines matching the web's
@@ -108,6 +113,13 @@ jrevillard.
 
 ## 6. Change log (for pre-kickoff adjustments)
 
+> Standing rule (2026-09-19): EVERY web enhancement/change made from now
+> on is tracked here and reflected in the matrix/phases, so the mobile
+> catch-up plan never drifts from the web app.
+
+- 2026-09-19 v4: global series on/off toggles (new M20, Phase C) —
+  checkbox chips driving chart + table + CSV + Latest card, stable
+  palette slots, last-active guard. Plan now under a standing sync rule.
 - 2026-09-19 v3: session sync — 15-series grains (M1/M3), start-year
   filter (M4), acronym chips + self-explaining headline (M10), per-series
   tooltips (M7), date-aligned multi-series table + CSV (M11/M12), serve-path

@@ -1,6 +1,8 @@
 # Flutter Mobile Parity — Comprehensive Work Plan (v2)
 
-Date: 2026-09-19 · Branch: `feat/agri-external-data-apis` · Status: **plan only — not started**
+Date: 2026-09-19 · Implementation branch: **`feat/agri-mobile-parity`**
+(branch off `feat/agri-external-data-apis` once MR !388 merges; own MR,
+reviewed after !388) · Status: **plan only — not started**
 Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 `mobile/genie_ai_mobile` into line with the Vue 3 web app.
 

@@ -1462,6 +1462,7 @@ export default {
       publish: {
         body: "Publishing mints v{'{'}n{'}'} and stores bundle \"{'{'}file{'}'}\" in the document repository, superseding any previous zip. The new version is not serving until you Ingest it.",
         confirm: 'Publish',
+        inProgress: 'Publishing — exporting and transferring the bundle…',
         title: 'Publish'
       },
       readonly: 'READ ONLY',

@@ -146,7 +146,7 @@
               <tr>
                 <th>{{ $t('charts.market.period', 'Period') }}</th>
                 <th v-for="s in visibleSeries" :key="s.name" :title="`${s.name} (${s.unit || unit || 'n/a'})`">
-                  {{ shortSeriesName(s.name) }}
+                  {{ dispName(s.name) }}
                 </th>
                 <th>{{ $t('charts.caveats.quality', 'Quality') }}</th>
               </tr>
@@ -382,12 +382,31 @@ export default {
     activeSeries() {
       return this.series.filter((s) => !this.hiddenSeries.includes(s.name));
     },
+    /**
+     * Short display names per series (legend, toggles, table headers) —
+     * country-tagged only on base-name collisions, keeping 15-series
+     * legends readable and non-overlapping.
+     */
+    seriesDisplayNames() {
+      const bases = this.series.map((s) => this.baseSeriesName(s.name));
+      const counts = bases.reduce((m, b) => m.set(b, (m.get(b) || 0) + 1), new Map());
+      const out = {};
+      this.series.forEach((s, i) => {
+        let n = bases[i];
+        if ((counts.get(bases[i]) || 0) > 1) {
+          const tag = this.countryTag(s.name);
+          if (tag) n += ` (${tag})`;
+        }
+        out[s.name] = n;
+      });
+      return out;
+    },
     toggleItems() {
       const palette = this.seriesPalette;
       const activeCount = this.activeSeries.length;
       return this.series.map((s, i) => ({
         name: s.name,
-        shortName: this.shortSeriesName(s.name),
+        shortName: this.dispName(s.name),
         color: palette[i % palette.length],
         hidden: this.hiddenSeries.includes(s.name),
         lastActive: !this.hiddenSeries.includes(s.name) && activeCount === 1
@@ -565,7 +584,7 @@ export default {
         const origIdx = this.series.indexOf(s);
         return {
           name: s.name,
-          shortName: this.shortSeriesName(s.name),
+          shortName: this.dispName(s.name),
           value,
           color: palette[origIdx % palette.length],
           tip: `Latest month-end price of ${s.name} — ${value}${unitSuffix}`
@@ -801,7 +820,17 @@ export default {
           }
         },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 },
-        legend: { show: this.series.length > 1, labels: { colors: cssVars.mutedColor } }
+        legend: {
+          show: this.series.length > 1,
+          // Top-left, compact: 15-series bottom legends wrapped into an
+          // overlapping mess (found live 2026-09-19)
+          position: 'top',
+          horizontalAlign: 'left',
+          fontSize: '11px',
+          markers: { size: 4, strokeWidth: 0 },
+          itemMargin: { horizontal: 6, vertical: 2 },
+          labels: { colors: cssVars.mutedColor }
+        }
       };
     },
     chartSeries() {
@@ -826,14 +855,14 @@ export default {
 
       const out = [
         {
-          name: primary.name || this.commodityName,
+          name: this.dispName(primary.name) || this.commodityName,
           data: actual,
           unit: primary.unit || this.unit,
           colorIdx: primary.idx ?? 0
         },
         {
           name: this.$t('charts.caveats.estimatedSeries', '{name} (estimated)', {
-            name: primary.name || this.commodityName
+            name: this.dispName(primary.name) || this.commodityName
           }),
           data: estimated,
           unit: primary.unit || this.unit,
@@ -848,7 +877,7 @@ export default {
       // (every commodity the sources publish, user req 2026-09-19).
       for (const extra of this.visibleSeries.slice(1, 24)) {
         out.push({
-          name: extra.name,
+          name: this.dispName(extra.name),
           data: extra.data.map((d) => [ts(d.date), d.value]).filter((p) => p[0] !== null),
           unit: extra.unit || this.unit,
           colorIdx: extra.idx ?? 0
@@ -899,19 +928,39 @@ export default {
         this.hiddenSeries = [...this.hiddenSeries, name];
       }
     },
-    /** Compact commodity name for the multi-Latest lists: strips the
-     *  [regional]/[converted] tags, intl-benchmark parentheticals and the
-     *  market qualifier after the first comma. MUST live in methods — as a
-     *  computed it broke rendering under this app's Vue compat mode
-     *  (found live 2026-09-19: "Cannot convert object to primitive value"). */
-    shortSeriesName(name) {
+    /** Compact commodity name: strips the [regional]/[converted] tags,
+     *  benchmark parentheticals and the market qualifier after the first
+     *  comma; repairs an unbalanced paren left by the comma cut. MUST live
+     *  in methods — as a computed it broke rendering under this app's Vue
+     *  compat mode (found live 2026-09-19). */
+    baseSeriesName(name) {
       const raw = typeof name === 'string' ? name : '';
-      const short = raw
-        .replace(/\s*\[(regional|converted[^\]]*)\]/gi, '')
-        .replace(/\s*\((intl|international|fob|cif)[^)]*\)/gi, '')
-        .split(',')[0]
-        .trim();
-      return short || raw;
+      let s = raw.replace(/\s*\[(regional|converted[^\]]*)\]/gi, '');
+      s = s.replace(/\s*\([^)]*(?:intl|international|benchmark|fob|cif)[^)]*\)/gi, '');
+      s = s.split(',')[0].trim();
+      const opens = (s.match(/\(/g) || []).length;
+      const closes = (s.match(/\)/g) || []).length;
+      if (opens > closes) s = s.replace(/\s*\([^)]*$/, '').trim();
+      return s || raw;
+    },
+    /** Short origin tag for disambiguating duplicate commodity names. */
+    countryTag(fullName) {
+      const f = String(fullName || '');
+      if (/intl benchmark|US Gulf/i.test(f)) return 'intl';
+      if (/San Salvador|El Salvador/i.test(f)) return 'SV';
+      if (/Guatemala/i.test(f)) return 'GT';
+      if (/Nicaragua/i.test(f)) return 'NIC';
+      if (/Honduras/i.test(f)) return 'HN';
+      if (/Costa Rica/i.test(f)) return 'CR';
+      if (/Brazil/i.test(f)) return 'BR';
+      if (/Middle East/i.test(f)) return 'ME';
+      return '';
+    },
+    /** Display name for legend/toggles/table headers: short base, and a
+     *  country tag ONLY when two series share a base ("Beans (red) (SV)"
+     *  vs "Beans (red) (NIC)"). Full name stays on hover/title. */
+    dispName(name) {
+      return this.seriesDisplayNames[name] || this.baseSeriesName(name);
     },
     /** Human date for tooltips: daily, month-keyed and year-keyed periods. */
     formatTooltipDate(value) {

@@ -1,10 +1,21 @@
-# Mobile Parity — Build Specification (v1.0)
+# Mobile Parity — Build Specification (v1.1)
 
 Companion to `mobile-parity-workplan.md` (tracker) — THIS document is the
 build contract for `feat/agri-mobile-parity`. Every algorithm, threshold,
 string and i18n key is stated exactly; where behavior exists on the web
 the authoritative source file is cited. Target:
 `mobile/genie_ai_mobile` · Flutter 3.x · fl_chart (pinned in pubspec).
+
+## PRIME DIRECTIVE — visual parity
+
+The mobile screens must look **almost exactly the same** as the Vue 3
+app: same layout order, same card anatomy, same chip/table/legend/tooltip
+content and styling, same DS palette in light and dark. Where a Flutter
+widget differs technically from the web's (fl_chart vs ApexCharts, long-
+press vs hover, share sheet vs download), implement the CLOSEST
+equivalent and record it in the Deltas table (§13) — a behavioral or
+informational difference is NOT acceptable; a platform-mechanics
+difference is. Every S-item below states the web visual it mirrors.
 
 Reference web files (branch `feat/agri-external-data-apis`):
 - `components/gov-chat-backend/services/agri/agri-service.js` (envelope)
@@ -154,14 +165,15 @@ selected year. Bottom ticks: `interval` = months span ≤ 24 → 1 month,
 ≤ 120 → 1 year, else 5 years; label format `MMM yy` / `yyyy`
 (intl default locale).
 
-**S7 — Series rendering.** One `LineChartBarData` per active series:
-width 2, `isCurved: true` (smooth), dot radius 2 (dense: >120 visible
-points → 1.5), `dotStrokes` off. The estimated subset of the primary
+**S7 — Series rendering (mirror web stroke/fill/markers).** One
+`LineChartBarData` per active series: `strokeWidth` 4 (web), smooth
+curve, `BelowBarAreaData` ON at 15 % alpha of the series color (web
+`fill.opacity 0.15`), dots `FlDotData` radius 6 (dense >300 visible
+points → 2) with a 2 px stroke in the BACKGROUND color (web
+`strokeColors: background`). The estimated subset of the primary
 (`quality == 'estimated'`) renders as a SEPARATE bar with
-`dashArray: [6, 6]` and palette slot1; actual points of the same month
-window render in the primary's color. `belowBarArea` off (web uses 15 %
-fill; fl_chart area under 15 series becomes mud — parity target is
-readability, deviation recorded here).
+`dashArray: [6, 6]`, palette slot1 (warning), no area fill; actual
+points of the same window render in the primary's color.
 
 **S8 — Y axes.** Group active series by `unit` string. Per group compute
 `minVal`, `maxVal` over the group's VISIBLE window (after S6/S20 filters);
@@ -173,10 +185,12 @@ each with its unit as axis title. Tick labels: currency units
 (unit contains `USD`, case-insensitive) get a `$` prefix; `%` units a
 `%` suffix; others bare. (Web: MarketPriceChart.vue `axisFor`.)
 
-**S9 — Legend.** Custom chip row ABOVE the chart (fl_chart has none):
-color dot (6 px) + `displayName`, wrapping, font 11. Tapping a legend
-chip toggles that series (same handler as S15) — one control surface,
-two entries.
+**S9 — Legend (mirror web legend).** Positioned top-left ABOVE the plot:
+color marker (~4 px rounded) + `displayName`, compact horizontal wrapping
+(equivalent of web `fontSize 11px`, `itemMargin 6/2`, `markerSize 4`),
+label color = theme muted. Tapping a legend entry toggles that series
+(same handler as S15/S16) — mirroring web behavior where the legend and
+the checkbox row control the same state.
 
 **S10 — Height.** `chartHeight = max(320, 240 + 45 * activeSeriesCount)`
 logical pixels.
@@ -324,7 +338,26 @@ caveats.aboutData / .source / .coverage / .estimation / .attribution  (port if a
 On-screen language selector stays EN/ES (flavor-driven) — unchanged.
 Other locale files stay key-complete (CI + country reuse).
 
-## 13. Widget tests (must ship with the code)
+## 13. Visual parity contract & Deltas
+
+**Rule:** for every screen, a side-by-side against the Vue app (same
+category, same filters) must show the SAME: section order (caveats →
+summary cards → predictions button → type masters → series toggles →
+Price History + From-year → chart → Data Table + Export → last-updated),
+card anatomy (sparkline top-left, headline+trend right, chips full-width
+under the sparkline, 3-col grid >4 chips), chip/checkbox/table styling,
+colors per series, and light/dark rendering via the app's DS theme.
+
+**Allowed Deltas (platform mechanics only — anything else is a bug):**
+
+| Web | Mobile | Why |
+|---|---|---|
+| Mouse hover tooltips | Long-press tooltips / touch-spots | Touch platform |
+| Mouse-wheel zoom + toolbar buttons | Pinch-zoom + drag + [−][+][Fit] buttons | Same buttons; no wheel |
+| Browser CSV download | System share sheet (same file) | No direct downloads on mobile |
+| ApexCharts rendering | fl_chart rendering | Closest-equivalent stroke/fill/markers per S7 |
+
+## 14. Widget tests (must ship with the code)
 
 1. Data mapping: 3-series/2-unit/1-estimated fixture → 1:1 (S1).
 2. Display names: the 15 grains names → the exact outputs in §2.
@@ -336,9 +369,9 @@ Other locale files stay key-complete (CI + country reuse).
 8. Chips: `Maize (US #2, US Gulf intl benchmark)` → `MAI-US`; duplicate
    codes get the second-word initial (S21).
 
-## 14. Definition of done (binding)
+## 15. Definition of done (binding)
 
-- All S-items implemented; §13 tests green; `flutter analyze` clean;
+- All S-items implemented; §14 tests green; `flutter analyze` clean;
   `dart format` clean.
 - **Reuse mandate (§0) holds: zero upstream calls, zero data derivation
   in Dart** — grep-review confirms the app only ever calls the five

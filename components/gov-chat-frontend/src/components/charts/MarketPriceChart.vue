@@ -419,7 +419,10 @@ export default {
     },
     visibleSeries() {
       const cutoff = `${this.startYear}-01-01`;
-      return this.activeSeries.map((s) => ({ ...s, data: (s.data || []).filter((p) => p.date >= cutoff) }));
+      // `idx` = the series' original slot in this.series — the spread COPY
+      // would break indexOf()-based color lookup (found live 2026-09-19:
+      // indexOf on copies returned -1 → undefined color → black markers).
+      return this.activeSeries.map((s, idx) => ({ ...s, idx, data: (s.data || []).filter((p) => p.date >= cutoff) }));
     },
     categoryConfig() {
       const configs = {
@@ -755,12 +758,13 @@ export default {
         // Palette is shared with the multi-commodity Latest card so chips
         // and lines stay color-matched. Per-series colorIdx keeps a series'
         // color STABLE when siblings are toggled off; the dashed estimated
-        // overlay keeps the warning color.
-        colors: this.chartSeries.map((s) =>
-          s.isEstimate
-            ? cssVars.warningColor || 'var(--warning)'
-            : this.seriesPalette[(s.colorIdx || 0) % this.seriesPalette.length]
-        ),
+        // overlay keeps the warning color. Index is normalized defensively —
+        // a single undefined entry blanks every marker to black.
+        colors: this.chartSeries.map((s) => {
+          if (s.isEstimate) return cssVars.warningColor || 'var(--warning)';
+          const i = Number.isInteger(s.colorIdx) && s.colorIdx >= 0 ? s.colorIdx : 0;
+          return this.seriesPalette[i % this.seriesPalette.length];
+        }),
         // Solid fill (light opacity) instead of gradient — the gradient
         // version made the line stroke appear to fade because ApexCharts
         // applies the fill opacity to the line border as well.
@@ -825,7 +829,7 @@ export default {
           name: primary.name || this.commodityName,
           data: actual,
           unit: primary.unit || this.unit,
-          colorIdx: this.series.indexOf(primary)
+          colorIdx: primary.idx ?? 0
         },
         {
           name: this.$t('charts.caveats.estimatedSeries', '{name} (estimated)', {
@@ -847,7 +851,7 @@ export default {
           name: extra.name,
           data: extra.data.map((d) => [ts(d.date), d.value]).filter((p) => p[0] !== null),
           unit: extra.unit || this.unit,
-          colorIdx: this.series.indexOf(extra)
+          colorIdx: extra.idx ?? 0
         });
       }
       return out;

@@ -637,6 +637,7 @@ export default {
       latest: 'Ba ho feta',
       trend: 'Mokhoa',
       priceHistory: 'Histori ya Theko',
+      startYear: 'From',
       dataTable: 'Tafole ya Data',
       period: 'Period',
       exportCsv: 'Export CSV',

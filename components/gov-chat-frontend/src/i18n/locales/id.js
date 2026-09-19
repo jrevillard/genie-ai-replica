@@ -644,6 +644,7 @@ export default {
       latest: 'Terbaru',
       trend: 'Tren',
       priceHistory: 'Riwayat Harga',
+      startYear: 'From',
       dataTable: 'Tabel Data',
       period: 'Period',
       exportCsv: 'Export CSV',

@@ -660,6 +660,7 @@ export default {
       latest: 'Último',
       trend: 'Tendencia',
       priceHistory: 'Historial de Precios',
+      startYear: 'Desde',
       dataTable: 'Tabla de Datos',
       period: 'Periodo',
       exportCsv: 'Exportar CSV',

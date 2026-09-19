@@ -643,6 +643,7 @@ export default {
       latest: 'الأحدث',
       trend: 'الاتجاه',
       priceHistory: 'سجل الأسعار',
+      startYear: 'From',
       dataTable: 'جدول البيانات',
       period: 'Period',
       exportCsv: 'Export CSV',

@@ -642,6 +642,7 @@ export default {
       latest: 'Ya hivi karibuni',
       trend: 'Mwenendo',
       priceHistory: 'Historia ya Bei',
+      startYear: 'From',
       dataTable: 'Jedwali la Data',
       period: 'Period',
       exportCsv: 'Export CSV',

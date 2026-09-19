@@ -642,6 +642,7 @@ export default {
       latest: 'ล่าสุด',
       trend: 'แนวโน้ม',
       priceHistory: 'ประวัติราคา',
+      startYear: 'From',
       dataTable: 'ตารางข้อมูล',
       period: 'Period',
       exportCsv: 'Export CSV',

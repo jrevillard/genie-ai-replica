@@ -639,6 +639,7 @@ export default {
       latest: '最新',
       trend: '趋势',
       priceHistory: '价格历史',
+      startYear: 'From',
       dataTable: '数据表',
       period: 'Period',
       exportCsv: 'Export CSV',

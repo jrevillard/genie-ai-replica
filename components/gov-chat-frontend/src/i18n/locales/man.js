@@ -632,6 +632,7 @@ export default {
       latest: 'Labato',
       trend: 'Sira',
       priceHistory: 'Jago ɲɛnɛ',
+      startYear: 'From',
       dataTable: 'Dɛta tabali',
       period: 'Period',
       exportCsv: 'Export CSV',

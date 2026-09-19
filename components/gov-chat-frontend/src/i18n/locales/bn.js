@@ -633,6 +633,7 @@ export default {
       latest: 'সর্বশেষ',
       trend: 'প্রবণতা',
       priceHistory: 'মূল্যের ইতিহাস',
+      startYear: 'From',
       dataTable: 'ডেটা টেবিল',
       period: 'Period',
       exportCsv: 'Export CSV',

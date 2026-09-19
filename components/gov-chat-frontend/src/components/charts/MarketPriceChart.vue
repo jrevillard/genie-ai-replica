@@ -85,8 +85,19 @@
       </DsButton>
 
       <!-- Price History Chart (dense series scroll horizontally — every
-           data point stays neatly spaced instead of crowding) -->
-      <h3 class="section-title">{{ $t('charts.market.priceHistory', 'Price History') }}</h3>
+           data point stays neatly spaced instead of crowding). The start-year
+           filter re-renders chart, table and CSV from the chosen year. -->
+      <div class="section-header">
+        <h3 class="section-title">{{ $t('charts.market.priceHistory', 'Price History') }}</h3>
+        <div class="history-controls">
+          <label class="history-controls__label" for="start-year-select">{{
+            $t('charts.market.startYear', 'From')
+          }}</label>
+          <DsSelect id="start-year-select" v-model="startYear" class="history-controls__select">
+            <option v-for="year in startYearOptions" :key="year" :value="year">{{ year }}</option>
+          </DsSelect>
+        </div>
+      </div>
       <DsCard variant="elevated" padding="lg">
         <div ref="chartScroll" class="chart-scroll">
           <apexchart
@@ -303,6 +314,7 @@ export default {
       error: null,
       refreshTimer: null,
       scrollWidth: 760, // measured from the chart container on mount/resize
+      startYear: 2015, // history filter (user req 2026-09-19); clamped to data
       showAbout: false,
       showPredictionDialog: false,
       showResponseDialog: false,
@@ -335,7 +347,35 @@ export default {
       return (this.envelope && this.envelope.data && this.envelope.data.series) || [];
     },
     primarySeries() {
-      return this.series[0] || { data: [], name: '', unit: '' };
+      return this.visibleSeries[0] || { data: [], name: '', unit: '' };
+    },
+    /**
+     * Start-year filter (user req 2026-09-19): everything rendered — chart,
+     * table, CSV — flows through visibleSeries. Options span the data set's
+     * earliest year through (current year − 5); default 2015, clamped when
+     * the data starts later.
+     */
+    earliestDataYear() {
+      let min = null;
+      for (const s of this.series) {
+        for (const p of s.data || []) {
+          const y = Number(String(p.date || '').slice(0, 4));
+          if (Number.isFinite(y) && (min === null || y < min)) min = y;
+        }
+      }
+      return min || new Date().getFullYear() - 5;
+    },
+    startYearOptions() {
+      const first = this.earliestDataYear;
+      const last = new Date().getFullYear() - 5;
+      const years = [];
+      for (let y = Math.max(first, last); y >= first; y -= 1) years.push(y);
+      if (years.length === 0) years.push(first);
+      return years;
+    },
+    visibleSeries() {
+      const cutoff = `${this.startYear}-01-01`;
+      return this.series.map((s) => ({ ...s, data: (s.data || []).filter((p) => p.date >= cutoff) }));
     },
     categoryConfig() {
       const configs = {
@@ -727,6 +767,11 @@ export default {
       this.newsGlobal = [];
       this.newsLocal = [];
       if (this.newsPickerOpen) this.loadNews();
+    },
+    // Keep the history filter inside the data set's real range once the
+    // envelope loads (e.g. cropProtection starts 2024 — default 2015 clamps).
+    earliestDataYear(year) {
+      if (this.startYear < year) this.startYear = year;
     }
   },
   mounted() {
@@ -834,7 +879,7 @@ export default {
       };
       const header = [
         this.$t('charts.market.period', 'Period'),
-        ...this.series.map((s) => `${s.name || this.commodityName}${unit}`),
+        ...this.visibleSeries.map((s) => `${s.name || this.commodityName}${unit}`),
         this.$t('charts.caveats.quality', 'Quality')
       ];
       const lines = [header.map(esc).join(',')];
@@ -842,7 +887,7 @@ export default {
         lines.push(
           [
             this.timeSeries[i].date,
-            ...this.series.map((s) => (s.data[i] ? s.data[i].value : '')),
+            ...this.visibleSeries.map((s) => (s.data[i] ? s.data[i].value : '')),
             this.timeSeries[i].quality === 'estimated'
               ? this.$t('charts.caveats.estimated', 'Estimated')
               : this.$t('charts.caveats.actual', 'Actual')
@@ -1042,6 +1087,22 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
+}
+
+/* Start-year filter beside the Price History title */
+.history-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.history-controls__label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.history-controls__select {
+  min-width: 84px;
 }
 
 /* Multi-commodity Latest list — one row per plotted series */

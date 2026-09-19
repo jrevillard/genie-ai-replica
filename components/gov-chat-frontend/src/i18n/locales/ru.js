@@ -642,6 +642,7 @@ export default {
       latest: 'Последний',
       trend: 'Тренд',
       priceHistory: 'История цен',
+      startYear: 'From',
       dataTable: 'Таблица данных',
       period: 'Period',
       exportCsv: 'Export CSV',

@@ -223,6 +223,16 @@ surface — chart lines, legend, Latest card, table columns, CSV — derives
 from `activeSeries = series.where(!hidden)` in original order. No
 surface reads the raw series list directly.
 
+**S25 — Commodity-TYPE masters.** Above the per-series chips, one
+master checkbox per commodity FAMILY with ≥2 varieties (family = first
+word of `baseSeriesName`: Beans, Maize, Rice, Sorghum, Wheat,
+Tomatoes…). Label `Family (count)` e.g. `Beans (5)`. States: checked =
+every member active; unchecked = every member hidden; indeterminate =
+mixed (tristate). Tap: all-on → hide all members (DISABLED when that
+would empty the chart, i.e. no active series outside the family);
+otherwise → show all members. Masters derive from the same
+`hiddenSeries` state as S16 — no separate state.
+
 ## 7. Start-year filter (Phase C)
 
 **S17 — Options.** `earliestDataYear` = min year over ALL series' points
@@ -258,8 +268,11 @@ the multi-series rows; current mobile export is primary-only).
 
 ## 9. Summary-card dashboard (Phase C)
 
-**S21 — Acronym chips.** Cards show the primary headline + trend pill
-(unchanged) plus chips for NON-primary series (up to 23):
+**S21 — Acronym chips.** Cards show the primary headline + trend pill;
+BELOW the sparkline row, a left-aligned full-width chip row covers **ALL
+series including the primary** (Livestock must show chicken AND beef;
+primary chip gets an accent border). Layout: flex-wrap normally; a
+**3-column grid** when >4 chips (grains) so the card never grows tall.
 `commodityCode(name)`:
   1. base = `baseSeriesName(name)`; code = first word of base, first 3
      chars, uppercase (min 3, pad `?`).
@@ -269,12 +282,15 @@ the multi-series rows; current mobile export is primary-only).
   3. Duplicate codes in one category get a second-word initial:
      `CODE-X`.
 Chip render: 0.65rem-equivalent text, 1 px border, dot colored
-`palette[(seriesOriginalIndex) % 5]`, `cursor: help` equivalent
-(long-press tooltip). Tooltip: `{full series name} — {latest value}
-{unit}`.
+`palette[(seriesOriginalIndex) % 5]`, long-press tooltip.
+Tooltip: `{full series name} — {latest value} {unit}`.
 
 **S22 — Headline tooltip.** The card's big number gets the S12 template
 with the PRIMARY series.
+
+**S22bis — Card order (fixed):** 1 Maize/Beans/Grains, 2 Fruits & Veg,
+3 Livestock, 4 Aquaculture, 5 Apiary & Honey, 6 Fertilizer,
+7 Crop Protection, 8 Harvest & Storage.
 
 ## 10. About panel & caveats (Phase D)
 

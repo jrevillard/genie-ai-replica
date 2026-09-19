@@ -37,6 +37,9 @@ the Vue app's backend adapters/APIs exclusively (spec §0).
 | M11 | Data table: one column per series, date-aligned union rows, horizontal scroll | Primary-only rows | Medium |
 | M12 | CSV export: all series, date-aligned, unit headers, translated quality | **Done** — but mobile's export still assumes primary-only; must switch to the date-aligned multi-series shape | Medium |
 | M20 | Global series on/off toggles: one checkbox per commodity (color-dotted, short name, full name on hover) driving chart + table + CSV + Latest card together; stable per-series palette slots; last active series cannot be switched off | Absent (depends on M1) | Medium |
+| M22 | Card dashboard layout: chips for ALL series (incl. primary — Livestock shows chicken AND beef) left-aligned under the sparkline; 3-column grid when >4 chips; primary chip accent-bordered | Chips beside value; primary absent | Medium |
+| M23 | Commodity-TYPE master toggles in dialogs (Beans (5), Maize (4)…): tristate family switch above per-series toggles, empty-chart guard | Absent (depends on M20) | Medium |
+| M24 | Card order: grains, veg, livestock, aquaculture, apiary, fertilizer, crop protection, harvest | Order differs | Trivial |
 | M21 | Shared short display names + legend layout: compact commodity names (country-tagged on collisions, e.g. "Beans (red) (SV)" vs "(NIC)") used IDENTICALLY by chart legend, toggles, Latest rows and table headers; legend top-left, compact markers; per-series palette slots survive filtering/toggling (no black-marker class bugs) | Absent (depends on M1) | Medium — implement together with M20 |
 | M13 | News: language-follows-locale, relevance gate, AI translation fallback (translate-then-persist `_tr<lang>`), wire dedupe, economía feed | **Done** (same endpoints) | — |
 | M14 | Caveat chips + About panel (source/coverage/estimation) | Banner only; About panel absent | Low |
@@ -124,6 +127,8 @@ jrevillard.
 > on is tracked here and reflected in the matrix/phases, so the mobile
 > catch-up plan never drifts from the web app.
 
+- 2026-09-19 v4.2: card dashboard layout + all-series chips (M22),
+  commodity-TYPE master toggles (M23, spec S25), fixed card order (M24).
 - 2026-09-19 v4.1: shared short display names + legend layout (new M21,
   pair with M20 in Phase C) — the web's marker-color regression (indexOf
   on copied series → -1 → black markers) and legend-overlap fix are

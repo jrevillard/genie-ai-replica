@@ -224,5 +224,29 @@ void main() {
         expect(actionFired, isTrue);
       });
     });
+    group('close button', () {
+      testWidgets('rendered and wired when onClose is set', (tester) async {
+        var closed = 0;
+        await tester.pumpWidget(
+          testApp(
+            DsModal(
+              title: 'T',
+              content: const Text('B'),
+              onClose: () => closed++,
+            ),
+          ),
+        );
+        await tester.tap(find.byKey(const ValueKey('ds-modal-close')));
+        await tester.pump();
+        expect(closed, 1);
+      });
+
+      testWidgets('absent without onClose', (tester) async {
+        await tester.pumpWidget(
+          testApp(DsModal(title: 'T', content: const Text('B'))),
+        );
+        expect(find.byKey(const ValueKey('ds-modal-close')), findsNothing);
+      });
+    });
   });
 }

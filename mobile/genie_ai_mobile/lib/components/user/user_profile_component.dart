@@ -916,14 +916,25 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
       '[UI] build() called. _isLoading: $_isLoading, _errorMessage: $_errorMessage',
     );
 
+    // Loading / error states keep the app bar so the user can always go back.
+    final PreferredSizeWidget statusAppBar = AppBar(
+      title: Text(tr('userProfile.title')),
+      backgroundColor: tokens.surface,
+      foregroundColor: tokens.fg,
+    );
+
     if (_isLoading) {
       debugPrint('[UI] Showing loading indicator');
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: statusAppBar,
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (_errorMessage != null) {
       debugPrint('[UI] Showing error screen: $_errorMessage');
       return Scaffold(
+        appBar: statusAppBar,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

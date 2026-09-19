@@ -58,6 +58,17 @@ dependencies:
   # App Package Info (Version, Build Number)
   package_info_plus: ^9.0.0
 
+  # Push notifications (FCM) — Android-only for now
+  firebase_core: ^4.7.0
+  firebase_messaging: ^16.2.0
+  flutter_local_notifications: ^21.0.0
+
+  # Climate features: device location -> district (alert banner, {{location}}
+  # prompts) and the field-delineation / flood-extent map overlay
+  geolocator: ^14.0.2
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+
   # Structured logging for auth diagnostics
   talker: ^4.5.0
   talker_flutter: ^4.5.0

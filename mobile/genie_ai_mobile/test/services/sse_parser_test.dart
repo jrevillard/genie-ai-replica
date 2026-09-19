@@ -2,6 +2,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
 
 void main() {
+  group('SseParser metadata raw payload', () {
+    test('keeps climate GeoJSON fields for the map overlay', () {
+      final parser = SseParser();
+      final events = parser.parseChunk(
+        'data: {"type":"metadata","source_documents":[],"confidence_score":0.5,'
+        '"is_grounded":true,"field_delineation":{"field_count":2,'
+        '"fields_geojson":{"type":"FeatureCollection","features":[{}]}}}\n\n',
+      );
+      final meta = events.single as SseMetadataEvent;
+      expect(meta.raw.containsKey('type'), isFalse);
+      expect(meta.raw['field_delineation']['field_count'], 2);
+      expect(meta.raw['is_grounded'], isTrue);
+      expect(meta.isGrounded, isTrue);
+    });
+  });
+
   group('SseParser', () {
     late SseParser parser;
 

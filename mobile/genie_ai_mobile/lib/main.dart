@@ -14,6 +14,10 @@ import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart'; // ADDED
 import 'package:genie_ai_mobile/services/fallback_localizations.dart';
+import 'package:genie_ai_mobile/services/notification_service.dart';
+import 'package:genie_ai_mobile/services/push_notification_service.dart';
+import 'package:genie_ai_mobile/services/location_service.dart';
+import 'package:genie_ai_mobile/components/chat/crop_alert_banner.dart';
 import 'package:genie_ai_mobile/services/auth/auth_providers.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 
@@ -63,6 +67,10 @@ void main() async {
   // Initialize Connectivity (Online/Offline)
   await ConnectivityService().init();
 
+  // Initialize FCM push notifications (Android/iOS only; never throws —
+  // the app runs without push if Firebase is unavailable).
+  await PushNotificationService.init();
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -98,7 +106,20 @@ class _MyAppState extends ConsumerState<MyApp> {
       },
     );
 
+    // A district change (geolocation resolved after login) re-targets the
+    // push registration to the new district.
+    LocationService().addListener(_onDistrictChanged);
+
     _loadAppConfiguration();
+  }
+
+  void _onDistrictChanged() {
+    if (ref.read(authProvider).status != AuthStatus.authenticated) return;
+    PushNotificationService.registerDevice(
+      client: ref.read(authenticatedHttpClientProvider),
+      backendUrl: ref.read(backendUrlProvider),
+      district: LocationService().district,
+    );
   }
 
   Future<void> _handleIncomingLink(Uri uri) async {
@@ -168,6 +189,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void dispose() {
     _appLinkSubscription?.cancel();
+    LocationService().removeListener(_onDistrictChanged);
     super.dispose();
   }
 
@@ -206,19 +228,41 @@ class _MyAppState extends ConsumerState<MyApp> {
     ThemeManager().toggleTheme();
   }
 
-  void _onLogout() {
-    ref.read(authProvider.notifier).logout();
+  Future<void> _onLogout() async {
+    // Stop alerts for this account before the bearer token is revoked.
+    await PushNotificationService.unregisterDevice(
+      client: ref.read(authenticatedHttpClientProvider),
+      backendUrl: ref.read(backendUrlProvider),
+    );
+    await ref.read(authProvider.notifier).logout();
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
+    // Once authenticated: resolve the user's district (device location ->
+    // nearest district, else the deployment default) and register the FCM
+    // token for it. Both are idempotent across rebuilds.
+    if (authState.status == AuthStatus.authenticated) {
+      final client = ref.read(authenticatedHttpClientProvider);
+      final backendUrl = ref.read(backendUrlProvider);
+      LocationService()
+          .init(client: client, backendUrl: backendUrl)
+          .then(
+            (_) => PushNotificationService.registerDevice(
+              client: client,
+              backendUrl: backendUrl,
+              district: LocationService().district,
+            ),
+          );
+    }
+
     return AnimatedBuilder(
       animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
         return MaterialApp(
-          title: 'Genie AI',
+          title: GenieAiConfig.title,
           debugShowCheckedModeBanner: false,
           locale: I18nService().currentLocale,
           supportedLocales: I18nService().supportedLanguages.keys.map(
@@ -297,6 +341,9 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final GlobalKey<ChatBotComponentState> _chatBotKey =
       GlobalKey<ChatBotComponentState>();
+  // The binder tabs live inside this Scaffold's body, so they cannot reach it
+  // through Scaffold.of(context) from this State's context; use a key instead.
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   List<dynamic> _currentRelatedDocuments = [];
 
@@ -304,11 +351,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   StreamSubscription<bool>? _connectivitySubscription;
   bool _isOnline = true;
 
+  // In-app toasts (save/feedback results, FCM foreground alerts). Nothing
+  // rendered NotificationService events before, so every success/error
+  // message was silently dropped.
+  StreamSubscription<NotificationEvent>? _toastSubscription;
+
   @override
   void initState() {
     super.initState();
     // 1. Observe lifecycle for App Resume -> Recheck Connectivity
     WidgetsBinding.instance.addObserver(this);
+
+    _toastSubscription = NotificationService.events.listen(_showToast);
 
     // 2. Initialize current state
     _isOnline = ConnectivityService().isOnline;
@@ -337,7 +391,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _connectivitySubscription?.cancel();
+    _toastSubscription?.cancel();
     super.dispose();
+  }
+
+  void _showToast(NotificationEvent event) {
+    if (!mounted) return;
+    final tokens = ThemeManager().tokens;
+    final Color color = switch (event.type) {
+      NotificationType.success => tokens.success,
+      NotificationType.error => tokens.danger,
+      NotificationType.warning => tokens.warning,
+      NotificationType.info => tokens.info,
+    };
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(event.message),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: event.duration),
+        ),
+      );
   }
 
   @override
@@ -382,6 +458,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         : ThemeManager().tokens.muted;
 
     return Scaffold(
+      key: _scaffoldKey,
       // Drawer is handled via Scaffold callbacks but triggered by BinderTabs
       // DISABLE DRAWER WHEN OFFLINE: Setting to null prevents opening via gesture
       drawer: (isWideScreen || !_isOnline)
@@ -410,6 +487,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   user: widget.user,
                   onLogout: widget.onLogout,
                   showRightDrawerButton: !isWideScreen,
+                  // Logo / brand tap leaves the conversation and returns to
+                  // the dashboard (save / discard prompt if unsaved) - web parity.
+                  onBrandTap: () => _chatBotKey.currentState?.goHome(),
                 ),
                 Expanded(
                   child: Row(
@@ -439,17 +519,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           ignoring: !_isOnline,
                           child: Opacity(
                             opacity: _isOnline ? 1.0 : 0.5,
-                            child: KeyedSubtree(
-                              key: const Key('main_chat_bot'),
-                              child: ChatBotComponent(
-                                key: _chatBotKey,
-                                userId: widget.user['id'] ?? widget.user['_id'],
-                                onRefreshSidebar: _refreshSidebar,
-                                onRelatedDocumentsUpdate:
-                                    _updateRelatedDocuments,
-                                httpClient: widget.httpClient,
-                                streamBaseUrl: widget.streamBaseUrl,
-                              ),
+                            child: Column(
+                              children: [
+                                // Early-warning banner + notices (web parity)
+                                if (widget.httpClient != null &&
+                                    widget.streamBaseUrl != null)
+                                  CropAlertBanner(
+                                    client: widget.httpClient!,
+                                    backendUrl: widget.streamBaseUrl!,
+                                  ),
+                                Expanded(
+                                  child: KeyedSubtree(
+                                    key: const Key('main_chat_bot'),
+                                    child: ChatBotComponent(
+                                      key: _chatBotKey,
+                                      userId:
+                                          widget.user['id'] ??
+                                          widget.user['_id'],
+                                      onRefreshSidebar: _refreshSidebar,
+                                      onRelatedDocumentsUpdate:
+                                          _updateRelatedDocuments,
+                                      httpClient: widget.httpClient,
+                                      streamBaseUrl: widget.streamBaseUrl,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -480,7 +575,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   isLeft: true,
                   color: _isOnline ? binderColor : ThemeManager().tokens.muted,
                   onTap: _isOnline
-                      ? () => Scaffold.of(context).openDrawer()
+                      ? () => _scaffoldKey.currentState?.openDrawer()
                       : () {
                           debugPrint("Drawer disabled (Offline)");
                         },
@@ -495,7 +590,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 child: _BinderTab(
                   isLeft: false,
                   color: binderColor,
-                  onTap: () => Scaffold.of(context).openEndDrawer(),
+                  onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
                 ),
               ),
           ],

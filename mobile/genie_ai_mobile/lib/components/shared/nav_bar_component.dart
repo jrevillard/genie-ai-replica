@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
+import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
@@ -14,11 +15,15 @@ class NavBarComponent extends StatelessWidget {
   final VoidCallback onLogout;
   final bool showRightDrawerButton;
 
+  /// Called when the logo or title is tapped (return to the dashboard).
+  final VoidCallback? onBrandTap;
+
   const NavBarComponent({
     super.key,
     required this.user,
     required this.onLogout,
     this.showRightDrawerButton = false,
+    this.onBrandTap,
   });
 
   // FIX: Made async because toggleUserOfflineMode returns Future<bool>
@@ -57,31 +62,55 @@ class NavBarComponent extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: DsSpacing.md),
           child: Row(
             children: [
-              // 1. LOGO
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-                    ? SvgPicture.asset(
-                        GenieAiConfig.iconPath,
-                        fit: BoxFit.contain,
-                      )
-                    : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
-              ),
-              const SizedBox(width: DsSpacing.md),
-
-              // 2. TITLE
-              Text(
-                GenieAiConfig.title,
-                style: TextStyle(
-                  color: contentColor,
-                  fontWeight: FontWeight.w900, // Extra Bold
-                  fontSize: ThemeManager().tokens.textLg,
-                  letterSpacing: 1.5,
+              // 1. + 2. BRAND (logo + title) — tapping returns to the
+              // dashboard, like the web navbar's brand link.
+              Expanded(
+                child: InkWell(
+                  key: const Key('navbar_brand'),
+                  onTap: onBrandTap,
+                  borderRadius: BorderRadius.circular(DsRadii.md),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child:
+                            GenieAiConfig.iconPath.toLowerCase().endsWith(
+                              '.svg',
+                            )
+                            ? SvgPicture.asset(
+                                GenieAiConfig.iconPath,
+                                fit: BoxFit.contain,
+                              )
+                            : Image.asset(
+                                GenieAiConfig.iconPath,
+                                fit: BoxFit.contain,
+                              ),
+                      ),
+                      const SizedBox(width: DsSpacing.md),
+                      // TITLE — responsive: takes the remaining width and
+                      // scales the text down (never up) so long deployment
+                      // names ("MEWA Bangladesh") fit any screen width.
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            GenieAiConfig.title,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: contentColor,
+                              fontWeight: FontWeight.w900, // Extra Bold
+                              fontSize: ThemeManager().tokens.textLg,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-              const Spacer(),
 
               // 3. CONNECTIVITY (Small Dot/Icon)
               StreamBuilder<bool>(

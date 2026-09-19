@@ -7,13 +7,18 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
+import 'package:genie_ai_mobile/components/shared/inline_modal.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
+import 'package:genie_ai_mobile/components/chat/export_chat_dialog.dart';
+import 'package:genie_ai_mobile/components/chat/map_view_screen.dart';
+import 'package:genie_ai_mobile/components/chat/save_conversation_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
+import 'package:genie_ai_mobile/services/location_service.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
@@ -24,6 +29,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
+import 'package:genie_ai_mobile/utils/geo_utils.dart';
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -68,9 +74,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   http.Client? get httpClient => widget.httpClient;
   String? get streamBaseUrl => widget.streamBaseUrl;
 
-  // Dirty State Tracking
-  int _lastSavedMessageCount = 0;
-
   // Inputs
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _inputController = TextEditingController();
@@ -93,9 +96,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _showNewChatConfirm = false;
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
-  bool _showExportDialog = false;
-  String _exportFilename = "";
+  bool _isSaving = false;
+  // Save / export prompts are hosted INLINE over the chat area (InlineModal),
+  // not as routes, so the nav bar stays live while they are open (web parity:
+  // the brand tap leaves the conversation, discarding the prompt).
   bool _showSaveDialog = false;
+  bool _showExportDialog = false;
+  String _exportInitialName = '';
+  // "Save first" from the new-chat prompt: start a fresh chat once saved.
+  bool _startNewAfterSave = false;
   final TextEditingController _titleController = TextEditingController();
 
   // Quick Help Overlay Visibility
@@ -108,11 +117,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   Map<String, dynamic>? _cachedConfig;
   String _currentLocale = 'en';
 
+  /// Web parity (`hasUnsavedChanges`): a new conversation is dirty once the
+  /// user has said anything; a saved one when an unsaved user message or an
+  /// unsaved answered assistant message exists. Welcome / map-echo bubbles
+  /// never count.
   bool get _hasUnsavedChanges {
     if (_currentConversationId == null) {
-      return _messages.length > 1;
+      return _messages.any((m) => m['role'] == 'user');
     }
-    return _messages.length > _lastSavedMessageCount;
+    return _messages.any(
+      (m) =>
+          m['isSaved'] != true &&
+          (m['role'] == 'user' ||
+              (m['role'] == 'assistant' &&
+                  (m['queryId']?.toString().isNotEmpty ?? false))),
+    );
   }
 
   @override
@@ -133,7 +152,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': true,
     });
-    _lastSavedMessageCount = 1;
   }
 
   @override
@@ -207,7 +225,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         }
         // Safe parsing: use map access with defaults to prevent null crashes
         final appearance = btn['appearance'] as Map<String, dynamic>?;
-        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
+        final iconMap =
+            (btn['icon'] ?? appearance?['icon']) as Map<String, dynamic>?;
         final iconPath = iconMap?['value']?.toString() ?? '';
 
         final String localIconAsset = iconPath.isNotEmpty
@@ -337,7 +356,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _conversationTitle = conv['title'] ?? tr('chatbot.newChatTitle');
         _titleController.text = _conversationTitle;
         _messages = loadedMessages;
-        _lastSavedMessageCount = loadedMessages.length;
       });
 
       List<dynamic> accumulatedDocs = [];
@@ -362,12 +380,67 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
   }
 
+  /// Brand tap: leave the current conversation and return to the dashboard
+  /// (quick-help overlay). No-op when already there; otherwise the same
+  /// save / discard / cancel prompt as "new chat" (web parity).
+  void goHome() {
+    // A save / export prompt is open: the brand tap leaves the conversation
+    // WITHOUT saving and without a second prompt (web: the header link
+    // navigates away, which simply unmounts the dialog). Ignored for the
+    // brief moment a save request is actually in flight.
+    if (_showSaveDialog || _showExportDialog) {
+      if (_isSaving) return;
+      _startNewAfterSave = false;
+      setState(() {
+        _showSaveDialog = false;
+        _showExportDialog = false;
+      });
+      _startFreshChat();
+      return;
+    }
+    final onDashboard =
+        _showQuickHelpOverlay &&
+        _currentConversationId == null &&
+        _messages.length <= 1;
+    if (onDashboard) return;
+    startNewChat();
+  }
+
   void startNewChat() {
     if (_isStreaming) return;
     if (_hasUnsavedChanges) {
       setState(() => _showNewChatConfirm = true);
     } else {
-      _resetChat();
+      _startFreshChat();
+    }
+  }
+
+  /// Reset to the dashboard state and confirm it (web `startNewChatConfirmed`).
+  void _startFreshChat() {
+    _resetChat();
+    NotificationService.info(tr('chatbot.newChatStarted'));
+  }
+
+  /// "Save first" in the new-chat prompt (web `saveAndStartNewChat`): an
+  /// existing conversation is updated silently, a new one goes through the
+  /// naming dialog; either way the fresh chat starts once the save succeeds.
+  Future<void> _saveThenStartNew() async {
+    if (_currentConversationId != null) {
+      final ok = await saveConversation();
+      if (ok && mounted) _startFreshChat();
+      return;
+    }
+    _startNewAfterSave = true;
+    _openSaveDialog();
+  }
+
+  /// Save icon (web `saveChatToHistory`): existing conversations are updated
+  /// without asking for a title again; new ones open the naming dialog.
+  void _onSavePressed() {
+    if (_currentConversationId != null) {
+      saveConversation();
+    } else {
+      _openSaveDialog();
     }
   }
 
@@ -391,12 +464,33 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       'timestamp': DateTime.now().toIso8601String(),
       'isSaved': true,
     });
-    _lastSavedMessageCount = 1;
     _updateQuickHelpVisibility();
   }
 
   void _sendMessage(String text, {String? hiddenPrompt}) async {
     if (text.trim().isEmpty || _isLoading || _isStreaming) return;
+
+    // Map intent (`show me the map <place>` and the Bengali forms) opens the
+    // map via the geocoder instead of calling the LLM (parity with web).
+    final mapPlace = hiddenPrompt == null ? parseMapIntent(text) : null;
+    if (mapPlace != null) {
+      await _openMapForPlace(text.trim(), mapPlace);
+      return;
+    }
+    // {{location}} in a config prompt becomes the user's resolved district (or
+    // the deployment default) so "my area" is never a hard-coded place.
+    final needsLocation =
+        (hiddenPrompt?.contains(LocationService.placeholder) ?? false) ||
+        text.contains(LocationService.placeholder);
+    if (needsLocation) {
+      setState(() => _isLoading = true);
+      await _ensureLocationReady();
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+    final location = LocationService();
+    hiddenPrompt = location.fillPlaceholder(hiddenPrompt);
+    text = location.fillPlaceholder(text)!;
 
     final userMessage = {
       'role': 'user',
@@ -474,6 +568,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     List<dynamic>? sources;
     double? confidence;
     bool? isGrounded;
+    Map<String, dynamic>? rawMetadata;
 
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
@@ -529,11 +624,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
+                    :final raw,
                     isGrounded: final grounded,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    rawMetadata = raw;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                     setState(() {
@@ -558,11 +655,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
+                    :final raw,
                     isGrounded: final grounded,
                   ):
                     sources = sourceDocuments;
                     confidence = confidenceScore;
                     isGrounded = grounded;
+                    rawMetadata = raw;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
                   case SseErrorEvent(:final message):
@@ -581,12 +680,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   msg['confidence'] = confidence;
                   msg['isGrounded'] = isGrounded;
                   msg['metadata'] = {
+                    ...?rawMetadata,
                     'sources': sources,
                     'confidence_score': confidence,
                     'is_grounded': isGrounded,
                   }..removeWhere((key, value) => value == null);
                 });
               }
+              // Auto-open the map for geo-inference results (the weather
+              // router answers delineation / flood queries with GeoJSON).
+              _openMapFromMetadata(rawMetadata);
 
               setState(() {
                 _isStreaming = false;
@@ -697,6 +800,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _relatedDocuments = _mergeUniqueDocs(newDocs, _relatedDocuments);
         _isLoading = false;
       });
+      _openMapFromMetadata(metadata);
 
       widget.onRelatedDocumentsUpdate(_relatedDocuments);
       _scrollToBottom();
@@ -783,6 +887,95 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _sendMessage(visibleText, hiddenPrompt: hiddenPrompt);
   }
 
+  /// Wait (bounded) for the user's district before a `{{location}}` prompt is
+  /// filled, so the deployment default is used rather than the built-in
+  /// fallback when a chip is tapped right after login.
+  Future<void> _ensureLocationReady() {
+    final http.Client client =
+        httpClient ?? ref.read(authenticatedHttpClientProvider);
+    final String base = streamBaseUrl ?? ref.read(backendUrlProvider);
+    return LocationService().ensureReady(client: client, backendUrl: base);
+  }
+
+  /// Open the map for a response whose metadata carries field-delineation /
+  /// flood-analysis GeoJSON. No-op when there is nothing to draw.
+  void _openMapFromMetadata(Map<String, dynamic>? metadata) {
+    final layers = geoLayersFromMetadata(metadata);
+    if (layers.isEmpty || !mounted) return;
+    final bbox = computeGeojsonBbox(layers.expand((l) => l.features).toList());
+    if (bbox == null) return;
+    MapViewScreen.open(
+      context,
+      lat: (bbox[1] + bbox[3]) / 2,
+      lon: (bbox[0] + bbox[2]) / 2,
+      name: layers.map((l) => l.label).join(' \u00b7 '),
+      zoom: 12,
+      layers: layers,
+    );
+  }
+
+  /// `show me the map <place>`: geocode through the backend and open the map,
+  /// echoing a bot reply so the request shows in the transcript.
+  Future<void> _openMapForPlace(String content, String place) async {
+    setState(() {
+      _messages.add({
+        'role': 'user',
+        'content': content,
+        'timestamp': DateTime.now().toIso8601String(),
+        'isSaved': false,
+      });
+      _isLoading = true;
+      _showQuickHelpOverlay = false;
+    });
+    _inputController.clear();
+    _scrollToBottom();
+
+    final http.Client client =
+        httpClient ?? ref.read(authenticatedHttpClientProvider);
+    final base = streamBaseUrl ?? ref.read(backendUrlProvider);
+    Map<String, dynamic>? geo;
+    try {
+      final uri = Uri.parse(
+        '$base/api/weather/geocode',
+      ).replace(queryParameters: {'location': place});
+      final resp = await client.get(uri).timeout(const Duration(seconds: 10));
+      if (resp.statusCode == 200) {
+        geo = Map<String, dynamic>.from(
+          jsonDecode(utf8.decode(resp.bodyBytes)) as Map,
+        );
+      }
+    } catch (e) {
+      debugPrint('[CHATBOT] geocode failed: $e');
+    }
+    if (!mounted) return;
+
+    final name = geo?['name']?.toString() ?? place;
+    setState(() {
+      _messages.add({
+        'role': 'assistant',
+        'content': geo != null
+            ? tr('map.opening', args: {'name': name})
+            : tr('map.notFound', args: {'name': place}),
+        'timestamp': DateTime.now().toIso8601String(),
+        'isSaved': false,
+      });
+      _isLoading = false;
+    });
+    _scrollToBottom();
+
+    final lat = (geo?['lat'] as num?)?.toDouble();
+    final lon = (geo?['lon'] as num?)?.toDouble();
+    if (lat != null && lon != null) {
+      await MapViewScreen.open(
+        context,
+        lat: lat,
+        lon: lon,
+        name: name,
+        zoom: (geo?['zoom'] as num?)?.toDouble() ?? 12,
+      );
+    }
+  }
+
   void _openFeedbackDialog(Map<String, dynamic> message) {
     final tokens = ThemeManager().tokens;
     showDialog(
@@ -830,16 +1023,103 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // ===========================================================================
   // SAVING & EXPORT LOGIC
   // ===========================================================================
-  Future<void> saveConversation({String? folderId}) async {
+  /// Default chat title: the first user message (truncated), else a dated
+  /// fallback — matches the web `generateChatTitle()`.
+  String _generateChatTitle() {
+    final userMsg = _messages.firstWhere(
+      (m) => m['role'] == 'user',
+      orElse: () => const {},
+    );
+    final content = (userMsg['content'] as String?)?.trim() ?? '';
+    if (content.isNotEmpty) {
+      return content.length > 20 ? '${content.substring(0, 17)}...' : content;
+    }
+    final now = DateTime.now();
+    return 'Chat - ${now.day}/${now.month}/${now.year}';
+  }
+
+  /// Prefill the naming field and open the save dialog. For a new conversation
+  /// the title defaults to the first user message (web parity); an existing one
+  /// keeps its current title.
+  ///
+  /// The prompt (web `saveChatDialog`) is hosted inline over the chat area,
+  /// see [InlineModal]; it stays open until Save succeeds, the user cancels,
+  /// or the brand tap leaves the conversation ([goHome]).
+  void _openSaveDialog() {
+    if (_currentConversationId == null &&
+        (_conversationTitle.isEmpty ||
+            _conversationTitle == tr('chatbot.newChatTitle'))) {
+      _conversationTitle = _generateChatTitle();
+    }
+    _titleController.text = _conversationTitle;
+    setState(() => _showSaveDialog = true);
+  }
+
+  /// [SaveConversationDialog.onDismiss]: `true` = saved, `false` = Cancel,
+  /// `null` = scrim / close (x). Anything but a save drops a pending
+  /// "save first, then new chat".
+  void _onSaveDialogDismissed(bool? result) {
+    if (!mounted) return;
+    setState(() => _showSaveDialog = false);
+    if (result != true) _startNewAfterSave = false;
+  }
+
+  /// Export icon: ask for a file name, then share the PDF.
+  void _openExportDialog() {
+    _exportInitialName =
+        "chat_${DateTime.now().toIso8601String().split('T').first}";
+    setState(() => _showExportDialog = true);
+  }
+
+  void _closeExportDialog([bool? _]) {
+    if (mounted) setState(() => _showExportDialog = false);
+  }
+
+  /// Folders for the save dialog's picker (web `getAllFolders` minus the
+  /// virtual default, which the dialog adds itself). Never throws.
+  Future<List<SaveFolder>> _loadSaveFolders() async {
+    try {
+      final res = await ref
+          .read(chatHistoryApiProvider)
+          .apiChatFoldersGetWithHttpInfo()
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return const [];
+      final raw = jsonDecode(res.body);
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map>()
+          .map((f) => Map<String, dynamic>.from(f))
+          .where((f) => f['isDefault'] != true)
+          .map(
+            (f) => SaveFolder(
+              id: (f['_key'] ?? f['id']).toString(),
+              name: f['name']?.toString() ?? '',
+            ),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('[SAVE] folders unavailable: $e');
+      return const [];
+    }
+  }
+
+  Future<bool> saveConversation({String? title, String? folderId}) async {
     if (_messages.isEmpty) {
       NotificationService.info("Nothing to save");
-      return;
+      return false;
     }
+    if (_isSaving) return false;
+    final bool isNewConversation = _currentConversationId == null;
+    final String? targetFolderId = folderId;
+    bool saved = false;
 
+    final String requestedTitle = (title ?? _titleController.text).trim();
     setState(() {
-      _conversationTitle = _titleController.text.trim().isEmpty
+      _isSaving = true;
+      _conversationTitle = requestedTitle.isEmpty
           ? tr('chatbot.newChatTitle')
-          : _titleController.text.trim();
+          : requestedTitle;
+      _titleController.text = _conversationTitle;
     });
 
     try {
@@ -851,12 +1131,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           title: _conversationTitle,
           categoryId: _selectedCategoryId,
         );
-        final res = await chatHistoryApi.apiChatConversationsPostWithHttpInfo(
-          createRequest,
-        );
+        final res = await chatHistoryApi
+            .apiChatConversationsPostWithHttpInfo(createRequest)
+            .timeout(const Duration(seconds: 30));
 
         if (res.statusCode != 200 && res.statusCode != 201) {
-          throw Exception("Create conversation failed: ${res.statusCode}");
+          throw Exception(
+            "Create conversation failed: ${res.statusCode} ${res.body}",
+          );
         }
 
         conversationResponse = jsonDecode(res.body);
@@ -870,10 +1152,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             .apiChatConversationsConversationIdPatchWithHttpInfo(
               id,
               updateRequest,
-            );
+            )
+            .timeout(const Duration(seconds: 30));
 
         if (res.statusCode != 200 && res.statusCode != 201) {
-          throw Exception("Update conversation failed: ${res.statusCode}");
+          throw Exception(
+            "Update conversation failed: ${res.statusCode} ${res.body}",
+          );
         }
 
         conversationResponse = jsonDecode(res.body);
@@ -889,6 +1174,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       for (int i = 0; i < _messages.length; i++) {
         final msg = _messages[i];
         if (msg['isSaved'] == true) continue;
+
+        // Web parity (ChatBotComponent.handleSaveChat): persist user messages
+        // and answered assistant messages only. Assistant bubbles without a
+        // queryId — the welcome message, "opening map" echoes, stream errors —
+        // are marked saved and skipped so history matches the web exactly.
+        final bool isUserMsg = msg['role'] == 'user';
+        final bool hasQueryId =
+            (msg['queryId']?.toString().trim().isNotEmpty ?? false);
+        if (!isUserMsg && !hasQueryId) {
+          setState(() => _messages[i]['isSaved'] = true);
+          continue;
+        }
 
         // CRITICAL: We save msg['content'] (Visible prompt), NOT actualContent (hidden prompt).
         // This ensures the user sees exactly what they clicked in history.
@@ -909,10 +1206,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               .apiChatConversationsConversationIdMessagesPostWithHttpInfo(
                 conversationIdClean,
                 addMessageRequest,
-              );
+              )
+              .timeout(const Duration(seconds: 20));
 
           if (res.statusCode != 200 && res.statusCode != 201) {
-            throw Exception("Add message failed: ${res.statusCode}");
+            throw Exception(
+              "Add message failed: ${res.statusCode} ${res.body}",
+            );
           }
           setState(() {
             _messages[i]['isSaved'] = true;
@@ -922,19 +1222,44 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         }
       }
 
+      // Web parity: a new conversation saved into a non-default folder.
+      if (isNewConversation &&
+          targetFolderId != null &&
+          targetFolderId.isNotEmpty &&
+          targetFolderId != 'default') {
+        try {
+          await chatHistoryApi
+              .apiChatFoldersFolderIdConversationsConversationIdPostWithHttpInfo(
+                targetFolderId,
+                conversationIdClean,
+              )
+              .timeout(const Duration(seconds: 20));
+        } catch (folderError) {
+          debugPrint("[SAVE] folder assignment failed: $folderError");
+        }
+      }
+
       setState(() {
         _currentConversationId =
             conversationResponse['_id'] ?? _currentConversationId;
-        _showSaveDialog = false;
-        _lastSavedMessageCount = _messages.length;
       });
 
-      NotificationService.success(tr('chatbot.chatSaved'));
+      NotificationService.success(
+        tr(isNewConversation ? 'chatbot.chatSaved' : 'chatbot.chatUpdated'),
+      );
       widget.onRefreshSidebar();
+      saved = true;
     } catch (e) {
       debugPrint("[SAVE] ERROR: $e");
-      NotificationService.error(tr('chatbot.errorUpdatingChat'));
+      NotificationService.error('${tr('chatbot.errorUpdatingChat')} ($e)');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
+    if (saved && _startNewAfterSave && mounted) {
+      _startNewAfterSave = false;
+      _startFreshChat();
+    }
+    return saved;
   }
 
   pw.TextSpan _buildInlineSpans(
@@ -1065,7 +1390,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
-  Future<void> exportChatToPDF() async {
+  Future<bool> exportChatToPDF({String? filename}) async {
     final pdf = pw.Document();
     final tokens = ThemeManager().tokens;
     pw.Font? customFont;
@@ -1164,19 +1489,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         ),
       );
 
-      final filename = _exportFilename.trim().isEmpty
+      final String requested = (filename ?? '').trim();
+      final String outName = requested.isEmpty
           ? "genie_chat_${DateTime.now().toIso8601String().split('T').first}"
-          : _exportFilename.trim();
+          : requested;
 
       await Printing.sharePdf(
         bytes: await pdf.save(),
-        filename: '$filename.pdf',
+        filename: '$outName.pdf',
       );
       NotificationService.success(tr('chatbot.exportSuccess'));
-      setState(() => _showExportDialog = false);
+      return true;
     } catch (e) {
       debugPrint("[PDF EXPORT] ERROR: $e");
       NotificationService.error(tr('chatbot.exportError'));
+      return false;
     }
   }
 
@@ -1238,606 +1565,510 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // Explicitly kill focus node to prevent "phantom" keyboard popups
         if (_inputFocusNode.hasFocus) _inputFocusNode.unfocus();
       },
-      child: Stack(
-        children: [
-          Column(
-            children: [
-              // Context Bar
-              if (_selectedCategoryName.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DsSpacing.md,
-                    vertical: DsSpacing.sm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tokens.accent10,
-                    border: Border(bottom: BorderSide(color: tokens.border)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.lightbulb_outline,
-                        size: 20,
-                        color: tokens.accent,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: tokens.fg,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      DsButton(
-                        iconOnly: true,
-                        icon: Icons.close,
-                        variant: DsButtonVariant.ghost,
-                        overrideFg: tokens.fg,
-                        onPressed: () => setCategoryContext("", ""),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // Messages
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(DsSpacing.md),
-                  itemCount:
-                      _messages.length + (_isLoading || _isStreaming ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == _messages.length &&
-                        (_isLoading || _isStreaming)) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: DsSpacing.md,
-                        ),
-                        child: Row(
-                          children: [
-                            const CircularProgressIndicator(strokeWidth: 2),
-                            const SizedBox(width: 12),
-                            Text(
-                              _isStreaming
-                                  ? tr('chatbot.generating')
-                                  : tr('chatbot.thinking'),
-                              style: TextStyle(color: tokens.fg),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    final msg = _messages[index];
-                    final bool isUser = msg['role'] == 'user';
-
-                    return Align(
-                      alignment: isUser
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          vertical: DsSpacing.sm,
-                        ),
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? tokens.accent
-                              : (isDark ? tokens.surface : tokens.muted20),
-                          borderRadius: BorderRadius.circular(DsRadii.xl),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MarkdownBody(
-                              data: msg['content'] ?? '',
-                              styleSheet: MarkdownStyleSheet(
-                                p: TextStyle(
-                                  color: isUser ? tokens.accentFg : tokens.fg,
-                                  fontSize: tokens.textMd,
-                                  height: 1.5,
-                                ),
-                                codeblockDecoration: BoxDecoration(
-                                  color: isUser
-                                      ? tokens.accentFg.withValues(alpha: 0.1)
-                                      : (isDark ? tokens.fg30 : tokens.muted20),
-                                  borderRadius: BorderRadius.circular(
-                                    DsRadii.md,
-                                  ),
-                                ),
-                              ),
-                              selectable: true,
-                              onTapLink: (text, href, title) {
-                                if (href != null) {
-                                  launchUrl(
-                                    Uri.parse(href),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                }
-                              },
-                            ),
-
-                            // Footer: Confidence & Feedback
-                            if (!isUser)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: DsSpacing.md,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    if (msg['isGrounded'] == false)
-                                      Text(
-                                        tr('chatbot.aiGeneratedNoDocs'),
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.warning,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      )
-                                    else if (msg['confidence'] != null)
-                                      Text(
-                                        "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.fg50,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                    // Feedback Button
-                                    Tooltip(
-                                      message: tr('feedback.title'),
-                                      child: InkWell(
-                                        onTap: () => _openFeedbackDialog(msg),
-                                        borderRadius: BorderRadius.circular(
-                                          DsRadii.lg,
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(
-                                            DsSpacing.xs,
-                                          ),
-                                          child: Icon(
-                                            Icons.thumb_up_alt_outlined,
-                                            size: 16,
-                                            color: tokens.fg50,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              // Input Area
-              Container(
-                padding: const EdgeInsets.all(DsSpacing.md),
-                decoration: BoxDecoration(
-                  color: tokens.surface,
-                  border: Border(top: BorderSide(color: tokens.border)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Tooltip(
-                          message: tr('chatbot.newChatTitle'),
-                          child: DsButton(
-                            iconOnly: true,
-                            icon: Icons.add_circle_outline,
-                            variant: DsButtonVariant.ghost,
-                            overrideFg: tokens.fg,
-                            onPressed: startNewChat,
-                          ),
-                        ),
-                        Tooltip(
-                          message: tr('chatbot.saveChat'),
-                          child: DsButton(
-                            iconOnly: true,
-                            icon: Icons.save_outlined,
-                            variant: DsButtonVariant.ghost,
-                            overrideFg: tokens.fg,
-                            onPressed: () {
-                              _titleController.text = _conversationTitle;
-                              setState(() => _showSaveDialog = true);
-                            },
-                          ),
-                        ),
-                        Tooltip(
-                          message: tr('chatbot.exportChat'),
-                          child: DsButton(
-                            iconOnly: true,
-                            icon: Icons.picture_as_pdf_outlined,
-                            variant: DsButtonVariant.ghost,
-                            overrideFg: tokens.fg,
-                            onPressed: () {
-                              _exportFilename =
-                                  "chat_${DateTime.now().toIso8601String().split('T').first}";
-                              setState(() => _showExportDialog = true);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: DsSpacing.sm),
-                        Tooltip(
-                          message: tr('chatbot.shareWhatsApp'),
-                          child: IconButton(
-                            onPressed: _shareToWhatsApp,
-                            icon: SvgPicture.string(
-                              '''
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
-        </svg>
-        ''',
-                              width: 24,
-                              height: 24,
-                            ),
-                          ),
-                        ),
-                      ],
+      child: PopScope(
+        canPop: !(_showSaveDialog || _showExportDialog),
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || _isSaving) return;
+          if (_showSaveDialog) _onSaveDialogDismissed(null);
+          if (_showExportDialog) _closeExportDialog();
+        },
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                // Context Bar
+                if (_selectedCategoryName.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DsSpacing.md,
+                      vertical: DsSpacing.sm,
                     ),
-                    const SizedBox(height: DsSpacing.sm),
-                    Row(
+                    decoration: BoxDecoration(
+                      color: tokens.accent10,
+                      border: Border(bottom: BorderSide(color: tokens.border)),
+                    ),
+                    child: Row(
                       children: [
+                        Icon(
+                          Icons.lightbulb_outline,
+                          size: 20,
+                          color: tokens.accent,
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: TextField(
-                            controller: _inputController,
-                            focusNode: _inputFocusNode,
-                            style: TextStyle(color: tokens.fg),
-                            decoration: InputDecoration(
-                              hintText: tr('chatbot.placeholder'),
-                              hintStyle: TextStyle(color: tokens.mutedSoft),
-                              filled: true,
-                              fillColor: isDark
-                                  ? tokens.muted20
-                                  : Colors.transparent,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(DsRadii.md),
-                                borderSide: BorderSide(color: tokens.border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(DsRadii.md),
-                                borderSide: BorderSide(color: tokens.border),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: DsSpacing.md,
-                                vertical: 14,
-                              ),
+                          child: Text(
+                            "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: tokens.fg,
                             ),
-                            maxLines: null,
-                            onSubmitted: (_) =>
-                                _sendMessage(_inputController.text),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 12),
                         DsButton(
                           iconOnly: true,
-                          icon: Icons.send,
+                          icon: Icons.close,
                           variant: DsButtonVariant.ghost,
-                          overrideFg: tokens.accent,
-                          onPressed: _isLoading || _isStreaming
-                              ? null
-                              : () => _sendMessage(_inputController.text),
+                          overrideFg: tokens.fg,
+                          onPressed: () => setCategoryContext("", ""),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Quick Help Overlay
-          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            Container(
-              color: tokens.bg,
-              padding: const EdgeInsets.symmetric(
-                horizontal: DsSpacing.md,
-                vertical: DsSpacing.xl,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    tr('chatbot.whatCanIHelp'),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: tokens.fg,
-                    ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: DsSpacing.lg),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
 
-                        return GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
+                // Messages
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(DsSpacing.md),
+                    itemCount:
+                        _messages.length + (_isLoading || _isStreaming ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length &&
+                          (_isLoading || _isStreaming)) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: DsSpacing.md,
+                          ),
+                          child: Row(
+                            children: [
+                              const CircularProgressIndicator(strokeWidth: 2),
+                              const SizedBox(width: 12),
+                              Text(
+                                _isStreaming
+                                    ? tr('chatbot.generating')
+                                    : tr('chatbot.thinking'),
+                                style: TextStyle(color: tokens.fg),
                               ),
-                          itemCount: _quickHelpButtons.length,
-                          itemBuilder: (context, index) {
-                            final button = _quickHelpButtons[index];
-                            final labelMap =
-                                button['appearance']?['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String titleKey =
-                                labelMap['text']?.toString() ?? '';
-                            final String translatedTitle = tr(titleKey);
-                            final String iconAsset =
-                                button['iconAsset']?.toString() ?? '';
+                            ],
+                          ),
+                        );
+                      }
 
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(DsRadii.lg),
-                                onTap: () => _quickHelpPressed(button),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
+                      final msg = _messages[index];
+                      final bool isUser = msg['role'] == 'user';
+
+                      return Align(
+                        alignment: isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            vertical: DsSpacing.sm,
+                          ),
+                          padding: const EdgeInsets.all(DsSpacing.md),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.75,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isUser
+                                ? tokens.accent
+                                : (isDark ? tokens.surface : tokens.muted20),
+                            borderRadius: BorderRadius.circular(DsRadii.xl),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MarkdownBody(
+                                data: msg['content'] ?? '',
+                                styleSheet: MarkdownStyleSheet(
+                                  p: TextStyle(
+                                    color: isUser ? tokens.accentFg : tokens.fg,
+                                    fontSize: tokens.textMd,
+                                    height: 1.5,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: tokens.surface,
+                                  codeblockDecoration: BoxDecoration(
+                                    color: isUser
+                                        ? tokens.accentFg.withValues(alpha: 0.1)
+                                        : (isDark
+                                              ? tokens.fg30
+                                              : tokens.muted20),
                                     borderRadius: BorderRadius.circular(
-                                      DsRadii.lg,
+                                      DsRadii.md,
                                     ),
-                                    border: Border.all(
-                                      color: tokens.borderLight,
+                                  ),
+                                ),
+                                selectable: true,
+                                onTapLink: (text, href, title) {
+                                  if (href != null) {
+                                    launchUrl(
+                                      Uri.parse(href),
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  }
+                                },
+                              ),
+
+                              if (!isUser &&
+                                  geoLayersFromMetadata(
+                                    msg['metadata'] as Map<String, dynamic>?,
+                                  ).isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: DsSpacing.sm,
+                                  ),
+                                  child: DsButton(
+                                    key: Key('view_on_map_${msg['id']}'),
+                                    label: tr('map.viewOnMap'),
+                                    icon: Icons.map_outlined,
+                                    variant: DsButtonVariant.secondary,
+                                    onPressed: () => _openMapFromMetadata(
+                                      msg['metadata'] as Map<String, dynamic>?,
                                     ),
+                                  ),
+                                ),
+
+                              // Footer: Confidence & Feedback
+                              if (!isUser)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: DsSpacing.md,
                                   ),
                                   child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      SvgPicture.asset(
-                                        iconAsset,
-                                        width: 18,
-                                        height: 18,
-                                        placeholderBuilder: (_) => Icon(
-                                          Icons.help_outline,
-                                          size: 20,
-                                          color: tokens.accent,
+                                      if (msg['isGrounded'] == false)
+                                        Text(
+                                          tr('chatbot.aiGeneratedNoDocs'),
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.warning,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        )
+                                      else if (msg['confidence'] != null)
+                                        Text(
+                                          "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.fg50,
+                                            fontStyle: FontStyle.italic,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          translatedTitle,
-                                          style: theme.textTheme.labelMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: tokens.textXs,
-                                                color: tokens.fg,
-                                              ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                      // Feedback Button
+                                      Tooltip(
+                                        message: tr('feedback.title'),
+                                        child: InkWell(
+                                          onTap: () => _openFeedbackDialog(msg),
+                                          borderRadius: BorderRadius.circular(
+                                            DsRadii.lg,
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(
+                                              DsSpacing.xs,
+                                            ),
+                                            child: Icon(
+                                              Icons.thumb_up_alt_outlined,
+                                              size: 16,
+                                              color: tokens.fg50,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ],
-              ),
+                ),
+
+                // Input Area
+                Container(
+                  padding: const EdgeInsets.all(DsSpacing.md),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    border: Border(top: BorderSide(color: tokens.border)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Tooltip(
+                            message: tr('chatbot.newChatTitle'),
+                            child: DsButton(
+                              iconOnly: true,
+                              icon: Icons.add_circle_outline,
+                              variant: DsButtonVariant.ghost,
+                              overrideFg: tokens.fg,
+                              onPressed: startNewChat,
+                            ),
+                          ),
+                          Tooltip(
+                            message: tr('chatbot.saveChat'),
+                            child: DsButton(
+                              iconOnly: true,
+                              icon: Icons.save_outlined,
+                              variant: DsButtonVariant.ghost,
+                              overrideFg: tokens.fg,
+                              onPressed: _onSavePressed,
+                            ),
+                          ),
+                          Tooltip(
+                            message: tr('chatbot.exportChat'),
+                            child: DsButton(
+                              iconOnly: true,
+                              icon: Icons.picture_as_pdf_outlined,
+                              variant: DsButtonVariant.ghost,
+                              overrideFg: tokens.fg,
+                              onPressed: _openExportDialog,
+                            ),
+                          ),
+                          const SizedBox(width: DsSpacing.sm),
+                          Tooltip(
+                            message: tr('chatbot.shareWhatsApp'),
+                            child: IconButton(
+                              onPressed: _shareToWhatsApp,
+                              icon: SvgPicture.string(
+                                '''
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path fill="#25D366" d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 16.61c-1.48 0-2.94-.4-4.21-1.15l-.3-.18-3.11.82.83-3.04-.19-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.82 2.42a8.183 8.183 0 0 1 2.41 5.83c.02 4.54-3.68 8.23-8.23 8.23m4.53-6.18c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43s.17-.25.25-.41c.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.43h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18s-.22-.16-.47-.28z"/>
+        </svg>
+        ''',
+                                width: 24,
+                                height: 24,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: DsSpacing.sm),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _inputController,
+                              focusNode: _inputFocusNode,
+                              style: TextStyle(color: tokens.fg),
+                              decoration: InputDecoration(
+                                hintText: tr('chatbot.placeholder'),
+                                hintStyle: TextStyle(color: tokens.mutedSoft),
+                                filled: true,
+                                fillColor: isDark
+                                    ? tokens.muted20
+                                    : Colors.transparent,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    DsRadii.md,
+                                  ),
+                                  borderSide: BorderSide(color: tokens.border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    DsRadii.md,
+                                  ),
+                                  borderSide: BorderSide(color: tokens.border),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: DsSpacing.md,
+                                  vertical: 14,
+                                ),
+                              ),
+                              maxLines: null,
+                              onSubmitted: (_) =>
+                                  _sendMessage(_inputController.text),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          DsButton(
+                            iconOnly: true,
+                            icon: Icons.send,
+                            variant: DsButtonVariant.ghost,
+                            overrideFg: tokens.accent,
+                            onPressed: _isLoading || _isStreaming
+                                ? null
+                                : () => _sendMessage(_inputController.text),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
 
-          // Confirm Dialogs & Save/Export Alerts
-          ConfirmDialog(
-            visible: _showNewChatConfirm,
-            title: tr('chatbot.dialogs.newChatTitle'),
-            message: tr('chatbot.dialogs.newChatContent'),
-            confirmText: tr('chatbot.dialogs.actions.discardAndNew'),
-            cancelText: tr('common.cancel'),
-            secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
-            onConfirm: () {
-              setState(() => _showNewChatConfirm = false);
-              _resetChat();
-            },
-            onCancel: () => setState(() => _showNewChatConfirm = false),
-            onSecondary: () {
-              setState(() => _showNewChatConfirm = false);
-              _titleController.text = _conversationTitle;
-              setState(() => _showSaveDialog = true);
-            },
-          ),
-          ConfirmDialog(
-            visible: _showLoadConfirm,
-            title: tr('chatbot.dialogs.loadChatTitle'),
-            message: tr('chatbot.dialogs.loadChatContent'),
-            confirmText: tr('chatbot.dialogs.actions.discardAndLoad'),
-            cancelText: tr('common.cancel'),
-            secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
-            onConfirm: () {
-              setState(() => _showLoadConfirm = false);
-              _loadConversationDirect(_pendingLoadConversationId!);
-            },
-            onCancel: () => setState(() => _showLoadConfirm = false),
-            onSecondary: () {
-              setState(() => _showLoadConfirm = false);
-              _titleController.text = _conversationTitle;
-              setState(() => _showSaveDialog = true);
-            },
-          ),
-          if (_showSaveDialog)
-            Dialog(
-              backgroundColor: tokens.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DsRadii.xl),
-              ),
-              insetPadding: const EdgeInsets.all(DsSpacing.md),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
+            // Quick Help Overlay
+            if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+              Container(
+                color: tokens.bg,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpacing.md,
+                  vertical: DsSpacing.xl,
+                ),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.lg,
-                        DsSpacing.lg,
-                        DsSpacing.md,
-                        DsSpacing.md,
+                    Text(
+                      tr('chatbot.whatCanIHelp'),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: tokens.fg,
                       ),
-                      child: Text(
-                        tr('chatbot.dialogs.saveTitle'),
-                        style: TextStyle(
-                          color: tokens.fg,
-                          fontSize: tokens.textLg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(DsSpacing.lg),
-                      child: TextField(
-                        controller: _titleController,
-                        style: TextStyle(color: tokens.fg),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.dialogs.saveHint'),
-                          hintStyle: TextStyle(color: tokens.mutedSoft),
-                          border: const OutlineInputBorder(),
-                        ),
-                        onChanged: (v) => _conversationTitle = v,
-                        autofocus: true,
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.md,
-                        DsSpacing.sm,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          DsButton(
-                            label: tr('common.cancel'),
-                            variant: DsButtonVariant.ghost,
-                            onPressed: () =>
-                                setState(() => _showSaveDialog = false),
-                          ),
-                          const SizedBox(width: DsSpacing.sm),
-                          DsButton(
-                            label: tr('common.save'),
-                            variant: DsButtonVariant.primary,
-                            onPressed: () {
-                              saveConversation().then((_) {});
+                    const SizedBox(height: DsSpacing.lg),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final int crossAxisCount =
+                              _quickHelpLayout['columns'] as int? ?? 2;
+                          final double aspectRatio =
+                              (_quickHelpLayout['childAspectRatio'] as num?)
+                                  ?.toDouble() ??
+                              3.5;
+
+                          return GridView.builder(
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  childAspectRatio: aspectRatio,
+                                  mainAxisSpacing: 10,
+                                  crossAxisSpacing: 10,
+                                ),
+                            itemCount: _quickHelpButtons.length,
+                            itemBuilder: (context, index) {
+                              final button = _quickHelpButtons[index];
+                              final labelMap =
+                                  button['appearance']?['label']
+                                      as Map<String, dynamic>? ??
+                                  {};
+                              final String titleKey =
+                                  labelMap['text']?.toString() ?? '';
+                              // Config titles are {en, bn} maps resolved at load
+                              // time; legacy configs carry an i18n key instead.
+                              final String resolvedTitle =
+                                  button['resolvedTitle']?.toString() ?? '';
+                              final String translatedTitle =
+                                  resolvedTitle.isNotEmpty
+                                  ? resolvedTitle
+                                  : tr(titleKey);
+                              final String iconAsset =
+                                  button['iconAsset']?.toString() ?? '';
+
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(
+                                    DsRadii.lg,
+                                  ),
+                                  onTap: () => _quickHelpPressed(button),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: tokens.surface,
+                                      borderRadius: BorderRadius.circular(
+                                        DsRadii.lg,
+                                      ),
+                                      border: Border.all(
+                                        color: tokens.borderLight,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        SvgPicture.asset(
+                                          iconAsset,
+                                          width: 18,
+                                          height: 18,
+                                          placeholderBuilder: (_) => Icon(
+                                            Icons.help_outline,
+                                            size: 20,
+                                            color: tokens.accent,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            translatedTitle,
+                                            style: theme.textTheme.labelMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: tokens.textXs,
+                                                  color: tokens.fg,
+                                                ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
                             },
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                   ],
                 ),
               ),
+
+            // Confirm Dialogs & Save/Export Alerts
+            ConfirmDialog(
+              visible: _showNewChatConfirm,
+              title: tr('chatbot.dialogs.newChatTitle'),
+              message: tr('chatbot.dialogs.newChatContent'),
+              confirmText: tr('chatbot.dialogs.actions.discardAndNew'),
+              cancelText: tr('common.cancel'),
+              secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
+              onConfirm: () {
+                setState(() => _showNewChatConfirm = false);
+                _startFreshChat();
+              },
+              onCancel: () => setState(() => _showNewChatConfirm = false),
+              onSecondary: () {
+                setState(() => _showNewChatConfirm = false);
+                _saveThenStartNew();
+              },
             ),
-          if (_showExportDialog)
-            Dialog(
-              backgroundColor: tokens.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DsRadii.xl),
-              ),
-              insetPadding: const EdgeInsets.all(DsSpacing.md),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.lg,
-                        DsSpacing.lg,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Text(
-                        tr('chatbot.dialogs.exportTitle'),
-                        style: TextStyle(
-                          color: tokens.fg,
-                          fontSize: tokens.textLg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(DsSpacing.lg),
-                      child: TextField(
-                        style: TextStyle(color: tokens.fg),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.dialogs.exportHint'),
-                          hintStyle: TextStyle(color: tokens.mutedSoft),
-                        ),
-                        onChanged: (v) => _exportFilename = v,
-                        controller: TextEditingController(
-                          text: _exportFilename,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.md,
-                        DsSpacing.sm,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          DsButton(
-                            label: tr('common.cancel'),
-                            variant: DsButtonVariant.ghost,
-                            onPressed: () =>
-                                setState(() => _showExportDialog = false),
-                          ),
-                          const SizedBox(width: DsSpacing.sm),
-                          DsButton(
-                            label: tr('chatbot.dialogs.actions.export'),
-                            variant: DsButtonVariant.primary,
-                            onPressed: _exportFilename.trim().isEmpty
-                                ? null
-                                : exportChatToPDF,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            ConfirmDialog(
+              visible: _showLoadConfirm,
+              title: tr('chatbot.dialogs.loadChatTitle'),
+              message: tr('chatbot.dialogs.loadChatContent'),
+              confirmText: tr('chatbot.dialogs.actions.discardAndLoad'),
+              cancelText: tr('common.cancel'),
+              secondaryText: tr('chatbot.dialogs.actions.saveFirst'),
+              onConfirm: () {
+                setState(() => _showLoadConfirm = false);
+                _loadConversationDirect(_pendingLoadConversationId!);
+              },
+              onCancel: () => setState(() => _showLoadConfirm = false),
+              onSecondary: () {
+                setState(() => _showLoadConfirm = false);
+                _openSaveDialog();
+              },
+            ),
+            InlineModal(
+              visible: _showSaveDialog,
+              dismissible: !_isSaving,
+              onDismiss: () => _onSaveDialogDismissed(null),
+              child: SaveConversationDialog(
+                initialTitle: _conversationTitle,
+                loadFolders: _loadSaveFolders,
+                onSave: (title, folderId) =>
+                    saveConversation(title: title, folderId: folderId),
+                onDismiss: _onSaveDialogDismissed,
               ),
             ),
-        ],
+            InlineModal(
+              visible: _showExportDialog,
+              onDismiss: _closeExportDialog,
+              child: ExportChatDialog(
+                initialFilename: _exportInitialName,
+                onExport: (name) => exportChatToPDF(filename: name),
+                onDismiss: _closeExportDialog,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

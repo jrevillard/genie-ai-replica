@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 
 class GenieAiConfig {
   static String title = "Genie AI"; // Default fallback
-  static String iconPath = "images/genie-ai-icon-light.svg"; // Default fallback
+  static String iconPath =
+      "assets/images/genie-ai-icon-light.svg"; // Default fallback
   static bool _loaded = false;
 
   /// Loads the configuration from assets/genie-ai-config.json
@@ -31,9 +32,13 @@ class GenieAiConfig {
         if (appConfig['icon'] != null && appConfig['icon']['value'] != null) {
           iconPath = appConfig['icon']['value'];
 
-          // Remove leading slash if present (e.g. "/assets/..." -> "assets/...")
+          // The shared config uses web-served paths ("/config/x.svg"); the
+          // mobile bundle ships the same files under "assets/".
           if (iconPath.startsWith('/')) {
             iconPath = iconPath.substring(1);
+          }
+          if (!iconPath.startsWith('assets/')) {
+            iconPath = 'assets/$iconPath';
           }
         }
       }

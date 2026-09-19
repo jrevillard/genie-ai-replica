@@ -22,11 +22,16 @@ class SseMetadataEvent extends SseEvent {
   final double confidenceScore;
   final int? responseTime;
   final bool isGrounded;
+
+  /// The full metadata payload. Climate answers carry `field_delineation` /
+  /// `flood_analysis` GeoJSON here, which the map overlay reads.
+  final Map<String, dynamic> raw;
   const SseMetadataEvent({
     required this.sourceDocuments,
     required this.confidenceScore,
     required this.isGrounded,
     this.responseTime,
+    this.raw = const {},
   });
 }
 
@@ -111,6 +116,7 @@ class SseParser {
         confidenceScore: (json['confidence_score'] as num?)?.toDouble() ?? 0.0,
         isGrounded: json['is_grounded'] as bool? ?? false,
         responseTime: json['responseTime'] as int?,
+        raw: Map<String, dynamic>.from(json)..remove('type'),
       ),
       'translation' => SseTranslationEvent(json['content'] as String? ?? ''),
       'done' => SseDoneEvent(json['queryId'] as String?),

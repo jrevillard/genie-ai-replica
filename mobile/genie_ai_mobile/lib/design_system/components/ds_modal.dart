@@ -11,12 +11,17 @@ class DsModal extends StatelessWidget {
   final List<Widget>? actions;
   final DsModalSize size;
 
+  /// When set, a close (x) button is rendered in the title row (web DsModal
+  /// parity). Null hides it.
+  final VoidCallback? onClose;
+
   const DsModal({
     super.key,
     required this.title,
     required this.content,
     this.actions,
     this.size = DsModalSize.md,
+    this.onClose,
   });
 
   static Future<T?> show<T>({
@@ -62,14 +67,30 @@ class DsModal extends StatelessWidget {
                 DsSpacing.md,
                 DsSpacing.md,
               ),
-              child: Text(
-                title,
-                key: const ValueKey('ds-modal-title'),
-                style: TextStyle(
-                  color: tokens.fg,
-                  fontSize: 18 * tokens.fontScale,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      key: const ValueKey('ds-modal-title'),
+                      style: TextStyle(
+                        color: tokens.fg,
+                        fontSize: 18 * tokens.fontScale,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (onClose != null)
+                    IconButton(
+                      key: const ValueKey('ds-modal-close'),
+                      icon: Icon(Icons.close, color: tokens.muted),
+                      onPressed: onClose,
+                      visualDensity: VisualDensity.compact,
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).closeButtonTooltip,
+                    ),
+                ],
               ),
             ),
             const Divider(height: 1, key: ValueKey('ds-modal-divider-title')),

@@ -89,7 +89,9 @@ void main() {
         devConfig.realmUrl,
         equals('https://localhost:443/auth/realms/genie'),
       );
-      expect(devConfig.clientId, equals('genie-mobile-dev'));
+      // Defaults to the realm-provisioned client (KC_MOBILE_CLIENT_ID);
+      // override per deployment with --dart-define=DEV_CLIENT_ID=...
+      expect(devConfig.clientId, equals('genie_ai_mobile'));
       expect(devConfig.redirectScheme, equals('com.itu.genieai.dev'));
       expect(devConfig.backendUrl, equals('https://localhost:443'));
     });

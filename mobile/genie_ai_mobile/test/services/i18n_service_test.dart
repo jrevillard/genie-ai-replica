@@ -30,29 +30,31 @@ void main() {
         expect(service.supportedLanguages.length, greaterThan(0));
       });
 
-      test('supported languages contains key locales', () {
+      test('supported languages contains the deployment locales', () {
+        // MEWA Bangladesh dev flavor whitelists English + Bengali only.
         expect(service.supportedLanguages.containsKey('en'), isTrue);
-        expect(service.supportedLanguages.containsKey('ar'), isTrue);
-        expect(service.supportedLanguages.containsKey('fr'), isTrue);
+        expect(service.supportedLanguages.containsKey('bn'), isTrue);
+        expect(service.supportedLanguages.containsKey('ar'), isFalse);
+        expect(service.supportedLanguages.containsKey('fr'), isFalse);
       });
     });
 
     group('locale switching', () {
-      test('changes locale to French', () {
-        service.changeLanguage('fr');
-        expect(service.currentLocale.languageCode, 'fr');
+      test('changes locale to Bengali', () {
+        service.changeLanguage('bn');
+        expect(service.currentLocale.languageCode, 'bn');
       });
 
-      test('changes locale to Arabic', () {
+      test('rejects a locale outside the deployment whitelist', () {
         service.changeLanguage('ar');
-        expect(service.currentLocale.languageCode, 'ar');
+        expect(service.currentLocale.languageCode, 'en');
       });
 
       test('notifies listeners on locale change', () {
         bool notified = false;
         service.addListener(() => notified = true);
 
-        service.changeLanguage('fr');
+        service.changeLanguage('bn');
 
         expect(notified, isTrue);
       });
@@ -133,13 +135,14 @@ void main() {
         expect(service.isRtl, isFalse);
       });
 
-      test('Arabic is RTL', () {
+      test('Arabic is outside the en/bn whitelist so the UI stays LTR', () {
         service.changeLanguage('ar');
-        expect(service.isRtl, isTrue);
+        expect(service.currentLocale.languageCode, 'en');
+        expect(service.isRtl, isFalse);
       });
 
-      test('French is not RTL', () {
-        service.changeLanguage('fr');
+      test('Bengali is not RTL', () {
+        service.changeLanguage('bn');
         expect(service.isRtl, isFalse);
       });
 
@@ -167,13 +170,14 @@ void main() {
     });
 
     group('per-deployment locale whitelist', () {
-      test('default flavor exposes every shipped locale', () {
-        expect(getConfig().supportedLocaleCodes, allSupportedLocaleCodes);
-        final I18nService service = I18nService();
+      test('dev flavor exposes the MEWA whitelist (en, bn)', () {
+        expect(getConfig().supportedLocaleCodes, ['en', 'bn']);
         expect(
-          service.supportedLanguages.length,
-          allSupportedLocaleCodes.length,
+          allSupportedLocaleCodes,
+          containsAll(getConfig().supportedLocaleCodes),
         );
+        final I18nService service = I18nService();
+        expect(service.supportedLanguages.keys, ['en', 'bn']);
       });
 
       test('a flavor can restrict to a subset (e.g. el-salvador en/es)', () {

@@ -142,6 +142,18 @@ export function localizeSeriesName(baseName, locale) {
   return SERIES_NAMES_ES[baseName] || baseName;
 }
 
+/**
+ * Full-name lookup with a converted-tag retry: served benchmark names can
+ * carry a technical ' [converted USD/mt to QQ]' suffix — look the human
+ * part up and re-attach the tag untranslated.
+ */
+function lookupFullName(name) {
+  if (FULL_NAMES_ES[name]) return FULL_NAMES_ES[name];
+  const m = name.match(/^(.*?)\s*\[converted[^\]]*\]\s*$/);
+  if (m && FULL_NAMES_ES[m[1]]) return FULL_NAMES_ES[m[1]] + name.slice(m[1].length);
+  return name;
+}
+
 /** Localize a full served series name. Unknown → input. */
 export function localizeFullName(fullName, locale) {
   if (locale !== 'es') return fullName;
@@ -170,11 +182,13 @@ export function localizeCoverage(coverage, locale) {
   }
   const segments = out.split('; ');
   const translated = segments.map((seg) => {
+    // Greedy name group lands on the LAST '(' (the country segment);
+    // trim() clears the space the backtracking leaves behind.
     const m = seg.match(/^(.*)\s*\((.*),\s*through\s+(.*?)\)$/);
     if (!m) return seg;
-    const [, name, country, date] = m;
-    const c = COUNTRIES_ES[country] || country;
-    const n = FULL_NAMES_ES[name] || name;
+    const [, rawName, country, date] = m;
+    const c = COUNTRIES_ES[country.trim()] || country.trim();
+    const n = lookupFullName(rawName.trim());
     return `${n} (${c}, hasta ${date})`;
   });
   return translated.join('; ') + suffix;

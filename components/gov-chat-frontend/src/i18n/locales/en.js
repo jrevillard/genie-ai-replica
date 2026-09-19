@@ -543,6 +543,9 @@ export default {
     loadDataError: 'Failed to load data',
     filterSeverity: 'Filter by severity',
 
+    advisory: 'Advisory',
+    regional: 'Regional',
+    sighting: 'Sighting',
     news: {
       addFromNews: 'Add from recent news',
       insert: 'Insert selected',

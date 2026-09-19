@@ -146,8 +146,9 @@ export default {
      * Acronym chips for the NON-primary commodities on multi-commodity
      * cards — "CAB-GT", "DAP-US", "TIL-HN"… Tooltip carries the full
      * description + latest price. Codes: first word (≤3 letters) + country
-     * tag when the series name names one; same-base collisions get a
-     * second-word initial (apiary honey producer vs export).
+     * tag on same-base collisions; a uniqueness counter guarantees no two
+     * chips share a code (i18n-session fix: "(" and "?" no longer leak
+     * into codes — BEA-( → BEA-SV, RIC-? → RIC-SV/RIC-GT).
      */
     codeChips() {
       const palette = [this.resolvedCategoryColor, 'var(--warning)', 'var(--muted)', 'var(--info)', 'var(--danger)'];
@@ -157,12 +158,16 @@ export default {
       const codes = items.map((s) => this.commodityCode(s.name));
       const counts = new Map();
       codes.forEach((c) => counts.set(c, (counts.get(c) || 0) + 1));
+      const seen = new Map();
       return items.map((s, i) => {
         let code = codes[i];
-        if ((counts.get(code) || 0) > 1) {
-          const second = (this.baseSeriesName(s.name).split(/\s+/)[1] || '?')[0].toUpperCase();
-          code = `${code}-${second}`;
+        if ((counts.get(code) || 0) > 1 && !code.includes('-')) {
+          const tag = this.chipCountryTag(s.name);
+          if (tag) code = `${code}-${tag}`;
         }
+        const n = (seen.get(code) || 0) + 1;
+        seen.set(code, n);
+        if (n > 1) code = `${code}-${n}`;
         const points = (s.data || []).filter((p) => Number.isFinite(p.value));
         const last = points[points.length - 1];
         const value = last ? last.value.toFixed(2) : '--';
@@ -353,6 +358,32 @@ export default {
   },
 
   methods: {
+    /**
+     * Country tag from the RAW series name — mirrors the chart's
+     * countryTag so chips and legends agree. SAN SALVADOR counts as SV;
+     * intl benchmarks collapse to INT. Method, NOT computed (a computed
+     * cannot be invoked as a function — the shortSeriesName crash class).
+     */
+    chipCountryTag(rawName) {
+      const up = String(rawName).toUpperCase();
+      const map = [
+        ['EL SALVADOR', 'SV'],
+        ['SAN SALVADOR', 'SV'],
+        ['GUATEMALA', 'GT'],
+        ['NICARAGUA', 'NI'],
+        ['HONDURAS', 'HN'],
+        ['COSTA RICA', 'CR'],
+        ['BRAZIL', 'BR'],
+        ['US GULF', 'US'],
+        ['UNITED STATES', 'US'],
+        ['MIDDLE EAST', 'ME'],
+        ['WORLD', 'INT'],
+        ['INTL', 'INT'],
+        ['BENCHMARK', 'INT']
+      ];
+      const hit = map.find(([needle]) => up.includes(needle));
+      return hit ? hit[1] : '';
+    },
     /** UI language ('en'|'es') — drives the data-layer localization.
      *  Method, NOT computed (a computed cannot be invoked as a function). */
     uiLocale() {
@@ -375,21 +406,14 @@ export default {
     commodityCode(name) {
       const raw = typeof name === 'string' ? name : '';
       const short = this.baseSeriesName(raw);
-      const base = ((short.split(/\s+/)[0] || '?').slice(0, 3).toUpperCase() || '???').slice(0, 3);
-      const countryMap = [
-        ['EL SALVADOR', 'SV'],
-        ['HONDURAS', 'HN'],
-        ['GUATEMALA', 'GT'],
-        ['COSTA RICA', 'CR'],
-        ['NICARAGUA', 'NI'],
-        ['BRAZIL', 'BR'],
-        ['US GULF', 'US'],
-        ['UNITED STATES', 'US'],
-        ['MIDDLE EAST', 'ME'],
-        ['WORLD', 'INT']
-      ];
-      const hit = countryMap.find(([needle]) => raw.toUpperCase().includes(needle));
-      return hit ? `${base}-${hit[1]}` : base;
+      const base = (
+        (short.split(/\s+/)[0] || '')
+          .replace(/[^A-Za-z]/g, '')
+          .slice(0, 3)
+          .toUpperCase() || '???'
+      ).slice(0, 3);
+      const tag = this.chipCountryTag(raw);
+      return tag ? `${base}-${tag}` : base;
     },
     /** Sparkline tooltip date — handles daily, monthly and annual keys;
      *  rendered in the UI language, not the browser's. */

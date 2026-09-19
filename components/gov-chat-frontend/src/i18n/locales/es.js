@@ -548,6 +548,9 @@ export default {
     loadDataError: 'Error al cargar datos',
     filterSeverity: 'Filtrar por gravedad',
 
+    advisory: 'Advertencia',
+    regional: 'Regional',
+    sighting: 'Avistamiento',
     news: {
       addFromNews: 'Añadir de noticias recientes',
       insert: 'Insertar seleccionadas',

@@ -6,7 +6,7 @@ reviewed after !388) · Status: **plan only — not started**
 Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 `mobile/genie_ai_mobile` into line with the Vue 3 web app.
 
-> v3 incorporates everything shipped on the web app during the
+> v4 incorporates everything shipped on the web app during the
 > 2026-09-18/19 sessions (news pipeline, chart crash fixes, grains
 > expansion, history filter, multi-series table). The capability matrix
 > is the source of truth; numbered items (M#) are independent so

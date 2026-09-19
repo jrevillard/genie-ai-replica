@@ -1026,6 +1026,31 @@ export default {
   }
 }
 
+/* Phones down to 384px wide. Three nested containers each contributed
+   var(--space-lg)/var(--space-md) of padding, so 128px of the viewport went to
+   padding alone and charts/tables were left ~237px to render in. Collapsing the
+   nesting to var(--space-sm) per level returns ~100px of content width. */
+@media (max-width: 480px) {
+  .analytics-content {
+    width: 100%;
+    padding: var(--space-sm);
+  }
+
+  .analytics-body {
+    padding: var(--space-sm);
+  }
+
+  .analytics-section {
+    padding: var(--space-sm);
+    margin-bottom: var(--space-md);
+  }
+
+  /* Stacked at this width, so the 50% floor only forces overflow. */
+  .half-width {
+    min-width: 0;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

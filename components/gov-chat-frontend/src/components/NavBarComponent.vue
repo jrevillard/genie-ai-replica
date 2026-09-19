@@ -772,52 +772,56 @@ export default {
   }
 }
 
+/* Phones down to 384px wide. The nav-left row carries the hamburger, the logo
+   and all six mobile controls, so every item is sized and spaced from the same
+   budget: 8px of bar padding + 4px gaps + 32px targets = 316px at the widest,
+   leaving headroom at 384px.
+   Selectors are qualified with .nav-bar on purpose: the base rule is
+   `.nav-bar .icon-btn` (two classes), so a bare `.icon-btn` or `.mobile-btn`
+   here loses the cascade and the reductions silently do nothing. */
 @media (max-width: 480px) {
+  .nav-bar {
+    height: 54px;
+    padding: 0 var(--space-sm);
+  }
+
+  /* Let the row shrink instead of pushing its last button off-screen. */
+  .nav-left,
+  .mobile-controls {
+    min-width: 0;
+  }
+
   .govt-logo {
     height: 32px;
     width: 32px;
   }
 
-  .icon-btn {
-    width: 36px;
-    height: 36px;
+  .nav-bar .logo-container {
+    width: 32px;
+    height: 32px;
+    margin-left: var(--space-xs);
   }
 
-  .icon-btn svg {
+  .nav-bar .icon-btn {
+    width: 32px;
+    height: 32px;
+    margin-left: var(--space-xs);
+  }
+
+  .nav-bar .icon-btn svg {
     width: 20px;
     height: 20px;
   }
 
-  .hamburger-btn {
-    width: 36px;
-    height: 36px;
+  /* Width stays 50px: the inner DsSelect spends 40px on padding (12px text
+     inset + 28px for the chevron), so a narrower box clips the locale label. */
+  .nav-bar .mobile-language-select {
+    width: 50px;
+    margin-left: var(--space-xs);
   }
 
   .tooltip {
     display: none;
-  }
-}
-
-@media (max-width: 480px) {
-  .govt-logo {
-    height: 32px;
-    width: 32px;
-  }
-
-  .nav-bar {
-    height: 54px;
-  }
-
-  /* Space mobile controls more compactly */
-  .mobile-btn {
-    margin-left: var(--space-sm);
-    width: 32px;
-    height: 32px;
-  }
-
-  .mobile-language-select {
-    width: 50px;
-    margin-left: var(--space-sm);
   }
 }
 </style>

@@ -514,6 +514,10 @@ export default {
 .table-container {
   max-height: 140px;
   overflow-y: auto;
+  /* Explicit rather than relying on overflow-y:auto making this compute to
+     auto: the query column has a 300px floor, so on a phone the table is wider
+     than its container and the avg-time column must stay reachable. */
+  overflow-x: auto;
   margin-bottom: var(--space-sm);
   background-color: var(--surface);
 }
@@ -561,6 +565,25 @@ export default {
   white-space: nowrap;
   max-width: 300px;
   color: var(--fg);
+}
+
+/* Phones down to 384px wide. nowrap + max-width makes 300px an effective floor
+   for this cell, which pushed the table to 447px and the avg-time column out of
+   view. The text is already ellipsized, so a narrower cap costs nothing. */
+@media (max-width: 480px) {
+  .top-queries-table .query-text {
+    max-width: 140px;
+  }
+
+  .top-queries-table th,
+  .top-queries-table td {
+    padding: var(--space-xs);
+  }
+
+  .top-queries-table .count,
+  .top-queries-table .avg-time {
+    width: 48px;
+  }
 }
 
 .bar-chart-container {

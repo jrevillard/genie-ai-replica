@@ -1311,10 +1311,11 @@ def _crop_profiles() -> dict:
         return {}
 
 
-def _crop_profile_context(district: str, crops: list[str]) -> list[str]:
+def _crop_profile_context(district: str, crops: list[str], today) -> list[str]:
     """Source-backed deterministic profile context for requested crops."""
     profiles = _crop_profiles()
     sections: list[str] = []
+    iso_week = today.isocalendar()[1]
     for crop in crops:
         profile = next(
             (item for item in profiles.values() if item.get("crop") == crop), None
@@ -1323,9 +1324,20 @@ def _crop_profile_context(district: str, crops: list[str]) -> list[str]:
             continue
         label = profile.get("crop_display_name") or _crop_label(crop)
         region = str(profile.get("region") or "unknown").title()
+        current_stages = [
+            stage.get("stage")
+            for stage in profile.get("growth_stages") or []
+            if iso_week in stage.get("weeks", [])
+        ]
         source_profile = {
             "crop": profile.get("crop"),
             "published_source_region": profile.get("region"),
+            "current_calendar_status": {
+                "date": today.isoformat(),
+                "iso_week": iso_week,
+                "status": "in_season" if current_stages else "outside_season",
+                "stages": current_stages,
+            },
             "season_calendar": {
                 "season_span": profile.get("season_span", {}),
                 "growth_stages": [
@@ -1346,10 +1358,14 @@ def _crop_profile_context(district: str, crops: list[str]) -> list[str]:
             "source_coverage": profile.get("source_coverage", {}),
         }
         sections.append(
-            f"Deterministic {label} crop profile for {district} "
+            f"Official BAMIS {label} crop calendar for {district} "
             f"(published source region: {region}).\n"
-            "This selected crop profile is authoritative for crop facts. If a "
+            "This official BAMIS profile is authoritative for crop facts. If a "
             "retrieved document is unclear or conflicts with it, use this profile. "
+            "For questions about today or the current crop stage, copy "
+            "current_calendar_status exactly; do not choose another stage from the "
+            "calendar. Call the source the official BAMIS crop calendar and use at "
+            "most one suitable crop or stage emoji per crop. "
             "Use favorable_conditions_by_stage only for questions about favorable "
             "or ideal requirements. historical_weekly_climate_normals are calendar "
             "observations, not favorable requirements. Empty or absent values mean "
@@ -1425,7 +1441,7 @@ def _build_weather_context(
     sections: list[str] = [
         f"Today is {now:%A %d %B %Y} (UTC), ISO week {today.isocalendar()[1]}. District: {district}."
     ]
-    sections.extend(_crop_profile_context(district, list(crops or [])))
+    sections.extend(_crop_profile_context(district, list(crops or []), today))
 
     # Short-term forecast
     forecast_horizon = ""

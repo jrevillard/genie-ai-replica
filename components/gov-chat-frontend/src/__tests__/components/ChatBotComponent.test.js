@@ -449,10 +449,10 @@ describe('ChatBotComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Confidence bar: shown whenever a confidence score is present
+  // Confidence metadata is retained but hidden from the citizen chat UI
   // -----------------------------------------------------------------------
-  describe('Confidence bar', () => {
-    it('shows the confidence bar regardless of grounding metadata', async () => {
+  describe('Confidence metadata', () => {
+    it('stores an ungrounded confidence score without displaying it', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -467,10 +467,12 @@ describe('ChatBotComponent', () => {
       });
       await wrapper.vm.$nextTick();
 
-      expect(wrapper.find('.confidence-score').exists()).toBe(true);
+      const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
+      expect(lastBot.confidenceScore).toBe(0);
+      expect(wrapper.find('.confidence-score').exists()).toBe(false);
     });
 
-    it('shows the confidence bar when metadata reports is_grounded=true', async () => {
+    it('stores a grounded confidence score without displaying it', async () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
 
@@ -487,7 +489,7 @@ describe('ChatBotComponent', () => {
 
       const lastBot = vm.chatMessages[vm.chatMessages.length - 1];
       expect(lastBot.confidenceScore).toBe(0.92);
-      expect(wrapper.find('.confidence-score').exists()).toBe(true);
+      expect(wrapper.find('.confidence-score').exists()).toBe(false);
     });
   });
 
@@ -1585,6 +1587,36 @@ describe('ChatBotComponent', () => {
       capturedCallbacks.onTranslation('Traduction');
 
       expect(vm.chatMessages[botMsgIndex].content).toBe('Traduction');
+    });
+
+    it('adds deterministic crop and weather emojis when the response completes', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Crop and weather test';
+      await vm.sendMessage();
+
+      const botMsgIndex = vm.chatMessages.length - 1;
+      capturedCallbacks.onChunk('- Eggplant: rain is expected.\n- Mango: windy conditions.\n- Rice Aman: clear sky.');
+      capturedCallbacks.onDone({ queryId: 'emoji-test' });
+
+      expect(vm.chatMessages[botMsgIndex].content).toBe(
+        '- 🍆 Eggplant: 🌧️ rain is expected.\n- 🥭 Mango: 💨 windy conditions.\n- 🌾 Rice Aman: ☀️ clear sky.'
+      );
+    });
+
+    it('adds one matching weather emoji to a weather line', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      vm.newMessage = 'Weather test';
+      await vm.sendMessage();
+
+      const botMsgIndex = vm.chatMessages.length - 1;
+      capturedCallbacks.onChunk('Rain is expected on Tuesday.\nWind remains light.');
+      capturedCallbacks.onDone({ queryId: 'weather-emoji-test' });
+
+      expect(vm.chatMessages[botMsgIndex].content).toBe('🌧️ Rain is expected on Tuesday.\n💨 Wind remains light.');
     });
   });
 

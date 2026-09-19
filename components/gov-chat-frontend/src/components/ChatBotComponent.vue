@@ -125,12 +125,8 @@
             </div>
             <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
           </div>
-          <!-- Feedback and confidence score for bot messages -->
+          <!-- Feedback for bot messages; confidence remains in metadata for analytics -->
           <div v-if="msg.sender === 'bot'" class="bot-message-meta">
-            <div v-if="msg.confidenceScore != null" class="confidence-score">
-              <Brain :size="16" />
-              <span>Confidence: {{ (msg.confidenceScore * 100).toFixed(0) }}%</span>
-            </div>
             <div class="feedback-trigger">
               <DsPill>
                 <DsButton variant="ghost" :small="true" @click="openFeedbackDialog(index)">
@@ -276,8 +272,9 @@
 </template>
 
 <script>
-import { Brain, Loader2, Plus, Save, FileText } from '@lucide/vue';
+import { Loader2, Plus, Save, FileText } from '@lucide/vue';
 import { fillLocationPlaceholder } from '@/config/defaultLocation';
+import { decorateChatResponse } from '@/utils/chatResponseEmojis';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
 import { mapGetters, mapActions } from 'vuex';
@@ -315,7 +312,6 @@ marked.use({ renderer: linkRenderer });
 export default {
   name: 'ChatBotComponent',
   components: {
-    Brain,
     Loader2,
     Plus,
     Save,
@@ -1077,7 +1073,7 @@ export default {
             this.openMapFromMetadata(metadata);
           },
           onTranslation: (translatedContent) => {
-            this.chatMessages[lastMessageIndex].content = translatedContent;
+            this.chatMessages[lastMessageIndex].content = decorateChatResponse(translatedContent);
             this.scrollToBottom();
           },
           onDone: (data) => {
@@ -1086,6 +1082,9 @@ export default {
             this.streamingQueryId = data.queryId;
             this.chatMessages[lastMessageIndex].isStreaming = false;
             this.chatMessages[lastMessageIndex].isSaved = false;
+            this.chatMessages[lastMessageIndex].content = decorateChatResponse(
+              this.chatMessages[lastMessageIndex].content
+            );
             if (data.queryId) {
               this.chatMessages[lastMessageIndex].queryId = data.queryId;
             }
@@ -2197,17 +2196,6 @@ export default {
   align-items: flex-start;
 }
 
-.confidence-score {
-  font-size: var(--text-sm);
-  color: var(--muted-soft);
-  background: var(--surface);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
 .feedback-trigger {
   margin-left: 0;
 }
@@ -2258,7 +2246,9 @@ export default {
 
 .quick-help-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  /* min(250px, 100%) so a panel narrower than the track floor collapses to one
+     column instead of overflowing it. */
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
   gap: var(--space-md);
 }
 
@@ -2290,6 +2280,14 @@ export default {
   font-size: var(--text-base);
   color: var(--fg);
   font-weight: 500;
+  /* Flex items floor at min-content by default, which kept the longest service
+     name propping the card open wider than its grid track. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quick-help-item :deep(.ds-card__body) {
+  min-width: 0;
 }
 
 /* Chat Input Styles */
@@ -2333,14 +2331,21 @@ export default {
     flex: 1;
   }
 
+  /* minmax(0, ...) rather than a bare 1fr: 1fr floors each track at its
+     min-content width, so these columns could not shrink to fit the panel they
+     live in. The column count keys off the viewport, but the quick-help grid
+     sits in the chat panel, which at exactly 768px is only ~286px wide once the
+     450px sidebar is laid out inline — three min-content tracks then overflowed
+     it. Tracks only shrink past min-content when the space demands it, so wider
+     layouts are unchanged. */
   .quick-help-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
   .quick-help-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

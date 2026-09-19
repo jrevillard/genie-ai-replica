@@ -118,7 +118,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Maize (white)',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Maize (white), Nicaragua national average [regional]',
         unit: QUINTAL,
         regional: true
@@ -128,7 +128,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Beans (red)',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Beans (red), Nicaragua national average [regional]',
         unit: QUINTAL,
         regional: true
@@ -138,7 +138,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Beans (kidney, pinto)',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Beans (pinto), Nicaragua national average [regional]',
         unit: QUINTAL,
         regional: true
@@ -148,7 +148,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Sorghum (white)',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Sorghum, Nicaragua national average [regional]',
         unit: QUINTAL,
         regional: true
@@ -241,7 +241,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Chicken (poultry)',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Chicken, Nicaragua national average [regional]',
         unit: 'USD/lb',
         regional: true
@@ -251,7 +251,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Pork',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Pork, Nicaragua national average [regional]',
         unit: 'USD/lb',
         regional: true
@@ -261,7 +261,7 @@ const MARKET_CATEGORIES = {
         adapter: 'wfp-nic',
         country: 'Nicaragua',
         commodity: 'Eggs',
-        pricetype: 'retail',
+        pricetype: 'wholesale',
         name: 'Eggs, Nicaragua national average [regional]',
         unit: 'USD/dozen',
         regional: true

@@ -93,7 +93,7 @@
         role="group"
         :aria-label="$t('charts.market.series', 'Series')"
       >
-        <label v-for="g in groupItems" :key="g.word" class="series-group" :title="g.names.join(', ')">
+        <label v-for="g in groupItems" :key="g.word" class="series-group" :title="g.tip">
           <input
             type="checkbox"
             :checked="g.allOn"
@@ -110,7 +110,7 @@
         role="group"
         :aria-label="$t('charts.market.series', 'Series')"
       >
-        <label v-for="item in toggleItems" :key="item.name" class="series-toggle" :title="item.name">
+        <label v-for="item in toggleItems" :key="item.name" class="series-toggle" :title="item.tip">
           <input
             type="checkbox"
             :checked="!item.hidden"
@@ -162,7 +162,7 @@
             <thead>
               <tr>
                 <th>{{ $t('charts.market.period', 'Period') }}</th>
-                <th v-for="s in visibleSeries" :key="s.name" :title="`${s.name} (${s.unit || unit || 'n/a'})`">
+                <th v-for="s in visibleSeries" :key="s.name" :title="seriesHeaderTip(s)">
                   {{ dispName(s.name) }}
                 </th>
                 <th>{{ $t('charts.caveats.quality', 'Quality') }}</th>
@@ -306,6 +306,7 @@
 
 <script>
 import agriApiService from '../../services/agriApiService.js';
+import { agriDateLocale, localizeFullName, localizeMeta, localizeSeriesName } from '../../utils/agri-i18n.js';
 import chatbotService from '../../services/chatbotService.js';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -381,7 +382,8 @@ export default {
       return DOMPurify.sanitize(marked.parse(this.predictionResponse));
     },
     meta() {
-      return (this.envelope && this.envelope.meta) || {};
+      const raw = (this.envelope && this.envelope.meta) || {};
+      return localizeMeta(raw, this.uiLocale());
     },
     hasData() {
       return this.series.length > 0;
@@ -405,7 +407,7 @@ export default {
      * legends readable and non-overlapping.
      */
     seriesDisplayNames() {
-      const bases = this.series.map((s) => this.baseSeriesName(s.name));
+      const bases = this.series.map((s) => localizeSeriesName(this.baseSeriesName(s.name), this.uiLocale()));
       const counts = bases.reduce((m, b) => m.set(b, (m.get(b) || 0) + 1), new Map());
       const out = {};
       this.series.forEach((s, i) => {
@@ -424,6 +426,7 @@ export default {
       return this.series.map((s, i) => ({
         name: s.name,
         shortName: this.dispName(s.name),
+        tip: `${localizeFullName(s.name, this.uiLocale())}${s.unit ? ` (${s.unit})` : ''}`,
         color: palette[i % palette.length],
         hidden: this.hiddenSeries.includes(s.name),
         lastActive: !this.hiddenSeries.includes(s.name) && activeCount === 1
@@ -439,7 +442,12 @@ export default {
     groupItems() {
       const groups = new Map();
       for (const s of this.series) {
-        const word = (this.baseSeriesName(s.name).split(/\s+/)[0] || '').toLowerCase();
+        // Family word comes from the LOCALIZED base so type-master labels
+        // render "Frijol (5)" under es — grouping is 1:1 with the English
+        // words because the name dictionary is injective.
+        const word = (
+          localizeSeriesName(this.baseSeriesName(s.name), this.uiLocale()).split(/\s+/)[0] || ''
+        ).toLowerCase();
         if (!word) continue;
         if (!groups.has(word)) groups.set(word, []);
         groups.get(word).push(s.name);
@@ -456,6 +464,7 @@ export default {
           word,
           label: `${word[0].toUpperCase()}${word.slice(1)} (${names.length})`,
           names,
+          tip: names.map((n) => localizeFullName(n, this.uiLocale())).join(', '),
           allOn,
           someOn: on.length > 0,
           disabled
@@ -643,7 +652,11 @@ export default {
           shortName: this.dispName(s.name),
           value,
           color: palette[origIdx % palette.length],
-          tip: `Latest month-end price of ${s.name} — ${value}${unitSuffix}`
+          tip: this.$t('charts.market.latestTip', 'Latest month-end price of {name} — {value}{unit}', {
+            name: localizeFullName(s.name, this.uiLocale()),
+            value,
+            unit: unitSuffix
+          })
         };
       });
     },
@@ -651,7 +664,11 @@ export default {
     primaryLatestTooltip() {
       const primary = this.series[0];
       if (!primary) return '';
-      return `Latest month-end price of ${primary.name} — ${this.latestValue}${this.unit ? ` ${this.unit}` : ''}`;
+      return this.$t('charts.market.latestTip', 'Latest month-end price of {name} — {value}{unit}', {
+        name: localizeFullName(primary.name, this.uiLocale()),
+        value: this.latestValue,
+        unit: this.unit ? ` ${this.unit}` : ''
+      });
     },
     /**
      * Date-aligned table rows: the UNION of every visible series' dates.
@@ -794,6 +811,55 @@ export default {
       return {
         chart: {
           type: 'line',
+          // Axis month/day names follow the UI language — ApexCharts ships
+          // EN-only by default (i18n req 2026-09-19).
+          locales: [
+            {
+              name: 'en',
+              options: {
+                months: [
+                  'January',
+                  'February',
+                  'March',
+                  'April',
+                  'May',
+                  'June',
+                  'July',
+                  'August',
+                  'September',
+                  'October',
+                  'November',
+                  'December'
+                ],
+                monthsShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+                daysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+              }
+            },
+            {
+              name: 'es',
+              options: {
+                months: [
+                  'Enero',
+                  'Febrero',
+                  'Marzo',
+                  'Abril',
+                  'Mayo',
+                  'Junio',
+                  'Julio',
+                  'Agosto',
+                  'Septiembre',
+                  'Octubre',
+                  'Noviembre',
+                  'Diciembre'
+                ],
+                monthsShort: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+                days: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
+                daysShort: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+              }
+            }
+          ],
+          defaultLocale: this.uiLocale() === 'es' ? 'es' : 'en',
           // Wheel-zoom + pan + native +/−/reset toolbar (user req 2026-09-18:
           // wheel users zoom, everyone needs buttons; pan is auto-selected so
           // drag scrolls the zoomed surface). autoScaleYaxis keeps each zoom
@@ -1184,9 +1250,17 @@ export default {
       if (this.category === 'aquaculture' && value >= 1000) return `${(value / 1000).toFixed(0)}K`;
       return value >= 100 ? value.toFixed(0) : value.toFixed(1);
     },
+    /** UI language ('en'|'es') — drives the data-layer localization. */
+    uiLocale() {
+      return (this.$i18n && this.$i18n.locale) || localStorage.getItem('userLocale') || 'en';
+    },
+    /** Table-header hover: full localized series name + unit. */
+    seriesHeaderTip(s) {
+      return `${localizeFullName(s.name, this.uiLocale())} (${s.unit || this.unit || 'n/a'})`;
+    },
     formatDate(dateStr) {
       if (!dateStr) return '--';
-      return new Date(dateStr).toLocaleDateString();
+      return new Date(dateStr).toLocaleDateString(agriDateLocale(this.uiLocale()));
     },
     async loadChartData() {
       this.loading = true;

@@ -664,6 +664,7 @@ export default {
       dataTable: 'Data Table',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Last updated',
       commodity: 'Commodity',
       noData: 'No data available',

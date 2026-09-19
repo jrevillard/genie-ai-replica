@@ -56,6 +56,7 @@ import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsPill from '../ds/Pill.vue';
 import agriApiService from '../../services/agriApiService.js';
+import { agriDateLocale, localizeFullName } from '../../utils/agri-i18n.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
@@ -126,7 +127,7 @@ export default {
 
     /** Explains what the headline number IS (user req 2026-09-19): the
      *  primary commodity's latest month-end observation, not an average,
-     *  sum or index. */
+     *  sum or index. Localized (i18n req 2026-09-19). */
     latestTooltip() {
       const primary = this.allSeries[0];
       if (!primary) return '';
@@ -134,7 +135,11 @@ export default {
       const last = points[points.length - 1];
       const value = last ? last.value.toFixed(2) : '--';
       const unit = this.unit ? ` ${this.unit}` : '';
-      return `Latest month-end price of ${primary.name} — ${value}${unit}`;
+      return this.$t('charts.market.latestTip', 'Latest month-end price of {name} — {value}{unit}', {
+        name: localizeFullName(primary.name, this.uiLocale()),
+        value,
+        unit
+      });
     },
 
     /**
@@ -165,7 +170,11 @@ export default {
         return {
           code,
           isPrimary: i === 0,
-          tip: `${s.name} — ${value}${unit ? ` ${unit}` : ''}`,
+          tip: this.$t('charts.market.latestTip', 'Latest month-end price of {name} — {value}{unit}', {
+            name: localizeFullName(s.name, this.uiLocale()),
+            value,
+            unit: unit ? ` ${unit}` : ''
+          }),
           color: palette[i % palette.length]
         };
       });
@@ -344,6 +353,11 @@ export default {
   },
 
   methods: {
+    /** UI language ('en'|'es') — drives the data-layer localization.
+     *  Method, NOT computed (a computed cannot be invoked as a function). */
+    uiLocale() {
+      return (this.$i18n && this.$i18n.locale) || localStorage.getItem('userLocale') || 'en';
+    },
     /** Compact commodity name — SAME algorithm as the chart's
      *  baseSeriesName (MarketPriceChart.vue) so codes and legends agree.
      *  Method, NOT computed. */
@@ -377,19 +391,21 @@ export default {
       const hit = countryMap.find(([needle]) => raw.toUpperCase().includes(needle));
       return hit ? `${base}-${hit[1]}` : base;
     },
-    /** Sparkline tooltip date — handles daily, monthly and annual keys. */
+    /** Sparkline tooltip date — handles daily, monthly and annual keys;
+     *  rendered in the UI language, not the browser's. */
     formatSparkTooltipDate(value) {
       if (value === null || value === undefined) return '';
       const s = String(value);
+      const locale = agriDateLocale(this.uiLocale());
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        return new Date(`${s}T00:00:00`).toLocaleDateString(undefined, {
+        return new Date(`${s}T00:00:00`).toLocaleDateString(locale, {
           year: 'numeric',
           month: 'short',
           day: 'numeric'
         });
       }
       if (/^\d{4}-\d{2}$/.test(s)) {
-        return new Date(`${s}-01T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+        return new Date(`${s}-01T00:00:00`).toLocaleDateString(locale, { year: 'numeric', month: 'long' });
       }
       if (/^\d{4}$/.test(s)) return s;
       return s;

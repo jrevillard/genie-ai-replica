@@ -638,6 +638,7 @@ export default {
       dataTable: 'ডেটা টেবিল',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'সর্বশেষ আপডেট',
       commodity: 'পণ্য',
       noData: 'কোনো ডেটা নেই',

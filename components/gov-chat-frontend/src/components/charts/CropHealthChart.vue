@@ -79,6 +79,7 @@
 
 <script>
 import agriApiService from '../../services/agriApiService.js';
+import { agriDateLocale } from '../../utils/agri-i18n.js';
 import { useChartTheme } from '../../composables/useChartTheme.js';
 import DsCard from '../ds/Card.vue';
 import DsPill from '../ds/Pill.vue';
@@ -200,7 +201,8 @@ export default {
               if (dp && dp.date) {
                 const when = new Date(`${String(dp.date).slice(0, 10)}T00:00:00`);
                 if (!Number.isNaN(when.getTime())) {
-                  return `${v.toFixed(3)} — ${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+                  const uiLocale = (this.$i18n && this.$i18n.locale) || 'en';
+                  return `${v.toFixed(3)} — ${when.toLocaleDateString(agriDateLocale(uiLocale), { year: 'numeric', month: 'short', day: 'numeric' })}`;
                 }
               }
               return v.toFixed(3);

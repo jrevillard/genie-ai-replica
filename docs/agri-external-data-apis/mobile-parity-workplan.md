@@ -44,7 +44,7 @@ the Vue app's backend adapters/APIs exclusively (spec §0).
 | M13 | News: language-follows-locale, relevance gate, AI translation fallback (translate-then-persist `_tr<lang>`), wire dedupe, economía feed | **Done** (same endpoints) | — |
 | M14 | Caveat chips + About panel (source/coverage/estimation) | Banner only; About panel absent | Low |
 | M15 | Unit calibration explanations (quintal/PPI/index/SDG %-of-what incl. the 8-in-100-kg example) | Exists | — |
-| M16 | EN/ES i18n for all chart strings (selector stays EN/ES; other locale files key-complete) | **Done** | — |
+| M16 | EN/ES i18n: all chart strings **plus data-layer localization** (spec §12bis S27 — series-name/meta dictionaries, UI-locale dates, chart month names) | Strings **Done**; data-layer localization absent | High |
 | M17 | Debug logging: per-load line (series/points/units/stale) + per-axis line (groups/min/max) | Absent | Low |
 | M18 | Crop Health: 14 depts, baseline/trend/health buckets | List renders; verify baseline/change display + tooltips | Verify |
 | M19 | Pest Alerts: advisories/regional/sightings, severity filter, AI assistance | Exists | Verify |
@@ -127,6 +127,15 @@ jrevillard.
 > on is tracked here and reflected in the matrix/phases, so the mobile
 > catch-up plan never drifts from the web app.
 
+- 2026-09-19 v4.5: full EN/ES parity sweep (web) — audits proved every
+  `$t()` key complete; the visible gaps were DATA-derived strings. New
+  web contract `src/utils/agri-i18n.js`: exact-match ES dictionaries for
+  the 33 base + 40 full series names, countries, sources, coverage and
+  CPI-estimation templates (unknown input falls back, never
+  mistranslates); tooltip sentences via `market.latestTip`; UI-locale
+  date formatting; ApexCharts EN/ES month names; SatisfactionGauge
+  fallback labels reuse `analytics.timePeriods`. M16 re-opened for the
+  mobile side (spec §12bis S27, new widget tests).
 - 2026-09-19 v4.4: AI-prediction output contract (web) — the backend
   caps LLM completions at 1024 tokens (comps `LLMParams` default; no
   client in our chain sends `max_tokens`), which truncated long

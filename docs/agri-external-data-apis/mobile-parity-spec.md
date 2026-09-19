@@ -338,6 +338,34 @@ caveats.aboutData / .source / .coverage / .estimation / .attribution  (port if a
 On-screen language selector stays EN/ES (flavor-driven) — unchanged.
 Other locale files stay key-complete (CI + country reuse).
 
+### 12bis. Data-layer localization (S27) — names & meta are DATA, not keys
+
+Web reference implementation: `components/gov-chat-frontend/src/utils/agri-i18n.js`.
+Commodity/series names arrive from the backend in English and the envelope
+`meta` strings (source/coverage/estimation/attribution) are composed
+server-side — locale files cannot carry them. Mobile MUST port the same
+exact-match dictionaries to Dart (one file, e.g. `agri_i18n.dart`) with
+the SAME fallback rule:
+
+- `localizeSeriesName(baseName, locale)`: 33 base-name entries — an
+  unknown name returns the input (never mistranslates).
+- `localizeFullName(fullName, locale)`: 40 full-name entries (tooltips,
+  coverage string).
+- Countries (Brazil→Brasil, US Gulf→Golfo de EE. UU., Middle East→Oriente
+  Medio, World→Mundo, United States→Estados Unidos), sources (3 entries),
+  coverage fragments (incl. the "— monthly aggregates" suffix), the CPI
+  estimation template, the WFP attribution line.
+- `localizeMeta(meta, locale)` mirrors web behavior exactly.
+- Dates render in the UI language (`es-SV` / `en-US`), never the device
+  locale; chart month/day tick names follow the UI language (fl_chart:
+  Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic under es).
+- Acronym chips (`commodityCode`) stay ENGLISH-derived in both languages
+  (MAI-US, CAB-GT…) — codes are identifiers; only their tooltips translate.
+
+Widget test (add to §14): localizeSeriesName('Maize (white)', 'es') ==
+'Maíz (blanco)'; unknown input returns unchanged; localizeMeta on a
+fixture envelope translates source+coverage+estimation together.
+
 ## 13. Visual parity contract & Deltas
 
 **Rule:** for every screen, a side-by-side against the Vue app (same

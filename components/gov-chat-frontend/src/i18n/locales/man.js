@@ -637,6 +637,7 @@ export default {
       dataTable: 'Dɛta tabali',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Labato ɲɛ',
       commodity: 'Dɛtɔ',
       noData: 'Dɛta ma ɲini',

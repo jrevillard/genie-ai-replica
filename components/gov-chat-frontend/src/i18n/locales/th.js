@@ -647,6 +647,7 @@ export default {
       dataTable: 'ตารางข้อมูล',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'อัปเดตล่าสุด',
       commodity: 'สินค้า',
       noData: 'ไม่มีข้อมูล',

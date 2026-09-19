@@ -642,6 +642,7 @@ export default {
       dataTable: 'Tafole ya Data',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Holisitsoe ho feta',
       commodity: 'Thepa',
       noData: 'Ha ho data',

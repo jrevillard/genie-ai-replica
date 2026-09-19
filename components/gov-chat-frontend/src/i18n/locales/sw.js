@@ -647,6 +647,7 @@ export default {
       dataTable: 'Jedwali la Data',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Ilisasishwa mwisho',
       commodity: 'Bidhaa',
       noData: 'Hakuna data',

@@ -648,6 +648,7 @@ export default {
       dataTable: 'جدول البيانات',
       period: 'Period',
       exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'آخر تحديث',
       commodity: 'سلعة',
       noData: 'لا تتوفر بيانات',

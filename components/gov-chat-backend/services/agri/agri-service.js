@@ -238,7 +238,7 @@ const MARKET_CATEGORIES = {
       {
         type: 'sdg',
         key: 'FAOSTAT:SDG:Central America',
-        name: 'Central America post-harvest food loss (FAO SDG 12.3.1)',
+        name: 'Central America food lost after harvest, before retail (share of food harvest by mass) (FAO SDG 12.3.1)',
         unit: '% of production',
         annual: true
       }

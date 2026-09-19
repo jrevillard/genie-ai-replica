@@ -476,8 +476,15 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
     }
     if (u.contains('%')) {
       return es
-          ? 'Porcentaje de la producción — estadística regional modelada (FAO ODS 12.3.1).'
-          : 'Percentage of production — a modeled regional statistic (FAO SDG 12.3.1).';
+          ? 'Último = la proporción de la cosecha alimentaria centroamericana, '
+                'en masa, que se pierde entre la cosecha y la venta al por menor '
+                '(estimación regional modelada FAO ODS 12.3.1 — no es un precio). '
+                'Ejemplo: 8.3 significa que unos 8 de cada 100 kg de alimentos '
+                'producidos nunca llegan al consumidor.'
+          : 'Latest = the share of the Central American food harvest, by mass, '
+                'lost between harvest and retail (FAO SDG 12.3.1 modeled regional '
+                'estimate — not a price). Example: 8.3 means about 8 of every '
+                '100 kg of food grown never reaches a consumer.';
     }
     if (u.contains('usd/mt')) {
       return es

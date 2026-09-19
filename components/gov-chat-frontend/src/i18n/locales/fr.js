@@ -660,7 +660,7 @@ export default {
       unitIndex:
         'Les valeurs d’indice sont relatives à une période de base (par ex. 2016 = 100), pas des prix absolus — la tendance montre la direction et l’ampleur du changement.',
       unitPercent:
-        'Pourcentage de la production — statistique régionale modélisée (FAO ODD 12.3.1), pas un prix observé.',
+        'Dernier = la part de la récolte alimentaire centraméricaine, en masse, perdue entre la récolte et la vente au détail (estimation régionale modélisée FAO ODD 12.3.1 — pas un prix). Exemple : 8.3 signifie que près de 8 kg sur 100 produits ne parviennent jamais au consommateur.',
       unitUsdKg: 'Dollars US par kilogramme.',
       unitUsdMt: 'Dollars US par tonne métrique (1 000 kg) — marchés de référence internationaux.',
       unitShortTon: 'Dollars US par tonne courte (907,18 kg) — convention du marché américain.',

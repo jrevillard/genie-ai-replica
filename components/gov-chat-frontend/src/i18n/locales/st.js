@@ -649,7 +649,8 @@ export default {
         'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
       unitIndex:
         'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
-      unitPercent: 'Percentage of production — a modeled regional statistic (FAO SDG 12.3.1), not an observed price.',
+      unitPercent:
+        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
       unitUsdKg: 'US dollars per kilogram.',
       unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
       unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',

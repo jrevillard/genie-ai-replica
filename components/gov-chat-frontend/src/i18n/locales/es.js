@@ -673,7 +673,7 @@ export default {
       unitIndex:
         'Los valores del índice son relativos a un período base (por ejemplo 2016 = 100), no precios absolutos — la tendencia muestra dirección y magnitud del cambio.',
       unitPercent:
-        'Porcentaje de la producción — estadística regional modelada (FAO ODS 12.3.1), no un precio observado.',
+        'Último = la proporción de la cosecha alimentaria centroamericana, en masa, que se pierde entre la cosecha y la venta al por menor (estimación regional modelada FAO SDG 12.3.1 — no es un precio). Ejemplo: 8.3 significa que unos 8 de cada 100 kg de alimentos producidos nunca llegan al consumidor.',
       unitUsdKg: 'Dólares estadounidenses por kilogramo.',
       unitUsdMt: 'Dólares estadounidenses por tonelada métrica (1.000 kg) — mercados internacionales de referencia.',
       unitShortTon: 'Dólares estadounidenses por tonelada corta (907,18 kg) — convención del mercado de EE. UU.',

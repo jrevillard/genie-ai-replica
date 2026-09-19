@@ -658,7 +658,8 @@ export default {
         'Índice de Preços ao Produtor dos EUA para fabricação de pesticidas e produtos químicos agrícolas (BLS). Os valores do índice são relativos a um período-base, não preços absolutos — a tendência mostra a direção do custo.',
       unitIndex:
         'Os valores do índice são relativos a um período-base (por exemplo 2016 = 100), não preços absolutos — a tendência mostra direção e magnitude da mudança.',
-      unitPercent: 'Percentagem da produção — estatística regional modelada (FAO ODS 12.3.1), não um preço observado.',
+      unitPercent:
+        'Último = a parcela da colheita de alimentos da América Central, em massa, perdida entre a colheita e o varejo (estimativa regional modelada FAO ODS 12.3.1 — não é um preço). Exemplo: 8.3 significa que cerca de 8 em cada 100 kg de alimentos produzidos nunca chegam ao consumidor.',
       unitUsdKg: 'Dólares americanos por quilograma.',
       unitUsdMt: 'Dólares americanos por tonelada métrica (1.000 kg) — mercados internacionais de referência.',
       unitShortTon: 'Dólares americanos por tonelada curta (907,18 kg) — convenção do mercado dos EUA.',

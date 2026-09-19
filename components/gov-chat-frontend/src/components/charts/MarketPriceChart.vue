@@ -41,9 +41,26 @@
       <!-- Summary Cards -->
       <div class="summary-grid">
         <DsCard variant="elevated">
-          <div class="summary-item">
+          <!-- Single commodity: one figure. Multi-commodity charts: the
+               Latest card lists every plotted commodity with its own figure,
+               color-matched to its line. -->
+          <div v-if="series.length <= 1" class="summary-item">
             <span class="summary-label">{{ $t('charts.market.latest', 'Latest') }}</span>
             <strong class="summary-value">{{ latestValue }}</strong>
+            <span v-if="unit" class="summary-unit summary-unit--info" tabindex="0" :title="unitExplanation"
+              >{{ unit }}
+              <i class="fas fa-circle-info unit-info-icon" aria-hidden="true"></i>
+            </span>
+          </div>
+          <div v-else class="summary-item summary-item--multi">
+            <span class="summary-label">{{ $t('charts.market.latest', 'Latest') }}</span>
+            <ul class="latest-list">
+              <li v-for="item in latestBySeries" :key="item.name" class="latest-list__item">
+                <span class="latest-list__dot" :style="{ background: item.color }" aria-hidden="true"></span>
+                <span class="latest-list__name" :title="item.name">{{ item.shortName }}</span>
+                <strong class="latest-list__value">{{ item.value }}</strong>
+              </li>
+            </ul>
             <span v-if="unit" class="summary-unit summary-unit--info" tabindex="0" :title="unitExplanation"
               >{{ unit }}
               <i class="fas fa-circle-info unit-info-icon" aria-hidden="true"></i>
@@ -436,6 +453,42 @@ export default {
       if (latest.value === null || latest.value === undefined) return '--';
       return this.formatValue(latest.value);
     },
+    /** Chart line palette (index-matched to series order). */
+    seriesPalette() {
+      const cssVars = this.resolvedCssVars;
+      return [
+        this.resolvedCategoryColor || cssVars.accentColor,
+        cssVars.warningColor || 'var(--warning)',
+        cssVars.mutedColor,
+        cssVars.infoColor || 'var(--info)',
+        cssVars.dangerColor || 'var(--danger)'
+      ];
+    },
+    /**
+     * Per-commodity Latest figures for multi-commodity charts — each row
+     * color-matched to its line so the card reads straight off the chart.
+     */
+    latestBySeries() {
+      const palette = this.seriesPalette;
+      return this.series.map((s, i) => {
+        const points = (s.data || []).filter((p) => Number.isFinite(p.value));
+        const last = points[points.length - 1];
+        return {
+          name: s.name,
+          shortName: this.shortSeriesName(s.name),
+          value: last ? this.formatValue(last.value) : '--',
+          color: palette[i % palette.length]
+        };
+      });
+    },
+    shortSeriesName(name) {
+      const short = String(name || '')
+        .replace(/\s*\[(regional|converted[^\]]*)\]/gi, '')
+        .replace(/\s*\((intl|international|fob|cif)[^)]*\)/gi, '')
+        .split(',')[0]
+        .trim();
+      return short || name;
+    },
     trendLabel() {
       const map = {
         up: this.$t('charts.market.trendUp', 'Rising'),
@@ -491,7 +544,6 @@ export default {
     },
     chartOptions() {
       const cssVars = this.resolvedCssVars;
-      const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
       const dense = this.pointCount > 300;
 
       // Group visible series by unit. Series stay in chartSeries order and
@@ -591,16 +643,9 @@ export default {
           axisTicks: { show: false }
         },
         yaxis,
-        // Primary line uses the resolved --fg token (guaranteed contrast in
-        // both themes); the remaining entries color the estimated overlay
-        // and the secondary regional/benchmark series.
-        colors: [
-          seriesColor,
-          cssVars.warningColor || 'var(--warning)',
-          cssVars.mutedColor,
-          cssVars.infoColor || 'var(--info)',
-          cssVars.dangerColor || 'var(--danger)'
-        ],
+        // Palette is shared with the multi-commodity Latest card so chips
+        // and lines stay color-matched.
+        colors: this.seriesPalette,
         // Solid fill (light opacity) instead of gradient — the gradient
         // version made the line stroke appear to fade because ApexCharts
         // applies the fill opacity to the line border as well.
@@ -991,6 +1036,47 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
+}
+
+/* Multi-commodity Latest list — one row per plotted series */
+.latest-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.latest-list__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.latest-list__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.latest-list__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--fg-muted, var(--muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.latest-list__value {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
 }
 
 .caveat-row {

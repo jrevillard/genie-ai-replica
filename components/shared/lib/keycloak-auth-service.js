@@ -162,15 +162,24 @@ async function init(idpUrl) {
   if (jwksOverride) {
     const overrideJwks = createJwksCache(jwksOverride);
     issuerMap.set(doc.issuer, overrideJwks);
-    // Compute the public issuer here too so token lookups work when the JWT
-    // carries the public-side issuer (KEYCLOAK_PUBLIC_URL differs from the
-    // discovery issuer in split-URL local builds).
+    // Register every plausible issuer alias so token lookups succeed regardless
+    // of which issuer the JWT carries:
+    //   - doc.issuer: the discovery-reported issuer (http://keycloak:8080 in local Docker)
+    //   - KEYCLOAK_PUBLIC_URL derived issuer: container-internal hostname (Docker DNS)
+    //   - KEYCLOAK_BROWSER_ISSUER: explicit browser-facing issuer (e.g. https://localhost/auth)
     const publicUrlOverride = process.env.KEYCLOAK_PUBLIC_URL;
     if (publicUrlOverride) {
       const publicIssuerOverride = `${publicUrlOverride.replace(/\/$/, '')}/realms/${KEYCLOAK_REALM}`;
       issuerMap.set(publicIssuerOverride, overrideJwks);
     }
-    logger.info(`[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} (overrides discovery ${doc.jwks_uri})`);
+    if (process.env.KEYCLOAK_BROWSER_ISSUER) {
+      issuerMap.set(process.env.KEYCLOAK_BROWSER_ISSUER, overrideJwks);
+    }
+    logger.info(
+      `[KeycloakAuth] Using KEYCLOAK_JWKS_URL=${jwksOverride} ` +
+      `(overrides discovery ${doc.jwks_uri}; ` +
+      `registered issuers: ${Array.from(issuerMap.keys()).join(', ')})`
+    );
   }
 
   // Alias a public-facing issuer for split internal/public OIDC URLs (e.g. local

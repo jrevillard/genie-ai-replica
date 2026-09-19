@@ -334,11 +334,16 @@ async function transition(repoId, action, actor) {
   if (!spec) {
     throw new LifecycleError('VALIDATION_ERROR', `action must be one of ${ACTIONS.join('|')}`, 400);
   }
+  // [DIAG 2026-09-15] Lifecycle 502 — verbose entry/exit per branch + try/finally
+  // so the next failed publish leaves a trace in okf-server.log. Without this
+  // we cannot see WHICH step (mint, export, requeue, audit) throws.
+  logger.info('[OKF-LIFECYCLE] entry', { repo_id: repoId, action, actor_sub: actor && actor.sub });
   return withSpan('okf.lifecycle.transition', async (span) => {
     span.setAttribute('okf.repo_id', repoId);
     span.setAttribute('okf.lifecycle.action', action);
     const db = await getDb();
     const repo = await loadRepo(db, repoId);
+    logger.info('[OKF-LIFECYCLE] loaded repo', { repo_id: repoId, state: repo.lifecycle_state, version: repo.version, ingested_version: repo.ingested_version });
 
     // BUILDING GATE — before the transition table so a building repo hears
     // "still building", never "invalid transition". Retract is exempt (a
@@ -390,6 +395,9 @@ async function transition(repoId, action, actor) {
     }
 
     if (action === 'publish') {
+      // [DIAG 2026-09-15] Mark every step so we can see exactly where the
+      // publish dies (entry / conceptCount / mint / fresh / export / requeue).
+      logger.info('[OKF-PUBLISH] step=entry', { repo_id: repoId, current_state: repo.lifecycle_state });
       // A SERVING repo is READ ONLY (David, 2026-08-30): publishing a new
       // version requires retracting first — content cannot change while the
       // graph serves, so a publish-while-serving would mint an identical
@@ -402,6 +410,7 @@ async function transition(repoId, action, actor) {
         );
       }
       // An empty repo must not publish — the mint would snapshot zero concepts.
+      logger.info('[OKF-PUBLISH] step=counting concepts', { repo_id: repoId });
       const conceptCount = (
         await (
           await db.query(`FOR m IN ${META} FILTER m.repo_id == @repo_id COLLECT WITH COUNT INTO c RETURN c`, {
@@ -409,6 +418,7 @@ async function transition(repoId, action, actor) {
           })
         ).all()
       )[0];
+      logger.info('[OKF-PUBLISH] step=concepts-counted', { repo_id: repoId, count: conceptCount });
       if (!conceptCount) {
         throw new LifecycleError('PUBLISH_EMPTY', 'repository has no concepts — add content before publishing', 409);
       }
@@ -417,12 +427,29 @@ async function transition(repoId, action, actor) {
       // through untouched). It bumps repo.version to N.
       // A recorded steward acknowledgement (pii_ack) waives the PII 'hit'
       // gate (reviewed public entities); a scanner 'error' still blocks.
+      logger.info('[OKF-PUBLISH] step=minting', { repo_id: repoId, pii_acknowledged: !!repo.pii_ack });
       await versionService.mintVersion(repoId, { trigger: 'publish', acknowledgePii: !!repo.pii_ack }, actor);
+      logger.info('[OKF-PUBLISH] step=minted', { repo_id: repoId });
       // Re-read the registry post-mint (version/okf_tag bumped).
       const fresh = await loadRepo(db, repoId);
       // Export the bundle zip — THE repo+version artifact in the doc-repo.
       // A failure here fails the publish (lifecycle unchanged; retryable).
-      const bundle = await bundleExportService.exportBundle(fresh, actor);
+      logger.info('[OKF-PUBLISH] step=exporting bundle', { repo_id: repoId, new_version: fresh.version });
+      let bundle;
+      try {
+        bundle = await bundleExportService.exportBundle(fresh, actor);
+      } catch (exportErr) {
+        logger.error('[OKF-PUBLISH] step=export FAILED', {
+          repo_id: repoId,
+          new_version: fresh.version,
+          error_code: exportErr && exportErr.code,
+          error_message: exportErr && exportErr.message,
+          error_status: exportErr && exportErr.status,
+          stack: exportErr && exportErr.stack
+        });
+        throw exportErr;
+      }
+      logger.info('[OKF-PUBLISH] step=exported', { repo_id: repoId, file_id: bundle.file_id });
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to,
         bundle: {

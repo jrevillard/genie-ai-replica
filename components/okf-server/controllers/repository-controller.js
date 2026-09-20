@@ -10,6 +10,7 @@ const ingestService = require('../services/ingest-service');
 const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
 const parserService = require('../services/parser-service');
+const authzResolverService = require('../services/authz-resolver-service');
 const { getMeter } = require('../shared-lib/metrics');
 const {
   createSchema,
@@ -58,24 +59,13 @@ function actorFrom(req) {
  * scopes and the tools-admin bootstrap super-role ⇒ isSuperAdmin (unrestricted).
  * A caller with no okf scopes gets an EMPTY set — list returns nothing, and
  * getById 404s every repo (G3 closed).
+ *
+ * Story 6.1b: the implementation moved to authz-resolver-service (single scope
+ * authority shared with the read-side graph-set resolver) — delegated here,
+ * byte-identical semantics.
  */
 function callerAuthz(req) {
-  if (req.okfIsSuperAdmin) return { isSuperAdmin: true, authorizedRepoIds: null };
-  const scopes = Array.isArray(req.okfScopes) ? req.okfScopes : [];
-  const repos = new Set();
-  let wildcard = false;
-  for (const scope of scopes) {
-    const parts = scope.split(':');
-    // STRICT (2026-08-16 review fix): a scope is only a grant when its LEVEL
-    // is grammar-valid — `okf:t1:*:write` (typo level) must NOT become a
-    // wildcard, and `okf:t1:repoB:write` must not enter the read set.
-    if (parts.length !== 4 || parts[0] !== 'okf') continue;
-    if (parts[3] !== 'read' && parts[3] !== 'admin') continue;
-    if (parts[2] === '*') wildcard = true;
-    else if (parts[2]) repos.add(parts[2]);
-  }
-  if (wildcard) return { isSuperAdmin: true, authorizedRepoIds: null };
-  return { isSuperAdmin: false, authorizedRepoIds: repos };
+  return authzResolverService.deriveScopeAuthz(req.okfScopes, req.okfIsSuperAdmin);
 }
 
 /** Service-facing authz param: null = unrestricted, Set = filter. */

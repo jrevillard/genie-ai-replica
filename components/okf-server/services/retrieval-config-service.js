@@ -105,9 +105,22 @@ async function getEffectiveConfig() {
  * Serving repos: lifecycle truth (publish + ingested_at + not tombstoned),
  * each with its CURRENT serving graph name via the workingGraphName authority.
  * These are the only repos a fan-out leg may traverse.
+ *
+ * MEMOIZED ≤30s (ADR-039 D3's skew bound, shared with the authz resolver —
+ * one cached query, two consumers). The cache bounds re-publish skew: a graph
+ * that retires/reappears mid-window is tolerated by the retriever (zero-hit),
+ * never stale-served past 30s. `fresh` bypasses for tests; `_resetServingCache`
+ * is the test hook.
+ * @param {{fresh?: boolean}} [opts]
  * @returns {Promise<Array<{repo_id, name, domain, graph_name}>>}
  */
-async function servingRepos() {
+const SERVING_TTL_MS = 30_000;
+let _servingCache = { at: 0, rows: null };
+
+async function servingRepos(opts = {}) {
+  if (!opts.fresh && _servingCache.rows && Date.now() - _servingCache.at < SERVING_TTL_MS) {
+    return _servingCache.rows;
+  }
   const db = await getDb();
   const rows = await (
     await db.query(
@@ -117,7 +130,14 @@ async function servingRepos() {
         "RETURN KEEP(r, ['repo_id', 'name', 'domain', 'version', 'ingested_version'])"
     )
   ).all();
-  return rows.map((r) => ({ ...r, graph_name: workingGraphName(r) }));
+  const serving = rows.map((r) => ({ ...r, graph_name: workingGraphName(r) }));
+  _servingCache = { at: Date.now(), rows: serving };
+  return serving;
+}
+
+/** Test hook: drop the serving-set memo (no production caller — TTL governs). */
+function _resetServingCache() {
+  _servingCache = { at: 0, rows: null };
 }
 
 /**
@@ -243,6 +263,8 @@ module.exports = {
   servingRepos,
   putRetrievalConfig,
   validatePatch,
+  _resetServingCache,
+  SERVING_TTL_MS,
   MODES,
   LIMITS,
   DOC_KEY,

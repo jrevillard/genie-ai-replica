@@ -44,6 +44,7 @@ function seedServing(rows) {
 describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
   beforeEach(() => {
     mockDb._reset();
+    svc._resetServingCache(); // the serving-set memo is shared with the authz resolver
     auditService.writeAudit.mockClear();
   });
 
@@ -93,8 +94,10 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
       expect(legacy.serving_graph_count).toBe(1);
       expect(legacy.warnings).toHaveLength(0);
 
-      // flip to okf_only with an EMPTY serving set
+      // flip to okf_only with an EMPTY serving set (fresh read — the memo
+      // would otherwise serve the cached 1-row set from the legacy check)
       mockDb._reset();
+      svc._resetServingCache();
       mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'okf_only' });
       seedServing([]);
       const okfOnlyEmpty = await svc.getRetrievalConfig();

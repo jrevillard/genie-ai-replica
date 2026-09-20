@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
+import 'package:genie_ai_mobile/components/charts/market_price_series_chart.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
@@ -28,12 +29,43 @@ class MarketPriceChart extends StatefulWidget {
 
 class _MarketPriceChartState extends State<MarketPriceChart> {
   String _currentLangCode = '';
+  final AgriApiService _agriService = AgriApiService();
+
+  /// Phase-B multi-series envelope (parity spec S1). Fetched on open;
+  /// null until loaded or on failure — the legacy single-series chart
+  /// stays as fallback so the dialog never regresses.
+  Map<String, dynamic>? _fullEnvelope;
+  bool _fullLoading = true;
 
   @override
   void initState() {
     super.initState();
     _currentLangCode = I18nService().currentLocale.languageCode;
     I18nService().addListener(_onLanguageChange);
+    _loadFullEnvelope();
+  }
+
+  Future<void> _loadFullEnvelope() async {
+    try {
+      final envelope = await _agriService.getMarketPricesFull(widget.category);
+      if (mounted) {
+        setState(() {
+          _fullEnvelope = envelope;
+          _fullLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint(
+        '[MarketPriceChart] Full envelope unavailable, legacy fallback: $e',
+      );
+      if (mounted) setState(() => _fullLoading = false);
+    }
+  }
+
+  bool get _hasFullSeries {
+    if (_fullEnvelope == null) return false;
+    final series = _fullEnvelope!['series'] as List?;
+    return series != null && series.isNotEmpty;
   }
 
   @override
@@ -219,128 +251,144 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
             ),
           ),
           const SizedBox(height: 12),
-          // Line Chart — dense series scroll horizontally so every data
-          // point stays neatly spaced instead of crowding (user req).
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final pointCount = _timeSeries.length;
-              final chartWidth = math.max(
-                constraints.maxWidth,
-                pointCount * 14.0,
-              );
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: chartWidth,
-                  height: 250,
-                  child: LineChart(
-                    LineChartData(
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        horizontalInterval: _calculateYInterval(),
-                        getDrawingHorizontalLine: (value) {
-                          return FlLine(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.1,
-                            ),
-                            strokeWidth: 1,
-                          );
-                        },
-                      ),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            interval: _calculateXInterval(),
-                            getTitlesWidget: (value, meta) {
-                              return _buildXAxisLabel(value, theme);
-                            },
-                          ),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 50,
-                            interval: _calculateYInterval(),
-                            getTitlesWidget: (value, meta) {
-                              return _buildYAxisLabel(value, theme);
-                            },
-                          ),
-                        ),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      minX: 0,
-                      maxX: (_timeSeries.length - 1).toDouble(),
-                      minY: _minY,
-                      maxY: _maxY,
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: _buildSpots(),
-                          isCurved: true,
-                          curveSmoothness: 0.3,
-                          color: _categoryColor,
-                          barWidth: 3,
-                          isStrokeCapRound: true,
-                          dotData: FlDotData(
-                            show: true,
-                            getDotPainter: (spot, percent, barData, index) {
-                              return FlDotCirclePainter(
-                                radius: 4,
-                                color: _categoryColor,
-                                strokeWidth: 2,
-                                strokeColor: isDark
-                                    ? Colors.black
-                                    : Colors.white,
-                              );
-                            },
-                          ),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: _categoryColor.withValues(alpha: 0.15),
-                          ),
-                        ),
-                      ],
-                      lineTouchData: LineTouchData(
-                        enabled: true,
-                        touchTooltipData: LineTouchTooltipData(
-                          getTooltipItems: (touchedSpots) {
-                            return touchedSpots.map((spot) {
-                              final index = spot.x.toInt();
-                              if (index >= 0 && index < _timeSeries.length) {
-                                final dataPoint = _timeSeries[index];
-                                final year = dataPoint['year'] as String? ?? '';
-                                final value = _formatValue(
-                                  dataPoint['value'] as double?,
-                                );
-                                return LineTooltipItem(
-                                  '$year\n$value',
-                                  TextStyle(
-                                    color: isDark ? Colors.white : Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                );
-                              }
-                              return null;
-                            }).toList();
+          // Line Chart — Phase B multi-series chart when the full
+          // envelope is available; legacy single-series chart stays as
+          // fallback (and while loading) so the dialog never regresses.
+          if (_hasFullSeries)
+            MarketPriceSeriesChart(
+              key: ValueKey('series-chart-${widget.category}'),
+              category: widget.category,
+              envelope: _fullEnvelope!,
+            )
+          else if (_fullLoading)
+            const SizedBox(
+              height: 320,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final pointCount = _timeSeries.length;
+                final chartWidth = math.max(
+                  constraints.maxWidth,
+                  pointCount * 14.0,
+                );
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: chartWidth,
+                    height: 250,
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          horizontalInterval: _calculateYInterval(),
+                          getDrawingHorizontalLine: (value) {
+                            return FlLine(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.1,
+                              ),
+                              strokeWidth: 1,
+                            );
                           },
+                        ),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 30,
+                              interval: _calculateXInterval(),
+                              getTitlesWidget: (value, meta) {
+                                return _buildXAxisLabel(value, theme);
+                              },
+                            ),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 50,
+                              interval: _calculateYInterval(),
+                              getTitlesWidget: (value, meta) {
+                                return _buildYAxisLabel(value, theme);
+                              },
+                            ),
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        minX: 0,
+                        maxX: (_timeSeries.length - 1).toDouble(),
+                        minY: _minY,
+                        maxY: _maxY,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: _buildSpots(),
+                            isCurved: true,
+                            curveSmoothness: 0.3,
+                            color: _categoryColor,
+                            barWidth: 3,
+                            isStrokeCapRound: true,
+                            dotData: FlDotData(
+                              show: true,
+                              getDotPainter: (spot, percent, barData, index) {
+                                return FlDotCirclePainter(
+                                  radius: 4,
+                                  color: _categoryColor,
+                                  strokeWidth: 2,
+                                  strokeColor: isDark
+                                      ? Colors.black
+                                      : Colors.white,
+                                );
+                              },
+                            ),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: _categoryColor.withValues(alpha: 0.15),
+                            ),
+                          ),
+                        ],
+                        lineTouchData: LineTouchData(
+                          enabled: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                final index = spot.x.toInt();
+                                if (index >= 0 && index < _timeSeries.length) {
+                                  final dataPoint = _timeSeries[index];
+                                  final year =
+                                      dataPoint['year'] as String? ?? '';
+                                  final value = _formatValue(
+                                    dataPoint['value'] as double?,
+                                  );
+                                  return LineTooltipItem(
+                                    '$year\n$value',
+                                    TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                }
+                                return null;
+                              }).toList();
+                            },
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
+                );
+              },
+            ),
           const SizedBox(height: 16),
           // Data Table (exportable — CSV via the system share sheet,
           // spreadsheet-ready: opens in Excel/Sheets)

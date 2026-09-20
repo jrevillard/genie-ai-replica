@@ -1891,33 +1891,24 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         );
                       },
                     ),
-                    // Team hero — sits between the Fast Actions grid and the
-                    // chat input bar. White background already keyed out;
-                    // soft drop shadow + faint surface tint that picks up
-                    // tokens.bg so the artwork blends with both light and
-                    // dark modes without leaving a halo.
-                    const SizedBox(height: DsSpacing.xl),
-                    Center(
-                      child: Container(
-                        constraints: const BoxConstraints(maxHeight: 240),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DsSpacing.sm,
-                          vertical: DsSpacing.sm,
-                        ),
-                        decoration: BoxDecoration(
-                          color: tokens.bg.withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(DsRadii.lg),
-                          boxShadow: [
-                            BoxShadow(
-                              color: tokens.fg.withValues(alpha: 0.10),
-                              blurRadius: 18,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          'assets/images/team_agro.png',
-                          fit: BoxFit.contain,
+                    // Team hero — last item in the QuickHelp overlay,
+                    // so it auto-disappears when the chat enters
+                    // response mode (the overlay hides on first
+                    // interaction). Lives INSIDE the scroll, below
+                    // the Fast Actions cards in document order.
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        top: DsSpacing.md,
+                        bottom: DsSpacing.xl,
+                      ),
+                      child: Center(
+                        child: SizedBox(
+                          height: 96,
+                          width: 220,
+                          child: Image.asset(
+                            'assets/images/team_agro.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                     ),

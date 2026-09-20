@@ -97,7 +97,7 @@ development_status:
 
   epic-6: in-progress        # Hardening — cross-cutting
   6-1-authn-authz-rbac: done                    # (+ 2026-08-13 P0: default-deny, requireRepoScope(repo,'admin') replaces global tools-admin — G3/G15)
-  6-1b-authz-resolver-token-to-graph-set: backlog # NEW 2026-08-13 — token→{graph_names,per_graph_labels,domains}, per-session cache (G8)
+  6-1b-authz-resolver-token-to-graph-set: done # NEW 2026-08-13 — DONE 2026-09-20 (story file 6-1b-authz-resolver-token-to-graph-set.md): GET /api/okf/authz/graphs — token scopes → serving graph set (serving ∩ authorized, zero-hit by construction); SINGLE scope authority (deriveScopeAuthz, write-side callerAuthz delegates byte-identical); graph names via workingGraphName authority; per-graph label map shape shipped (values null — no label-ACL source yet, documented seam); ≤30s serving-set memo shared with retrieval-config; jest 26/26 across both files, suite exit 0. Consumers: 1.2 forwards (Python session cache), 1.3 router intersections
   6-2-audit-foi-export: backlog                   # (+ 2026-08-13: write-before-respond governance, hash chain, tenant field, INSERT-only — G16/LG-4)
   6-3-end-to-end-tracing: backlog
   6-4-health-readiness-metrics: backlog

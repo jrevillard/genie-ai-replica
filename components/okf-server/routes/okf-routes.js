@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/auth');
 const { requireScope } = require('../middleware/require-scope');
 const { requireRole } = require('../middleware/require-role');
 const retrievalConfigController = require('../controllers/retrieval-config-controller');
+const authzResolverController = require('../controllers/authz-resolver-controller');
 const { withSpan } = require('../shared-lib/tracing');
 
 // Auth on all OKF API routes (per-route via router.use, NOT global):
@@ -23,6 +24,10 @@ router.use('/repos', require('./repos-routes'));
 // is tools-admin only and audited before→after in the service.
 router.get('/retrieval-config', retrievalConfigController.getRetrievalConfig);
 router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigController.putRetrievalConfig);
+
+// Authz resolver read side (Story 6.1b): token scopes → the caller's serving
+// graph set (zero-hit by construction). Read-scoped by the router gate.
+router.get('/authz/graphs', authzResolverController.getGraphs);
 
 // Service root — confirms the service + auth are wired.
 router.get('/', async (req, res, next) => {

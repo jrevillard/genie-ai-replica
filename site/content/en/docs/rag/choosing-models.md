@@ -364,9 +364,9 @@ Converts document chunks and user queries into mathematical vectors (embeddings)
 
 | Model | Dimensions | VRAM | Multilingual | License | Notes |
 |-------|-----------|------|-------------|---------|-------|
-| **BAAI/bge-base-en-v1.5** | 768 | ~500 MB | No (English only) | MIT | Default. Good quality for English. |
-| **BAAI/bge-m3** | 1024 | ~1 GB | Yes | MIT | **Recommended upgrade.** Supports 100+ languages, dense + sparse + ColBERT retrieval. |
-| **BAAI/bge-large-en-v1.5** | 1024 | ~800 MB | No | MIT | Higher quality English embeddings. |
+| **BAAI/bge-large-en-v1.5** | 1024 | ~800 MB | No | MIT | Default. Higher quality English embeddings than `bge-base`. |
+| **BAAI/bge-base-en-v1.5** | 768 | ~500 MB | No (English only) | MIT | Faster, smaller. Lower recall than `bge-large`. |
+| **BAAI/bge-m3** | 1024 | ~1 GB | Yes | MIT | **Recommended for multilingual corpora.** Supports 100+ languages, dense + sparse + ColBERT retrieval. |
 | **intfloat/multilingual-e5-base** | 768 | ~500 MB | Yes | Apache 2.0 | Good multilingual alternative. |
 | **intfloat/multilingual-e5-large** | 1024 | ~800 MB | Yes | Apache 2.0 | Higher quality multilingual. |
 | **sentence-transformers/all-MiniLM-L6-v2** | 384 | ~200 MB | No | Apache 2.0 | Very small. Use only if GPU memory is extremely constrained. |
@@ -377,8 +377,8 @@ Converts document chunks and user queries into mathematical vectors (embeddings)
 
 ```bash
 # In your .env file
-EMBEDDING_MODEL_ID=BAAI/bge-base-en-v1.5
-TEI_EMBED_MODEL=BAAI/bge-base-en-v1.5
+EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5
+TEI_EMBED_MODEL=BAAI/bge-large-en-v1.5
 ```
 
 ---
@@ -769,7 +769,7 @@ Do you need high-quality translation for many languages?
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `EMBEDDING_MODEL_ID` | `BAAI/bge-base-en-v1.5` | Embedding model |
+| `EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | Embedding model |
 | `TEI_EMBED_MODEL` | (must match above) | TEI embedding model |
 | `RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Reranking model (use MiniLM on T4) |
 

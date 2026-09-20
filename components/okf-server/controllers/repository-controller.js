@@ -10,7 +10,7 @@ const ingestService = require('../services/ingest-service');
 const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
 const parserService = require('../services/parser-service');
-const authzResolverService = require('../services/authz-resolver-service');
+const scopeAuthzService = require('../services/scope-authz-service');
 const { getMeter } = require('../shared-lib/metrics');
 const {
   createSchema,
@@ -60,12 +60,12 @@ function actorFrom(req) {
  * A caller with no okf scopes gets an EMPTY set — list returns nothing, and
  * getById 404s every repo (G3 closed).
  *
- * Story 6.1b: the implementation moved to authz-resolver-service (single scope
+ * Story 6.1b: the implementation moved to scope-authz-service (single scope
  * authority shared with the read-side graph-set resolver) — delegated here,
  * byte-identical semantics.
  */
 function callerAuthz(req) {
-  return authzResolverService.deriveScopeAuthz(req.okfScopes, req.okfIsSuperAdmin);
+  return scopeAuthzService.deriveScopeAuthz(req.okfScopes, req.okfIsSuperAdmin);
 }
 
 /** Service-facing authz param: null = unrestricted, Set = filter. */

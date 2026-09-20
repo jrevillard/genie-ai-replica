@@ -388,31 +388,36 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
           const SizedBox(height: 16),
           // Data Table (exportable — CSV via the system share sheet,
           // spreadsheet-ready: opens in Excel/Sheets)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                tr('market.dataTable'),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+          if (!_hasFullSeries)
+            Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      tr('market.dataTable'),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _exportCsv,
+                      icon: const Icon(Icons.file_download, size: 18),
+                      label: Text(tr('market.exportCsv')),
+                      // App theme forces full-width TextButtons; in an
+                      // unbounded Row that crashes layout — hug content.
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              TextButton.icon(
-                onPressed: _exportCsv,
-                icon: const Icon(Icons.file_download, size: 18),
-                label: Text(tr('market.exportCsv')),
-                // App theme forces full-width TextButtons; in an
-                // unbounded Row that crashes layout — hug content.
-                style: TextButton.styleFrom(
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildDataTable(theme, isDark),
-          const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                _buildDataTable(theme, isDark),
+                const SizedBox(height: 16),
+              ],
+            ),
           // Footer
           Center(
             child: Text(

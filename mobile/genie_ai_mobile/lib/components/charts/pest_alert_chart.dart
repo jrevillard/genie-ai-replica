@@ -326,10 +326,12 @@ class _PestAlertChartState extends State<PestAlertChart> {
 
   Widget _buildSummaryChart(ThemeData theme) {
     final summary = (_pestData!['summary'] as Map).cast<String, dynamic>();
-    final high = summary['high'] as int? ?? 0;
-    final moderate = summary['moderate'] as int? ?? 0;
-    final low = summary['low'] as int? ?? 0;
-    final total = summary['total'] as int? ?? 0;
+    // JSON numbers may arrive as double (2.0) — read via num first.
+    int asCount(String k) => (summary[k] as num?)?.toInt() ?? 0;
+    final high = asCount('high');
+    final moderate = asCount('moderate');
+    final low = asCount('low');
+    final total = asCount('total');
 
     if (total == 0) return const SizedBox.shrink();
 

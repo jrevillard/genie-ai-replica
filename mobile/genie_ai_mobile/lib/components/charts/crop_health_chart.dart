@@ -389,7 +389,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
     final data = _cropData!['data'] as List<dynamic>;
     return List.generate(data.length, (index) {
       final item = data[index];
-      final ndvi = (item['ndvi'] as num).toDouble();
+      final ndvi = (item['ndvi'] as num?)?.toDouble() ?? 0.0;
       return FlSpot(index.toDouble(), ndvi);
     });
   }
@@ -539,10 +539,10 @@ class _CropHealthChartState extends State<CropHealthChart> {
         const SizedBox(height: 8),
         ...departments.map((dept) {
           final name = dept['department'] as String;
-          final ndvi = (dept['ndvi'] as num).toDouble();
+          final ndvi = (dept['ndvi'] as num?)?.toDouble() ?? 0.0;
           final health = dept['health'] as String;
           final trend = dept['trend'] as String;
-          final change = (dept['change'] as num).toDouble();
+          final change = (dept['change'] as num?)?.toDouble() ?? 0.0;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 8),

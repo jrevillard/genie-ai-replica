@@ -132,7 +132,7 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
         // S25 commodity-type masters, then S15 per-series toggles
         // (web order: both above the chart; legend stays by the plot).
         if (_allSeries.length > 1) _buildFamilyMasters(),
-        if (_allSeries.length > 1) _buildSeriesChips(),
+        // Per-series on/off stays on the LEGEND tap (user req).
         const SizedBox(height: 4),
         _buildLegend(series),
         _buildStartYearFilter(),
@@ -759,81 +759,6 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
   }
 
   // ---------------------------------------------------------------------------
-  // S15/S16 — per-series checkbox chips. Unchecking hides the series;
-  // the LAST active series' checkbox is disabled so the chart never
-  // empties via a single chip.
-  Widget _buildSeriesChips() {
-    final names = _allSeries.map((s) => s['name'] as String? ?? '').toList();
-    final palette = _palette();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 0,
-        children: [
-          for (var i = 0; i < _allSeries.length; i++)
-            _seriesChip(_allSeries[i], i, names, palette),
-        ],
-      ),
-    );
-  }
-
-  void _toggleSeries(String name) {
-    setState(
-      () => _isHidden(name)
-          ? _hiddenSeries.remove(name)
-          : _hiddenSeries.add(name),
-    );
-  }
-
-  Widget _seriesChip(
-    Map<String, dynamic> series,
-    int originalIndex,
-    List<String> allNames,
-    AgriPalette palette,
-  ) {
-    final name = series['name'] as String? ?? '';
-    final hidden = _isHidden(name);
-    final locked = _toggleLocked(name);
-    final color = palette.colorForSeriesIndex(originalIndex);
-    return InkWell(
-      onTap: locked ? null : () => _toggleSeries(name),
-      borderRadius: BorderRadius.circular(8),
-      child: Opacity(
-        opacity: hidden ? 0.55 : 1,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 32,
-                height: 28,
-                child: Checkbox(
-                  visualDensity: VisualDensity.compact,
-                  value: !hidden,
-                  onChanged: locked ? null : (_) => _toggleSeries(name),
-                ),
-              ),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                displayName(name, allNames),
-                style: TextStyle(fontSize: 12, color: _tokens.fg),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
   // S17/S18 — start-year filter ("From"): options earliest..currentYear-5
   // descending, default 2015 clamped to the earliest data year. Changing
   // it re-renders chart, table and CSV (Latest values always use the
@@ -1034,10 +959,8 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
       TextStyle? style,
       String? tooltip,
       Alignment align = Alignment.centerLeft,
-    }) => Tooltip(
-      message: tooltip,
-      triggerMode: TooltipTriggerMode.longPress,
-      child: Container(
+    }) {
+      final content = Container(
         width: w,
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         alignment: align,
@@ -1047,8 +970,16 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
           overflow: TextOverflow.ellipsis,
           style: style ?? TextStyle(fontSize: 12, color: _tokens.fg),
         ),
-      ),
-    );
+      );
+      // Tooltip asserts on a null message — wrap only header cells
+      // that carry one (value cells have none). Table crash fix.
+      if (tooltip == null) return content;
+      return Tooltip(
+        message: tooltip,
+        triggerMode: TooltipTriggerMode.longPress,
+        child: content,
+      );
+    }
 
     Widget headerRow() => Container(
       decoration: BoxDecoration(

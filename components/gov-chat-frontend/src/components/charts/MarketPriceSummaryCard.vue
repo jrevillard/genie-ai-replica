@@ -33,7 +33,6 @@ import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsPill from '../ds/Pill.vue';
 import worldBankService from '../../services/worldBankService.js';
-import { useChartTheme } from '../../composables/useChartTheme.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
@@ -68,8 +67,7 @@ export default {
   emits: ['open-chart'],
 
   setup() {
-    const { getCssVarStrings } = useChartTheme({});
-    return { getCssVarStrings };
+    return {};
   },
   data() {
     return {
@@ -142,8 +140,6 @@ export default {
     },
 
     chartOptions() {
-      const cssVars = this.getCssVarStrings();
-
       return {
         chart: {
           type: 'line',
@@ -157,17 +153,17 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: 2
+          width: 4
         },
-        colors: [cssVars.accentColor],
+        // Resolved at render time (see resolvedCategoryColor). Falls back to
+        // the raw var() string if getComputedStyle returns empty.
+        colors: [this.resolvedCategoryColor],
+        // Solid fill (light opacity) instead of gradient — the gradient
+        // version made the line stroke appear to fade because ApexCharts
+        // applies the fill opacity to the line border as well.
         fill: {
-          type: 'gradient',
-          gradient: {
-            shadeIntensity: 1,
-            opacityFrom: 0.3,
-            opacityTo: 0,
-            stops: [0, 100]
-          }
+          type: 'solid',
+          opacity: 0.2
         },
         xaxis: {
           categories: this.timeSeries.map((d) => d.year),
@@ -188,22 +184,10 @@ export default {
           show: false
         },
         tooltip: {
-          enabled: true,
-          theme: 'dark',
-          x: {
-            formatter: (value) => {
-              const index = value - 1;
-              if (this.timeSeries[index]) {
-                return this.timeSeries[index].year;
-              }
-              return value;
-            }
-          },
-          y: {
-            formatter: (value) => {
-              return value ? value.toFixed(2) : this.$t('charts.market.noData', 'N/A');
-            }
-          }
+          // Disabled on the sparkline (60x60 button) — full chart details
+          // are available by clicking through to the panel. The ApexCharts
+          // dark tooltip on a small surface is also hard to read.
+          enabled: false
         },
         dataLabels: {
           enabled: false
@@ -223,11 +207,57 @@ export default {
         harvestStorage: 'var(--muted)'
       };
       return colorMap[this.category] || 'var(--muted)';
+    },
+
+    // Resolve CSS var() to actual hex value. ApexCharts builds SVG internally
+    // and does not always inherit CSS custom properties from the host element,
+    // so we resolve to hex at render time. Re-resolved on theme change via the
+    // themeKey watcher below.
+    //
+    // Use --fg (text color) directly: it gives guaranteed contrast against
+    // --bg in both light and dark modes without introducing new DS tokens.
+    // Per-category colors were too pale on dark bg; --fg (dark text in light
+    // mode, warm off-white in dark mode) reads cleanly in both.
+    resolvedCategoryColor() {
+      const value = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      return value || this.categoryColor;
+    },
+
+    // Bump on theme change to force ApexCharts to re-render with new colors.
+    themeKey() {
+      return document.documentElement.getAttribute('data-theme') || 'light';
+    }
+  },
+
+  watch: {
+    themeKey() {
+      // Watching themeKey causes chartOptions to re-compute (resolvedCategoryColor
+      // depends on document.documentElement), which triggers ApexCharts re-render.
     }
   },
 
   async mounted() {
+    // Listen for theme changes so the sparkline color updates without a route
+    // change. Without this, toggling dark mode leaves the curve the old color.
+    this.themeObserver = new MutationObserver(() => {
+      // Trigger chartOptions re-computation by reading the attr (already in
+      // themeKey getter). Forcing a no-op update via $forceUpdate is needed
+      // because Vue's reactivity does not track DOM attribute reads.
+      this.$forceUpdate();
+    });
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
     await this.loadPriceData();
+  },
+
+  beforeUnmount() {
+    if (this.themeObserver) {
+      this.themeObserver.disconnect();
+      this.themeObserver = null;
+    }
   },
 
   methods: {

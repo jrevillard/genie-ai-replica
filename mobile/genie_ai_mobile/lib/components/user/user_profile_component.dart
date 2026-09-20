@@ -32,21 +32,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
 
   late TabController _tabController;
 
-  // These align with keys in de.dart -> userProfile.tabsShort
-  final List<String> _tabs = [
-    'personal',
-    'civil',
-    'address',
-    'identity',
-    'health',
-    'employment',
-    'education',
-    'financial',
-    'social',
-    'criminal',
-    'transport',
-    'civic',
-  ];
+  // These align with keys in de.dart -> userProfile.tabsShort.
+  // El Salvador scope: only Personal, Education and Social are exposed —
+  // the other 9 category views remain in the widget tree history (see MR
+  // !395) and can be re-added by extending this list.
+  final List<String> _tabs = ['personal', 'education', 'social'];
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -96,6 +86,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     'Domestic Partnership',
   ];
 
+  // Reserved for the health tab, hidden in the El Salvador scope.
+  // ignore: unused_field
   final List<String> _bloodTypes = [
     'A+',
     'A-',
@@ -781,6 +773,9 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     );
   }
 
+  /// Reserved for the document-upload tabs, hidden in the El Salvador
+  /// scope (civil/address/identity/health/financial/criminal tabs).
+  // ignore: unused_element
   Widget _buildFilePicker(String labelKey, String section, String field) {
     final tokens = ThemeManager().tokens;
     final file = _formData[section]?[field];
@@ -946,30 +941,62 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr('userProfile.title')), // "Benutzerprofil"
-        backgroundColor: tokens.surface,
-        foregroundColor: tokens.fg,
-        actions: [
-          DsButton(
-            label: tr('settings.save'),
-            variant: DsButtonVariant.primary,
-            onPressed: _saveProfile,
-          ),
-          DsButton(
-            iconOnly: true,
-            icon: Icons.close,
-            variant: DsButtonVariant.ghost,
-            overrideFg: tokens.fg,
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
+      // NO AppBar: this app's AppBar action slot throws a layout assert
+      // (invalid toolbar constraints) and paints an EMPTY bar — the chat
+      // screen uses a custom header for the same reason.
       body: Stack(
         children: [
           SafeArea(
             child: Column(
               children: [
+                // Custom header: exit (pop), title, Save.
+                Container(
+                  color: tokens.surface,
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.xs,
+                    DsSpacing.xs,
+                    DsSpacing.md,
+                    DsSpacing.xs,
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: tr('settings.close'),
+                        icon: const Icon(Icons.close),
+                        color: tokens.fg,
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      Expanded(
+                        child: Text(
+                          tr('userProfile.title'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: tokens.fg,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _saveProfile,
+                        // App theme defaults TextButtons to full-width
+                        // (minimumSize Size(double.infinity, 48)) which crashes
+                        // layout inside an unbounded Row — override locally.
+                        style: TextButton.styleFrom(
+                          foregroundColor: tokens.accent,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DsSpacing.sm,
+                            vertical: DsSpacing.xs,
+                          ),
+                        ),
+                        child: Text(
+                          tr('settings.save'),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Container(
                   padding: const EdgeInsets.all(DsSpacing.xl),
                   color: tokens.surface,
@@ -1041,205 +1068,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                           ),
                         ],
                       ),
-                      // 2. Civil
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildFilePicker(
-                            'userProfile.fields.birthCert',
-                            'civilRegistration',
-                            'birthCert',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.deathCert',
-                            'civilRegistration',
-                            'deathCert',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.marriageDivorce',
-                            'civilRegistration',
-                            'marriageDivorce',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.adoption',
-                            'civilRegistration',
-                            'adoption',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.citizenship',
-                            'civilRegistration',
-                            'citizenship',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.immigration',
-                            'civilRegistration',
-                            'immigration',
-                          ),
-                        ],
-                      ),
-                      // 3. Address
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildTextField(
-                            'userProfile.fields.currentAddress',
-                            'addressResidency',
-                            'currentAddress',
-                            multiline: true,
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.previousAddresses',
-                            'addressResidency',
-                            'previousAddresses',
-                            multiline: true,
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.homeOrRental',
-                            'addressResidency',
-                            'homeOrRental',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.utilityBills',
-                            'addressResidency',
-                            'utilityBills',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.landRecords',
-                            'addressResidency',
-                            'landRecords',
-                          ),
-                        ],
-                      ),
-                      // 4. Identity
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildTextField(
-                            'userProfile.fields.idCard',
-                            'identityTravel',
-                            'idCard',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.passport',
-                            'identityTravel',
-                            'passport',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.driversLicense',
-                            'identityTravel',
-                            'driversLicense',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.voterId',
-                            'identityTravel',
-                            'voterId',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.ssn',
-                            'identityTravel',
-                            'ssn',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.militaryRecords',
-                            'identityTravel',
-                            'militaryRecords',
-                          ),
-                        ],
-                      ),
-                      // 5. Health
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildTextField(
-                            'userProfile.fields.medicalHistory',
-                            'healthMedical',
-                            'medicalHistory',
-                            multiline: true,
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.vaccinations',
-                            'healthMedical',
-                            'vaccinations',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.insuranceDetails',
-                            'healthMedical',
-                            'insuranceDetails',
-                          ),
-                          _buildDropdown(
-                            'userProfile.fields.bloodType',
-                            'healthMedical',
-                            'bloodType',
-                            _bloodTypes,
-                            type: 'blood',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.disability',
-                            'healthMedical',
-                            'disability',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.organDonor',
-                            'healthMedical',
-                            'organDonor',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.prescriptions',
-                            'healthMedical',
-                            'prescriptions',
-                            multiline: true,
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.mentalHealth',
-                            'healthMedical',
-                            'mentalHealth',
-                            multiline: true,
-                          ),
-                        ],
-                      ),
-                      // 6. Employment
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildTextField(
-                            'userProfile.fields.eHistory',
-                            'employment',
-                            'eHistory',
-                            multiline: true,
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.currentEmployer',
-                            'employment',
-                            'currentEmployer',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.workPermits',
-                            'employment',
-                            'workPermits',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.certifications',
-                            'employment',
-                            'certifications',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.unemployment',
-                            'employment',
-                            'unemployment',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.tin',
-                            'employment',
-                            'tin',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.businessAffiliations',
-                            'employment',
-                            'businessAffiliations',
-                          ),
-                        ],
-                      ),
-                      // 7. Education
+                      // 2. Education
                       ListView(
                         padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
@@ -1266,43 +1095,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                           ),
                         ],
                       ),
-                      // 8. Financial
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildFilePicker(
-                            'userProfile.fields.incomeTax',
-                            'financialTax',
-                            'incomeTax',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.bankAccounts',
-                            'financialTax',
-                            'bankAccounts',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.propertyTax',
-                            'financialTax',
-                            'propertyTax',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.businessTax',
-                            'financialTax',
-                            'businessTax',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.pensionContrib',
-                            'financialTax',
-                            'pensionContrib',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.loanAid',
-                            'financialTax',
-                            'loanAid',
-                          ),
-                        ],
-                      ),
-                      // 9. Social
+                      // 3. Social
                       ListView(
                         padding: const EdgeInsets.all(DsSpacing.md),
                         children: [
@@ -1335,94 +1128,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                             'userProfile.fields.housingAssistance',
                             'socialSecurity',
                             'housingAssistance',
-                          ),
-                        ],
-                      ),
-                      // 10. Criminal
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildFilePicker(
-                            'userProfile.fields.policeRecords',
-                            'criminalLegal',
-                            'policeRecords',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.courtCases',
-                            'criminalLegal',
-                            'courtCases',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.finesPenalties',
-                            'criminalLegal',
-                            'finesPenalties',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.paroleProbation',
-                            'criminalLegal',
-                            'paroleProbation',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.citizenshipRevocation',
-                            'criminalLegal',
-                            'citizenshipRevocation',
-                          ),
-                        ],
-                      ),
-                      // 11. Transport
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildTextField(
-                            'userProfile.fields.vehicleReg',
-                            'transportation',
-                            'vehicleReg',
-                          ),
-                          _buildFilePicker(
-                            'userProfile.fields.trafficViolations',
-                            'transportation',
-                            'trafficViolations',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.licenseHistory',
-                            'transportation',
-                            'licenseHistory',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.publicTransportCard',
-                            'transportation',
-                            'publicTransportCard',
-                          ),
-                        ],
-                      ),
-                      // 12. Civic
-                      ListView(
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        children: [
-                          _buildTextField(
-                            'userProfile.fields.voterRegistration',
-                            'civicParticipation',
-                            'voterRegistration',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.electionHistory',
-                            'civicParticipation',
-                            'electionHistory',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.partyMembership',
-                            'civicParticipation',
-                            'partyMembership',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.militaryStatus',
-                            'civicParticipation',
-                            'militaryStatus',
-                          ),
-                          _buildTextField(
-                            'userProfile.fields.publicServiceRoles',
-                            'civicParticipation',
-                            'publicServiceRoles',
                           ),
                         ],
                       ),

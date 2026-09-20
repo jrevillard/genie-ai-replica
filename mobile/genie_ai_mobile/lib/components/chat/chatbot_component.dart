@@ -1891,6 +1891,36 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         );
                       },
                     ),
+                    // Team hero — sits between the Fast Actions grid and the
+                    // chat input bar. White background already keyed out;
+                    // soft drop shadow + faint surface tint that picks up
+                    // tokens.bg so the artwork blends with both light and
+                    // dark modes without leaving a halo.
+                    const SizedBox(height: DsSpacing.xl),
+                    Center(
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 240),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: DsSpacing.sm,
+                          vertical: DsSpacing.sm,
+                        ),
+                        decoration: BoxDecoration(
+                          color: tokens.bg.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(DsRadii.lg),
+                          boxShadow: [
+                            BoxShadow(
+                              color: tokens.fg.withValues(alpha: 0.10),
+                              blurRadius: 18,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Image.asset(
+                          'assets/images/team_agro.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

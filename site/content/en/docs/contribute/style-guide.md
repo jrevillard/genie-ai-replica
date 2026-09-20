@@ -79,7 +79,7 @@ See [Add a new doc](/docs/contribute/add-a-doc/). Mandatory fields:
 title: "..."
 weight: <int>
 description: "..."
-mode: tutorial|how-to|reference|explanation
+mode: how-to  # one of: tutorial | how-to | reference | explanation
 persona: user|deployer|developer|contributor|mixed
 owner: "<team>"
 last_reviewed: YYYY-MM-DD

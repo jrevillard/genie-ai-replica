@@ -47,7 +47,7 @@ Every doc uses the extended Docsy frontmatter:
 title: "Human-readable title"
 weight: <int>           # render order within section (1, 2, 3, …)
 description: "≤160 chars, SEO + landing card"
-mode: tutorial|how-to|reference|explanation
+mode: how-to  # one of: tutorial | how-to | reference | explanation
 persona: user|deployer|developer|contributor|mixed
 owner: "<team or doc-lead>"
 last_reviewed: 2026-09-18   # quarterly review stamp

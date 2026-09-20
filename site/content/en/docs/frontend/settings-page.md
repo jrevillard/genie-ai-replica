@@ -54,7 +54,7 @@ Three DS primitives back the layout: `DsButton`, `DsSpinner`, and
 ```
 
 `<LanguageSelector>` (in `src/components/LanguageSelector.vue`) lists the
-locales declared in `VUE_APP_AVAILABLE_LOCALES` (env var). Changing it
+locales declared in `VUE_APP_AVAILABLE_LOCALES` (env var; see [Restrict active locales](/docs/configure/locale-whitelist/)). Changing it
 fires the `vue-i18n` `localeChanged` event, which propagates to every
 `translate()` call.
 

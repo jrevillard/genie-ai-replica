@@ -5,7 +5,7 @@ weight: 1
 section: "deploy"
 aliases:
   - /docs/deployment/install-guide/
-mode: reference
+mode: how-to
 persona: deployer
 owner: "docs-stewards"
 last_reviewed: 2026-09-18
@@ -551,7 +551,7 @@ For tuning guidance see
 | `KEYCLOAK_THEME` | string | no | `genie` | Login theme |
 | `KEYCLOAK_I18N_ENABLED` | bool | no | `true` | Enable login-page i18n |
 | `KEYCLOAK_LOCALE` | string | no | `en` | Default login locale |
-| `KEYCLOAK_SUPPORTED_LOCALES` | string | no | `["ar","de","en","es","fr","pt","ru","th","zh-Hans"]` | JSON array of supported login locales |
+| `KEYCLOAK_SUPPORTED_LOCALES` | string | no | `["ar","de","en","es","fr","pt","ru","th","zh-Hans"]` | JSON array of supported login locales. See [Restrict active locales](/docs/configure/locale-whitelist/) for the canonical reference. |
 | `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` | number | no | `300` | Access-token TTL (seconds) |
 | `GENIE_ADMIN_EMAIL` | string | no | (unset) | Initial admin email |
 | `GENIE_ADMIN_USERNAME` | string | no | `genie-admin` | Initial admin username |
@@ -740,7 +740,7 @@ applied by `keycloak-config`. Common post-deploy knobs:
 
 | Variable | Purpose |
 |---|---|
-| `KEYCLOAK_SUPPORTED_LOCALES` | JSON array of login-page locales (e.g. `["en","es"]`) |
+| `KEYCLOAK_SUPPORTED_LOCALES` | JSON array of login-page locales (e.g. `["en","es"]`) — see [Restrict active locales](/docs/configure/locale-whitelist/) |
 | `KEYCLOAK_PASSWORD_POLICY` | Realm password complexity rules (default: length(12) + 1 upper/lower/digit/special) |
 | `KEYCLOAK_BRUTE_FORCE` | Enable Keycloak's built-in brute-force protection (default `true`) |
 | `KEYCLOAK_VERIFY_EMAIL` | Require email verification on signup (default `true`) |

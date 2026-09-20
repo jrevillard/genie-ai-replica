@@ -52,7 +52,8 @@ you also need the model to support guided JSON (`response_format={"type":
 
 The chat UI locales are configured by `VUE_APP_AVAILABLE_LOCALES` (web) and
 `KeycloakConfig.supportedLocaleCodes` (mobile). Keycloak login pages use
-`KEYCLOAK_SUPPORTED_LOCALES`. For translations, see
+`KEYCLOAK_SUPPORTED_LOCALES`. See [Restrict active locales](/docs/configure/locale-whitelist/)
+for the canonical reference. For translations, see
 [Contribute → i18n](/docs/contribute/i18n/).
 
 ### 7. What's the cost of running this?

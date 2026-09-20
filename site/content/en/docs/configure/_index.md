@@ -17,6 +17,7 @@ GENIE.AI delegates **all** identity management to Keycloak: users, roles, sessio
 2. [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/) — federate sign-in through Google, Microsoft Entra, generic OIDC, or SAML.
 3. [Local development with self-signed certificates](/docs/configure/local-dev-self-signed/) — bypass or trust the self-signed NGINX/GPU certs on a local dev stack: which env vars, which services, security implications.
 4. [CORS, CSP & Public Domain](/docs/configure/cors-csp/) — wire the browser-facing CORS allow-list, the nginx Content-Security-Policy, and the public-domain variable that drives every redirect URL.
+5. [Restrict active locales on a deployment](/docs/configure/locale-whitelist/) — restrict which languages the web UI, Keycloak login, and Flutter mobile app expose. Covers `VUE_APP_AVAILABLE_LOCALES`, `KEYCLOAK_SUPPORTED_LOCALES`, and `KeycloakConfig.supportedLocaleCodes`.
 
 ## Where to go next
 

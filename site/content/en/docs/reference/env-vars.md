@@ -56,8 +56,8 @@ source first** (the file in the repo), then regenerate.
 | `CSP_CONNECT_SRC` | `'self' http://localhost:3000 http://localhost:8090 http://127.0.0.1:8090 ws://localhost:3000 ws://localhost:8090` | nginx | Content-Security-Policy `connect-src`; localhost dev default |
 | `NGINX_PUBLIC_DOMAIN` | `localhost` | nginx | Public domain |
 | `VUE_APP_API_URL` | `/api` | frontend | Frontend API base |
-| `VUE_APP_AVAILABLE_LOCALES` | _(unset = all)_ | frontend | Comma-separated codes (e.g. `en,es`) |
-| `KEYCLOAK_SUPPORTED_LOCALES` | _(curated default)_ | keycloak | JSON array (e.g. `["en","es"]`) |
+| `VUE_APP_AVAILABLE_LOCALES` | _(unset = all)_ | frontend | Comma-separated codes (e.g. `en,es`) — see [Restrict active locales](/docs/configure/locale-whitelist/) |
+| `KEYCLOAK_SUPPORTED_LOCALES` | _(curated default)_ | keycloak | JSON array (e.g. `["en","es"]`) — see [Restrict active locales](/docs/configure/locale-whitelist/) |
 | `STREAMING_TRANSLATION_ENABLED` | `0` | chatqna | `1`/`0`; stream translated tokens during generation |
 | `KC_GRAFANA_CLIENT_ID` | `grafana` | keycloak, grafana | OIDC client ID for Grafana SSO |
 | `KC_GRAFANA_CLIENT_SECRET` | _(required when observability enabled)_ | keycloak, grafana | OIDC client secret |
@@ -130,3 +130,4 @@ The validator fails CI if a required env-var is undocumented here.
 - [Deploy → Install guide](/docs/deploy/install-guide/) — deployment narrative
 - [Configure → CORS / CSP](/docs/configure/cors-csp/) — public-domain knobs
 - [Configure → Keycloak admin guide](/docs/configure/keycloak-admin-guide/) — realm/service configuration
+- [Configure → Restrict active locales](/docs/configure/locale-whitelist/) — `VUE_APP_AVAILABLE_LOCALES` / `KEYCLOAK_SUPPORTED_LOCALES` / mobile whitelist

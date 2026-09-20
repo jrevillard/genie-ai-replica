@@ -242,7 +242,7 @@ For the per-directory walk-through, see
 | `KEYCLOAK_REALM` | `genie` | Realm name |
 | `KEYCLOAK_CLIENT_ID` | `genie-app` | Web client id |
 | `VUE_APP_API_URL` | (unset → relative `/api`) | Override when the backend is on a different host |
-| `VUE_APP_AVAILABLE_LOCALES` | (unset → all 14 locales active) | Comma-separated whitelist (e.g. `en,es,fr`) |
+| `VUE_APP_AVAILABLE_LOCALES` | (unset → all 14 locales active) | Comma-separated whitelist (e.g. `en,es,fr`) — see [Restrict active locales](/docs/configure/locale-whitelist/) |
 | `LOG_LEVEL` | `info` | Winston verbosity (`debug` for tracing dataprep) |
 
 > **Prompts** (`CHATQNA_SYSTEM_PROMPT`, `LABEL_SELECTOR_SYSTEM_PROMPT`,

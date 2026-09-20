@@ -5,7 +5,7 @@ weight: 6
 section: "deploy"
 aliases:
   - /docs/deployment/topologies/
-mode: reference
+mode: how-to
 persona: deployer
 owner: "docs-stewards"
 last_reviewed: 2026-09-19

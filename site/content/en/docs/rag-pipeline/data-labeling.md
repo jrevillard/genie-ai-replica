@@ -175,6 +175,94 @@ categories) and a long tail of single-chunk labels. A flat distribution
 (no label > 5% of chunks) often means the taxonomy is too coarse for
 the corpus or the LLM is under-labelling.
 
+## Managing the taxonomy (operator workflow)
+
+Operators curate the **service-category hierarchy** — the set of categories
+and services the deployment answers about — through the backend CRUD surface
+at `/api/service-categories` (see
+`components/gov-chat-backend/routes/service-category-routes.js`):
+
+| Endpoint | Purpose | Auth |
+|---|---|---|
+| `GET /api/service-categories/categories` | List categories | Authenticated |
+| `GET /api/service-categories/categories/detailed` | List with full service tree | Auth |
+| `GET /api/service-categories/search?query=` | Search categories | Auth |
+| `GET /api/service-categories/categories/{categoryId}` | Single category + services | Auth |
+| `POST /api/service-categories` | Create category (requires `nameEN`) | Authenticated |
+| `POST /api/service-categories/init` | Seed an initial taxonomy | Authenticated |
+| `POST /api/service-categories/{categoryId}/services` | Add service under category | Authenticated |
+| `PUT /api/service-categories/{categoryId}` | Update category (incl. translations) | Authenticated |
+| `GET /api/service-categories/{categoryId}/translations` | Read translations | Auth |
+| `DELETE /api/service-categories/{categoryId}` | Remove category | Authenticated |
+
+The same operations are available through the **Knowledge Hierarchy** tab of
+the Admin Dashboard — this is the recommended path for non-developers.
+
+> **New labels are empty until re-ingestion.** When you add a label, no chunks
+> carry it yet. Existing documents must be retracted and re-uploaded (or a
+> re-label job run) for the new label to start appearing in retrieval. See
+> [Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}).
+
+**`nameEN` is the source of truth** for RAG compatibility. It is the
+required English field on each `serviceCategories` and `services` document
+(see `components/gov-chat-backend/scripts/new-schema-scripts/arango-schema.json`).
+Labelling and retrieval both operate on the English label, regardless of the
+user's UI language. Translation collections (`serviceCategoryTranslations`)
+are keyed by `languageCode` + `translation`, not `nameEN`.
+
+> **Curate the taxonomy deliberately.** Labels are only as good as the
+> taxonomy they reference. A flat or ambiguous taxonomy produces vague labels;
+> a well-structured one produces precise retrieval. Domain experts should
+> review the category set, not just the documents.
+
+## Diagnosing label quality
+
+For a representative `file_id`, the per-chunk labels are visible in the
+ingestion log:
+
+```aql
+FOR d IN ingestion_log
+  FILTER d.file_id == "<file_id>" AND d.message LIKE "%Final labels%"
+  RETURN d.message
+```
+
+(Or via the admin UI: Admin Dashboard → Document Management → file →
+Ingestion log → filter to "Final labels" entries.)
+
+Look at the proportion of chunks with non-empty label arrays. **On a healthy
+30-chunk document, expect ≥ 80 % of chunks to receive at least one label.**
+0-label chunks should appear only on genuinely generic passages (boilerplate,
+page footers, contact info). Anything below ~60 % usually means the taxonomy is
+missing the relevant category or the prompt needs a sharper definition.
+
+To distinguish a model issue from a pipeline issue, bypass dataprep and call
+the vLLM directly with the real `LABEL_SELECTOR_SYSTEM_PROMPT` and a real
+chunk. See `.claude/rules/DEBUGGING-TRACING.md` §7 for the base64 pattern
+that avoids ssh quoting hell.
+
+## Managing labels via the document-repository API
+
+The document-repository service also has a parallel `/api/labels` surface
+(`components/document-repository/src/routes/labelRoutes.js`) used by the
+document-repository-managed label tree. These are the labels attached to chunks
+during ingestion (vs the service-category taxonomy in the backend, which the
+chat UI uses). All endpoints require the **`Admin`** role.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/labels` | List labels (unpaginated, filterable by `name`/`level`/`status`/`parentId`/`publish`) |
+| `GET /api/labels/{labelId}` | Get a single label + translations |
+| `POST /api/labels` | Create a label (`name`, `level`, `status`, `parentId`) |
+| `PATCH /api/labels/{labelId}` | Partial update |
+| `DELETE /api/labels/{labelId}` | Hard-delete the label |
+| `DELETE /api/labels/{labelId}/with-children` | Cascade-delete the label and its descendants |
+| `GET /api/labels/{labelId}/related` | Graph-based related labels |
+
+> **Common pitfall.** Deleting a label whose chunks still carry it leaves
+> the chunks in place but **without** their label. The chunks survive in
+> retrieval but lose the filter, so cross-topic bleed can re-emerge. Always
+> cascade (`with-children`) when retiring a category.
+
 ## Related
 
 - [Knowledge base → Labelling & Taxonomy]({{< relref "/docs/knowledge-base/labelling-taxonomy" >}})

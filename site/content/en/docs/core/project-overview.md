@@ -35,7 +35,8 @@ content manager, sovereign reviewer) start here.
   model API is required for the core path.
 - **Multilingual** — English is the RAG source of truth; the UI and answer
   stream are translatable, with config-driven locale availability
-  (`VUE_APP_AVAILABLE_LOCALES`, `KEYCLOAK_SUPPORTED_LOCALES`).
+  (`VUE_APP_AVAILABLE_LOCALES`, `KEYCLOAK_SUPPORTED_LOCALES`; see
+  [Restrict active locales](/docs/configure/locale-whitelist/)).
 - **Observable** — OpenTelemetry-native metrics, logs, and traces across the
   RAG pipeline (when `ENABLE_OBSERVABILITY=1`). See
   [Observability](/docs/observe/).
@@ -100,7 +101,8 @@ For the full source-tree walk-through, see
 - **Standards-based interoperability** — OIDC/OAuth2, OpenTelemetry,
   OpenAI-compatible model APIs, W3C trace context.
 - **Extensibility** — pluggable models, configurable prompts and retrieval
-  knobs, locale-whitelisting per deployment.
+  knobs, locale-whitelisting per deployment (see
+  [Restrict active locales](/docs/configure/locale-whitelist/)).
 - **Operational simplicity** — single-node storage binaries, one collector
   per node, a single `docker-compose.yaml` for both Compose and Swarm.
 

@@ -246,6 +246,54 @@ If any step fails, the troubleshooting table below pinpoints the cause.
 | `Level: WARN` rows show `New (non-taxonomy) labels suggested` | The labelling LLM hallucinated labels that are not in the `serviceCategories` taxonomy. | Review the suggested labels in the admin UI under Knowledge Hierarchy; promote any valid ones, then re-ingest. |
 | Many rows with `Doc-level context generation failed after 3 attempts` | vLLM is overloaded (queue full, OOM) or `DATAPREP_CONTEXTUAL_DOC_BUDGET` is too large for the loaded context window. | Lower `DATAPREP_CONTEXTUAL_DOC_BUDGET`, or temporarily set `CONTEXTUAL_RETRIEVAL_ENABLED=false` and re-ingest. |
 
+## Troubleshooting by symptom
+
+The table above maps symptoms to likely causes in one row. The playbook below
+maps the most common symptoms to a numbered recipe — useful when the
+diagnosis needs a probe, not a one-liner.
+
+### Symptom: file stuck in `Ingesting` for > 1 hour
+
+1. Open the ingestion log; check whether entries are still being written.
+2. If yes — the worker is alive but slow. Check dataprep container CPU/memory
+   (`docker service ps genieai_dataprep-arango-service` for Swarm — in Swarm
+   mode, container names are randomized; the service-style command works,
+   while `docker stats` requires the exact randomized container name).
+3. If no — the worker probably crashed. Restart the dataprep container; the
+   file stays in `Ingesting` until the worker resumes or you kill it.
+
+### Symptom: file ends in `Ingestion Error` with labelling parse failures
+
+The labelling LLM returned malformed JSON. Almost always a model issue, not
+a document issue. Steps:
+
+1. Probe the live vLLM with the real `LABEL_SELECTOR_SYSTEM_PROMPT` and a
+   real chunk from the file (see `.claude/rules/DEBUGGING-TRACING.md` §7 —
+   use the base64 ssh pattern).
+2. If the probe succeeds — check whether the file's content includes very
+   long sections that may have hit `DATAPREP_CONTEXTUAL_MAX_TOKENS` (default
+   `512`).
+3. If the probe fails — the model is overloaded or misconfigured; check
+   vLLM health and the model's guided-JSON support.
+
+### Symptom: many files show batch labelling fallbacks
+
+The primary embedding model is degraded. Steps:
+
+1. Check the `embedding` / `tei` container logs.
+2. Check the embedding service endpoint (`EMBEDDING_SERVICE_URL`) is
+   reachable from `dataprep-arango-service` (the Docker service / DNS
+   hostname; the OTel `service.name` for queries in VictoriaLogs is
+   `genieai-dataprep`).
+3. If `tei` is OOM-killed, scale down concurrency (`VLLM_MAX_NUM_SEQS`) or
+   upgrade the embedding model.
+
+### Symptom: file in `Ingested with Warnings`
+
+Ingestion succeeded but at least one chunk used a fallback. The document IS
+retrievable, but quality may be reduced. Open the ingestion log, count
+warnings per chunk, and decide whether to retract + re-upload.
+
 ## Related
 
 - [Knowledge base &rarr; Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) — the per-document state machine

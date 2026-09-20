@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/components/charts/pest_alert_chart.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 /// Simple pest alert summary card for QuickHelp overlay
 /// Shows just the count of active alerts with severity indicator
@@ -68,16 +69,17 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
   }
 
   Color _getAlertColor() {
-    if (_pestData == null) return Colors.grey;
-    if (_highSeverity > 0) return Colors.red;
-    if (_totalAlerts > 0) return Colors.orange;
-    return Colors.green;
+    // DS token values (danger/warning/success), matching the web pills.
+    final tokens = ThemeManager().tokens;
+    if (_pestData == null) return tokens.muted;
+    if (_highSeverity > 0) return tokens.danger;
+    if (_totalAlerts > 0) return tokens.warning;
+    return tokens.success;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     // Tap opens the full Pest Alerts chart dialog (web parity: the
     // summary card opens the chart). The card previously had NO tap
@@ -91,7 +93,7 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
         height: 68,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+          color: ThemeManager().tokens.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _getAlertColor().withValues(alpha: 0.5),

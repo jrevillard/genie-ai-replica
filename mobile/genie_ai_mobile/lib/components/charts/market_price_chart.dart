@@ -716,9 +716,9 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
         .toList();
     if (values.isEmpty) return 100;
     final max = values.reduce((a, b) => a > b ? a : b);
-    // 1.5× the top series value — user-prescribed headroom (2026-09-18):
-    // emphasizes the price range without crowding the plot top
-    return max * 1.5;
+    // 1.2× the top series value (user req 2026-09-20): the axis tops out
+    // only 20% above the highest rendered point — neat, readable plots.
+    return max * 1.2;
   }
 
   double _calculateXInterval() {

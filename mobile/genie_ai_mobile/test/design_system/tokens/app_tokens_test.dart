@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
-import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 
 void main() {
   group('AppTokens', () {
@@ -16,47 +15,47 @@ void main() {
         expect(tokens.isDark, isFalse);
       });
 
-      test('brand defaults to steel blue', () {
-        expect(tokens.brand, const Color(0xFF4682B4));
+      test('brand defaults to Verde AgroGenio', () {
+        expect(tokens.brand, const Color(0xFF176B3A));
       });
 
-      test('bg defaults to light gray', () {
-        expect(tokens.bg, const Color(0xFFF8F9FA));
+      test('bg defaults to warm off-white', () {
+        expect(tokens.bg, const Color(0xFFF7F8F4));
       });
 
-      test('fg defaults to dark navy', () {
-        expect(tokens.fg, const Color(0xFF1A1A2E));
+      test('fg defaults to greenish black', () {
+        expect(tokens.fg, const Color(0xFF17231C));
       });
 
-      test('surface is white', () {
-        expect(tokens.surface, Colors.white);
+      test('surface is warm off-white', () {
+        expect(tokens.surface, const Color(0xFFFCFDFA));
       });
 
       test('accent equals brand', () {
         expect(tokens.accent, tokens.brand);
       });
 
-      test('accentFg is white', () {
-        expect(tokens.accentFg, Colors.white);
+      test('accentFg is warm off-white', () {
+        expect(tokens.accentFg, const Color(0xFFFCFDFA));
       });
 
       test('navbarBg defaults to brand', () {
         expect(tokens.navbarBg, tokens.brand);
       });
 
-      test('navbarFg defaults to white', () {
-        expect(tokens.navbarFg, Colors.white);
+      test('navbarFg defaults to warm off-white', () {
+        expect(tokens.navbarFg, const Color(0xFFFCFDFA));
       });
 
       test('fontScale defaults to 1.0', () {
         expect(tokens.fontScale, 1.0);
       });
 
-      test('success/warning/danger/info defaults', () {
-        expect(tokens.success, const Color(0xFF10B981));
-        expect(tokens.warning, const Color(0xFFF59E0B));
-        expect(tokens.danger, const Color(0xFFEF4444));
-        expect(tokens.info, const Color(0xFF3B82F6));
+      test('success/warning/danger/info defaults (AgroGenio palette)', () {
+        expect(tokens.success, const Color(0xFF69A83B));
+        expect(tokens.warning, const Color(0xFFB86B00));
+        expect(tokens.danger, const Color(0xFFB42318));
+        expect(tokens.info, const Color(0xFF1565A8));
       });
     });
 
@@ -71,27 +70,31 @@ void main() {
         expect(tokens.isDark, isTrue);
       });
 
-      test('fg is near white', () {
-        expect(tokens.fg, const Color(0xFFF0F0F0));
+      test('fg is warm off-white', () {
+        expect(tokens.fg, const Color(0xFFF2F4EE));
       });
 
-      test('accent is lightened brand', () {
-        final expected = ColorUtils.lighten(tokens.brand, 0.20);
-        expect(tokens.accent, expected);
+      test('accent is the fixed verde cultivo (web dark parity)', () {
+        expect(tokens.accent, const Color(0xFF69A83B));
       });
 
-      test('accentFg is darkened brand', () {
-        final expected = ColorUtils.darken(tokens.brand, 0.32);
-        expect(tokens.accentFg, expected);
+      test('accentFg is the deep verde bg color', () {
+        expect(tokens.accentFg, const Color(0xFF0F1A12));
       });
 
-      test('bg is brand-tinted dark', () {
-        final expected = ColorUtils.brandTinted(
-          tokens.brand,
-          lightness: 0.14,
-          saturationMultiplier: 0.25,
-        );
-        expect(tokens.bg, expected);
+      test('bg is the fixed deep verde (web dark parity)', () {
+        expect(tokens.bg, const Color(0xFF0F1A12));
+      });
+
+      test('dark semantic overrides (brighter for chart visibility)', () {
+        expect(tokens.success, const Color(0xFF9BC97B));
+        expect(tokens.warning, const Color(0xFFE08A1A));
+        expect(tokens.danger, const Color(0xFFE85A4F));
+        expect(tokens.info, const Color(0xFF4A8DCB));
+      });
+
+      test('navbarFg stays light in dark mode (web parity)', () {
+        expect(tokens.navbarFg, const Color(0xFFF2F4EE));
       });
     });
 
@@ -265,7 +268,7 @@ void main() {
           config: const {'theme': 'bad'},
           isDark: false,
         );
-        expect(tokens.brand, const Color(0xFF4682B4));
+        expect(tokens.brand, const Color(0xFF176B3A));
         expect(tokens.fontScale, 1.0);
       });
 
@@ -274,7 +277,7 @@ void main() {
           config: const {'theme': 42},
           isDark: false,
         );
-        expect(tokens.brand, const Color(0xFF4682B4));
+        expect(tokens.brand, const Color(0xFF176B3A));
         expect(tokens.navbarBg, tokens.brand);
       });
 
@@ -285,7 +288,7 @@ void main() {
           },
           isDark: false,
         );
-        expect(tokens.brand, const Color(0xFF4682B4));
+        expect(tokens.brand, const Color(0xFF176B3A));
       });
 
       test('navbar as string falls back to brand', () {
@@ -296,7 +299,7 @@ void main() {
           isDark: false,
         );
         expect(tokens.navbarBg, tokens.brand);
-        expect(tokens.navbarFg, Colors.white);
+        expect(tokens.navbarFg, const Color(0xFFFCFDFA));
       });
 
       test('colors as list falls back to defaults', () {
@@ -308,8 +311,8 @@ void main() {
           },
           isDark: false,
         );
-        expect(tokens.success, const Color(0xFF10B981));
-        expect(tokens.warning, const Color(0xFFF59E0B));
+        expect(tokens.success, const Color(0xFF69A83B));
+        expect(tokens.warning, const Color(0xFFB86B00));
       });
 
       test('typography as string falls back to defaults', () {
@@ -346,7 +349,7 @@ void main() {
           isDark: true,
         );
         expect(tokens.navbarBg, tokens.brand);
-        expect(tokens.success, const Color(0xFF10B981));
+        expect(tokens.success, const Color(0xFF9BC97B));
         expect(tokens.fontScale, 1.0);
       });
     });

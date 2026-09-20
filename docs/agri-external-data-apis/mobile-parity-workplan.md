@@ -144,7 +144,15 @@ envelopes (month-end cadence, unit conversions, translated news,
 - **Admin Dashboard: OUT OF SCOPE for mobile, permanently** — the
   mobile app is end-user only; admin features are never ported.
 - **M27 color-scheme audit** (chat + Insights + Market Prices vs the
-  Vue DS tokens, light AND dark): pending — Phase D item.
+  Vue DS tokens, light AND dark): **DONE (2026-09-20)** — AppTokens
+  defaults now mirror the Vue `theme-variables.css` exactly (AgroGenio
+  light palette incl. fixed verde-cultivo `--accent-secondary`, and the
+  fixed dark-theme values incl. light navbar text); fallback brand is
+  Verde AgroGenio #176B3A (was steel blue); hardcoded Material colors on
+  the agri cards/dialogs (health/severity/trend) replaced with DS token
+  values. Note: the brand sheet's exact logo greens (#1E5631 / #4CAF50)
+  and the #E9C46A gold differ from the web UI tokens — mobile follows
+  the web; changing both is a web-side decision.
 
 ## 4. Risks
 

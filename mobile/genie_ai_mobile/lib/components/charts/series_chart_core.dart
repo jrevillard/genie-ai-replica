@@ -121,7 +121,9 @@ double bottomTickIntervalMs(DateTime minX, DateTime maxX) {
 /// range = maxVal - minVal (or 1 when flat); step = 10^floor(log10(
 /// range/4)) with a floor of 1; yMin = max(0, floor((minVal -
 /// range*0.05)/step)*step) when minVal >= 0, else the unclamped
-/// floor; yMax = round(maxVal*1.5*100)/100.
+/// floor; yMax = round(maxVal*1.2*100)/100 — the axis tops out only
+/// 20% above the highest rendered point (user req 2026-09-20: keeps
+/// the plot area tight and readable).
 ({double yMin, double yMax, double step}) computeYAxis(
   double minVal,
   double maxVal,
@@ -134,7 +136,7 @@ double bottomTickIntervalMs(DateTime minX, DateTime maxX) {
   if (step < 1) step = 1.0;
   final floorVal = ((minVal - range * 0.05) / step).floorToDouble() * step;
   final yMin = minVal >= 0 ? (floorVal < 0 ? 0.0 : floorVal) : floorVal;
-  final yMax = (maxVal * 1.5 * 100).roundToDouble() / 100;
+  final yMax = (maxVal * 1.2 * 100).roundToDouble() / 100;
   return (yMin: yMin, yMax: yMax, step: step);
 }
 

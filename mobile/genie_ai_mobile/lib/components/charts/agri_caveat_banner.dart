@@ -69,6 +69,10 @@ class AgriCaveatBanner extends StatelessWidget {
   List<(String, String)> _chips() {
     final out = <(String, String)>[];
     final caveats = (data?['caveats'] as List?) ?? [];
+    // The envelope aggregates PER-SERIES caveats (a 5-series category
+    // repeats its estimation/regional pair 5×) — collapse identical
+    // code+params pairs so each distinct caveat renders once.
+    final seen = <String>{};
     for (final c in caveats) {
       if (c is! Map) continue;
       final code = c['code'] as String? ?? '';
@@ -83,6 +87,7 @@ class AgriCaveatBanner extends StatelessWidget {
       if (code == 'ANNUAL_ONLY' && params['lastYear'] != null) {
         label = '$label (${params['lastYear']})';
       }
+      if (!seen.add('$code|$label')) continue;
       out.add((code, label));
     }
     return out;

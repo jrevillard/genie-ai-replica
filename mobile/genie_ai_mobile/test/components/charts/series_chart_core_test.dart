@@ -79,24 +79,24 @@ void main() {
     });
   });
 
-  group('computeYAxis (S8) — spec section 14 test 4', () {
-    test('chicken/beef 0.3-8.21 gives yMin 0, yMax 12.32', () {
+  group('computeYAxis (S8) — axis tops out 20% above the data max', () {
+    test('chicken/beef 0.3-8.21 gives yMin 0, yMax 9.85', () {
       final a = computeYAxis(0.3, 8.21);
       expect(a.yMin, 0.0);
-      expect(a.yMax, 12.32);
+      expect(a.yMax, 9.85); // 8.21 * 1.2, 2-dp rounded
       expect(a.step, 1.0);
     });
 
     test('negative data keeps the unclamped floor', () {
       final a = computeYAxis(-5.0, -1.0);
       expect(a.yMin, lessThan(0));
-      expect(a.yMax, -1.5); // -1 * 1.5
+      expect(a.yMax, -1.2); // -1 * 1.2
     });
 
     test('flat series do not divide by zero', () {
       final a = computeYAxis(7.0, 7.0);
       expect(a.step, greaterThanOrEqualTo(1));
-      expect(a.yMax, 10.5);
+      expect(a.yMax, 8.4);
     });
   });
 

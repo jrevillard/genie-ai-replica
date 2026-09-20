@@ -106,6 +106,22 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
 
   String get _locale => I18nService().currentLocale.languageCode;
 
+  /// Web `unitExplanation` parity — what the unit means, keyed the same
+  /// way (quintal/PPI/index/%/...). Long-press target on the Latest card.
+  String _unitExplanation(String unit) {
+    final u = unit.toLowerCase();
+    if (u.contains('quintal')) return tr('market.unitQuintal');
+    if (u.contains('ppi')) return tr('market.unitPpi');
+    if (u.contains('index')) return tr('market.unitIndex');
+    if (u.contains('%')) return tr('market.unitPercent');
+    if (u.contains('usd/kg')) return tr('market.unitUsdKg');
+    if (u.contains('usd/mt')) return tr('market.unitUsdMt');
+    if (u.contains('short ton')) return tr('market.unitShortTon');
+    if (u.contains('usd/lb')) return tr('market.unitUsdLb');
+    if (u.contains('usd/dozen')) return tr('market.unitDozen');
+    return tr('market.unitGeneric');
+  }
+
   AppTokens get _tokens => ThemeManager().tokens;
 
   /// S7 dot density: dense series (more than 300 visible points)
@@ -210,38 +226,48 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
     final hidden = _isHidden(name);
     final locked = _toggleLocked(name);
     final label = displayName(name, allNames);
-    return InkWell(
-      onTap: locked
-          ? null
-          : () => setState(
-              () =>
-                  hidden ? _hiddenSeries.remove(name) : _hiddenSeries.add(name),
+    // Web :title parity — full name + unit on long-press.
+    final unit = series['unit'] as String? ?? '';
+    final tip = unit.isEmpty
+        ? localizeFullName(name, _locale)
+        : '${localizeFullName(name, _locale)} ($unit)';
+    return Tooltip(
+      message: tip,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: InkWell(
+        onTap: locked
+            ? null
+            : () => setState(
+                () => hidden
+                    ? _hiddenSeries.remove(name)
+                    : _hiddenSeries.add(name),
+              ),
+        child: Opacity(
+          opacity: hidden ? 0.35 : 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  localizeFullName(label, _locale),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _tokens.muted,
+                    decoration: hidden ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ],
             ),
-      child: Opacity(
-        opacity: hidden ? 0.35 : 1,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 4,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                localizeFullName(label, _locale),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: _tokens.muted,
-                  decoration: hidden ? TextDecoration.lineThrough : null,
-                ),
-              ),
-            ],
           ),
         ),
       ),
@@ -602,6 +628,33 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
     List<List<FlSpotLite>> spotsPerSeries,
   ) {
     final palette = _palette();
+    final cardUnit = _allSeries.isEmpty
+        ? ''
+        : (_allSeries.first['unit'] as String? ?? '');
+
+    // Web parity: the unit with an info affordance — long-press explains
+    // what the unit means (quintal/PPI/index/... same copy as the web).
+    Widget unitInfoLine() {
+      if (cardUnit.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Tooltip(
+          message: _unitExplanation(cardUnit),
+          triggerMode: TooltipTriggerMode.longPress,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                cardUnit,
+                style: TextStyle(fontSize: 11, color: _tokens.muted),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.info_outline, size: 13, color: _tokens.muted),
+            ],
+          ),
+        ),
+      );
+    }
 
     Widget latestRow(
       Color color,
@@ -654,17 +707,24 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
       final spots = spotsPerSeries.isNotEmpty ? spotsPerSeries.first : null;
       final point = spots == null ? null : latestPoint(spots);
       final fullName = series?['name'] as String? ?? '';
-      return latestRow(
-        palette.colorForSeriesIndex(0),
-        tr('market.latest'),
-        point,
-        fullName,
-        series?['unit'] as String? ?? '',
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          unitInfoLine(),
+          latestRow(
+            palette.colorForSeriesIndex(0),
+            tr('market.latest'),
+            point,
+            fullName,
+            series?['unit'] as String? ?? '',
+          ),
+        ],
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        unitInfoLine(),
         for (var i = 0; i < activeSeries.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
@@ -725,34 +785,40 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
       });
     }
 
-    return InkWell(
-      onTap: disableHide ? null : toggle,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 32,
-              height: 28,
-              child: Checkbox(
-                tristate: true,
-                visualDensity: VisualDensity.compact,
-                value: allShown ? true : (allHidden ? false : null),
-                onChanged: disableHide ? null : (_) => toggle(),
+    // Web :title parity — the family's member names on long-press.
+    final tip = members.map((m) => localizeFullName(m, _locale)).join(', ');
+    return Tooltip(
+      message: tip,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: InkWell(
+        onTap: disableHide ? null : toggle,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 32,
+                height: 28,
+                child: Checkbox(
+                  tristate: true,
+                  visualDensity: VisualDensity.compact,
+                  value: allShown ? true : (allHidden ? false : null),
+                  onChanged: disableHide ? null : (_) => toggle(),
+                ),
               ),
-            ),
-            Text(
-              '$family (${members.length})',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: disableHide ? _tokens.muted : _tokens.fg,
+              Text(
+                '$family (${members.length})',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: disableHide ? _tokens.muted : _tokens.fg,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-          ],
+              const SizedBox(width: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -994,7 +1060,7 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
               displayName(names[i], allNames),
               seriesW,
               style: headerStyle(),
-              tooltip: '${names[i]} (${units[i]})',
+              tooltip: '${localizeFullName(names[i], _locale)} (${units[i]})',
             ),
           cell(tr('market.quality'), qualityW, style: headerStyle()),
         ],

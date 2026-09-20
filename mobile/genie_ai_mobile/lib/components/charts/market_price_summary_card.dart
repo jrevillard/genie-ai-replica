@@ -138,7 +138,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
     if (colorHex != null) {
       return Color(int.parse(colorHex.replaceFirst('#', '0xFF')));
     }
-    return Colors.blue;
+    return ThemeManager().tokens.accent;
   }
 
   IconData get _categoryIcon {
@@ -190,7 +190,6 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return InkWell(
       onTap: () => _showDetailedChart(context),
@@ -200,7 +199,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
         height: 170,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+          color: ThemeManager().tokens.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _categoryColor.withValues(alpha: 0.5),
@@ -232,9 +231,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                             data: _timeSeries,
                             lineColor: _categoryColor,
                             fillColor: _categoryColor.withValues(alpha: 0.2),
-                            backgroundColor: isDark
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
+                            backgroundColor: ThemeManager().tokens.border,
                           ),
                           child: Center(
                             child: Icon(
@@ -287,11 +284,12 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                                       ? Icons.trending_down
                                       : Icons.trending_flat,
                                   size: 9,
+                                  // DS tokens: success/danger/muted.
                                   color: _trend == 'up'
-                                      ? Colors.green
+                                      ? ThemeManager().tokens.success
                                       : _trend == 'down'
-                                      ? Colors.red
-                                      : Colors.grey,
+                                      ? ThemeManager().tokens.danger
+                                      : ThemeManager().tokens.muted,
                                 ),
                               ],
                             ),

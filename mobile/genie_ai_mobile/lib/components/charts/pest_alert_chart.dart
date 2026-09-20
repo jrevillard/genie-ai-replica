@@ -6,6 +6,7 @@ import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -708,15 +709,18 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   Color _getSeverityColor(String severity) {
+    // DS token values — same mapping as the web's getSeverityPillVariant
+    // (high→danger, moderate→warning, low→success, default→info).
+    final tokens = ThemeManager().tokens;
     switch (severity) {
       case 'high':
-        return Colors.red;
+        return tokens.danger;
       case 'moderate':
-        return Colors.orange;
+        return tokens.warning;
       case 'low':
-        return Colors.blue;
+        return tokens.success;
       default:
-        return Colors.grey;
+        return tokens.info;
     }
   }
 

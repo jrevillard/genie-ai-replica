@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 
 /// Crop Health Chart Widget
 ///
@@ -657,15 +658,17 @@ class _CropHealthChartState extends State<CropHealthChart> {
   }
 
   Color _getHealthColor(String health) {
+    // DS token values — the same colors the web DsPill variants resolve to.
+    final tokens = ThemeManager().tokens;
     switch (health) {
       case 'good':
-        return Colors.green;
+        return tokens.success;
       case 'moderate':
-        return Colors.orange;
+        return tokens.warning;
       case 'warning':
-        return Colors.red;
+        return tokens.danger;
       default:
-        return Colors.grey;
+        return tokens.muted;
     }
   }
 
@@ -694,13 +697,15 @@ class _CropHealthChartState extends State<CropHealthChart> {
   }
 
   Color _getTrendColor(String trend) {
+    // DS token values — success/danger/warning, matching the web pills.
+    final tokens = ThemeManager().tokens;
     switch (trend) {
       case 'improving':
-        return Colors.green;
+        return tokens.success;
       case 'declining':
-        return Colors.red;
+        return tokens.danger;
       default:
-        return Colors.amber;
+        return tokens.warning;
     }
   }
 

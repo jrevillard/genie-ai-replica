@@ -95,9 +95,12 @@ class AppTokens {
     double fontScale = 1.0,
   }) {
     final theme = _asMap(config['theme']) ?? <String, dynamic>{};
+    // Fallback brand = Verde AgroGenio #176B3A — the same dev fallback the
+    // web ships in theme-variables.css (--brand). Unconfigured apps now
+    // render identically (the previous steel-blue #4682B4 broke parity).
     final brandColor =
         ColorUtils.parseHexNullable(theme['brandColor']) ??
-        const Color(0xFF4682B4);
+        const Color(0xFF176B3A);
 
     if (isDark) {
       return _dark(brandColor: brandColor, theme: theme, fontScale: fontScale);
@@ -110,30 +113,32 @@ class AppTokens {
     required Map<String, dynamic> theme,
     required double fontScale,
   }) {
+    // Defaults mirror theme-variables.css :root (AgroGenio warm palette):
+    // warm off-white bg, greenish-black fg, soft greenish borders.
     final bg =
-        ColorUtils.parseHexNullable(theme['bg']) ?? const Color(0xFFF8F9FA);
+        ColorUtils.parseHexNullable(theme['bg']) ?? const Color(0xFFF7F8F4);
     final fg =
-        ColorUtils.parseHexNullable(theme['fg']) ?? const Color(0xFF1A1A2E);
+        ColorUtils.parseHexNullable(theme['fg']) ?? const Color(0xFF17231C);
 
     final navbar = _asMap(theme['navbar']) ?? {};
     final navbarBg =
         ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
-    // Web: --navbar-fg is light text contrasted from brand (l+0.56, low chroma)
     final navbarFg =
-        ColorUtils.parseHexNullable(navbar['text']) ?? Colors.white;
+        ColorUtils.parseHexNullable(navbar['text']) ?? const Color(0xFFFCFDFA);
 
     final colors = _asMap(theme['colors']) ?? {};
     final success =
         ColorUtils.parseHexNullable(colors['success']) ??
-        const Color(0xFF10B981);
+        const Color(0xFF69A83B); // Verde cultivo
     final warning =
         ColorUtils.parseHexNullable(colors['warning']) ??
-        const Color(0xFFF59E0B);
+        const Color(0xFFB86B00); // Ámbar alerta
     final danger =
         ColorUtils.parseHexNullable(colors['danger']) ??
-        const Color(0xFFEF4444);
+        const Color(0xFFB42318); // Rojo crítico
     final info =
-        ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF3B82F6);
+        ColorUtils.parseHexNullable(colors['info']) ??
+        const Color(0xFF1565A8); // Azul servicio
 
     final typography = _asMap(theme['typography']) ?? {};
     final scale = (_asNum(typography['fontScale']))?.toDouble() ?? 1.0;
@@ -142,16 +147,18 @@ class AppTokens {
       brand: brandColor,
       bg: bg,
       fg: fg,
-      surface: Colors.white,
-      muted: const Color(0xFF6B7280),
-      mutedSoft: const Color(0xFF9CA3AF),
-      border: const Color(0xFFD1D5DB),
-      borderLight: const Color(0xFFE5E7EB),
+      surface: const Color(0xFFFCFDFA),
+      muted: const Color(0xFF5A6B5F),
+      mutedSoft: const Color(0xFF8A9690),
+      border: const Color(0xFFD6DED8),
+      borderLight: const Color(0xFFE4ECE6),
       accent: brandColor,
-      accentHover: ColorUtils.darken(brandColor, 0.04),
+      // Web hover #0D4B28 (verde profundo) ≈ 25% darker than the brand.
+      accentHover: ColorUtils.darken(brandColor, 0.25),
       accentMuted: brandColor.withValues(alpha: 0.12),
-      accentFg: Colors.white,
-      accentSecondary: ColorUtils.darken(brandColor, 0.07),
+      accentFg: const Color(0xFFFCFDFA),
+      // Web --accent-secondary is the FIXED verde cultivo #69A83B.
+      accentSecondary: const Color(0xFF69A83B),
       navbarBg: navbarBg,
       navbarFg: navbarFg,
       success: success,
@@ -168,70 +175,48 @@ class AppTokens {
     required Map<String, dynamic> theme,
     required double fontScale,
   }) {
+    // Dark tokens are FIXED values on the web (theme-variables.css
+    // [data-theme='dark']) — deep brand-tinted greens with warm off-white
+    // text. They deliberately do NOT derive from the brand: --accent stays
+    // verde cultivo and --brand keeps the navbar identical across modes.
     final navbar = _asMap(theme['navbar']) ?? {};
-    // Web: navbar-bg stays brand in both modes; navbar-fg is dark (l-0.32) in dark
     final navbarBg =
         ColorUtils.parseHexNullable(navbar['background']) ?? brandColor;
-    // Web dark: --navbar-fg: oklch(from brand max(calc(l - 0.32), 0.1) c h)
-    // Approximation: use a darkened version of the brand color
+    // Web dark: --navbar-fg: #f2f4ee — LIGHT text in both modes (the
+    // previous darkened-brand text was nearly invisible on the navbar).
     final navbarFg =
-        ColorUtils.parseHexNullable(navbar['text']) ??
-        ColorUtils.darken(brandColor, 0.25);
+        ColorUtils.parseHexNullable(navbar['text']) ?? const Color(0xFFF2F4EE);
 
     final colors = _asMap(theme['colors']) ?? {};
     final success =
         ColorUtils.parseHexNullable(colors['success']) ??
-        const Color(0xFF10B981);
+        const Color(0xFF9BC97B);
     final warning =
         ColorUtils.parseHexNullable(colors['warning']) ??
-        const Color(0xFFF59E0B);
+        const Color(0xFFE08A1A);
     final danger =
         ColorUtils.parseHexNullable(colors['danger']) ??
-        const Color(0xFFEF4444);
+        const Color(0xFFE85A4F);
     final info =
-        ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF3B82F6);
+        ColorUtils.parseHexNullable(colors['info']) ?? const Color(0xFF4A8DCB);
 
     final typography = _asMap(theme['typography']) ?? {};
     final scale = (_asNum(typography['fontScale']))?.toDouble() ?? 1.0;
 
     return AppTokens(
       brand: brandColor,
-      bg: ColorUtils.brandTinted(
-        brandColor,
-        lightness: 0.14,
-        saturationMultiplier: 0.25,
-      ),
-      fg: const Color(0xFFF0F0F0),
-      surface: ColorUtils.brandTinted(
-        brandColor,
-        lightness: 0.22,
-        saturationMultiplier: 0.18,
-      ),
-      muted: ColorUtils.brandTinted(
-        brandColor,
-        lightness: 0.58,
-        saturationMultiplier: 0.15,
-      ),
-      mutedSoft: ColorUtils.brandTinted(
-        brandColor,
-        lightness: 0.45,
-        saturationMultiplier: 0.12,
-      ),
-      border: ColorUtils.brandTinted(
-        brandColor,
-        lightness: 0.30,
-        saturationMultiplier: 0.20,
-      ),
-      borderLight: ColorUtils.brandTinted(
-        brandColor,
-        lightness: 0.24,
-        saturationMultiplier: 0.18,
-      ),
-      accent: ColorUtils.lighten(brandColor, 0.20),
-      accentHover: ColorUtils.lighten(brandColor, 0.14),
-      accentMuted: brandColor.withValues(alpha: 0.15),
-      accentFg: ColorUtils.darken(brandColor, 0.32),
-      accentSecondary: ColorUtils.lighten(brandColor, 0.10),
+      bg: ColorUtils.parseHexNullable(theme['bg']) ?? const Color(0xFF0F1A12),
+      fg: ColorUtils.parseHexNullable(theme['fg']) ?? const Color(0xFFF2F4EE),
+      surface: const Color(0xFF16241A),
+      muted: const Color(0xFF8FA395),
+      mutedSoft: const Color(0xFF6B7D70),
+      border: const Color(0xFF2A3B30),
+      borderLight: const Color(0xFF1F2D24),
+      accent: const Color(0xFF69A83B),
+      accentHover: const Color(0xFF7DBC4D),
+      accentMuted: const Color(0xFF69A83B).withValues(alpha: 0.15),
+      accentFg: const Color(0xFF0F1A12),
+      accentSecondary: const Color(0xFF176B3A),
       navbarBg: navbarBg,
       navbarFg: navbarFg,
       success: success,

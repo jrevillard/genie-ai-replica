@@ -114,7 +114,11 @@ vllm_translation_gpu_utilization: "0.35"
 vllm_translation_kv_cache_dtype: auto
 vllm_max_num_seqs: "1024"
 vllm_translation_max_num_seqs: "32"
-embedding_model_id: BAAI/bge-base-en-v1.5
+# embedding_model_id: inherited from group_vars/all.yml (BAAI/bge-large-en-v1.5
+# after MR !399). Was previously pinned to bge-base here, but the deployed
+# chunks are 1024-dim and the GPU now serves bge-large — keeping the explicit
+# pin caused score=null on every query (dim mismatch → retriever exception →
+# 0 docs attached). Removed to inherit the canonical default.
 reranker_model_id: BAAI/bge-reranker-v2-m3
 chatqna_enforce_abstention: "false"
 # Opt-in LLM self-grade: the model appends [[CONF:<0-100>]] rating how well the

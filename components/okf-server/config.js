@@ -30,5 +30,18 @@ module.exports = {
   // separate surface from the authenticated /api/okf router.
   internal: {
     secret: process.env.OKF_INTERNAL_SECRET || ''
+  },
+  // Story 1.7 (ADR-okf-039 D3): retrieval mode governance. These are the BOOT
+  // DEFAULTS — the okf_system_config doc (_key='retrieval') overrides field-by-
+  // field once a steward PUTs a config; the doc never has to exist (legacy is
+  // the safe default and needs no row). The read side (chatqna/retriever) adds
+  // its own ≤30s TTL cache on top; okf-server always answers from current state.
+  retrieval: {
+    mode: process.env.OKF_RETRIEVAL_MODE || 'legacy',
+    maxFanoutGraphs: parseInt(process.env.OKF_RETRIEVAL_MAX_FANOUT_GRAPHS || '5', 10),
+    spineMaxHops: parseInt(process.env.OKF_RETRIEVAL_SPINE_MAX_HOPS || '2', 10),
+    extractedHopCap: parseInt(process.env.OKF_RETRIEVAL_EXTRACTED_HOP_CAP || '1', 10),
+    candidateCapPerGraph: parseInt(process.env.OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH || '50', 10),
+    candidateCapGlobal: parseInt(process.env.OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL || '200', 10)
   }
 };

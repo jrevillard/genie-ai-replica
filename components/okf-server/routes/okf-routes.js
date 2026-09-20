@@ -4,6 +4,8 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { requireScope } = require('../middleware/require-scope');
+const { requireRole } = require('../middleware/require-role');
+const retrievalConfigController = require('../controllers/retrieval-config-controller');
 const { withSpan } = require('../shared-lib/tracing');
 
 // Auth on all OKF API routes (per-route via router.use, NOT global):
@@ -15,6 +17,12 @@ router.use(requireScope('read'));
 
 // Repository CRUD (Story 2.2) — inherits authenticate above.
 router.use('/repos', require('./repos-routes'));
+
+// Retrieval mode governance (Story 1.7, ADR-okf-039 D3): the read-model is
+// read-scoped (chat path service token + Studio card); the governance write
+// is tools-admin only and audited before→after in the service.
+router.get('/retrieval-config', retrievalConfigController.getRetrievalConfig);
+router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigController.putRetrievalConfig);
 
 // Service root — confirms the service + auth are wired.
 router.get('/', async (req, res, next) => {

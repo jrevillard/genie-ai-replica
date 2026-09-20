@@ -20,7 +20,10 @@ const COLLECTIONS = [
   'okf_audit_logs',
   'okf_sources',
   'okf_versions',
-  'okf_bundle_manifest'
+  'okf_bundle_manifest',
+  // Story 1.7 (ADR-okf-039 D3): runtime governance config. Tiny keyed docs
+  // (_key='retrieval' today) — never per-repo, so no indexes beyond _key.
+  'okf_system_config'
 ];
 
 const INDEXES = {

@@ -4,9 +4,19 @@
 
 See core/label_contract.py for the format documentation. These tests guarantee
 the encode/decode roundtrip is correct + edge cases are handled.
+
+Story 1.0b — the graph-names carrier (LG-5 launch gate): the parallel
+``::graphs:`` segment rides the same search_start string and must coexist
+with the labels segment without interference. Proves the data contract BEFORE
+Story 1.1 fan-out code lands.
 """
 
-from core.label_contract import decode_filter_labels, encode_filter_labels
+from core.label_contract import (
+    decode,
+    decode_filter_labels,
+    encode,
+    encode_filter_labels,
+)
 
 
 class TestEncodeFilterLabels:
@@ -120,3 +130,122 @@ class TestMultiCategoryLabels:
         encoded = encode_filter_labels("chunk", ["Tomato"])
         mode, labels = decode_filter_labels(encoded)
         assert labels == ["Tomato"]
+
+
+# ─── Story 1.0b: graph_names carrier ─────────────────────────────────────────
+# The new combined encode/decode MUST coexist with the existing labels carrier
+# without breaking it. The back-compat shims above stay identical; these tests
+# pin the new shape and the order-insensitive dual-segment behaviour.
+
+
+class TestEncodeGraphNames:
+    def test_graphs_only_no_labels(self):
+        assert encode("chunk", graphs=["GRAPH", "OKF_kenya-gov_v3"]) == ("chunk::graphs:GRAPH,OKF_kenya-gov_v3")
+
+    def test_graphs_and_labels_both_present(self):
+        result = encode("chunk", labels=["Onion"], graphs=["GRAPH", "OKF_kenya-gov_v3"])
+        assert result == "chunk::labels:Onion::graphs:GRAPH,OKF_kenya-gov_v3"
+
+    def test_graphs_segment_order_insensitive(self):
+        # both orderings must round-trip to the same pair of lists
+        a = encode("chunk", labels=["Onion"], graphs=["GRAPH", "OKF_kenya-gov_v3"])
+        b = "chunk::graphs:GRAPH,OKF_kenya-gov_v3::labels:Onion"
+        assert decode(a) == decode(b)
+
+    def test_empty_graphs_omits_segment(self):
+        assert encode("chunk", labels=["Onion"], graphs=[]) == "chunk::labels:Onion"
+
+    def test_none_graphs_omits_segment(self):
+        assert encode("chunk", labels=["Onion"], graphs=None) == "chunk::labels:Onion"
+
+    def test_whitespace_only_graphs_filtered(self):
+        assert encode("chunk", graphs=["", "  ", None]) == "chunk"  # type: ignore[list-item]
+
+    def test_graphs_stripped(self):
+        result = encode("chunk", graphs=["  GRAPH  ", "OKF_kenya-gov_v3"])
+        assert result == "chunk::graphs:GRAPH,OKF_kenya-gov_v3"
+
+    def test_no_segments_returns_base_mode_unchanged(self):
+        assert encode("chunk") == "chunk"
+        assert encode("node") == "node"
+        assert encode("edge") == "edge"
+
+
+class TestDecodeGraphNames:
+    def test_graphs_only(self):
+        mode, labels, graphs = decode("chunk::graphs:GRAPH,OKF_kenya-gov_v3")
+        assert mode == "chunk"
+        assert labels == []
+        assert graphs == ["GRAPH", "OKF_kenya-gov_v3"]
+
+    def test_labels_and_graphs_both_decoded(self):
+        mode, labels, graphs = decode("chunk::labels:Onion,Vegetables::graphs:GRAPH,OKF_kenya-gov_v3")
+        assert mode == "chunk"
+        assert labels == ["Onion", "Vegetables"]
+        assert graphs == ["GRAPH", "OKF_kenya-gov_v3"]
+
+    def test_legacy_input_still_works(self):
+        # any segment missing ⇒ empty list (legacy chat keeps running unchanged)
+        mode, labels, graphs = decode("chunk")
+        assert mode == "chunk"
+        assert labels == []
+        assert graphs == []
+
+    def test_segment_order_does_not_matter(self):
+        a = decode("chunk::labels:Onion::graphs:GRAPH")
+        b = decode("chunk::graphs:GRAPH::labels:Onion")
+        assert a == b == ("chunk", ["Onion"], ["GRAPH"])
+
+    def test_handles_none_input(self):
+        # mirrors the legacy shim's behaviour — None ⇒ empty string (not
+        # "None"); callers always pass a string
+        mode, labels, graphs = decode(None)  # type: ignore[arg-type]
+        assert mode == ""
+        assert labels == []
+        assert graphs == []
+
+    def test_empty_segment_after_marker(self):
+        mode, labels, graphs = decode("chunk::graphs:")
+        assert mode == "chunk"
+        assert labels == []
+        assert graphs == []
+
+
+class TestGraphNamesRoundtrip:
+    def test_graphs_roundtrip(self):
+        original = ["GRAPH", "OKF_kenya-gov_v3", "OKF_health-services_v1"]
+        encoded = encode("chunk", graphs=original)
+        _, _, decoded = decode(encoded)
+        assert decoded == original
+
+    def test_labels_and_graphs_roundtrip(self):
+        labels = ["Onion", "Vegetables"]
+        graphs = ["GRAPH", "OKF_kenya-gov_v3"]
+        encoded = encode("edge", labels=labels, graphs=graphs)
+        m, dl, dg = decode(encoded)
+        assert m == "edge"
+        assert dl == labels
+        assert dg == graphs
+
+
+class TestLegacyBackCompat:
+    """The encode_filter_labels / decode_filter_labels shims must remain
+    BYTE-IDENTICAL to the pre-1.0b contract — every existing chatqna/retriever
+    call site keeps running unchanged."""
+
+    def test_encode_shim_matches_legacy(self):
+        assert encode_filter_labels("chunk", ["Onion"]) == "chunk::labels:Onion"
+        assert encode_filter_labels("node", ["X", "Y"]) == "node::labels:X,Y"
+        assert encode_filter_labels("chunk", []) == "chunk"
+
+    def test_decode_shim_returns_two_tuple(self):
+        mode, labels = decode_filter_labels("chunk::labels:Onion")
+        assert mode == "chunk"
+        assert labels == ["Onion"]
+
+    def test_decode_shim_ignores_graph_segment(self):
+        # legacy callers (which don't know about graph_names) must NOT see
+        # graphs leaking into the labels list
+        mode, labels = decode_filter_labels("chunk::graphs:GRAPH")
+        assert mode == "chunk"
+        assert labels == []

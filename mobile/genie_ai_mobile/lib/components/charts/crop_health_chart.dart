@@ -292,8 +292,11 @@ class _CropHealthChartState extends State<CropHealthChart> {
                         getTooltipItems: (touchedSpots) {
                           return touchedSpots.map((spot) {
                             final dept = _cropData!['data'][spot.x.toInt()];
-                            final name = dept['department'] as String;
-                            final ndvi = dept['ndvi'] as double;
+                            final name = dept['department'] as String? ?? '';
+                            // API may return int or null NDVI — never crash
+                            // the tooltip on live data.
+                            final ndvi =
+                                (dept['ndvi'] as num?)?.toDouble() ?? 0.0;
                             // Show the observation date with the value (user req)
                             final rawDate = dept['date'] as String?;
                             var dateLine = '';

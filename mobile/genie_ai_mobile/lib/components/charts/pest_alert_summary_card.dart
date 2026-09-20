@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
+import 'package:genie_ai_mobile/components/charts/pest_alert_chart.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 
 /// Simple pest alert summary card for QuickHelp overlay
@@ -78,80 +79,133 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      // 68: 60 clipped the two-line text column by 3px (overflow in the
-      // hosted Insights row).
-      height: 68,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: _getAlertColor().withValues(alpha: 0.5),
-          width: 2,
+    // Tap opens the full Pest Alerts chart dialog (web parity: the
+    // summary card opens the chart). The card previously had NO tap
+    // target at all.
+    return InkWell(
+      onTap: () => _showFullChart(context),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        // 68: 60 clipped the two-line text column by 3px (overflow in the
+        // hosted Insights row).
+        height: 68,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _getAlertColor().withValues(alpha: 0.5),
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _getAlertColor().withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                _highSeverity > 0 ? Icons.warning : Icons.info,
+                color: _getAlertColor(),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _translate('charts.pestAlerts') ?? 'Pest Alerts',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 10,
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(
+                        '$_totalAlerts',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: _getAlertColor(),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          _translate('charts.active') ?? 'active',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: _getAlertColor().withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(
-              _highSeverity > 0 ? Icons.warning : Icons.info,
-              color: _getAlertColor(),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _translate('charts.pestAlerts') ?? 'Pest Alerts',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  void _showFullChart(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width * 0.95,
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
                 ),
-                const SizedBox(height: 2),
-                Row(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '$_totalAlerts',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: _getAlertColor(),
+                    Expanded(
+                      child: Text(
+                        '${tr('charts.pestAlerts')} - ${tr('charts.details')}',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        _translate('charts.active') ?? 'active',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
-                          fontSize: 11,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: PestAlertChart(region: widget.region, compact: true),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

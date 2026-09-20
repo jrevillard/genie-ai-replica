@@ -1759,175 +1759,182 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
           // Quick Help Overlay
           if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            Container(
-              color: tokens.bg,
-              padding: const EdgeInsets.symmetric(
-                horizontal: DsSpacing.md,
-                vertical: DsSpacing.xl,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      tr('chatbot.whatCanIHelp'),
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: tokens.fg,
-                      ),
-                      textAlign: TextAlign.center,
+            // Capped at 55% of viewport so the team hero always has
+            // space below it in the chat home, between the QuickHelp
+            // bottom and the chat controls bar.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * 0.55,
+                  ),
+                  child: Container(
+                    color: tokens.bg,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DsSpacing.md,
+                      vertical: DsSpacing.xl,
                     ),
-                    const SizedBox(height: DsSpacing.lg),
-                    // Insights section (web ChatBotComponent parity).
-                    _agriSectionTitle(theme, tokens, tr('charts.insights')),
-                    const Row(
-                      children: [
-                        Expanded(child: CropHealthSummaryCard()),
-                        Expanded(child: PestAlertSummaryCard()),
-                      ],
-                    ),
-                    const SizedBox(height: DsSpacing.lg),
-                    // Fast Actions section.
-                    _agriSectionTitle(theme, tokens, tr('charts.fastActions')),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            tr('chatbot.whatCanIHelp'),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: tokens.fg,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: DsSpacing.lg),
+                          _agriSectionTitle(theme, tokens, tr('charts.insights')),
+                          const Row(
+                            children: [
+                              Expanded(child: CropHealthSummaryCard()),
+                              Expanded(child: PestAlertSummaryCard()),
+                            ],
+                          ),
+                          const SizedBox(height: DsSpacing.lg),
+                          _agriSectionTitle(theme, tokens, tr('charts.fastActions')),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final int crossAxisCount =
+                                  _quickHelpLayout['columns'] as int? ?? 2;
+                              final double aspectRatio =
+                                  (_quickHelpLayout['childAspectRatio']
+                                          as num?)
+                                      ?.toDouble() ??
+                                  3.5;
 
-                        return GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
-                              ),
-                          itemCount: _quickHelpButtons.length,
-                          itemBuilder: (context, index) {
-                            final button = _quickHelpButtons[index];
-                            // Label: prefer the loader-resolved title
-                            // (config carries {en, es} maps, not i18n keys);
-                            // fall back to the appearance.label.text key for
-                            // older config drafts.
-                            final labelMap =
-                                button['appearance']?['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String titleKey =
-                                labelMap['text']?.toString() ?? '';
-                            final String resolvedTitle =
-                                button['resolvedTitle']?.toString() ?? '';
-                            final String translatedTitle =
-                                resolvedTitle.isNotEmpty
-                                ? resolvedTitle
-                                : (titleKey.isNotEmpty ? tr(titleKey) : '');
-                            final String iconAsset =
-                                button['iconAsset']?.toString() ?? '';
+                              return GridView.builder(
+                                shrinkWrap: true,
+                                physics:
+                                    const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  childAspectRatio: aspectRatio,
+                                  mainAxisSpacing: 10,
+                                  crossAxisSpacing: 10,
+                                ),
+                                itemCount: _quickHelpButtons.length,
+                                itemBuilder: (context, index) {
+                                  final button = _quickHelpButtons[index];
+                                  final labelMap =
+                                      button['appearance']?['label']
+                                          as Map<String, dynamic>? ??
+                                          {};
+                                  final String titleKey =
+                                      labelMap['text']?.toString() ?? '';
+                                  final String resolvedTitle =
+                                      button['resolvedTitle']?.toString() ??
+                                          '';
+                                  final String translatedTitle =
+                                      resolvedTitle.isNotEmpty
+                                          ? resolvedTitle
+                                          : (titleKey.isNotEmpty
+                                              ? tr(titleKey)
+                                              : '');
+                                  final String iconAsset =
+                                      button['iconAsset']?.toString() ?? '';
 
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(DsRadii.lg),
-                                onTap: () => _quickHelpPressed(button),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: tokens.surface,
-                                    borderRadius: BorderRadius.circular(
-                                      DsRadii.lg,
-                                    ),
-                                    border: Border.all(
-                                      color: tokens.borderLight,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      if (iconAsset.isNotEmpty)
-                                        SvgPicture.asset(
-                                          iconAsset,
-                                          width: 18,
-                                          height: 18,
-                                          placeholderBuilder: (_) => Icon(
-                                            Icons.help_outline,
-                                            size: 20,
-                                            color: tokens.accent,
-                                          ),
-                                        )
-                                      else
-                                        Icon(
-                                          Icons.help_outline,
-                                          size: 20,
-                                          color: tokens.accent,
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius:
+                                          BorderRadius.circular(DsRadii.lg),
+                                      onTap: () => _quickHelpPressed(button),
+                                      child: Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
                                         ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          translatedTitle,
-                                          style: theme.textTheme.labelMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: tokens.textXs,
-                                                color: tokens.fg,
+                                        decoration: BoxDecoration(
+                                          color: tokens.surface,
+                                          borderRadius:
+                                              BorderRadius.circular(
+                                            DsRadii.lg,
+                                          ),
+                                          border: Border.all(
+                                            color: tokens.borderLight,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            if (iconAsset.isNotEmpty)
+                                              SvgPicture.asset(
+                                                iconAsset,
+                                                width: 18,
+                                                height: 18,
+                                                placeholderBuilder: (_) =>
+                                                    Icon(
+                                                  Icons.help_outline,
+                                                  size: 20,
+                                                  color: tokens.accent,
+                                                ),
+                                              )
+                                            else
+                                              Icon(
+                                                Icons.help_outline,
+                                                size: 20,
+                                                color: tokens.accent,
                                               ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                translatedTitle,
+                                                style: theme
+                                                    .textTheme.labelMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: tokens.textXs,
+                                                      color: tokens.fg,
+                                                    ),
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                          // Team hero — last item inside the QuickHelp
+                          // scroll, sized compact so it reads as
+                          // centered in the gap above the chat
+                          // controls bar. Auto-disappears with the
+                          // rest of the overlay when the user starts
+                          // chatting.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: DsSpacing.lg,
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                height: 80,
+                                width: 180,
+                                child: Image.asset(
+                                  'assets/images/team_agro.png',
+                                  fit: BoxFit.contain,
                                 ),
                               ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // Team hero — sits BELOW the QuickHelp container and ABOVE
-          // the chat controls bar. The Expanded + equal Spacers
-          // vertically center-justifies the image in whatever gap
-          // remains between the QuickHelp bottom and the Input Area
-          // top, regardless of card density. Auto-disappears with
-          // the rest of the overlay.
-          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: DsSpacing.sm,
-                ),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    Center(
-                      child: SizedBox(
-                        height: 128,
-                        width: 280,
-                        child: Image.asset(
-                          'assets/images/team_agro.png',
-                          fit: BoxFit.contain,
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const Spacer(),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
-
-          // Confirm Dialogs & Save/Export Alerts
+// Confirm Dialogs & Save/Export Alerts
           ConfirmDialog(
             visible: _showNewChatConfirm,
             title: tr('chatbot.dialogs.newChatTitle'),

@@ -35,7 +35,7 @@ from comps.dataprep.src.utils import get_separators
 from fastapi import HTTPException
 from langchain_arangodb import ArangoGraph
 from langchain_core.documents import Document
-from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import HTMLHeaderTextSplitter, MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from numpy import dot
 from numpy.linalg import norm
 from openai import AsyncOpenAI
@@ -454,6 +454,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         if path.endswith(".html"):
             text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=[("h1", "H1"), ("h2", "H2")])
+        elif path.endswith(".md"):
+            text_splitter = MarkdownHeaderTextSplitter(
+                headers_to_split_on=[("#", "H1"), ("##", "H2")],
+                strip_headers=False,
+                )
         else:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=doc_path.chunk_size,
@@ -473,7 +478,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         raw_chunks.append(item_str)
                 plain_chunks = raw_chunks
             else:
-                docs = text_splitter.create_documents([content])
+                if isinstance(text_splitter, RecursiveCharacterTextSplitter):
+                    docs = text_splitter.create_documents([content])
+                else:
+                    docs = text_splitter.split_text(content)
                 plain_chunks = [d.page_content for d in docs]
 
             valid_chunks = [c for c in plain_chunks if is_valid_content(c)]

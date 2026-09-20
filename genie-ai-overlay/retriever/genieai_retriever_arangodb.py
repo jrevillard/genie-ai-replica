@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -39,6 +40,10 @@ from .config import (
     ARANGO_URL,
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
+    FANOUT_CANDIDATE_CAP_GLOBAL,
+    FANOUT_ENABLED,
+    FANOUT_MAX_GRAPHS,
+    FANOUT_PER_GRAPH_TIMEOUT_MS,
     HF_TOKEN,
     HYBRID_BM25_ANALYZER,
     HYBRID_BM25_CANDIDATES,
@@ -741,13 +746,19 @@ class GenieaiArangoRetriever(OpeaComponent):
     async def invoke(
         self, input: ChatCompletionRequest | RetrievalRequest | RetrievalRequestArangoDB | GenieEmbedDoc
     ) -> list:
-        """Process the retrieval request and return relevant documents."""
+        """Process the retrieval request and return relevant documents.
+
+        This is the legacy single-graph entry point. The actual extraction
+        lives in `_extract_for_graph` so the fan-out orchestrator (Story 1.1)
+        can call it once per authorized graph with the per-leg `graph_name`
+        passed explicitly — no Pydantic mutation, no behavioral change to
+        this path (ADR-039 D8: legacy byte-identical).
+        """
         if logflag:
             logger.debug(input)
 
         start = time.time()
 
-        # OpenTelemetry span for retrieval operation
         from tracing import get_tracer
 
         tracer = get_tracer("retriever.arangodb")
@@ -776,9 +787,7 @@ class GenieaiArangoRetriever(OpeaComponent):
                 input_dict["_encoded_filter_labels"] = _encoded_labels
             # graph_names (Story 1.0b/1.1): default [] = single-graph legacy
             # behavior; when chatqna encodes a non-empty set, the fan-out path
-            # traverses exactly those graphs. Populated on input_dict so the
-            # upstream input-graph-name lookup (line below) and the
-            # fan-out orchestration (Story 1.1) both see the authorized set.
+            # traverses exactly those graphs.
             input_dict["_encoded_graph_names"] = _encoded_graphs
 
             query = input_dict.get("input", input_dict.get("text"))
@@ -789,8 +798,70 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.error("Query is empty. Please provide a valid query.")
                 return []
 
+            # Resolve the per-call graph name (Story 1.0/1.1): explicit input
+            # attr > carrier single-graph (legacy single-element list) >
+            # ARANGO_GRAPH_NAME default. Fan-out (≥2 graphs) routes through
+            # `invoke_fanout` once per graph; here we resolve the single-graph
+            # call site's effective graph name.
+            if input_dict.get("graph_name"):
+                graph_name = input_dict["graph_name"]
+            elif len(_encoded_graphs) == 1:
+                # Backwards-compat: a single-element carrier list predates the
+                # fan-out feature — treat it as the legacy single-graph call.
+                graph_name = _encoded_graphs[0]
+            else:
+                graph_name = ARANGO_GRAPH_NAME
+            # STORY 1.1/1.4/1.5 — additive fan-out branch. Engages only when
+            # ≥2 graphs are encoded (single-graph legacy bypass, plus the
+            # "free-form-only with zero OKF graphs" case both fall through to
+            # the single-graph path). The orchestrator invokes the SAME
+            # `_extract_for_graph` body once per authorized graph — zero
+            # mutation of legacy model state, byte-identical per-leg behavior.
+            if _fanout_should_engage(_encoded_graphs, fanout_enabled=FANOUT_ENABLED):
+                try:
+                    return await self.invoke_fanout(
+                        input=input,
+                        input_dict=input_dict,
+                        encoded_graph_names=_encoded_graphs,
+                    )
+                except Exception:
+                    span.end()
+                    raise
+            return await self._extract_for_graph(
+                graph_name=graph_name,
+                input_dict=input_dict,
+                input=input,
+                query=query,
+                start_time=start,
+                span=span,
+            )
+        except Exception:
+            span.end()
+            raise
+
+    async def _extract_for_graph(
+        self,
+        *,
+        graph_name: str,
+        input_dict: dict,
+        input,
+        query: str,
+        start_time: float,
+        span,
+    ) -> list:
+        """Run the full extraction body (vector search → BM25 hybrid →
+        traversal → final response assembly) against a SPECIFIC graph.
+
+        Extracted from `invoke()` (Story 1.0/1.1) so the fan-out orchestrator
+        can call it once per authorized graph without mutating Pydantic models.
+        The single-graph legacy path passes `graph_name = input.graph_name or
+        ARANGO_GRAPH_NAME`; the per-leg path passes the leg's resolved name.
+        Behavior is byte-identical between the two call sites (the per-leg
+        site simply substitutes the graph_name argument the legacy path derived
+        from the request).
+        """
+        try:
             embedding = input.embedding if isinstance(input.embedding, list) else None
-            graph_name = input_dict.get("graph_name", ARANGO_GRAPH_NAME)
             search_start = input_dict.get("search_start", ARANGO_SEARCH_START)
             search_mode = input_dict.get("search_mode", ARANGO_SEARCH_MODE)
             enable_traversal = input_dict.get("enable_traversal", ARANGO_TRAVERSAL_ENABLED)
@@ -1232,10 +1303,196 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             finish = time.time()
             if logflag:
-                logger.info(f"Retreiver logic completion time: {finish - start:.4f} seconds")
+                logger.info(f"Retreiver logic completion time: {finish - start_time:.4f} seconds")
 
             span.set_attribute("rag.chunk_count", len(search_res))
+            return search_res
         finally:
             span.end()
 
-        return search_res
+
+# ─── Story 1.0/1.1/1.4/1.5 — additive multi-graph fan-out ─────────────────────────
+# EVERY helper below is ADDITIVE — the single-graph legacy path (invoke +
+# _extract_for_graph above) runs byte-identical when _encoded_graph_names is
+# empty or single-element (Decision D: graceful bypass of the zero-OKF-graph
+# case; ADR-039 D8 invariant).
+#
+# The graph name maintains parity AND RELATIONSHIP with the ingested OKF repo
+# (David, 2026-09-20): the retriever's "graph exists" check is the lens through
+# which the chat path knows the repo's current serving reality — workingGraphName
+# on the okf-server side names the graph BORN for the version being built, and
+# versioned serving names (OKF_<slug>_v<N>) are the FKs the fan-out carries.
+
+
+def _fanout_should_engage(encoded_graph_names, fanout_enabled: bool = True) -> bool:
+    """Decide whether the additive fan-out path engages (Decision D).
+
+    Empty list (legacy free-form-only case) OR single-element list both
+    bypass fan-out — the legacy single-graph path runs unchanged. Only ≥2
+    graphs engage the fan-out. The chat-side `fanout_enabled` flag lets
+    Wave R4 keep the feature off in places where it hasn't been validated
+    end-to-end yet (matches RETRIEVER_FANOUT_ENABLED default).
+    """
+    if not fanout_enabled:
+        return False
+    if not encoded_graph_names:
+        return False
+    return len(encoded_graph_names) >= 2
+
+
+def _attach_provenance(items, graph_name, repo_id=None):
+    """Attach per-leg provenance to each result item (Story 1.0 — fusion-time).
+
+    Pure function — no I/O. `concept_id` is the chunk's `file_id` (the
+    content-only-chunking invariant — chunk `file_id == concept_id`, see
+    ingest-service.js:1109) and is preserved verbatim from chunk metadata.
+    `repo_id` is optional — only known when the chat-side resolver maps
+    graph→repo at request time (Story 1.2). Missing items are skipped
+    silently (zero-hit per missing graph is the orchestrator's job, not
+    this attacher's).
+    """
+    out = []
+    for item in items or []:
+        doc = item.get("doc") if isinstance(item, dict) else None
+        metadata = getattr(doc, "metadata", None) if doc is not None else None
+        metadata = metadata or {}
+        concept_id = metadata.get("file_id") or metadata.get("concept_id")
+        prov = dict(metadata)
+        prov["graph_name"] = graph_name
+        if repo_id is not None:
+            prov["repo_id"] = repo_id
+        if concept_id is not None and "concept_id" not in prov:
+            prov["concept_id"] = concept_id
+        if doc is not None and hasattr(doc, "metadata"):
+            with contextlib.suppress(Exception):
+                # pydantic models may be frozen; the enriched item still
+                # carries the provenance dict.
+                doc.metadata = prov
+        out.append(item)
+    return out
+
+
+def _merge_per_graph_results(per_graph_results, k: int) -> list:
+    """Cross-graph 2-level RRF (Story 1.5 — Level-2 only; Level-1 is
+    per-graph rrf_fuse inside each leg's _extract_for_graph call).
+
+    Pure function — no I/O, no DB. Re-keys by `(graph_name, chunk_id)`
+    rather than `(chunk_id)` alone: a chunk_id can theoretically exist in
+    two graphs (cloned repos); the (graph_name, chunk_id) pair is the
+    canonical citation handle. Provenance (`graph_name`, `repo_id`,
+    `concept_id`) survives fusion because each fused entry keeps the per-leg
+    doc reference.
+
+    Missing / empty per-graph lists are skipped (zero-hit per missing graph
+    is the orchestrator's job).
+    """
+    fused: dict[tuple[str, str], dict] = {}
+    for graph_name, items in per_graph_results:
+        rank = 0
+        seen: set[str] = set()
+        for item in items or []:
+            doc = item.get("doc") if isinstance(item, dict) else None
+            chunk_id = _normalize_chunk_id(doc) if doc is not None else None
+            if chunk_id is None:
+                chunk_id = f"__unkeyed_{len(fused)}"
+            key = (graph_name, chunk_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            rank += 1
+            entry = fused.setdefault(key, {"doc": item.get("doc"), "score": 0.0})
+            entry["score"] += 1.0 / (HYBRID_RRF_K + rank)
+    return [sorted_items for sorted_items in sorted(fused.values(), key=lambda x: x["score"], reverse=True)][: int(k)]
+
+
+async def _invoke_leg(self, graph_name, input_dict, input, query):
+    """Single fan-out leg — the SAME extraction as the legacy single-graph
+    path, driven by `_extract_for_graph` with the per-leg `graph_name`.
+
+    No Pydantic mutation. The per-leg call passes the resolved graph name
+    explicitly; the helper does not need to read or mutate `input.graph_name`.
+    Per-leg exceptions and timeouts return [] (Decision E: zero-hit per
+    missing graph, ADR-039 D8).
+    """
+    import asyncio
+
+    return await asyncio.wait_for(
+        self._extract_for_graph(
+            graph_name=graph_name,
+            input_dict=input_dict,
+            input=input,
+            query=query,
+            start_time=time.time(),
+            span=None,
+        ),
+        timeout=FANOUT_PER_GRAPH_TIMEOUT_MS / 1000.0,
+    )
+
+
+async def invoke_fanout(self, input, input_dict, encoded_graph_names):
+    """Additive multi-graph fan-out orchestrator (Story 1.1/1.4/1.5).
+
+    Called when `_encoded_graph_names` carries ≥2 graphs. Runs the legacy
+    extraction ONCE per authorized graph (Decision B: full extraction —
+    vector + BM25 hybrid + traversal + response, per leg) and fuses via
+    2-level cross-graph RRF (Level-2 only; Level-1 is per-leg). Per-leg
+    timeout (Decision E, ADR-039 D8) — a slow/sick graph contributes zero
+    hits, NEVER a 500. Concurrency bounded by FANOUT_MAX_GRAPHS via
+    `asyncio.Semaphore` (Decision F).
+    """
+    import asyncio
+
+    from tracing import get_tracer
+
+    tracer = get_tracer("retriever.fanout")
+    span = tracer.start_span("retriever.fanout")
+    span.set_attribute("okf.fanout.engaged", True)
+    span.set_attribute("okf.fanout.graph_count", len(encoded_graph_names))
+    span.set_attribute("okf.fanout.timeout_ms", FANOUT_PER_GRAPH_TIMEOUT_MS)
+    sem = asyncio.Semaphore(FANOUT_MAX_GRAPHS)
+
+    async def _leg(graph_name):
+        async with sem:
+            try:
+                return await _invoke_leg(
+                    self, graph_name, input_dict, input, query=input_dict.get("input", input_dict.get("text"))
+                )
+            except TimeoutError:
+                logger.info(
+                    "Fan-out leg timed out (skip-on-timeout, ADR-039 D8)",
+                    extra={"okf.graph_name": graph_name, "timeout_ms": FANOUT_PER_GRAPH_TIMEOUT_MS},
+                )
+                return []
+            except Exception as e:
+                logger.info(
+                    "Fan-out leg failed (zero-hit, ADR-039 D8)",
+                    extra={"okf.graph_name": graph_name, "error": str(e)},
+                )
+                return []
+
+    try:
+        leg_results = await asyncio.gather(*[_leg(g) for g in encoded_graph_names])
+    except Exception:
+        span.end()
+        raise
+    per_graph = []
+    for graph_name, items in zip(encoded_graph_names, leg_results, strict=True):
+        enriched = _attach_provenance(items, graph_name)
+        per_graph.append((graph_name, enriched))
+    target_k = min(int(input.k) if input.k else 10, FANOUT_CANDIDATE_CAP_GLOBAL)
+    fused = _merge_per_graph_results(per_graph, k=target_k)
+    # Span attributes (Story 1.6 + ADR-039 D5 — for the Studio card).
+    span.set_attribute("okf.fanout.legs_succeeded", sum(1 for r in leg_results if r))
+    span.set_attribute("okf.fanout.legs_failed", sum(1 for r in leg_results if not r))
+    span.set_attribute("okf.fanout.fused_count", len(fused))
+    logger.info(
+        "Fan-out complete",
+        extra={
+            "legs": len(encoded_graph_names),
+            "fused": len(fused),
+            "succeeded": sum(1 for r in leg_results if r),
+            "failed": sum(1 for r in leg_results if not r),
+        },
+    )
+    span.end()
+    return fused

@@ -29,7 +29,7 @@ development_status:
   1-4-parallel-fanout-bounded-concurrency: backlog  # NEW 2026-08-13 — Semaphore + per-graph timeout + partial-failure (G14)
   1-5-two-level-cross-graph-rrf: backlog            # NEW 2026-08-13 — size-normalized 2-level RRF (G21); Level-1 reuses the existing rrf_fuse (hybrid BM25+RRF within-graph, already live)
   1-6-fanout-observability-spans: backlog           # NEW 2026-08-13 — selection/fan-out spans (G24, G35)
-  1-7-retrieval-mode-governance-config: backlog     # NEW 2026-09-10 (ADR-okf-039/FR-44) — okf_system_config + GET/PUT /api/okf/retrieval-config + engagement gate; config+API legs UNGATED, build FIRST (the switch that keeps legacy safe)
+  1-7-retrieval-mode-governance-config: in-progress     # NEW 2026-09-10 (ADR-okf-039/FR-44) — UNGATED LEGS LANDED 2026-09-20 (44127eb; story file 1-7-retrieval-mode-governance-config.md): okf_system_config + GET/PUT /api/okf/retrieval-config + engagement gate + serving-graph resolution via workingGraphName; jest 15/15, suite green. Remaining: chatqna/retriever consumption (≤30s TTL, Wave R4) + 10.7 Studio card (i18n ×14 + site docs = completion gates)
   epic-1-retrospective: optional
 
   epic-2: in-progress            # Mostly ungated — build first

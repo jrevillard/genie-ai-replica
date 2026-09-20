@@ -1894,24 +1894,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     // Team hero — last item inside the QuickHelp
                     // scroll so it sits below the Fast Actions cards
                     // and auto-disappears with the rest of the
-                    // overlay when the user starts chatting. Sized to
-                    // leave a generous bottom gap (the Input Area
-                    // lives below the scroll in the parent Column),
-                    // so it reads as vertically center-justified in
-                    // the available space above the chat controls.
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: DsSpacing.md,
-                        bottom: 80,
-                      ),
-                      child: Center(
-                        child: SizedBox(
-                          height: 96,
-                          width: 220,
-                          child: Image.asset(
-                            'assets/images/team_agro.png',
-                            fit: BoxFit.contain,
-                          ),
+                    // overlay when the user starts chatting.
+                    // Sized larger so it visually centers in the gap
+                    // above the chat controls bar without needing
+                    // padding (which was clipping the toolbar
+                    // icons).
+                    Center(
+                      child: SizedBox(
+                        height: 128,
+                        width: 280,
+                        child: Image.asset(
+                          'assets/images/team_agro.png',
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ),

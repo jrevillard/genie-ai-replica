@@ -231,6 +231,25 @@ HYBRID_DENSE_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_DENSE_WEIGHT", "1.0"))
 HYBRID_LEXICAL_WEIGHT = float(os.getenv("RETRIEVER_HYBRID_LEXICAL_WEIGHT", "1.0"))
 HYBRID_BM25_ANALYZER = os.getenv("RETRIEVER_HYBRID_BM25_ANALYZER", "text_en")
 
+# Story 1.1/1.4/1.5 (ADR-039 D4/D5/D8) — multi-graph fan-out governance.
+# The retriever reads `_encoded_graph_names` from the search_start carrier
+# (Story 1.0b / core/label_contract.py). When the carrier carries ≥2 graphs,
+# the retriever engages the additive fan-out path; with 0 or 1 graphs the
+# original single-graph path runs unchanged (D8: legacy byte-identical).
+# The chat-side resolver sets per-request overrides via kwargs (Story 1.2).
+# Defaults preserve legacy behavior — fan-out is opt-in via RETRIEVER_FANOUT_ENABLED.
+FANOUT_ENABLED = os.getenv("RETRIEVER_FANOUT_ENABLED", "true").lower() == "true"
+FANOUT_MAX_GRAPHS = int(os.getenv("RETRIEVER_FANOUT_MAX_GRAPHS", "5"))
+FANOUT_PER_GRAPH_TIMEOUT_MS = int(os.getenv("RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS", "2000"))
+# Story 1.5 (ADR-039 D4): tiered option-(d) fan-out caps — within a graph the
+# fused candidate pool is hard-capped per graph and globally before fusion.
+FANOUT_CANDIDATE_CAP_PER_GRAPH = int(os.getenv("RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH", "50"))
+FANOUT_CANDIDATE_CAP_GLOBAL = int(os.getenv("RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL", "200"))
+# Tier-1 curated-spine hops over `source='author'` edges (ADR-039 D4).
+FANOUT_SPINE_MAX_HOPS = int(os.getenv("RETRIEVER_FANOUT_SPINE_MAX_HOPS", "2"))
+# Tier-2 extracted-relation hop cap (kept low — extracted edges are noisy).
+FANOUT_EXTRACTED_HOP_CAP = int(os.getenv("RETRIEVER_FANOUT_EXTRACTED_HOP_CAP", "1"))
+
 # Summarizer Configuration
 SUMMARIZER_ENABLED = os.getenv("RETRIEVER_SUMMARIZER_ENABLED", "false").lower() == "true"
 

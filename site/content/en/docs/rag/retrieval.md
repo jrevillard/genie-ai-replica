@@ -21,7 +21,7 @@ documents with three fields used at query time: `text`, `embedding`, and
 ### 1. Dense-vector search
 
 The query is embedded with the same model used at ingest time (default
-`BAAI/bge-base-en-v1.5`, 768-dim) and compared against chunk embeddings by cosine
+`BAAI/bge-large-en-v1.5`, 1024-dim) and compared against chunk embeddings by cosine
 similarity. This catches semantic matches ("how do I renew my permit?" matching a
 "licence renewal" chunk).
 

@@ -199,8 +199,8 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("TEI_EMBEDDING_ENDPOINT", "http://localhost:80")
     monkeypatch.setenv("TEI_RERANKING_ENDPOINT", "http://localhost:80")
     monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-base-en-v1.5")
-    monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-base-en-v1.5")
+    monkeypatch.setenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-large-en-v1.5")
+    monkeypatch.setenv("RETRIEVER_MODEL_ID", "BAAI/bge-large-en-v1.5")
 
 
 # ---------------------------------------------------------------------------

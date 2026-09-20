@@ -264,7 +264,7 @@ Set in `group_vars/<env>/vars.yml`:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `embedding_server_endpoint` | `/v1/embeddings` | Embedding service API endpoint path |
-| `embedding_model_id` | `BAAI/bge-base-en-v1.5` | Embedding model for vector search |
+| `embedding_model_id` | `BAAI/bge-large-en-v1.5` | Embedding model for vector search |
 | `reranker_model_id` | `BAAI/bge-reranker-v2-m3` | Reranking model |
 | `reranking_strategy` | `slice` | Reranker strategy: `slice` (default; top-N), `threshold`, `slice_threshold`, `knee_threshold`, `adaptive` |
 | `reranker_top_n` | `3` | Chunks kept for slice/slice_threshold strategies |

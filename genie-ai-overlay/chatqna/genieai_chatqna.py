@@ -219,7 +219,7 @@ def _extract_history_text(translated_history_string, n_turns):
 
     The blob format is "ROLE: content |<-MSG->| ROLE: content |<-MSG->| ...",
     the same string handle_request builds (English-normalized for non-EN
-    conversations so it matches the bge-base-en-v1.5 embedding space). The last
+    conversations so it matches the bge-large-en-v1.5 embedding space). The last
     segment is the current user turn (already extracted as the query via
     USER_MSG_PATTERN); everything before it is history. We return the last
     `n_turns` prior segments joined into one string for a single embedding call.

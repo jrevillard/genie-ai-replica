@@ -667,8 +667,8 @@ These variables control the specific AI models used for generation, guardrails, 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
 | EMBEDDING\_MODEL\_ENDPOINT | Endpoint for the embedding service. | http://tei:80 |
-| EMBEDDING\_MODEL\_ID | Model ID used by OPEA embedding service. | BAAI/bge-base-en-v1.5 |
-| TEI\_EMBED\_MODEL | TEI embedding model (must match above). | BAAI/bge-base-en-v1.5 |
+| EMBEDDING\_MODEL\_ID | Model ID used by OPEA embedding service. | BAAI/bge-large-en-v1.5 |
+| TEI\_EMBED\_MODEL | TEI embedding model (must match above). | BAAI/bge-large-en-v1.5 |
 | TEI\_EMBEDDING\_ENDPOINT | TEI Endpoint (Note: duplicate of Dataprep config). | http://tei:80 |
 | RERANKER\_MODEL\_ENDPOINT | Endpoint for the reranking service. | http://tei\_reranker:80 |
 | TEI\_RERANKING\_ENDPOINT | Endpoint alias for reranking. | http://tei\_reranker:80 |
@@ -734,7 +734,7 @@ After launching services and waiting for the service startup: the following is a
 * **Advantage:** These cards support bfloat16 for higher precision and stability. 48GB allows for larger context windows and concurrent processing.  
 * **Recommended Configuration:**  
   * **LLM:** meta-llama/Meta-Llama-3.1-8B-Instruct (default) or meta-llama/Meta-Llama-3.1-70B-Instruct-AWQ (quantized; recommended: ibm-granite/granite-4.1-8b).  
-  * **Embeddings:** BAAI/bge-base-en-v1.5 or BAAI/bge-m3.  
+  * **Embeddings:** BAAI/bge-large-en-v1.5 (default) or BAAI/bge-m3.  
   * **Reranker:** BAAI/bge-reranker-v2-m3.  
   * **Env Settings:** Use VLLM\_DTYPE=bfloat16 and enable VLLM\_ATTENTION\_BACKEND=FLASH\_ATTN (if supported) for maximum throughput.
 

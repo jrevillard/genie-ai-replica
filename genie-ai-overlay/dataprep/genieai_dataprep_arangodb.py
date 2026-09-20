@@ -458,7 +458,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             text_splitter = MarkdownHeaderTextSplitter(
                 headers_to_split_on=[("#", "H1"), ("##", "H2")],
                 strip_headers=False,
-                )
+            )
         else:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=doc_path.chunk_size,

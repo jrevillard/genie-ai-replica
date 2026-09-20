@@ -134,6 +134,8 @@ brand name in the navbar still reads *"GENIE.AI"*.
 > extending `VUE_APP_AVAILABLE_LOCALES` and shipping the corresponding
 > translation file. The system already ships 14 locales; expanding is a
 > configuration change, not a release.
+>
+> See [Restrict active locales](/docs/configure/locale-whitelist/) for the canonical deployer reference.
 
 ## Step 5 — Manage your conversation history
 

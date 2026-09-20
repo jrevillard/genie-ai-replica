@@ -7,8 +7,6 @@ mode: reference
 persona: developer
 owner: "docs-stewards"
 last_reviewed: 2026-09-19
-aliases:
-  - /docs/backend/api-contracts-backend/
 ---
 
 This page has moved to

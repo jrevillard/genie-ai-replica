@@ -6,6 +6,8 @@ mode: reference
 persona: developer
 owner: docs-stewards
 last_reviewed: 2026-09-19
+aliases:
+  - /docs/backend/api-contracts-backend/
 ---
 
 ## Purpose
@@ -984,7 +986,7 @@ paging deep.
 The BFF uses soft-delete throughout. There are three flavours; check the
 table when in doubt.
 
-| Endpoint | Behaviour |
+| Endpoint | Behavior |
 |----------|-----------|
 | `POST /api/me/delete` | **Soft-delete with PII nullification** — Keycloak user is deleted, ArangoDB user is marked `deleted=true` and every PII field is overwritten with `null`. Irreversible. Subsequent requests with cached tokens return `FORBIDDEN`. |
 | `POST /api/me/reset-data` | **Reset profile data** — clears custom profile fields but preserves `email`, `createdAt`, and Keycloak credentials so JIT re-bootstraps on next login. Reversible (re-login recreates). |

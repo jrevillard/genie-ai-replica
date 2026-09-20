@@ -637,5 +637,6 @@ curl -sk -X PUT "https://${NGINX_PUBLIC_DOMAIN}/auth/admin/realms/genie/clients/
 - **Map IdP attributes to roles** automatically — see [§6 External IdP attribute → role mapping](#6-external-idp-attribute--role-mapping) above.
 - **Understand the architecture** behind authentication — see [Architecture Overview](/docs/architecture/architecture/).
 - **Deploy a mobile client** with its own OIDC client — see [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/).
+- **Restrict active locales** (web, mobile, Keycloak login) — see [Restrict active locales](/docs/configure/locale-whitelist/).
 - **Back up Keycloak** (PostgreSQL state, realm config, keys) — see [Operations → Backup & Restore](/docs/operate/backup-restore/).
 - **Rotate secrets** (master password, proxy client secret, realm signing keys) — see [Operations → Secret Rotation](/docs/operate/security-hardening/).

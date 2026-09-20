@@ -210,5 +210,5 @@ class TestAutouseEnvVars:
         assert os.getenv("TEI_EMBEDDING_ENDPOINT") == "http://localhost:80"
         assert os.getenv("TEI_RERANKING_ENDPOINT") == "http://localhost:80"
         assert os.getenv("VLLM_ENDPOINT") == "http://localhost:8000"
-        assert os.getenv("LOCAL_EMBEDDING_MODEL") == "BAAI/bge-base-en-v1.5"
-        assert os.getenv("RETRIEVER_MODEL_ID") == "BAAI/bge-base-en-v1.5"
+        assert os.getenv("LOCAL_EMBEDDING_MODEL") == "BAAI/bge-large-en-v1.5"
+        assert os.getenv("RETRIEVER_MODEL_ID") == "BAAI/bge-large-en-v1.5"

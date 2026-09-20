@@ -51,7 +51,7 @@ All three flags default to safe no-op values. The feature is **OFF by default**.
 | `MULTI_TURN_HISTORY_TURNS` | `1` | Number of prior turns blended. `1` = previous turn only. `0` disables even if the flag is on. |
 
 History text is drawn from the same English-normalized conversation blob used
-for LLM generation, so it matches the `bge-base-en-v1.5` embedding space
+for LLM generation, so it matches the `bge-large-en-v1.5` embedding space
 regardless of the UI language.
 
 ## Limitations

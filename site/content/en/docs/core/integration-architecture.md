@@ -236,7 +236,7 @@ POST http://chatqna:8888/v1/chat/completions
 ChatQnA Service
   ↓
 OPEA Microservice Orchestration:
-  1. Embedding Service (TEI + BAAI/bge-base-en-v1.5)
+  1. Embedding Service (TEI + BAAI/bge-large-en-v1.5)
   2. Retriever Service (ArangoDB vector + graph traversal)
   3. Reranker Service (Cross-encoder model)
   4. LLM Service (vLLM + meta-llama/Meta-Llama-3.1-8B-Instruct; recommended ibm-granite/granite-4.1-8b)

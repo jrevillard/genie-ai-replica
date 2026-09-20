@@ -242,7 +242,7 @@ Contains VLLM-specific configurations and model settings.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EMBEDDING_MODEL_ID` | `BAAI/bge-base-en-v1.5` | Embedding model |
+| `EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | Embedding model |
 | `RERANK_MODEL_ID` | `BAAI/bge-reranker-base` | Reranking model |
 | `MAX_BATCH_SIZE` | 32 | Maximum batch size |
 | `MAX_CLIENT_BATCH_SIZE` | 128 | Maximum client batch size |

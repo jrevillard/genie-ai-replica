@@ -310,7 +310,7 @@ def _artifact_kw(anchor=None):
             "arango_graph_name": "GRAPH_TEST",
             "source_collection": "GRAPH_TEST_SOURCE",
         },
-        model_pins={"embedding_model_id": "BAAI/bge-base-en-v1.5"},
+        model_pins={"embedding_model_id": "BAAI/bge-large-en-v1.5"},
         stack={"name": "release-el-salvador", "services": {}},
         repo_root=_repo_root(),
         k=3.0,
@@ -332,7 +332,7 @@ def test_build_artifact_pins_gold_hash_and_driver_produced_meta():
     assert a["config_snapshot"]["graph"]["arango_graph_name"] == "GRAPH_TEST"
     assert (
         a["config_snapshot"]["model_pins"]["embedding_model_id"]
-        == "BAAI/bge-base-en-v1.5"
+        == "BAAI/bge-large-en-v1.5"
     )
 
 

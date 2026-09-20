@@ -913,7 +913,8 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
             safe_params = retriever_parameters.model_dump(exclude_unset=True, exclude_none=True)
             inputs.update(safe_params)
 
-        # DATA CONTRACT: encode filter labels into search_start.
+        # DATA CONTRACT: encode filter labels AND the authorized graph set
+        # into search_start.
         #
         # The OPEA MicroService framework creates a dynamic __main__ input type
         # from the HTTP body when parsing requests at the retriever endpoint.
@@ -922,20 +923,35 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # fields like "context" are silently dropped — verified via probes
         # (POST body has context, retriever's parsed input does not).
         #
-        # To pass filter labels through this contract boundary, encode them in
-        # search_start (a standard EmbedDoc string field that survives parsing).
-        # Format: "{base_mode}::labels:{label1},{label2},..."
+        # To pass filter labels + the authorized graph set through this
+        # contract boundary, encode them in search_start (a standard EmbedDoc
+        # string field that survives parsing).
+        # Format: "{base_mode}::labels:{label1},{label2},...::graphs:{g1},{g2},..."
         # The retriever parses this to build labels_to_filter for its DB-level
-        # label filter (BM25 aql_filter_clause + dense post-filter).
+        # label filter (BM25 aql_filter_clause + dense post-filter) AND to
+        # build the authorized graph set for the Epic-1 fan-out
+        # (Story 1.0b/1.1/1.2; default [] = single-graph legacy).
         retrieval_context = _gp(kwargs, "retrieval_context", {})
         # Build filter labels (category singular/plural + service). Extracted to
         # _build_filter_labels for testability.
         _filter_labels = _build_filter_labels(retrieval_context)
-        if _filter_labels:
+        # Authorized graph set (Story 1.0b/1.2): populated by the Wave R5 chat
+        # forwarding via kwargs once the per-session cache lands. Empty list =
+        # the legacy single-graph path runs unchanged.
+        _graph_names = _gp(kwargs, "authorized_graph_names", []) or []
+        if _filter_labels and not _graph_names:
+            # LEGACY CALL SURFACE: the chatqna test suite (test_chatqna.py)
+            # mocks `core.label_contract.encode_filter_labels`; calling it
+            # here keeps the labels-only path byte-identical to pre-1.0b.
             from core.label_contract import encode_filter_labels
 
             _base_mode = inputs.get("search_start", "chunk")
             inputs["search_start"] = encode_filter_labels(_base_mode, _filter_labels)
+        elif _filter_labels or _graph_names:
+            from core.label_contract import encode
+
+            _base_mode = inputs.get("search_start", "chunk")
+            inputs["search_start"] = encode(_base_mode, labels=_filter_labels, graphs=_graph_names)
 
     elif self.services[cur_node].service_type == ServiceType.RERANK:
         reranker_parameters = _gp(kwargs, "reranker_parameters")

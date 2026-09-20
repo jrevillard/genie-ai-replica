@@ -1,8 +1,11 @@
-# Flutter Mobile Parity — Comprehensive Work Plan (v4)
+# Flutter Mobile Parity — Comprehensive Work Plan (v5)
 
-Date: 2026-09-19 · Implementation branch: **`feat/agri-mobile-parity`**
-(branch off `feat/agri-external-data-apis` once MR !388 merges; own MR,
-reviewed after !388) · Status: **plan only — not started**
+Date: 2026-09-19 (v5 · 2026-09-20) · Implementation branch:
+**`feat/agri-mobile-parity`** (branch off `feat/agri-external-data-apis`;
+own MR, reviewed after !388) · Status: **Phase A done** (S1/S2 mapper +
+tests, commit `8ea35f3b1`); quick-help render fix landed (`3c2d3f977`);
+Phases B–D pending; live verification blocked 2026-09-20 by lab-VPN
+outage (10.0.0.x unreachable from dev host).
 Scope: bring Crop Health, Pest Alerts and ALL Market Prices screens in
 `mobile/genie_ai_mobile` into line with the Vue 3 web app.
 
@@ -48,13 +51,27 @@ the Vue app's backend adapters/APIs exclusively (spec §0).
 | M17 | Debug logging: per-load line (series/points/units/stale) + per-axis line (groups/min/max) | Absent | Low |
 | M18 | Crop Health: 14 depts, baseline/trend/health buckets | List renders; verify baseline/change display + tooltips | Verify |
 | M19 | Pest Alerts: advisories/regional/sightings, severity filter, AI assistance | Exists | Verify |
+| M25 | Auth session resilience: proactive token refresh on app resume; after idle-expiry (SSO session death server-side) redirect to login instead of raw `ApiException … AuthException: Session expired` screens on every surface | Refresh failure clears tokens (correct) but screens keep rendering profile/settings/chat errors; user must manually restart to reach login | High (2026-09-20) |
+| M26 | Chat AI streaming (server-side SSE) verified live: quick-help prompts stream a response; stream errors surface as retryable UI states, never blank bubbles | Code present (`sse_parser.dart`, `chatbot_proxy.dart`, component stream handlers); live verification blocked by VPN outage 2026-09-20; user references a main-branch implementation — `origin/main` has NO `mobile/` tree, so the reference app must be identified (repo/branch) before diffing | High (2026-09-20) |
+| M27 | Color scheme matches the Vue 3 app DS tokens (light + dark) on chat, Insights and Market Prices screens | App DS (ThemeManager + design_system) renders; palette audit vs the Vue app on `feat/agri-external-data-apis` pending | Medium (2026-09-20) |
 
 ## 2. Phases
 
-### Phase A — Data layer (M1, M2) · effort S · no UI change
+### Phase A — Data layer (M1, M2) · effort S · no UI change · **DONE 2026-09-20**
 Map the full envelope: every series (name, unit, data incl. `quality`),
 meta passthrough. Acceptance: 15-series grains envelope maps 1:1 (fixture
 test); existing screens still render from `series[0]`.
+Shipped: `mapMarketPricesEnvelope` in `agri_api_service.dart` (commit
+`8ea35f3b1`) + 6 fixture tests (spec §14 test 1 + never-fail paths).
+
+### Phase A2 — Auth & connectivity hardening (M25) · effort S · NEW 2026-09-20
+Proactive token refresh when the app resumes/foregrounds (before the
+first 401); when refresh fails with an unrecoverable grant error, the
+root navigator MUST land on `OidcLoginScreen` — no surface may keep
+rendering `ApiException … Session expired` screens. Include a
+network-unreachable state distinct from auth failure (the 2026-09-20
+lab-VPN outage produced identical-looking errors for a pure-network
+cause).
 
 ### Phase B — Chart core (M3, M5, M7, M8) · effort L
 Date-keyed spots (`millisecondsSinceEpoch`), `minX/maxX` from union range,
@@ -83,20 +100,25 @@ Acceptance: filter + toggles + zoom compose (zoom respects the filtered,
 toggled range); chips and table match the web's information density
 without widening the cards; toggling never leaves an empty chart.
 
-### Phase D — Polish, parity verification, logging (M14, M17, M18, M19) · effort S
+### Phase D — Polish, parity verification, logging (M14, M17, M18, M19, M26, M27) · effort S
 About panel from meta; `debugPrint` load/axis lines matching the web's
 console lines; crop-health and pest-alerts verification passes; flutter
 analyze/format/tests green; manual smoke on Android + iOS against
-10.0.0.101.
+10.0.0.101. NEW 2026-09-20: live streaming check — every quick-help
+button sends, streams and renders its AI response (M26), after
+identifying the reference "main-branch" mobile app the user cited
+(`origin/main` carries no `mobile/` tree — ask user for repo/branch);
+color-scheme audit of chat + Insights + Market Prices against the Vue
+app DS tokens, light AND dark (M27).
 
 ## 3. Sequencing & estimates
 
-A (S) → B (L) → C (M/L) → D (S). B alone fixes the "wrong data on
-screen" class; C brings the dashboard interactions. Total: roughly 3–4
-focused days (v3 adds the filter, chips, multi-series table/CSV). No
-backend changes required — mobile consumes the same envelopes
-(month-end cadence, unit conversions, translated news, 15-series grains
-all server-side).
+A (S, DONE) → A2 (S) → B (L) → C (M/L) → D (S). B alone fixes the
+"wrong data on screen" class; C brings the dashboard interactions.
+Total: roughly 3–4 focused days (v3 adds the filter, chips, multi-series
+table/CSV). No backend changes required — mobile consumes the same
+envelopes (month-end cadence, unit conversions, translated news,
+15-series grains all server-side).
 
 ## 4. Risks
 
@@ -127,6 +149,23 @@ jrevillard.
 > on is tracked here and reflected in the matrix/phases, so the mobile
 > catch-up plan never drifts from the web app.
 
+- 2026-09-20 v5: field session on the deployed stack (10.0.0.101,
+  `release/el-salvador`). Provisioning gap fixed server-side: the realm
+  had no `genie-mobile-dev` OIDC client (keycloak-config-cli does not
+  create it on this deployment) — created per the documented recipe
+  (public, PKCE S256, redirect `com.itu.genieai.dev://callback`).
+  Quick-help buttons rendered as outlines (loader read non-existent
+  `appearance.*` config fields; labels empty, icons fell back to a
+  missing default.svg) — fixed in `3c2d3f977`. Phase A shipped
+  (`8ea35f3b1`). New matrix items: M25 auth session resilience (an
+  overnight SSO idle expiry cleared tokens and every surface showed raw
+  `Session expired` ApiException screens instead of re-login), M26 live
+  streaming verification (SSE code present in this branch; reference
+  "main-branch" app to be identified — `origin/main` has no `mobile/`),
+  M27 color-scheme alignment audit vs the Vue 3 app. Dev-environment
+  note: the lab (10.0.0.x) is reached through a WireGuard tunnel; when
+  it drops, app errors are network-shaped, not auth-shaped (motivates
+  the M25 distinct-network-state requirement).
 - 2026-09-19 v4.5: full EN/ES parity sweep (web) — audits proved every
   `$t()` key complete; the visible gaps were DATA-derived strings. New
   web contract `src/utils/agri-i18n.js`: exact-match ES dictionaries for

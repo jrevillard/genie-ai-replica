@@ -85,8 +85,7 @@ class AgriApiService {
     final series = rawSeries.whereType<Map>().map<Map<String, dynamic>>((s) {
       final m = s.cast<String, dynamic>();
       final rawPoints = (m['data'] as List?) ?? const [];
-      final points =
-          rawPoints.whereType<Map>().map<Map<String, dynamic>>((p) {
+      final points = rawPoints.whereType<Map>().map<Map<String, dynamic>>((p) {
         final pm = p.cast<String, dynamic>();
         return {
           'date': pm['date'] as String? ?? '',

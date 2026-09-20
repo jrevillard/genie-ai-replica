@@ -1597,8 +1597,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 labelMap['text']?.toString() ?? '';
                             final String resolvedTitle =
                                 button['resolvedTitle']?.toString() ?? '';
-                            final String translatedTitle = resolvedTitle
-                                .isNotEmpty
+                            final String translatedTitle =
+                                resolvedTitle.isNotEmpty
                                 ? resolvedTitle
                                 : (titleKey.isNotEmpty ? tr(titleKey) : '');
                             final String iconAsset =

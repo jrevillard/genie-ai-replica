@@ -30,7 +30,8 @@ void main() {
             ],
           },
           {
-            'name': 'Maize (US #2), US Gulf intl benchmark [converted to USD/quintal (46 kg)]',
+            'name':
+                'Maize (US #2), US Gulf intl benchmark [converted to USD/quintal (46 kg)]',
             'unit': 'USD/quintal (46 kg)',
             'country': 'United States',
             'data': [

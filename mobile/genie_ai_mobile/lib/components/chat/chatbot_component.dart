@@ -1914,6 +1914,37 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               ),
             ),
 
+          // Team hero — sits BELOW the QuickHelp container and ABOVE
+          // the chat controls bar. The Expanded + equal Spacers
+          // vertically center-justifies the image in whatever gap
+          // remains between the QuickHelp bottom and the Input Area
+          // top, regardless of card density. Auto-disappears with
+          // the rest of the overlay.
+          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: DsSpacing.sm,
+                ),
+                child: Column(
+                  children: [
+                    const Spacer(),
+                    Center(
+                      child: SizedBox(
+                        height: 128,
+                        width: 280,
+                        child: Image.asset(
+                          'assets/images/team_agro.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                  ],
+                ),
+              ),
+            ),
+
           // Confirm Dialogs & Save/Export Alerts
           ConfirmDialog(
             visible: _showNewChatConfirm,

@@ -320,13 +320,30 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
       categoryColor: _categoryColor,
     );
     final locale = I18nService().currentLocale.languageCode;
-    return Wrap(
+    final chips = Wrap(
       spacing: 4,
       runSpacing: 3,
       children: [
         for (var i = 0; i < series.length; i++)
           _seriesChip(series[i], i, palette, locale),
       ],
+    );
+    // Overflow protection: a category with many series (grains = 15)
+    // wraps to more rows than the fixed-height card can hold. Bound
+    // the chip area to two rows and CLIP the rest — the chart dialog
+    // always shows every series, so clipping here loses nothing.
+    return SizedBox(
+      height: 44,
+      child: ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: 0,
+          maxWidth: double.infinity,
+          minHeight: 0,
+          maxHeight: double.infinity,
+          child: chips,
+        ),
+      ),
     );
   }
 

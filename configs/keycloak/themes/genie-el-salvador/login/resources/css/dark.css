@@ -1,88 +1,88 @@
 /* AgroGenio El Salvador Keycloak Login Theme — Dark Mode
  * Activated by upstream keycloak.v2 darkMode=true
  *
- * El Salvador DS dark token mapping:
- *   accent  = Genie Glow #4FC3F7 (cyan/blue for AI-active states)
- *   green   = Accent Green #81C784 (desaturated green)
- *   fg      = #E2E2E6 (high-emphasis white)
- *   muted   = #9CA3AF
- *   border  = #2D3748
- *   bg      = #0D1117
- *   surface = #1C1F22 (raised elements)
+ * AgroGenio dark palette:
+ *   accent     = Verde cultivo #69A83B (bright green for AI-active states)
+ *   accent-2   = Verde AgroGenio #176B3A (mid green)
+ *   fg         = Fondo cálido #F2F4EE (warm off-white)
+ *   muted      = #9CA3AF
+ *   border     = #2A3B30 (deep verde border)
+ *   bg         = #0F1A12 (deep brand-tinted bg)
+ *   surface    = #16241A (raised elements)
  */
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Primary — Genie Glow cyan */
-    --pf-v5-global--primary-color--100: #4FC3F7;
-    --pf-v5-global--primary-color--200: #39A8D8;
-    --pf-v5-global--primary-color--300: #66D4FF;
+    /* Primary — Verde cultivo (bright on dark) */
+    --pf-v5-global--primary-color--100: #69a83b;
+    --pf-v5-global--primary-color--200: #58a82e;
+    --pf-v5-global--primary-color--300: #7dbc4d;
 
-    /* Background — dark bg / surface */
-    --pf-v5-global--BackgroundColor--100: #0D1117;
-    --pf-v5-global--BackgroundColor--200: #1C1F22;
+    /* Background — deep brand-tinted bg / surface */
+    --pf-v5-global--BackgroundColor--100: #0f1a12;
+    --pf-v5-global--BackgroundColor--200: #16241a;
 
-    /* Text */
-    --pf-v5-global--Color--100: #E2E2E6;
-    --pf-v5-global--Color--200: #9CA3AF;
-    --pf-v5-global--Color--300: #6B7280;
+    /* Text — warm off-white */
+    --pf-v5-global--Color--100: #f2f4ee;
+    --pf-v5-global--Color--200: #9ca3af;
+    --pf-v5-global--Color--300: #6b7280;
 
-    /* Borders */
-    --pf-v5-global--BorderColor--100: #2D3748;
-    --pf-v5-global--BorderColor--200: #1E2533;
+    /* Borders — deep verde */
+    --pf-v5-global--BorderColor--100: #2a3b30;
+    --pf-v5-global--BorderColor--200: #1f2d24;
 
-    /* Success — Accent Green */
-    --pf-v5-global--success-color--100: #81C784;
+    /* Success — lighter verde cultivo */
+    --pf-v5-global--success-color--100: #9bc97b;
 
-    /* Link — Genie Glow */
-    --pf-v5-global--link--Color: #4FC3F7;
-    --pf-v5-global--link--Color--hover: #66D4FF;
+    /* Link — Verde cultivo */
+    --pf-v5-global--link--Color: #69a83b;
+    --pf-v5-global--link--Color--hover: #7dbc4d;
 
     /* Login-specific */
-    --pf-v5-c-login__main-header--BorderTopColor: #4FC3F7;
-    --pf-v5-c-login__main-body--BackgroundColor: #1C1F22;
-    --pf-v5-c-login__main-header--BackgroundColor: #1C1F22;
+    --pf-v5-c-login__main-header--BorderTopColor: #69a83b;
+    --pf-v5-c-login__main-body--BackgroundColor: #16241a;
+    --pf-v5-c-login__main-header--BackgroundColor: #16241a;
 
-    /* Buttons — Genie Glow */
-    --pf-v5-c-button--m-primary--BackgroundColor: #4FC3F7;
-    --pf-v5-c-button--m-primary--hover--BackgroundColor: #39A8D8;
-    --pf-v5-c-button--m-primary--active--BackgroundColor: #66D4FF;
-    --pf-v5-c-button--m-primary--focus--BackgroundColor: #4FC3F7;
-    --pf-v5-c-button--m-secondary--BorderColor: #4FC3F7;
-    --pf-v5-c-button--m-secondary--Color: #4FC3F7;
+    /* Buttons — Verde cultivo */
+    --pf-v5-c-button--m-primary--BackgroundColor: #69a83b;
+    --pf-v5-c-button--m-primary--hover--BackgroundColor: #7dbc4d;
+    --pf-v5-c-button--m-primary--active--BackgroundColor: #58a82e;
+    --pf-v5-c-button--m-primary--focus--BackgroundColor: #69a83b;
+    --pf-v5-c-button--m-secondary--BorderColor: #69a83b;
+    --pf-v5-c-button--m-secondary--Color: #69a83b;
 
     /* Form control */
-    --pf-v5-c-form-control--BackgroundColor: #1C1F22;
-    --pf-v5-c-form-control--BorderColor: #2D3748;
-    --pf-v5-c-form-control--Color: #E2E2E6;
-    --pf-v5-c-form-control--focus--BorderColor: #4FC3F7;
-    --pf-v5-c-form-control--focus--BoxShadowColor: rgba(79, 195, 247, 0.25);
+    --pf-v5-c-form-control--BackgroundColor: #16241a;
+    --pf-v5-c-form-control--BorderColor: #2a3b30;
+    --pf-v5-c-form-control--Color: #f2f4ee;
+    --pf-v5-c-form-control--focus--BorderColor: #69a83b;
+    --pf-v5-c-form-control--focus--BoxShadowColor: rgba(105, 168, 59, 0.25);
 
     /* Page background */
-    --pf-v5-c-page--BackgroundColor: #0D1117;
+    --pf-v5-c-page--BackgroundColor: #0f1a12;
   }
 
   body {
-    background-color: #0D1117;
+    background-color: #0f1a12;
   }
 
   #keycloak-bg {
-    background-color: #0D1117;
+    background-color: #0f1a12;
   }
 
   .pf-v5-c-login__main {
-    background-color: #1C1F22;
+    background-color: #16241a;
   }
 
   #kc-header-wrapper {
-    color: #4FC3F7;
+    color: #69a83b;
   }
 
   #kc-page-title {
-    color: #E2E2E6;
+    color: #f2f4ee;
   }
 
   #kc-footer-wrapper {
-    color: #6B7280;
+    color: #6b7280;
   }
 }

@@ -1173,6 +1173,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                               variant: active
                                   ? DsButtonVariant.primary
                                   : DsButtonVariant.ghost,
+                              // Unbounded Row: full-width minimumSize crashes.
+                              expand: false,
                               onPressed: () => setState(() => _iconTab = t),
                             );
                           }).toList(),
@@ -1288,12 +1290,15 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen>
                             DsButton(
                               label: tr('userProfile.actions.cancel'),
                               variant: DsButtonVariant.ghost,
+                              // Unbounded Row: full-width minimumSize crashes.
+                              expand: false,
                               onPressed: () =>
                                   setState(() => _showIconSelector = false),
                             ),
                             DsButton(
                               label: tr('common.done'),
                               variant: DsButtonVariant.primary,
+                              expand: false,
                               onPressed: () =>
                                   setState(() => _showIconSelector = false),
                             ),

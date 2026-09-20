@@ -19,10 +19,7 @@
           "properties": {
             "type": {
               "type": "string",
-              "enum": [
-                "file",
-                "inline"
-              ],
+              "enum": ["file", "inline"],
               "description": "Type of icon source",
               "default": "file"
             },
@@ -59,10 +56,7 @@
           ]
         }
       },
-      "required": [
-        "title",
-        "icon"
-      ]
+      "required": ["title", "icon"]
     },
     "theme": {
       "type": "object",
@@ -169,9 +163,7 @@
           }
         }
       },
-      "required": [
-        "brandColor"
-      ]
+      "required": ["brandColor"]
     },
     "features": {
       "type": "object",
@@ -222,10 +214,7 @@
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": [
-                              "file",
-                              "inline"
-                            ],
+                            "enum": ["file", "inline"],
                             "description": "Type of icon source"
                           },
                           "value": {
@@ -233,16 +222,10 @@
                             "description": "Path to SVG file or inline SVG content"
                           }
                         },
-                        "required": [
-                          "type",
-                          "value"
-                        ]
+                        "required": ["type", "value"]
                       },
                       "category": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "Category ID for the button (null for general)"
                       },
                       "action": {
@@ -266,10 +249,7 @@
                             ]
                           }
                         },
-                        "required": [
-                          "visibleText",
-                          "hiddenPrompt"
-                        ]
+                        "required": ["visibleText", "hiddenPrompt"]
                       },
                       "styles": {
                         "type": "object",
@@ -314,9 +294,7 @@
                   }
                 }
               },
-              "required": [
-                "buttons"
-              ]
+              "required": ["buttons"]
             }
           }
         }
@@ -328,10 +306,7 @@
       "additionalProperties": true
     }
   },
-  "required": [
-    "app",
-    "theme"
-  ],
+  "required": ["app", "theme"],
   "app": {
     "title": "AgroGenio AI",
     "icon": {
@@ -414,9 +389,7 @@
                 "es": "Eres un Diagnóstico de Salud de Cultivos y Ganado de CENTA El Salvador. Ayuda a los agricultores a identificar plagas, enfermedades y deficiencias de nutrientes que afectan sus cultivos o animales. Haz preguntas de seguimiento sobre síntomas, partes afectadas, duración y condiciones ambientales. Recomienda estrategias de Manejo Integrado de Plagas (MIP), opciones de tratamiento orgánico y químico, y medidas de prevención apropiadas para El Salvador. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
             },
-            "serviceLabels": [
-              "Pest/ Disease Health"
-            ]
+            "serviceLabels": ["Pest/ Disease Health"]
           },
           {
             "id": "grow-fruits-veggies",
@@ -439,12 +412,7 @@
                 "es": "Eres un Especialista en Horticultura de CENTA El Salvador. Proporciona guías de cultivo detalladas para frutas y vegetales comúnmente cultivados en El Salvador (tomates, chiles, papaya, mango, cítricos, plátanos, etc.). Cubre siembra, poda, fertilización, riego, cosecha y manejo poscosecha. Adapta los consejos a las condiciones locales: clima tropical, suelos volcánicos, estaciones seca/lluviosa. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
             },
-            "serviceLabels": [
-              "Tomato",
-              "Onion",
-              "Cucumber",
-              "Potato"
-            ]
+            "serviceLabels": ["Tomato", "Onion", "Cucumber", "Potato"]
           },
           {
             "id": "manage-poultry-pigs",
@@ -489,10 +457,7 @@
                 "es": "Eres un Especialista en Suelos y Fertilizantes de CENTA El Salvador. Ayuda a los agricultores a entender su tipo de suelo, recomienda técnicas de preparación del suelo y asesora sobre fórmulas de fertilizantes apropiadas y calendarios de aplicación para los suelos volcánicos y arcillosos de El Salvador. Cubre enmiendas orgánicas, compostaje, manejo de pH y control de erosión. Referencia los servicios de análisis de suelos de CENTA cuando sea apropiado. REGLA: Siempre refiérase a la aplicación como 'Genie AI'."
               }
             },
-            "serviceLabels": [
-              "Nutrition",
-              "Establishment"
-            ]
+            "serviceLabels": ["Nutrition", "Establishment"]
           },
           {
             "id": "start-manage-apiary",

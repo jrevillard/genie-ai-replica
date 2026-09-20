@@ -46,6 +46,11 @@ class GenieAiConfig {
           }
         }
       }
+
+      // The login screen uses the green AgroGenio leaf PNG
+      // (transparent) regardless of what the bundled config
+      // points at — pinned by the user.
+      iconPath = 'assets/images/agro-genio-logo.png';
       _loaded = true;
     } catch (e) {
       debugPrint("Error loading Genie AI Config: $e");

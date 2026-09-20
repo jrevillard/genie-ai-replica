@@ -1915,8 +1915,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             ),
                             child: Center(
                               child: SizedBox(
-                                height: 80,
-                                width: 180,
+                                height: 120,
+                                width: 270,
                                 child: Image.asset(
                                   'assets/images/team_agro.png',
                                   fit: BoxFit.contain,

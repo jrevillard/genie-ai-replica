@@ -452,6 +452,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         if not content:
             return []
 
+        uses_header_splitter = path.endswith((".html", ".md"))
         if path.endswith(".html"):
             text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=[("h1", "H1"), ("h2", "H2")])
         elif path.endswith(".md"):
@@ -478,10 +479,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         raw_chunks.append(item_str)
                 plain_chunks = raw_chunks
             else:
-                if isinstance(text_splitter, RecursiveCharacterTextSplitter):
-                    docs = text_splitter.create_documents([content])
-                else:
+                if uses_header_splitter:
                     docs = text_splitter.split_text(content)
+                else:
+                    docs = text_splitter.create_documents([content])
                 plain_chunks = [d.page_content for d in docs]
 
             valid_chunks = [c for c in plain_chunks if is_valid_content(c)]

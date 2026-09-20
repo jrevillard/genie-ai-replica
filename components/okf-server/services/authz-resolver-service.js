@@ -22,36 +22,11 @@
 // beyond the caller's own search_start filter_labels". The map is the contract
 // that survives a future label-ACL source (Keycloak attribute or repo field).
 
-const { parseOkfScope } = require('../middleware/require-scope');
+const { DateTime } = require('luxon');
 const { servingRepos, SERVING_TTL_MS } = require('./retrieval-config-service');
+const { deriveScopeAuthz } = require('./scope-authz-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
-
-/**
- * Scope context → {isSuperAdmin, authorizedRepoIds|null} — THE shared
- * implementation (write-side callerAuthz delegates; byte-identical semantics:
- * strict 4-part grammar, level ∈ {read, admin}, `*` repo ⇒ unrestricted,
- * exact repo segments accumulate, tenants ignored).
- * @param {string[]} okfScopes
- * @param {boolean} isSuperAdmin
- */
-function deriveScopeAuthz(okfScopes, isSuperAdmin) {
-  if (isSuperAdmin) return { isSuperAdmin: true, authorizedRepoIds: null };
-  const scopes = Array.isArray(okfScopes) ? okfScopes : [];
-  const repos = new Set();
-  let wildcard = false;
-  for (const scope of scopes) {
-    const p = parseOkfScope(scope);
-    // parseOkfScope enforces the strict grammar + level whitelist — a typo
-    // level ('write') returns null and grants nothing (2026-08-16 review fix,
-    // preserved verbatim).
-    if (!p) continue;
-    if (p.repo === '*') wildcard = true;
-    else if (p.repo) repos.add(p.repo);
-  }
-  if (wildcard) return { isSuperAdmin: true, authorizedRepoIds: null };
-  return { isSuperAdmin: false, authorizedRepoIds: repos };
-}
 
 /**
  * Resolve the caller's traversable graph set.
@@ -71,6 +46,9 @@ async function resolveGraphSet(caller) {
     const domains = {};
     for (const r of allowed) {
       per_graph_labels[r.graph_name] = null; // G8 seam — no label-ACL source yet
+      // `domains` is the O(1) keyed lookup for the Graph Router's hot path;
+      // `repos[]` is the human-readable join. Deliberate duplication
+      // (code-review 2026-09-20): two access patterns, one payload.
       domains[r.graph_name] = r.domain || null;
     }
     span.setAttribute('okf.authz.superadmin', isSuperAdmin);
@@ -92,10 +70,19 @@ async function resolveGraphSet(caller) {
         domain: r.domain || null,
         graph_name: r.graph_name
       })),
-      generated_at: new Date().toISOString(),
+      generated_at: DateTime.now().toUTC().toISO(),
+      // CACHE CONTRACT (consumers — chatqna/retriever, Story 1.2): this ttl is
+      // the ADR-bounded serving-set skew window, NOT an authorization-decision
+      // cache lifetime. A consumer that caches this response extends graph
+      // access up to 30s past token revocation; key any consumer cache on the
+      // TOKEN/SESSION and drop it on logout, never on a fixed timer alone.
       ttl_seconds: Math.round(SERVING_TTL_MS / 1000)
     };
   });
 }
+
+// deriveScopeAuthz is re-exported for backward compatibility (the resolver was
+// its original home; the single authority now lives in scope-authz-service).
+module.exports = { deriveScopeAuthz, resolveGraphSet };
 
 module.exports = { deriveScopeAuthz, resolveGraphSet };

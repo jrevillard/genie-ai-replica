@@ -1,9 +1,28 @@
 # Story 1.7 — Retrieval Mode Governance (runtime config + engagement gate)
 
-**Status:** IN-PROGRESS — ungated legs LANDED 2026-09-20 (commit 44127eb); gated
-consumption legs ride Wave R4/R6 of the fan-out build.
+**Status:** IN-PROGRESS — ungated legs DONE + adversarially review-hardened
+2026-09-20 (commits 44127eb, feac617 + review-hardening commit; review findings
+in [6-1b's story file](6-1b-authz-resolver-token-to-graph-set.md) — the two
+stories share these files). Remaining: the gated CONSUMPTION legs (read-side
+TTL cache in chatqna/retriever — Wave R4; legacy CI invariant — Wave R4;
+10.7 Studio card with i18n ×14 + site-docs gates — Wave R6).
 **Sources:** [ADR-okf-039](../../../docs/adr/okf-039-retrieval-mode-governance.md) D1–D3,
 FR-44, [fan-out course-correction](../planning-artifacts/okf-fanout-course-correction-2026-09-20.md).
+
+## Review hardening applied 2026-09-20 (from the 6-1b adversarial review)
+
+- **Engagement gate is a WHITELIST** — only `okf_only`/`hybrid` engage; a
+  corrupted mode value can never switch the fan-out on.
+- **All config values sanitized on read** (env AND stored) — invalid → safe
+  default (`legacy`), caps clamped to LIMITS.
+- **Serving view is per-caller** — config posture stays global; the serving
+  set/count reflect the caller's authorization (zero-hit by construction).
+- **PUT under optimistic concurrency** (`_rev` precondition, retry-once) — no
+  lost governance writes; audit details carry the raw prior STORED row + source.
+- joi at the controller boundary; real `Error` shapes (`.code/.status/.details`);
+  luxon timestamps; serving-projection contract with `workingGraphName` pinned;
+  HTTP-layer route tests (403/400/200 + authz/graphs); TTL-expiry test;
+  `OKF_RETRIEVAL_*` documented in the root `env` template.
 
 ## What landed (the ungated legs)
 

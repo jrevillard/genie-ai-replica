@@ -1972,3 +1972,9 @@ location: _bmad-output/implementation-artifacts/spec-3-4-confirm-the-targeted-up
 severity: low
 reason: All verification commands specify only "expected" success outcomes. No failure handling documented.
 status: open
+
+## Deferred from: code review of 6-1b-authz-resolver-token-to-graph-set (2026-09-20)
+
+- **No reset path for the governed retrieval-config row** — after the first PUT, env `OKF_RETRIEVAL_*` changes are shadowed by the stored doc (per ADR-039 D3 design: DB overrides env). A reset control (clear the row back to env defaults) belongs to the Story 10.7 Studio retrieval card.
+- **ADR D3's `utility_gate` / `label_federation` config fields are unstorable** — `validatePatch`/LIMITS reject them as unknown. The Wave R4/R6 landing stories must extend the config shape (and LIMITS) when the utility-cost gate and KH label federation legs land.
+- **CHANGELOG + site configuration docs for GET/PUT /retrieval-config and GET /authz/graphs** — CHANGELOG entries land with the MR/release flow (docs/RELEASE.md); the site operator docs are a Story 10.7 completion gate (i18n ×14 + site/content/en/docs).

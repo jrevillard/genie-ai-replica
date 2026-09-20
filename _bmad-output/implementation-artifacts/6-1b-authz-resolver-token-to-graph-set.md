@@ -1,6 +1,8 @@
 # Story 6.1b — Authz Resolver: token → graph set (read side)
 
-**Status:** IN-PROGRESS → implemented this session.
+**Status:** DONE 2026-09-20 (implemented + adversarially reviewed; all 18 review
+patches applied — commits feac617 + review-hardening commit). Consumers are
+separate stories by contract: 1.2 forwards (Python session cache), 1.3 router.
 **Sources:** epics.md G8; sprint `6-1b`; [ADR-okf-039](../../../docs/adr/okf-039-retrieval-mode-governance.md)
 (read path); [fan-out course-correction](../planning-artifacts/okf-fanout-course-correction-2026-09-20.md)
 amendments B (versioned graph names from the repo doc) + D (label-map seam).
@@ -54,3 +56,33 @@ zero hits by construction, never by post-filtering**.
   beforeEach; explicit resets where tests reseed mid-test).
 - Full okf-server suite green (the `callerAuthz` delegation must keep every
   existing authz test green — behavior-identical).
+
+## Review Findings
+
+Code review 2026-09-20 — layers: blind-hunter ✅, acceptance-auditor ✅ (verdict:
+conforming), edge-case-hunter ❌ FAILED (instruction file absent from skill
+install), verification-gap ❌ FAILED (same). Coverage gap disclosed; findings
+below are from the two completed layers. 0 decision-needed · 18 patch · 3
+defer · 3 dismissed.
+
+- [x] [Review][Patch] Serving projection strips lifecycle_state/ingested_at — servingRepos resolves EVERY repo to draft name v{N+1} in production (mock bypasses AQL KEEP, so tests stayed green); drop dead ingested_version [services/retrieval-config-service.js]
+- [x] [Review][Patch] Engagement gate + env defaults unvalidated — mode!=='legacy' engages INVALID modes; env NaN/unclamped caps flow into effective config [services/retrieval-config-service.js + config.js]
+- [x] [Review][Patch] Hand-rolled 404 check bypasses house isArangoNotFound — real-driver errorNum-only shapes 500 the designed default path on fresh deployments [services/retrieval-config-service.js]
+- [x] [Review][Patch] GET /retrieval-config serves the GLOBAL serving set to any read-scoped caller — make the serving view authz-aware (per-caller count/list; also corrects the per-caller engagement gate for Wave R4) [services/retrieval-config-service.js]
+- [x] [Review][Patch] PUT is an unguarded read-modify-write — concurrent stewards lose updates, duplicate revisions; add rev-precondition retry [services/retrieval-config-service.js]
+- [x] [Review][Patch] No HTTP-layer route tests for GET/PUT retrieval-config + GET authz/graphs (403/400/200 paths) [__tests__/]
+- [x] [Review][Patch] Tests pin a false projection invariant; misleading comment ("the query filters on… so every row carries them") [__tests__/authz-resolver-service.test.js]
+- [x] [Review][Patch] Hand-rolled validatePatch — house convention is joi in validators/ [services/retrieval-config-service.js]
+- [x] [Review][Patch] Plain-object throws (no stack) — throw Error with .code/.status [services/retrieval-config-service.js]
+- [x] [Review][Patch] new Date().toISOString() — house rule is luxon [services/retrieval-config-service.js]
+- [x] [Review][Patch] OKF_RETRIEVAL_* env vars missing from the root env template [env]
+- [x] [Review][Patch] Audit details.before records EFFECTIVE config, not the stored row — include source + stored-before [services/retrieval-config-service.js]
+- [x] [Review][Patch] ttl_seconds invites consumers to cache the authz decision past revocation — document the tradeoff [services/authz-resolver-service.js]
+- [x] [Review][Patch] actorFrom duplicated; domains-map rationale undocumented [controllers/retrieval-config-controller.js + services/authz-resolver-service.js]
+- [x] [Review][Patch] TTL expiry (≤30s) untested — fake-timer test [__tests__/retrieval-config-service.test.js]
+- [x] [Review][Patch] version===ingested_version serving invariant unpinned — comment citing lifecycle-service.js:405-462 [__tests__/authz-resolver-service.test.js]
+- [x] [Review][Patch] getDb comment claims "retry on failure" — no retry exists; fix comment [services/retrieval-config-service.js]
+- [x] [Review][Patch] hybrid+zero-serving warning asymmetry is deliberate — document why [services/retrieval-config-service.js]
+- [x] [Review][Defer] No reset path for the governed row (env shadowing after first PUT is per ADR D3 design; a reset control belongs to the 10.7 Studio card) — deferred, needs 10.7 UX decision
+- [x] [Review][Defer] ADR D3's utility_gate/label_federation fields unstorable — Wave R4/R6 stories must extend LIMITS/allowed when those legs land — deferred, gated consumption legs
+- [x] [Review][Defer] CHANGELOG + site configuration docs for the new endpoints — deferred, CHANGELOG lands with the MR/release flow; site docs are a 10.7 completion gate

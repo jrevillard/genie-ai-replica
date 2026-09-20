@@ -82,6 +82,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
 
+  /// Timestamp of the last streaming repaint — chunks batch to ~10/s so
+  /// the UI thread stays responsive to taps while a response streams.
+  int _lastStreamUiMs = 0;
+
   bool get _canStream => httpClient != null && streamBaseUrl != null;
   http.Client? get httpClient => widget.httpClient;
   String? get streamBaseUrl => widget.streamBaseUrl;
@@ -547,10 +551,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 switch (event) {
                   case SseChunkEvent(:final content):
                     accumulatedContent += content;
-                    setState(() {
-                      msg['content'] = accumulatedContent;
-                    });
-                    _scrollToBottom();
+                    // Throttle repaints: a setState + markdown rebuild +
+                    // scroll per SSE chunk saturates the UI thread and
+                    // drops taps on the toolbar while streaming. Batch
+                    // visual updates to ~10/s; onDone flushes the rest.
+                    final nowMs = DateTime.now().millisecondsSinceEpoch;
+                    if (nowMs - _lastStreamUiMs >= 100) {
+                      _lastStreamUiMs = nowMs;
+                      setState(() {
+                        msg['content'] = accumulatedContent;
+                      });
+                      _scrollToBottom();
+                    }
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -561,10 +573,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     isGrounded = grounded;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
-                    setState(() {
-                      msg['content'] = content;
-                    });
-                    _scrollToBottom();
+                    final nowMs = DateTime.now().millisecondsSinceEpoch;
+                    if (nowMs - _lastStreamUiMs >= 100) {
+                      _lastStreamUiMs = nowMs;
+                      setState(() {
+                        msg['content'] = content;
+                      });
+                      _scrollToBottom();
+                    }
                   case SseDoneEvent(:final queryId):
                     streamQueryId = queryId;
                   case SseErrorEvent(:final message):

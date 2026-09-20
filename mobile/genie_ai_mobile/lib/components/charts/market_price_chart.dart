@@ -179,24 +179,20 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
           // Summary Cards
           Row(
             children: [
-              Expanded(
-                child: _buildSummaryCard(
-                  context,
-                  tr('market.latest'),
-                  _latestValue,
-                  _unit,
-                  _categoryColor,
-                ),
+              _buildSummaryCard(
+                context,
+                tr('market.latest'),
+                _latestValue,
+                _unit,
+                _categoryColor,
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  context,
-                  tr('market.trend'),
-                  _trendLabel,
-                  '',
-                  _trendColor,
-                ),
+              _buildSummaryCard(
+                context,
+                tr('market.trend'),
+                _trendLabel,
+                '',
+                _trendColor,
               ),
             ],
           ),
@@ -405,6 +401,12 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
                 onPressed: _exportCsv,
                 icon: const Icon(Icons.file_download, size: 18),
                 label: Text(tr('market.exportCsv')),
+                // App theme forces full-width TextButtons; in an
+                // unbounded Row that crashes layout — hug content.
+                style: TextButton.styleFrom(
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ],
           ),

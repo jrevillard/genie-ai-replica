@@ -1757,18 +1757,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             ],
           ),
 
-          // Quick Help Overlay
+          // Quick Help Overlay - Expanded fills the remaining
+          // viewport above the Input Area (the next sibling in
+          // the parent Column), so the QuickHelp bottom edge
+          // aligns with the chat controls bar's top.
           if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            // Capped at 55% of viewport so the team hero always has
-            // space below it in the chat home, between the QuickHelp
-            // bottom and the chat controls bar.
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: constraints.maxHeight * 0.55,
-                  ),
-                  child: Container(
+            Expanded(
+              child: Container(
                     color: tokens.bg,
                     padding: const EdgeInsets.symmetric(
                       horizontal: DsSpacing.md,
@@ -1800,11 +1795,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             builder: (context, constraints) {
                               final int crossAxisCount =
                                   _quickHelpLayout['columns'] as int? ?? 2;
+                              // Compact cards so all 8 fit in the
+                              // QuickHelp Expanded without scrolling.
                               final double aspectRatio =
                                   (_quickHelpLayout['childAspectRatio']
                                           as num?)
                                       ?.toDouble() ??
-                                  3.5;
+                                  4.5;
 
                               return GridView.builder(
                                 shrinkWrap: true,
@@ -1931,9 +1928,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+          ),
 // Confirm Dialogs & Save/Export Alerts
           ConfirmDialog(
             visible: _showNewChatConfirm,

@@ -5,27 +5,31 @@
 # GitLab sync is driven directly via glab against the OKF epics.md.
 
 generated: 2026-08-11
-last_updated: 2026-09-14
+last_updated: 2026-09-20
 project: GENIE.AI OKF Server
 project_key: okf-server
 tracking_system: gitlab
 story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
-# GATING KEY (confirmed with team):
-#   [BUMP]  = blocked by OPEA 1.5 bump !277 (feat/opea-1.5-upgrade/prd) merging to main
-#   [AGENTIC] = blocked by agentic workflows !280 MCP client landing
-#   SST (!279) = pattern only, no gate. Ungated stories build first.
+# GATING KEY (confirmed with team; CORRECTED 2026-09-20):
+#   The branch feat/okf-server was rebased onto main 2026-09-10 and CARRIES the
+#   OPEA 1.5 bump (retriever Dockerfile ARG OPEA_VERSION="v1.5"; dataprep likewise).
+#   No story is blocked by the bump for work done IN THIS BRANCH — the [BUMP]
+#   tags below are historical record only. Merging anything anywhere is NOT in
+#   scope; all remaining work stays on feat/okf-server until OKF is complete.
+#   [AGENTIC] = blocked by agentic workflows !280 MCP client landing (still real).
 
 development_status:
-  epic-1: backlog            # [BUMP] Unified Multi-Graph Grounding — whole epic gated
-  1-1-retriever-multigraph-fanout-rrf: backlog      # [BUMP] (+ 2026-08-13: boundary-probe dep, ACL on all search_start, per-graph contribution counts, zero-hit unauthorized)
-  1-2-chatqna-forwards-graph-set: backlog           # [BUMP] (+ 2026-08-13: per-graph label map from 6.1b, isolation test)
-  1-0-retriever-provenance-materialization: backlog # [BUMP] NEW 2026-08-13 — pins as 1.1 dep (G18)
-  1-0b-boundary-probe-graph-names: backlog          # [BUMP] NEW 2026-08-13 — determines transport shape (G2, LG-5)
-  1-3-graph-router-query-aware-selection: backlog   # [BUMP] NEW 2026-08-13 — intelligent selection, MAX_FANOUT_GRAPHS=5, ≤20ms gate (G6, D8-D10/D14)
-  1-4-parallel-fanout-bounded-concurrency: backlog  # [BUMP] NEW 2026-08-13 — Semaphore + per-graph timeout + partial-failure (G14)
-  1-5-two-level-cross-graph-rrf: backlog            # [BUMP] NEW 2026-08-13 — size-normalized 2-level RRF (G21)
-  1-6-fanout-observability-spans: backlog           # [BUMP] NEW 2026-08-13 — selection/fan-out spans (G24, G35)
+  epic-1: backlog            # Unified Multi-Graph Grounding — buildable IN-BRANCH now (OPEA 1.5 carried by the rebase); mode-gated at runtime per ADR-okf-039 (legacy default). Build order: 1-7 legs → 6-1b → 1-0b → 1-0 → 1-1 → 1-4 → 1-5 → 1-2 → 1-3 → 1-6
+  1-1-retriever-multigraph-fanout-rrf: backlog      # (+ 2026-08-13: boundary-probe dep, ACL on all search_start, per-graph contribution counts, zero-hit unauthorized; + 2026-09-10 ADR-039: tiered option-(d) fan-out, legacy byte-identical CI guard)
+  1-2-chatqna-forwards-graph-set: backlog           # (+ 2026-08-13: per-graph label map from 6.1b, isolation test)
+  1-0-retriever-provenance-materialization: backlog # NEW 2026-08-13 — pins as 1.1 dep (G18)
+  1-0b-boundary-probe-graph-names: backlog          # NEW 2026-08-13 — determines transport shape (G2, LG-5); label_contract is the proven carrier pattern
+  1-3-graph-router-query-aware-selection: backlog   # NEW 2026-08-13 — intelligent selection, MAX_FANOUT_GRAPHS=5, ≤20ms gate (G6, D8-D10/D14); tier-1 discovery ALREADY LIVE (bce story); + 2026-09-10: utility-cost selection per ADR-039 D5
+  1-4-parallel-fanout-bounded-concurrency: backlog  # NEW 2026-08-13 — Semaphore + per-graph timeout + partial-failure (G14)
+  1-5-two-level-cross-graph-rrf: backlog            # NEW 2026-08-13 — size-normalized 2-level RRF (G21); Level-1 reuses the existing rrf_fuse (hybrid BM25+RRF within-graph, already live)
+  1-6-fanout-observability-spans: backlog           # NEW 2026-08-13 — selection/fan-out spans (G24, G35)
+  1-7-retrieval-mode-governance-config: backlog     # NEW 2026-09-10 (ADR-okf-039/FR-44) — okf_system_config + GET/PUT /api/okf/retrieval-config + engagement gate; config+API legs UNGATED, build FIRST (the switch that keeps legacy safe)
   epic-1-retrospective: optional
 
   epic-2: in-progress            # Mostly ungated — build first
@@ -34,7 +38,7 @@ development_status:
   2-3-okf-parser-frontmatter-links: done
   2-4-conformance-validation-quality-metrics: done
   2-5-docrepo-bundle-ingest-route: done            # code-review fixes applied 2026-08-14 (fire-and-forget ingest kick). 416 tests green.
-  2-6-dataprep-graphname-metadata-retract: backlog  # [BUMP] (ACL-preserve EXTRACTED to ungated 2-6a; this story keeps graph-name body-read, repo-level retract, retractRepoGraph drops 4 OKF_{repo}_* collections — G5)
+  2-6-dataprep-graphname-metadata-retract: done     # DONE in-branch via the born-right graph naming pass (2026-08-31/09-01, live-verified: dataprep repoId identity, graph-name body-read, repo-level retract, retractRepoGraph CASCADE; full-drain E2E complete) — [BUMP] tag historical, bump carried by rebase
   2-7-source-sync-git-s3-change-detection: deferred   # DEFERRED 2026-08-14: v1 inputs = browser file picker (FR-37) + crawler + manual; Git/S3 sync scrapped for v1 (FR-1/FR-2 deferred)
   2-8-pii-redaction-version-provenance-docrefs: done       # review fixes applied 2026-08-14: 23 findings (incl. critical fail-open) fixed; CI lane added; deployed+verified locally; Ansible/Swarm wired
   epic-2-retrospective: optional
@@ -133,6 +137,7 @@ development_status:
   10-4-cross-repo-auto-correct-inbox: backlog                # gated by Story 6.1b (authz)
   10-5-studio-service-okf-studio-dashboard: backlog          # multi-repo dashboard + drafts + bulk publish
   10-6-review-publish-lifecycle-ui: backlog                  # Step 8/9 (gated 2.8 PII, 2.9.7 mintVersion)
+  10-7-studio-retrieval-controls-card: backlog               # NEW 2026-09-10 (ADR-okf-039 D7/FR-44) — live legacy/okf_only/hybrid mode selector + serving-graph count + cap editors + audit trail, in the Studio tab; depends on 1-7's API
   epic-10-retrospective: optional
   # B+C+E (2026-08-23, David's directives — the bundle IS a graph + manifest discovery index):
   # B: author-stated frontmatter links mirrored into _LINKS_TO (source='author', vertex-integrity + G22 enforced)

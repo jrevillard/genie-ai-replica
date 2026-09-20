@@ -3,11 +3,22 @@ title: "Integration Architecture"
 description: "How the GENIE.AI components integrate: service boundaries, dependencies, and the inter-service contract surface."
 weight: 3
 section: "core"
+audience: "integrator, developer"
+mode: explanation
+persona: developer
+owner: "docs-stewards"
+last_reviewed: 2026-09-18
 ---
 
-> **For integrators and developers.** How the components fit together: service boundaries, dependencies, and the inter-service contract surface.
+This document describes how the GENIE.AI components fit together — service
+boundaries, dependencies, and the inter-service contract surface.
 
-This document describes the integration points, communication patterns, and data flows between all components of the GENIE.AI platform.
+> **For integrators and developers.** Operators can skip this page; deployers
+> should focus on [Service Discovery & Routing](#service-discovery--routing)
+> and [Security Considerations](#security-considerations).
+
+For the high-level orientation, see [Project Overview](/docs/core/project-overview/).
+For per-directory code layout, see [Source Tree Analysis](/docs/core/source-tree-analysis/).
 
 ## Table of Contents
 
@@ -19,12 +30,15 @@ This document describes the integration points, communication patterns, and data
 - [Service Discovery & Routing](#service-discovery--routing)
 - [Error Handling & Resilience](#error-handling--resilience)
 - [Security Considerations](#security-considerations)
+- [Where to Go Next](#where-to-go-next)
 
 ---
 
 ## System Overview
 
-GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST APIs, SSE (Server-Sent Events), and direct database connections:
+GENIE.AI is a monorepo consisting of 7 main parts that communicate through
+REST APIs, SSE ([Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events)),
+and direct database connections:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -37,7 +51,6 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 │  │              │    │              │    │  │  Kong   │ -> │  NGINX  │  │  │
 │  └──────┬───────┘    └──────┬───────┘    │  └─────────┘    └─────────┘  │  │
 │         │                   │             └──────────────┬────────────────┘  │
-│         │                   │                            │                   │
 │         └───────────────────┼────────────────────────────┘                   │
 │                             │                                        │      │
 │                             v                                        v      │
@@ -45,7 +58,8 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 │  │                     Application Layer                              │   │
 │  │  ┌────────────────┐    ┌──────────────────┐    ┌────────────────┐  │   │
 │  │  │   Express.js   │    │   Document       │    │   Keycloak     │  │   │
-│  │  │    Backend     │<-->|   Repository     │    │  (OIDC Provider)│  │   │
+│  │  │    Backend     │    │   Repository     │    │  (OIDC Provider│  │   │
+│  │  │  (BFF:3000)    │    │   (:3001)        │    │   :8080)       │  │   │
 │  │  └────────┬───────┘    └──────────────────┘    └────────┬───────┘  │   │
 │  └───────────┼──────────────────────────────────────────────┼──────────┘   │
 │              │                                              │              │
@@ -64,9 +78,11 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 │  │                       AI/ML Layer (OPEA)                              │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │  │
 │  │  │ ChatQnA  │  │Retriever │  │ Reranker │  │   TEI    │  │ vLLM   │ │  │
+│  │  │  :8888   │  │  :7000   │  │  :8000   │  │  :80     │  │ :8000  │ │  │
 │  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └────────┘ │  │
 │  │  ┌──────────┐                                                         │  │
 │  │  │ Dataprep │                                                         │  │
+│  │  │  :5000   │                                                         │  │
 │  │  └──────────┘                                                         │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
@@ -79,159 +95,210 @@ GENIE.AI is a monorepo consisting of 6 main parts that communicate through REST 
 
 ### 1. Frontend ↔ Backend
 
-**Protocol**: HTTP/HTTPS (REST API)
+**Protocol:** HTTP/HTTPS (REST API + SSE).
 
-**Authentication**: OIDC Authorization Code Flow with Keycloak
+**Authentication:** [OIDC](https://openid.net/connect/) Authorization Code
+flow with [PKCE](https://oauth.net/2/pkce/) against Keycloak, handled
+client-side by `oidc-client-ts`.
 
-**Transport Layer**: Axios HTTP client
+**Transport layer:** Axios HTTP client (`src/services/httpService.js`).
 
-**Key Integration Details**:
+**Key integration details**
 
-- **Base URL Configuration**: Frontend reads API URL from `window.APP_CONFIG?.apiUrl` or `VUE_APP_API_URL` env variable
-- **Token Management**: Frontend stores Keycloak JWT in localStorage and injects via `Authorization: Bearer <token>` header
-- **CORS Handling**: All requests proxied through Kong gateway (no direct backend access)
+- **Base URL:** `window.APP_CONFIG?.apiUrl` (runtime config from
+  `/config/genie-ai-config.json`) or `VUE_APP_API_URL` (build-time env var).
+- **Token management:** Keycloak JWT is stored **in JavaScript memory only**
+  (never in `localStorage`, `sessionStorage`, or cookies) via
+  `oidc-client-ts UserManager`. The source file
+  `src/services/keycloakAuthService.js` states explicitly:
+  *"Tokens are stored in JavaScript memory only — never in localStorage,
+  sessionStorage, or cookies."* It is injected as
+  `Authorization: Bearer <token>` on every request.
+- **CORS:** all requests go through Kong; CORS is configured at the gateway
+  (`CORS_ALLOWED_ORIGINS`).
 
-**Primary Endpoints**:
+#### Primary endpoints (Backend mounts — `ROUTE_CONFIGS` in `index.js`)
 
-| Endpoint | Method | Purpose | Response Type |
+| Endpoint | Method | Purpose | Response type |
 |----------|--------|---------|---------------|
-| `/api/auth/login` | POST | Initiate OIDC login | Redirect to Keycloak |
-| `/api/auth/callback` | POST | OIDC callback handler | JWT token |
-| `/api/auth/refresh-token` | POST | Refresh access token | New JWT |
-| `/api/queries` | POST | Submit non-streaming query | JSON response |
-| `/api/queries/stream` | POST | Submit streaming query (SSE) | Server-Sent Events |
+| `/api/auth/logout` | POST | Logout (Keycloak invalidates the session server-side) | JSON |
+| `/api/queries` | POST | Submit a non-streaming query | JSON |
+| `/api/queries/stream` | POST | Submit a streaming query (SSE) | Server-Sent Events |
 | `/api/queries/:queryId/responsetime` | PATCH | Update query metrics | JSON |
-| `/api/chat/conversations` | GET/POST | Conversation CRUD | JSON array/object |
-| `/api/chat/messages` | GET | Fetch conversation messages | JSON array |
-| `/api/me` | GET | Get user profile | JSON |
-| `/api/me` | PUT | Update user profile | JSON |
-| `/api/me/context` | GET | Get user context/preferences | JSON |
+| `/api/chat` / `/api/chat-history` | GET/POST | Conversation CRUD | JSON |
+| `/api/chat/conversations/:conversationId/messages` | GET | Fetch conversation messages | JSON |
+| `/api/chat/folders/*` | GET/POST/PATCH/DELETE | Folder CRUD + reorder | JSON |
+| `/api/me` | GET / PUT | Get / update user profile | JSON |
+| `/api/me/context` | GET | Get user context / preferences | JSON |
 | `/api/analytics/*` | GET | Analytics dashboards | JSON |
-| `/api/service-categories` | GET | Knowledge base categories | JSON |
-| `/api/files` | POST | Upload documents (admin only) | JSON |
+| `/api/service-categories` | GET | Knowledge-base category tree | JSON |
+| `/api/services` | GET | Service catalog | JSON |
+| `/api/database/*` | GET/POST | Database operations | JSON |
+| `/api/admin/*` | GET/POST | Admin operations | JSON |
+| `/api/logger/*` | POST | Log ingestion | JSON |
+| `/api/weather` | GET | Weather widget data | JSON |
+| `/api/translate` | POST | Translate text or markdown | JSON |
+| `/api/files` | POST | Upload a document (multipart) — proxied by Kong directly to `document-repository` | JSON |
+| `/api/labels` | GET/POST/PATCH/DELETE | Label CRUD — proxied by Kong directly to `document-repository` | JSON |
 
-**Service Code**:
-- Frontend: `src/services/chatbotService.js`, `src/services/httpService.js`, `src/services/keycloakAuthService.js`
-- Backend: `routes/query-routes.js`, `routes/chat-routes.js`, `routes/auth-routes.js`
+> **Note on `/api/auth/*`:** the only handler the backend implements is
+> `POST /api/auth/logout`. Login (`/api/auth/login`), callback
+> (`/api/auth/callback`), and refresh (`/api/auth/refresh-token`) are
+> **not** implemented server-side — the OIDC redirect and token refresh are
+> handled client-side by `oidc-client-ts` against Keycloak directly. Kong
+> routes `/api/auth/login` and `/api/auth/refresh-token` are placeholders
+> (in case a legacy client hits them); the backend returns 404.
+
+**Service code**
+
+- Frontend: `src/services/chatbotService.js`, `src/services/httpService.js`,
+  `src/services/keycloakAuthService.js`, `src/services/chatHistoryService.js`.
+- Backend: `routes/query-routes.js` (`/api/queries/*`),
+  `routes/chat-history-routes.js` (`/api/chat/*` and `/api/chat-history/*`),
+  `routes/auth-routes.js` (`/api/auth/logout`).
 
 ---
 
 ### 2. Mobile ↔ Backend
 
-**Protocol**: HTTP/HTTPS (REST API + SSE streaming)
+**Protocol:** HTTP/HTTPS (REST API + SSE streaming).
 
-**Authentication**: OIDC PKCE Flow with Keycloak via `flutter_appauth` (forked)
+**Authentication:** OIDC PKCE flow with Keycloak via the local
+`flutter_appauth` fork (`mobile/genie_ai_mobile/flutter_appauth/`). The fork
+allows `allowInsecureConnections` for dev / self-signed-cert setups (used by
+the El-Salvador deployment).
 
-**Transport Layer**:
-- REST: OpenAPI-generated client (`openapi/`) using `http` package
-- Streaming: Custom `http.Client` with `AuthInterceptor` wrapper for SSE
+**Transport layer**
 
-**Key Integration Details**:
+- REST: OpenAPI-generated client (`openapi_client/lib/api/`) using Dart
+  `http` package.
+- Streaming: custom `http.Client` with `AuthInterceptor` wrapper for SSE
+  parsing (`lib/services/auth/auth_interceptor.dart` + `lib/services/sse_parser.dart`).
 
-- **OpenAPI Client**: Auto-generated from backend JSDoc annotations via `scripts/generate-api-client.sh`
-- **Flavor Configuration**: dev (localhost), e2e, staging, itu (prod) — each with distinct URL schemes and bundle IDs
-- **Token Injection**: `AuthInterceptor` wraps `http.Client` to automatically inject Bearer tokens
-- **SSL Pinning Bypass**: Local `flutter_appauth` fork allows `allowInsecureConnections` for dev self-signed certs
+**Key integration details**
 
-**Primary Endpoints**: Same as Frontend → Backend
+- **OpenAPI client:** auto-generated from backend JSDoc annotations via
+  `scripts/generate-api-client.sh`.
+- **Flavour configuration:** `lib/config/{dev,e2e,staging}_config.dart`
+  defines `dev` (localhost), `e2e`, `staging`; `lib/config/flavors/itu.dart`
+  defines `itu` (prod). Each sets its URL scheme and bundle ID.
+- **Token injection:** `AuthInterceptor` wraps `http.Client` to inject the
+  Bearer token.
+- **SSL pinning bypass:** local `flutter_appauth` fork allows
+  `allowInsecureConnections` for dev self-signed certs.
 
-**Service Code**:
-- Mobile: `lib/providers/api_providers.dart`, `lib/services/auth/auth_interceptor.dart`, `lib/services/keycloak/`
-- Generated Client: `openapi_client/lib/api/`
-- SSE Parser: `lib/services/sse_parser.dart` (parses chunk/metadata/translation/done/error events)
+**Primary endpoints:** same as the web frontend.
+
+**Service code**
+
+- Mobile: `lib/providers/api_providers.dart`, `lib/services/auth/auth_interceptor.dart`,
+  `lib/services/keycloak/`.
+- SSE parser: `lib/services/sse_parser.dart` (parses `chunk` / `metadata` /
+  `translation` / `done` / `error` events).
 
 ---
 
 ### 3. Backend ↔ ArangoDB
 
-**Protocol**: HTTP/HTTPS (arangojs driver)
+**Protocol:** HTTP (ArangoDB HTTP API).
 
-**Driver**: `arangojs` v8.8.1
+**Driver:** `arangojs` v8.8.1, wrapped by the shared library
+`components/shared/lib/` (frozen singleton exported as `dbService`).
 
-**Connection Details**:
+**Connection details**
+
+The actual entry point used by the backend is the shared-library singleton,
+not a raw `arangojs` client:
 
 ```javascript
-const db = new Database({
-  url: process.env.ARANGO_URL || 'http://arango:8529',
-  databaseName: process.env.ARANGO_DB || 'genieai',
-  auth: { username: process.env.ARANGO_USER || 'root', password: process.env.ARANGO_PASSWORD }
-});
+const { logger, dbService } = require('./shared-lib');
+// dbService.query(aql`FOR u IN users RETURN u`)
+// dbService.collection('users').document(userId)
 ```
 
-**Collections Used**:
+Raw `arangojs` is reserved for migrations (`scripts/migrations/*.js`).
 
-| Collection | Type | Purpose | Indexes |
-|------------|------|---------|---------|
-| `users` | Document | User profiles, preferences | `user_id` (unique), `email` (unique) |
+**Collections used**
+
+| Collection | Type | Purpose | Notes |
+|---|---|---|---|
+| `users` | Document | User profiles, preferences | `iss_sub` (unique), `email` |
 | `conversations` | Document | Chat conversation threads | `userId` (persistent), `updatedAt` (TTL) |
 | `messages` | Document | Individual chat messages | `conversationId` (persistent), `timestamp` |
 | `queries` | Document | Query logs and analytics | `userId`, `timestamp`, `categoryId` |
-| `serviceCategories` | Document | Knowledge base categories | `nameEN` (unique) |
+| `serviceCategories` | Document | Knowledge-base categories | `nameEN` (unique) |
 | `services` | Document | Service catalog items | `nameEN` (unique) |
 | `serviceCategoryTranslations` | Document | Category translations | `sourceKey`, `languageCode` |
-| `sessions` | Document | Active user sessions | `userId`, `expiresAt` (TTL) |
+| `sessions` | Document | Active user sessions (server-side session) | `userId`, `expiresAt` (TTL) |
 | `analytics` | Document | Pre-computed analytics | `type`, `period` |
+| `<GRAPH>_SOURCE` (default `GRAPH_SOURCE`) | Document | Chunked documents + vector embeddings | ArangoDB 3.12+ vector indexes on `embedding` |
+| `<GRAPH>_LINKS_TO` (default `GRAPH_LINKS_TO`) | Edge | Knowledge-graph links between chunks | Hybrid retrieval graph |
+| `<GRAPH>_HAS_SOURCE` (default `GRAPH_HAS_SOURCE`) | Edge | Links source documents to chunks | Ingestion-time metadata |
+| `files` | Document | File metadata (managed by document-repository) | `dataprep.status`, `storage_path` |
+| `ingestion_log` | Document | Per-chunk dataprep progress (visible in UI) | `file_id`, `message` |
 
-**Edge Collections (Graph)**:
-- `serviceCategoryTranslationsEdge` — Links translations to source categories
+**Edge collections (graph)**
 
-**Vector Search**:
-- ArangoDB v3.12+ supports vector similarity search on embedded chunks
-- Collections: `chunks` (document embeddings), `chunk_edges` (knowledge graph links)
+- `serviceCategoryTranslationsEdge` — links translations to source categories.
+- `<GRAPH>_LINKS_TO`, `<GRAPH>_HAS_SOURCE` — knowledge-graph relationships
+  (`GRAPH` is `ARANGO_GRAPH_NAME`, default `GRAPH`).
 
-**Service Code**:
-- Database: `shared-lib/database/db.js`, `shared-lib/database/arango-client.js`
-- Migrations: `scripts/migrations/*.js`
+**Vector search:** enabled on `<GRAPH>_SOURCE.embedding` (ArangoDB 3.12+ vector index).
+
+**Service code**
+
+- DB singleton: `components/shared/lib/db-connection-service.js`
+  (loaded via `require('./shared-lib')`).
+- Migrations: `scripts/migrations/*.js`.
 
 ---
 
 ### 4. Backend ↔ Redis
 
-**Protocol**: TCP (Redis protocol)
+**Protocol:** TCP (Redis protocol).
 
-**Driver**: `ioredis` v5.8.2
+**Driver:** `ioredis` v5 (used only by the translation service for caching).
 
-**Connection Details**:
+**Connection details**
 
 ```javascript
+// services/translation-service.js
 const Redis = require('ioredis');
 const redis = new Redis({
-  host: process.env.REDIS_HOST || 'redis',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD
+  host: process.env.TRANSLATION_CACHE_HOST || 'localhost',
+  port: parseInt(process.env.TRANSLATION_CACHE_PORT, 10) || 6379,
+  password: process.env.TRANSLATION_CACHE_PASSWORD || null
 });
 ```
 
-**Use Cases**:
+**Use cases**
 
-| Purpose | Key Pattern | TTL | Example |
-|---------|-------------|-----|---------|
-| Translation Cache | `translation:${lang}:${hash}` | 24h | Cached Google Cloud translations |
-| Session Cache | `session:${userId}` | 7d | User session data |
-| Rate Limiting | `ratelimit:${userId}:${endpoint}` | 1h | Request counters |
-| Analytics Cache | `analytics:${type}:${period}` | 1h | Pre-aggregated metrics |
-| Category Tree | `categories:tree` | 1h | Hierarchical category structure |
+| Purpose | Configured by |
+|---|---|
+| Translation cache (Google Cloud / vLLM translations) | `TRANSLATION_CACHE=on`, `TRANSLATION_CACHE_HOST`, `TRANSLATION_CACHE_PORT`, `TRANSLATION_CACHE_PASSWORD` |
 
-**Service Code**:
-- Cache: `services/cache-service.js`
-- Translation: `services/translation-service.js`
+> **Sessions are NOT in Redis.** `services/session-service.js` stores user
+> sessions in ArangoDB (`sessions` collection). The Redis cache exists only
+> for translation, keyed on `translation:<lang>:<hash>` with a TTL.
 
 ---
 
 ### 5. Backend ↔ ChatQnA (AI/ML Layer)
 
-**Protocol**: HTTP (REST API + SSE streaming)
+**Protocol:** HTTP (REST API + SSE streaming).
 
-**Backend Implementation**: Worker threads via `services/opea-worker.js`
+**Backend implementation:** Worker threads via `services/opea-worker.js`
+(avoids blocking the Node.js event loop during LLM inference).
 
-**ChatQnA Service**: Python FastAPI (port 8888)
+**ChatQnA service:** Python FastAPI (`genie-ai-overlay/chatqna/genieai_chatqna.py`),
+port `8888` (`MEGA_SERVICE_PORT`).
 
-**Request Flow**:
+**Request flow**
 
 ```
 Backend QueryService
   ↓
-POST http://chatqna:8888/v1/chat/completions
+POST http://chatqna:8888/v1/chatqna
   ↓ (worker thread for non-blocking)
 ChatQnA Service
   ↓
@@ -239,12 +306,13 @@ OPEA Microservice Orchestration:
   1. Embedding Service (TEI + BAAI/bge-base-en-v1.5)
   2. Retriever Service (ArangoDB vector + graph traversal)
   3. Reranker Service (Cross-encoder model)
-  4. LLM Service (vLLM + meta-llama/Meta-Llama-3.1-8B-Instruct; recommended ibm-granite/granite-4.1-8b)
+  4. LLM Service (vLLM + meta-llama/Meta-Llama-3.1-8B-Instruct;
+                  recommended ibm-granite/granite-4.1-8b for guided JSON labelling)
   ↓
-Response → Backend → Client (SSE or JSON)
+Response → Backend → Client (SSE chunks or JSON)
 ```
 
-**Request Payload**:
+**Request payload (sent to ChatQnA)**
 
 ```json
 {
@@ -260,7 +328,7 @@ Response → Backend → Client (SSE or JSON)
 }
 ```
 
-**Response (SSE Events)**:
+**Response (SSE events — `routes/query-routes.js`)**
 
 ```javascript
 // Incremental LLM token
@@ -279,240 +347,268 @@ data: {"type":"done","queryId":"abc123"}
 data: {"type":"error","message":"Error description"}
 ```
 
-**Environment Variables**:
+**Environment variables**
 
 | Variable | Purpose | Default |
-|----------|---------|---------|
-| `CHATQNA_SERVICE_HOST_IP` | ChatQnA host | `chatqna` |
-| `CHATQNA_SERVICE_PORT` | ChatQnA port | `8888` |
-| `LLM_SERVER_HOST_IP` | vLLM host | `vllm` |
-| `LLM_SERVER_PORT` | vLLM port | `80` |
-| `EMBEDDING_SERVER_HOST_IP` | TEI embedding host | `tei-embedding` |
-| `EMBEDDING_SERVER_PORT` | TEI embedding port | `80` |
-| `RETRIEVER_SERVICE_HOST_IP` | Retriever host | `retriever` |
-| `RETRIEVER_SERVICE_PORT` | Retriever port | `7000` |
-| `RERANK_SERVER_HOST_IP` | Reranker host | `tei-reranking` |
-| `RERANK_SERVER_PORT` | Reranker port | `80` |
+|---|---|---|
+| `OPEA_HOST` | ChatQnA host (backend side) | `chatqna-xeon-backend-server` (compose) |
+| `OPEA_PORT` | ChatQnA port (backend side) | `8888` |
+| `MEGA_SERVICE_PORT` | ChatQnA port (server-side, ChatQnA bind) | `8888` |
+| `LLM_SERVER_HOST_IP` | vLLM host | `vllm` *(compose override; code default `0.0.0.0`)* |
+| `LLM_SERVER_PORT` | vLLM port | `8000` *(compose override; code default `80`)* |
+| `EMBEDDING_SERVER_HOST_IP` | Embedding host | `embedding` *(compose override; code default `0.0.0.0`)* |
+| `EMBEDDING_SERVER_PORT` | Embedding port | `6000` *(compose override; code default `80`)* |
+| `EMBEDDING_SERVER_ENDPOINT` | Embedding API path | `/v1/embeddings` |
+| `RETRIEVER_SERVICE_HOST_IP` | Retriever host | `retriever-arango-service` *(compose override; code default `0.0.0.0`)* |
+| `RETRIEVER_SERVICE_PORT` | Retriever port | `7000` *(compose override; code default `7025`)* |
+| `RERANK_SERVER_HOST_IP` | Reranker host | `reranker` *(compose override; code default `0.0.0.0`)* |
+| `RERANK_SERVER_PORT` | Reranker port | `8000` *(compose override; code default `80`)* |
+| `RERANKING_STRATEGY` | Slice / threshold / knee_threshold / adaptive | `slice` (compose default; ChatQnA code default `adaptive`) |
+| `RERANKER_TOP_N` | Chunks kept for slice strategy | `3` |
+| `RERANKING_THRESHOLD` | Min reranker score for threshold strategy | `0.9` (ChatQnA default) |
+| `CONFIDENCE_RANK_DECAY` | Exponential weight decay per rank | `0.5` |
+| `MULTI_TURN_BLEND_ENABLED` | Vector-space blending of multi-turn history | `false` |
+| `MULTI_TURN_BLEND_ALPHA` | Query weight α (1.0 = query-only) | `0.7` |
 
-**Service Code**:
-- Backend: `services/opea-worker.js`, `routes/query-routes.js`
-- ChatQnA: `genie-ai-overlay/chatqna/genieai_chatqna.py`
+**Service code**
+
+- Backend: `services/opea-worker.js`, `routes/query-routes.js`,
+  `services/query-service.js`.
+- ChatQnA: `genie-ai-overlay/chatqna/genieai_chatqna.py`.
 
 ---
 
-### 6. Backend ↔ Document Repository
+### 6. Document Repository
 
-**Protocol**: HTTP (REST API, internal Docker network)
+**Protocol:** HTTP (REST API, internal Docker network).
 
-**Purpose**: File upload, virus scanning, document metadata, labeling
+**Purpose:** File upload, virus scanning (ClamAV), document metadata, label
+CRUD.
 
-**Integration Points**:
+**Mounted routes** (in `src/app.js`):
 
-| Backend Endpoint | Doc Repo Endpoint | Purpose |
-|------------------|-------------------|---------|
-| `/api/files` (proxy) | `POST /api/files` | Upload file (multipart/form-data) |
-| Query source documents | `GET /api/files/:id` | Fetch file metadata for citations |
-| Category-driven labeling | `POST /api/labels` | Assign labels to uploaded files |
+- `/api/files` → `routes/fileRoutes.js`
+- `/api/labels` → `routes/labelRoutes.js`
 
-**Document Processing Pipeline**:
+Kong routes `/api/files/*` and `/api/labels/*` directly to
+`document-repository:3001` — the backend is **not** in the path for these.
+
+#### Document processing pipeline
 
 ```
-Backend (POST /api/files)
+Frontend (POST /api/files, multipart)
+  ↓ Kong → document-repository
+  1. ClamAV scan (clamdscan via clamav-node.sh)
+  2. Text extraction (Docling / pdfminer / python-docx)
+  3. Dataprep trigger — chunk, embed, label
+  4. ArangoDB writes (chunks + vectors + knowledge graph edges)
   ↓
-Document Repository (upload endpoint)
-  ↓
-ClamAV (virus scanning)
-  ↓
-Text Extraction (pdfminer, python-docx, etc.)
-  ↓
-Dataprep Service (chunking, embedding)
-  ↓
-ArangoDB (vectors + metadata)
+Frontend polls /api/admin or ingestion_log for progress
 ```
 
-**ClamAV Integration**:
+> **ClamAV operational note:** `clamav-node.sh` shells out to `clamdscan`,
+> which depends on `clamav-daemon` (a `Recommends:` of `clamav`,
+> dropped by `--no-install-recommends`). Production images must keep
+> `clamav-daemon` installed — verify with
+> `docker exec <doc-repo> clamdscan --version` after every image rebuild
+> (Q3-2026 hardening, MR !324).
 
-```javascript
-// Document repository calls ClamAV before storage
-const clamav = require('clamav.js');
-await clamav.scanFile(filePath);
-```
+**Label flow clarification**
 
-**Service Code**:
-- Backend: `routes/file-routes.js`
-- Doc Repo: `components/document-repository/`
+- `POST /api/labels` (and the rest of `/api/labels/*`) is **label CRUD**
+  (define what labels exist).
+- **Assigning labels to uploaded files happens downstream** — dataprep reads
+  the label list from the backend at `/api/service-categories`, decides per
+  chunk (LLM, embedding, or BM25 strategy), and writes the assignment
+  directly to ArangoDB.
 
 ---
 
 ### 7. Backend ↔ Keycloak
 
-**Protocol**: HTTPS (OIDC protocol + Admin API)
+**Protocol:** HTTPS ([OIDC](https://openid.net/connect/) + Keycloak Admin
+REST API).
 
-**Keycloak URLs**:
-- Well-known config: `https://<domain>/auth/realms/<realm>/.well-known/openid-configuration`
-- Token endpoint: `/auth/realms/<realm>/protocol/openid-connect/token`
-- UserInfo: `/auth/realms/<realm>/protocol/openid-connect/userinfo`
-- Admin API: `/auth/admin/realms/<realm>/`
+**Keycloak URLs**
 
-**JWT Validation Flow**:
+- Well-known config: `<KEYCLOAK_URL>/realms/<KEYCLOAK_REALM>/.well-known/openid-configuration`
+- Token endpoint: `<KEYCLOAK_URL>/realms/<KEYCLOAK_REALM>/protocol/openid-connect/token`
+- UserInfo: `<KEYCLOAK_URL>/realms/<KEYCLOAK_REALM>/protocol/openid-connect/userinfo`
+- Admin API: `<KEYCLOAK_URL>/admin/realms/<KEYCLOAK_REALM>/`
+
+#### JWT validation flow
 
 ```javascript
 // middleware/keycloak-auth-middleware.js
 async function authenticate(req, res, next) {
   const token = extractBearerToken(req);
   const decoded = await keycloakAuthService.verifyToken(token);
-
-  // Token contains: sub, email, name, preferred_username, etc.
+  // Token contains: sub, email, name, preferred_username, realm_access.roles
   req.user = decoded;
   req.userId = decoded.sub; // Keycloak subject
-
-  // Auto-provision user in ArangoDB
-  await userProvisioningService.findOrCreate(decoded);
-
+  // Auto-provision user in ArangoDB (provisionUser)
+  await userProvisioningService.provisionUser(decoded);
   next();
 }
 ```
 
-**Token Refresh Flow**:
+The backend validates the JWT signature against Keycloak's [JWKS](https://oauth.net/2/jwk/)
+endpoint (`services/keycloak-auth-service.js`) and checks signature, expiry,
+issuer, and audience.
 
-```javascript
-// Client-side (Frontend/Mobile)
-POST /api/auth/refresh-token
-{
-  "refresh_token": "<refresh-token>"
-}
+#### Token refresh
 
-// Backend → Keycloak
-POST https://<keycloak>/auth/realms/<realm>/protocol/openid-connect/token
-grant_type=refresh_token&refresh_token=<token>&client_id=<client_id>
+**Handled client-side**, not via a backend route. The OIDC client
+(`oidc-client-ts` on the web, `flutter_appauth` on mobile) calls Keycloak
+directly:
+
+```
+Client (oidc-client-ts) → Keycloak /token (grant_type=refresh_token)
+Keycloak → Client: new access_token (used silently for the next call)
 ```
 
-**Admin API Operations**:
+The `POST /api/auth/refresh-token` endpoint does **not** exist in the
+backend. Kong has a placeholder route for it (legacy clients), but the
+backend returns 404 — refresh is always client-side.
+
+#### Admin API operations
 
 | Operation | Endpoint | Purpose |
-|-----------|----------|---------|
+|---|---|---|
 | Get user | `GET /admin/realms/<realm>/users/{id}` | Fetch user profile |
 | Create user | `POST /admin/realms/<realm>/users` | Provision new user |
 | Update user | `PUT /admin/realms/<realm>/users/{id}` | Sync profile changes |
 | Delete user | `DELETE /admin/realms/<realm>/users/{id}` | Deactivate account |
 
-**Service Code**:
-- Backend: `services/keycloak-auth-service.js`, `middleware/keycloak-auth-middleware.js`
-- Frontend: `src/services/keycloakAuthService.js`
-- Mobile: `lib/services/keycloak/keycloak_service.dart`
+**Service code**
+
+- Backend: `services/keycloak-auth-service.js`,
+  `services/keycloak-proxy-service.js`,
+  `middleware/keycloak-auth-middleware.js`,
+  `services/user-provisioning-service.js`.
+- Frontend: `src/services/keycloakAuthService.js`.
+- Mobile: `lib/services/keycloak/keycloak_service.dart`.
 
 ---
 
 ### 8. Client → Kong → Backend (API Gateway)
 
-**Protocol**: HTTPS (TLS termination at NGINX)
+**Protocol:** HTTPS (TLS termination at NGINX).
 
-**Kong Configuration**: `api-gateway-solution/new-config/kong_config.json`
+**Kong configuration:** `api-gateway-solution/new-config/kong_config.json`
+(DB-less declarative; reloaded via `restore-kong-config.sh`).
 
-**Routing Rules**:
+#### Live routes (from `kong_config.json`)
 
-| Route | Service | Backend | Path Handling |
-|-------|---------|---------|---------------|
-| `/api` | express-api | backend:3000 | `strip_path: false` |
-| `/api/auth` | express-api | backend:3000 | `strip_path: false` |
-| `/api/files` | document-repository | document-repository:3001 | `strip_path: false` |
-| `/api/labels` | document-repository | document-repository:3001 | `strip_path: false` |
-| `/auth` | keycloak | keycloak:8080 | `strip_path: true` (rewrites to `/realms/<realm>/...`) |
+| Route | Service | Upstream | `strip_path` |
+|---|---|---|---|
+| `/api` (fallback) | express-api | backend:3000 | false |
+| `/api/auth` | express-api | backend:3000 | false |
+| `/api/auth/login` | express-api | backend:3000 | false (legacy placeholder, returns 404) |
+| `/api/auth/refresh-token` | express-api | backend:3000 | false (legacy placeholder, returns 404) |
+| `/api/me` | express-api | backend:3000 | false |
+| `/api/queries` | express-api | backend:3000 | false |
+| `/api/queries/stream` | express-api | backend:3000 | false |
+| `/api/services` | express-api | backend:3000 | false |
+| `/api/service-categories` | express-api | backend:3000 | false |
+| `/api/database` | express-api | backend:3000 | false |
+| `/api/analytics` | express-api | backend:3000 | false |
+| `/api/logger` | express-api | backend:3000 | false |
+| `/api/security` | express-api | backend:3000 | false |
+| `/api/admin` | express-api | backend:3000 | false |
+| `/api/chat`, `/api/chat/folders/*`, `/api/chat/conversations/*` | express-api | backend:3000 | false |
+| `/api/files`, `/api/files/` | document-repository | document-repository:3001 | false |
+| `/api/labels`, `/api/labels/` | document-repository | document-repository:3001 | false |
+| `/auth` | keycloak | keycloak:8080 | **true** (Kong strips `/auth` before forwarding) |
+| `/grafana` | grafana | grafana:3000 | false |
 
-**SSE Streaming Configuration**:
+#### SSE streaming configuration (critical)
 
-Critical for `/api/queries/stream` — Kong must not buffer the response:
+For `/api/queries/stream` Kong must not buffer the response — chat answers
+would otherwise "hang" until the upstream closes, then dump in one block.
+The current Kong route relies on the **global** plugin defaults; verify the
+`response_buffering` setting on the `queries-stream-route` is `false` and
+`read_timeout` is at least `3600000` (1 hour) before going live.
 
-```json
-{
-  "name": "queries-stream-route",
-  "paths": ["/api/queries/stream"],
-  "response_buffering": false,  // ← REQUIRED for SSE
-  "read_timeout": 3600000       // 1 hour for long-running queries
-}
-```
+> **Failure mode if `response_buffering` is left at the default `true`:**
+> the SSE stream is buffered until the upstream closes — the chat UI appears
+> frozen, then the entire answer dumps at once. Always set `false` for
+> `/api/queries/stream`.
 
-**Kong Plugins Applied**:
+#### Kong plugins applied
 
-| Plugin | Purpose | Configuration |
-|--------|---------|---------------|
-| Rate Limiting | Prevent abuse | 1000 req/min, 10000 req/hour |
-| CORS | Cross-origin headers | Allowed origins from env |
-| JWT (future) | Token validation at gateway | Not currently used (validation at backend) |
-| Prometheus | Metrics export | `/metrics` endpoint |
-| Request Transformer | Headers rewrite | Add `X-Forwarded-For`, etc. |
+| Plugin | Purpose | Notes |
+|---|---|---|
+| Rate Limiting | Prevent abuse | `kong-rate-limit.sh` helper |
+| CORS | Cross-origin headers | `CORS_ALLOWED_ORIGINS` |
+| Prometheus | Metrics export | `/metrics` |
+| Request Transformer | Header rewrite | `X-Forwarded-For`, etc. |
 
-**Health Checks**:
+JWT validation is performed at the backend, not at the gateway (the gateway
+would need Keycloak's JWKS).
+
+#### Health checks
 
 ```bash
-# Kong active health checks (passive)
-curl http://kong:8001/health/enabled
-# Kong checks: 429, 500, 503 → mark target unhealthy
+# From inside the Docker network
+curl -s http://kong:8001/health
+
+# List live routes from anywhere with admin port exposed (internal only)
+curl -s http://kong:8001/routes | jq '.data[].paths'
 ```
 
-**NGINX Configuration** (`api-gateway-solution/nginx/`):
+#### NGINX configuration (`api-gateway-solution/nginx/`)
 
-- TLS termination (SSL certificates)
-- Reverse proxy to Kong (port 8000)
-- Static file serving (if needed)
-- WebSocket/SSE passthrough (proxy_buffering off)
+- TLS termination (SSL certificates from `secrets/ssl/`, gitignored).
+- Reverse proxy to Kong on port 8000.
+- ModSecurity WAF (CRS rules under `modsec-rules/`).
+- WebSocket / SSE passthrough (`proxy_buffering off`).
+- Static SPA file serving (built Vue assets).
 
-**Service Code**:
-- Kong: `api-gateway-solution/new-config/manage-kong-config.sh`
-- NGINX: `api-gateway-solution/nginx/nginx.conf`
+**Service code**
+
+- Kong: `api-gateway-solution/new-config/manage-kong-config.sh`,
+  `api-gateway-solution/new-config/restore-kong-config.sh`.
+- NGINX: `api-gateway-solution/nginx/conf/default.conf`,
+  `api-gateway-solution/nginx/entrypoint.sh`.
 
 ---
 
-### 9. Backend ↔ Translation Services
+### 9. Translation Services
 
-**Protocol**: HTTPS (REST API)
+**Protocol:** HTTPS (REST API).
 
-**Two Translation Backends**:
+#### Two backends, one service
 
-1. **Google Cloud Translation API** (primary, production):
+The `services/translation-service.js` module exposes a single API and
+dispatches to a pluggable backend chosen by `TRANSLATION_BACKEND`:
 
-```javascript
-// services/translation-service.js
-const { TranslationServiceClient } = require('@google-cloud/translate');
-const client = new TranslationServiceClient();
+| Backend | Use case | Source |
+|---|---|---|
+| `cpu` | Offline, sovereign — NLLB-200 via Marian | `services/translation/cpu-translate-backend.js` |
+| `gpu` | vLLM with translateGemma (`google/translategemma-4b-it`) | `services/translation/gpu-translate-backend.js` |
+| `auto` (default) | Try GPU, fall back to CPU on error | dispatcher |
 
-async translate(text, from, to) {
-  const [response] = await client.translateText({
-    parent: `projects/${projectId}/locations/global`,
-    contents: [text],
-    mimeType: 'text/plain',
-    sourceLanguageCode: from,
-    targetLanguageCode: to
-  });
-  return response.translations[0].translatedText;
-}
-```
+The actual translation model is `VLLM_TRANSLATION_MODEL_ID` (e.g.
+`google/gemma-3-4b-it`, `google/translategemma-4b-it`, or
+`google/translategemma-12b-it`). See `env` lines 129-148 for the
+recommended options.
 
-2. **vLLM Translation** (offline, sovereign):
+> **Earlier docs described Google Cloud Translation API as "primary".**
+> That was the case in v1.x; the current production path is vLLM
+> (`TRANSLATION_BACKEND=gpu|auto`) for sovereignty. Google Cloud is not
+> part of the current code path; if you need it, run your own
+> `cpu-translate-backend` that calls the Google API.
 
-```javascript
-// Calls vLLM service directly (bypasses OPEA translation proxy)
-const VLLM_TRANSLATION_ENDPOINT = process.env.VLLM_TRANSLATION_ENDPOINT;
-// Model: google/gemma-3-1b-it or similar
-
-async translate(text, from, to) {
-  const response = await axios.post(`${VLLM_TRANSLATION_ENDPOINT}/v1/chat/completions`, {
-    model: process.env.VLLM_TRANSLATION_MODEL_ID,
-    messages: [{ role: 'user', content: `Translate to ${to}: ${text}` }]
-  });
-  return response.choices[0].message.content;
-}
-```
-
-**Backend Endpoints**:
+#### Backend endpoints
 
 | Endpoint | Purpose | Method |
-|----------|---------|--------|
+|---|---|---|
 | `/api/translate` | Translate plain text | POST |
 | `/api/translate/markdown` | Translate Markdown (preserves formatting) | POST |
-| `/api/queries/stream` | Auto-translate response (SSE event: `translation`) | POST |
+| `/api/queries/stream` | Auto-translate response (SSE event `translation`) | POST |
 
-**Translation Flow in SSE**:
+#### Translation flow in SSE
 
 ```
 ChatQnA returns English response
@@ -526,80 +622,87 @@ Backend sends translation event (type: "translation")
 Frontend/Mobile replaces content with translated text
 ```
 
-**Environment Variables**:
+When `STREAMING_TRANSLATION_ENABLED=1`, the translation is streamed
+*during* generation (issue #829) instead of an English-then-flip pattern.
+
+#### Environment variables
 
 | Variable | Purpose | Default |
-|----------|---------|---------|
-| `GOOGLE_CLOUD_PROJECT` | GCP project ID | - |
-| `GOOGLE_CLOUD_CREDENTIALS` | GCP service account key | - |
-| `VLLM_TRANSLATION_ENDPOINT` | vLLM translation URL | - |
-| `VLLM_TRANSLATION_MODEL_ID` | Translation model | `google/gemma-3-1b-it` |
-| `TRANSLATION_BACKEND` | `google` or `vllm` | `google` |
+|---|---|---|
+| `TRANSLATION_BACKEND` | `auto` / `gpu` / `cpu` | `auto` |
+| `VLLM_TRANSLATION_ENDPOINT` | vLLM translation URL (ChatQnA path) | `http://vllm-translation-guardrail:9031` |
+| `VLLM_TRANSLATION_MODEL_ID` | Translation model | `google/gemma-3-4b-it` |
+| `TRANSLATION_CACHE` | `on` enables Redis cache | (unset / off) |
+| `TRANSLATION_CACHE_HOST` | Redis host for cache | `localhost` |
+| `TRANSLATION_CACHE_PORT` | Redis port | `6379` |
+| `TRANSLATION_CACHE_PASSWORD` | Redis password | (none) |
+| `STREAMING_TRANSLATION_ENABLED` | Stream translation during generation | `0` |
+| `TRANSLATION_THREADS` | CPU thread pool size | `4` |
+| `TRANSLATION_BATCHES` | Parallel batches | `5` |
 
-**Service Code**:
-- Backend: `services/translation-service.js`
+**Service code:** `services/translation-service.js`,
+`services/translation/cpu-translate-backend.js`,
+`services/translation/gpu-translate-backend.js`.
 
 ---
 
 ### 10. Dataprep ↔ ArangoDB (Document Ingestion)
 
-**Protocol**: HTTP (arangojs driver) + internal OPEA orchestration
+**Protocol:** HTTP (`arangojs` driver) + internal OPEA orchestration.
 
-**Purpose**: Chunk, embed, and store documents from Document Repository
+**Purpose:** chunk, embed, and label documents from the document-repository.
 
-**Dataprep Pipeline**:
+#### Dataprep pipeline
 
 ```
 Document Repository (triggers ingestion)
   ↓
-Dataprep Service receives document URL
+Dataprep Service (dataprep-arango-service:5000)
   ↓
 Content Extraction (Docling, pdfminer, etc.)
   ↓
 Text Splitting (RecursiveCharacterTextSplitter)
   ↓
-Label Assignment (LLM-based or embedding-based)
+Label Assignment (LLM-based / embedding-based / BM25)
   ↓
 Embedding Generation (TEI service)
   ↓
 ArangoDB Storage:
-  - chunks collection (document + vector)
-  - chunk_edges (knowledge graph links)
+  - `<GRAPH>_SOURCE` collection (document + vector)
+  - `<GRAPH>_LINKS_TO` edges (knowledge-graph links)
+  - `<GRAPH>_HAS_SOURCE` edges (links source docs to chunks)
+  - ingestion_log (per-chunk progress)
 ```
 
-**Labeling Strategies**:
+#### Labelling strategies (illustrative — actual code in `genieai_dataprep_arangodb.py`)
 
-1. **LLM-based** (default, requires `VLLM_TRANSLATION_ENDPOINT`):
+1. **LLM-based** (default for `LABELING_STRATEGY=llm`): the LLM is asked
+   to assign 1–4 relevant labels per chunk. The system prompt is
+   `LABEL_SELECTOR_SYSTEM_PROMPT` (ENV-tunable).
+2. **Embedding-based** (`LABELING_STRATEGY=embedding`): cosine similarity
+   between the chunk embedding and label embeddings; threshold
+   `EMBEDDING_LABEL_THRESHOLD`.
+3. **BM25-based** (`LABELING_STRATEGY=bm25`): keyword scoring against the
+   label text.
 
-```python
-# Uses LLM to assign 1-4 relevant labels per chunk
-LABEL_SELECTOR_SYSTEM_PROMPT = """
-You are a precise semantic labeler for a RAG knowledge graph.
-Assign 1-4 MOST RELEVANT labels from: {labels_list}
-...
-"""
-```
+The actual code lives in
+`genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`; the snippets in
+earlier docs were abridged. Read the source for the live defaults.
 
-2. **Embedding-based** (fallback, cosine similarity):
+#### Contextual retrieval (optional)
 
-```python
-# Compares chunk embedding to label embeddings
-if similarity > EMBEDDING_LABEL_THRESHOLD:
-    assign_label()
-```
+`CONTEXTUAL_RETRIEVAL_ENABLED=true` (default) prepends an LLM-generated
+context prefix to each chunk before embedding and labelling. Two modes:
+`per_chunk` (default; one call per chunk) or `doc_level` (one call per doc).
+See `DATAPREP_CONTEXTUAL_MAX_TOKENS` (default `512`) — earlier docs
+hardcoded `200`, which truncated JSON under vLLM load and caused
+`JSONDecodeError` → raw-chunk fallback.
 
-3. **BM25-based** (keyword matching):
+#### Authentication
 
-```python
-# Uses BM25Okapi for keyword-based labeling
-if score > BM25_LABEL_THRESHOLD:
-    assign_label()
-```
-
-**Authentication**:
-
-- Dataprep uses **service account** (client_credentials grant) to call backend
-- Obtains labels from `/api/service-categories` endpoint
+Dataprep uses a **service account** (`client_credentials` grant) to call
+the backend. It obtains labels from `/api/service-categories`. The service
+account is provisioned in Keycloak via `keycloak-config-cli`:
 
 ```python
 # genie-ai-overlay/dataprep/keycloak_service_account.py
@@ -616,25 +719,28 @@ async def get_service_account_token():
             return await response.json()
 ```
 
-**Service Code**:
-- Dataprep: `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`
-- Keycloak SA: `genie-ai-overlay/dataprep/keycloak_service_account.py`
+**Service code**
+
+- Dataprep: `genie-ai-overlay/dataprep/genieai_dataprep_arangodb.py`,
+  `genieai_dataprep_microservice.py`.
+- Keycloak SA: `genie-ai-overlay/dataprep/keycloak_service_account.py`.
 
 ---
 
 ## Communication Protocols
 
-### HTTP/REST
+### HTTP / REST
 
-All synchronous request-response communication uses REST APIs over HTTP/HTTPS:
+All synchronous request-response communication uses REST APIs over
+HTTP/HTTPS:
 
-- **Frontend/Mobile → Backend**: Axios (JS), http package (Dart)
-- **Backend → ChatQnA**: Axios (Node.js)
-- **Backend → Document Repository**: Axios (Node.js)
-- **Backend → Keycloak**: Axios (Node.js)
-- **Backend → Translation**: Google Cloud SDK or Axios (vLLM)
+- Frontend/Mobile → Backend: Axios (JS), `http` package (Dart).
+- Backend → ChatQnA: Axios (Node.js).
+- Backend → Document Repository: Axios (Node.js).
+- Backend → Keycloak: Axios (Node.js).
+- Backend → Translation: Axios (Node.js).
 
-**Standard Response Format**:
+**Standard response format**
 
 ```json
 {
@@ -647,7 +753,7 @@ All synchronous request-response communication uses REST APIs over HTTP/HTTPS:
 }
 ```
 
-**Error Response Format**:
+**Error response format**
 
 ```json
 {
@@ -659,25 +765,23 @@ All synchronous request-response communication uses REST APIs over HTTP/HTTPS:
 }
 ```
 
----
-
 ### Server-Sent Events (SSE)
 
-**Use Case**: Real-time streaming of LLM responses from ChatQnA
+**Use case:** Real-time streaming of LLM responses from ChatQnA.
 
-**Endpoint**: `POST /api/queries/stream`
+**Endpoint:** `POST /api/queries/stream`
 
-**Event Types**:
+**Event types**
 
 | Type | Payload | Purpose |
-|------|---------|---------|
+|---|---|---|
 | `chunk` | `{ content: "text" }` | Incremental LLM token |
 | `metadata` | `{ source_documents: [...], confidence_score: 0.85 }` | Citation + confidence |
 | `translation` | `{ content: "translated text" }` | Final translation (replaces chunks) |
 | `done` | `{ queryId: "abc123" }` | Stream complete |
 | `error` | `{ message: "Error description" }` | Stream-level error |
 
-**SSE Format**:
+**SSE format**
 
 ```
 data: {"type":"chunk","content":"Hello"}
@@ -687,9 +791,10 @@ data: {"type":"metadata","source_documents":[...],"confidence_score":0.9}
 data: {"type":"done","queryId":"abc123"}
 ```
 
-**Keepalive**: SSE comments (`: ping`) sent every 15s to prevent connection timeout.
+**Keepalive:** SSE comments (`: ping`) sent every 15s to prevent connection
+timeout.
 
-**Frontend Implementation** (Fetch API):
+**Frontend implementation (Fetch API)**
 
 ```javascript
 const response = await fetch('/api/queries/stream', {
@@ -716,7 +821,7 @@ while (true) {
 }
 ```
 
-**Mobile Implementation** (http.Client):
+**Mobile implementation (`http.Client.send` + `SseParser`)**
 
 ```dart
 final request = http.Request('POST', Uri.parse('$baseUrl/api/queries/stream'))
@@ -729,46 +834,30 @@ final streamedResponse = await httpClient.send(request);
 await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
   for (final event in SseParser.parseChunk(chunk)) {
     switch (event) {
-      case SseChunkEvent():
-        appendContent(event.content);
-      case SseMetadataEvent():
-        updateSources(event.sourceDocuments);
-      case SseTranslationEvent():
-        replaceContent(event.content);
-      case SseDoneEvent():
-        saveQuery(event.queryId);
-      case SseErrorEvent():
-        showError(event.message);
+      case SseChunkEvent():        appendContent(event.content);
+      case SseMetadataEvent():     updateSources(event.sourceDocuments);
+      case SseTranslationEvent():  replaceContent(event.content);
+      case SseDoneEvent():         saveQuery(event.queryId);
+      case SseErrorEvent():        showError(event.message);
     }
   }
 }
 ```
 
-**Kong Configuration** (CRITICAL):
-
-```json
-{
-  "name": "queries-stream-route",
-  "response_buffering": false,  // ← Must be false for SSE
-  "read_timeout": 3600000       // 1 hour
-}
-```
-
----
-
 ### Direct Database Connections
 
-**Backend → ArangoDB**: arangojs driver (HTTP-based)
+- Backend → ArangoDB: `arangojs` driver (HTTP-based).
+- Backend → Redis: `ioredis` driver (TCP-based) — translation cache only.
+- Document-repository → ArangoDB: `arangojs` (file metadata, ingestion_log).
 
-**Backend → Redis**: ioredis driver (TCP-based)
-
-**No other services** connect directly to databases — all access goes through the Backend API.
+**No other service** connects directly to databases — all access goes
+through either the backend or document-repository.
 
 ---
 
 ## Data Flow Diagrams
 
-### RAG Pipeline Flow
+### RAG pipeline flow
 
 ```
 ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌────────────┐
@@ -782,39 +871,26 @@ await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
      │                 │                 │ POST /v1/chat/completions
      │                 │                 │───────────────────>│
      │                 │                 │                   │
-     │                 │                 │    Orchestration:
-     │                 │                 │                   │
-     │                 │                 │    1. Embedding
-     │                 │                 │       <───────┐
-     │                 │                 │                   │
+     │                 │                 │    Orchestration: │
+     │                 │                 │    1. Embedding   │
      │                 │                 │    2. Retrieval (ArangoDB)
-     │                 │                 │                   │
-     │                 │                 │    3. Reranking
-     │                 │                 │                   │
+     │                 │                 │    3. Reranking   │
      │                 │                 │    4. LLM Inference
      │                 │                 │                   │
      │ SSE: chunk      │                 │<──────────────────│
      │<─────────────────────────────────│                   │
-     │                 │                 │                   │
      │ SSE: chunk      │                 │<──────────────────│
      │<─────────────────────────────────│                   │
-     │                 │                 │                   │
      │ SSE: metadata   │                 │<──────────────────│
      │<─────────────────────────────────│                   │
-     │                 │                 │                   │
      │ SSE: done       │                 │<──────────────────│
      │<─────────────────────────────────│                   │
-     │                 │                 │                   │
      │ Backend translates (if needed)    │                   │
-     │                 │                 │                   │
-     │ SSE: translation│                 │                   │
+     │ SSE: translation                 │                   │
      │<─────────────────────────────────│                   │
-     │                 │                 │                   │
 ```
 
----
-
-### Authentication Flow
+### Authentication flow
 
 ```
 ┌─────────┐       ┌─────────┐       ┌─────────┐       ┌──────────┐
@@ -822,140 +898,108 @@ await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
 │ (Web/Mobile) │   │ (OIDC)  │   │ (API)   │       │          │
 └────┬────┘       └────┬────┘       └────┬────┘       └────┬─────┘
      │                 │                 │                 │
-     │ 1. OIDC Authorize                │                 │
-     │────────────────>│                 │                 │
-     │                 │                 │                 │
-     │ 2. User logs in                  │                 │
-     │                 │                 │                 │
-     │ 3. Redirect + code               │                 │
-     │<────────────────│                 │                 │
-     │                 │                 │                 │
-     │ 4. POST /api/auth/callback       │                 │
-     │    { code }                      │                 │
-     │─────────────────────────────────>│                 │
-     │                 │                 │                 │
-     │                 │ 5. Token exchange│                 │
-     │                 │────────────────>│                 │
-     │                 │                 │                 │
-     │                 │ 6. JWT (access + refresh)
-     │                 │<────────────────│                 │
-     │                 │                 │                 │
-     │ 7. Return JWT   │                 │                 │
-     │<─────────────────────────────────│                 │
-     │                 │                 │                 │
-     │ 8. Store token  │                 │                 │
-     │    (localStorage/secure storage)  │                 │
-     │                 │                 │                 │
-     │ 9. API request with Bearer token  │                 │
-     │─────────────────────────────────>│                 │
-     │                 │                 │                 │
-     │                 │                 │ 10. Validate JWT
-     │                 │                 │────────────────>│
-     │                 │                 │                 │
-     │                 │                 │ 11. Provision user
-     │                 │                 │<────────────────│
-     │                 │                 │                 │
-     │ 12. Response    │                 │                 │
-     │<─────────────────────────────────│                 │
-     │                 │                 │                 │
+     │ 1. OIDC Authorize (Keycloak /auth)               │
+     │────────────────>│                                 │
+     │                 │                                 │
+     │ 2. User logs in                                  │
+     │                 │                                 │
+     │ 3. Redirect + auth code                          │
+     │<────────────────│                                 │
+     │                 │                                 │
+     │ 4. Token exchange (oidc-client-ts → Keycloak)    │
+     │                 │   (NOT a backend callback —     │
+     │                 │    the OIDC client handles it)  │
+     │ 5. JWT (access + refresh)                         │
+     │<────────────────│                                 │
+     │                 │                                 │
+     │ 6. Store token in JS memory (NEVER localStorage)  │
+     │                 │                                 │
+     │ 7. API request with Authorization: Bearer <jwt>  │
+     │─────────────────────────────────>                │
+     │                 │                                 │
+     │                 │ 8. Validate JWT against JWKS    │
+     │                 │────────────────────────────────>│
+     │                 │                                 │
+     │                 │ 9. Provision user (provisionUser)│
+     │                 │────────────────────────────────>│
+     │                 │                                 │
+     │ 10. Response    │                                 │
+     │<─────────────────────────────────                 │
 ```
 
-**Token Refresh** (automatic before expiry):
+**Token refresh** is automatic before expiry and handled entirely
+client-side by `oidc-client-ts` / `flutter_appauth`:
 
 ```
-Client → Backend: POST /api/auth/refresh-token { refresh_token }
-Backend → Keycloak: POST /token (grant_type=refresh_token)
-Keycloak → Backend: New access_token
-Backend → Client: New JWT
+Client (oidc-client-ts) → Keycloak /token (grant_type=refresh_token)
+Keycloak → Client: new access_token (used silently for the next call)
 ```
 
----
-
-### SSE Streaming Flow
+### SSE streaming flow
 
 ```
 ┌────────┐       ┌────────┐       ┌────────┐       ┌──────────┐
 │ Client │       │ Kong   │       │ Backend │       │ ChatQnA  │
-│ (SSE) │       │ Gateway │   │ (Proxy) │   │ (OPEA)   │
+│ (SSE)  │       │ Gateway │   │ (Proxy) │       │ (OPEA)   │
 └───┬────┘       └───┬────┘       └───┬────┘       └────┬─────┘
     │                │                │                 │
     │ POST /api/queries/stream       │                 │
     │────────────────────────────────>│                 │
-    │                │                │                 │
     │                │                │ POST /v1/chat/completions
     │                │                │─────────────────>│
     │                │                │                 │
     │                │                │<─ SSE: chunk ───│
     │ SSE: chunk     │                │                 │
     │<───────────────│                │                 │
-    │                │                │                 │
     │                │                │<─ SSE: chunk ───│
     │ SSE: chunk     │                │                 │
     │<───────────────│                │                 │
-    │                │                │                 │
     │                │                │<─ SSE: metadata │
     │ SSE: metadata  │                │                 │
     │<───────────────│                │                 │
-    │                │                │                 │
     │                │                │<─ SSE: done ────│
     │ SSE: done      │                │                 │
     │<───────────────│                │                 │
-    │                │                │                 │
     │                │                │ Backend: translationService.translate()
     │                │                │                 │
     │ SSE: translation                │                 │
     │<───────────────│                │                 │
-    │                │                │                 │
 ```
 
-**Client Handling**:
-
-- **Web (Vue)**: Fetch API + `ReadableStream` reader
-- **Mobile (Flutter)**: `http.Client.send()` + `SseParser`
-
----
-
-### Document Ingestion Flow
+### Document ingestion flow
 
 ```
 ┌──────────────┐       ┌──────────────────┐       ┌──────────┐
 │ Admin User   │       │ Document Repo    │       │ Dataprep │
-│ (Backend API)│   │   │              │   │          │
+│ (Browser)    │       │   :3001          │       │ :5000    │
 └──────┬───────┘       └────┬─────────────┘       └────┬─────┘
        │                     │                         │
        │ POST /api/files     │                         │
+       │ (multipart)         │                         │
        │────────────────────>│                         │
        │                     │                         │
        │                     │ 1. ClamAV scan          │
-       │                     │    ┌─────┐             │
-       │                     │    │ClamAV│             │
-       │                     │    └─────┘             │
+       │                     │    (clamdscan)          │
        │                     │                         │
-       │                     │ 2. Extract text        │
+       │                     │ 2. Extract text         │
        │                     │    (Docling, etc.)      │
        │                     │                         │
-       │ { fileId, metadata }│                         │
+       │ { fileId, metadata } │                         │
        │<────────────────────│                         │
        │                     │                         │
        │                     │ 3. Trigger ingestion    │
        │                     │────────────────────────>│
        │                     │                         │
-       │                     │ 4. Fetch labels (Backend)
-       │                     │    ┌─────────┐          │
-       │                     │    │ Backend │          │
-       │                     │    └─────────┘          │
+       │                     │ 4. Fetch labels         │
+       │                     │    GET /api/service-categories
+       │                     │    (Keycloak SA token)  │
        │                     │                         │
        │                     │ 5. Chunk content        │
        │                     │ 6. Assign labels        │
-       │                     │ 7. Generate embeddings   │
-       │                     │    ┌──────┐             │
-       │                     │    │  TEI │             │
-       │                     │    └──────┘             │
+       │                     │ 7. Generate embeddings  │
+       │                     │    (TEI)                │
        │                     │                         │
        │                     │ 8. Store in ArangoDB    │
-       │                     │    ┌──────────┐         │
-       │                     │    │ ArangoDB │         │
-       │                     │    └──────────┘         │
        │                     │                         │
        │ { ingestionStatus } │                         │
        │<────────────────────│                         │
@@ -963,36 +1007,75 @@ Backend → Client: New JWT
 
 ---
 
+## Authentication & Authorization
+
+### Transport security
+
+| Layer | Protocol | Termination |
+|---|---|---|
+| External → NGINX | HTTPS (TLS 1.3) | NGINX |
+| NGINX → Kong | HTTP (internal) | — |
+| Kong → Services | HTTP (internal) | — |
+| Services → Databases | HTTP/HTTPS (internal) | — |
+
+**Internal network:** Docker bridge network (`genieai_network`) — all
+inter-service traffic is unencrypted within the cluster.
+
+**SSL certificates:** stored in `secrets/ssl/` (gitignored).
+
+### Authentication
+
+| Service | Method | Token source |
+|---|---|---|
+| Frontend/Mobile → Backend | Bearer JWT | Keycloak OIDC |
+| Backend → Keycloak (Admin API) | Bearer JWT | Service account |
+| Dataprep → Backend | Bearer JWT | Service account (`client_credentials`) |
+| Backend → ArangoDB | Basic auth | `ARANGO_USER` / `ARANGO_PASSWORD` |
+| Backend → Redis | Optional password | `TRANSLATION_CACHE_PASSWORD` |
+
+**JWT validation:** backend validates the JWT signature against the Keycloak
+JWKS endpoint (`services/keycloak-auth-service.js`); checks signature,
+expiry, issuer, audience.
+
+### Authorization
+
+**Role-Based Access Control (RBAC):** Keycloak realm roles.
+
+| Role | Permissions |
+|---|---|
+| `user` (default) | Chat, profile management, own analytics |
+| `admin` | Document upload, label management, all analytics |
+| `service-account` | Dataprep (label fetch only) |
+
+### CORS configuration
+
+**Kong Gateway:** applied at the gateway level (`CORS_ALLOWED_ORIGINS`).
+
+**Backend dev mode:** `cors()` middleware (effectively bypassed in
+production because Kong is in front).
+
+---
+
 ## Service Discovery & Routing
 
-### Docker Compose (Single-Node)
+### Docker Compose (single-node)
 
-**Service Naming**: Docker internal DNS (service names as hostnames)
+**Service naming:** Docker internal DNS (service names as hostnames).
 
 ```yaml
 services:
   backend:
     # Accessible as "http://backend:3000" from other containers
-
   chatqna:
-    # Accessible as "http://chatqna:8888"
+    # Accessible as "http://chatqna-xeon-backend-server:8888"
 ```
 
-**Environment Variables**: Each service reads its dependencies from `env` file:
+**Environment variables:** each service reads its dependencies from the
+`env` file (Docker Compose passes them via `env_file` or `environment:`).
 
-```bash
-BACKEND_SERVICE_URL=http://backend:3000
-CHATQNA_SERVICE_HOST_IP=chatqna
-CHATQNA_SERVICE_PORT=8888
-ARANGO_URL=http://arango:8529
-REDIS_HOST=redis
-```
+### Docker Swarm (multi-node)
 
----
-
-### Docker Swarm (Multi-Node)
-
-**Service Placement**: Node labels control where services run:
+**Service placement:** node labels control where services run.
 
 ```bash
 docker node update --label-add gpu=true <gpu-node>
@@ -1000,7 +1083,7 @@ docker node update --label-add gateway=true <gateway-node>
 docker node update --label-add genieai=true <genieai-node>
 ```
 
-**Placement Constraints** (docker-compose.yaml):
+**Placement constraints** (`docker-compose.yaml`):
 
 ```yaml
 deploy:
@@ -1008,47 +1091,46 @@ deploy:
     constraints:
       - node.labels.gateway == true  # Kong, NGINX
       - node.labels.genieai == true  # Backend, Frontend
-      - node.labels.gpu == true      # vLLM, TEI
+      - node.labels.gpu == true      # vLLM, TEI, ChatQnA, dataprep-arango, retriever-arango
 ```
 
-**Service Discovery**: Swarm internal DNS + overlay network (`genieai_network`)
+**Service discovery:** Swarm internal DNS + overlay network (`genieai_network`).
 
----
+### Kong gateway routing
 
-### Kong Gateway Routing
+**Static configuration:** `api-gateway-solution/new-config/kong_config.json`.
 
-**Static Configuration**: `api-gateway-solution/new-config/kong_config.json`
+**Verify the live Kong routes match the file** (useful after a deploy):
 
-**Service Definitions**:
-
-```json
-{
-  "services": [
-    { "name": "express-api", "host": "backend", "port": 3000 },
-    { "name": "document-repository", "host": "document-repository", "port": 3001 },
-    { "name": "keycloak", "host": "keycloak", "port": 8080 }
-  ]
-}
+```bash
+# From a container with access to the kong network:
+docker exec <kong-container> curl -s http://localhost:8001/routes | jq '.data[].paths[]'
+# or, from the host:
+docker exec <kong-container> curl -s http://localhost:8001/routes | jq '.data[].paths[]'
 ```
 
-**Route Definitions**: Prefix-based routing (all routes have `strip_path: false`)
+Compare against `jq '.routes[].paths' api-gateway-solution/new-config/kong_config.json`.
 
-**Health Checks**: Kong passive health checking (429, 500, 503 → mark unhealthy)
+**Service definitions:** Kong has 4 services (`express-api`,
+`document-repository`, `keycloak`, `grafana`) — see the [live routes
+table](#live-routes-from-kong_configjson) above.
 
-**Load Balancing**: Round-robin algorithm (default)
+**Health checks:** Kong passive health checking (429, 500, 503 → mark
+unhealthy); active checks are configured but disabled by default.
+
+**Load balancing:** round-robin (default).
 
 ---
 
 ## Error Handling & Resilience
 
-### Backend Error Handling
+### Backend error handling
 
-**Global Error Handler** (`middleware/error-handler.js`):
+**Global error handler** (inline in `index.js`):
 
 ```javascript
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   logger.error('Unhandled error', { error: err.message, stack: err.stack });
-
   res.status(err.status || 500).json({
     error: {
       code: err.code || 'INTERNAL_SERVER_ERROR',
@@ -1059,7 +1141,7 @@ app.use((err, req, res, next) => {
 });
 ```
 
-**OPEA Worker Error Handling** (`services/opea-worker.js`):
+**OPEA worker error handling** (`services/opea-worker.js`):
 
 ```javascript
 try {
@@ -1073,162 +1155,60 @@ try {
 }
 ```
 
----
-
-### Timeout Configurations
+### Timeout configurations
 
 | Service | Timeout | Reason |
-|---------|---------|--------|
+|---|---|---|
 | Kong → Backend | 60s (read) | Standard API calls |
 | Kong → Backend (stream) | 3600s (1h) | SSE long-running queries |
 | Backend → ChatQnA | 120s | LLM inference time |
-| Backend → Translation | 180s | Google Cloud API |
+| Backend → Translation | 3600s (1h) | Long documents (translation-service.js: hardcoded 3600000ms) |
 | Backend → ArangoDB | 30s | Database queries |
-| Backend → Redis | 5s | Cache operations |
 
----
+### Retry logic
 
-### Retry Logic
+**Backend → OPEA services:** no retry logic is implemented today. The
+OPEA worker (`components/gov-chat-backend/services/opea-worker.js`) uses a
+hard 120s axios timeout (`timeout: 120000`). Add retries only when there
+is a real outage to mitigate.
 
-**Backend → OPEA Services**: Exponential backoff with max 3 retries
+**Kong → Backend:** passive retry (mark unhealthy, retry after health check
+passes).
 
-```javascript
-const retry = require('async-retry');
+### Circuit breakers
 
-await retry(
-  async (bail) => {
-    try {
-      return await axios.post(url, payload);
-    } catch (err) {
-      if (err.response?.status === 400) bail(err); // Don't retry client errors
-      throw err;
-    }
-  },
-  { retries: 3, minTimeout: 1000, maxTimeout: 5000 }
-);
-```
+**Kong:** passive health checking (no active circuit-breaker plugin
+configured).
 
-**Kong → Backend**: Passive retry (mark unhealthy, retry after health check passes)
-
----
-
-### Circuit Breakers
-
-**Kong**: Passive health checking (no active circuit breaker plugin configured)
-
-**Backend**: Manual circuit breaking for OPEA services (planned)
-
-```javascript
-// Future: Use opossum or circuit-breaker package
-const breaker = new CircuitBreaker(opeaWorkerCall, {
-  timeout: 120000,
-  errorThresholdPercentage: 50,
-  resetTimeout: 30000
-});
-```
+**Backend:** **no circuit breaker is wired today.** Earlier docs showed a
+proposed snippet using `opossum` or `circuit-breaker`; that is not yet in
+production. Add one only when there is a real outage to mitigate.
 
 ---
 
 ## Security Considerations
 
-### Transport Security
+### Secrets management
 
-| Layer | Protocol | Termination |
-|-------|----------|-------------|
-| External → NGINX | HTTPS (TLS 1.3) | NGINX |
-| NGINX → Kong | HTTP (internal) | - |
-| Kong → Services | HTTP (internal) | - |
-| Services → Databases | HTTP/HTTPS (internal) | - |
-
-**Internal Network**: Docker bridge network (`genieai_network`) — all inter-service traffic is unencrypted within the cluster.
-
-**SSL Certificates**: Stored in `secrets/ssl/` (gitignored)
-
----
-
-### Authentication
-
-| Service | Method | Token Source |
-|---------|--------|--------------|
-| Frontend/Mobile → Backend | Bearer JWT | Keycloak OIDC |
-| Backend → Keycloak (Admin API) | Bearer JWT | Service account |
-| Dataprep → Backend | Bearer JWT | Service account (client_credentials) |
-| Backend → ArangoDB | Basic auth | `ARANGO_USER` / `ARANGO_PASSWORD` |
-| Backend → Redis | (optional) | `REDIS_PASSWORD` |
-
-**JWT Validation**: Backend validates JWT signature against Keycloak JWKS endpoint
-
-```javascript
-const decoded = await keycloakAuthService.verifyToken(token);
-// Checks: signature, expiry, issuer, audience
-```
-
----
-
-### Authorization
-
-**Role-Based Access Control (RBAC)**: Keycloak realm roles
-
-| Role | Permissions |
-|------|-------------|
-| `user` (default) | Chat, profile management, analytics (own data) |
-| `admin` | Document upload, label management, all analytics |
-| `service-account` | Dataprep (label fetch only) |
-
-**Endpoint Protection**:
-
-```javascript
-// Example: Admin-only endpoint
-router.post('/files', upload.single('file'), async (req, res, next) => {
-  if (!req.user.realm_access.roles.includes('admin')) {
-    return res.status(403).json({ error: 'FORBIDDEN' });
-  }
-  // ...
-});
-```
-
----
-
-### CORS Configuration
-
-**Kong Gateway**: Applied at gateway level
-
-```json
-{
-  "cors": {
-    "origins": ["https://example.com"], // From env
-    "methods": ["GET", "POST", "PATCH", "DELETE"],
-    "headers": ["Authorization", "Content-Type"],
-    "credentials": true
-  }
-}
-```
-
-**Backend Development Mode**: `cors()` middleware (disabled in production via Kong)
-
----
-
-### Secrets Management
-
-**Environment Variables** (`.env` file, gitignored):
+**Environment variables** (`.env` file, gitignored):
 
 ```bash
 # Database passwords
 ARANGO_PASSWORD=...
 POSTGRES_PASSWORD=...
-REDIS_PASSWORD=...
+TRANSLATION_CACHE_PASSWORD=...   # only used when TRANSLATION_CACHE=on
 
 # Keycloak secrets
 KEYCLOAK_ADMIN_PASSWORD=...
 KEYCLOAK_CLIENT_SECRET=...
 KC_DATAPREP_CLIENT_SECRET=...
+KEYCLOAK_PROXY_CLIENT_SECRET=...
 
 # API keys
 HUGGING_FACE_HUB_TOKEN=...
-GOOGLE_CLOUD_CREDENTIALS=...
 ```
 
-**Docker Secrets** (Swarm mode):
+**Docker secrets** (Swarm mode):
 
 ```bash
 echo "secret_value" | docker secret create arango_password -
@@ -1238,151 +1218,65 @@ secrets:
     external: true
 ```
 
----
+### Rate limiting
 
-### Rate Limiting
-
-**Kong Plugin**: Applied globally
+**Kong plugin:** applied globally (`kong-rate-limit.sh`).
 
 ```json
 {
   "rate_limiting": {
-    "minute": 1000,   // 1000 requests/min
-    "hour": 10000,    // 10000 requests/hour
-    "policy": "redis",
-    "redis_host": "redis",
-    "redis_port": 6379
+    "minute": 1000,
+    "hour": 10000,
+    "policy": "local",
+    "limit_by": "consumer"
   }
 }
 ```
 
-**Backend Rate Limiting**: `express-rate-limit` (fallback, not used in production)
+**Backend rate limiting:** `express-rate-limit` is available as a
+fallback, but is not active in production (Kong handles it).
 
-```javascript
-const rateLimit = require('express-rate-limit');
+### Monitoring & Observability
 
-const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100 // 100 requests per minute
-});
+**Logging**
 
-app.use('/api/', limiter);
-```
+- Backend: Winston with daily rotation (`components/shared/lib/logger.js`).
+- Frontend: console (dev only).
+- Mobile: `talker` logger (local file + stderr).
+- OPEA services: Python `logging` module.
 
----
+**Centralised log storage:** VictoriaLogs via the OTel Collector
+(`fluentd` driver → OTel Collector fluent_forward receiver on port 24224,
+localhost only). All services use the `fluentd` logging driver; Docker dual
+logging keeps `docker logs` working too.
 
-## Monitoring & Observability
+**Metrics**
 
-### Logging
+- Kong: Prometheus metrics at `kong:8001/metrics` (internal only).
+- Backend: OTel SDK (`tracing.js`, `tracing-db.js`, `tracing-pii.js`) +
+  Prometheus metrics (`metrics.js`).
+- OPEA services: OTel SDK (`genie-ai-overlay/tracing.py`) emitting per-RAG
+  stage spans.
 
-**Backend**: Winston + daily rotation (`shared-lib/logger.js`)
-
-**Frontend**: Console (dev) + Sentry (planned)
-
-**Mobile**: `talker` logger (local file + stderr)
-
-**OPEA Services**: Python `logging` module
-
-**Centralized Logging**: VictoriaLogs via the OTel Collector (fluentd receiver) — see the Observability section
-
----
-
-### Metrics
-
-**Kong**: Prometheus metrics at `http://kong:8001/metrics`
-
-**Backend**: OTel SDK (tracing.js, tracing-db.js, tracing-pii.js) + Prometheus metrics (metrics.js)
-
-**OPEA Services**: OTel SDK (tracing.py) emitting per-RAG-stage spans
-
----
-
-### Health Checks
+### Health checks
 
 | Service | Endpoint | Purpose |
-|---------|----------|---------|
-| Backend | `/health` | ArangoDB + Redis connectivity |
-| Document Repository | `/health` | ClamAV + ArangoDB |
+|---|---|---|
+| Backend | `/api/health` | Basic liveness (status, serverTime, uptime) |
+| Document Repository | `/health` | Basic liveness (status, timestamp, uptime, env, version) |
 | ChatQnA | `/health` | OPEA microservice health |
 | Kong | `/health` | Gateway status |
 | Keycloak | `/health/ready` | Realm ready |
 
-**Kong Active Health Checks** (configured but disabled by default):
-
-```json
-{
-  "healthcheck": {
-    "active": {
-      "http_path": "/health",
-      "healthy": { "interval": 10, "successes": 2 },
-      "unhealthy": { "interval": 5, "http_failures": 3 }
-    }
-  }
-}
-```
-
 ---
 
-## Appendix: Environment Variables
+## Related
 
-### Backend (`components/gov-chat-backend/`)
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `NODE_ENV` | No | `production` | Environment mode |
-| `PORT` | No | `3000` | Backend port |
-| `ARANGO_URL` | No | `http://arango:8529` | ArangoDB connection |
-| `ARANGO_DB` | No | `genieai` | Database name |
-| `ARANGO_USER` | No | `root` | Database user |
-| `ARANGO_PASSWORD` | **Yes** | - | Database password |
-| `REDIS_HOST` | No | `redis` | Redis host |
-| `REDIS_PORT` | No | `6379` | Redis port |
-| `REDIS_PASSWORD` | No | - | Redis password |
-| `KEYCLOAK_URL` | **Yes** | - | Keycloak URL |
-| `KEYCLOAK_REALM` | No | `genie` | Realm name |
-| `BACKEND_SERVICE_URL` | No | `http://backend:3000` | Service URL for internal calls |
-| `CHATQNA_SERVICE_HOST_IP` | No | `chatqna` | ChatQnA host |
-| `CHATQNA_SERVICE_PORT` | No | `8888` | ChatQnA port |
-| `VLLM_TRANSLATION_ENDPOINT` | No | - | vLLM translation URL |
-| `GOOGLE_CLOUD_PROJECT` | No | - | GCP project ID |
-| `GOOGLE_CLOUD_CREDENTIALS` | No | - | GCP service account key |
-| `TRANSLATION_BACKEND` | No | `google` | Translation backend |
-
-### OPEA Services (`genie-ai-overlay/`)
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `MEGA_SERVICE_PORT` | No | `8888` | ChatQnA port |
-| `LLM_SERVER_HOST_IP` | No | `vllm` | vLLM host |
-| `LLM_SERVER_PORT` | No | `80` | vLLM port |
-| `EMBEDDING_SERVER_HOST_IP` | No | `tei-embedding` | TEI host |
-| `EMBEDDING_SERVER_PORT` | No | `80` | TEI port |
-| `RETRIEVER_SERVICE_HOST_IP` | No | `retriever` | Retriever host |
-| `RETRIEVER_SERVICE_PORT` | No | `7000` | Retriever port |
-| `RERANK_SERVER_HOST_IP` | No | `tei-reranking` | Reranker host |
-| `RERANK_SERVER_PORT` | No | `80` | Reranker port |
-| `BACKEND_SERVICE_URL` | No | `http://backend:3000` | Backend URL |
-| `DOCUMENT_REPOSITORY_URL` | No | `http://document-repository:3001` | Doc repo URL |
-| `KC_DATAPREP_CLIENT_ID` | **Yes** | - | Dataprep service account |
-| `KC_DATAPREP_CLIENT_SECRET` | **Yes** | - | Dataprep client secret |
-
-### Frontend (`components/gov-chat-frontend/`)
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `VUE_APP_API_URL` | **Yes** | - | Backend API URL |
-| `VUE_APP_KEYCLOAK_URL` | **Yes** | - | Keycloak URL |
-| `VUE_APP_KEYCLOAK_REALM` | No | `genie` | Realm name |
-| `VUE_APP_KEYCLOAK_CLIENT_ID` | **Yes** | - | OIDC client ID |
-
-### Mobile (`mobile/genie_ai_mobile/`)
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `DEV_SERVER` | No | `localhost` | Custom server host |
-| `DEV_PORT` | No | `443` | Custom server port |
-| `KEYCLOAK_URL` | **Yes** | - | Keycloak URL |
-| `KEYCLOAK_REALM` | No | `genie` | Realm name |
-| `KC_MOBILE_CLIENT_ID` | **Yes** | - | Mobile OIDC client ID |
-
----
+| You want to… | Read |
+|---|---|
+| Deploy the stack (Compose / Swarm / Ansible) | [Deployment](/docs/deploy/) |
+| Trace a request through the RAG pipeline | [Observability](/docs/observe/) |
+| Look up an environment variable | [Configuration](/docs/configure/) |
+| Find where a route or service lives in code | [Source Tree Analysis](/docs/core/source-tree-analysis/) |
+| Set up a local dev environment | [Development Guide](/docs/core/development-guide/) |
+| Understand the high-level system diagram | [Architecture](/docs/architecture/) |

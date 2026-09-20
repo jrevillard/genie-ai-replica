@@ -1,177 +1,360 @@
 ---
-title: "State Management Frontend"
-description: "State management in the GENIE.AI web frontend: Vuex stores, modules, and data flow."
+title: "State Management"
+description: "Vuex 4 in the Vue 3 web app — store wiring, namespacing rules, the auth and chatHistory modules, and the localStorage persistence plugin."
 weight: 2
-section: "frontend"
+mode: reference
+persona: developer
+owner: "docs-stewards"
+last_reviewed: 2026-09-18
 ---
 
-> **For frontend developers.** How the Vue 3 web app manages state — Vuex store, modules, and data flow.
+> **For frontend developers.** How the Vue 3 web app keeps state across logins, navigation, and page reloads — and the one rule you must not break.
+
+## Prerequisites
+
+You should already know:
+
+- **Vue 3 Options API** — components declared with `data / computed / methods / watch` (project convention; not Composition API).
+- **Vuex 4 core concepts** — `state`, `getters`, `mutations`, `actions`, `modules`. The [Vuex guide](https://vuex.vuejs.org/guide/) covers them; the only oddity here is that **the auth module is NOT namespaced** (read on).
+- **ES module imports** — `import auth from '@/store/modules/auth'` etc.
+
+If you only remember one thing: **the auth module lives in the global Vuex namespace, but the chatHistory module is namespaced.** All `dispatch`, `commit`, and `rootGetters` calls below reflect that.
 
 ## Overview
-The frontend application uses **Vuex 4.x** for centralized state management, with a modular architecture that separates concerns between authentication, chat history, and application state. The implementation follows modern Vue.js 3 patterns with namespaced modules.
 
-## Store Architecture
+`src/store/index.js` creates a single `vuex` store that bundles two modules plus a localStorage persistence plugin. The architecture is intentionally small — auth + chat history, nothing else — because everything else (UI state, form state, ephemeral flags) lives in the component that owns it.
 
-### Main Store (`/src/store/index.js`)
+```
+src/store/
+├── index.js                # createStore() + localStorage plugin
+├── chatHistoryStore.js     # namespaced module (folders + chats)
+└── modules/
+    └── auth.js             # NON-namespaced module (Keycloak OIDC)
+```
+
+## Main store
+
+`src/store/index.js`:
+
 ```javascript
+import { createStore } from 'vuex';
+import chatHistoryStore from './chatHistoryStore';
+import auth from './modules/auth';
+
 export default createStore({
   modules: {
-    chatHistory: chatHistoryStore,
-    auth: auth
+    chatHistory: chatHistoryStore,  // namespaced: 'chatHistory/'
+    auth                            // NOT namespaced — getters/actions are global
   },
+
   plugins: [
-    // localStorage persistence plugin for chatHistory
+    (store) => {
+      // 1. On boot, hydrate chatHistory from localStorage['chatHistory'].
+      try {
+        const savedChatHistory = localStorage.getItem('chatHistory');
+        if (savedChatHistory) {
+          const parsedData = JSON.parse(savedChatHistory);
+          if (parsedData && typeof parsedData === 'object') {
+            store.replaceState({ ...store.state, chatHistory: parsedData });
+          }
+        }
+      } catch (e) {
+        console.error('Error loading chat history from localStorage:', e);
+      }
+
+      // 2. Subscribe to mutations: persist every chatHistory/* mutation.
+      //    CLEAR_FOLDERS wipes localStorage; everything else rewrites the blob.
+      store.subscribe((mutation, state) => {
+        if (mutation.type.startsWith('chatHistory/')) {
+          try {
+            if (mutation.type === 'chatHistory/CLEAR_FOLDERS') {
+              localStorage.removeItem('chatHistory');
+            } else {
+              localStorage.setItem('chatHistory', JSON.stringify(state.chatHistory));
+            }
+          } catch (e) {
+            console.error('Error saving chat history to localStorage:', e);
+          }
+        }
+      });
+    }
   ]
 });
 ```
 
-**Key Features:**
-- Namespaced modules for better organization
-- localStorage persistence for chat history data
-- Plugin system for state persistence
-- Centralized error handling
+**Key features:**
 
-## Store Modules
+- **One root-level persistence plugin** — only `chatHistory/*` mutations are observed; auth tokens never touch `localStorage`.
+- **Replace on boot** — the plugin uses `store.replaceState({...store.state, chatHistory: parsedData})` so the rest of the default state (auth) is preserved.
+- **Failure is non-fatal** — JSON parse errors and quota errors are logged but do not break the app.
 
-### 1. Authentication Module (`/src/store/modules/auth.js`)
+## Module 1: Authentication — `src/store/modules/auth.js`
 
-#### Purpose
-Handles OIDC (OpenID Connect) authentication with Keycloak, including user session management, token handling, and authentication state.
+Handles Keycloak OIDC via the `keycloakAuthService` wrapper. Tokens live in memory only — never `localStorage`. After intentional logout the store blocks silent re-login via a `genie_post_logout` session flag (see [Auth Flow](/docs/frontend/auth-flow/)).
 
-#### State Structure
+### Namespacing
+
+**The auth module is NOT namespaced.** The actual `export default { state, getters, actions, mutations }` has no `namespaced: true`. Vuex mounts it at the root, so:
+
+| Vuex call | Resolves to |
+|-----------|-------------|
+| `this.$store.getters.currentUser` | `state.user` |
+| `this.$store.dispatch('login', { returnUrl })` | `auth.login` |
+| `commit('setAuth', payload)` | `auth.setAuth` |
+| `rootGetters['currentUser']` (from another module) | `state.user` |
+
+The "auth/" prefix is reserved for `chatHistory` mutations only. A `rootGetters['auth/currentUser']` call would resolve to `undefined`.
+
+### State
+
 ```javascript
-state: {
+state = () => ({
   isAuthenticated: false,
   user: null,
   accessToken: null,
-  error: null,
-  isInitialized: false
-}
+  error: null,           // string OR { code, message }
+  isInitialized: false    // set by setInitialized after first bootstrap attempt
+});
 ```
 
-#### Key Actions
-- **`initialize`**: Initialize OIDC service and restore session
-- **`login`**: Redirect to Keycloak login
-- **`handleCallback`**: Process OAuth callback
-- **`logout`**: Clear auth state and redirect to logout
-- **`handleApiError`**: Standardized API error handling
+### Getters
 
-#### Mutations
-- **`setAuth`**: Set authenticated state with user data
-- **`clearAuth`**: Clear all authentication state
-- **`setError`** / **`clearError`**: Error state management
-- **`updateAccessToken`**: Update access token during silent refresh
+| Getter | Returns |
+|--------|---------|
+| `isAuthenticated` | `state.isAuthenticated` |
+| `currentUser` | `state.user` (mapped from OIDC profile + `realm_access.roles`) |
+| `accessToken` | `state.accessToken` |
+| `authError` | `state.error.message` if it's an object, else the raw string — backward-compatible single-field lookup |
+| `lastAuthErrorCode` | `state.error.code` if it's an object, else `null` |
+| `isAuthInitialized` | `state.isInitialized` |
 
-#### Data Flow
+### Actions
+
+| Action | Purpose |
+|--------|---------|
+| `initialize()` | One-time bootstrap. Honours `sessionStorage.getItem('genie_post_logout')` (intentional logout → block restoration); otherwise calls `keycloakAuthService.initialize()` and rehydrates the user from a still-valid session. Always commits `setInitialized` in `finally`. |
+| `login({ returnUrl })` | Clears any `genie_post_logout` flag and redirects to Keycloak via `keycloakAuthService.login`. |
+| `handleCallback()` | Runs at `/callback`. Clears the post-logout flag, validates the auth-code response, calls `setAuth`, registers the silent-renew callback. |
+| `logout()` | Strips legacy `localStorage` keys (`user`, `auth_token`), sets `sessionStorage.genie_post_logout = 'true'`, removes the silent-renew callback, then calls `keycloakAuthService.logout()` (which navigates away). Always commits `clearAuth` even if the redirect fails. |
+| `handleApiError(error)` | Standardises backend error parsing — accepts a string OR `{ code, message }` and writes to `state.error`. Use this from API services that want to surface errors through the auth getter layer. |
+| `clearError()` | Commit alias. |
+
+### Mutations
+
+| Mutation | Effect |
+|----------|--------|
+| `setAuth({ isAuthenticated, user, accessToken })` | Bulk set after successful auth. |
+| `clearAuth()` | Resets to logged-out state. |
+| `setError(error)` | Accepts string or `{ code, message }`. |
+| `clearError()` | `state.error = null`. |
+| `setInitialized()` | `state.isInitialized = true` — mark the auth subsystem as bootstrapped. Used by both `initialize()` and `handleCallback()`. |
+| `updateAccessToken({ accessToken, user })` | Silent-renew callback writes the rotated token + refreshed profile here without re-running the full login flow. |
+
+### Data flow
+
 ```
-User Action → Service Call → Vuex Action → State Update → UI Update
+Login button → router guard → dispatch('login', { returnUrl })
+  → keycloakAuthService.login() → Keycloak redirect → /callback
+  → dispatch('handleCallback') → commit('setAuth') → re-render
+
+Silent renew (background iframe) → onAccessTokenUpdated → commit('updateAccessToken')
+
+Logout button → dispatch('logout') → sessionStorage.genie_post_logout = 'true'
+  → keycloakAuthService.logout() → Keycloak redirect → /logged-out
 ```
 
-### 2. Chat History Module (`/src/store/chatHistoryStore.js`)
+Full step-by-step auth sequence (incl. the post-logout block and silent renew iframe) is in [Auth Flow](/docs/frontend/auth-flow/).
 
-#### Purpose
-Manages chat conversations, folders, and message history with persistent storage.
+## Module 2: Chat history — `src/store/chatHistoryStore.js`
 
-#### State Structure
+`namespaced: true` — all dispatches are prefixed with `chatHistory/` and all mutations with `chatHistory/`. The persistence plugin watches every mutation whose type starts with that prefix.
+
+### State
+
 ```javascript
 state: () => ({
   folders: [
-    {
-      id: 'default',
-      name: 'All Chats',
-      isDefault: true,
-      createdAt: new Date().toISOString()
-    }
+    { id: 'default', name: 'All Chats', isDefault: true, createdAt: <ISO> }
   ],
-  chats: [],
-  folderChats: {
+  chats: [],            // { id, title, preview, createdAt, updatedAt, messageCount }
+  folderChats: {        // folderId → [chatId, ...]
     default: []
   }
 })
 ```
 
-#### Key Actions
-- **`setFolders`**: Load folders from API
-- **`createFolder`** / **`updateFolder`** / **`deleteFolder`**: Folder CRUD operations
-- **`createChat`** / **`updateChat`** / **`deleteChat`**: Chat CRUD operations
-- **`moveChat`**: Move chat between folders (with API sync)
-- **`clearFolders`**: Reset to default state
+The `default` folder is the pinned system folder — `ADD_FOLDER`, `UPDATE_FOLDER`, and `REMOVE_FOLDER` refuse to touch it (`if (!state.folders[i].isDefault) ...`). Chat deletions always re-attach the chat to `default` first so it never gets lost.
 
-#### Getters
-- **`getAllFolders`**: Get all folders
-- **`getChatsByFolderId`**: Get chats for specific folder
-- **`getFolderById`**: Get folder by ID
-- **`getChatById`**: Get chat by ID
+### Getters
 
-#### Mutations
-- **Folder operations**: `ADD_FOLDER`, `UPDATE_FOLDER`, `REMOVE_FOLDER`
-- **Chat operations**: `ADD_CHAT`, `UPDATE_CHAT`, `REMOVE_CHAT`
-- **Relationship management**: `ADD_CHAT_TO_FOLDER`, `MOVE_CHAT`
-- **State management**: `SET_FOLDER_CHATS`, `CLEAR_FOLDERS`
+| Getter | Signature | Notes |
+|--------|-----------|-------|
+| `getAllFolders` | `() => state.folders` | All folders including `default`. |
+| `getChatsByFolderId` | `(folderId) => Chat[]` | Returns chat *objects* (joins `state.chats`). Filters out missing entries. |
+| `getFolderById` | `(folderId) => Folder \| undefined` | Linear scan. |
+| `getChatById` | `(chatId) => Chat \| undefined` | Linear scan. |
 
-## State Usage in Components
+### Mutations (all namespaced — `chatHistory/MUTATION_NAME`)
 
-### 1. App.vue (Root Component)
-```javascript
-computed: {
-  ...mapGetters(['isAuthenticated', 'currentUser'])
-},
-methods: {
-  async loadFoldersOnAuth() {
-    await this.$store.dispatch('chatHistory/setFolders', allFolders);
-  }
-}
-```
+| Mutation | Payload | Notes |
+|----------|---------|-------|
+| `setFolders(state, folders)` | `Folder[]` | Wholesale replace. |
+| `ADD_FOLDER` | `{ name }` | Generates UUID, pushes, creates empty `folderChats[newId]`. Returns the new id. |
+| `UPDATE_FOLDER` | `{ folderId, name }` | Refuses the default folder. |
+| `REMOVE_FOLDER` | `folderId` | Refuses the default folder. Re-parents chats to `default`, deletes the `folderChats[folderId]` key. |
+| `ADD_CHAT` | `{ id?, title?, preview?, folderId?, messageCount? }` | Auto-creates `folderChats[folderId]` if missing. Pins to `default` if not already there. Returns the new chat id. |
+| `UPDATE_CHAT` | `{ chatId, title?, preview? }` | Sets `updatedAt`. |
+| `REMOVE_CHAT` | `chatId` | Removes from every folder, deletes the chat object. |
+| `ADD_CHAT_TO_FOLDER` | `{ chatId, folderId }` | Idempotent — only pushes if missing. |
+| `REMOVE_CHAT_FROM_FOLDER` | `{ chatId, folderId }` | Removes from one folder only. |
+| `MOVE_CHAT` | `{ chatId, fromFolderId, toFolderId }` | No-op if `from === to`. Always pins to `default`. |
+| `SET_FOLDER_CHATS` | `{ folderId, chats }` | Wholesale replace. Used by the post-move refresh. |
+| `CLEAR_FOLDERS` | — | Resets to the default folder only. Persistence plugin wipes `localStorage` when it sees this. |
 
-### 2. RightSideBarComponent.vue
-```javascript
-methods: {
-  getAuthToken() {
-    return this.$store.getters.accessToken || null;
-  }
-}
-```
+### Actions
 
-## Service Layer Integration
+| Action | Behaviour |
+|--------|-----------|
+| `setFolders(folders)` | `setFolders` mutation. |
+| `createFolder({ name })` | `ADD_FOLDER`, returns the new id. |
+| `updateFolder({ folderId, name })` | `UPDATE_FOLDER`. |
+| `deleteFolder(folderId)` | `REMOVE_FOLDER`. |
+| `createChat(chatData)` | `ADD_CHAT`, returns the new id. |
+| `updateChat(chatData)` | `UPDATE_CHAT`. |
+| `deleteChat(chatId)` | `REMOVE_CHAT`. |
+| `addChatToFolder({ chatId, folderId })` | `ADD_CHAT_TO_FOLDER`. |
+| `moveChat({ chatId, fromFolderId, toFolderId })` | See below. |
+| `removeChatFromFolder(...)` | `REMOVE_CHAT_FROM_FOLDER` plus the auto-default-pin guarantee. |
 
-### Key Service Files
-- **`keycloakAuthService.js`**: OIDC authentication service
-- **`chatHistoryService.js`**: Chat and folder API operations
-- **`httpService.js`**: HTTP client with auth headers
+### `moveChat` — the non-trivial one
 
-### Service-Store Integration
 ```javascript
 async moveChat({ commit, rootGetters }, { chatId, fromFolderId, toFolderId }) {
-  const currentUser = rootGetters['auth/currentUser'];
+  // auth module is NOT namespaced — getter lives in global namespace
+  const currentUser = rootGetters['currentUser'];
+  if (!currentUser) throw new Error('User is missing');
+
+  // Authoritative backend operation — a failure here must propagate
   await chatHistoryService.moveConversation(chatId, fromFolderId, toFolderId);
-  commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
+
+  // Reflect the move locally regardless of the subsequent folder refresh
+  commit('MOVE_CHAT', { chatId, fromFolderId, toFolderId });
+
+  // Best-effort folder refresh — a failure here must NOT fail the move,
+  // since the backend operation already succeeded (issue #827)
+  try {
+    const folder = await chatHistoryService.getFolder(toFolderId);
+    const chatIds = (folder?.conversations || []).map((conv) => conv._key);
+    commit('SET_FOLDER_CHATS', { folderId: toFolderId, chats: chatIds });
+  } catch (error) {
+    console.error(`Failed to refresh folder ${toFolderId} after moving chat ${chatId}:`, error);
+  }
 }
 ```
 
-## Data Flow Architecture
+Two non-obvious things:
 
-### 1. Authentication Flow
-```
-Login → keycloakAuthService.login → auth/login → setAuth → Re-render app
-Callback → handleCallback → setAuth → Update UI
+1. **`rootGetters['currentUser']` (no `auth/` prefix).** Adding `auth/` returns `undefined` and the action throws `User is missing`.
+2. **`MOVE_CHAT` is committed BEFORE the best-effort refresh.** The local state always reflects what the backend has accepted; the refresh only re-syncs the canonical list of chat ids in the destination folder.
+
+## Using the store from components
+
+### Map getters (preferred)
+
+```javascript
+import { mapGetters, mapActions } from 'vuex';
+
+export default {
+  // ...
+  computed: {
+    ...mapGetters(['isAuthenticated', 'currentUser']),
+    ...mapGetters('chatHistory', ['getAllFolders', 'getChatsByFolderId'])
+  },
+  methods: {
+    ...mapActions(['login', 'logout']),
+    ...mapActions('chatHistory', ['createChat', 'moveChat']),
+
+    async archive(chat) {
+      // 1. Move chat locally
+      await this.moveChat({ chatId: chat.id, fromFolderId: 'default', toFolderId: 'archived' });
+      // 2. Mark starred via direct commit (no action for this yet)
+      this.$store.commit('chatHistory/UPDATE_CHAT', {
+        chatId: chat.id,
+        title: chat.title,
+        preview: `[archived] ${chat.preview}`
+      });
+    }
+  }
+};
 ```
 
-### 2. Chat Management Flow
-```
-Create Chat → createChat → API sync → ADD_CHAT → Update sidebar
-Move Chat → moveChat → API call → MOVE_CHAT → Update folders
+### Direct access (when mapping is awkward)
+
+```javascript
+export default {
+  computed: {
+    token() { return this.$store.getters.accessToken; }
+  },
+  methods: {
+    async reload() {
+      await this.$store.dispatch('chatHistory/setFolders', await fetchFolders());
+    }
+  }
+};
 ```
 
-### 3. Persistence Flow
+The auth getters (`accessToken`, `currentUser`, `isAuthenticated`) and the chatHistory namespaced mutations follow the two rules stated at the top: **no prefix for auth, `chatHistory/` for chatHistory.**
+
+## Service layer integration
+
+| Service | File | Responsibility |
+|---------|------|----------------|
+| `keycloakAuthService` | `src/services/keycloakAuthService.js` | `oidc-client-ts` `UserManager` wrapper. In-memory token storage; silent renew; `/callback` processing; logout redirect. |
+| `chatHistoryService` | `src/services/chatHistoryService.js` | Folder + conversation CRUD against the backend BFF. `moveConversation(chatId, fromFolderId, toFolderId)`, `getFolder(folderId)`, `getUserFolders()`. |
+| `httpService` | `src/services/httpService.js` | Axios client with 401 retry and auth headers. |
+
+The auth store **never** touches `localStorage`; the `keycloakAuthService` keeps tokens in memory and uses `sessionStorage` only for the `genie_post_logout` block-flag. The chatHistory store does the opposite: it is persisted to `localStorage` via the plugin, but the underlying service calls the backend for anything user-visible.
+
+## Data flow
+
 ```
-State Change → Vuex Mutation → Plugin → localStorage
-App Load → Plugin → localStorage.getItem → Initial State
+[ Auth ]
+Login button → router guard → dispatch('login')
+   → keycloakAuthService.login → Keycloak redirect → /callback
+   → dispatch('handleCallback') → setAuth → UI re-render
+
+[ Chat history ]
+User clicks "+ New chat" → createChat → chatHistoryService.createConversation
+   → ADD_CHAT → plugin → localStorage
+Move chat → moveChat → chatHistoryService.moveConversation
+   → MOVE_CHAT → SET_FOLDER_CHATS (best-effort refresh)
+
+[ Persistence ]
+Mutation type starts with 'chatHistory/' → plugin writes localStorage['chatHistory']
+CLEAR_FOLDERS → plugin removes localStorage['chatHistory']
+App boot → plugin hydrates store.replaceState({...state, chatHistory: parsed})
 ```
 
-## Key Benefits
+## Testing the store
 
-1. **Separation of Concerns**: Clear division between auth and chat management
-2. **Persistence**: Critical data survives page refreshes
-3. **Security**: Sensitive tokens kept in memory only
-4. **Scalability**: Modular architecture supports easy extension
-5. **Maintainability**: Centralized state management with clear patterns
+Tests live in `src/__tests__/store/`. The two patterns to know:
+
+```javascript
+// 1. Namespaced dispatch/commit — pass the third arg.
+await store.dispatch('chatHistory/createFolder', { name: 'Inbox' });
+expect(store.state.chatHistory.folders).toHaveLength(2);
+
+// 2. Auth is non-namespaced — no prefix.
+await store.dispatch('login');
+expect(store.getters.isAuthenticated).toBe(true);
+```
+
+Mock `localStorage` and the `keycloakAuthService` / `chatHistoryService` modules before importing the store. See `src/__tests__/store/` for worked examples.
+
+## Where to go next
+
+- [Auth Flow](/docs/frontend/auth-flow/) — step-by-step Keycloak OIDC sequence, silent-renew iframe, the `genie_post_logout` flag.
+- [Chat UX](/docs/frontend/chat-ux/) — how `chatHistory` state drives the conversation list, the streaming send, save / export.
+- [Theme System](/docs/frontend/theme-system/) — design tokens (independent of Vuex).
+- [UI Component Inventory](/docs/frontend/ui-component-inventory-frontend/) — which components touch which state.
+- `components/gov-chat-frontend/CLAUDE.md` — Testing patterns, `createApp` lifecycle, axios interceptors.

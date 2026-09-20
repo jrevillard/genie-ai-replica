@@ -1,191 +1,185 @@
 ---
-title: "Ui Component Inventory Mobile"
-description: "An inventory of the GENIE.AI mobile app UI widgets and their usage."
+title: "UI Component Inventory (mobile)"
+description: "Annotated map of the Flutter mobile app: components, design system, services, providers, and i18n locales."
 weight: 1
 section: "mobile"
+mode: reference
+persona: developer
+owner: "docs-stewards"
+last_reviewed: 2026-09-18
 ---
 
-> **For mobile developers.** A reference catalogue of the Flutter app widgets.
+## Overview
 
----
+Reference map of every Dart file under `mobile/genie_ai_mobile/lib/`. Counts are pulled from a snapshot of the source tree and are correct as of the audit date — when adding or removing files, regenerate the snapshot rather than editing the numbers by hand.
 
-## Summary
+For architectural concerns (how the layers compose, what each service is responsible for at the wire level), see [Mobile Architecture](/docs/mobile/mobile-architecture/). For end-user-facing flows, see [User Authentication](/docs/mobile/user-authentication/) and [Chat Pipeline](/docs/mobile/chat-pipeline/).
 
-- **Total Dart Files**: 76
-- **UI Components**: 14
-- **Design System Components**: 6
-- **Design System Tokens**: 5
-- **Services**: 12
-- **Config**: 5
-- **i18n Locales**: 13
+## Snapshot
 
----
+| Bucket | Count | Where |
+|--------|------:|-------|
+| Dart files (whole `lib/`) | **80** | `mobile/genie_ai_mobile/lib/**/*.dart` |
+| UI components (`lib/components/`) | **16** | `chat=6, sidebar=3, auth=1, user=1, settings=2, shared=3` |
+| Design system primitives (`lib/design_system/components/`) | **6** | `ds_button, ds_card, ds_input, ds_modal, ds_spinner, ds_state_display` |
+| Design tokens (`lib/design_system/tokens/`) | **4** | `app_tokens, color_utils, spacing, radii` |
+| Services (`lib/services/`) | **18** | `auth/` = 10, `keycloak/` = 1, top-level = 7 |
+| Configuration (`lib/config/`) | **6** | root = 4, `flavors/` = 2 |
+| Riverpod providers (`lib/providers/`) | **1** | `api_providers.dart` |
+| Utilities (`lib/utils/`) | **4** | `theme_manager, chart_theme_utils, dialog_theme_utils, config_resolver` |
+| i18n locales (`lib/i18n/locales/`) | **14** | see [Locales](#locales) below |
 
-## Design System (`lib/design_system/`)
+> "Services = 18" is the count of `*.dart` files in `lib/services/`. The auth subdirectory contains 10 files (`app_auth, auth_interceptor, auth_logger, auth_notifier, auth_state, auth_providers, token_storage, connectivity_checker, network_error_classifier, insecure_http_client`). The keycloak subdirectory contains 1 (`keycloak_service`). The 7 top-level services are `connectivity_service, fallback_localizations, genie_ai_config, i18n_service, notification_service, sse_parser, user_service`.
 
-### DS Components (`lib/design_system/components/`)
+## Design system
+
+### Primitives (`lib/design_system/components/`)
 
 | Component | Description |
 |-----------|-------------|
-| `ds_button.dart` | Button primitive with variants (primary, secondary, ghost, danger) |
-| `ds_card.dart` | Container card with elevation and border radius |
-| `ds_input.dart` | Text input field with label, validation states, and error messaging |
+| `ds_button.dart` | Button with variants: `primary`, `secondary`, `ghost`, `danger` |
+| `ds_card.dart` | Container with elevation and border radius |
+| `ds_input.dart` | Text field with label, validation states, error message slot |
 | `ds_modal.dart` | Modal dialog overlay with content slot |
-| `ds_spinner.dart` | Loading spinner animation (circular progress indicator) |
-| `ds_state_display.dart` | Empty/error/loading state display component |
+| `ds_spinner.dart` | Circular progress indicator |
+| `ds_state_display.dart` | Empty / error / loading state presenter |
 
-### DS Tokens (`lib/design_system/tokens/`)
+### Tokens (`lib/design_system/tokens/`)
 
-| Token File | Description |
-|------------|-------------|
-| `app_tokens.dart` | Global design tokens (typography, colors, spacing scale) |
-| `color_utils.dart` | Color utilities (lighten, darken, opacity, theme mapping) |
-| `spacing.dart` | Spacing scale constants (xs, sm, md, lg, xl) |
-| `radii.dart` | Border radius tokens (sm, md, lg, xl, full) |
+| Token | Description |
+|-------|-------------|
+| `app_tokens.dart` | Global typography + color tokens |
+| `color_utils.dart` | Lighten / darken / opacity / theme mapping |
+| `spacing.dart` | Spacing scale constants (`xs`, `sm`, `md`, `lg`, `xl`) |
+| `radii.dart` | Border radius tokens (`sm`, `md`, `lg`, `xl`, `full`) |
 
-### DS Theme (`lib/design_system/theme/`)
-
-| File | Description |
-|------|-------------|
-| `app_theme.dart` | Material theme configuration (light/dark, color schemes) |
-
----
-
-## Chat Components (`lib/components/chat/`)
-
-| Component | Description |
-|-----------|-------------|
-| `chatbot_component.dart` | Main chat interface with message list and input area |
-| `right_sidebar_component.dart` | Right sidebar displaying context, documents, or service info |
-| `chat_response_feedback_dialog.dart` | Feedback dialog for rating chat responses (thumbs up/down) |
-| `web_file_utils.dart` | File utility functions for web platform |
-| `stub_file_utils.dart` | File utility stubs for non-web platforms |
-| `right_sidebar_stub.dart` | Stub implementation for right sidebar (conditional compilation) |
-
----
-
-## Sidebar Components (`lib/components/sidebar/`)
-
-| Component | Description |
-|-----------|-------------|
-| `sidebar_component.dart` | Left sidebar with conversation history and navigation |
-| `chat_folders_panel.dart` | Conversation folder management (create, rename, delete) |
-| `service_tree_panel.dart` | Hierarchical tree view of service categories |
-
----
-
-## Authentication Components (`lib/components/auth/`)
-
-| Component | Description |
-|-----------|-------------|
-| `oidc_login_screen.dart` | OIDC login screen with Keycloak authentication flow |
-
----
-
-## User Components (`lib/components/user/`)
-
-| Component | Description |
-|-----------|-------------|
-| `user_profile_component.dart` | User profile display and edit form |
-
----
-
-## Settings Components (`lib/components/settings/`)
-
-| Component | Description |
-|-----------|-------------|
-| `settings_component.dart` | Application settings panel (theme, language, preferences) |
-| `about_screen.dart` | About screen with app version, license, and links |
-
----
-
-## Shared Components (`lib/components/shared/`)
-
-| Component | Description |
-|-----------|-------------|
-| `nav_bar_component.dart` | Bottom navigation bar (mobile app navigation) |
-| `confirm_dialog.dart` | Generic confirmation dialog (confirm/cancel actions) |
-| `language_selector.dart` | Language selection dropdown for i18n |
-
----
-
-## Application Structure (`lib/src/`)
+### Theme (`lib/design_system/theme/`)
 
 | File | Description |
 |------|-------------|
-| `app.dart` | Root app widget with router and global providers |
-| `sample_feature/` | Sample feature code (Flutter template, may be unused) |
-| `settings/` | Settings controller and service (legacy, may be unused) |
-| `localization/` | App localization delegates |
+| `app_theme.dart` | Material theme configuration (light + dark color schemes) |
 
----
+## Chat components (`lib/components/chat/`)
 
-## Services (`lib/services/`)
+| File | Description |
+|------|-------------|
+| `chatbot_component.dart` | Main chat interface — message list, input, feedback, SSE stream handler, Quick Help overlay, PDF export. The single largest widget in the app (~67 KB). |
+| `right_sidebar_component.dart` | Related Documents sidebar — MIME-iconed cards, external launch |
+| `chat_response_feedback_dialog.dart` | Per-message feedback dialog (thumbs → star rating → free text → skin-tone selector) |
+| `right_sidebar_stub.dart` | Conditional compilation stub for platforms where the right sidebar is not rendered |
+| `web_file_utils.dart` | Browser-side file save helpers (used by PDF export on web) |
+| `stub_file_utils.dart` | Native fallback stub (no-ops on non-web platforms) |
 
-### Authentication Services (`lib/services/auth/`)
+## Sidebar components (`lib/components/sidebar/`)
 
-| Service | Description |
-|---------|-------------|
-| `app_auth.dart` | Authentication state management and token handling |
-| `auth_interceptor.dart` | HTTP request interceptor for auth token injection |
-| `auth_logger.dart` | Authentication event logging |
-| `auth_notifier.dart` | Authentication state change notifications |
-| `auth_state.dart` | Authentication state enum and data classes |
-| `auth_providers.dart` | Riverpod providers for auth services |
-| `token_storage.dart` | Secure token storage (Keychain/Keystore) |
-| `connectivity_checker.dart` | Network connectivity status checker |
-| `network_error_classifier.dart` | Network error classification and retry logic |
-| `insecure_http_client.dart` | HTTP client for dev environments (bypasses SSL) |
+| File | Description |
+|------|-------------|
+| `sidebar_component.dart` | Left sidebar with conversation history and services tabs |
+| `chat_folders_panel.dart` | Conversation folders — All / Starred / Archived tabs, CRUD operations |
+| `service_tree_panel.dart` | Hierarchical service-category tree with multi-select |
 
-### Other Services (`lib/services/`)
+## Auth components (`lib/components/auth/`)
 
-| Service | Description |
-|---------|-------------|
-| `keycloak/keycloak_service.dart` | Keycloak OIDC service wrapper |
-| `connectivity_service.dart` | Network connectivity monitoring |
-| `notification_service.dart` | Push notification handling |
-| `user_service.dart` | User profile and preferences service |
-| `i18n_service.dart` | Internationalization service |
-| `genie_ai_config.dart` | GENIE.AI configuration loader |
-| `fallback_localizations.dart` | Fallback localization delegates |
-| `sse_parser.dart` | Server-Sent Events (SSE) stream parser |
+| File | Description |
+|------|-------------|
+| `oidc_login_screen.dart` | OIDC login screen with branding, error display, retry mechanism |
 
----
+## User components (`lib/components/user/`)
+
+| File | Description |
+|------|-------------|
+| `user_profile_component.dart` | User profile form (personal info, preferences, country, ID docs) |
+
+## Settings components (`lib/components/settings/`)
+
+| File | Description |
+|------|-------------|
+| `settings_component.dart` | Theme, language, notifications, account management (~26 KB) |
+| `about_screen.dart` | App version, build info, OSS licenses |
+
+## Shared components (`lib/components/shared/`)
+
+| File | Description |
+|------|-------------|
+| `nav_bar_component.dart` | Bottom navigation bar |
+| `confirm_dialog.dart` | Generic confirm / cancel dialog |
+| `language_selector.dart` | Language picker (writes locale to `i18n_service`) |
+
+## App structure (`lib/src/`)
+
+| File | Description |
+|------|-------------|
+| `app.dart` | Root widget with router and global providers |
+| `localization/` | Localization delegates (`flutter_localizations` glue) |
+| `sample_feature/` | Flutter template leftover; **unused at runtime** — safe to delete |
+| `settings/` | Legacy settings controller; **unused at runtime** — safe to delete |
+
+> `sample_feature/` and `settings/` under `lib/src/` are Flutter project-template artefacts. They are not referenced from `main.dart` or any provider. They inflate the file count but contribute no production behaviour.
+
+## Services
+
+### Authentication (`lib/services/auth/`)
+
+| File | Purpose |
+|------|---------|
+| `app_auth.dart` | Thin flutter_appauth wrapper |
+| `auth_interceptor.dart` | `BaseClient` that injects Bearer tokens and handles 401 → refresh → retry |
+| `auth_logger.dart` | Structured event logger (talker-backed) |
+| `auth_notifier.dart` | Auth state machine — `init`, `authorize`, `refreshTokens`, `validateTokens`, `logout` |
+| `auth_state.dart` | Sealed `AuthState` (`Authenticated` / `Unauthenticated` / `Error`) |
+| `auth_providers.dart` | Riverpod provider wiring for the above |
+| `token_storage.dart` | `flutter_secure_storage`-backed token persistence |
+| `connectivity_checker.dart` | Network state read used by `NetworkErrorClassifier` |
+| `network_error_classifier.dart` | Classifies HTTP errors into retryable vs terminal |
+| `insecure_http_client.dart` | Dev-only HTTP client that bypasses TLS validation |
+
+### Keycloak (`lib/services/keycloak/`)
+
+| File | Purpose |
+|------|---------|
+| `keycloak_service.dart` | OIDC discovery + authorize / token / end_session endpoints |
+
+### Top-level (`lib/services/`)
+
+| File | Purpose |
+|------|---------|
+| `connectivity_service.dart` | Reactive online/offline state driving the offline banner. **Differs from** `connectivity_checker.dart` (which is the per-request classifier hook used by `NetworkErrorClassifier`). |
+| `user_service.dart` | User profile operations against `/api/me` |
+| `i18n_service.dart` | Locale selection + translation lookups |
+| `notification_service.dart` | In-app toast / event bus (success/error/info/warning broadcast over StreamController). No push notification integration is currently wired. |
+| `genie_ai_config.dart` | Reads `assets/config/genie-ai-config.json` at startup |
+| `fallback_localizations.dart` | English fallback for missing translation keys |
+| `sse_parser.dart` | SSE stream → typed `SseEvent` objects (chunk / metadata / translation / done / error) |
 
 ## Configuration (`lib/config/`)
 
-| File | Description |
-|------|-------------|
-| `keycloak_config.dart` | Keycloak OIDC client configuration |
-| `dev_config.dart` | Development environment configuration |
-| `staging_config.dart` | Staging environment configuration |
-| `e2e_config.dart` | E2E testing configuration |
-| `flavors/itu.dart` | ITU flavor-specific configuration |
-| `flavors/template.dart` | Flavor configuration template |
-
----
+| File | Purpose |
+|------|---------|
+| `keycloak_config.dart` | `KeycloakConfig` schema + `getConfig()` flavor switch + `allSupportedLocaleCodes` |
+| `dev_config.dart` | Development flavor |
+| `staging_config.dart` | Staging flavor |
+| `e2e_config.dart` | E2E test flavor |
+| `flavors/itu.dart` | ITU production flavor |
+| `flavors/template.dart` | Template to copy for new institutional flavors |
 
 ## Providers (`lib/providers/`)
 
-| File | Description |
-|------|-------------|
-| `api_providers.dart` | Riverpod providers for API clients |
-
----
+| File | Purpose |
+|------|---------|
+| `api_providers.dart` | Riverpod providers for backend API clients (one per OpenAPI domain) |
 
 ## Utilities (`lib/utils/`)
 
-| File | Description |
-|------|-------------|
-| `theme_manager.dart` | Theme switching and persistence |
-| `chart_theme_utils.dart` | Chart theme utilities (for analytics charts) |
-| `dialog_theme_utils.dart` | Dialog theme utilities |
+| File | Purpose |
+|------|---------|
+| `theme_manager.dart` | Theme switching + persistence |
+| `chart_theme_utils.dart` | Chart theme helpers for the analytics view |
+| `dialog_theme_utils.dart` | Dialog theme helpers |
+| `config_resolver.dart` | Resolves flavor-specific runtime overrides |
 
----
+## Locales
 
-## Internationalization (`lib/i18n/locales/`)
-
-Supported languages (14 locales):
+`lib/i18n/locales/` ships 14 locale files, matched by `allSupportedLocaleCodes` in `lib/config/keycloak_config.dart`:
 
 | Locale | Language | File |
 |--------|----------|------|
@@ -196,57 +190,52 @@ Supported languages (14 locales):
 | `es` | Spanish | `es.dart` |
 | `fr` | French | `fr.dart` |
 | `id` | Indonesian | `id.dart` |
-| `man` | Mandarin Chinese | `man.dart` |
+| `man` | Mandarin (Pinyin) | `man.dart` |
 | `pt` | Portuguese | `pt.dart` |
 | `ru` | Russian | `ru.dart` |
 | `st` | Sesotho | `st.dart` |
 | `sw` | Swahili | `sw.dart` |
 | `th` | Thai | `th.dart` |
-| `zh` | Chinese | `zh.dart` |
+| `zh` | Chinese (Simplified) | `zh.dart` |
 
----
+> Deployment-level locale whitelist is **config-driven**. All 14 files stay in the source; a flavor restricts the active set via `KeycloakConfig.supportedLocaleCodes` (see [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) §4).
 
-## Component Organization
+## Tree
 
 ```
-lib/
-├── main.dart                       # App entry point
-├── src/                            # App structure
-│   ├── app.dart                    # Root widget
-│   ├── sample_feature/             # Sample feature (template code)
-│   ├── settings/                   # Settings (legacy)
-│   └── localization/               # Localization delegates
-├── components/                     # UI components (14)
-│   ├── auth/                       # Authentication (1)
-│   ├── chat/                       # Chat interface (6)
-│   ├── sidebar/                    # Sidebar (3)
-│   ├── user/                       # User profile (1)
-│   ├── settings/                   # Settings (2)
-│   └── shared/                     # Shared UI (3)
-├── design_system/                  # Design system (11)
-│   ├── components/                 # DS primitives (6)
-│   ├── tokens/                     # Design tokens (4)
-│   └── theme/                      # App theme (1)
-├── services/                       # Business logic (20)
-│   ├── auth/                       # Auth services (10)
-│   ├── keycloak/                   # Keycloak wrapper (1)
-│   └── [other services]            # Other services (9)
-├── config/                         # Configuration (5)
-│   └── flavors/                    # Flavor configs (2)
-├── providers/                      # Riverpod providers (1)
-├── utils/                          # Utilities (3)
-└── i18n/                           # Internationalization
-    └── locales/                    # Translation files (13)
+mobile/genie_ai_mobile/lib/
+├── main.dart                         # App entry point (MyApp root)
+├── src/                              # App composition root
+│   ├── app.dart                      # Router + theme + locale wiring
+│   ├── localization/                 # Flutter localization delegates
+│   ├── sample_feature/               # Flutter template (unused at runtime)
+│   └── settings/                     # Legacy settings controller (unused)
+├── components/                       # UI components (16)
+│   ├── auth/                         # Authentication (1)
+│   ├── chat/                         # Chat interface (6)
+│   ├── sidebar/                      # Sidebar (3)
+│   ├── user/                         # User profile (1)
+│   ├── settings/                     # Settings (2)
+│   └── shared/                       # Shared UI (3)
+├── design_system/                    # Design system (11)
+│   ├── components/                   # DS primitives (6)
+│   ├── tokens/                       # Design tokens (4)
+│   └── theme/                        # App theme (1)
+├── services/                         # Business logic (18)
+│   ├── auth/                         # Auth services (10)
+│   ├── keycloak/                     # Keycloak wrapper (1)
+│   └── [top-level services]           # (7)
+├── config/                           # Configuration (6)
+│   └── flavors/                      # Flavor configs (2)
+├── providers/                        # Riverpod providers (1)
+├── utils/                            # Utilities (4)
+└── i18n/                             # Internationalization
+    └── locales/                      # Translation files (14)
 ```
 
----
+## Related
 
-## Notes
-
-- **State Management**: Riverpod (provider-based)
-- **Authentication**: Keycloak OIDC with secure token storage
-- **Networking**: Custom HTTP client with interceptors and SSE support
-- **i18n**: 13 language locales with fallback support
-- **Design System**: Token-based with DS components and utilities
-- **Flavors**: Multi-environment configuration (dev, staging, prod)
-- **Platform Support**: Web, Android, iOS (conditional file utilities)
+- [Mobile Architecture](/docs/mobile/mobile-architecture/) — how the layers compose; auth and SSE at the wire level.
+- [User Authentication](/docs/mobile/user-authentication/) — user-visible auth flow (PKCE, refresh, logout, error states).
+- [Chat Pipeline](/docs/mobile/chat-pipeline/) — SSE event flow, feedback dialog, Quick Help, PDF export.
+- [Mobile Deployment Guide](/docs/mobile/mobile-deployment-guide/) — flavor creation, Android signing, iOS provisioning.

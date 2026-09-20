@@ -1,7 +1,7 @@
 ---
 title: "Core & Project Overview"
 description: "Top-level project context for GENIE.AI: scope, source-tree map, integration architecture, and contributor onboarding."
-weight: 1
+weight: 55
 section: "core"
 ---
 

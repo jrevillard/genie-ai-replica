@@ -1,7 +1,7 @@
 ---
 title: Knowledge Base
 description: Managing the GENIE.AI knowledge base — ingesting documents, the processing pipeline, the label taxonomy, document lifecycle, and content guidance.
-weight: 10
+weight: 70
 slug: knowledge-base
 ---
 
@@ -12,7 +12,7 @@ knowledge managers, domain experts, and administrators — not developers of the
 pipeline internals.
 
 If you want to understand *how retrieval works under the hood*, read the
-[RAG Pipeline]({{< relref "/docs/rag" >}}) section first. This section is about
+[RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) section first. This section is about
 the **operational** side: how documents get in, how they are processed, how to
 organise and maintain them, and what makes content retrieve well.
 
@@ -23,11 +23,14 @@ organise and maintain them, and what makes content retrieve well.
 - [Document lifecycle]({{< relref "document-lifecycle" >}}) — upload, processing
   states, updating, and retracting documents.
 - [Labelling & taxonomy]({{< relref "labelling-taxonomy" >}}) — how chunks are
-  labelled, the service-category taxonomy, and label-based filtering at retrieve
-  time.
+  labelled, the service-category taxonomy, label-based filtering at retrieve
+  time, and how to curate the taxonomy from the admin UI.
 - [Content guidance]({{< relref "content-guidance" >}}) — what makes knowledge-base
   content retrieve well: document structure, chunking, and the effect of
   contextual retrieval.
+- [Ingestion log reference]({{< relref "ingestion-log" >}}) — per-chunk progress
+  log written by dataprep: schema, endpoints, canonical message strings, and a
+  debugging playbook.
 
 ## How documents flow through the system
 
@@ -47,6 +50,6 @@ chunks, embeddings, and graph nodes cleanly.
 
 | Role | What you'll do here |
 |---|---|
-| Knowledge manager | Upload and curate documents; organise the taxonomy. |
+| Knowledge manager | Upload and curate documents; organise the taxonomy via the Knowledge Hierarchy tab. |
 | Domain expert | Review and refine labels; judge retrieval quality. |
-| Administrator | Monitor ingestion health; retract outdated content; size the knowledge base. |
+| Administrator | Monitor ingestion health; retract outdated content; size the knowledge base; read the ingestion log. |

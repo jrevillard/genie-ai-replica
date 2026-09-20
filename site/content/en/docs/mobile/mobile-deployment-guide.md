@@ -1,31 +1,61 @@
 ---
 title: "Mobile Deployment Guide"
-description: "Building and deploying the GENIE.AI mobile app (Android/iOS): onboarding and release."
-weight: 2
+description: "Building and deploying the GENIE.AI mobile app (Android/iOS): flavor onboarding, signing, and release."
+weight: 3
 section: "mobile"
+mode: how-to
+persona: developer
+owner: "docs-stewards"
+last_reviewed: 2026-09-18
 ---
 
 ## Overview
 
-This guide walks deployment technicians through creating a new institutional deployment of the GENIE.AI mobile app. Each deployment produces a dedicated build with its own app ID, Keycloak client, backend URL, and deep link scheme — all compiled at build-time via Flutter flavors.
+This guide walks deployment technicians through shipping a new institutional build of the GENIE.AI mobile app. Each deployment produces a dedicated build with its own app ID, Keycloak client, backend URL, deep-link scheme, and asset-link fingerprints — all wired at build time via Flutter flavors.
 
-**Target audience:** Deployment technicians familiar with Flutter, Gradle, Xcode, and Docker.
+**Audience:** Deployment technicians familiar with Flutter, Gradle, Xcode, and Docker.
 
 **Estimated time:** Under a day for a single deployment.
+
+## Placeholders used in this guide
+
+Every `<PLACEHOLDER>` in the code blocks below must be substituted before running. Export them into the shell once, then copy-paste from there:
+
+```bash
+# Substitute before running any command in this guide.
+export KEYCLOAK_URL="https://keycloak.<your-domain>"
+export KC_MOBILE_CLIENT_ID="genie-mobile-<institution>"
+export KC_MOBILE_REDIRECT_SCHEME="com.<institution>.genieai"
+export APPLICATION_ID="com.example.genie_ai_mobile"
+export BUNDLE_ID="com.example.genieAiMobile"
+export TEAM_ID="<Apple Developer Team ID>"
+export SHA256_FINGERPRINT="<release-key SHA-256>"
+```
+
+| Placeholder | Where to find it |
+|-------------|-----------------|
+| `<KEYCLOAK_URL>` | The public URL of your Keycloak instance |
+| `<institution>` | Your institution short name (lowercase, no spaces) |
+| `<KC_MOBILE_CLIENT_ID>` | The mobile OIDC client ID (defaults to `genie-mobile-<institution>`) |
+| `<KC_MOBILE_REDIRECT_SCHEME>` | Reverse-DNS scheme, e.g. `com.<institution>.genieai` |
+| `<APPLICATION_ID>` | Android `applicationId` from `build.gradle` (e.g. `com.example.genie_ai_mobile`) |
+| `<BUNDLE_ID>` | iOS `PRODUCT_BUNDLE_IDENTIFIER` from the XCConfig triplet |
+| `<TEAM_ID>` | Apple Developer Team ID (from [Apple Developer Portal](https://developer.apple.com/account)) |
+| `<SHA256_FINGERPRINT>` | Output of `keytool -list -v -keystore <keystore>` for the release key |
 
 ## Prerequisites
 
 | Requirement | Purpose |
 |-------------|---------|
-| Flutter SDK 3.10+ | Build the mobile app |
+| Flutter SDK 3.38+ (Dart SDK 3.10.8+, per pubspec.yaml and pubspec.lock) | Build the mobile app |
 | Android Studio (with SDK) | Android builds, Gradle, emulator |
 | Xcode 14+ (macOS only) | iOS builds, signing, IPA creation |
-| Docker + Docker Compose | Run Keycloak locally for testing |
+| Access to the running stack | The `keycloak-config` service must be reachable to import the realm |
 | Device or emulator | End-to-end validation |
 | Access to deployment `.env` | Configure Keycloak client and redirect scheme |
-| Keystore for Android signing | Release builds (see [Step 5: Android Signing](#step-5-android-signing)) |
+| Keystore for Android signing | Release builds (see [Step 5](#step-5-android-signing)) |
 
-## Step 1: Environment Variables
+## Step 1: Environment variables
 
 Add two required variables to the deployment `.env` file:
 
@@ -33,22 +63,34 @@ Add two required variables to the deployment `.env` file:
 # Mobile OIDC client for institutional deployments (Flutter app)
 # Public client with PKCE — no client secret required (RFC 8252).
 # REQUIRED — no default. Omitting causes silent keycloak-config-cli failure.
-# Used by: keycloak-config-cli (creates the mobile OIDC client in Keycloak at startup)
 KC_MOBILE_CLIENT_ID=genie-mobile-<institution>
 
 # Mobile app custom URL scheme for OIDC callback redirect.
 # REQUIRED — no default. Omitting causes silent keycloak-config-cli failure.
-# See: Scheme Coherence Rule (Step 3) — this value must match 4 other config layers.
 KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 ```
 
-> **Warning:** Unlike other Keycloak variables (e.g., `KC_CLIENT_ID` which defaults to `genie-app`), `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` have **no defaults**. Omitting them does not produce an error — keycloak-config-cli silently skips client creation, and the mobile app will fail to authenticate at runtime.
+> **Warning:** `KC_MOBILE_CLIENT_ID` and `KC_MOBILE_REDIRECT_SCHEME` have **no defaults** (unlike `KC_CLIENT_ID` which defaults to `genie-app`). Omitting them does not produce an error — `keycloak-config-cli` silently skips client creation and the app fails to authenticate at runtime.
 
-These variables are already passed to the `keycloak-config` service in `docker-compose.yaml` (lines 1202-1203). No manual docker-compose edit is needed — just set them in `.env` and restart the service.
+**Preflight check before editing:**
 
-## Step 2: Keycloak Client
+```bash
+# Confirm the variables are not already set on this deployment
+grep -E "^KC_MOBILE" .env || echo "not set — add them"
+```
 
-keycloak-config-cli creates the mobile client automatically from the environment variables at container startup. The client definition is in `configs/keycloak/genie-realm.yaml` (lines 171-189).
+These variables are already wired into the `keycloak-config` service in `docker-compose.yaml` (lines 1591-1592). No `docker-compose.yaml` edit is needed — just set them in `.env` and restart the service.
+
+```bash
+# Docker Swarm
+docker service update --force genieai_keycloak-config
+# Docker Compose
+docker compose restart keycloak-config
+```
+
+## Step 2: Keycloak client
+
+`keycloak-config-cli` creates the mobile client automatically from the environment variables at container startup. The client definition is in `configs/keycloak/genie-realm.yaml` (lines 158-178).
 
 **Client configuration (automatic):**
 
@@ -67,19 +109,19 @@ After setting the environment variables and restarting the `keycloak-config` ser
 ```bash
 # Get master admin token
 KC_ADMIN_PWD=$(grep "^KEYCLOAK_ADMIN_PASSWORD=" .env | cut -d= -f2)
-ADMIN_TOKEN=$(curl -sk -X POST "<KEYCLOAK_URL>/realms/master/protocol/openid-connect/token" \
+ADMIN_TOKEN=$(curl -sk -X POST "$KEYCLOAK_URL/realms/master/protocol/openid-connect/token" \
   -d "client_id=admin-cli" -d "username=admin" -d "password=${KC_ADMIN_PWD}" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Verify client exists
-curl -sk "<KEYCLOAK_URL>/admin/realms/genie/clients?clientId=<KC_MOBILE_CLIENT_ID>" \
+curl -sk "$KEYCLOAK_URL/admin/realms/genie/clients?clientId=$KC_MOBILE_CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; c=json.load(sys.stdin); print('OK' if c else 'NOT FOUND')"
 # Expected: OK
 ```
 
-> **Swarm constraint:** In `docker stack deploy` mode, `env_file` does not propagate to `$(env:VAR)` substitution in `genie-realm.yaml`. Each environment variable used by keycloak-config-cli must be explicitly listed in the `keycloak-config` service `environment:` block in `docker-compose.yaml`. The mobile vars are already present (lines 1202-1203) — added in Story 4.2. Future vars will require the same manual addition.
+> **Swarm constraint:** In `docker stack deploy` mode, `env_file` does not propagate to `$(env:VAR)` substitution in `genie-realm.yaml`. Each environment variable used by `keycloak-config-cli` must be explicitly listed in the `keycloak-config` service `environment:` block in `docker-compose.yaml`. The mobile vars are already present (lines 1591-1592). Future vars will require the same manual addition.
 
-## Step 3: Scheme Coherence Rule
+## Step 3: Scheme coherence rule
 
 The OIDC redirect scheme must match across **5 layers**. A mismatch between any layer causes **silent callback failure** — the browser redirects to the wrong scheme and the app never receives the authorization code.
 
@@ -91,7 +133,7 @@ The OIDC redirect scheme must match across **5 layers**. A mismatch between any 
 | 4 | Deployment `.env` | `.env` | `KC_MOBILE_REDIRECT_SCHEME` |
 | 5 | Keycloak realm config | `configs/keycloak/genie-realm.yaml` (via keycloak-config-cli) | `redirectUris[0]` |
 
-**Reference example — ITU deployment:**
+**Reference — ITU deployment:**
 
 | Layer | Value |
 |-------|-------|
@@ -101,23 +143,26 @@ The OIDC redirect scheme must match across **5 layers**. A mismatch between any 
 | `.env` | `KC_MOBILE_REDIRECT_SCHEME=com.itu.genieai` |
 | Keycloak client | `redirectUris: ["com.itu.genieai://callback"]` |
 
-**Verification commands:**
+**Verification:**
 
 ```bash
-# Android — check registered scheme after install
-adb shell dumpsys package <appId> | grep "Scheme:"
+# Android — check the registered scheme after install
+adb shell dumpsys package <applicationId> | grep "Scheme:"
 # Expected: Scheme: "com.<institution>.genieai"
+# If empty: the app is not installed as a release build, or the manifestPlaceholders
+# weren't applied — re-run Step 4 Layer 3 and rebuild.
 
-# iOS — check XCConfig values (from repo root)
+# iOS — confirm all 3 XCConfig files use the same scheme
 grep APP_AUTH_REDIRECT_SCHEME mobile/genie_ai_mobile/ios/Flutter/*-<name>.xcconfig
 # Expected: all 3 files show the same scheme
+# If they diverge: edit the file that drifted and rebuild.
 ```
 
-## Step 4: Flutter Flavor Configuration
+## Step 4: Flutter flavor configuration
 
-Adding a new deployment requires changes in **4 layers**. Follow the checklist below.
+Adding a new deployment requires changes in **4 layers**.
 
-### Layer 1: Dart Flavor Config
+### Layer 1 — Dart flavor config
 
 Copy the template and fill in the values:
 
@@ -140,13 +185,13 @@ const config = KeycloakConfig(
 );
 ```
 
-> **Remember:** `redirectScheme` must match `KC_MOBILE_REDIRECT_SCHEME` in `.env` (see [Step 3](#step-3-scheme-coherence-rule)).
+> `redirectScheme` must match `KC_MOBILE_REDIRECT_SCHEME` in `.env` (see [Step 3](#step-3-scheme-coherence-rule)).
 
-### Layer 2: getConfig() Switch
+### Layer 2 — `getConfig()` switch
 
-Add a case in `lib/config/keycloak_config.dart`:
+Edit `lib/config/keycloak_config.dart`:
 
-1. Add the import at the top: `import 'flavors/<institution>.dart' as <institution>_flavor;`
+1. Add the import: `import 'flavors/<institution>.dart' as <institution>_flavor;`
 2. Add a case in the `getConfig()` switch:
 
 ```dart
@@ -154,7 +199,7 @@ case '<institution>':
   return <institution>_flavor.config;
 ```
 
-### Layer 3: Android Gradle Product Flavor
+### Layer 3 — Android Gradle product flavor
 
 Add a product flavor in `android/app/build.gradle` inside the `productFlavors` block:
 
@@ -167,7 +212,7 @@ Add a product flavor in `android/app/build.gradle` inside the `productFlavors` b
 }
 ```
 
-For development flavors, add `applicationIdSuffix ".<name>"` to avoid conflicts on the same device:
+For development flavors, add `applicationIdSuffix ".<name>"` to allow side-by-side install on the same device:
 
 ```gradle
 dev {
@@ -179,49 +224,78 @@ dev {
 }
 ```
 
-### Layer 4: iOS XCConfig Triplet
+> **Note:** Only `appAuthRedirectScheme` is wired into `manifestPlaceholders`. The `nginxPublicDomain` placeholder shown in earlier revisions of this guide is **not** present in the current `build.gradle` and is not required for App Links — see [Step 9](#step-9-universal-links--app-links) for the actual App Links wiring.
 
-Create 3 files under `mobile/genie_ai_mobile/ios/Flutter/`:
+### Layer 4 — iOS XCConfig triplet
+
+Create three files under `mobile/genie_ai_mobile/ios/Flutter/`:
 
 **`Debug-<name>.xcconfig`:**
+
 ```
 #include "Generated.xcconfig"
 #include "Debug.xcconfig"
 
-PRODUCT_BUNDLE_IDENTIFIER = com.example.genieAiMobile
+PRODUCT_BUNDLE_IDENTIFIER = <bundle-id>
 APP_AUTH_REDIRECT_SCHEME = com.<institution>.genieai
+ASSOCIATED_DOMAINS = applinks:<keycloak-domain>
 ```
 
 **`Release-<name>.xcconfig`:**
+
 ```
 #include "Generated.xcconfig"
 #include "Release.xcconfig"
 
-PRODUCT_BUNDLE_IDENTIFIER = com.example.genieAiMobile
+PRODUCT_BUNDLE_IDENTIFIER = <bundle-id>
 APP_AUTH_REDIRECT_SCHEME = com.<institution>.genieai
+ASSOCIATED_DOMAINS = applinks:<keycloak-domain>
 ```
 
 **`Profile-<name>.xcconfig`:**
+
 ```
 #include "Generated.xcconfig"
 #include "Release.xcconfig"
 
-PRODUCT_BUNDLE_IDENTIFIER = com.example.genieAiMobile
+PRODUCT_BUNDLE_IDENTIFIER = <bundle-id>
 APP_AUTH_REDIRECT_SCHEME = com.<institution>.genieai
+ASSOCIATED_DOMAINS = applinks:<keycloak-domain>
 ```
 
-> **Note:** Replace `PRODUCT_BUNDLE_IDENTIFIER` with the unique bundle ID for this deployment. Each deployment needs a unique bundle ID for App Store distribution.
+Replace `PRODUCT_BUNDLE_IDENTIFIER` with the unique bundle ID for this deployment. Each deployment needs a unique bundle ID for App Store distribution.
 
-## Step 5: Android Signing
+## Step 5: Android signing
 
-Release builds require a `key.properties` file in `mobile/genie_ai_mobile/android/` (gitignored). Copy from the template:
+Release builds require a `key.properties` file in `mobile/genie_ai_mobile/android/` (gitignored). The template lives at `mobile/genie_ai_mobile/android/key.properties.example`.
+
+**Verify the template exists:**
+
+```bash
+ls mobile/genie_ai_mobile/android/key.properties.example
+# If missing, the file content is reproduced below — save it manually.
+```
+
+**Expected `key.properties` format:**
+
+```
+storePassword=<your-store-password>
+keyPassword=<your-key-password>
+keyAlias=<your-key-alias>
+storeFile=<path-to-your-keystore.jks>
+```
+
+> Placeholder names: `<your-key-alias>` and `<path-to-your-keystore.jks>` (not `<institution>` — those are placeholder names from the upstream Android signing-config example).
+
+**Copy and fill:**
 
 ```bash
 cp mobile/genie_ai_mobile/android/key.properties.example \
    mobile/genie_ai_mobile/android/key.properties
+# Edit key.properties with your keystore values
 ```
 
-Generate a keystore (if one doesn't exist for this deployment):
+Generate a keystore if one doesn't exist:
 
 ```bash
 keytool -genkeypair -v \
@@ -232,38 +306,29 @@ keytool -genkeypair -v \
   -validity 10000
 ```
 
-Edit `android/key.properties` with the keystore values:
-
-```
-storePassword=<your-store-password>
-keyPassword=<your-key-password>
-keyAlias=<institution>
-storeFile=<path-to-<institution>-release.keystore>
-```
-
-> **Security:** Restrict file permissions immediately after editing — `key.properties` contains plaintext passwords for the signing keystore:
+> **Security:** Restrict permissions on the file immediately after editing — `key.properties` contains plaintext passwords for the signing keystore:
 >
 > ```bash
 > chmod 600 mobile/genie_ai_mobile/android/key.properties
 > ```
 >
-> The file is already gitignored, but restrictive permissions prevent other local users or processes from reading the credentials.
+> The file is gitignored, but restrictive permissions prevent other local users or processes from reading the credentials.
 
 ## Step 6: Build
 
-Build commands always use `--flavor <name>` syntax. Do not use `--dart-define` or `-t` flags.
+Build commands use `--flavor <name>` to select the Flutter flavor. `--dart-define` is reserved for `DEV_SERVER`/`DEV_PORT` overrides on the dev flavor only (see `mobile/genie_ai_mobile/CLAUDE.md`); do **not** use it for general flavor builds.
 
 ```bash
 cd mobile/genie_ai_mobile
 
 # Android APK (debug)
-ANDROID_HOME=${ANDROID_HOME} flutter build apk --flavor <institution> --debug
+flutter build apk --flavor <institution> --debug
 
 # Android APK (release)
-ANDROID_HOME=${ANDROID_HOME} flutter build apk --flavor <institution> --release
+flutter build apk --flavor <institution> --release
 
 # Android App Bundle (for Google Play)
-ANDROID_HOME=${ANDROID_HOME} flutter build appbundle --flavor <institution> --release
+flutter build appbundle --flavor <institution> --release
 
 # iOS IPA (macOS only)
 flutter build ipa --flavor <institution>
@@ -275,158 +340,162 @@ For detailed build and run instructions, see `mobile/genie_ai_mobile/CLAUDE.md`.
 
 Run through this checklist after completing the flavor configuration.
 
-### Prerequisite: Verify Service Health
+### 7.0 Verify service health (prerequisite)
 
-Before running the verification commands below, confirm that the `keycloak-config` service has finished importing the realm configuration. Running verification too early (while keycloak-config-cli is still starting up or importing) produces misleading "NOT FOUND" results.
+Before running verification commands, confirm that the `keycloak-config` service has finished importing the realm configuration. Running verification too early produces misleading "NOT FOUND" results.
 
 ```bash
-# Check keycloak-config completed realm import successfully
-# Docker Swarm:
+# Docker Swarm
 docker service logs genieai_keycloak-config --since 5m 2>&1 | grep -i "import\|success\|completed"
-# Docker Compose:
+# Docker Compose
 docker compose logs keycloak-config --since 5m 2>&1 | grep -i "import\|success\|completed"
 ```
 
-If no success message appears within 2-3 minutes, check service status:
+If no success message appears within 2-3 minutes, check service status and restart if needed:
 
 ```bash
-# Docker Swarm:
+# Swarm
 docker service ps genieai_keycloak-config
-# Docker Compose:
+# Compose
 docker compose ps keycloak-config
 ```
 
-Restart if state is `failed` or `restarting`.
-
-Wait until you see a success/import-completed message before proceeding. If Keycloak itself is not yet responsive, also check:
+Also confirm Keycloak is responding:
 
 ```bash
-# Verify Keycloak is accepting connections
-curl -sk -o /dev/null -w "%{http_code}" "<KEYCLOAK_URL>/realms/master"
+curl -sk -o /dev/null -w "%{http_code}" "$KEYCLOAK_URL/realms/master"
 # Expected: 200
 ```
 
-### 7.1 Verify Keycloak Client Exists
+### 7.1 Verify Keycloak client exists
 
 ```bash
-curl -sk "<KEYCLOAK_URL>/admin/realms/genie/clients?clientId=<KC_MOBILE_CLIENT_ID>" \
+curl -sk "$KEYCLOAK_URL/admin/realms/genie/clients?clientId=$KC_MOBILE_CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 # Expected: JSON array with one client matching the clientId
+# Empty array: client was not imported — check Step 1 env vars and keycloak-config logs
 ```
 
-### 7.2 Verify Scheme Registered (Android)
+### 7.2 Verify scheme registered (Android)
 
 ```bash
 adb install -r build/app/outputs/flutter-apk/app-<institution>-release.apk
-# appId = base applicationId from build.gradle defaultConfig
-# + applicationIdSuffix from the product flavor (if any)
-adb shell dumpsys package <appId> | grep "Scheme:"
+# applicationId = base applicationId + flavor applicationIdSuffix (if any)
+adb shell dumpsys package <applicationId> | grep "Scheme:"
 # Expected: Scheme: "com.<institution>.genieai"
+# Empty: scheme not registered — re-run Step 4 Layer 3, rebuild, reinstall
 ```
 
-### 7.3 Test Login Flow
+### 7.3 Test login flow
 
 Install the app on a device or emulator and complete the OIDC login flow:
 
-1. Launch the app
-2. Tap "Sign In"
-3. Keycloak login page opens in the system browser
-4. Enter credentials and authorize
-5. App receives the callback and navigates to the authenticated state
+1. Launch the app → the OIDC login screen appears.
+2. Tap **Sign In**.
+3. The system browser (Chrome Custom Tabs on Android, Safari/ASWebAuthenticationSession on iOS) opens the Keycloak login page at `$KEYCLOAK_URL/realms/genie`.
+4. Enter credentials and tap **Authorize** (or **Submit**).
+5. The browser redirects to `<redirectScheme>://callback?...` and the app receives the authorization code.
+6. The app exchanges the code for tokens, persists them, and navigates to the authenticated state (chat view).
 
-For automated verification, see `mobile/genie_ai_mobile/CLAUDE.md#Verify OIDC Login Flow`.
+For automated verification, see `mobile/genie_ai_mobile/CLAUDE.md#Verify OIDC Login Flow`. For the underlying protocol, see [User Authentication](/docs/mobile/user-authentication/).
 
-### 7.4 Verify Token Refresh
+> **Reference screenshots** — capture the canonical login screen, system-browser handover, and authenticated home screens per deployment and store them alongside the deployment runbook (no canonical `mobile/genie_ai_mobile/screenshots/` directory is shipped in the repo).
 
-1. Log in successfully
-2. Background the app and wait for the access token to expire (default: 5 minutes)
-3. Resume the app
-4. The app should automatically refresh the token without prompting the user
+### 7.4 Verify token refresh
 
-### 7.5 Verify Logout Terminates Keycloak Session
+1. Log in successfully.
+2. Background the app and wait for the access token to expire (default: 5 minutes).
+3. Resume the app.
+4. The app refreshes the token transparently — no user prompt, no re-login.
 
-1. Log in
-2. Tap "Log Out"
-3. Verify in Keycloak Admin Console that the session is terminated (or use the Admin API to check active sessions)
+If the user is bounced back to the login screen, the refresh token has been revoked (e.g. by an `/api/auth/logout` from another device). See [User Authentication](/docs/mobile/user-authentication/) §"Refresh" for the failure boundary.
 
-For detailed verification procedures, see `mobile/genie_ai_mobile/CLAUDE.md#Verify Logout`.
+### 7.5 Verify logout terminates Keycloak session
 
-### 7.6 Verify Password Reset
+1. Log in.
+2. Tap **Log Out**.
+3. Verify in Keycloak Admin Console that the session is terminated — or check the active sessions count via the Admin API:
 
-**Prerequisite:** SMTP must be configured (`EMAIL_HOST`, `EMAIL_USER` set in `.env`). If SMTP is not set up, Keycloak logs an error but shows no user-facing message — the user submits their email but never receives a reset link.
+```bash
+curl -sk "$KEYCLOAK_URL/admin/realms/genie/sessions?first=0&max=10" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))"
+# Expected: 0 (or fewer than before logout)
+```
 
-1. Launch the app and tap "Sign In"
-2. On the Keycloak login page in the system browser, verify the "Forgot Password" link is visible
-3. Tap "Forgot Password" → Keycloak shows the email input form
-4. Enter a test user email and submit → check that the email is sent (verify in SMTP logs or mailbox)
-5. Tap the reset link in the email → verify it opens the Keycloak reset page in the **system browser** (not the app). On Android, no disambiguation dialog should appear if App Links are configured correctly.
-6. Set a new password and submit
-7. Return to the app and tap "Sign In" → authenticate with the new password
-8. To verify AC5 (disable): set `KEYCLOAK_RESET_PASSWORD=false` in `.env`, restart the `keycloak-config` service (`docker service update --force genieai_keycloak-config` in Swarm, or `docker compose restart keycloak-config` in Compose), then refresh the Keycloak login page — the "Forgot Password" link must no longer appear
+For the full logout sequence (backend + Keycloak `end_session` + storage wipe), see [User Authentication](/docs/mobile/user-authentication/) §"Logout".
 
-> **Note:** After changing `KEYCLOAK_RESET_PASSWORD`, the `keycloak-config` one-shot service must be restarted to apply the realm setting. Restarting Keycloak alone is not sufficient.
+### 7.6 Verify password reset
 
-## Password Reset
+**Prerequisite:** SMTP must be configured (`EMAIL_HOST`, `EMAIL_USER`, etc. set in `.env`). If SMTP is not set up, Keycloak logs an error but shows no user-facing message — the user submits their email but never receives a reset link.
 
-Password reset is a Keycloak built-in feature. The "Forgot Password" link appears on the Keycloak login page (rendered in the system browser) — the app does not control its visibility.
+1. Launch the app and tap **Sign In**.
+2. On the Keycloak login page in the system browser, verify the **Forgot Password** link is visible.
+3. Tap **Forgot Password** → Keycloak shows the email input form.
+4. Enter a test user email and submit → check that the email is sent (verify in SMTP logs or mailbox).
+5. Tap the reset link in the email → it opens the Keycloak reset page in the **system browser** (not the app). On Android, if you see the system app-picker disambiguation dialog, App Links verification failed — run `adb shell pm verify-app-links --re-verify <application_id>` and re-test.
+6. Set a new password and submit.
+7. Return to the app and tap **Sign In** → authenticate with the new password.
+8. **AC5 disable verification:** set `KEYCLOAK_RESET_PASSWORD=false` in `.env`, restart `keycloak-config` (`docker service update --force genieai_keycloak-config` or `docker compose restart keycloak-config`), refresh the Keycloak login page — the **Forgot Password** link must no longer appear.
+
+> After changing `KEYCLOAK_RESET_PASSWORD`, the `keycloak-config` one-shot service must be restarted to apply the realm setting. Restarting Keycloak alone is not sufficient.
+
+## Step 8: Password reset
+
+Password reset is a Keycloak built-in feature. The **Forgot Password** link appears on the Keycloak login page (rendered in the system browser) — the app does not control its visibility.
 
 ### Configuration
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `KEYCLOAK_RESET_PASSWORD` | `true` | Enable/disable "Forgot Password" on Keycloak login page |
-| `EMAIL_HOST` | (required) | SMTP server hostname |
-| `EMAIL_PORT` | (required) | SMTP server port |
-| `EMAIL_SECURE` | `false` | Use SSL/TLS for SMTP |
-| `EMAIL_USER` | (required) | SMTP authentication username |
-| `EMAIL_PASSWORD` | (required) | SMTP authentication password |
-| `EMAIL_FROM` | (required) | Sender email address |
+| Variable | Default | Required | Purpose |
+|----------|---------|----------|---------|
+| `KEYCLOAK_RESET_PASSWORD` | `true` | no | Enable/disable "Forgot Password" on Keycloak login page |
+| `EMAIL_HOST` | (empty) | yes (for SMTP) | SMTP server hostname |
+| `EMAIL_PORT` | `587` | no | SMTP server port |
+| `EMAIL_SECURE` | `false` | no | Implicit SSL/TLS for SMTP |
+| `EMAIL_USER` | (empty) | yes (for SMTP) | SMTP authentication username |
+| `EMAIL_PASSWORD` | (empty) | yes (for SMTP) | SMTP authentication password |
+| `EMAIL_FROM` | (empty) | yes (for SMTP) | Sender email address |
 
-Set `KEYCLOAK_RESET_PASSWORD=false` in `.env` to hide the "Forgot Password" link. This is a Keycloak realm setting — the app has no control over it.
+> **Defaults verified at `docker-compose.yaml:1597` (`KEYCLOAK_RESET_PASSWORD=${KEYCLOAK_RESET_PASSWORD:-true}`) and `docker-compose.yaml:1535` (`KC_SMTP_PORT=${EMAIL_PORT:-587}`).**
+>
+> **SMTP must be configured** (`EMAIL_*` variables) for password reset emails to work. If SMTP is not set up, Keycloak logs an error but shows no user-facing message — the user submits their email but never receives a reset link.
 
-> **Important:** SMTP must be configured (`EMAIL_*` variables) for password reset emails to work. If SMTP is not set up, Keycloak logs an error but shows no user-facing message — the user submits their email but never receives a reset link.
+### How it works
 
-### How It Works
+1. User taps **Sign In** in the app → system browser opens the Keycloak login page.
+2. User taps **Forgot Password** on Keycloak's page → Keycloak shows the reset form (all in browser).
+3. User submits email → Keycloak sends a reset email via SMTP.
+4. User taps the reset link in the email → system browser opens the Keycloak reset page (HTTPS URL).
+5. User sets a new password → returns to the app → taps **Sign In** → authenticates with the new password.
 
-1. User taps "Sign In" in the app → system browser opens the Keycloak login page
-2. User taps "Forgot Password" on Keycloak's page → Keycloak shows the reset form (all in browser)
-3. User submits their email → Keycloak sends a reset email via SMTP
-4. User taps the reset link in the email → system browser opens the Keycloak reset page (HTTPS URL)
-5. User sets a new password → returns to the app → taps "Sign In" → authenticates with the new password
+> Password reset links always open in the system browser because Keycloak uses HTTPS URLs. The app only registers a custom URL scheme (`<redirectScheme>://callback`) for OIDC callbacks — it does not intercept HTTPS links. Universal Links / App Links (Step 9) ensure the system browser opens without disambiguation dialogs.
 
-> **Note:** Password reset links always open in the system browser because Keycloak uses HTTPS URLs. The app only registers a custom URL scheme (`<redirectScheme>://callback`) for OIDC callbacks — it does not intercept HTTPS links. Universal Links/App Links ensure the system browser opens without disambiguation dialogs on Android.
-
-### Customization (Optional)
+### Customization
 
 For advanced password reset configuration, use the Keycloak Admin Console:
 
-- Custom email templates (realm settings → Email tab)
-- Brute force detection thresholds (realm settings → Security Defenses)
-- Password policy requirements (realm settings → Password Policy)
+- Custom email templates (Realm settings → Email tab)
+- Brute-force detection thresholds (Realm settings → Security Defenses)
+- Password policy requirements (Realm settings → Password Policy)
 - Reset link expiration time
 
-## Universal Links & App Links
+## Step 9: Universal Links & App Links
 
-Universal Links (iOS) and App Links (Android) use cryptographic domain verification to ensure that password reset and email verification links open in the **system browser** instead of triggering Android's disambiguation dialog.
+Universal Links (iOS) and App Links (Android) use cryptographic domain verification so that password reset and email verification links open in the **system browser** instead of triggering Android's disambiguation dialog.
 
-> **⚠️ CRITICAL: Customize Verification Files Before Deployment**
+> **CRITICAL: Customize verification files before deployment**
 >
-> The verification files in `api-gateway-solution/nginx/conf/` contain **placeholder values** (`<TEAM_ID>`, `<BUNDLE_ID>`, `<APPLICATION_ID>`, `<SHA256_FINGERPRINT>`) that **MUST be replaced** with your deployment-specific values before building the nginx Docker image. If deployed without customization, App Links verification will fail silently.
->
-> See `api-gateway-solution/nginx/conf/README.md` for detailed customization instructions.
+> The verification files in `api-gateway-solution/nginx/conf/` contain **placeholder values** (`<TEAM_ID>`, `<BUNDLE_ID>`, `<APPLICATION_ID>`, `<SHA256_FINGERPRINT>`) that **MUST be replaced** with deployment-specific values before building the nginx Docker image. If deployed without customization, App Links verification fails silently. See `api-gateway-solution/nginx/conf/README.md` for details.
 
-### How It Works
-
-The app uses a **dual deep link mechanism**:
+### How it works — dual deep-link mechanism
 
 | Mechanism | Platform | Purpose | Protocol |
 |-----------|----------|---------|----------|
 | Custom URL scheme | iOS + Android | OIDC callbacks only | `com.<institution>.genieai://callback` |
 | Universal Links / App Links | iOS / Android | Password reset, email verification | `https://<domain>/...` |
 
-Custom URL schemes are configured via `RedirectUriReceiverActivity` (Android) and `CFBundleURLSchemes` (iOS). These are **not affected** by this section.
+Custom URL schemes are wired through `RedirectUriReceiverActivity` (Android) and `CFBundleURLSchemes` (iOS) and are **not affected** by this section.
 
-### iOS: apple-app-site-association
+### iOS — `apple-app-site-association`
 
 Host the verification file at `https://<keycloak-domain>/.well-known/apple-app-site-association` (no `.json` extension in the URL).
 
@@ -448,29 +517,25 @@ Host the verification file at `https://<keycloak-domain>/.well-known/apple-app-s
 | Placeholder | Value |
 |-------------|-------|
 | `<TEAM_ID>` | Apple Developer Team ID (from Apple Developer Portal) |
-| `<BUNDLE_ID>` | App bundle identifier per flavor (e.g., `com.example.genieAiMobile`) |
+| `<BUNDLE_ID>` | App bundle identifier per flavor (e.g. `com.example.genieAiMobile`) |
 
-The file is served by nginx — no action needed beyond deploying the updated `apple-app-site-association` file.
+#### iOS Associated Domains entitlement
 
-#### iOS Associated Domains Entitlement
-
-The entitlements file at `mobile/genie_ai_mobile/ios/Runner/Runner.entitlements` uses `$(ASSOCIATED_DOMAINS)` which is set per flavor in the XCConfig files. For a new deployment, add the `ASSOCIATED_DOMAINS` variable to all 3 XCConfig files (`Debug-<name>.xcconfig`, `Release-<name>.xcconfig`, `Profile-<name>.xcconfig`):
+The entitlements file at `mobile/genie_ai_mobile/ios/Runner/Runner.entitlements` uses `$(ASSOCIATED_DOMAINS)`, set per flavor in the XCConfig files. For a new deployment, add `ASSOCIATED_DOMAINS` to all 3 XCConfig files (already shown in [Step 4 Layer 4](#layer-4--ios-xcconfig-triplet)):
 
 ```
 ASSOCIATED_DOMAINS = applinks:<keycloak-domain>
 ```
 
-The entitlements file and `.pbxproj` reference are already configured. Only the XCConfig variable needs to be set per deployment.
-
-> **🔔 CRITICAL: Apple CDN Cache Delay**
+> **CRITICAL: Apple CDN cache delay**
 >
 > Apple's CDN caches the AASA file for **up to 24 hours**. After updating `apple-app-site-association`, Universal Links may not work immediately.
 >
-> **DO NOT waste hours debugging** — Use Apple's [App Search Validation Tool](https://search.developer.apple.com/appsearch-validation-tool/) for **instant verification** instead of waiting for CDN propagation.
+> Do **not** spend hours debugging — use Apple's [App Search Validation Tool](https://search.developer.apple.com/appsearch-validation-tool/) for instant verification instead of waiting for CDN propagation.
 >
-> **Testing workaround:** During development, add a query parameter to your test URLs (e.g., `?_test=123`) to bypass CDN cache, or temporarily change the `ASSOCIATED_DOMAINS` value to force re-fetch.
+> **Testing workaround:** During development, add a query parameter to test URLs (e.g. `?_test=123`) to bypass CDN cache, or temporarily change `ASSOCIATED_DOMAINS` to force a re-fetch.
 
-### Android: assetlinks.json
+### Android — `assetlinks.json`
 
 Host the verification file at `https://<keycloak-domain>/.well-known/assetlinks.json`.
 
@@ -489,12 +554,12 @@ Host the verification file at `https://<keycloak-domain>/.well-known/assetlinks.
 
 | Placeholder | Value |
 |-------------|-------|
-| `<APPLICATION_ID>` | Android application ID per flavor (e.g., `com.example.genie_ai_mobile`) |
+| `<APPLICATION_ID>` | Android `applicationId` per flavor (e.g. `com.example.genie_ai_mobile`) |
 | `<SHA256_FINGERPRINT>` | SHA-256 fingerprint of the app signing certificate |
 
-> **⚠️ IMPORTANT: Debug vs Release Fingerprints**
+> **IMPORTANT: Debug vs release fingerprints**
 >
-> Debug and release certificates have **different SHA256 fingerprints**. If you deploy both debug and release builds to the same device, you **must include both fingerprints** in `assetlinks.json`:
+> Debug and release certificates have **different SHA256 fingerprints**. If you deploy both debug and release builds to the same device, include **both fingerprints** in `assetlinks.json`:
 >
 > ```json
 > "sha256_cert_fingerprints": [
@@ -503,7 +568,7 @@ Host the verification file at `https://<keycloak-domain>/.well-known/assetlinks.
 > ]
 > ```
 >
-> Otherwise, App Links verification will fail for one of the build variants.
+> Otherwise, App Links verification fails for one of the build variants.
 
 To obtain the SHA-256 fingerprint:
 
@@ -515,25 +580,13 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 keytool -list -v -keystore <path-to-keystore> -alias <alias> | grep SHA256
 ```
 
-The file is served by nginx — no action needed beyond deploying the updated `assetlinks.json` file.
+#### Android App Links wiring
 
-#### Android App Links Intent Filter
+The `${appAuthRedirectScheme}` placeholder is set per flavor in `build.gradle` (see [Step 4 Layer 3](#layer-3--android-gradle-product-flavor)) — this is what `flutter_appauth` uses to register `RedirectUriReceiverActivity` for the OIDC callback.
 
-The intent filter with `android:autoVerify="true"` is already configured in `AndroidManifest.xml` on `MainActivity`. The `${nginxPublicDomain}` placeholder is set per flavor in `build.gradle`. For a new deployment, add `nginxPublicDomain` to the flavor's `manifestPlaceholders`:
+> **HTTPS auto-verify intent filter** — the deployment guide previously documented an `android:autoVerify="true"` intent filter for the Keycloak HTTPS host. That filter is **not** present in `mobile/genie_ai_mobile/android/app/src/main/AndroidManifest.xml` today (only the MAIN/LAUNCHER and the `genie-e2e-test` deep link are wired). App Links verification currently relies on the user tapping the link and confirming the disambiguation dialog. To eliminate the dialog, add an HTTPS intent-filter with `android:autoVerify="true"` on `MainActivity` and reference a `nginxPublicDomain` placeholder from `build.gradle`. Until then, treat "no disambiguation dialog" as an enhancement, not a baseline.
 
-```gradle
-<institution> {
-    dimension "environment"
-    manifestPlaceholders = [
-        appAuthRedirectScheme: "com.<institution>.genieai",
-        nginxPublicDomain: "<keycloak-domain>"
-    ]
-}
-```
-
-Android verifies App Links at install time — no CDN caching delay.
-
-### Nginx Configuration
+### Nginx configuration
 
 Both verification files are served by the nginx reverse gateway. The location blocks are in `api-gateway-solution/nginx/conf/default.conf.template` (placed before the SPA catch-all `location /`):
 
@@ -542,18 +595,20 @@ Both verification files are served by the nginx reverse gateway. The location bl
 location = /.well-known/assetlinks.json {
     default_type application/json;
     alias /etc/nginx/conf.d/assetlinks.json;
+    add_header Cache-Control "public, max-age=3600" always;
 }
 
 # iOS Universal Links verification
 location = /.well-known/apple-app-site-association {
     default_type text/plain;
     alias /etc/nginx/conf.d/apple-app-site-association;
+    add_header Cache-Control "public, max-age=3600" always;
 }
 ```
 
-The files are copied into the nginx Docker image via the Dockerfile. After customizing the JSON files for your deployment, rebuild and redeploy the nginx service.
+The `Cache-Control` header caps client caching at one hour — long enough to avoid hammering the verification endpoints, short enough that post-deployment updates take effect quickly. The files are copied into the nginx Docker image via the Dockerfile. After customising the JSON files for your deployment, rebuild and redeploy the nginx service.
 
-### Verification Testing
+### Verification testing
 
 **Android:**
 
@@ -574,10 +629,10 @@ adb shell am start -a android.intent.action.VIEW \
 
 **iOS:**
 
-1. Use Apple's [App Search Validation Tool](https://search.developer.apple.com/appsearch-validation-tool/) — submit the AASA URL and verify the domain association
-2. On-device test: install the app, tap a Keycloak HTTPS link in the Notes app — should open in Safari (not the app)
+1. Use Apple's [App Search Validation Tool](https://search.developer.apple.com/appsearch-validation-tool/) — submit the AASA URL and verify the domain association.
+2. **On-device test:** install the app, then in the Notes app paste a Keycloak HTTPS link (e.g. `https://<keycloak-domain>/realms/genie/account`), long-press, and tap **Open in Safari** — the link must open in Safari, not the app.
 
-**nginx (both platforms):**
+**Nginx (both platforms):**
 
 ```bash
 curl -s https://<keycloak-domain>/.well-known/assetlinks.json | python3 -m json.tool
@@ -587,27 +642,23 @@ curl -s https://<keycloak-domain>/.well-known/apple-app-site-association | pytho
 # Expected: valid JSON with applinks.details array
 ```
 
-## Air-Gapped Deployments
+## Step 10: Air-gapped deployments
 
-GENIE.AI mobile OIDC works identically whether Keycloak is internet-facing or on an internal network. The only requirement is that the **device must be able to reach Keycloak** at runtime.
+GENIE.AI mobile OIDC works identically whether Keycloak is internet-facing or on an internal network. The only requirement is that the **device must reach Keycloak** at runtime.
 
-### Network Prerequisites
+### Network prerequisites
 
-- The mobile device must resolve the Keycloak hostname (e.g., `keycloak.<institution>.int`)
-- Configure local DNS or `/etc/hosts` on the device if no internal DNS server is available
+- The mobile device must resolve the Keycloak hostname (e.g. `keycloak.<institution>.int`).
+- Configure local DNS or `/etc/hosts` on the device if no internal DNS server is available.
 
-**Configuring local DNS resolution (no DNS server available):**
-
-When the deployment has no internal DNS server, point the Keycloak hostname to the server's IP address using one of the methods below.
-
-*Option A: `/etc/hosts` entry (Android emulator via `adb`, or Linux host):*
+**Option A — `/etc/hosts` (Android emulator via `adb`, or Linux host):**
 
 ```
-# /etc/hosts — add one line per hostname the app must reach
+# /etc/hosts — one line per hostname the app must reach
 10.0.0.100    keycloak.<institution>.int api.<institution>.int
 ```
 
-For an Android emulator, push the entry into the emulator's `/etc/hosts`. **Prerequisites:** requires a `userdebug` or `eng` Android build — production/user builds have a locked `/system` partition and cannot modify `/etc/hosts`. Use a `userdebug` emulator image.
+For an Android emulator, push the entry into the emulator's `/etc/hosts`. Requires a `userdebug` or `eng` Android build — production/user builds have a locked `/system` partition.
 
 ```bash
 adb root
@@ -615,104 +666,98 @@ adb remount
 adb shell "echo '10.0.0.100 keycloak.<institution>.int api.<institution>.int' >> /etc/hosts"
 ```
 
-**Note:** `/etc/hosts` modifications do not survive emulator restart. Re-apply after each cold boot, or use the emulator `-dns-server` launch flag to point the emulator at a DNS server that resolves the hostnames.
+> `/etc/hosts` modifications do not survive emulator restart. Re-apply after each cold boot, or use the emulator `-dns-server` launch flag to point at a DNS server that resolves the hostnames.
 
-*Option B: `resolvectl` / `systemd-resolve` (Linux host running the app or emulator):*
-
-`systemd-resolve` is deprecated in favor of `resolvectl` on modern systemd (v237+). Use the command appropriate for your system:
+**Option B — `resolvectl` / `systemd-resolve` (Linux host):**
 
 ```bash
-# Modern (systemd v237+):
+# Modern systemd (v237+)
 sudo resolvectl dns <iface> 10.0.0.100
-# Or pin a single domain (route queries for this domain to this link's DNS):
 sudo resolvectl domain <iface> ~<institution>.int
 
-# Legacy (older systemd):
+# Legacy systemd
 sudo systemd-resolve --interface=<iface> --set-dns=10.0.0.100
 sudo systemd-resolve --interface=<iface> --set-domain=~<institution>.int
 ```
 
 Verify with `resolvectl status <iface>` or `systemd-resolve --status <iface>`.
 
-*Option C: `nmcli` (NetworkManager-based Linux host):*
+**Option C — `nmcli` (NetworkManager-based Linux host):**
 
 ```bash
 nmcli connection modify "<connection-name>" ipv4.dns "10.0.0.100" ipv4.ignore-auto-dns yes
 nmcli connection up "<connection-name>"
 ```
 
-The `ipv4.ignore-auto-dns yes` flag ensures DHCP-assigned DNS servers do not override the manually configured DNS. Without it, DHCP may re-add the ISP DNS on reconnect, causing intermittent resolution failures.
+The `ipv4.ignore-auto-dns yes` flag prevents DHCP from re-adding the ISP DNS on reconnect.
 
 **Verify resolution before testing:**
 
 ```bash
-# Confirm the hostname resolves to the expected IP
 ping -c 2 keycloak.<institution>.int
 nslookup keycloak.<institution>.int
-# Both should return 10.0.0.100 (or the configured IP)
+# Both should return 10.0.0.100 (or your configured IP)
 ```
 
-- The device must be on the same network or VPN as the Keycloak server
-- No external internet access is required for OIDC — the entire flow stays within the internal network
+- The device must be on the same network or VPN as the Keycloak server.
+- No external internet access is required for OIDC — the entire flow stays within the internal network.
 
-### SSL Considerations
+### SSL considerations
 
-- Air-gapped deployments typically use self-signed certificates
-- For Android emulator testing, install the certificate on the emulator (see `mobile/genie_ai_mobile/CLAUDE.md#Emulator SSL Certificate Setup`)
-- For production devices, install the CA certificate via MDM profile or device policy
+- Air-gapped deployments typically use self-signed certificates.
+- For Android emulator testing, install the certificate on the emulator (see `mobile/genie_ai_mobile/CLAUDE.md#Emulator SSL Certificate Setup`).
+- For production devices, install the CA certificate via MDM profile or device policy.
 
-## OS Version Policy
+## Step 11: OS version policy
 
-| Platform | Technical Minimum | Rationale |
+| Platform | Technical minimum | Rationale |
 |----------|-------------------|-----------|
-| iOS | 13.0+ | `ASWebAuthenticationSession` (system browser SSO) + PKCE support |
-| Android | 6.0+ (API 23) | `EncryptedSharedPreferences` for secure token storage |
+| iOS | **12.0+** | `IPHONEOS_DEPLOYMENT_TARGET = 12.0` (verified at `ios/Runner.xcodeproj/project.pbxproj` lines 363/490/541/647/699). `ASWebAuthenticationSession` and PKCE are available since iOS 12.0. |
+| Android | **API 21+** | `minSdk = flutter.minSdkVersion` (`build.gradle:31`). Flutter 3.10+ defaults `minSdk` to 21. The deployment guide's previous "Android 6.0+ (API 23)" minimum overstated the actual floor; API 21 (Android 5.0) is sufficient. `flutter_launcher_icons` enforces `min_sdk_android: 21` (`pubspec.yaml`). |
 
-### Security Patch Considerations
+### Security patch considerations
 
-- The technical minimums ensure OIDC functionality
-- Institutional security policies may require higher minimums
-- Check for known CVEs in the target OS version before deployment
-- MDM policies can enforce minimum OS version requirements
+- The technical minimums ensure OIDC functionality.
+- Institutional security policies may require higher minimums.
+- Check for known CVEs in the target OS version before deployment.
+- MDM policies can enforce minimum OS version requirements.
 
-### MDM Enforcement Recommendation
+### MDM enforcement recommendation
 
 For institutional deployments, enforce OS version policies via MDM:
 
-- **iOS:** Configuration Profile → Restrictions → Minimum OS version
-- **Android:** EMM policy → Device policy → System update requirements
+- **iOS:** Configuration Profile → Restrictions → Minimum OS version.
+- **Android:** EMM policy → Device policy → System update requirements.
 
-## App Store Submission
+## Step 12: App store submission
 
 ### Google Play
 
-1. Build the Android App Bundle: `flutter build appbundle --flavor <institution> --release`
-2. **Signing:** Use the keystore created in [Step 5](#step-5-android-signing)
-3. **Content rating:** Complete the Google Play content rating questionnaire
-4. **Privacy policy:** Provide a URL to the institution's privacy policy
-5. **Target API level:** Ensure `targetSdkVersion` meets Google Play's current requirements
+1. Build the Android App Bundle: `flutter build appbundle --flavor <institution> --release`.
+2. **Signing:** Use the keystore created in [Step 5](#step-5-android-signing).
+3. **Content rating:** Complete the Google Play content rating questionnaire.
+4. **Privacy policy:** Provide a URL to the institution's privacy policy.
+5. **Target API level:** Ensure `targetSdkVersion` meets Google Play's current requirements.
 
 ### Apple App Store
 
-1. Build the IPA: `flutter build ipa --flavor <institution>`
-2. **Apple Developer account:** Each deployment needs a unique bundle ID registered in App Store Connect
-3. **Provisioning profiles:** Create distribution provisioning profiles per deployment bundle ID
-4. **App Review:** Prepare screenshots, description, and review notes for the App Store review process
+1. Build the IPA: `flutter build ipa --flavor <institution>`.
+2. **Apple Developer account:** Each deployment needs a unique bundle ID registered in App Store Connect.
+3. **Provisioning profiles:** Create distribution provisioning profiles per deployment bundle ID.
+4. **App Review:** Prepare screenshots, description, and review notes.
 
-### Signing Certificate Management
+### Signing certificate management
 
-- Maintain separate keystores/provisioning profiles per deployment
-- Store signing credentials securely (do not commit to version control)
-- `key.properties` is gitignored — never commit signing secrets
-- Document the keystore location and password in a secure credential store (not in this repo)
+- Maintain separate keystores / provisioning profiles per deployment.
+- Store signing credentials securely — do not commit to version control.
+- `key.properties` is gitignored — never commit signing secrets.
+- Document the keystore location and password in a secure credential store.
 
-### Compliance Requirements
+### Compliance requirements
 
-App stores require explicit privacy disclosures. Prepare these before submitting:
+App stores require explicit privacy disclosures. Prepare these before submitting.
 
 **Google Play — Data Safety section:**
-
-Google Play requires a Data Safety declaration describing what data the app collects, how it is used, and whether it is shared. The GENIE.AI mobile app typically collects:
 
 | Data type | Collected? | Purpose |
 |-----------|-----------|---------|
@@ -723,32 +768,28 @@ Google Play requires a Data Safety declaration describing what data the app coll
 | Name, email | Yes | User profile (sourced from Keycloak / institutional directory) |
 | Location, contacts, photos, microphone | No | Not accessed by the app |
 
-Declare data handling practices accurately — misrepresentation is a policy violation. Link to the institution's privacy policy in the store listing.
-
-See: [Google Play Data Safety documentation](https://support.google.com/googleplay/android-developer/answer/10787469)
+Declare data handling practices accurately — misrepresentation is a policy violation. See [Google Play Data Safety documentation](https://support.google.com/googleplay/android-developer/answer/10787469).
 
 **Apple App Store — Privacy Manifests (required from Spring 2024):**
 
 Apple requires a `PrivacyInfo.xcprivacy` manifest declaring:
 
-1. **Required Reason APIs** — which protected API categories the app uses (e.g., `UserDefaults` for token storage, `File Timestamp APIs` for caching). List each API and the approved reason code.
+1. **Required Reason APIs** — which protected API categories the app uses (e.g. `UserDefaults` for token storage, `File Timestamp APIs` for caching). List each API and the approved reason code.
 2. **Tracking domains** — any domains used for tracking users. The GENIE.AI app does not track users, so this is typically empty.
-3. **Data collected** — similar to Google Play's Data Safety, declare what user data is collected and the purpose.
+3. **Data collected** — declare what user data is collected and the purpose.
 
-Flutter 3.16+ generates a baseline `PrivacyInfo.xcprivacy` during build. Most deployments must extend it manually for biometric authentication, push notifications via APNs, or other native APIs. Review the generated manifest and add entries for any additional protected APIs your deployment uses.
+Flutter 3.16+ generates a baseline `PrivacyInfo.xcprivacy` during build. Most deployments must extend it manually for biometric authentication, push notifications via APNs, or other native APIs. See [Apple Privacy Manifests documentation](https://developer.apple.com/documentation/bundleresources/privacy_manifest_files).
 
-See: [Apple Privacy Manifests documentation](https://developer.apple.com/documentation/bundleresources/privacy_manifest_files)
+## Step 13: Version code & name management
 
-## Version Code & Name Management
+App stores require each uploaded build to carry a **unique version code** strictly greater than the previously published build. When multiple institutions deploy from the same codebase, version code collisions must be avoided.
 
-App stores require each uploaded build to carry a **unique version code** that is strictly greater than the previously published build. When multiple institutions deploy from the same codebase, version code collisions must be avoided.
-
-### pubspec.yaml version format
+### `pubspec.yaml` format
 
 Flutter versions follow the pattern `X.Y.Z+N`:
 
-- `X.Y.Z` — **version name** (user-facing, e.g., `1.0.0`). Maps to Android `versionName` and iOS `CFBundleShortVersionString`.
-- `+N` — **version code** (integer, build-only). Maps to Android `versionCode`. iOS uses `CFBundleVersion` which Flutter also derives from `N`.
+- `X.Y.Z` — **version name** (user-facing). Maps to Android `versionName` and iOS `CFBundleShortVersionString`.
+- `+N` — **version code** (integer, build-only). Maps to Android `versionCode`. iOS uses `CFBundleVersion` which Flutter derives from `N`.
 
 ```yaml
 # mobile/genie_ai_mobile/pubspec.yaml
@@ -764,16 +805,14 @@ versionName = flutter.versionName   # reads the X.Y.Z part
 
 You only edit `pubspec.yaml` — Gradle and Xcode pick up the values.
 
-### Version code strategy for multi-deployment
+### Multi-deployment strategy
 
 Each institutional deployment publishes to its own app store listing (distinct `applicationId` / bundle ID), so **version codes do not collide across deployments** — they only need to be monotonically increasing *within the same store listing*.
 
-Recommended approach:
-
-1. **Bump `+N` on every build submitted to a store** — even for re-signed or metadata-only re-uploads. Google Play and App Store Connect reject builds whose version code is ≤ the current published version.
-2. **Use a per-deployment changelog or build log** to track which `+N` was last submitted, so the next operator knows where to resume.
+1. **Bump `+N` on every build** submitted to a store — even for re-signed or metadata-only re-uploads. Google Play and App Store Connect reject builds whose version code is ≤ the current published version.
+2. **Use a per-deployment changelog or build log** to track the last submitted `+N`, so the next operator knows where to resume.
 3. **Do not reuse version codes** — once submitted, a code is consumed. If a build is retracted, the next build must still use a higher code.
-4. **For CI/CD**, automate the bump: derive `+N` from the CI build number or a monotonically increasing counter stored outside the repo (e.g., in the deployment's credential store), then inject it at build time via `--build-name` and `--build-number` flags:
+4. **For CI/CD**, automate the bump — derive `+N` from the CI build number or a counter stored outside the repo, then inject at build time via `--build-name` and `--build-number`:
    ```bash
    flutter build appbundle --flavor <institution> --release \
      --build-name 1.0.0 --build-number 42
@@ -782,53 +821,49 @@ Recommended approach:
 
 ### iOS note
 
-iOS uses `CFBundleVersion` (a monotonically increasing string) for the App Store's build identification, separate from `CFBundleShortVersionString` (the user-facing version). Flutter maps `+N` to `CFBundleVersion`. When releasing on iOS, ensure `+N` increases with every submission — Apple rejects builds with a duplicate or lower `CFBundleVersion`.
+iOS uses `CFBundleVersion` (a monotonically increasing string) for App Store build identification, separate from `CFBundleShortVersionString` (the user-facing version). Flutter maps `+N` to `CFBundleVersion`. Apple rejects builds with a duplicate or lower `CFBundleVersion`. Apple requires `CFBundleVersion` uniqueness across all uploads for a given bundle ID — two builds with the same `CFBundleShortVersionString` must have different `CFBundleVersion` values.
 
-Apple requires `CFBundleVersion` uniqueness across all uploads for a given bundle ID — not just per version name. Two builds with the same `CFBundleShortVersionString` (e.g., `1.0.0`) must have different `CFBundleVersion` values (e.g., `+1` vs `+2`).
+## Step 14: Rollback
 
-## Rollback
-
-### Remove Keycloak Client
+### Remove Keycloak client
 
 ```bash
-# Find the client UUID
-CLIENT_UUID=$(curl -sk "<KEYCLOAK_URL>/admin/realms/genie/clients?clientId=<KC_MOBILE_CLIENT_ID>" \
+CLIENT_UUID=$(curl -sk "$KEYCLOAK_URL/admin/realms/genie/clients?clientId=$KC_MOBILE_CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
-# Delete the client
-curl -sk -X DELETE "<KEYCLOAK_URL>/admin/realms/genie/clients/$CLIENT_UUID" \
+curl -sk -X DELETE "$KEYCLOAK_URL/admin/realms/genie/clients/$CLIENT_UUID" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### Revert Flavor Configuration
+### Revert flavor configuration
 
 ```bash
-# Revert all flavor-related changes
 git revert <commit-hash> --no-commit
 git diff --cached  # Review before committing
 git commit -m "revert: remove <institution> deployment flavor"
 ```
 
-### Unpublish from App Stores
+### Unpublish from app stores
 
-- **Google Play:** Create a new release with 0% rollout and unpublish the app
-- **Apple App Store:** Remove from sale in App Store Connect
+- **Google Play:** Create a new release with 0% rollout and unpublish the app.
+- **Apple App Store:** Remove from sale in App Store Connect.
 
-### End User Communication
+### End-user communication
 
-- Notify users before rollback (via institution communication channels)
-- Provide clear instructions: "Uninstall the app and install the previous version"
-- Set a support contact for users who experience issues during transition
+- Notify users before rollback (via institution communication channels).
+- Provide clear instructions: "Uninstall the app and install the previous version."
+- Set a support contact for users who experience transition issues.
 
 ## Troubleshooting
 
-### OIDC Callback Not Received
+### OIDC callback not received
 
 **Symptom:** User authenticates successfully in the browser, but the app stays on the login screen.
 
 **Cause:** Redirect scheme mismatch between layers (see [Step 3](#step-3-scheme-coherence-rule)).
 
 **Fix:** Verify all 5 layers match:
+
 ```bash
 # Check .env
 grep KC_MOBILE_REDIRECT_SCHEME .env
@@ -843,45 +878,39 @@ grep appAuthRedirectScheme mobile/genie_ai_mobile/android/app/build.gradle
 grep APP_AUTH_REDIRECT_SCHEME mobile/genie_ai_mobile/ios/Flutter/*-<name>.xcconfig
 
 # Check Keycloak client
-curl -sk "<KEYCLOAK_URL>/admin/realms/genie/clients?clientId=<KC_MOBILE_CLIENT_ID>" \
+curl -sk "$KEYCLOAK_URL/admin/realms/genie/clients?clientId=$KC_MOBILE_CLIENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['redirectUris'])"
 ```
 
-### Build Failure: Missing key.properties
+### Build failure — missing `key.properties`
 
 **Symptom:** Release build fails with `keystoreProperties` is null.
 
 **Cause:** `android/key.properties` not created.
 
-**Fix:** Copy from template:
+**Fix:** Copy from the template:
+
 ```bash
 cp mobile/genie_ai_mobile/android/key.properties.example \
    mobile/genie_ai_mobile/android/key.properties
-# Fill in keystore values
+# Edit key.properties with your keystore values
 ```
 
-### 401 After Login
+If the template is missing, see [Step 5](#step-5-android-signing) for the expected format.
+
+### 401 after login
 
 **Symptom:** User logs in successfully, but API calls return 401 Unauthorized.
 
 **Cause:** Backend cannot validate the token (typically a network issue between backend and Keycloak, not a mobile issue).
 
 **Fix:** Check that the backend service can reach Keycloak:
+
 ```bash
 docker compose logs backend --since 30s | grep -v health
 ```
 
-### flutter_appauth Local Fork
-
-The `pubspec.yaml` may point to a local fork of `flutter_appauth` at `flutter_appauth/` that patches the `InsecureConnectionBuilder` bug (upstream issue [#386](https://github.com/MaikuB/flutter_appauth/issues/386)).
-
-**This fork is for development only.** Before merging any changes to `main`, revert:
-1. In `pubspec.yaml`: replace the local fork path with `flutter_appauth: ^11.0.0`
-2. Remove the `flutter_appauth/` directory
-
-The fork does not affect production builds (production uses CA-signed certs and `allowInsecureConnections=false`).
-
-### keycloak-config-cli Silent Failure
+### `keycloak-config-cli` silent failure
 
 **Symptom:** Keycloak client not created, no error in logs.
 
@@ -889,34 +918,64 @@ The fork does not affect production builds (production uses CA-signed certs and 
 
 **Fix:** Set both variables in `.env` and restart the `keycloak-config` service. See [Step 1](#step-1-environment-variables).
 
-### Build Failure: flutter pub get
+### App Links verification fails
+
+**Symptom:** Android shows the system app-picker dialog when tapping a Keycloak HTTPS link; iOS Universal Links do not open the app.
+
+**Causes and fixes:**
+
+1. **`assetlinks.json` / `apple-app-site-association` not customized** — verify both files in `api-gateway-solution/nginx/conf/` have deployment-specific values (no `<TEAM_ID>`, `<BUNDLE_ID>`, `<APPLICATION_ID>`, `<SHA256_FINGERPRINT>` placeholders).
+2. **Wrong SHA-256 fingerprint** — regenerate `assetlinks.json` from the release keystore (or include both debug and release fingerprints if you ship both).
+3. **iOS AASA CDN cache** — Apple's CDN caches AASA for up to 24 hours. Use the [App Search Validation Tool](https://search.developer.apple.com/appsearch-validation-tool/) for instant feedback.
+4. **HTTPS auto-verify intent filter missing on Android** — `AndroidManifest.xml` does not have `android:autoVerify="true"`. Add the filter to eliminate the disambiguation dialog (see [Step 9](#step-9-universal-links--app-links)).
+
+### Contributor concerns (dev-only)
+
+> **Note for deployers:** the next two items are contributor concerns and not part of a deployment runbook. They live here for reference only — contributors handle them as part of pre-merge hygiene.
+
+#### Local `flutter_appauth` fork
+
+The `pubspec.yaml` may reference a local fork of `flutter_appauth` at `flutter_appauth/` that patches the `InsecureConnectionBuilder` bug (upstream issue [#386](https://github.com/MaikuB/flutter_appauth/issues/386)). **The fork is for development only.** Before merging any changes to `main`, revert:
+
+1. In `pubspec.yaml`: replace the local fork path with `flutter_appauth: ^11.0.0`.
+2. Remove the `flutter_appauth/` directory.
+
+The fork does not affect production builds (production uses CA-signed certs and `allowInsecureConnections=false`).
+
+#### Build failure — `flutter pub get`
 
 **Symptom:** First build (or fresh checkout) fails during `flutter pub get` with dependency resolution errors, checksum mismatches, or "version solving failed."
 
 **Common causes and fixes:**
 
-1. **Stale pub cache** — the local package cache has corrupted or outdated entries:
+1. **Stale pub cache** — clean and retry:
    ```bash
    flutter pub cache clean
    flutter pub get
    ```
-
 2. **Network / proxy issues** — corporate proxy or firewall blocks pub.dev or GitHub:
    ```bash
-   # If behind a corporate proxy, set the environment variables:
    export https_proxy=http://proxy.<institution>.int:8080
    export http_proxy=http://proxy.<institution>.int:8080
    flutter pub get
    ```
-   For Git-hosted dependencies (e.g., `flutter_appauth` local fork referenced via `path:`), ensure Git can reach its remotes.
-
-3. **Lock file conflicts** — `pubspec.lock` or `.flutter-plugins` is out of sync with `pubspec.yaml` (common after switching branches or pulling changes that modified dependencies):
+   For Git-hosted dependencies (e.g. `flutter_appauth` local fork referenced via `path:`), ensure Git can reach its remotes.
+3. **Lock file conflicts** — `pubspec.lock` or `.flutter-plugins` is out of sync with `pubspec.yaml`:
    ```bash
    cd mobile/genie_ai_mobile
    rm -f pubspec.lock .flutter-plugins .flutter-plugins-dependencies
    flutter pub get
    ```
+4. **Local fork path conflicts** — `pubspec.yaml` references a local path dependency but the directory is missing or on a different branch. Ensure the referenced path exists and contains a valid `pubspec.yaml`.
 
-4. **Local fork path conflicts** — `pubspec.yaml` references a local path dependency (e.g., `path: flutter_appauth/flutter_appauth`) but the directory is missing or on a different branch. See the [flutter_appauth Local Fork](#flutter_appauth-local-fork) entry above for the development-only fork setup. Ensure the referenced path exists and contains a valid `pubspec.yaml`.
+**Recovery order:** (1) cache clean → (2) network issues → (3) lock file reset → (4) local fork paths.
 
-**Recovery order:** try (1) cache clean first; if that fails, try (2) network issues; if that fails, try (3) lock file reset; if that fails, check (4) local fork paths.
+## You're done when…
+
+- The app installs on a real Android device or emulator with the deployment's `applicationId`.
+- The app installs on a real iOS device or simulator with the deployment's bundle ID.
+- Steps 7.3, 7.4, and 7.5 all pass: login + token refresh + logout terminate the Keycloak session.
+- Password reset (Step 7.6) opens the Keycloak reset page in the system browser.
+- Asset-link verification (`assetlinks.json` / `apple-app-site-association`) is reachable and valid at `https://<keycloak-domain>/.well-known/`.
+
+**Next:** wire the mobile app's traces and logs into your observability stack — see [Observability](/docs/observe/) for Grafana dashboards and VictoriaLogs queries.

@@ -1,13 +1,38 @@
 ---
 title: "Architecture"
-description: "System architecture: C4 context and container views, the RAG pipeline flow, database schema, and API structure."
+description: "End-to-end architecture: system context, service topology, request flows, auth/RBAC, observability, gateway, and RAG pipeline integration points."
 weight: 1
 section: "architecture"
+mode: explanation
+persona: mixed
+owner: "docs-stewards"
+last_reviewed: 2026-09-18
 ---
 
 # Architecture Overview
 
-High-level architecture of the GENIE.AI platform with Keycloak OIDC integration.
+The single reference for how GENIE.AI is wired together — every request path, every trust boundary, and every service-to-service contract that a deployer or integrator needs to reason about. Read this once before deploying or extending the stack; refer back to specific sections when changing the piece you own.
+
+> **Audience:** Deployers and integrators. For code-level detail (route handlers, span emissions, reranker math), follow the cross-section links at the bottom.
+
+---
+
+## Glossary
+
+| Term | Expansion |
+|------|-----------|
+| OIDC | OpenID Connect — identity layer on top of OAuth 2.0 |
+| OAuth 2.0 | Authorization framework (delegated consent) |
+| SAML 2.0 | Security Assertion Markup Language — federated identity via XML assertions |
+| JWKS | JSON Web Key Set — public-key bundle used to verify JWT signatures |
+| JWT | JSON Web Token — signed claim set (access token, id token) |
+| OPEA | Open Platform for Enterprise AI — composable microservice framework |
+| TEI | Text Embeddings Inference (Hugging Face) — embedding/reranking model server |
+| BM25 | Best Match 25 — lexical retrieval ranking function |
+| RRF | Reciprocal Rank Fusion — score-combination method for hybrid retrieval |
+| MMR | Maximal Marginal Relevance — diversity-aware re-ranking |
+| OTLP | OpenTelemetry Line Protocol — telemetry wire format |
+| `comps` | OPEA's vendored microservice library (built into OPEA overlay images at build time) |
 
 ---
 
@@ -42,13 +67,69 @@ graph TB
 
 GENIE.AI is a sovereign RAG platform for the public sector. It authenticates users via Keycloak, which can broker to external identity providers (Google, Microsoft, SAML). Three actor personas interact with the system:
 
-- **End User** -- interacts with the chat frontend to query documents
-- **IT Admin** -- manages Keycloak realms, clients, and external IdP connections
-- **Functional Admin** -- manages documents, categories, and service data
+- **End User** — interacts with the chat frontend to query documents
+- **IT Admin** — manages Keycloak realms, clients, and external IdP connections
+- **Functional Admin** — manages documents, categories, and service data
+
+External IdPs are configured through Keycloak identity brokering — the GENIE.AI code never sees the external IdP directly. See [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/) for configuring Google, Microsoft, or SAML.
 
 ---
 
 ## 2. Service Architecture
+
+### At-a-glance container view
+
+```mermaid
+flowchart LR
+    subgraph Client
+        U[Web / Mobile User]
+    end
+
+    subgraph Edge
+        NG[NGINX]
+        KG[Kong]
+    end
+
+    subgraph App
+        BE[Backend BFF]
+        DR[Document Repository]
+    end
+
+    subgraph Identity
+        KC[Keycloak]
+    end
+
+    subgraph AI[OPEA AI Layer]
+        CQ[ChatQnA]
+        EM[Embedding]
+        RT[Retriever]
+        RR[Reranker]
+        LM[vLLM]
+    end
+
+    subgraph Data
+        AD[(ArangoDB)]
+        RD[(Redis)]
+    end
+
+    U --> NG --> KG --> BE
+    KG --> DR
+    BE --> KC
+    BE --> CQ
+    CQ --> EM
+    CQ --> RT
+    CQ --> RR
+    CQ --> LM
+    RT --> AD
+    BE --> AD
+    BE --> RD
+```
+
+This is the **C4 container-level** view: one box per deployable service,
+edges are real network calls. The detailed diagrams below break each group
+out (auth flow, RAG stages, observability fan-out, etc.).
+
+### Detailed service architecture
 
 ```mermaid
 graph TB
@@ -59,6 +140,16 @@ graph TB
     subgraph API Gateway
         NGINX[NGINX<br/>TLS Termination]
         KONG[Kong<br/>Reverse Proxy / CORS / Rate Limiting]
+    end
+
+    subgraph Application Layer
+        BE[Backend<br/>Node.js / Express]
+        DR[Document Repository]
+        CLAMAV[ClamAV]
+    end
+
+    subgraph Identity Layer
+        KC[Keycloak<br/>Identity Provider]
     end
 
     subgraph Application Layer
@@ -120,7 +211,7 @@ graph TB
 
 | Layer | Components | Purpose |
 |-------|-----------|---------|
-| Browser | Vue 3 Frontend | User interface, in-memory OIDC tokens |
+| Browser | Vue 3 Frontend | User interface, in-memory OIDC tokens (no `localStorage`) |
 | API Gateway | NGINX, Kong | TLS termination, reverse proxy, CORS, rate limiting |
 | Application | Backend, Document Repository, ClamAV | Business logic, session management, file upload with virus scanning |
 | Identity | Keycloak | User authentication, session management, identity brokering |
@@ -133,12 +224,12 @@ graph TB
 
 | Service | Auth Method | Notes |
 |---------|-------------|-------|
-| Frontend (Vue 3) | Keycloak OIDC | oidc-client-ts, tokens in-memory only |
+| Frontend (Vue 3) | Keycloak OIDC | `oidc-client-ts`, tokens in-memory only |
 | Backend (Node.js) | Keycloak JWT (JWKS) | Validates every request, performs JIT user provisioning, forwards Bearer token to upstream services |
 | Document Repository | Keycloak JWT (JWKS) | Independent JWKS validation |
 | OPEA ChatQnA | Keycloak JWT (JWKS) | Validates forwarded Bearer token independently; extracts user info from JWT payload |
-| OPEA Dataprep | Keycloak client_credentials | Service account (KC_DATAPREP_CLIENT_ID/SECRET) |
-| OPEA AI services | None | vLLM, TEI, reranker -- internal network only |
+| OPEA Dataprep | Keycloak `client_credentials` | Service account (`KC_DATAPREP_CLIENT_ID/SECRET`) |
+| OPEA AI services | None | vLLM, TEI, reranker — internal network only |
 | Keycloak | N/A | Identity provider (source of truth for users, roles, sessions) |
 | Kong | None | Pure reverse proxy |
 | NGINX | TLS only | Terminates TLS, proxies to Kong |
@@ -154,103 +245,67 @@ graph TB
 
 ## 4. Testing Architecture
 
+> For testing conventions, commands, CI stages, and the `createApp()` supertest pattern, see the in-repo [Testing rule](/.claude/rules/TESTING.md) (developer-facing reference). This section is a deployer-level summary.
+
 ### 4.1 Test Framework Matrix
 
 | Component | Test Framework | Test Directory | Coverage |
 |-----------|---------------|----------------|----------|
 | Backend | Jest (supertest) | `components/gov-chat-backend/__tests__/` | Unit + integration tests for routes, controllers, services |
 | Frontend | Jest + Vue Test Utils | `components/gov-chat-frontend/src/__tests__/` | Component unit tests, Vuex store tests |
-| Document Repository | Jest (supertest) | `components/document-repository/__tests__/` | Upload, ClamAV scanning, metadata tests |
-| OPEA ChatQnA | pytest | `genie-ai-overlay/chatqna/tests/` | Python unit + integration tests |
-| OPEA Retriever | pytest | `genie-ai-overlay/retriever/tests/` | Vector + graph retrieval tests |
-| OPEA Dataprep | pytest | `genie-ai-overlay/dataprep/tests/` | Ingestion, chunking, labeling tests |
+| Document Repository | Jest (supertest) | `components/document-repository/src/__tests__/` | Upload, ClamAV scanning, metadata tests |
+| OPEA ChatQnA / Retriever / Dataprep / Reranker | pytest | `genie-ai-overlay/tests/` (shared) | Single shared suite with one `conftest.py` that mocks `comps` for every module |
+| OPEA contract suite | pytest (real `comps`) | `genie-ai-overlay/contracts/` (sibling of `tests/`) | Runs **inside the built image** against the vendored OPEA library; see the [Contract Tests README](https://gitlab.com/un/itu/genie-ai/-/blob/main/genie-ai-overlay/contracts/README.md) |
 | Mobile | flutter_test | `mobile/genie_ai_mobile/test/` | Widget + integration tests |
-| E2E | Playwright | `tests/e2e/` | Multi-phase procedure tests (auth, chat, upload) |
+| E2E | Playwright | `docs/e2e-tests/` (multi-phase procedures) | Auth, chat, document upload, ingestion |
 | Config Validation | Jest | `tests/config-validator/` | Environment variable coverage, secret validation |
 
-### 4.2 CI Pipeline Flow
+### 4.2 CI Pipeline Stages
+
+The GitLab CI pipeline (`.gitlab-ci.yml`) declares **12 stages**, executed in this order:
 
 ```mermaid
 graph LR
-    A[Lint] --> B[Test]
-    B --> C[Config Validate]
-    C --> D[E2E Tests]
-    D --> E[JUnit Reports]
-    
+    A[lint] --> B[test]
+    B --> C[config]
+    C --> D[build]
+    D --> E[scan]
+    E --> F[contract-in-image]
+    F --> G[e2e]
+    G --> H[promote]
+    H --> I[release]
+
     style A fill:#e1f5fe
     style B fill:#c8e6c9
     style C fill:#fff9c4
-    style D fill:#f3e5f5
-    style E fill:#e0f2f1
+    style D fill:#fff59d
+    style E fill:#ffe0b2
+    style F fill:#ffccbc
+    style G fill:#f3e5f5
+    style H fill:#e0f2f1
+    style I fill:#d1c4e9
 ```
 
-The GitLab CI pipeline (`.gitlab-ci.yml`) executes in four stages:
+| # | Stage | Purpose |
+|---|-------|---------|
+| 1 | `lint` | ESLint (JS), Ruff (Python), Dart analyzer (Flutter) |
+| 2 | `test` | Unit + integration tests (Jest, pytest, flutter_test) |
+| 3 | `config` | Env-var coverage (`config:validate`), changelog validation, dataprep dependency-lock freshness — fail-fast before build |
+| 4 | `build` | Publish candidate images to GitLab Container Registry (`tmp/` namespace) |
+| 5 | `scan` | GitLab official Container Scanning template (advisory + dashboard) |
+| 6 | `contract-in-image` | Contract tests vs real vendored `comps`, run inside the built image |
+| 7 | `e2e` | Playwright multi-phase procedures (authentication, chat, document upload, ingestion) |
+| 8 | `promote` | Retag tested digests to deployable tags (main/tags only) |
+| 9 | `release` | Create GitLab Release from changelog (tag pipelines only) |
+| 10–12 | `scheduled` / `manual` / `deploy` | Scheduled/manual jobs, deployment |
 
-1. **Lint** — ESLint (JS), Ruff (Python), Dart analyzer (Flutter)
-2. **Test** — Unit + integration tests (Jest, pytest, flutter_test)
-3. **Config Validate** — Verify environment variable coverage, required secrets, conflicting configs
-4. **E2E Tests** — Playwright multi-phase procedures (authentication, chat, document upload, ingestion)
-
-All test stages generate JUnit XML reports for GitLab to display in merge request widgets and block merging on failure.
-
-### 4.3 Backend Testability Pattern
-
-The backend uses a `createApp()` pattern to enable route testing without starting an HTTP server:
-
-```javascript
-// index.js
-export function createApp() {
-  const app = express();
-  // ... middleware and routes
-  return app;
-}
-
-// __tests__/integration/chat.test.js
-import { createApp } from '../index';
-import request from 'supertest';
-
-describe('POST /api/chat', () => {
-  it('should return chat response', async () => {
-    const app = createApp();
-    const response = await request(app)
-      .post('/api/chat')
-      .send({ message: 'test' });
-    expect(response.status).toBe(200);
-  });
-});
-```
-
-This pattern allows `supertest` to test Express routes directly without binding to a network port, enabling fast parallel test execution.
-
-### 4.4 Contract Test Layer
-
-The OPEA overlay (`genie-ai-overlay/`) ships a **contract test suite** that validates the integration contracts between GENIE.AI's custom overlay code and the vendored OPEA `comps` library. Unlike the mocked unit-test suite (`tests/`, which stubs `comps` in `sys.modules`), the contract suite runs **inside the built module image** against the real vendored `comps` — catching runtime API changes that mocked tests are blind to.
-
-**Isolation decision:** The contract suite lives in `genie-ai-overlay/contracts/`, a **sibling** of `tests/` — not nested inside it. The `pytest.ini` sets `testpaths = tests`, so the mocked suite never collects contract tests. The `contracts/conftest.py` provides a `comps` fixture that returns the real vendored module or **skips** when absent (dev venv / wrong module image). This separation ensures a test running against the mocked library cannot pass silently.
-
-**Suite layout:** Each contract file targets a specific module boundary:
-
-| File | Contract under test |
-|------|---------------------|
-| `test_contract_orchestrator_wire.py` | GENIE kwargs forwarding across mega-service nodes |
-| `test_contract_label_filter.py` | Category-filter AQL construction + forwarding to vector search |
-| `test_contract_retriever_fusion.py` | Hybrid RRF fusion (dedup, weights, unkeyed-doc isolation) |
-| `test_contract_reranker.py` | Reranker v1.5 adapter coupling surface |
-| `test_contract_e2e_pipeline.py` | Label-contract roundtrip, streaming metadata, graph schedule, confidence distribution, abstention |
-| `test_contract_ingest.py` | Real docling chunker: structured, text-bearing, deterministic chunks |
-| `test_contract_telemetry.py` | Span operation names dashboards rely on |
-
-**CI integration:** The `contract-in-image` stage in `.gitlab-ci.yml` runs per-module jobs (`contract:retriever-arango`, `contract:reranker`, `contract:dataprep-arango`) inside the built image with `--junitxml` artifacts. Pure-logic tests (label filter, harness, telemetry) also run in the dev venv via `contract:unit`.
-
-**Red-green validation principle:** Every contract test asserts an **observable shape the upgrade actually changes** — kwargs forwarding, docarray shim pin, chunk shape, AQL filter clause, streaming metadata fields. A green-on-green test (asserting something that passes regardless of the upgrade) is a quality failure. The suite was proven green on v1.3 and red on a bare v1.5 bump without overlay re-graft.
-
-For operational details (invocation commands, suite maintenance), see the [Contract Tests README](../../../genie-ai-overlay/contracts/README.md).
+All `test` and `contract-in-image` stages generate JUnit XML reports for GitLab to display in merge request widgets and block merging on failure.
 
 ---
 
 ## 5. Observability Architecture
 
-> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observability" >}}) section. This section covers the architecture-level design.
+> For operational observability — dashboards, alerting, configuration, and tracing — see the [Observability]({{< relref "/docs/observe" >}}) section. This section covers the architecture-level design.
 
 ### 5.1 Distributed Tracing Flow
 
@@ -266,30 +321,30 @@ sequenceDiagram
     participant ADB as ArangoDB
     participant LLM as vLLM
     participant Collector as OTel Collector
-    participant VM as VictoriaTraces
+    participant VT as VictoriaTraces
 
     User->>FE: Send message
     FE->>N: HTTPS (traceparent header)
     N->>K: Proxy (propagates traceparent)
     K->>BE: Reverse proxy
-    
-    BE->>BE: Create root span (backend.request)
+
+    BE->>BE: Create root span (auto-instrumented HTTP server span, named after the route, e.g. `POST /api/chat`)
     BE->>Collector: Export span (OTLP)
-    
+
     BE->>ChatQnA: Bearer token + traceparent
-    ChatQnA->>ChatQnA: Create child span (chatqna.process)
+    ChatQnA->>ChatQnA: Create child span (chatqna.orchestrate)
     ChatQnA->>Collector: Export span
-    
+
     ChatQnA->>Ret: Query + traceparent
-    Ret->>Ret: Create child span (retriever.search)
+    Ret->>Ret: Create child span (retriever.hybrid_search)
     Ret->>ADB: Vector + graph search
     Ret->>Collector: Export span
-    
+
     ChatQnA->>LLM: Generate + traceparent
-    LLM->>LLM: Create child span (llm.inference)
+    LLM->>LLM: vLLM call (not instrumented with a dedicated GENIE.AI span)
     LLM->>Collector: Export span
-    
-    Collector->>VM: Store trace
+
+    Collector->>VT: Store trace
     Collector->>Collector: Self-telemetry span
 ```
 
@@ -321,9 +376,9 @@ Trace propagation chain:
 
 | Component | Purpose | Retention | Port |
 |-----------|---------|-----------|------|
-| VictoriaMetrics | Metric storage (Prometheus compatible) | 30d (configurable) | 8428 |
-| VictoriaLogs | Log storage (fluentd receiver) | 30d (configurable) | 9428 |
-| VictoriaTraces | Distributed trace storage | 30d (configurable) | 10428 |
+| VictoriaMetrics | Metric storage (Prometheus compatible) | 30d (configurable via `VICTORIAMETRICS_RETENTION`) | 8428 |
+| VictoriaLogs | Log storage (fluentd receiver) | 30d (configurable via `VICTORIALOGS_RETENTION`) | 9428 |
+| VictoriaTraces | Distributed trace storage | 30d (configurable via `VICTORIATRACES_RETENTION`) | 10428 |
 
 ### 5.5 OTel Collection
 
@@ -341,18 +396,17 @@ Service traces/metrics → OTLP HTTP → OTel Collector → VictoriaTraces/Victo
 
 ### 5.6 Grafana Dashboards and Alerting
 
-Grafana provides 10 pre-built dashboards across two folders:
+Grafana ships with **9 pre-built dashboards** across two folders:
 
 **Application dashboards (General folder):**
 
 | Dashboard | Purpose | Data Source |
 |-----------|---------|-------------|
-| Service Health | Service uptime, error rates, latency | VictoriaMetrics |
-| Application Metrics | Custom business metrics (requests, users) | VictoriaMetrics |
-| Logs Explorer | Log aggregation, filtering, search | VictoriaLogs |
+| Service Health | Service uptime, request rate, error rates, latency, CPU/memory | VictoriaMetrics |
+| Application Metrics | Custom business metrics (HTTP requests, RAG pipeline latency, sub-service P95) | VictoriaMetrics |
+| Service Logs | Log aggregation, filtering, search | VictoriaLogs |
 | Trace Explorer | Distributed trace search, waterfall | VictoriaTraces (Jaeger) |
-| RAG Waterfall | End-to-end RAG pipeline latency | VictoriaTraces |
-| Stack Health | Infrastructure metrics (CPU, memory) | VictoriaMetrics |
+| RAG Pipeline Trace Waterfall | End-to-end RAG pipeline latency | VictoriaTraces |
 
 **Infrastructure dashboards (Observability folder):**
 
@@ -379,15 +433,36 @@ Observability is **disabled by default**. Enable via:
 | Docker Swarm | `ENABLE_OBSERVABILITY=1` in `.env` (MUST be `0` or `1`) |
 | Ansible | `enable_observability: "1"` in `group_vars/all.yml` |
 
+**Prerequisites before enabling:**
+- Keycloak SSO client for Grafana: `KC_GRAFANA_CLIENT_ID` (default `grafana`) and `KC_GRAFANA_CLIENT_SECRET` (set a value, required).
+- Sufficient disk for the chosen retention — defaults (`VICTORIAMETRICS_RETENTION`, `VICTORIALOGS_RETENTION`, `VICTORIATRACES_RETENTION` = `30d`) consume a few GB per day under load.
+- For external OTel collectors, override `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
 **Environment variables** (`.env` Section 12C):
 - `ENABLE_OBSERVABILITY` — Enable/disable the stack (default: `0`)
 - `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` — Grafana credentials
-- `VICTORIALOGS_RETENTION` / `VICTORIATRACES_RETENTION` / `VICTORIAMETRICS_RETENTION` — Data retention
-- `OTEL_TRACES_SAMPLER_RATE` — Trace sampling rate (default: 100.0 = 100%)
+- `VICTORIALOGS_RETENTION` / `VICTORIATRACES_RETENTION` / `VICTORIAMETRICS_RETENTION` — Data retention (default `30d`)
+- `OTEL_TRACES_SAMPLER_RATE` — Trace sampling rate (default: `100.0` = 100%)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — Base OTLP endpoint for traces + metrics (default `http://otel-collector:4318`)
 
 **Config files**:
 - `configs/otel/otel-collector-config.yaml` — Collector receivers, processors, exporters
 - `configs/grafana/provisioning/` — Datasources + dashboards (auto-provisioned)
+
+**Verify after enabling:**
+```bash
+# All observability services healthy
+docker service ls | grep -E "victoria|otel|grafana"
+
+# Grafana reachable through Kong and authenticates via Keycloak
+curl -skI https://<NGINX_PUBLIC_DOMAIN>/grafana/login
+# Expected: 200 (Kong routes /grafana/ → Grafana, which then redirects to Keycloak)
+
+# Spans landing in VictoriaTraces — open a chat query, then:
+docker exec $(docker ps --format "{{.Names}}" | grep backend | head -1) \
+  curl -s http://victoriatraces:10428/select/jaeger/api/services
+# Expected: JSON listing "backend", "chatqna", "retriever", "reranker", "llm", "otel-collector"
+```
 
 ---
 
@@ -464,7 +539,7 @@ sequenceDiagram
     DR->>DR: Validate signature + claims
 ```
 
-Each service independently validates JWTs against Keycloak JWKS. JWKS public keys are cached locally and refreshed on cache miss or key rotation. Services validate the token signature, expiry, issuer, and audience claims.
+Each service fetches Keycloak's JWKS public keys, caches them locally, and refreshes on cache miss or key rotation. On every request, the service validates the JWT signature, expiry, issuer, and audience claims.
 
 ---
 
@@ -484,7 +559,9 @@ sequenceDiagram
     Vue->>Vue: Replace in-memory token
 ```
 
-The frontend uses a silent renew mechanism (iframe) to obtain a new access_token from Keycloak before the current one expires. This happens transparently to the user as long as the Keycloak session is still valid.
+The frontend uses a silent renew mechanism (hidden iframe, OIDC spec) to obtain a new `access_token` from Keycloak before the current one expires. This happens transparently to the user as long as the Keycloak session is still valid.
+
+> **Failure mode.** A silent renew only succeeds if the user's Keycloak session cookie is still valid. If the session has expired (idle or absolute timeout), the renew fails and the user is bounced to the login page. Configure the session lifetime in `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` and the realm session settings.
 
 ### 8.2 Logout and Session Termination
 
@@ -502,7 +579,9 @@ sequenceDiagram
     Vue->>Vue: Redirect to login page
 ```
 
-Logout is initiated by the frontend calling Keycloak's end_session_endpoint with the id_token_hint. Keycloak revokes all sessions and tokens, then redirects back. The frontend clears its in-memory token storage and redirects to the login page.
+> [Screenshot: Keycloak account console showing "Sign out" button]
+
+Logout is initiated by the frontend calling Keycloak's `end_session_endpoint` with the `id_token_hint`. Keycloak revokes all sessions and tokens, then redirects back. The frontend clears its in-memory token storage and redirects to the login page.
 
 ---
 
@@ -564,49 +643,49 @@ sequenceDiagram
 
     User->>FE: Send query
     FE->>BE: POST /api/chat
-    
-    BE->>BE: [SPAN: backend.request]
+
+    BE->>BE: [SPAN: auto-instrumented HTTP server span, e.g. `POST /api/chat`]
     BE->>Collector: Export span (OTLP)
-    
+
     BE->>ChatQnA: POST /chat (with traceparent)
-    ChatQnA->>ChatQnA: [SPAN: chatqna.process]
+    ChatQnA->>ChatQnA: [SPAN: chatqna.orchestrate]
     ChatQnA->>Collector: Export span
-    
+
     ChatQnA->>TEI: Generate embedding (traceparent)
-    TEI->>TEI: [SPAN: tei.embedding]
+    TEI->>TEI: TEI call (not instrumented with a dedicated GENIE.AI span)
     TEI->>Collector: Export span
     TEI->>ChatQnA: Vector
-    
+
     ChatQnA->>Ret: Query (traceparent)
-    Ret->>Ret: [SPAN: retriever.search]
+    Ret->>Ret: [SPAN: retriever.hybrid_search]
     Ret->>ADB: Vector + graph search
-    ADB->>ADB: [SPAN: arangodb.query]
+    ADB->>ADB: [SPAN: db.<operation> <collection>] (per-query span from backend tracing-db.js)
     Ret->>Collector: Export span
     Ret->>ChatQnA: Chunks
-    
+
     ChatQnA->>Rerank: Rerank (traceparent)
-    Rerank->>Rerank: [SPAN: reranker.score]
+    Rerank->>Rerank: [SPAN: reranker.rerank]
     Rerank->>Collector: Export span
     Rerank->>ChatQnA: Ranked chunks
-    
+
     ChatQnA->>LLM: Generate (traceparent)
-    LLM->>LLM: [SPAN: llm.inference]
+    LLM->>LLM: vLLM call (not instrumented with a dedicated GENIE.AI span)
     LLM->>Collector: Export span
     LLM->>ChatQnA: Response
-    
+
     ChatQnA->>BE: RAG response
     BE->>FE: API response
     FE->>User: Display answer
 ```
 
 **Key spans emitted:**
-- `backend.request` — Backend HTTP request processing
-- `chatqna.process` — ChatQnA orchestration (root span for RAG)
-- `tei.embedding` — Embedding generation
-- `retriever.search` — Vector + graph retrieval
-- `arangodb.query` — Database query execution
-- `reranker.score` — Result reranking
-- `llm.inference` — LLM generation
+- Auto-instrumented HTTP server spans (named after the route, e.g. `POST /api/chat`) — Backend HTTP request processing
+- `chatqna.orchestrate` — ChatQnA orchestration (root span for RAG)
+- `chatqna.reranker_selection` — Reranker strategy selection inside ChatQnA
+- `retriever.hybrid_search` — Vector + graph retrieval
+- `db.<operation> <collection>` — Database query execution (per-query span emitted by `components/gov-chat-backend/tracing-db.js`)
+- `reranker.rerank` — Result reranking (with `reranker.tei_invoke` for the inner TEI call)
+- `dataprep.ingest` / `dataprep.chunking` / `dataprep.retract` / `dataprep.kill_ingest` — Document ingestion pipeline (dataprep service)
 
 All spans include:
 - **Parent-child relationships** (via `traceparent` header)
@@ -740,9 +819,9 @@ sequenceDiagram
 
 Dataprep uses a dedicated Keycloak client with the `client_credentials` grant type. This service account is separate from user tokens and has permissions scoped to document ingestion operations. The ingestion pipeline extracts content, chunks it, labels each chunk against the service taxonomy, constructs a knowledge graph (entities + relationships), generates vector embeddings, and stores everything in ArangoDB.
 
-> **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `per_chunk` (one call/chunk, tailored; default) or `doc_level` (one call/chunk, tailored). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Default on (`true`); set `false` to disable. See the [Data Labelling Strategy]({{< relref "/docs/rag/data-labeling" >}}) doc (§7).
+> **Contextual Retrieval (optional).** `CONTEXTUAL_RETRIEVAL_ENABLED=true` (default); the dataprep generates an LLM document-context prefix per chunk (after chunking, before embedding) so chunks carry the document's subject. `CONTEXTUAL_STRATEGY` selects `doc_level` (one call per document, same context on every chunk — default in compose, N× cheaper, still propagates the doc subject) or `per_chunk` (one call per chunk, tailored to the chunk — Python fallback when the env var is unset). `CONTEXTUAL_LABEL_RAW=true` (default) decouples: label the **raw** chunk, use the context only for the **embedding** — keeps label precision while propagating the subject via the vector. Set `CONTEXTUAL_RETRIEVAL_ENABLED=false` to disable the feature entirely. See the [Data Labelling Strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}) doc (§7).
 
-> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag/multi-turn-retrieval" >}}).
+> **Multi-Turn Retrieval (optional, off by default).** `MULTI_TURN_BLEND_ENABLED=false` (default). A **query-time** companion to Contextual Retrieval: blends the embedded current query with an embedding of the previous N turns (`V = α·EQ + (1-α)·EH`, default `α=0.7`, `N=1`) at the retriever's dense leg, so pronoun-heavy follow-ups ("can you elaborate on this?") retrieve the prior turn's subject. Implemented as a single batched TEI call through the existing embedding node (no side-channel embedding). Under the default dense-only config the blended vector controls all retrieval; when hybrid retrieval is explicitly enabled (opt-in), only the dense leg is blended. See [Multi-Turn Retrieval]({{< relref "/docs/rag-pipeline/multi-turn-retrieval" >}}).
 
 ### 10.3 Document Retraction
 
@@ -771,16 +850,16 @@ Retraction removes all graph data (chunks, entities, relationships) associated w
 |-------|--------|-------|
 | `/health` | Public | Health check endpoints |
 | `/api-docs` | Public | Swagger API documentation |
-| `/api/auth/callback` | Public | Keycloak OIDC callback redirect |
-| `/api/auth/logout/callback` | Public | Keycloak post-logout callback |
-| `/api/auth/logout` | Protected | User logout (Keycloak handles session invalidation) |
+| `/api/auth/callback` | Public (allowlisted) | **Frontend-managed callback** — the actual OIDC handling lives in the Vue app via `oidc-client-ts`; the path is allowlisted in `keycloak-auth-middleware.js` (PUBLIC_PATHS) so the middleware never 401s it. |
+| `/api/auth/logout/callback` | Public (allowlisted) | **Frontend-managed callback** — same caveat: allowlisted for middleware bypass, but the post-logout redirect is handled by the Vue app, not by a backend route handler. |
+| `/api/auth/logout` | Protected | User logout (Keycloak handles session invalidation). The only real handler in `routes/auth-routes.js`. |
 | `/api/me` | Protected | Current user profile singleton (GET, PUT) |
 | `/api/me/context` | Protected | User context for AI enrichment |
 | `/api/me/reset-data` | Protected | Reset user profile data |
 | `/api/me/delete` | Protected | Delete user account (GDPR erasure) |
 | `/api/*` | Protected | All other API routes require valid Bearer token |
 
-Unauthenticated requests to protected routes receive a 401 response. The backend validates the JWT on every protected request before processing.
+The backend returns 401 to unauthenticated requests against protected routes. See [API Contracts — Backend](/docs/backend/api-contracts-backend/) for the full request/response shape of each route.
 
 ---
 
@@ -790,7 +869,7 @@ Unauthenticated requests to protected routes receive a 401 response. The backend
 
 On each authenticated request, the backend checks whether the user exists in ArangoDB. If not, it creates the user record using a composite key formed from the JWT issuer and subject (`iss#sub`). If the user already exists, the backend updates the user's metadata (name, email, roles) to stay in sync with Keycloak.
 
-This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/).
+This ensures ArangoDB always reflects the current state from the identity provider. For detailed user management procedures, see the [Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/).
 
 ### 12.2 User Disable and Delete Propagation
 
@@ -811,6 +890,8 @@ sequenceDiagram
     BE->>BE: Reject request (401)
     BE->>ADB: Soft-delete user record
 ```
+
+> [Screenshot: Keycloak admin → Users → Enabled toggle]
 
 When a user is disabled or deleted in Keycloak, the propagation is handled at the next interaction point:
 
@@ -840,9 +921,9 @@ sequenceDiagram
     FE->>FE: Store tokens in-memory
 ```
 
-Keycloak acts as a broker between GENIE.AI and external identity providers. The external IdP authenticates the user, Keycloak maps the external identity to a local user, and issues a GENIE.AI-signed JWT. The frontend and backend only interact with Keycloak -- they are unaware of which external IdP was used.
+Keycloak acts as a broker between GENIE.AI and external identity providers. The external IdP authenticates the user, Keycloak maps the external identity to a local user, and issues a GENIE.AI-signed JWT. The frontend and backend only interact with Keycloak — they are unaware of which external IdP was used.
 
-For configuration details, see the [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/).
+For configuration details, see the [External IdP Integration Guide](/docs/configure/external-idp-integration-guide/).
 
 ---
 
@@ -850,11 +931,11 @@ For configuration details, see the [External IdP Integration Guide](/docs/config
 
 The API gateway consists of two layers:
 
-**NGINX** -- The outermost layer. Terminates TLS on port 443 and applies security headers. Proxies all requests to Kong. For Keycloak traffic (`/auth/`), NGINX sets `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-Port` so Keycloak can resolve its public URL dynamically.
+**NGINX** — The outermost layer. Terminates TLS on port 443 and applies security headers. Proxies all requests to Kong. For Keycloak traffic (`/auth/`), NGINX sets `X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-Port` so Keycloak can resolve its public URL dynamically.
 
-**Kong** -- Sits behind NGINX and acts as a pure reverse proxy. Provides CORS configuration and rate limiting. Routes requests to backend services. No JWT validation is performed at the gateway level -- authentication is enforced at each service boundary.
+**Kong** — Sits behind NGINX and acts as a pure reverse proxy. Provides CORS configuration and rate limiting. Routes requests to backend services. No JWT validation is performed at the gateway level — authentication is enforced at each service boundary.
 
-Request path: `Browser -> NGINX (TLS) -> Kong (CORS, rate limit) -> Backend (JWT validation) -> Upstream services`
+Request path: `Browser → NGINX (TLS) → Kong (CORS, rate limit) → Backend (JWT validation) → Upstream services`
 
 ### 14.1 Reverse Proxy Header Chain for Keycloak
 
@@ -878,14 +959,45 @@ Client → NGINX → Kong → Keycloak
 | `X-Forwarded-Port` | NGINX | `NGINX_HTTPS_PORT` | Keycloak uses the public port (not internal 443) |
 | `X-Forwarded-Prefix` | Kong (request-transformer plugin) | `/auth` | Keycloak resolves context path dynamically |
 
-**Kong trusted_ips**: Kong must trust NGINX to preserve the `X-Forwarded-*` headers set by NGINX. Without `KONG_TRUSTED_IPS`, Kong overwrites them with its own values (http/port 8000). Default: `172.16.0.0/12` (Docker bridge subnets).
+**Kong trusted_ips**: Kong must trust NGINX to preserve the `X-Forwarded-*` headers set by NGINX. Without `KONG_TRUSTED_IPS`, Kong overwrites them with its own values (http/port 8000). Default: `172.16.0.0/12` (Docker bridge subnets, set in `docker-compose.yaml`).
 
-**Keycloak configuration**:
-- `KC_PROXY_HEADERS=xforwarded` -- tells Keycloak to read proxy headers
-- `KC_HOSTNAME=<hostname>` -- simple hostname (no scheme/port/path), Keycloak resolves the full URL from headers
-- Keycloak 26.6.1+ required for `X-Forwarded-Prefix` support (bug #35298 in earlier versions)
+**Keycloak configuration** (note: `KC_PROXY_HEADERS` and `KC_HOSTNAME` are derived in `docker-compose.yaml`, not exposed as standalone env vars):
+- `KC_PROXY_HEADERS=xforwarded` — hardcoded in `docker-compose.yaml`; tells Keycloak to read proxy headers. There is no env override.
+- `KC_HOSTNAME=${NGINX_PUBLIC_DOMAIN:-localhost}` — derived from `NGINX_PUBLIC_DOMAIN` at deploy time.
+- Keycloak 26.7 (minimum 26.6.1 for `X-Forwarded-Prefix` support — bug #35298 in earlier versions).
 
 This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL in `KC_HOSTNAME`, making the deployment portable across environments without rebuilding the Keycloak image.
+
+### 14.2 Common Misconfigurations
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Every API call returns 401 with `iss` mismatch | `NGINX_PUBLIC_DOMAIN` does not match the URL the browser sees | Set `NGINX_PUBLIC_DOMAIN` to the exact public FQDN (no scheme, no port). Restart Kong and NGINX. |
+| Keycloak login loops / wrong issuer URL (e.g. `https://host/realms/...` instead of `https://host/auth/realms/...`) | Keycloak < 26.6.1 ignoring `X-Forwarded-Prefix`, or `KC_PROXY_HEADERS` not set | Verify: `docker exec <kc-container> /opt/keycloak/bin/kc.sh --version` ≥ 26.6.1. If on an older Keycloak, upgrade or hardcode the issuer. |
+| 502 Bad Gateway from Kong → backend | Backend not yet ready, or `KONG_TRUSTED_IPS` missing and X-Forwarded-* are being overwritten | Confirm `KONG_TRUSTED_IPS=172.16.0.0/12` (default). Tail logs: `docker service logs genieai_kong --tail 50`. |
+| Self-signed certs — JWKS fetch fails with TLS error | Node/OPEA reject self-signed by default | Set `OPEA_SSL_SKIP_VERIFY=1` **and** `KEYCLOAK_SSL_SKIP_VERIFY=1`. **Insecure; dev only.** |
+| JWT `exp` rejected immediately after login | Clock skew between browser host and backend | Ensure NTP sync on all nodes; check `date` on backend container vs browser host. |
+
+### 14.3 Verify After Install
+
+```bash
+# TLS termination
+curl -skI https://<NGINX_PUBLIC_DOMAIN>/health
+# Expected: 200
+
+# Kong routing
+curl -skI https://<NGINX_PUBLIC_DOMAIN>/api/me
+# Expected: 401 (no token) — proves route is registered and auth middleware is in the chain
+
+# Keycloak reachable through /auth prefix
+curl -skI https://<NGINX_PUBLIC_DOMAIN>/auth/realms/<KEYCLOAK_REALM>
+# Expected: 200 with a JSON realm representation
+
+# Logs
+docker service logs genieai_nginx --tail 50
+docker service logs genieai_kong --tail 50
+# Expected: no 502/504 entries during normal use
+```
 
 ---
 
@@ -893,26 +1005,43 @@ This approach (docs option 1: X-Forwarded-Prefix) avoids hardcoding a full URL i
 
 | ID | Decision | Rationale |
 |----|----------|-----------|
-| D1 | Keycloak as sole identity authority | Eliminates local password management. Single source of truth for users, roles, and sessions. |
+| D1 | Keycloak as the GENIE.AI-facing identity authority (sole authority visible to GENIE.AI code; may broker to external IdPs) | Eliminates local password management. Single source of truth for users, roles, and sessions as seen by GENIE.AI services. |
 | D2 | Token passthrough to OPEA | The original user's Bearer token is forwarded to ChatQnA, which independently validates it via JWKS and extracts user identity from the JWT payload. No shared trust boundary. |
 | D3 | JWT validation at service boundary | Each service (Backend, Document Repository, ChatQnA) validates tokens independently against Keycloak JWKS. No shared trust boundary at the gateway. |
 | D4 | JIT user provisioning | ArangoDB user records are created or updated on every login. Keeps the application database in sync with the identity provider without requiring separate user management. |
-| D5 | In-memory token storage | The frontend stores tokens in JavaScript memory only (no localStorage or sessionStorage). Mitigates token theft via XSS. |
-| D6 | Dataprep service account | Dataprep authenticates via Keycloak client_credentials grant with a dedicated service account, separate from user tokens. |
+| D5 | In-memory token storage | The frontend stores tokens in JavaScript memory only (no `localStorage` or `sessionStorage`). Mitigates token theft via XSS. |
+| D6 | Dataprep service account | Dataprep authenticates via Keycloak `client_credentials` grant with a dedicated service account, separate from user tokens. |
 | D7 | Gateway architecture | NGINX terminates TLS and proxies all traffic to Kong. Kong provides CORS and rate limiting. Both are required in the current configuration — Kong cannot be bypassed. |
 | D8 | `/api/me` singleton resource | After Keycloak migration, the frontend has no access to ArangoDB `_key` (only OIDC claims). A singleton `/api/me` resource eliminates the need for path-based user IDs. User resolution happens via JWT middleware (`req.user._key`). The `_key` never leaves the backend. |
 
 ---
 
+## Wrap-Up
+
+After reading this page you should be able to:
+
+- **Trace any user-visible feature** to its owning service and the request path that delivers it (browser → NGINX → Kong → backend → OPEA).
+- **Identify trust boundaries** (gateway, service-level JWT validation, Keycloak brokering) and the headers that cross them.
+- **Reason about deployer-relevant configuration** (gateway headers, JWKS caching, observability enablement, OIDC renewal) without diving into per-module code.
+- **Know where to go next** depending on what you need: deployment for setup, observability for operations, RAG for answer-quality tuning, backend API for HTTP contracts.
+
+---
+
 ## 16. Further Reading
 
-- [RAG Pipeline]({{< relref "/docs/rag" >}}) -- Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
-- [Observability]({{< relref "/docs/observability" >}}) -- Metrics, logs, traces, dashboards, alerting
+**RAG and AI:**
+- [RAG Pipeline]({{< relref "/docs/rag-pipeline" >}}) — Retrieval-augmented generation: embedding, hybrid retrieval, reranking, generation, translation
+- [Data Labelling Strategy]({{< relref "/docs/rag-pipeline/data-labeling" >}}) — §7 covers Contextual Retrieval in depth
+- [Multi-Turn Retrieval]({{< relref "/docs/rag-pipeline/multi-turn-retrieval" >}}) — `MULTI_TURN_BLEND_*` blending mode
 
-- [Keycloak Admin Guide](/docs/configuration/keycloak-admin-guide/) -- Realm configuration, user management, client setup
-- [Docker Compose Setup](/docs/deployment/docker-compose-setup/) -- Local development deployment with Docker Compose
-- [Docker Swarm Setup](/docs/deployment/docker-swarm-setup/) -- Production deployment with Docker Swarm and Ansible
-- [Ansible Deployment](../deploy/ansible/README.md) -- Automated Docker Swarm deployment with per-environment secrets
-- [OTel Collector Integration](../configs/otel/README.md) -- Observability stack configuration (OTel Collector, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana)
-- [External IdP Integration Guide](/docs/configuration/external-idp-integration-guide/) -- Connecting Google, Microsoft, and SAML identity providers
-- [E2E Tests](e2e-tests/README.md) -- End-to-end test procedures for authentication and session lifecycle
+**Operations:**
+- [Observability]({{< relref "/docs/observe" >}}) — Metrics, logs, traces, dashboards, alerting
+- [Docker Compose Setup]({{< relref "/docs/deploy/docker-compose-setup" >}}) — Local development deployment with Docker Compose
+- [Docker Swarm Setup]({{< relref "/docs/deploy/docker-swarm-setup" >}}) — Production deployment with Docker Swarm and Ansible
+
+**Identity and integration:**
+- [Keycloak Admin Guide]({{< relref "/docs/configure/keycloak-admin-guide" >}}) — Realm configuration, user management, client setup
+- [External IdP Integration Guide]({{< relref "/docs/configure/external-idp-integration-guide" >}}) — Connecting Google, Microsoft, and SAML identity providers
+
+**API contracts:**
+- [API Contracts — Backend]({{< relref "/docs/backend/api-contracts-backend" >}}) — HTTP request/response shapes for every endpoint

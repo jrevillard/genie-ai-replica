@@ -132,8 +132,10 @@ class AgriApiService {
           .map(
             (p) => {
               'year': p['date'],
-              'value': p['value'],
-              'decimal': p['value'],
+              // ints from JSON must not leak into the double? casts the
+              // cards use (Fertilizer card crashed on exactly this)
+              'value': (p['value'] as num?)?.toDouble(),
+              'decimal': (p['value'] as num?)?.toDouble(),
               'quality': p['quality'],
             },
           )

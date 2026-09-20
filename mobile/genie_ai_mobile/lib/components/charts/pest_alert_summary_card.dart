@@ -56,13 +56,13 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
 
   int get _totalAlerts {
     if (_pestData == null) return 0;
-    final summary = _pestData!['summary'] as Map<String, dynamic>?;
+    final summary = (_pestData!['summary'] as Map?)?.cast<String, dynamic>();
     return summary?['total'] as int? ?? 0;
   }
 
   int get _highSeverity {
     if (_pestData == null) return 0;
-    final summary = _pestData!['summary'] as Map<String, dynamic>?;
+    final summary = (_pestData!['summary'] as Map?)?.cast<String, dynamic>();
     return summary?['high'] as int? ?? 0;
   }
 

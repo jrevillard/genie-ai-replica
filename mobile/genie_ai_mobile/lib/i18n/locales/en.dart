@@ -1178,8 +1178,11 @@ const Map<String, dynamic> enLocale = {
     "pestAlerts": "Pest Alerts",
     "responseCopied": "Response copied to clipboard",
     "submitQuery": "Submit",
+    "insights": "Insights",
+    "fastActions": "Fast Actions",
   },
   "market": {
+    "sectionTitle": "Market Prices",
     "addFromNews": "Add from recent news",
     "analyzing": "Analyzing market data...",
     "close": "Close",

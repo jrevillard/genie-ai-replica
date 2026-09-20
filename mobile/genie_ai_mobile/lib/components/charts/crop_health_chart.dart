@@ -123,18 +123,14 @@ class _CropHealthChartState extends State<CropHealthChart> {
               data: _cropData == null
                   ? null
                   : {
-                      'caveats':
-                          (_cropData!['meta']
-                              as Map<String, dynamic>?)?['caveats'],
-                      'coverage':
-                          (_cropData!['meta']
-                              as Map<String, dynamic>?)?['coverage'],
-                      'estimation':
-                          (_cropData!['meta']
-                              as Map<String, dynamic>?)?['estimation'],
-                      'dataSource':
-                          (_cropData!['meta']
-                              as Map<String, dynamic>?)?['source'],
+                      'caveats': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['caveats'],
+                      'coverage': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['coverage'],
+                      'estimation': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['estimation'],
+                      'dataSource': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['source'],
                     },
             ),
             const SizedBox(height: 20),

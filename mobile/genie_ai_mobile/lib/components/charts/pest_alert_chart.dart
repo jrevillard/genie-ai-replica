@@ -154,15 +154,12 @@ class _PestAlertChartState extends State<PestAlertChart> {
               data: _pestData == null
                   ? null
                   : {
-                      'caveats':
-                          (_pestData!['meta']
-                              as Map<String, dynamic>?)?['caveats'],
-                      'coverage':
-                          (_pestData!['meta']
-                              as Map<String, dynamic>?)?['coverage'],
-                      'dataSource':
-                          (_pestData!['meta']
-                              as Map<String, dynamic>?)?['source'],
+                      'caveats': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['caveats'],
+                      'coverage': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['coverage'],
+                      'dataSource': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['source'],
                     },
             ),
             const SizedBox(height: 16),
@@ -292,7 +289,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
   ) {
     final isDark = theme.brightness == Brightness.dark;
     final isSelected = _selectedSeverity == severity;
-    final summary = _pestData?['summary'] as Map<String, dynamic>?;
+    final summary = (_pestData?['summary'] as Map?)?.cast<String, dynamic>();
 
     int count = 0;
     if (severity == 'all') {
@@ -328,7 +325,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   Widget _buildSummaryChart(ThemeData theme) {
-    final summary = _pestData!['summary'] as Map<String, dynamic>;
+    final summary = (_pestData!['summary'] as Map).cast<String, dynamic>();
     final high = summary['high'] as int? ?? 0;
     final moderate = summary['moderate'] as int? ?? 0;
     final low = summary['low'] as int? ?? 0;

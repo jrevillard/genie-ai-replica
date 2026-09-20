@@ -6,6 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:genie_ai_mobile/components/charts/crop_health_summary_card.dart';
+import 'package:genie_ai_mobile/components/charts/market_price_summary_card.dart';
+import 'package:genie_ai_mobile/components/charts/pest_alert_summary_card.dart';
+
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
@@ -24,6 +28,21 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
+
+/// Web-parity section header for the quick-help overlay sections
+/// (Insights / Fast Actions / Market Prices).
+Widget _agriSectionTitle(ThemeData theme, dynamic tokens, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 8),
+    child: Text(
+      text,
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: tokens.fg as Color?,
+      ),
+    ),
+  );
+}
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -1557,20 +1576,31 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 horizontal: DsSpacing.md,
                 vertical: DsSpacing.xl,
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    tr('chatbot.whatCanIHelp'),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: tokens.fg,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      tr('chatbot.whatCanIHelp'),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: tokens.fg,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: DsSpacing.lg),
-                  Expanded(
-                    child: LayoutBuilder(
+                    const SizedBox(height: DsSpacing.lg),
+                    // Insights section (web ChatBotComponent parity).
+                    _agriSectionTitle(theme, tokens, tr('charts.insights')),
+                    const Row(
+                      children: [
+                        Expanded(child: CropHealthSummaryCard()),
+                        Expanded(child: PestAlertSummaryCard()),
+                      ],
+                    ),
+                    const SizedBox(height: DsSpacing.lg),
+                    // Fast Actions section.
+                    _agriSectionTitle(theme, tokens, tr('charts.fastActions')),
+                    LayoutBuilder(
                       builder: (context, constraints) {
                         final int crossAxisCount =
                             _quickHelpLayout['columns'] as int? ?? 2;
@@ -1580,6 +1610,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             3.5;
 
                         return GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
@@ -1670,8 +1702,29 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         );
                       },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: DsSpacing.lg),
+                    // Market Prices section (web order per 2026-09-19 req).
+                    _agriSectionTitle(theme, tokens, tr('market.sectionTitle')),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      childAspectRatio: 1.15,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      children: const [
+                        MarketPriceSummaryCard(category: 'maize'),
+                        MarketPriceSummaryCard(category: 'vegetables'),
+                        MarketPriceSummaryCard(category: 'livestock'),
+                        MarketPriceSummaryCard(category: 'aquaculture'),
+                        MarketPriceSummaryCard(category: 'apiary'),
+                        MarketPriceSummaryCard(category: 'fertilizer'),
+                        MarketPriceSummaryCard(category: 'cropProtection'),
+                        MarketPriceSummaryCard(category: 'harvestStorage'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
 

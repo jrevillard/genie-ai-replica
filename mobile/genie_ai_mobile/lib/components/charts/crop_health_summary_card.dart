@@ -65,7 +65,7 @@ class _CropHealthSummaryCardState extends State<CropHealthSummaryCard> {
 
   double get _healthPercent {
     if (_healthData == null) return 0.0;
-    final average = _healthData!['average'] as Map<String, dynamic>?;
+    final average = (_healthData!['average'] as Map?)?.cast<String, dynamic>();
     if (average == null) return 0.0;
     final ndvi = average['ndvi'] as num?;
     if (ndvi == null) return 0.0;

@@ -1179,8 +1179,11 @@ const Map<String, dynamic> esLocale = {
     "pestAlerts": "Alertas de Plagas",
     "responseCopied": "Respuesta copiada al portapapeles",
     "submitQuery": "Enviar",
+    "insights": "Perspectivas",
+    "fastActions": "Acciones Rápidas",
   },
   "market": {
+    "sectionTitle": "Precios de Mercado",
     "addFromNews": "Agregar de noticias recientes",
     "analyzing": "Analizando datos del mercado...",
     "close": "Cerrar",

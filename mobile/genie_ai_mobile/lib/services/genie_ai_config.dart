@@ -4,10 +4,11 @@ import 'package:flutter/services.dart';
 
 class GenieAiConfig {
   static String title = "AgroGenio AI"; // Default fallback
-  // The login/splash branding uses the green AgroGenio leaf PNG
-  // (transparent), pinned by the user regardless of the bundled
-  // config's icon entry.
-  static String iconPath = "assets/images/agro-genio-logo.png";
+  // The login/splash branding uses the green AgroGenio monogram SVG
+  // pulled from the Vue 3 app's static icon (the original "A" mark
+  // recoloured verde). The user pinned this specifically for the
+  // login screen — the leaf PNG belongs to the launcher icon only.
+  static String iconPath = "assets/config/agro-genio-icon.svg";
   static bool _loaded = false;
 
   /// Loads the configuration from assets/genie-ai-config.json

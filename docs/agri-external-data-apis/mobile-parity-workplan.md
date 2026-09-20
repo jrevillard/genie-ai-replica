@@ -94,7 +94,7 @@ grains renders 15 color-matched series with exact spec §2 legend names
 check on cropProtection still pending (dialog scroll UX); dots on
 annual series render radius 6 per spec — revisit density if heavy.
 
-### Phase C — Interaction & filters (M4, M6, M9, M10 chips, M11, M12, M20) · effort M/L
+### Phase C — Interaction & filters (M4, M6, M9, M10 chips, M11, M12, M20) · effort M/L · **SHIPPED 2026-09-20 (core)
 Start-year dropdown (same contract as web: earliest→current−5, default
 2015, clamped; chart+table+CSV re-render; axis pinned to the selection).
 Global series toggles (M20): a wrap of checkbox chips above the chart —
@@ -109,6 +109,15 @@ horizontally scrollable. CSV rebuilt on the same rows.
 Acceptance: filter + toggles + zoom compose (zoom respects the filtered,
 toggled range); chips and table match the web's information density
 without widening the cards; toggling never leaves an empty chart.
+
+Shipped (ae07d8c4e): S25 family masters + S15/S16 series chips,
+S17/S18 start-year filter, M6 [-][+]/Fit + pinch/drag-pan with
+Y re-scale, S19 multi-series table (lazy rows, union dates, localized
+quality), S20 exact CSV via share sheet. 7 new tests, suite 520 green.
+ALSO SHIPPED: Market Prices moved to a dedicated screen with a top-nav
+toggle (mobile real-estate, 0c6f0f275); S21 acronym chips + latest
+values on the summary cards (0c6f0f275); predictions news-picker
+insert control moved to a pinned top bar (0c6f0f275).
 
 ### Phase D — Polish, parity verification, logging (M14, M17, M18, M19, M26, M27) · effort S
 About panel from meta; `debugPrint` load/axis lines matching the web's
@@ -129,6 +138,13 @@ Total: roughly 3–4 focused days (v3 adds the filter, chips, multi-series
 table/CSV). No backend changes required — mobile consumes the same
 envelopes (month-end cadence, unit conversions, translated news,
 15-series grains all server-side).
+
+## 3bis. Scope notes
+
+- **Admin Dashboard: OUT OF SCOPE for mobile, permanently** — the
+  mobile app is end-user only; admin features are never ported.
+- **M27 color-scheme audit** (chat + Insights + Market Prices vs the
+  Vue DS tokens, light AND dark): pending — Phase D item.
 
 ## 4. Risks
 

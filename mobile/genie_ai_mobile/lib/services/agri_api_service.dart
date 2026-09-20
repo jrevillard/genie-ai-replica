@@ -145,6 +145,8 @@ class AgriApiService {
       'estimation': meta['estimation'],
       'coverage': meta['coverage'],
       'lastUpdated': meta['fetchedAt'],
+      'seeded': meta['seeded'],
+      'stale': meta['stale'],
     };
   }
 

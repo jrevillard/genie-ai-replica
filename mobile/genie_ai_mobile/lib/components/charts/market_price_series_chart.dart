@@ -941,6 +941,7 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
     final names = activeSeries.map((s) => s['name'] as String? ?? '').toList();
     final allNames = _allSeries.map((s) => s['name'] as String? ?? '').toList();
     final units = activeSeries.map((s) => s['unit'] as String? ?? '').toList();
+    final theme = Theme.of(context);
 
     const periodW = 92.0;
     const seriesW = 108.0;
@@ -1001,9 +1002,8 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
     );
 
     Widget dataRow(AgriTableRow r, int rowIndex) {
-      final q = r.primaryQuality == 'estimated'
-          ? tr('market.estimated')
-          : tr('market.actual');
+      final estimated = r.primaryQuality == 'estimated';
+      final q = estimated ? tr('market.estimated') : tr('market.actual');
       return Container(
         color: rowIndex.isOdd
             ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.03)
@@ -1020,7 +1020,16 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
             cell(
               q,
               qualityW,
-              style: TextStyle(fontSize: 11, color: _tokens.muted),
+              // Vue parity: Estimated is warning-tinted, Actual stays muted.
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: estimated ? FontWeight.w600 : FontWeight.w400,
+                color: estimated
+                    ? (theme.brightness == Brightness.dark
+                          ? Colors.amber.shade300
+                          : Colors.amber.shade800)
+                    : _tokens.muted,
+              ),
             ),
           ],
         ),

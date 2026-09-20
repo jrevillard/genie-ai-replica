@@ -319,25 +319,42 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
       tokens: ThemeManager().tokens,
       categoryColor: _categoryColor,
     );
+    final unit = (_fullEnvelope!['unit'] as String?) ?? '';
 
     // Vue parity: a strict 3-column grid of outlined acronym chips
-    // (small bold text, colored dot, no values — the headline carries
+    // (small NON-bold text, colored dot, no values — the headline carries
     // the price). The PRIMARY chip (index 0) gets the heavy border.
+    // Long-press tooltip = full name + latest price (web :title parity).
     Widget chip(int i) {
-      final name = series[i]['name'] as String? ?? '';
+      final s = series[i];
+      final name = s['name'] as String? ?? '';
       final code = commodityCode(name);
       final color = palette.colorForSeriesIndex(i);
       final primary = i == 0;
+      final points = (s['points'] as List?) ?? const [];
+      double? latest;
+      for (final p in points.whereType<Map<String, dynamic>>()) {
+        final v = p['value'] as double?;
+        if (v != null) latest = v;
+      }
+      final fullName = localizeFullName(
+        name,
+        I18nService().currentLocale.languageCode,
+      );
+      final tip = latest == null
+          ? fullName
+          : latestTooltipText(
+              fullSeriesName: fullName,
+              value: latest,
+              unit: unit,
+            );
       return Expanded(
         child: Tooltip(
-          message: localizeFullName(
-            name,
-            I18nService().currentLocale.languageCode,
-          ),
+          message: tip,
           triggerMode: TooltipTriggerMode.longPress,
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1.5),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
               color: ThemeManager().tokens.surface,
               borderRadius: BorderRadius.circular(6),
@@ -352,8 +369,8 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 6,
-                  height: 6,
+                  width: 5,
+                  height: 5,
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
@@ -366,8 +383,8 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 8.5,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w500,
                       color: ThemeManager().tokens.fg,
                     ),
                   ),
@@ -382,7 +399,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
     final rows = <Widget>[
       for (var r = 0; r < (series.length / 3).ceil(); r++)
         Padding(
-          padding: const EdgeInsets.only(bottom: 3),
+          padding: const EdgeInsets.only(bottom: 2),
           child: Row(
             children: [
               for (var c = 0; c < 3; c++)

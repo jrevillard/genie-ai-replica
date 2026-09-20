@@ -131,6 +131,12 @@ class _CropHealthChartState extends State<CropHealthChart> {
                           ?.cast<String, dynamic>()['estimation'],
                       'dataSource': (_cropData!['meta'] as Map?)
                           ?.cast<String, dynamic>()['source'],
+                      'fetchedAt': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['fetchedAt'],
+                      'seeded': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['seeded'],
+                      'stale': (_cropData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['stale'],
                     },
             ),
             const SizedBox(height: 20),
@@ -370,7 +376,10 @@ class _CropHealthChartState extends State<CropHealthChart> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(DateTime.now())}',
+                        // Vue parity: show the SERVER's fetch time, not
+                        // DateTime.now() — a cached payload must not claim
+                        // to be fresh.
+                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(_fetchedAt ?? DateTime.now())}',
                         style: TextStyle(
                           fontSize: 12,
                           color: theme.colorScheme.onSurface.withValues(
@@ -589,18 +598,42 @@ class _CropHealthChartState extends State<CropHealthChart> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Icon(
-                      _getTrendIcon(trend),
-                      color: _getTrendColor(trend),
-                      size: 16,
+                    // Health badge (Vue parity: DsPill Good/Moderate/Warning)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getHealthColor(health).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _translate('charts.$health') ?? health,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _getHealthColor(health),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${change > 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: _getTrendColor(trend),
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _getTrendIcon(trend),
+                          color: _getTrendColor(trend),
+                          size: 14,
+                        ),
+                        Text(
+                          '${change > 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: _getTrendColor(trend),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -673,6 +706,14 @@ class _CropHealthChartState extends State<CropHealthChart> {
 
   String? _translate(String key) {
     return tr(key);
+  }
+
+  /// Server fetch timestamp from the envelope meta (null on legacy payloads).
+  DateTime? get _fetchedAt {
+    final meta = (_cropData?['meta'] as Map?)?.cast<String, dynamic>();
+    final raw = meta?['fetchedAt'] as String?;
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
   }
 
   String _formatDate(DateTime date) {

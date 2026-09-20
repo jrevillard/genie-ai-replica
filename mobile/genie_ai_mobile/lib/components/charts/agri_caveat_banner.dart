@@ -33,6 +33,39 @@ class AgriCaveatBanner extends StatelessWidget {
     return m[lang] ?? m['en']!;
   }
 
+  /// Freshness pill (Vue parity): "Bundled snapshot" / "Saved data — X old"
+  /// / "Updated X ago". Returns (label, isWarning) or null when the payload
+  /// carries no fetch timestamp.
+  (String, bool)? _freshnessChip() {
+    final fetchedAt = (data?['fetchedAt'] ?? data?['lastUpdated']) as String?;
+    if (fetchedAt == null || fetchedAt.isEmpty) return null;
+    final fetched = DateTime.tryParse(fetchedAt);
+    final seeded = data?['seeded'] == true;
+    final stale = data?['stale'] == true;
+    final isEs = I18nService().currentLocale.languageCode == 'es';
+    if (seeded) {
+      return (isEs ? 'Instantánea incluida' : 'Bundled snapshot', true);
+    }
+    String age;
+    if (fetched != null) {
+      final hours = DateTime.now().difference(fetched).inMinutes / 60.0;
+      age = hours < 1
+          ? '${(hours * 60).round().clamp(1, 59)} min'
+          : hours < 48
+          ? '${hours.round()} h'
+          : '${(hours / 24).round()} d';
+    } else {
+      age = '';
+    }
+    if (stale) {
+      return (
+        isEs ? 'Datos guardados — hace $age' : 'Saved data — $age old',
+        true,
+      );
+    }
+    return (isEs ? 'Actualizado hace $age' : 'Updated $age ago', false);
+  }
+
   List<(String, String)> _chips() {
     final out = <(String, String)>[];
     final caveats = (data?['caveats'] as List?) ?? [];
@@ -59,7 +92,8 @@ class AgriCaveatBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final chips = _chips();
     final theme = Theme.of(context);
-    if (chips.isEmpty && data?['coverage'] == null) {
+    final fresh = _freshnessChip();
+    if (chips.isEmpty && fresh == null && data?['coverage'] == null) {
       return const SizedBox.shrink();
     }
 
@@ -71,31 +105,60 @@ class AgriCaveatBanner extends StatelessWidget {
           Wrap(
             spacing: 6,
             runSpacing: 4,
-            children: chips
-                .map(
-                  (c) => Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
+            children: [
+              // Freshness pill first (Vue parity: warning when seeded/
+              // stale, success when freshly updated).
+              if (fresh != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (fresh.$2 ? Colors.amber : Colors.green).withValues(
+                      alpha: 0.15,
                     ),
-                    decoration: BoxDecoration(
-                      color:
-                          (c.$1 == 'ESTIMATED_CPI' || c.$1 == 'PROXY_INDEX'
-                                  ? Colors.amber
-                                  : theme.colorScheme.secondary)
-                              .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      c.$2,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurface,
-                      ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    fresh.$1,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: fresh.$2
+                          ? (theme.brightness == Brightness.dark
+                                ? Colors.amber.shade300
+                                : Colors.amber.shade800)
+                          : (theme.brightness == Brightness.dark
+                                ? Colors.green.shade300
+                                : Colors.green.shade700),
                     ),
                   ),
-                )
-                .toList(),
+                ),
+              ...chips.map(
+                (c) => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        (c.$1 == 'ESTIMATED_CPI' || c.$1 == 'PROXY_INDEX'
+                                ? Colors.amber
+                                : theme.colorScheme.secondary)
+                            .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    c.$2,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           Theme(
             data: theme.copyWith(dividerColor: Colors.transparent),

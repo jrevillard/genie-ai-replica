@@ -1348,10 +1348,12 @@ ${tr('market.sharedVia')}
     final theme = Theme.of(context);
 
     return Dialog(
+      insetPadding: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-          maxWidth: MediaQuery.of(context).size.width * 0.95,
+          maxHeight: MediaQuery.of(context).size.height,
+          maxWidth: MediaQuery.of(context).size.width,
         ),
         padding: const EdgeInsets.all(20),
         child: Column(

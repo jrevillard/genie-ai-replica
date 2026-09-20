@@ -160,6 +160,12 @@ class _PestAlertChartState extends State<PestAlertChart> {
                           ?.cast<String, dynamic>()['coverage'],
                       'dataSource': (_pestData!['meta'] as Map?)
                           ?.cast<String, dynamic>()['source'],
+                      'fetchedAt': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['fetchedAt'],
+                      'seeded': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['seeded'],
+                      'stale': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['stale'],
                     },
             ),
             const SizedBox(height: 16),
@@ -263,7 +269,8 @@ class _PestAlertChartState extends State<PestAlertChart> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(DateTime.now())}',
+                        // Server fetch time, not DateTime.now() (Vue parity)
+                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(_fetchedAt ?? DateTime.now())}',
                         style: TextStyle(
                           fontSize: 12,
                           color: theme.colorScheme.onSurface.withValues(
@@ -541,13 +548,17 @@ class _PestAlertChartState extends State<PestAlertChart> {
                     departments,
                     theme,
                   ),
-                  _buildDetailItem(
-                    context,
-                    Icons.calendar_today,
-                    _translate('charts.firstDetected') ?? 'First Detected',
-                    _formatDate(DateTime.parse(firstDetected)),
-                    theme,
-                  ),
+                  // firstDetected is null on live data (the curated payload
+                  // has no detection date) — DateTime.parse('') threw
+                  // FormatException here; only render when a real date exists.
+                  if (DateTime.tryParse(firstDetected) != null)
+                    _buildDetailItem(
+                      context,
+                      Icons.calendar_today,
+                      _translate('charts.firstDetected') ?? 'First Detected',
+                      _formatDate(DateTime.parse(firstDetected)),
+                      theme,
+                    ),
                   const SizedBox(height: 12),
 
                   // Recommendations
@@ -1001,6 +1012,14 @@ Recommendations: $recommendations''';
       default:
         return severity.toUpperCase();
     }
+  }
+
+  /// Server fetch timestamp from the envelope meta (null on legacy payloads).
+  DateTime? get _fetchedAt {
+    final meta = (_pestData?['meta'] as Map?)?.cast<String, dynamic>();
+    final raw = meta?['fetchedAt'] as String?;
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
   }
 
   String _formatDate(DateTime date) {

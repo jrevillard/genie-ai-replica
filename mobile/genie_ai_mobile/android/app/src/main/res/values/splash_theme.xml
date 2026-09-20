@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Splash theme for the Android 12+ SplashScreen API. The system uses
+  the windowBackground drawable here to render the cold-start splash,
+  layered with the splashscreen-themed icon (the AgroGenio farmer on
+  the brand verde).
+
+  - windowSplashScreenBackground: brand verde background (#1E5631)
+  - windowSplashScreenAnimatedIcon: the mipmap-scaled farmer PNG,
+    rendered at 40% of the slot (iconBackgroundColor = transparent so
+    the verde background shows through).
+  - postSplashScreenTheme: the Flutter NormalTheme takes over once
+    installSplashScreen() finishes and the framework signals ready.
+-->
+<resources>
+    <style name="LaunchSplashTheme" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/launch_image</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/launch_bg</item>
+        <item name="postSplashScreenTheme">@style/NormalTheme</item>
+    </style>
+</resources>

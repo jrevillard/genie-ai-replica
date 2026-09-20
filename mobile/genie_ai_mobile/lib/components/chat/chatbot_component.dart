@@ -112,7 +112,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
   String _exportFilename = "";
-  bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
 
   // Quick Help Overlay Visibility
@@ -951,7 +950,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       setState(() {
         _currentConversationId =
             conversationResponse['_id'] ?? _currentConversationId;
-        _showSaveDialog = false;
         _lastSavedMessageCount = _messages.length;
       });
 
@@ -1169,6 +1167,96 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 Navigator.of(dialogContext).pop();
                                 exportChatToPDF();
                               },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Save-Chat dialog as a real modal route. It previously rendered as an
+  /// inline Dialog in the layout tree — the theme's full-width button
+  /// constraint crashed the Row layout and nothing appeared (same bug
+  /// class as the export dialog above).
+  Future<void> _openSaveDialog() async {
+    _titleController.text = _conversationTitle;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = ThemeManager().tokens;
+        return Dialog(
+          backgroundColor: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.xl),
+          ),
+          insetPadding: const EdgeInsets.all(DsSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.lg,
+                    DsSpacing.lg,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Text(
+                    tr('chatbot.dialogs.saveTitle'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.lg),
+                  child: TextField(
+                    controller: _titleController,
+                    style: TextStyle(color: tokens.fg),
+                    decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.saveHint'),
+                      hintStyle: TextStyle(color: tokens.mutedSoft),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => _conversationTitle = v,
+                    autofocus: true,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.md,
+                    DsSpacing.sm,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      DsButton(
+                        label: tr('common.cancel'),
+                        variant: DsButtonVariant.ghost,
+                        expand: false,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                      const SizedBox(width: DsSpacing.sm),
+                      DsButton(
+                        label: tr('common.save'),
+                        variant: DsButtonVariant.primary,
+                        expand: false,
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          saveConversation().then((_) {});
+                        },
                       ),
                     ],
                   ),
@@ -1571,10 +1659,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             icon: Icons.save_outlined,
                             variant: DsButtonVariant.ghost,
                             overrideFg: tokens.fg,
-                            onPressed: () {
-                              _titleController.text = _conversationTitle;
-                              setState(() => _showSaveDialog = true);
-                            },
+                            onPressed: _openSaveDialog,
                           ),
                         ),
                         Tooltip(
@@ -1810,8 +1895,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             onCancel: () => setState(() => _showNewChatConfirm = false),
             onSecondary: () {
               setState(() => _showNewChatConfirm = false);
-              _titleController.text = _conversationTitle;
-              setState(() => _showSaveDialog = true);
+              _openSaveDialog();
             },
           ),
           ConfirmDialog(
@@ -1828,85 +1912,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             onCancel: () => setState(() => _showLoadConfirm = false),
             onSecondary: () {
               setState(() => _showLoadConfirm = false);
-              _titleController.text = _conversationTitle;
-              setState(() => _showSaveDialog = true);
+              _openSaveDialog();
             },
           ),
-          if (_showSaveDialog)
-            Dialog(
-              backgroundColor: tokens.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DsRadii.xl),
-              ),
-              insetPadding: const EdgeInsets.all(DsSpacing.md),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.lg,
-                        DsSpacing.lg,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Text(
-                        tr('chatbot.dialogs.saveTitle'),
-                        style: TextStyle(
-                          color: tokens.fg,
-                          fontSize: tokens.textLg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(DsSpacing.lg),
-                      child: TextField(
-                        controller: _titleController,
-                        style: TextStyle(color: tokens.fg),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.dialogs.saveHint'),
-                          hintStyle: TextStyle(color: tokens.mutedSoft),
-                          border: const OutlineInputBorder(),
-                        ),
-                        onChanged: (v) => _conversationTitle = v,
-                        autofocus: true,
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.md,
-                        DsSpacing.sm,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          DsButton(
-                            label: tr('common.cancel'),
-                            variant: DsButtonVariant.ghost,
-                            onPressed: () =>
-                                setState(() => _showSaveDialog = false),
-                          ),
-                          const SizedBox(width: DsSpacing.sm),
-                          DsButton(
-                            label: tr('common.save'),
-                            variant: DsButtonVariant.primary,
-                            onPressed: () {
-                              saveConversation().then((_) {});
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

@@ -73,7 +73,7 @@ network-unreachable state distinct from auth failure (the 2026-09-20
 lab-VPN outage produced identical-looking errors for a pure-network
 cause).
 
-### Phase B — Chart core (M3, M5, M7, M8) · effort L
+### Phase B — Chart core (M3, M5, M7, M8) · effort L · **DONE 2026-09-20**
 Date-keyed spots (`millisecondsSinceEpoch`), `minX/maxX` from union range,
 month/year bottom-tick formatter. Multi-`LineChartBarData` with the web
 palette semantics; custom legend chip row; series-count-scaled height.
@@ -83,6 +83,16 @@ per-series "latest month-end price of…" tooltips (M7), headline-number
 tooltip on the summary cards (M10's tooltip half).
 Acceptance: grains renders 15 color-matched series with legend;
 cropProtection renders dual axes; every Latest row self-explains.
+Shipped: `series_chart_core.dart` (S3/S4 palette + S5 date-keyed spots
++ S6 window/ticks + S8 axis recipe + S10 height + S11/S12 Latest
+helpers), `market_price_series_chart.dart` (fl_chart multi-series,
+estimated dashed overlay S7, dual unit groups via transform + inverse
+right axis, S9 legend tap-toggle, S14 touch tooltip), dialog wiring
+(full envelope on open, legacy fallback). Verified live on emulator:
+grains renders 15 color-matched series with exact spec §2 legend names
++ Latest rows; 15 new tests, suite 513 green. NOTE: dual-axis visual
+check on cropProtection still pending (dialog scroll UX); dots on
+annual series render radius 6 per spec — revisit density if heavy.
 
 ### Phase C — Interaction & filters (M4, M6, M9, M10 chips, M11, M12, M20) · effort M/L
 Start-year dropdown (same contract as web: earliest→current−5, default

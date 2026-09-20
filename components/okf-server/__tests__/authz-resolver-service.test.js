@@ -21,17 +21,22 @@ const retrievalConfigService = require('../services/retrieval-config-service');
 const { deriveScopeAuthz, resolveGraphSet } = require('../services/authz-resolver-service');
 
 function servingRow(overrides) {
-  // Model what servingRepos() actually returns: the query filters on
-  // lifecycle_state='publish' + ingested_at, so every row carries them — and
-  // workingGraphName NEEDS the state to resolve the SERVING version (v{N},
-  // not the next build v{N+1}).
+  // Model what servingRepos() returns AND what workingGraphName needs: the
+  // rows carry lifecycle_state='publish' + ingested_at (the serving truth the
+  // AQL filters on AND projects — the projection contract with
+  // workingGraphName is pinned in retrieval-config-service's module header).
+  // INVARIANT (lifecycle-service.js:405-462): publish is BLOCKED while a
+  // drain is pending and publish nulls ingested_at until the drain settles —
+  // so any row in the serving set has version === the promoted serving
+  // version, and workingGraphName reading `version` is exactly the promoted
+  // name. A future mint-without-retract flow would silently break this —
+  // these fixtures would need a cross-check then.
   return Object.assign(
     {
       repo_id: 'r-kenya',
       name: 'Kenya Gov',
       domain: 'government',
       version: 3,
-      ingested_version: 3,
       lifecycle_state: 'publish',
       ingested_at: '2026-09-20T00:00:00Z'
     },

@@ -2845,3 +2845,9 @@ location: configs/grafana/provisioning/__tests__/alert-rules-disk-threshold.test
 severity: medium (test-correctness only)
 reason: Test was added in commit `bda03488e` (2026-09-17) with no `.gitlab-ci.yml` hookup — `.gitlab-ci.yml` does not gate `configs/grafana/provisioning/__tests__/` in any pipeline. Also the assertion was wrong: yml uses `vm_free_disk_space_bytes` + `type: lt` (correct for "low free space" semantic), test claimed `gt` is mandatory. Both layers of neglect stacked. Resolution: deleted the test outright — it had been dormant for 8 days since the fix commit and was producing no signal. Alerting yml itself is left untouched; its on-call behaviour is correct.
 status: RESOLVED in MR !343 follow-up commit (test file deleted 2026-09-25)
+
+## Deferred from: code review of 6-1b-authz-resolver-token-to-graph-set (2026-09-20)
+
+- **No reset path for the governed retrieval-config row** — after the first PUT, env `OKF_RETRIEVAL_*` changes are shadowed by the stored doc (per ADR-039 D3 design: DB overrides env). A reset control (clear the row back to env defaults) belongs to the Story 10.7 Studio retrieval card.
+- **ADR D3's `utility_gate` / `label_federation` config fields are unstorable** — `validatePatch`/LIMITS reject them as unknown. The Wave R4/R6 landing stories must extend the config shape (and LIMITS) when the utility-cost gate and KH label federation legs land.
+- **CHANGELOG + site configuration docs for GET/PUT /retrieval-config and GET /authz/graphs** — CHANGELOG entries land with the MR/release flow (docs/RELEASE.md); the site operator docs are a Story 10.7 completion gate (i18n ×14 + site/content/en/docs).

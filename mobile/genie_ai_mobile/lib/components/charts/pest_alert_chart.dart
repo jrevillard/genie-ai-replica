@@ -398,14 +398,14 @@ class _PestAlertChartState extends State<PestAlertChart> {
     ThemeData theme,
     bool isDark,
   ) {
-    final severity = alert['severity'] as String;
-    final pest = alert['pest'] as String;
-    final scientific = alert['scientificName'] as String;
-    final description = alert['description'] as String;
+    final severity = alert['severity'] as String? ?? '';
+    final pest = alert['pest'] as String? ?? '';
+    final scientific = alert['scientificName'] as String? ?? '';
+    final description = alert['description'] as String? ?? '';
     final crops = (alert['affectedCrops'] as List<dynamic>).join(', ');
     final departments = (alert['departments'] as List<dynamic>).join(', ');
-    final recommendations = alert['recommendations'] as String;
-    final firstDetected = alert['firstDetected'] as String;
+    final recommendations = alert['recommendations'] as String? ?? '';
+    final firstDetected = alert['firstDetected'] as String? ?? '';
     final isExpanded = _expandedAlerts.contains(alert['id']);
 
     final severityColor = _getSeverityColor(severity);
@@ -774,13 +774,13 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   void _shareAlert(Map<String, dynamic> alert) async {
-    final pest = alert['pest'] as String;
-    final scientific = alert['scientificName'] as String;
-    final severity = alert['severity'] as String;
-    final description = alert['description'] as String;
+    final pest = alert['pest'] as String? ?? '';
+    final scientific = alert['scientificName'] as String? ?? '';
+    final severity = alert['severity'] as String? ?? '';
+    final description = alert['description'] as String? ?? '';
     final crops = (alert['affectedCrops'] as List<dynamic>).join(', ');
     final departments = (alert['departments'] as List<dynamic>).join(', ');
-    final recommendations = alert['recommendations'] as String;
+    final recommendations = alert['recommendations'] as String? ?? '';
     final source = alert['source'] as String?;
 
     // Format the pest alert for sharing
@@ -826,12 +826,12 @@ ${_translate('charts.sharedVia') ?? 'Shared via'} AgroGenio AI
   }
 
   void _getAssistance(Map<String, dynamic> alert) async {
-    final pest = alert['pest'] as String;
-    final scientific = alert['scientificName'] as String;
-    final severity = alert['severity'] as String;
+    final pest = alert['pest'] as String? ?? '';
+    final scientific = alert['scientificName'] as String? ?? '';
+    final severity = alert['severity'] as String? ?? '';
     final crops = (alert['affectedCrops'] as List<dynamic>).join(', ');
     final departments = (alert['departments'] as List<dynamic>).join(', ');
-    final recommendations = alert['recommendations'] as String;
+    final recommendations = alert['recommendations'] as String? ?? '';
 
     // Clear previous user input
     _userContextController.clear();

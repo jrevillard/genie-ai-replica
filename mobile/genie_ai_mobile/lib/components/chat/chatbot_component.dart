@@ -111,7 +111,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _showNewChatConfirm = false;
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
-  bool _showExportDialog = false;
   String _exportFilename = "";
   bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
@@ -265,7 +264,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       }
 
       setState(() {
-        _quickHelpButtons = loadedButtons;
+        // 'Just Chat' removed (user req): the composer is always on the
+        // main screen, so a chat shortcut is redundant. Chat-only
+        // buttons are the ones without an action.
+        _quickHelpButtons = loadedButtons
+            .where((b) => (b['action'] as Map<String, dynamic>).isNotEmpty)
+            .toList();
       });
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
@@ -1087,6 +1091,96 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// Real modal route for the PDF export filename dialog — the old
+  /// inline Dialog-in-Column rendered invisibly and its layout crash
+  /// froze the whole screen (buttons dead).
+  Future<void> _openExportDialog() async {
+    _exportFilename =
+        "chat_${DateTime.now().toIso8601String().split('T').first}";
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = ThemeManager().tokens;
+        return Dialog(
+          backgroundColor: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.xl),
+          ),
+          insetPadding: const EdgeInsets.all(DsSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.lg,
+                    DsSpacing.lg,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Text(
+                    tr('chatbot.dialogs.exportTitle'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.lg),
+                  child: TextField(
+                    controller: TextEditingController(text: _exportFilename),
+                    style: TextStyle(color: tokens.fg),
+                    decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.exportHint'),
+                      hintStyle: TextStyle(color: tokens.mutedSoft),
+                    ),
+                    onChanged: (v) => _exportFilename = v,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.md,
+                    DsSpacing.sm,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      DsButton(
+                        label: tr('common.cancel'),
+                        variant: DsButtonVariant.ghost,
+                        expand: false,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                      const SizedBox(width: DsSpacing.sm),
+                      DsButton(
+                        label: tr('chatbot.dialogs.actions.export'),
+                        variant: DsButtonVariant.primary,
+                        expand: false,
+                        onPressed: _exportFilename.trim().isEmpty
+                            ? null
+                            : () {
+                                Navigator.of(dialogContext).pop();
+                                exportChatToPDF();
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
     final tokens = ThemeManager().tokens;
@@ -1195,7 +1289,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         filename: '$filename.pdf',
       );
       NotificationService.success(tr('chatbot.exportSuccess'));
-      setState(() => _showExportDialog = false);
     } catch (e) {
       debugPrint("[PDF EXPORT] ERROR: $e");
       NotificationService.error(tr('chatbot.exportError'));
@@ -1491,11 +1584,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             icon: Icons.picture_as_pdf_outlined,
                             variant: DsButtonVariant.ghost,
                             overrideFg: tokens.fg,
-                            onPressed: () {
-                              _exportFilename =
-                                  "chat_${DateTime.now().toIso8601String().split('T').first}";
-                              setState(() => _showExportDialog = true);
-                            },
+                            onPressed: _openExportDialog,
                           ),
                         ),
                         const SizedBox(width: DsSpacing.sm),
@@ -1810,81 +1899,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             onPressed: () {
                               saveConversation().then((_) {});
                             },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (_showExportDialog)
-            Dialog(
-              backgroundColor: tokens.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DsRadii.xl),
-              ),
-              insetPadding: const EdgeInsets.all(DsSpacing.md),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.lg,
-                        DsSpacing.lg,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Text(
-                        tr('chatbot.dialogs.exportTitle'),
-                        style: TextStyle(
-                          color: tokens.fg,
-                          fontSize: tokens.textLg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(DsSpacing.lg),
-                      child: TextField(
-                        style: TextStyle(color: tokens.fg),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.dialogs.exportHint'),
-                          hintStyle: TextStyle(color: tokens.mutedSoft),
-                        ),
-                        onChanged: (v) => _exportFilename = v,
-                        controller: TextEditingController(
-                          text: _exportFilename,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.md,
-                        DsSpacing.sm,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          DsButton(
-                            label: tr('common.cancel'),
-                            variant: DsButtonVariant.ghost,
-                            onPressed: () =>
-                                setState(() => _showExportDialog = false),
-                          ),
-                          const SizedBox(width: DsSpacing.sm),
-                          DsButton(
-                            label: tr('chatbot.dialogs.actions.export'),
-                            variant: DsButtonVariant.primary,
-                            onPressed: _exportFilename.trim().isEmpty
-                                ? null
-                                : exportChatToPDF,
                           ),
                         ],
                       ),

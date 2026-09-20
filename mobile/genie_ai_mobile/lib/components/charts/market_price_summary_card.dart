@@ -196,8 +196,8 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
       onTap: () => _showDetailedChart(context),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        // 150: the S21 acronym-chip row needs room below the headline.
-        height: 150,
+        // 170: headline row + the 5-row acronym-chip grid (Vue parity).
+        height: 170,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
@@ -255,7 +255,7 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                             Text(
                               _title,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                fontSize: 9,
+                                fontSize: 8,
                                 color: theme.colorScheme.onSurface.withValues(
                                   alpha: 0.7,
                                 ),
@@ -319,89 +319,88 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
       tokens: ThemeManager().tokens,
       categoryColor: _categoryColor,
     );
-    final locale = I18nService().currentLocale.languageCode;
-    final chips = Wrap(
-      spacing: 4,
-      runSpacing: 3,
-      children: [
-        for (var i = 0; i < series.length; i++)
-          _seriesChip(series[i], i, palette, locale),
-      ],
-    );
-    // Overflow protection: a category with many series (grains = 15)
-    // wraps to more rows than the fixed-height card can hold. Bound
-    // the chip area to two rows and CLIP the rest — the chart dialog
-    // always shows every series, so clipping here loses nothing.
-    return SizedBox(
-      height: 44,
-      child: ClipRect(
-        child: OverflowBox(
-          alignment: Alignment.topLeft,
-          minWidth: 0,
-          maxWidth: double.infinity,
-          minHeight: 0,
-          maxHeight: double.infinity,
-          child: chips,
-        ),
-      ),
-    );
-  }
 
-  Widget _seriesChip(
-    Map<String, dynamic> s,
-    int originalIndex,
-    AgriPalette palette,
-    String locale,
-  ) {
-    final name = s['name'] as String? ?? '';
-    final code = commodityCode(name);
-    final unit = s['unit'] as String? ?? '';
-    final spots = seriesToSpots(
-      (s['points'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
-          const [],
-    );
-    final latest = latestPoint(spots);
-    final color = palette.colorForSeriesIndex(originalIndex);
-    final tooltip = latestTooltipText(
-      fullSeriesName: localizeFullName(name, locale),
-      value: latest?.value ?? 0,
-      unit: unit,
-    );
-    return Tooltip(
-      message: tooltip,
-      triggerMode: TooltipTriggerMode.longPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
+    // Vue parity: a strict 3-column grid of outlined acronym chips
+    // (small bold text, colored dot, no values — the headline carries
+    // the price). The PRIMARY chip (index 0) gets the heavy border.
+    Widget chip(int i) {
+      final name = series[i]['name'] as String? ?? '';
+      final code = commodityCode(name);
+      final color = palette.colorForSeriesIndex(i);
+      final primary = i == 0;
+      return Expanded(
+        child: Tooltip(
+          message: localizeFullName(
+            name,
+            I18nService().currentLocale.languageCode,
+          ),
+          triggerMode: TooltipTriggerMode.longPress,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1.5),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+            decoration: BoxDecoration(
+              color: ThemeManager().tokens.surface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: primary
+                    ? ThemeManager().tokens.fg
+                    : ThemeManager().tokens.border,
+                width: primary ? 1.6 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Expanded(
+                  child: Text(
+                    code,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.w700,
+                      color: ThemeManager().tokens.fg,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 5,
-              height: 5,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 3),
-            Text(
-              code,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w700,
-                color: ThemeManager().tokens.fg,
-              ),
-            ),
-            const SizedBox(width: 3),
-            Text(
-              latest == null ? '--' : trimAgriNum(latest.value),
-              style: TextStyle(
-                fontSize: 9,
-                color: ThemeManager().tokens.fg.withValues(alpha: 0.8),
-              ),
-            ),
-          ],
+      );
+    }
+
+    final rows = <Widget>[
+      for (var r = 0; r < (series.length / 3).ceil(); r++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 3),
+          child: Row(
+            children: [
+              for (var c = 0; c < 3; c++)
+                (r * 3 + c < series.length)
+                    ? chip(r * 3 + c)
+                    : const Expanded(child: SizedBox()),
+            ],
+          ),
+        ),
+    ];
+
+    // Overflow protection: clip if a category ever exceeds the space.
+    return SizedBox(
+      height: 108,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Column(children: rows),
         ),
       ),
     );
@@ -410,11 +409,13 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   void _showDetailedChart(BuildContext context) {
     showDialog(
       context: context,
+      useSafeArea: true,
       builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        insetPadding: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(),
         child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.95,
-          height: MediaQuery.of(context).size.height * 0.85,
+          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.of(context).size.height,
           child: Column(
             children: [
               // Header

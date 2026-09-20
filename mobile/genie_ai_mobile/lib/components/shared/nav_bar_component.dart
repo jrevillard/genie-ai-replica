@@ -100,7 +100,7 @@ class NavBarComponent extends StatelessWidget {
                       ? Icons.chat_bubble_outline
                       : Icons.candlestick_chart,
                   variant: DsButtonVariant.ghost,
-                  overrideFg: marketViewActive ? tokens.accent : contentColor,
+                  overrideFg: contentColor,
                   onPressed: onToggleMarketView,
                 ),
               ),

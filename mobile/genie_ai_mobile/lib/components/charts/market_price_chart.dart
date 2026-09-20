@@ -1051,10 +1051,12 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
     final theme = Theme.of(context);
 
     return Dialog(
+      insetPadding: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height,
+          maxWidth: MediaQuery.of(context).size.width,
         ),
         padding: const EdgeInsets.all(16),
         child: Column(

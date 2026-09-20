@@ -31,7 +31,7 @@ class MarketPricesPage extends StatelessWidget {
             const SizedBox(height: 12),
             GridView.count(
               crossAxisCount: 2,
-              childAspectRatio: 1.15,
+              childAspectRatio: 1.0,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 10,

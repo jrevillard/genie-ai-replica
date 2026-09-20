@@ -1081,6 +1081,7 @@ const Map<String, dynamic> esLocale = {
   },
   "quickhelp": {},
   "common": {
+    "submit": "Enviar",
     "cancel": "Cancelar",
     "create": "Crear",
     "save": "Guardar",

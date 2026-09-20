@@ -1081,6 +1081,7 @@ const Map<String, dynamic> enLocale = {
     // User Prompts (Visible Text - First Person)
   },
   "common": {
+    "submit": "Submit",
     "cancel": "Cancel",
     "create": "Create",
     "save": "Save",

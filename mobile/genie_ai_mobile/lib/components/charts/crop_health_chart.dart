@@ -198,7 +198,8 @@ class _CropHealthChartState extends State<CropHealthChart> {
                             if (value.toInt() >= 0 &&
                                 value.toInt() < departments.length) {
                               final dept = departments[value.toInt()];
-                              final name = dept['department'] as String;
+                              final name =
+                                  (dept['department'] as String?) ?? '';
                               // Show first 3 chars for mobile
                               return Padding(
                                 padding: const EdgeInsets.only(top: 8.0),
@@ -266,7 +267,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
                           show: true,
                           getDotPainter: (spot, percent, barData, index) {
                             final dept = _cropData!['data'][index];
-                            final health = dept['health'] as String;
+                            final health = (dept['health'] as String?) ?? '';
                             return FlDotCirclePainter(
                               radius: 5,
                               color: _getHealthColor(health),
@@ -335,8 +336,13 @@ class _CropHealthChartState extends State<CropHealthChart> {
                       iconColor: Colors.green,
                       label: _translate('charts.averageNDVI') ?? 'Average NDVI',
                       value: _cropData!['average']['ndvi'].toString(),
-                      trend: _cropData!['average']['trend'],
-                      change: _cropData!['average']['change'],
+                      trend:
+                          (_cropData!['average']['trend'] as String?) ??
+                          'unknown',
+                      change:
+                          (_cropData!['average']['change'] as num?)
+                              ?.toDouble() ??
+                          0.0,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -541,7 +547,7 @@ class _CropHealthChartState extends State<CropHealthChart> {
           final name = dept['department'] as String;
           final ndvi = (dept['ndvi'] as num?)?.toDouble() ?? 0.0;
           final health = dept['health'] as String;
-          final trend = dept['trend'] as String;
+          final trend = (dept['trend'] as String?) ?? 'unknown';
           final change = (dept['change'] as num?)?.toDouble() ?? 0.0;
 
           return Container(

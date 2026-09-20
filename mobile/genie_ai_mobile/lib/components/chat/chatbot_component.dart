@@ -1375,25 +1375,30 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                   top: DsSpacing.md,
                                 ),
                                 child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     if (msg['isGrounded'] == false)
-                                      Text(
-                                        tr('chatbot.aiGeneratedNoDocs'),
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.warning,
-                                          fontStyle: FontStyle.italic,
+                                      Expanded(
+                                        child: Text(
+                                          tr('chatbot.aiGeneratedNoDocs'),
+                                          softWrap: true,
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.warning,
+                                            fontStyle: FontStyle.italic,
+                                          ),
                                         ),
                                       )
                                     else if (msg['confidence'] != null)
-                                      Text(
-                                        "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.fg50,
-                                          fontStyle: FontStyle.italic,
+                                      Expanded(
+                                        child: Text(
+                                          "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                          softWrap: true,
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.fg50,
+                                            fontStyle: FontStyle.italic,
+                                          ),
                                         ),
                                       ),
                                     // Feedback Button

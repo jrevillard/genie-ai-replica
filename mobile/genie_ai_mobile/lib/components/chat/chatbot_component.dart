@@ -1891,15 +1891,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         );
                       },
                     ),
-                    // Team hero — last item in the QuickHelp overlay,
-                    // so it auto-disappears when the chat enters
-                    // response mode (the overlay hides on first
-                    // interaction). Lives INSIDE the scroll, below
-                    // the Fast Actions cards in document order.
+                    // Team hero — last item inside the QuickHelp
+                    // scroll so it sits below the Fast Actions cards
+                    // and auto-disappears with the rest of the
+                    // overlay when the user starts chatting. Sized to
+                    // leave a generous bottom gap (the Input Area
+                    // lives below the scroll in the parent Column),
+                    // so it reads as vertically center-justified in
+                    // the available space above the chat controls.
                     Padding(
                       padding: const EdgeInsets.only(
                         top: DsSpacing.md,
-                        bottom: DsSpacing.xl,
+                        bottom: 80,
                       ),
                       child: Center(
                         child: SizedBox(

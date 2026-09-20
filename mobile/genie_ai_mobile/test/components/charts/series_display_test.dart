@@ -80,8 +80,8 @@ void main() {
         'Maize (white), Nicaragua wholesale',
         'Maize, Guatemala wholesale',
       ]);
-      // MAI-SV, MAI-NI and MAI are all distinct — no suffixes.
-      expect(codes, ['MAI-SV', 'MAI-NI', 'MAI']);
+      // Every name matches a country tag, so all three are distinct.
+      expect(codes, ['MAI-SV', 'MAI-NI', 'MAI-GT']);
     });
   });
 }

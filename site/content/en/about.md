@@ -41,12 +41,12 @@ trusts:
   model provider by default.
 - **Identity & access** — Keycloak (OIDC) handles authentication and
   role-based access; the API gateway (Kong) enforces routing and rate limits.
-  See [Configuration &rarr; Keycloak]({{< relref "/docs/configuration/keycloak-admin-guide" >}}).
+  See [Configuration &rarr; Keycloak]({{< relref "/docs/configure/keycloak-admin-guide" >}}).
 - **Document safety** — every uploaded document is virus-scanned (ClamAV) before
   it is stored or processed. See [Knowledge base &rarr; Ingestion]({{< relref "/docs/knowledge-base/ingestion" >}}).
 - **PII-safe telemetry** — observability spans are filtered to strip sensitive
   attributes (tokens, passwords, user PII) before export. See
-  [Observability &rarr; Tracing]({{< relref "/docs/observability/tracing" >}}).
+  [Observability &rarr; Tracing]({{< relref "/docs/observe/tracing" >}}).
 - **Hardened backend** — security headers (`helmet`), rate limiting, and
   CORS/CSP policies are applied at the backend and gateway.
 - **Data residency** — because the whole stack is self-hosted, data stays within
@@ -63,9 +63,9 @@ The people who use this documentation fall into four roles:
 | Role | What you'll do | Start here |
 |---|---|---|
 | **Evaluator / decision-maker** | Assess fit, sovereignty, compliance. | This page + [Project overview]({{< relref "/docs/core/project-overview" >}}) |
-| **Operator / admin** | Deploy, configure, run, observe. | [Deployment]({{< relref "/docs/deployment" >}}) + [Observability]({{< relref "/docs/observability" >}}) |
+| **Operator / admin** | Deploy, configure, run, observe. | [Deployment]({{< relref "/docs/deploy" >}}) + [Observability]({{< relref "/docs/observe" >}}) |
 | **Knowledge / content manager** | Curate the knowledge base. | [Knowledge base]({{< relref "/docs/knowledge-base" >}}) |
-| **Developer / integrator** | Extend, integrate, customise. | [Architecture]({{< relref "/docs/architecture" >}}) + [RAG pipeline]({{< relref "/docs/rag" >}}) |
+| **Developer / integrator** | Extend, integrate, customise. | [Architecture]({{< relref "/docs/architecture" >}}) + [RAG pipeline]({{< relref "/docs/rag-pipeline" >}}) |
 
 ## What you can do with it
 
@@ -87,7 +87,7 @@ New to GENIE.AI? The fastest path:
 
 1. Read the [Project overview]({{< relref "/docs/core/project-overview" >}}) for
    the 10-minute orientation.
-2. Follow the [Installation & Configuration Guide]({{< relref "/docs/deployment/install-guide" >}})
+2. Follow the [Installation & Configuration Guide]({{< relref "/docs/deploy/install-guide" >}})
    to stand up a deployment.
 3. Load documents via the [Knowledge base]({{< relref "/docs/knowledge-base" >}})
    workflow and start asking questions.

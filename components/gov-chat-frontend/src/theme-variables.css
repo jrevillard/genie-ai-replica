@@ -1,40 +1,57 @@
-/* Design system tokens. JS overrides --brand at runtime from config. */
+/* theme-variables.css — GENIE.AI Design System tokens
+ *
+ * Token hierarchy:
+ *   1. :root defines all DS tokens (OKLch, light mode)
+ *   2. [data-theme="dark"] overrides for dark mode
+ *   3. @media (prefers-color-scheme: dark) for system preference
+ *   4. Runtime JS (main.js) sets --brand from config; all accent
+ *      variants are derived in CSS using relative OKLch syntax
+ */
 
+/* ================================================================
+   LIGHT MODE — Default tokens
+   AgroGenio palette override
+   ================================================================ */
 :root {
-  /* --- Brand --- */
-  --brand: #1e5631;
+  /* --- Brand (set by JS from config, fallback for dev) --- */
+  /* Verde AgroGenio #176B3A */
+  --brand: #176b3a;
 
-  /* --- Core palette --- */
+  /* --- Core palette (AgroGenio: warm + agricultural) --- */
+  /* Fondo cálido #F7F8F4 — warm off-white bg */
   --bg: var(--config-bg, #f7f8f4);
   --surface: #fcfdfa;
+  /* Texto principal #17231C — dark greenish-black for max readability */
   --fg: var(--config-fg, #17231c);
   --muted: #5a6b5f;
   --muted-soft: #8a9690;
-  --border: #d8e2dc;
+  /* Borde #D6DED8 — soft greenish border */
+  --border: #d6ded8;
   --border-light: #e4ece6;
 
-  /* --- Accent --- */
+  /* --- Accent (AgroGenio greens) --- */
   --accent: var(--brand);
-  --accent-hover: #3f9b43;
-  --accent-muted: #1e56311f; /* 12% alpha */
+  /* Verde profundo #0D4B28 — hover state */
+  --accent-hover: #0d4b28;
+  --accent-muted: #176b3a1f; /* verde 12% */
+  /* Texto sobre accent (white-on-green) */
   --accent-fg: #fcfdfa;
-  --accent-secondary: #4caf50;
-  --accent-gold: #e9c46a;
-  --accent-gold-bg: #e9c46a1f;
+  /* Verde cultivo #69A83B — secondary accents (success-ish) */
+  --accent-secondary: #69a83b;
 
-  /* --- Navbar (defaults to brand) --- */
+  /* --- Navbar (defaults to brand, overridable via config) --- */
   --navbar-bg: var(--brand);
   --navbar-fg: #fcfdfa;
 
-  /* --- Semantic status ---
-     AgroGenio brand pivot: --info collapses into the brand green family
-     because the conventional blue clashes with the green-primary palette.
-     DsStatusTag / DsPill `info` variants and the top notification banner
-     all consume this token, so they render green across the app. */
-  --success: #4caf50;
-  --warning: #e9c46a;
-  --danger: #d95c4f;
-  --info: #4caf50;
+  /* --- Semantic status (AgroGenio palette) --- */
+  /* Verde cultivo */
+  --success: #69a83b;
+  /* Ámbar alerta #B86B00 */
+  --warning: #b86b00;
+  /* Rojo crítico #B42318 */
+  --danger: #b42318;
+  /* Azul servicio #1565A8 */
+  --info: #1565a8;
 
   /* --- Typography --- */
   --font-scale: 1;
@@ -72,25 +89,29 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
-  /* --- Shadows --- */
-  --shadow-sm: 0 1px 3px rgba(23, 43, 28, 0.06), 0 1px 2px rgba(23, 43, 28, 0.04);
-  --shadow-md: 0 4px 12px rgba(23, 43, 28, 0.08), 0 2px 4px rgba(23, 43, 28, 0.04);
-  --shadow-lg: 0 10px 24px rgba(23, 43, 28, 0.1), 0 4px 8px rgba(23, 43, 28, 0.05);
+  /* --- Shadows (floating elements only) --- */
+  --shadow-sm: 0 1px 2px rgba(23, 43, 28, 0.06);
+  --shadow-md: 0 4px 6px rgba(23, 43, 28, 0.1);
+  --shadow-lg: 0 10px 15px rgba(23, 43, 28, 0.12);
 
   /* --- Overlay --- */
   --overlay-bg: rgba(23, 35, 28, 0.5);
 
-  /* --- Tooltip --- */
+  /* --- Tooltip (dark greenish-black, warm) --- */
   --tooltip-bg: #17231c;
   --tooltip-fg: #f7f8f4;
 
-  /* --- Semantic badge backgrounds (12% alpha) --- */
-  --success-bg: #4caf501f;
-  --warning-bg: #e9c46a1f;
-  --danger-bg: #d95c4f1f;
-  --info-bg: #4caf501f;
+  /* --- Semantic badge backgrounds (AgroGenio @ 12% alpha) --- */
+  --success-bg: #69a83b1f;
+  --warning-bg: #b86b001f;
+  --danger-bg: #b423181f;
+  --info-bg: #1565a81f;
 
-  /* --- Semantic surfaces --- */
+  /* --- Info (semantic) --- */
+  --info: #1565a8;
+
+  /* --- Semantic surface tokens (Tierra / warm beige) --- */
+  /* Tierra #76543E in 8–10% saturation = soft warm beige */
   --bg-tertiary: #ede8df;
   --bg-sidebar: #f2eee5;
 
@@ -107,60 +128,86 @@
   --btn-secondary-fg: var(--fg);
 }
 
+/* ================================================================
+   DARK MODE — AgroGenio dark variant
+   Brand-tinted deep greens + warm off-white text
+   ================================================================ */
 html[data-theme='dark'],
 body[data-theme='dark'],
 [data-theme='dark'] {
-  /* --- Core palette (dark — premium depth: navbar > main > sidebar > cards) --- */
-  --bg: #101a15;
-  --surface: #17251d;
+  /* --- Core palette (verde profundo tint) --- */
+  /* Deep brand-tinted bg (verde profundo #0D4B28 derivative) */
+  --bg: #0f1a12;
+  --surface: #16241a;
+  /* Fondo cálido #F7F8F4 — same warm off-white as light mode for consistency */
   --fg: #f2f4ee;
   --muted: #8fa395;
   --muted-soft: #6b7d70;
+  /* Border on dark = lightened verde profundo */
   --border: #2a3b30;
   --border-light: #1f2d24;
 
-  /* --- Accent (dark — brighter for contrast) --- */
-  --accent: #4caf50;
-  --accent-hover: #66c76e;
-  --accent-muted: #4caf5026;
+  /* --- Accent (lighter for dark bg, agro-genio verde cultivo) --- */
+  /* Verde cultivo #69A83B = bright accent on dark bg */
+  --accent: #69a83b;
+  /* Slightly brighter hover */
+  --accent-hover: #7dbc4d;
+  --accent-muted: #69a83b26;
+  /* Dark text on bright accent */
   --accent-fg: #0f1a12;
-  --accent-secondary: #1e5631;
-  --accent-gold: #f0d08a;
-  --accent-gold-bg: #e9c46a26;
+  --accent-secondary: #176b3a;
 
-  /* --- Brand (identical to light mode for navbar consistency) --- */
-  --brand: #1e5631;
+  /* --- Brand in dark mode ---
+     Same Verde AgroGenio #176b3a as light mode. Keeps navbar visually
+     consistent across themes (no jarring bright green flip). Earlier override
+     to #69a83b (verde cultivo bright) made the navbar feel too saturated /
+     neon; reverted after design review feedback. */
+  --brand: #176b3a;
 
-  /* --- Semantic status (brightened for dark bg contrast) --- */
-  --success: #7ed48a;
-  --warning: #e9c46a;
-  --info: #66c76e;
+  /* --- Semantic status overrides for dark mode (chart/curve visibility) ---
+     Light mode AgroGenio colors (success=#69a83b, warning=#b86b00, info=#1565a8)
+     have insufficient contrast on dark verde bg (#0f1a12). Brighter variants. */
+  --success: #9bc97b;
+  --warning: #e08a1a;
+  --info: #7ab3e8;
   --danger: #e85a4f;
 
-  /* --- Navbar --- */
+  /* --- Navbar (dark mode) --- */
   --navbar-fg: #f2f4ee;
 
-  /* --- Semantic surfaces --- */
+  /* --- Semantic surfaces (deep verde) --- */
   --bg-tertiary: #1b2a20;
-  --bg-sidebar: #0d1712;
+  --bg-sidebar: #142019;
 
-  /* --- Shadows --- */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.35);
+  /* --- Shadows (stronger for dark) --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 
-  /* --- Overlay --- */
+  /* --- Overlay (stronger for dark) --- */
   --overlay-bg: rgba(0, 0, 0, 0.75);
 
-  /* --- Tooltip --- */
+  /* --- Tooltip (inverted: warm light on dark surface) --- */
   --tooltip-bg: #f2f4ee;
   --tooltip-fg: #17231c;
 
-  /* --- Semantic badge backgrounds (20% alpha) --- */
-  --success-bg: #4caf5033;
-  --warning-bg: #e9c46a33;
+  /* --- Semantic badge backgrounds (dark, 20% alpha) --- */
+  --success-bg: #69a83b33;
+  --warning-bg: #b86b0033;
   --danger-bg: #b4231833;
-  --info-bg: #66c76e33;
+  --info-bg: #1565a833;
+
+  /* --- Info (semantic) — brighter blue for dark contrast --- */
+  --info: #4a8dcb;
+
+  /* --- Semantic status overrides (duplicate of main dark block above) ---
+     Kept here to stay consistent with the [data-theme='dark'] rules.
+     Without these, status colors fall back to light-mode values that
+     blend into the dark bg (see main dark block for explanation). */
+  --success: #9bc97b;
+  --warning: #e08a1a;
+  --info: #7ab3e8;
+  --danger: #e85a4f;
 
   /* --- Form elements --- */
   --slider-track: #2a3b30;
@@ -172,50 +219,56 @@ body[data-theme='dark'],
   --btn-secondary-fg: #f2f4ee;
 }
 
+/* ================================================================
+   SYSTEM PREFERENCE — dark when data-theme="system"
+   ================================================================ */
 @media (prefers-color-scheme: dark) {
   html[data-theme='system'],
   body[data-theme='system'],
   [data-theme='system'] {
-    --bg: #101a15;
-    --surface: #17251d;
+    --bg: #0f1a12;
+    --surface: #16241a;
     --fg: #f2f4ee;
     --muted: #8fa395;
     --muted-soft: #6b7d70;
     --border: #2a3b30;
     --border-light: #1f2d24;
 
-    --accent: #4caf50;
-    --accent-hover: #66c76e;
-    --accent-muted: #4caf5026;
+    --accent: #69a83b;
+    --accent-hover: #7dbc4d;
+    --accent-muted: #69a83b26;
     --accent-fg: #0f1a12;
-    --accent-secondary: #1e5631;
-    --accent-gold: #f0d08a;
-    --accent-gold-bg: #e9c46a26;
+    --accent-secondary: #176b3a;
 
-    --brand: #1e5631;
-    --success: #7ed48a;
-    --warning: #e9c46a;
-    --info: #66c76e;
+    /* Brand in dark mode — same AgroGenio primary as light mode (#176b3a)
+       for visual consistency. Semantic overrides below kept for chart/badge
+       visibility on the dark surface. */
+    --brand: #176b3a;
+    --success: #9bc97b;
+    --warning: #e08a1a;
+    --info: #7ab3e8;
     --danger: #e85a4f;
 
     --navbar-fg: #f2f4ee;
 
     --bg-tertiary: #1b2a20;
-    --bg-sidebar: #0d1712;
+    --bg-sidebar: #142019;
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 
     --overlay-bg: rgba(0, 0, 0, 0.75);
 
     --tooltip-bg: #f2f4ee;
     --tooltip-fg: #17231c;
 
-    --success-bg: #4caf5033;
-    --warning-bg: #e9c46a33;
+    --success-bg: #69a83b33;
+    --warning-bg: #b86b0033;
     --danger-bg: #b4231833;
-    --info-bg: #66c76e33;
+    --info-bg: #1565a833;
+
+    --info: #4a8dcb;
 
     --slider-track: #2a3b30;
     --switch-track-off: #2a3b30;

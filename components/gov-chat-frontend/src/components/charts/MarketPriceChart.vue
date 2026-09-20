@@ -216,6 +216,40 @@ export default {
       };
       return configs[this.category] || {};
     },
+
+    // Resolve var(--xxx) in cssVars to actual hex at render time. ApexCharts
+    // builds SVG internally and does not always inherit CSS custom properties
+    // from the host element. Re-resolved on theme change via useChartTheme.
+    //
+    // Use --fg (text color) directly for the series line: it gives guaranteed
+    // contrast against --bg in both light and dark modes without introducing
+    // new DS tokens. Per-category colors were too pale on dark bg.
+    resolvedCssVars() {
+      const raw = this.getCssVarStrings();
+      const resolve = (val) => {
+        if (typeof val !== 'string') return val;
+        const match = val.match(/var\((--[a-z0-9-]+)\)/i);
+        if (!match) return val;
+        const v = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+        return v || val;
+      };
+      const resolved = {};
+      for (const [k, val] of Object.entries(raw)) {
+        if (Array.isArray(val)) {
+          resolved[k] = val.map(resolve);
+        } else {
+          resolved[k] = resolve(val);
+        }
+      }
+      return resolved;
+    },
+
+    resolvedCategoryColor() {
+      // Override per-category color with --fg for guaranteed contrast in
+      // both themes. Removes the pale-green-on-dark-bg issue.
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      return v || null;
+    },
     commodityName() {
       return this.categoryConfig.i18nKey ? this.$t(this.categoryConfig.i18nKey) : this.category;
     },
@@ -260,7 +294,8 @@ export default {
       const minVal = Math.min(...values);
       const maxVal = Math.max(...values);
       const range = maxVal - minVal || 1;
-      const cssVars = this.getCssVarStrings();
+      const cssVars = this.resolvedCssVars;
+      const seriesColor = this.resolvedCategoryColor || cssVars.accentColor;
 
       return {
         chart: {
@@ -280,19 +315,26 @@ export default {
           max: Math.ceil((maxVal + range * 0.05) / 10) * 10,
           labels: { style: { colors: cssVars.mutedColor }, formatter: (v) => this.formatAxisValue(v) }
         },
-        colors: [this.categoryConfig.color || cssVars.accentColor],
-        stroke: { curve: 'smooth', width: 3 },
+        colors: [seriesColor],
+        stroke: { curve: 'smooth', width: 4 },
+        // Solid fill (light opacity) instead of gradient — the gradient
+        // version made the line stroke appear to fade because ApexCharts
+        // applies the fill opacity to the line border as well.
         fill: {
-          type: 'gradient',
-          gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] }
+          type: 'solid',
+          opacity: 0.15
         },
         markers: {
           size: 6,
-          colors: [this.categoryConfig.color || cssVars.accentColor],
+          colors: [seriesColor],
           strokeColors: cssVars.backgroundColor,
           strokeWidth: 2
         },
-        tooltip: { y: { formatter: (v) => this.formatValue(v) }, theme: this.isDarkMode ? 'dark' : 'light' },
+        // ApexCharts 'dark' theme uses hardcoded dark colors that don't contrast
+        // well with our --bg in dark mode. Use 'light' (high contrast always)
+        // and let scoped CSS below override the tooltip bg/text to use our
+        // DS tokens, so the tooltip stays readable and theme-consistent.
+        tooltip: { y: { formatter: (v) => this.formatValue(v) } },
         grid: { borderColor: cssVars.gridColor, strokeDashArray: 4, strokeOpacity: 0.5 }
       };
     },

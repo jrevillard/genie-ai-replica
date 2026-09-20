@@ -10,35 +10,48 @@
 
 /* ================================================================
    LIGHT MODE — Default tokens
+   AgroGenio palette override
    ================================================================ */
 :root {
   /* --- Brand (set by JS from config, fallback for dev) --- */
-  --brand: oklch(47% 0.14 265);
+  /* Verde AgroGenio #176B3A */
+  --brand: #176b3a;
 
-  /* --- Core palette (OKLch) --- */
-  --bg: var(--config-bg, oklch(98% 0.005 250));
-  --surface: oklch(100% 0 0);
-  --fg: var(--config-fg, oklch(22% 0.02 240));
-  --muted: oklch(50% 0.018 240);
-  --muted-soft: oklch(65% 0.01 240);
-  --border: oklch(82% 0.012 240);
-  --border-light: oklch(88% 0.008 240);
+  /* --- Core palette (AgroGenio: warm + agricultural) --- */
+  /* Fondo cálido #F7F8F4 — warm off-white bg */
+  --bg: var(--config-bg, #f7f8f4);
+  --surface: #fcfdfa;
+  /* Texto principal #17231C — dark greenish-black for max readability */
+  --fg: var(--config-fg, #17231c);
+  --muted: #5a6b5f;
+  --muted-soft: #8a9690;
+  /* Borde #D6DED8 — soft greenish border */
+  --border: #d6ded8;
+  --border-light: #e4ece6;
 
-  /* --- Accent (derived from --brand) --- */
+  /* --- Accent (AgroGenio greens) --- */
   --accent: var(--brand);
-  --accent-hover: oklch(from var(--brand) calc(l - 0.04) c h);
-  --accent-muted: oklch(from var(--brand) l c h / 0.12);
-  --accent-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
-  --accent-secondary: oklch(from var(--brand) max(calc(l - 0.07), 0.05) c calc(h + 0));
+  /* Verde profundo #0D4B28 — hover state */
+  --accent-hover: #0d4b28;
+  --accent-muted: #176b3a1f; /* verde 12% */
+  /* Texto sobre accent (white-on-green) */
+  --accent-fg: #fcfdfa;
+  /* Verde cultivo #69A83B — secondary accents (success-ish) */
+  --accent-secondary: #69a83b;
 
   /* --- Navbar (defaults to brand, overridable via config) --- */
   --navbar-bg: var(--brand);
-  --navbar-fg: oklch(from var(--brand) min(calc(l + 0.56), 0.98) calc(c * 0.1) h);
+  --navbar-fg: #fcfdfa;
 
-  /* --- Semantic status --- */
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  /* --- Semantic status (AgroGenio palette) --- */
+  /* Verde cultivo */
+  --success: #69a83b;
+  /* Ámbar alerta #B86B00 */
+  --warning: #b86b00;
+  /* Rojo crítico #B42318 */
+  --danger: #b42318;
+  /* Azul servicio #1565A8 */
+  --info: #1565a8;
 
   /* --- Typography --- */
   --font-scale: 1;
@@ -77,101 +90,133 @@
   --radius-xl: 16px;
 
   /* --- Shadows (floating elements only) --- */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px rgba(23, 43, 28, 0.06);
+  --shadow-md: 0 4px 6px rgba(23, 43, 28, 0.1);
+  --shadow-lg: 0 10px 15px rgba(23, 43, 28, 0.12);
 
   /* --- Overlay --- */
-  --overlay-bg: rgba(0, 0, 0, 0.5);
+  --overlay-bg: rgba(23, 35, 28, 0.5);
 
-  /* --- Tooltip --- */
-  --tooltip-bg: oklch(22% 0.02 240);
-  --tooltip-fg: oklch(98% 0.005 250);
+  /* --- Tooltip (dark greenish-black, warm) --- */
+  --tooltip-bg: #17231c;
+  --tooltip-fg: #f7f8f4;
 
-  /* --- Semantic badge backgrounds --- */
-  --success-bg: oklch(72% 0.17 162 / 0.1);
-  --warning-bg: oklch(80% 0.16 75 / 0.1);
-  --danger-bg: oklch(62% 0.22 25 / 0.1);
-  --info-bg: oklch(65% 0.15 240 / 0.1);
+  /* --- Semantic badge backgrounds (AgroGenio @ 12% alpha) --- */
+  --success-bg: #69a83b1f;
+  --warning-bg: #b86b001f;
+  --danger-bg: #b423181f;
+  --info-bg: #1565a81f;
 
   /* --- Info (semantic) --- */
-  --info: oklch(65% 0.15 240);
+  --info: #1565a8;
 
-  /* --- Semantic surface tokens --- */
-  --bg-tertiary: oklch(91% 0.008 250);
-  --bg-sidebar: oklch(93% 0.008 250);
+  /* --- Semantic surface tokens (Tierra / warm beige) --- */
+  /* Tierra #76543E in 8–10% saturation = soft warm beige */
+  --bg-tertiary: #ede8df;
+  --bg-sidebar: #f2eee5;
 
   /* --- Form elements --- */
-  --slider-track: oklch(92% 0.005 250);
+  --slider-track: #e4ece6;
   --slider-thumb: var(--accent);
-  --switch-track-off: oklch(88% 0.005 250);
+  --switch-track-off: #d6ded8;
   --switch-track-on: var(--accent);
-  --switch-thumb: oklch(100% 0 0);
+  --switch-thumb: #fcfdfa;
 
   /* --- Button tokens --- */
-  --btn-secondary-bg: oklch(88% 0.005 250);
-  --btn-secondary-hover: oklch(82% 0.008 250);
+  --btn-secondary-bg: #ede8df;
+  --btn-secondary-hover: #ddd3c2;
   --btn-secondary-fg: var(--fg);
 }
 
 /* ================================================================
-   DARK MODE
+   DARK MODE — AgroGenio dark variant
+   Brand-tinted deep greens + warm off-white text
    ================================================================ */
 html[data-theme='dark'],
 body[data-theme='dark'],
 [data-theme='dark'] {
-  /* --- Core palette (brand-tinted dark) --- */
-  --bg: oklch(from var(--brand) 0.14 calc(c * 0.25) h);
-  --surface: oklch(from var(--brand) 0.22 calc(c * 0.18) h);
-  --fg: oklch(95% 0.005 250);
-  --muted: oklch(from var(--brand) 0.58 calc(c * 0.15) h);
-  --muted-soft: oklch(from var(--brand) 0.45 calc(c * 0.12) h);
-  --border: oklch(from var(--brand) 0.3 calc(c * 0.2) h);
-  --border-light: oklch(from var(--brand) 0.24 calc(c * 0.18) h);
+  /* --- Core palette (verde profundo tint) --- */
+  /* Deep brand-tinted bg (verde profundo #0D4B28 derivative) */
+  --bg: #0f1a12;
+  --surface: #16241a;
+  /* Fondo cálido #F7F8F4 — same warm off-white as light mode for consistency */
+  --fg: #f2f4ee;
+  --muted: #8fa395;
+  --muted-soft: #6b7d70;
+  /* Border on dark = lightened verde profundo */
+  --border: #2a3b30;
+  --border-light: #1f2d24;
 
-  /* --- Accent (lighter for dark bg, derived from --brand) --- */
-  --accent: oklch(from var(--brand) calc(l + 0.2) calc(c * 0.85) h);
-  --accent-hover: oklch(from var(--brand) calc(l + 0.14) calc(c * 0.9) h);
-  --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
-  --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
-  --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
+  /* --- Accent (lighter for dark bg, agro-genio verde cultivo) --- */
+  /* Verde cultivo #69A83B = bright accent on dark bg */
+  --accent: #69a83b;
+  /* Slightly brighter hover */
+  --accent-hover: #7dbc4d;
+  --accent-muted: #69a83b26;
+  /* Dark text on bright accent */
+  --accent-fg: #0f1a12;
+  --accent-secondary: #176b3a;
+
+  /* --- Brand in dark mode ---
+     Same Verde AgroGenio #176b3a as light mode. Keeps navbar visually
+     consistent across themes (no jarring bright green flip). Earlier override
+     to #69a83b (verde cultivo bright) made the navbar feel too saturated /
+     neon; reverted after design review feedback. */
+  --brand: #176b3a;
+
+  /* --- Semantic status overrides for dark mode (chart/curve visibility) ---
+     Light mode AgroGenio colors (success=#69a83b, warning=#b86b00, info=#1565a8)
+     have insufficient contrast on dark verde bg (#0f1a12). Brighter variants. */
+  --success: #9bc97b;
+  --warning: #e08a1a;
+  --info: #7ab3e8;
+  --danger: #e85a4f;
 
   /* --- Navbar (dark mode) --- */
-  --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+  --navbar-fg: #f2f4ee;
 
-  /* --- Semantic surfaces (brand-tinted) --- */
-  --bg-tertiary: oklch(from var(--brand) 0.19 calc(c * 0.2) h);
-  --bg-sidebar: oklch(from var(--brand) 0.16 calc(c * 0.22) h);
+  /* --- Semantic surfaces (deep verde) --- */
+  --bg-tertiary: #1b2a20;
+  --bg-sidebar: #142019;
 
   /* --- Shadows (stronger for dark) --- */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 
   /* --- Overlay (stronger for dark) --- */
-  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --overlay-bg: rgba(0, 0, 0, 0.75);
 
-  /* --- Tooltip (dark) --- */
-  --tooltip-bg: oklch(85% 0.005 250);
-  --tooltip-fg: oklch(22% 0.02 240);
+  /* --- Tooltip (inverted: warm light on dark surface) --- */
+  --tooltip-bg: #f2f4ee;
+  --tooltip-fg: #17231c;
 
-  /* --- Semantic badge backgrounds (dark) --- */
-  --success-bg: oklch(72% 0.17 162 / 0.15);
-  --warning-bg: oklch(80% 0.16 75 / 0.15);
-  --danger-bg: oklch(62% 0.22 25 / 0.15);
-  --info-bg: oklch(65% 0.15 240 / 0.15);
+  /* --- Semantic badge backgrounds (dark, 20% alpha) --- */
+  --success-bg: #69a83b33;
+  --warning-bg: #b86b0033;
+  --danger-bg: #b4231833;
+  --info-bg: #1565a833;
 
-  /* --- Info (semantic) --- */
-  --info: oklch(70% 0.14 240);
+  /* --- Info (semantic) — brighter blue for dark contrast --- */
+  --info: #4a8dcb;
+
+  /* --- Semantic status overrides (duplicate of main dark block above) ---
+     Kept here to stay consistent with the [data-theme='dark'] rules.
+     Without these, status colors fall back to light-mode values that
+     blend into the dark bg (see main dark block for explanation). */
+  --success: #9bc97b;
+  --warning: #e08a1a;
+  --info: #7ab3e8;
+  --danger: #e85a4f;
 
   /* --- Form elements --- */
-  --slider-track: oklch(from var(--brand) 0.25 calc(c * 0.15) h);
-  --switch-track-off: oklch(from var(--brand) 0.3 calc(c * 0.15) h);
+  --slider-track: #2a3b30;
+  --switch-track-off: #2a3b30;
 
   /* --- Button tokens --- */
-  --btn-secondary-bg: oklch(from var(--brand) 0.32 calc(c * 0.2) h);
-  --btn-secondary-hover: oklch(from var(--brand) 0.38 calc(c * 0.22) h);
-  --btn-secondary-fg: oklch(88% 0.005 250);
+  --btn-secondary-bg: #2a3b30;
+  --btn-secondary-hover: #364a3d;
+  --btn-secondary-fg: #f2f4ee;
 }
 
 /* ================================================================
@@ -181,46 +226,55 @@ body[data-theme='dark'],
   html[data-theme='system'],
   body[data-theme='system'],
   [data-theme='system'] {
-    --bg: oklch(from var(--brand) 0.14 calc(c * 0.25) h);
-    --surface: oklch(from var(--brand) 0.22 calc(c * 0.18) h);
-    --fg: oklch(95% 0.005 250);
-    --muted: oklch(from var(--brand) 0.58 calc(c * 0.15) h);
-    --muted-soft: oklch(from var(--brand) 0.45 calc(c * 0.12) h);
-    --border: oklch(from var(--brand) 0.3 calc(c * 0.2) h);
-    --border-light: oklch(from var(--brand) 0.24 calc(c * 0.18) h);
+    --bg: #0f1a12;
+    --surface: #16241a;
+    --fg: #f2f4ee;
+    --muted: #8fa395;
+    --muted-soft: #6b7d70;
+    --border: #2a3b30;
+    --border-light: #1f2d24;
 
-    --accent: oklch(from var(--brand) calc(l + 0.2) calc(c * 0.85) h);
-    --accent-hover: oklch(from var(--brand) calc(l + 0.14) calc(c * 0.9) h);
-    --accent-muted: oklch(from var(--brand) calc(l + 0.2) c h / 0.15);
-    --accent-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
-    --accent-secondary: oklch(from var(--brand) max(calc(l + 0.1), 0.05) c calc(h + 0));
+    --accent: #69a83b;
+    --accent-hover: #7dbc4d;
+    --accent-muted: #69a83b26;
+    --accent-fg: #0f1a12;
+    --accent-secondary: #176b3a;
 
-    --navbar-fg: oklch(from var(--brand) max(calc(l - 0.32), 0.1) c h);
+    /* Brand in dark mode — same AgroGenio primary as light mode (#176b3a)
+       for visual consistency. Semantic overrides below kept for chart/badge
+       visibility on the dark surface. */
+    --brand: #176b3a;
+    --success: #9bc97b;
+    --warning: #e08a1a;
+    --info: #7ab3e8;
+    --danger: #e85a4f;
 
-    --bg-tertiary: oklch(from var(--brand) 0.19 calc(c * 0.2) h);
-    --bg-sidebar: oklch(from var(--brand) 0.16 calc(c * 0.22) h);
+    --navbar-fg: #f2f4ee;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
+    --bg-tertiary: #1b2a20;
+    --bg-sidebar: #142019;
 
-    --overlay-bg: rgba(0, 0, 0, 0.7);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
 
-    --tooltip-bg: oklch(85% 0.005 250);
-    --tooltip-fg: oklch(22% 0.02 240);
+    --overlay-bg: rgba(0, 0, 0, 0.75);
 
-    --success-bg: oklch(72% 0.17 162 / 0.15);
-    --warning-bg: oklch(80% 0.16 75 / 0.15);
-    --danger-bg: oklch(62% 0.22 25 / 0.15);
-    --info-bg: oklch(65% 0.15 240 / 0.15);
+    --tooltip-bg: #f2f4ee;
+    --tooltip-fg: #17231c;
 
-    --info: oklch(70% 0.14 240);
+    --success-bg: #69a83b33;
+    --warning-bg: #b86b0033;
+    --danger-bg: #b4231833;
+    --info-bg: #1565a833;
 
-    --slider-track: oklch(from var(--brand) 0.25 calc(c * 0.15) h);
-    --switch-track-off: oklch(from var(--brand) 0.3 calc(c * 0.15) h);
+    --info: #4a8dcb;
 
-    --btn-secondary-bg: oklch(from var(--brand) 0.32 calc(c * 0.2) h);
-    --btn-secondary-hover: oklch(from var(--brand) 0.38 calc(c * 0.22) h);
-    --btn-secondary-fg: oklch(85% 0.005 250);
+    --slider-track: #2a3b30;
+    --switch-track-off: #2a3b30;
+
+    --btn-secondary-bg: #2a3b30;
+    --btn-secondary-hover: #364a3d;
+    --btn-secondary-fg: #f2f4ee;
   }
 }

@@ -1978,3 +1978,7 @@ status: open
 - **No reset path for the governed retrieval-config row** — after the first PUT, env `OKF_RETRIEVAL_*` changes are shadowed by the stored doc (per ADR-039 D3 design: DB overrides env). A reset control (clear the row back to env defaults) belongs to the Story 10.7 Studio retrieval card.
 - **ADR D3's `utility_gate` / `label_federation` config fields are unstorable** — `validatePatch`/LIMITS reject them as unknown. The Wave R4/R6 landing stories must extend the config shape (and LIMITS) when the utility-cost gate and KH label federation legs land.
 - **CHANGELOG + site configuration docs for GET/PUT /retrieval-config and GET /authz/graphs** — CHANGELOG entries land with the MR/release flow (docs/RELEASE.md); the site operator docs are a Story 10.7 completion gate (i18n ×14 + site/content/en/docs).
+
+## Deferred from: code review / planning conversation (2026-09-20)
+
+- **OKF Studio dialog real-estate** (David, 2026-09-20, mid-R3) — dialogs that pop up when buttons are clicked should maximize the available real estate. Affects the OKF Studio surfaces (StudioWizard step flows, StudioDashboard card actions, ImportDocumentsDialog, AddFromLinkDialog, the future 10.7 Retrieval Card). NOT a code-review finding; needs design + DS primitives alignment. Belongs alongside the 10.7 Studio card story (i18n ×14 + site docs are completion gates for that surface).

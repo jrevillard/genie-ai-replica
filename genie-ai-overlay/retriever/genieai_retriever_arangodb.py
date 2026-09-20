@@ -762,16 +762,24 @@ class GenieaiArangoRetriever(OpeaComponent):
 
             input_dict = input.model_dump(exclude_none=True)
 
-            # DATA CONTRACT: decode filter labels from search_start BEFORE any
-            # search_start reads. chatqna encodes labels in search_start because
-            # the OPEA framework drops custom fields between mega-service nodes.
+            # DATA CONTRACT: decode filter labels AND authorized graph set
+            # from search_start BEFORE any search_start reads. chatqna encodes
+            # both segments in search_start because the OPEA framework drops
+            # custom fields between mega-service nodes. Story 1.0b
+            # (LG-5 launch gate) proves graph_names survives this boundary.
             # See core/label_contract.py for the format + full documentation.
-            from core.label_contract import decode_filter_labels
+            from core.label_contract import decode
 
-            _base_mode, _encoded_labels = decode_filter_labels(str(input_dict.get("search_start", "chunk")))
+            _base_mode, _encoded_labels, _encoded_graphs = decode(str(input_dict.get("search_start", "chunk")))
             input_dict["search_start"] = _base_mode  # restore base mode
             if _encoded_labels:
                 input_dict["_encoded_filter_labels"] = _encoded_labels
+            # graph_names (Story 1.0b/1.1): default [] = single-graph legacy
+            # behavior; when chatqna encodes a non-empty set, the fan-out path
+            # traverses exactly those graphs. Populated on input_dict so the
+            # upstream input-graph-name lookup (line below) and the
+            # fan-out orchestration (Story 1.1) both see the authorized set.
+            input_dict["_encoded_graph_names"] = _encoded_graphs
 
             query = input_dict.get("input", input_dict.get("text"))
             if logflag:

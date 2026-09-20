@@ -9,6 +9,7 @@ import 'package:genie_ai_mobile/components/charts/market_price_series_chart.dart
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1066,7 +1067,7 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
             // Header
             Row(
               children: [
-                Icon(Icons.psychology, color: widget.categoryColor),
+                Icon(Icons.psychology, color: ThemeManager().tokens.accentGold),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1369,7 +1370,11 @@ ${tr('market.sharedVia')}
                     color: categoryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.psychology, color: categoryColor, size: 24),
+                  child: Icon(
+                    Icons.psychology,
+                    color: ThemeManager().tokens.accentGold,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

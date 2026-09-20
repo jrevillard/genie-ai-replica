@@ -1221,7 +1221,7 @@ class _ResponseDialog extends StatelessWidget {
             // Header
             Row(
               children: [
-                Icon(Icons.psychology, color: theme.colorScheme.primary),
+                Icon(Icons.psychology, color: ThemeManager().tokens.accentGold),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

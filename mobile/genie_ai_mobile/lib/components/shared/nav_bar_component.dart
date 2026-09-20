@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/settings/settings_component.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
+import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
-import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/services/connectivity_service.dart';
 
 class NavBarComponent extends StatelessWidget {
@@ -64,28 +63,15 @@ class NavBarComponent extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: DsSpacing.md),
           child: Row(
             children: [
-              // 1. LOGO
-              SizedBox(
-                width: 32,
-                height: 32,
-                child: GenieAiConfig.iconPath.toLowerCase().endsWith('.svg')
-                    ? SvgPicture.asset(
-                        GenieAiConfig.iconPath,
-                        fit: BoxFit.contain,
-                      )
-                    : Image.asset(GenieAiConfig.iconPath, fit: BoxFit.contain),
-              ),
-              const SizedBox(width: DsSpacing.md),
-
-              // 2. TITLE
-              Text(
-                GenieAiConfig.title,
-                style: TextStyle(
-                  color: contentColor,
-                  fontWeight: FontWeight.w900, // Extra Bold
-                  fontSize: ThemeManager().tokens.textLg,
-                  letterSpacing: 1.5,
-                ),
+              // 1. BRAND LOGO (horizontal wordmark carries the name —
+              // no separate title text). Two variants: white wordmark
+              // for a dark navbar, dark verde for a light one.
+              Image.asset(
+                ColorUtils.isDarkColor(tokens.navbarBg)
+                    ? 'assets/images/agro-genio-navbar.png'
+                    : 'assets/images/agro-genio-navbar-light.png',
+                height: 40,
+                fit: BoxFit.contain,
               ),
 
               const Spacer(),

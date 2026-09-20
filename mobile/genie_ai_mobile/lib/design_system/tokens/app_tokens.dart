@@ -42,6 +42,10 @@ class AppTokens {
   final Color danger;
   final Color info;
 
+  /// Acento inteligencia — the brand sheet's #E9C46A gold, for AI
+  /// affordances (predictions, AI assistance).
+  final Color accentGold;
+
   final double fontScale;
   final bool isDark;
 
@@ -75,6 +79,7 @@ class AppTokens {
     required this.warning,
     required this.danger,
     required this.info,
+    required this.accentGold,
     required this.fontScale,
     required this.isDark,
   });
@@ -95,12 +100,12 @@ class AppTokens {
     double fontScale = 1.0,
   }) {
     final theme = _asMap(config['theme']) ?? <String, dynamic>{};
-    // Fallback brand = Verde AgroGenio #176B3A — the same dev fallback the
-    // web ships in theme-variables.css (--brand). Unconfigured apps now
-    // render identically (the previous steel-blue #4682B4 broke parity).
+    // Fallback brand = Verde AgroGenio oscuro #1E5631 — the brand
+    // sheet's primary green. (Was steel blue #4682B4, then the web's
+    // #176B3A; the user pinned the palette to the official sheet.)
     final brandColor =
         ColorUtils.parseHexNullable(theme['brandColor']) ??
-        const Color(0xFF176B3A);
+        const Color(0xFF1E5631);
 
     if (isDark) {
       return _dark(brandColor: brandColor, theme: theme, fontScale: fontScale);
@@ -129,7 +134,7 @@ class AppTokens {
     final colors = _asMap(theme['colors']) ?? {};
     final success =
         ColorUtils.parseHexNullable(colors['success']) ??
-        const Color(0xFF69A83B); // Verde cultivo
+        const Color(0xFF4CAF50); // Verde AgroGenio
     final warning =
         ColorUtils.parseHexNullable(colors['warning']) ??
         const Color(0xFFB86B00); // Ámbar alerta
@@ -157,14 +162,15 @@ class AppTokens {
       accentHover: ColorUtils.darken(brandColor, 0.25),
       accentMuted: brandColor.withValues(alpha: 0.12),
       accentFg: const Color(0xFFFCFDFA),
-      // Web --accent-secondary is the FIXED verde cultivo #69A83B.
-      accentSecondary: const Color(0xFF69A83B),
+      // Verde AgroGenio #4CAF50 from the brand sheet.
+      accentSecondary: const Color(0xFF4CAF50),
       navbarBg: navbarBg,
       navbarFg: navbarFg,
       success: success,
       warning: warning,
       danger: danger,
       info: info,
+      accentGold: const Color(0xFFE9C46A), // Acento inteligencia
       fontScale: scale,
       isDark: false,
     );
@@ -190,7 +196,7 @@ class AppTokens {
     final colors = _asMap(theme['colors']) ?? {};
     final success =
         ColorUtils.parseHexNullable(colors['success']) ??
-        const Color(0xFF9BC97B);
+        const Color(0xFF7ED48A); // brightened sheet green for dark bg
     final warning =
         ColorUtils.parseHexNullable(colors['warning']) ??
         const Color(0xFFE08A1A);
@@ -212,17 +218,18 @@ class AppTokens {
       mutedSoft: const Color(0xFF6B7D70),
       border: const Color(0xFF2A3B30),
       borderLight: const Color(0xFF1F2D24),
-      accent: const Color(0xFF69A83B),
-      accentHover: const Color(0xFF7DBC4D),
-      accentMuted: const Color(0xFF69A83B).withValues(alpha: 0.15),
+      accent: const Color(0xFF4CAF50),
+      accentHover: const Color(0xFF66C76E),
+      accentMuted: const Color(0xFF4CAF50).withValues(alpha: 0.15),
       accentFg: const Color(0xFF0F1A12),
-      accentSecondary: const Color(0xFF176B3A),
+      accentSecondary: const Color(0xFF1E5631),
       navbarBg: navbarBg,
       navbarFg: navbarFg,
       success: success,
       warning: warning,
       danger: danger,
       info: info,
+      accentGold: const Color(0xFFF0D08A), // brightened gold for dark
       fontScale: scale,
       isDark: true,
     );

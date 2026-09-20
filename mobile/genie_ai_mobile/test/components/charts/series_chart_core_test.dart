@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genie_ai_mobile/components/charts/series_chart_core.dart';
 
@@ -154,6 +156,105 @@ void main() {
       expect(chartHeightFor(1), 320); // 240+45=285 -> 320 floor
       expect(chartHeightFor(4), 420);
       expect(chartHeightFor(15), 915);
+    });
+  });
+  group('S16/S25 toggle guards (section 14 test 5)', () {
+    test('unchecking the last active series is locked', () {
+      expect(
+        toggleLocked(activeCount: 1, isHidden: false),
+        isTrue,
+        reason: 'the last active series must be locked',
+      );
+      expect(toggleLocked(activeCount: 3, isHidden: false), isFalse);
+      expect(
+        toggleLocked(activeCount: 1, isHidden: true),
+        isFalse,
+        reason: 're-showing is always allowed',
+      );
+    });
+
+    test('family master hide disabled when it would empty the chart', () {
+      expect(masterHideDisabled(activeOutsideFamily: 0), isTrue);
+      expect(masterHideDisabled(activeOutsideFamily: 2), isFalse);
+    });
+  });
+
+  group('S17 start-year (section 14 test 6)', () {
+    test('options descend from max(earliest, currentYear-5) to earliest', () {
+      final opts = startYearOptions(1991, 2026);
+      expect(opts.first, 2021);
+      expect(opts.last, 1991);
+      expect(opts.length, 31);
+      expect(opts, orderedEquals([for (var y = 2021; y >= 1991; y--) y]));
+    });
+
+    test('short history clamps the top to earliest', () {
+      final opts = startYearOptions(2024, 2026);
+      expect(opts, [2024]);
+    });
+
+    test('default 2015 clamps UP to the earliest data year', () {
+      expect(defaultStartYear(1991), 2015);
+      expect(defaultStartYear(2024), 2024);
+    });
+  });
+
+  group('S19 table rows (section 14 test 7)', () {
+    test('union dates ascending, empty cells for missing, primary quality', () {
+      final a = seriesToSpots([
+        {'date': '2024-01-01', 'value': 1.0},
+        {'date': '2024-03-01', 'value': 3.0, 'quality': 'estimated'},
+      ]);
+      final b = seriesToSpots([
+        {'date': '2024-02-01', 'value': 2.0},
+        {'date': '2024-03-01', 'value': 9.0},
+      ]);
+      final rows = buildTableRows([a, b]);
+      expect(rows.length, 3);
+      expect(rows[0].date, DateTime(2024, 1, 1));
+      expect(rows[0].values, [1.0, null]);
+      expect(rows[1].date, DateTime(2024, 2, 1));
+      expect(rows[1].values, [null, 2.0]);
+      expect(rows[2].values, [3.0, 9.0]);
+      expect(rows[2].primaryQuality, 'estimated');
+      expect(rows[0].primaryQuality, isNull);
+    });
+  });
+
+  group('S20 CSV', () {
+    test('BOM + CRLF + RFC4180 quoting + empty cells', () {
+      final a = seriesToSpots([
+        {'date': '2024-01-01', 'value': 1.5},
+        {'date': '2024-02-01', 'value': 2.0, 'quality': 'estimated'},
+      ]);
+      final rows = buildTableRows([a]);
+      String fmt(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+      final bytes = csvFileBytes(
+        // 'Maize, white' carries a real comma -> must be quoted; the
+        // comma-less 'X (USD/mt)' header must stay unquoted.
+        headers: ['Period', 'Maize, white (USD/mt)', 'X (USD/mt)'],
+        rows: rows,
+        formatDate: fmt,
+        qualityLabel: (q) => q == 'estimated' ? 'Estimated' : 'Actual',
+      );
+      expect(bytes.take(3).toList(), [
+        0xEF,
+        0xBB,
+        0xBF,
+      ], reason: 'UTF-8 BOM required');
+      final text = utf8.decode(bytes);
+      expect(text.contains('\r\n'), isTrue, reason: 'CRLF endings required');
+      expect(
+        text,
+        contains('"Maize, white (USD/mt)"'),
+        reason: 'fields containing commas must be quoted',
+      );
+      expect(text, contains('Period,"Maize, white (USD/mt)",X (USD/mt)'));
+      expect(text, contains('2024-01-01,1.50,Actual'));
+      expect(text, contains('2024-02-01,2,Estimated'));
     });
   });
 }

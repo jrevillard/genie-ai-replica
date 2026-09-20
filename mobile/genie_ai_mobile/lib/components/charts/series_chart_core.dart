@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../design_system/tokens/app_tokens.dart';
+import 'series_display.dart';
 
 /// Pure chart-core logic for the multi-series Market Prices chart
 /// (parity spec sections 3-5, Phase B). Plain Dart only so it stays
@@ -171,4 +173,129 @@ String latestTooltipText({
   final unitPart = unit.isEmpty ? '' : ' $unit';
   return 'Latest month-end price of $fullSeriesName'
       ' — ${value.toStringAsFixed(2)}$unitPart';
+}
+
+// ---------------------------------------------------------------------------
+// Phase C pure logic: family masters (S25), start-year filter (S17/S18),
+// table rows (S19) and the exact CSV file (S20).
+
+/// S25 commodity family = first word of the base series name
+/// (Beans, Maize, Rice, Sorghum, Wheat, Tomatoes, ...).
+String agriFamily(String name) {
+  final base = baseSeriesName(name);
+  return base.split(' ').first.trim();
+}
+
+/// S25 masters: only families with >= 2 members get one. Returns
+/// family -> member full names, in original series order.
+Map<String, List<String>> agriFamilyMasters(List<String> allNames) {
+  final map = <String, List<String>>{};
+  for (final n in allNames) {
+    map.putIfAbsent(agriFamily(n), () => []).add(n);
+  }
+  map.removeWhere((_, members) => members.length < 2);
+  return map;
+}
+
+/// S17 options: from max(earliest, currentYear - 5) down to earliest,
+/// inclusive, descending.
+List<int> startYearOptions(int earliestYear, int currentYear) {
+  final top = math.max(earliestYear, currentYear - 5);
+  if (top <= earliestYear) return [earliestYear];
+  return [for (var y = top; y >= earliestYear; y--) y];
+}
+
+/// S17 default selection: 2015, clamped up to the earliest data year.
+int defaultStartYear(int earliestYear) => math.max(2015, earliestYear);
+
+/// S16 guard: a series checkbox is locked when it is the LAST active
+/// series and currently shown (unchecking it must be a no-op so the
+/// chart never empties).
+bool toggleLocked({required int activeCount, required bool isHidden}) =>
+    activeCount <= 1 && !isHidden;
+
+/// S25 guard: hiding a whole family is disabled when no active series
+/// exists outside it (the chart would empty).
+bool masterHideDisabled({required int activeOutsideFamily}) =>
+    activeOutsideFamily == 0;
+
+/// S18 visible-window filter (start-year side; the zoom window applies
+/// to the chart only, never to table/CSV/Latest).
+List<FlSpotLite> filterSpotsFrom(List<FlSpotLite> spots, DateTime from) =>
+    spots.where((s) => !s.date.isBefore(from)).toList();
+
+/// S19 table row: the union of all active series' dates, sorted
+/// ascending; a cell is null when that series has no point for the
+/// date; quality reflects the PRIMARY series for that date.
+class AgriTableRow {
+  final DateTime date;
+  final List<double?> values;
+  final String? primaryQuality;
+  const AgriTableRow(this.date, this.values, this.primaryQuality);
+}
+
+List<AgriTableRow> buildTableRows(List<List<FlSpotLite>> seriesSpots) {
+  if (seriesSpots.isEmpty) return const [];
+  final primaryQuality = <int, String?>{
+    for (final p in seriesSpots.first) p.date.millisecondsSinceEpoch: p.quality,
+  };
+  final dates = <int>{};
+  final cells = <int, List<double?>>{};
+  for (final spots in seriesSpots) {
+    for (final s in spots) {
+      final k = s.date.millisecondsSinceEpoch;
+      dates.add(k);
+      cells.putIfAbsent(
+        k,
+        () => List<double?>.filled(seriesSpots.length, null),
+      );
+    }
+  }
+  for (var i = 0; i < seriesSpots.length; i++) {
+    for (final s in seriesSpots[i]) {
+      cells[s.date.millisecondsSinceEpoch]![i] = s.value;
+    }
+  }
+  final sorted = dates.toList()..sort();
+  return [
+    for (final k in sorted)
+      AgriTableRow(
+        DateTime.fromMillisecondsSinceEpoch(k),
+        cells[k]!,
+        primaryQuality[k],
+      ),
+  ];
+}
+
+/// S20 RFC-4180 field quoting.
+String csvEscapeField(String field) {
+  if (field.contains(RegExp('[,"\n\r]'))) {
+    return '"${field.replaceAll('"', '""')}"';
+  }
+  return field;
+}
+
+/// S20 exact file bytes: UTF-8 BOM + CRLF line endings. headers =
+/// ['Period', '{full series name} ({unit})' per active series,
+/// 'Quality']; values raw (no thousands separators), empty when
+/// missing.
+List<int> csvFileBytes({
+  required List<String> headers,
+  required List<AgriTableRow> rows,
+  required String Function(DateTime date) formatDate,
+  required String Function(String? quality) qualityLabel,
+}) {
+  final sb = StringBuffer();
+  sb.write([for (final h in headers) csvEscapeField(h)].join(','));
+  sb.write('\r\n');
+  for (final r in rows) {
+    final cells = <String>[formatDate(r.date)];
+    for (final v in r.values) {
+      cells.add(v == null ? '' : trimAgriNum(v));
+    }
+    cells.add(qualityLabel(r.primaryQuality));
+    sb.write([for (final c in cells) csvEscapeField(c)].join(','));
+    sb.write('\r\n');
+  }
+  return utf8.encode(String.fromCharCodes([0xFEFF]) + sb.toString());
 }

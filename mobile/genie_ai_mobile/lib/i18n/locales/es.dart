@@ -1183,6 +1183,8 @@ const Map<String, dynamic> esLocale = {
     "fastActions": "Acciones Rápidas",
   },
   "market": {
+    "startYear": "Desde",
+    "fit": "Ajustar",
     "sectionTitle": "Precios de Mercado",
     "maizeGrains": "Maíz, Frijoles y Granos",
     "cropProtection": "Protección de Cultivos",

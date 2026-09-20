@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
@@ -39,8 +43,15 @@ class MarketPriceSeriesChart extends StatefulWidget {
 }
 
 class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
-  /// S16 state arrives in Phase C; the legend already drives it (S9).
+  /// S15/S16/S25 toggle state (shared by masters, chips and legend).
   final Set<String> _hiddenSeries = {};
+
+  /// S17 start-year selection (null = spec default 2015, clamped).
+  int? _startYear;
+
+  /// M6 zoom/pan window in epoch millis; null/null = Fit (full range).
+  double? _viewStartMs;
+  double? _viewEndMs;
 
   List<Map<String, dynamic>> get _allSeries {
     final list = widget.envelope['series'] as List?;
@@ -51,6 +62,47 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
   List<Map<String, dynamic>> get _activeSeries => _allSeries
       .where((s) => !_hiddenSeries.contains(s['name'] as String? ?? ''))
       .toList();
+
+  /// S17 earliest data year across ALL series (fallback currentYear-5).
+  int? _earliestYear;
+  int get _earliestDataYear {
+    if (_earliestYear != null) return _earliestYear!;
+    var earliest = DateTime.now().year - 5;
+    for (final s in _allSeries) {
+      for (final p in (s['points'] as List?) ?? const []) {
+        final y = int.tryParse((p['date']?.toString() ?? '').split('-').first);
+        if (y != null && y < earliest) earliest = y;
+      }
+    }
+    _earliestYear = earliest;
+    return earliest;
+  }
+
+  int get _currentYear => DateTime.now().year;
+
+  List<int> get _yearOptions =>
+      startYearOptions(_earliestDataYear, _currentYear);
+
+  int get _effectiveStartYear =>
+      _startYear ?? defaultStartYear(_earliestDataYear);
+
+  /// S18 visible series data: start-year filtered (chart, table, CSV).
+  List<List<FlSpotLite>> _visibleSpots(List<Map<String, dynamic>> series) {
+    final from = DateTime(_effectiveStartYear, 1, 1);
+    return series
+        .map(
+          (s) => filterSpotsFrom(
+            seriesToSpots(
+              (s['points'] as List?)
+                      ?.whereType<Map<String, dynamic>>()
+                      .toList() ??
+                  const [],
+            ),
+            from,
+          ),
+        )
+        .toList();
+  }
 
   String get _locale => I18nService().currentLocale.languageCode;
 
@@ -72,29 +124,46 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
         ),
       );
     }
-    final spotsPerSeries = series
-        .map(
-          (s) => seriesToSpots(
-            (s['points'] as List?)
-                    ?.whereType<Map<String, dynamic>>()
-                    .toList() ??
-                const [],
-          ),
-        )
-        .toList();
-    final window = computeXWindow(spotsPerSeries);
+    final spotsPerSeries = _visibleSpots(series);
+    final window = _chartWindow(spotsPerSeries);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_allSeries.length > 1) _buildLegend(series),
+        // S25 commodity-type masters, then S15 per-series toggles
+        // (web order: both above the chart; legend stays by the plot).
+        if (_allSeries.length > 1) _buildFamilyMasters(),
+        if (_allSeries.length > 1) _buildSeriesChips(),
+        const SizedBox(height: 4),
+        _buildLegend(series),
+        _buildStartYearFilter(),
+        _buildZoomControls(),
         SizedBox(
           height: chartHeightFor(series.length),
-          child: _buildChart(series, spotsPerSeries, window),
+          child: _buildZoomableChart(
+            _buildChart(series, spotsPerSeries, window),
+            spotsPerSeries,
+          ),
         ),
         const SizedBox(height: 12),
         _buildLatestCard(series, spotsPerSeries),
+        const SizedBox(height: 16),
+        _buildTableSection(series, spotsPerSeries),
       ],
     );
+  }
+
+  /// M6 chart x-window: the zoom view when set, else the union range.
+  ({double minX, double maxX}) _chartWindow(
+    List<List<FlSpotLite>> spotsPerSeries,
+  ) {
+    final union = computeXWindow(spotsPerSeries);
+    if (_viewStartMs != null && _viewEndMs != null) {
+      return (
+        minX: _viewStartMs!.clamp(union.minX, union.maxX),
+        maxX: _viewEndMs!.clamp(union.minX, union.maxX),
+      );
+    }
+    return union;
   }
 
   // ---------------------------------------------------------------------------
@@ -612,5 +681,483 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
           ),
       ],
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // S25 — commodity-type masters (families with >= 2 members), above the
+  // per-series toggles. Tristate: checked = all shown, unchecked = all
+  // hidden, indeterminate = mixed. Tapping an all-shown master hides its
+  // members (DISABLED when that would empty the chart); otherwise shows
+  // them all. Derives from the same _hiddenSeries state — no new state.
+  Widget _buildFamilyMasters() {
+    final names = _allSeries.map((s) => s['name'] as String? ?? '').toList();
+    final masters = agriFamilyMasters(names);
+    if (masters.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 0,
+        children: [
+          for (final entry in masters.entries)
+            _familyMasterChip(entry.key, entry.value),
+        ],
+      ),
+    );
+  }
+
+  Widget _familyMasterChip(String family, List<String> members) {
+    final allShown = !members.any(_isHidden);
+    final allHidden = members.every(_isHidden);
+    final activeOutsideFamily = _activeSeries
+        .where((s) => !members.contains(s['name']))
+        .length;
+    // Hiding the whole family must never empty the chart (S25).
+    final disableHide = allShown && activeOutsideFamily == 0;
+
+    void toggle() {
+      setState(() {
+        if (allShown) {
+          _hiddenSeries.addAll(members);
+        } else {
+          _hiddenSeries.removeAll(members);
+        }
+      });
+    }
+
+    return InkWell(
+      onTap: disableHide ? null : toggle,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 28,
+              child: Checkbox(
+                tristate: true,
+                visualDensity: VisualDensity.compact,
+                value: allShown ? true : (allHidden ? false : null),
+                onChanged: disableHide ? null : (_) => toggle(),
+              ),
+            ),
+            Text(
+              '$family (${members.length})',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: disableHide ? _tokens.muted : _tokens.fg,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // S15/S16 — per-series checkbox chips. Unchecking hides the series;
+  // the LAST active series' checkbox is disabled so the chart never
+  // empties via a single chip.
+  Widget _buildSeriesChips() {
+    final names = _allSeries.map((s) => s['name'] as String? ?? '').toList();
+    final palette = _palette();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 0,
+        children: [
+          for (var i = 0; i < _allSeries.length; i++)
+            _seriesChip(_allSeries[i], i, names, palette),
+        ],
+      ),
+    );
+  }
+
+  void _toggleSeries(String name) {
+    setState(
+      () => _isHidden(name)
+          ? _hiddenSeries.remove(name)
+          : _hiddenSeries.add(name),
+    );
+  }
+
+  Widget _seriesChip(
+    Map<String, dynamic> series,
+    int originalIndex,
+    List<String> allNames,
+    AgriPalette palette,
+  ) {
+    final name = series['name'] as String? ?? '';
+    final hidden = _isHidden(name);
+    final locked = _toggleLocked(name);
+    final color = palette.colorForSeriesIndex(originalIndex);
+    return InkWell(
+      onTap: locked ? null : () => _toggleSeries(name),
+      borderRadius: BorderRadius.circular(8),
+      child: Opacity(
+        opacity: hidden ? 0.55 : 1,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 32,
+                height: 28,
+                child: Checkbox(
+                  visualDensity: VisualDensity.compact,
+                  value: !hidden,
+                  onChanged: locked ? null : (_) => _toggleSeries(name),
+                ),
+              ),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                displayName(name, allNames),
+                style: TextStyle(fontSize: 12, color: _tokens.fg),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // S17/S18 — start-year filter ("From"): options earliest..currentYear-5
+  // descending, default 2015 clamped to the earliest data year. Changing
+  // it re-renders chart, table and CSV (Latest values always use the
+  // full history) and pins the axis minimum at the selection.
+  Widget _buildStartYearFilter() {
+    final options = _yearOptions;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Text(
+            tr('market.startYear'),
+            style: TextStyle(fontSize: 12, color: _tokens.muted),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            constraints: const BoxConstraints(minWidth: 96),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: _tokens.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: options.contains(_effectiveStartYear)
+                    ? _effectiveStartYear
+                    : options.first,
+                isDense: true,
+                items: [
+                  for (final y in options)
+                    DropdownMenuItem(value: y, child: Text('$y')),
+                ],
+                onChanged: (y) => setState(() {
+                  _startYear = y;
+                  _viewStartMs = null;
+                  _viewEndMs = null;
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // M6 — zoom & pan: [−] [+] [Fit] buttons plus pinch-zoom and
+  // horizontal drag-pan driving the view window; the Y axes re-scale to
+  // the visible window (the S8 math runs over the windowed spots).
+  static const double _minZoomSpanMs = 30 * 24 * 3600 * 1000;
+
+  ({double s, double e})? _dragStartView;
+  double? _dragStartX;
+  double? _dragFocalMs;
+
+  void _zoomBy(double factor) {
+    final spots = _visibleSpots(_activeSeries);
+    final union = computeXWindow(spots);
+    final s = _viewStartMs ?? union.minX;
+    final e = _viewEndMs ?? union.maxX;
+    final center = (s + e) / 2;
+    final span = ((e - s) * factor).clamp(
+      _minZoomSpanMs,
+      union.maxX - union.minX,
+    );
+    setState(() {
+      _viewStartMs = (center - span / 2).clamp(union.minX, union.maxX);
+      _viewEndMs = (center + span / 2).clamp(union.minX, union.maxX);
+    });
+  }
+
+  void _fitZoom() => setState(() {
+    _viewStartMs = null;
+    _viewEndMs = null;
+  });
+
+  Widget _zoomButton(String label, VoidCallback? onPressed) {
+    // The app theme forces full-width text buttons; inside this
+    // scrollable dialog that crashes layout — hug content explicitly.
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        visualDensity: VisualDensity.compact,
+      ),
+      child: Text(label, style: TextStyle(fontSize: 13, color: _tokens.fg)),
+    );
+  }
+
+  Widget _buildZoomControls() {
+    final zoomed = _viewStartMs != null && _viewEndMs != null;
+    return Row(
+      children: [
+        const Spacer(),
+        _zoomButton('\u2212', () => _zoomBy(1.6)),
+        const SizedBox(width: 4),
+        _zoomButton('+', () => _zoomBy(1 / 1.6)),
+        const SizedBox(width: 4),
+        _zoomButton(tr('market.fit'), zoomed ? _fitZoom : null),
+      ],
+    );
+  }
+
+  /// Wraps the chart with pinch-zoom and horizontal drag-pan.
+  Widget _buildZoomableChart(
+    Widget chart,
+    List<List<FlSpotLite>> spotsPerSeries,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth == 0 ? 1.0 : constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onScaleStart: (d) {
+            final w = _chartWindow(spotsPerSeries);
+            _dragStartView = (s: w.minX, e: w.maxX);
+            _dragStartX = d.localFocalPoint.dx;
+            _dragFocalMs =
+                w.minX + (d.localFocalPoint.dx / width) * (w.maxX - w.minX);
+          },
+          onScaleUpdate: (d) {
+            final start = _dragStartView;
+            if (start == null) return;
+            final union = computeXWindow(spotsPerSeries);
+            final span0 = start.e - start.s;
+            double ns;
+            double ne;
+            if (d.pointerCount > 1) {
+              // pinch: scale the span around the focal point
+              final factor = d.scale == 0 ? 1.0 : d.scale;
+              final span = (span0 / factor).clamp(
+                _minZoomSpanMs,
+                union.maxX - union.minX,
+              );
+              final focal = _dragFocalMs ?? (start.s + start.e) / 2;
+              ns = focal - (focal - start.s) * (span / span0);
+              ne = ns + span;
+            } else {
+              // single-finger horizontal pan
+              final msPerPx = span0 / width;
+              final dxMs = (d.localFocalPoint.dx - _dragStartX!) * msPerPx;
+              ns = start.s - dxMs;
+              ne = start.e - dxMs;
+            }
+            final span = ne - ns;
+            if (ns < union.minX) {
+              ns = union.minX;
+              ne = ns + span;
+            }
+            if (ne > union.maxX) {
+              ne = union.maxX;
+              ns = (ne - span).clamp(union.minX, union.maxX);
+            }
+            setState(() {
+              _viewStartMs = ns;
+              _viewEndMs = ne;
+            });
+          },
+          onScaleEnd: (_) => _dragStartView = null,
+          child: chart,
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // S19 — data table: Period + one column per ACTIVE series (header =
+  // display name, tooltip = full name (unit)) + Quality. Rows are the
+  // union of dates sorted ascending; empty cell when a series lacks the
+  // date; Quality reflects the PRIMARY series. Horizontally scrollable;
+  // rows are lazy (grains has ~800 union dates).
+  Widget _buildTableSection(
+    List<Map<String, dynamic>> activeSeries,
+    List<List<FlSpotLite>> spotsPerSeries,
+  ) {
+    final rows = buildTableRows(spotsPerSeries);
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final names = activeSeries.map((s) => s['name'] as String? ?? '').toList();
+    final allNames = _allSeries.map((s) => s['name'] as String? ?? '').toList();
+    final units = activeSeries.map((s) => s['unit'] as String? ?? '').toList();
+
+    const periodW = 92.0;
+    const seriesW = 108.0;
+    const qualityW = 88.0;
+    final tableWidth = periodW + seriesW * activeSeries.length + qualityW;
+
+    TextStyle headerStyle() => TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      color: _tokens.muted,
+    );
+
+    Widget cell(
+      String text,
+      double w, {
+      TextStyle? style,
+      String? tooltip,
+      Alignment align = Alignment.centerLeft,
+    }) => Tooltip(
+      message: tooltip,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: Container(
+        width: w,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        alignment: align,
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style ?? TextStyle(fontSize: 12, color: _tokens.fg),
+        ),
+      ),
+    );
+
+    Widget headerRow() => Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: _tokens.border)),
+      ),
+      child: Row(
+        children: [
+          cell(tr('market.period'), periodW, style: headerStyle()),
+          for (var i = 0; i < activeSeries.length; i++)
+            cell(
+              displayName(names[i], allNames),
+              seriesW,
+              style: headerStyle(),
+              tooltip: '${names[i]} (${units[i]})',
+            ),
+          cell(tr('market.quality'), qualityW, style: headerStyle()),
+        ],
+      ),
+    );
+
+    Widget dataRow(AgriTableRow r, int rowIndex) {
+      final q = r.primaryQuality == 'estimated'
+          ? tr('market.estimated')
+          : tr('market.actual');
+      return Container(
+        color: rowIndex.isOdd
+            ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.03)
+            : null,
+        child: Row(
+          children: [
+            cell(
+              DateFormat('yyyy-MM-dd').format(r.date),
+              periodW,
+              style: TextStyle(fontSize: 11, color: _tokens.muted),
+            ),
+            for (final v in r.values)
+              cell(v == null ? '' : trimAgriNum(v), seriesW),
+            cell(
+              q,
+              qualityW,
+              style: TextStyle(fontSize: 11, color: _tokens.muted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              tr('market.dataTable'),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            _zoomButton(
+              tr('market.exportCsv'),
+              () => _exportCsv(activeSeries, rows),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 300,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: tableWidth,
+              child: ListView.builder(
+                physics: const ClampingScrollPhysics(),
+                itemCount: rows.length + 1,
+                itemBuilder: (context, i) =>
+                    i == 0 ? headerRow() : dataRow(rows[i - 1], i),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // S20 — CSV export of the S19 rows via the system share sheet.
+  Future<void> _exportCsv(
+    List<Map<String, dynamic>> activeSeries,
+    List<AgriTableRow> rows,
+  ) async {
+    final headers = <String>[
+      tr('market.period'),
+      for (final s in activeSeries) '${s['name']} (${s['unit']})',
+      tr('market.quality'),
+    ];
+    final bytes = csvFileBytes(
+      headers: headers,
+      rows: rows,
+      formatDate: (d) => DateFormat('yyyy-MM-dd').format(d),
+      qualityLabel: (q) =>
+          q == 'estimated' ? tr('market.estimated') : tr('market.actual'),
+    );
+    final dir = await getTemporaryDirectory();
+    final stamp = DateTime.now().toIso8601String().substring(0, 10);
+    final file = File(
+      '${dir.path}/market-prices-${widget.category}-$stamp.csv',
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    await Share.shareXFiles([XFile(file.path)]);
   }
 }

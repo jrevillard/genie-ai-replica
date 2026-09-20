@@ -1182,6 +1182,8 @@ const Map<String, dynamic> enLocale = {
     "fastActions": "Fast Actions",
   },
   "market": {
+    "startYear": "From",
+    "fit": "Fit",
     "sectionTitle": "Market Prices",
     "maizeGrains": "Maize, Beans & Grains",
     "cropProtection": "Crop Protection",

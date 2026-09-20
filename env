@@ -586,6 +586,21 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # OKF_INGEST_WORKER_REAP_GRACE_MS=3600000
 # OKF_INGEST_WORKER_MAX_CLAIMS=8
 
+# --- OKF retrieval mode governance (Story 1.7; ADR-okf-039 D3) ---
+# BOOT DEFAULTS only — the governed row in okf_system_config (_key='retrieval')
+# overrides field-by-field once a steward PUTs /api/okf/retrieval-config
+# (tools-admin; audited). mode 'legacy' runs today's single-graph retriever
+# byte-for-byte; 'okf_only'/'hybrid' engage the Epic-1 fan-out ONLY when ≥1 OKF
+# graph is serving. Garbage values fall back to the safe defaults in code
+# (mode → legacy; caps clamped to sane maxima) — these env vars can never
+# enable the fan-out on a misconfigured deployment.
+# OKF_RETRIEVAL_MODE=legacy
+# OKF_RETRIEVAL_MAX_FANOUT_GRAPHS=5
+# OKF_RETRIEVAL_SPINE_MAX_HOPS=2
+# OKF_RETRIEVAL_EXTRACTED_HOP_CAP=1
+# OKF_RETRIEVAL_CANDIDATE_CAP_PER_GRAPH=50
+# OKF_RETRIEVAL_CANDIDATE_CAP_GLOBAL=200
+
 # --- OKF content-only chunking (Story 4.8-amend) ---
 # Concepts never become doc-repo files docs — the worker POSTs the concept's
 # markdown DIRECTLY to dataprep (DATAPREP_URL below). Dataprep's completion

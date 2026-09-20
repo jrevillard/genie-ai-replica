@@ -278,15 +278,17 @@ a document issue. Steps:
 
 ### Symptom: many files show batch labelling fallbacks
 
-The primary embedding model is degraded. Steps:
+The primary labelling model is degraded or returning malformed JSON for many chunks. Steps:
 
-1. Check the `embedding` / `tei` container logs.
-2. Check the embedding service endpoint (`EMBEDDING_SERVICE_URL`) is
-   reachable from `dataprep-arango-service` (the Docker service / DNS
-   hostname; the OTel `service.name` for queries in VictoriaLogs is
-   `genieai-dataprep`).
-3. If `tei` is OOM-killed, scale down concurrency (`VLLM_MAX_NUM_SEQS`) or
-   upgrade the embedding model.
+1. Check the `vllm-llm` / `vllm` container logs. The OTel `service.name` for queries in VictoriaLogs is `genieai-dataprep`.
+2. Check the LLM endpoint is reachable from `dataprep-arango-service`:
+   - `VLLM_LLM_MODEL_ID` (default labelling model)
+   - `DATAPREP_CONTEXTUAL_MODEL` if `CONTEXTUAL_RETRIEVAL_ENABLED=true`
+   The endpoint URL is `<vllm-host>:8000` (or `<gpu-node>:8000` for remote GPU). Probe liveness: `curl http://<vllm>:8000/v1/models`.
+3. If vLLM is OOM-killed, scale down concurrency (`VLLM_MAX_NUM_SEQS`) or upgrade GPU memory.
+4. If model supports guided JSON but vLLM is overloaded, lower concurrency and re-ingest.
+
+Two parse-failure modes exist: batch-failures cite the chunk indices and trigger automatic per-chunk fallback; per-chunk failures are silent per-chunk downgrades logged individually. The Dataprep label-fallback flow is documented in [.claude/rules/DEBUGGING-TRACING.md](.claude/rules/DEBUGGING-TRACING.md) §3 (ArangoDB `ingestion_log` queries) and §7 (live vLLM probe).
 
 ### Symptom: file in `Ingested with Warnings`
 

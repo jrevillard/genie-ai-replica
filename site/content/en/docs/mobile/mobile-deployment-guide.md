@@ -979,3 +979,5 @@ The fork does not affect production builds (production uses CA-signed certs and 
 - Asset-link verification (`assetlinks.json` / `apple-app-site-association`) is reachable and valid at `https://<keycloak-domain>/.well-known/`.
 
 **Next:** wire the mobile app's traces and logs into your observability stack — see [Observability](/docs/observe/) for Grafana dashboards and VictoriaLogs queries.
+
+For per-flavor locale restriction (active set, dart-define wiring, CI rebuild pass), see [Restrict active locales](/docs/configure/locale-whitelist/).

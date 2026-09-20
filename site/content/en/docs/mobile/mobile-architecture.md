@@ -214,6 +214,8 @@ For the user-visible flow of these features — login screen tap, browser handov
 
 > Deployment-level locale whitelist is **config-driven**, not file-presence-driven — all 14 locale files stay in the source. A flavor restricts the active set via `KeycloakConfig.supportedLocaleCodes`.
 
+See [Restrict active locales](/docs/configure/locale-whitelist/) for the canonical deployer reference.
+
 ## 8. Cross-cutting services
 
 | Service | Purpose | When it fires |

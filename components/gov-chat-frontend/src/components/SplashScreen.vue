@@ -3,7 +3,7 @@
   <div class="splash-screen" :class="{ 'fade-out': isFadingOut }">
     <div class="splash-content">
       <img
-        src="/config/splash.png"
+        :src="splashPath"
         alt="Splash Screen"
         class="splash-image"
         @error="handleImageError"
@@ -17,6 +17,14 @@
 <script>
 export default {
   name: 'SplashScreen',
+  props: {
+    // Path to the splash image, sourced from config.app.splash.value.
+    // Falls back to /config/splash.png when no config is provided.
+    splashPath: {
+      type: String,
+      default: '/config/splash.png'
+    }
+  },
   emits: ['splash-complete'],
   data() {
     return {

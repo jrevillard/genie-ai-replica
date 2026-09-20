@@ -79,7 +79,9 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      height: 60,
+      // 68: 60 clipped the two-line text column by 3px (overflow in the
+      // hosted Insights row).
+      height: 68,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,

@@ -16,4 +16,11 @@ function isArangoUniqueViolation(err) {
   return !!(err && (err.errorNum === 1210 || err.errorNum === 1185 || err.code === 409));
 }
 
-module.exports = { isArangoNotFound, isArangoUniqueViolation };
+/** Concurrent-modification conflict (errorNum 1200, HTTP 409) — the
+ * optimistic-concurrency (`ignoreRevs: false`) precondition guard. ONLY to be
+ * tested against driver errors from collection writes, never app-level 409s. */
+function isArangoConflict(err) {
+  return !!(err && (err.errorNum === 1200 || err.code === 409 || err.statusCode === 409));
+}
+
+module.exports = { isArangoNotFound, isArangoUniqueViolation, isArangoConflict };

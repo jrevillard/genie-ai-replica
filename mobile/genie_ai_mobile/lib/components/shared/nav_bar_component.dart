@@ -14,11 +14,18 @@ class NavBarComponent extends StatelessWidget {
   final VoidCallback onLogout;
   final bool showRightDrawerButton;
 
+  /// Top-nav toggle: flips between the chat home and the dedicated
+  /// Market Prices screen (mobile real-estate constraint).
+  final bool marketViewActive;
+  final VoidCallback? onToggleMarketView;
+
   const NavBarComponent({
     super.key,
     required this.user,
     required this.onLogout,
     this.showRightDrawerButton = false,
+    this.marketViewActive = false,
+    this.onToggleMarketView,
   });
 
   // FIX: Made async because toggleUserOfflineMode returns Future<bool>
@@ -82,6 +89,21 @@ class NavBarComponent extends StatelessWidget {
               ),
 
               const Spacer(),
+
+              // 2b. MARKET PRICES TOGGLE
+              Tooltip(
+                message: tr('market.sectionTitle'),
+                child: DsButton(
+                  key: const Key('navbar_market_toggle'),
+                  iconOnly: true,
+                  icon: marketViewActive
+                      ? Icons.chat_bubble_outline
+                      : Icons.candlestick_chart,
+                  variant: DsButtonVariant.ghost,
+                  overrideFg: marketViewActive ? tokens.accent : contentColor,
+                  onPressed: onToggleMarketView,
+                ),
+              ),
 
               // 3. CONNECTIVITY (Small Dot/Icon)
               StreamBuilder<bool>(

@@ -1604,45 +1604,88 @@ class _NewsPickerSectionState extends State<_NewsPickerSection> {
                       style: theme.textTheme.bodySmall,
                     ),
                   )
-                : ListView(
-                    shrinkWrap: true,
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      ..._items.map((item) {
-                        final key = '${item['url'] ?? item['title']}';
-                        return CheckboxListTile(
-                          dense: true,
-                          value: _selected.contains(key),
-                          title: Text(
-                            item['title']?.toString() ?? '',
-                            style: theme.textTheme.bodySmall,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${item['source'] ?? ''}'
-                            '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 11,
-                            ),
-                          ),
-                          onChanged: (v) => setState(() {
-                            if (v == true) {
-                              _selected.add(key);
-                            } else {
-                              _selected.remove(key);
-                            }
-                          }),
-                        );
-                      }),
-                      if (_selected.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: ElevatedButton.icon(
-                            onPressed: _insert,
-                            icon: const Icon(Icons.add, size: 16),
-                            label: Text(tr('market.insertSelected')),
-                          ),
+                      // Sleek insert bar pinned ABOVE the list (user req:
+                      // the add control was buried at the bottom).
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${_selected.length}/5',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _selected.isEmpty ? null : _insert,
+                              icon: const Icon(Icons.playlist_add, size: 16),
+                              label: Text(tr('market.insertSelected')),
+                              style: TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            ..._items.map((item) {
+                              final key = '${item['url'] ?? item['title']}';
+                              return CheckboxListTile(
+                                dense: true,
+                                value: _selected.contains(key),
+                                title: Text(
+                                  item['title']?.toString() ?? '',
+                                  style: theme.textTheme.bodySmall,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  '${item['source'] ?? ''}'
+                                  '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                onChanged: (v) => setState(() {
+                                  if (v == true) {
+                                    _selected.add(key);
+                                  } else {
+                                    _selected.remove(key);
+                                  }
+                                }),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
           ),

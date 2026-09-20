@@ -7,7 +7,6 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/charts/crop_health_summary_card.dart';
-import 'package:genie_ai_mobile/components/charts/market_price_summary_card.dart';
 import 'package:genie_ai_mobile/components/charts/pest_alert_summary_card.dart';
 
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
@@ -1701,27 +1700,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           },
                         );
                       },
-                    ),
-                    const SizedBox(height: DsSpacing.lg),
-                    // Market Prices section (web order per 2026-09-19 req).
-                    _agriSectionTitle(theme, tokens, tr('market.sectionTitle')),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      childAspectRatio: 1.15,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      children: const [
-                        MarketPriceSummaryCard(category: 'maize'),
-                        MarketPriceSummaryCard(category: 'vegetables'),
-                        MarketPriceSummaryCard(category: 'livestock'),
-                        MarketPriceSummaryCard(category: 'aquaculture'),
-                        MarketPriceSummaryCard(category: 'apiary'),
-                        MarketPriceSummaryCard(category: 'fertilizer'),
-                        MarketPriceSummaryCard(category: 'cropProtection'),
-                        MarketPriceSummaryCard(category: 'harvestStorage'),
-                      ],
                     ),
                   ],
                 ),

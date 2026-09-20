@@ -1,6 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
+import 'package:genie_ai_mobile/components/charts/agri_i18n.dart';
+import 'package:genie_ai_mobile/components/charts/series_chart_core.dart';
+import 'package:genie_ai_mobile/components/charts/series_display.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'market_price_chart.dart';
 
@@ -19,6 +23,9 @@ class MarketPriceSummaryCard extends StatefulWidget {
 
 class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   final AgriApiService _agriService = AgriApiService();
+
+  /// Full multi-series envelope (S21 chips) — null until loaded.
+  Map<String, dynamic>? _fullEnvelope;
   Map<String, dynamic>? _priceData;
   bool _isLoading = true;
   String _currentLangCode = '';
@@ -94,10 +101,17 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
   Future<void> _loadData() async {
     try {
       final data = await _agriService.getMarketPricesLegacy(widget.category);
+      Map<String, dynamic>? full;
+      try {
+        full = await _agriService.getMarketPricesFull(widget.category);
+      } catch (_) {
+        // chips degrade silently — the headline still renders
+      }
 
       if (mounted) {
         setState(() {
           _priceData = data;
+          _fullEnvelope = full;
           _isLoading = false;
         });
       }
@@ -182,7 +196,8 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
       onTap: () => _showDetailedChart(context),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        height: 100,
+        // 150: the S21 acronym-chip row needs room below the headline.
+        height: 150,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
@@ -203,85 +218,174 @@ class _MarketPriceSummaryCardState extends State<MarketPriceSummaryCard> {
                   ),
                 ),
               )
-            : Row(
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Sparkline chart
-                  SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CustomPaint(
-                      painter: _PriceSparklinePainter(
-                        data: _timeSeries,
-                        lineColor: _categoryColor,
-                        fillColor: _categoryColor.withValues(alpha: 0.2),
-                        backgroundColor: isDark
-                            ? Colors.grey.shade700
-                            : Colors.grey.shade300,
-                      ),
-                      child: Center(
-                        child: Icon(
-                          _categoryIcon,
-                          size: 16,
-                          color: _categoryColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _title,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 9,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.7,
+                  Row(
+                    children: [
+                      // Sparkline chart
+                      SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: CustomPaint(
+                          painter: _PriceSparklinePainter(
+                            data: _timeSeries,
+                            lineColor: _categoryColor,
+                            fillColor: _categoryColor.withValues(alpha: 0.2),
+                            backgroundColor: isDark
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade300,
+                          ),
+                          child: Center(
+                            child: Icon(
+                              _categoryIcon,
+                              size: 16,
+                              color: _categoryColor,
                             ),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Row(
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Flexible(
-                              child: Text(
-                                _latestValue,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: _categoryColor,
-                                  fontSize: 10,
+                            Text(
+                              _title,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: 9,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.7,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(width: 2),
-                            Icon(
-                              _trend == 'up'
-                                  ? Icons.trending_up
-                                  : _trend == 'down'
-                                  ? Icons.trending_down
-                                  : Icons.trending_flat,
-                              size: 9,
-                              color: _trend == 'up'
-                                  ? Colors.green
-                                  : _trend == 'down'
-                                  ? Colors.red
-                                  : Colors.grey,
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _latestValue,
+                                    style: theme.textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: _categoryColor,
+                                      fontSize: 10,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                Icon(
+                                  _trend == 'up'
+                                      ? Icons.trending_up
+                                      : _trend == 'down'
+                                      ? Icons.trending_down
+                                      : Icons.trending_flat,
+                                  size: 9,
+                                  color: _trend == 'up'
+                                      ? Colors.green
+                                      : _trend == 'down'
+                                      ? Colors.red
+                                      : Colors.grey,
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 4),
+                  // S21 acronym chips: every series (incl. primary) as
+                  // dot + code + latest value; long-press = full name
+                  // + price (web tooltip parity).
+                  if (_fullEnvelope != null) _buildSeriesChips(),
                 ],
               ),
+      ),
+    );
+  }
+
+  Widget _buildSeriesChips() {
+    final list = _fullEnvelope!['series'] as List?;
+    if (list == null || list.isEmpty) return const SizedBox.shrink();
+    final series = list.whereType<Map<String, dynamic>>().toList();
+    final palette = AgriPalette.fromTokens(
+      tokens: ThemeManager().tokens,
+      categoryColor: _categoryColor,
+    );
+    final locale = I18nService().currentLocale.languageCode;
+    return Wrap(
+      spacing: 4,
+      runSpacing: 3,
+      children: [
+        for (var i = 0; i < series.length; i++)
+          _seriesChip(series[i], i, palette, locale),
+      ],
+    );
+  }
+
+  Widget _seriesChip(
+    Map<String, dynamic> s,
+    int originalIndex,
+    AgriPalette palette,
+    String locale,
+  ) {
+    final name = s['name'] as String? ?? '';
+    final code = commodityCode(name);
+    final unit = s['unit'] as String? ?? '';
+    final spots = seriesToSpots(
+      (s['points'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+          const [],
+    );
+    final latest = latestPoint(spots);
+    final color = palette.colorForSeriesIndex(originalIndex);
+    final tooltip = latestTooltipText(
+      fullSeriesName: localizeFullName(name, locale),
+      value: latest?.value ?? 0,
+      unit: unit,
+    );
+    return Tooltip(
+      message: tooltip,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              code,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: ThemeManager().tokens.fg,
+              ),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              latest == null ? '--' : trimAgriNum(latest.value),
+              style: TextStyle(
+                fontSize: 9,
+                color: ThemeManager().tokens.fg.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

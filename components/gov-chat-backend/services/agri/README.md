@@ -77,7 +77,6 @@ the availability matrix for per-category assignment.
 | `rss-presidencia.js` | `presidencia.gob.sv/feed`                                               | Local news (official, ES)                                                     | 1 h     |                                                                                                |
 | `rss-colatino.js`    | `diariocolatino.com/feed`                                               | Local news (outlet, ES, real snippets)                                        | 1 h     | Only Salvadoran outlet with a direct feed                                                      |
 | `rss-fao.js`         | `fao.org/feeds/fao-newsroom-rss`                                        | Institutional ag news                                                         | 1 h     |                                                                                                |
-| `frankfurter.js`     | `api.frankfurter.dev`                                                   | FX contingency                                                                | 24 h    | All price sources are USD; SLV is dollarized                                                   |
 
 Factories shared by families: `_wfp-factory.js` (CSV schema),
 `_rss-factory.js` (hardened RSS 2.0 parsing). Files starting with `_` are

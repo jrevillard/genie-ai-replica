@@ -266,11 +266,15 @@ td {
 }
 
 /* Navbar logo — horizontal wordmark (1172x346 native). Override component
-   default 40x40 square so the wordmark renders proportionally. */
+   default 40x40 square so the wordmark renders proportionally.
+   The white-on-transparent variant lives at /config/agro-genio-navbar-white.png
+   so contrast holds on the green gradient navbar; drop-shadow tightens the
+   edge against the mid-gradient stop. */
 .govt-logo {
   width: auto !important;
   height: 40px !important;
   max-width: 200px !important;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
 }
 
 /* Navbar — gradient + white text from JSON theme.navbar.background.

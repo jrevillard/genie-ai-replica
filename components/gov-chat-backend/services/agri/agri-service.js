@@ -511,8 +511,13 @@ class AgriService {
           `AgriService initialized (${this.adapters.length} adapters: ${this.adapters.map((a) => a.id).join(', ')})`
         );
 
-        // First prefetch pass in the background (never blocks startup)
-        if (process.env.AGRI_PREFETCH_ON_START !== '0') {
+        // First prefetch pass in the background (never blocks startup).
+        // Opt-IN: the previous `!== '0'` default ran prefetch unless tests
+        // explicitly disabled it, which caused test:backend to hit live
+        // upstream APIs. Now prod must opt in via AGRI_PREFETCH_ON_START=1
+        // in .env (see env Section 15). Tests / CI leave it unset → no
+        // prefetch → no live API calls.
+        if (process.env.AGRI_PREFETCH_ON_START === '1') {
           setImmediate(() =>
             this.scheduler.runOnce().catch((e) => logger.error(`agri initial prefetch failed: ${e.message}`))
           );

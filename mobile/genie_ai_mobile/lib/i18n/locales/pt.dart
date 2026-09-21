@@ -1152,7 +1152,7 @@ const Map<String, dynamic> ptLocale = {
     "title": "Sobre",
     "version": "Versão",
     "description":
-        "O Genie AI é o seu assistente inteligente para navegar pelos serviços e informações governamentais.",
+        "O AgroGenio é o seu assistente inteligente para informação agrícola em El Salvador — saúde das culturas, alertas de pragas e preços de mercado, no seu idioma.",
     "techStack": "Tech Stack",
     "copyright": "Todos os direitos reservados.",
   },

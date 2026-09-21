@@ -183,16 +183,18 @@
             <h3 class="section-title">{{ translate('charts.market.sectionTitle') }}</h3>
           </div>
           <div class="market-cards">
+            <!-- Order per user req 2026-09-19: grains, veg, livestock,
+                 aquaculture, apiary, fertilizer, crop protection, harvest -->
             <MarketPriceSummaryCard category="maize" @open-chart="openChart('market-price', 'maize')" />
+            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
+            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
+            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
+            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
+            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
             <MarketPriceSummaryCard
               category="cropProtection"
               @open-chart="openChart('market-price', 'cropProtection')"
             />
-            <MarketPriceSummaryCard category="vegetables" @open-chart="openChart('market-price', 'vegetables')" />
-            <MarketPriceSummaryCard category="livestock" @open-chart="openChart('market-price', 'livestock')" />
-            <MarketPriceSummaryCard category="fertilizer" @open-chart="openChart('market-price', 'fertilizer')" />
-            <MarketPriceSummaryCard category="apiary" @open-chart="openChart('market-price', 'apiary')" />
-            <MarketPriceSummaryCard category="aquaculture" @open-chart="openChart('market-price', 'aquaculture')" />
             <MarketPriceSummaryCard
               category="harvestStorage"
               @open-chart="openChart('market-price', 'harvestStorage')"
@@ -829,10 +831,24 @@ export default {
     },
 
     openChart(type, category) {
+      // Market dialogs carry the commodity in the title (user req
+      // 2026-09-19): "Market Prices - Maize & Grains" etc.
+      const categoryNames = {
+        maize: this.translate('charts.market.maizeGrains', 'Maize & Grains'),
+        cropProtection: this.translate('charts.market.cropProtection', 'Crop Protection'),
+        vegetables: this.translate('charts.market.fruitsVeggies', 'Fruits & Vegetables'),
+        livestock: this.translate('charts.market.livestock', 'Livestock'),
+        fertilizer: this.translate('charts.market.fertilizer', 'Fertilizer'),
+        apiary: this.translate('charts.market.apiary', 'Apiary & Honey'),
+        aquaculture: this.translate('charts.market.aquaculture', 'Aquaculture'),
+        harvestStorage: this.translate('charts.market.harvestStorage', 'Harvest & Storage')
+      };
       const titles = {
         'crop-health': this.translate('charts.cropHealthTitle', 'Crop Health - NDVI Index'),
         'pest-alert': this.translate('charts.pestAlertTitle', 'Pest & Disease Alerts'),
-        'market-price': this.translate('charts.market.sectionTitle', 'Market Prices')
+        'market-price': `${this.translate('charts.market.sectionTitle', 'Market Prices')} - ${
+          categoryNames[category] || ''
+        }`
       };
       this.chartDialog = { visible: true, type, title: titles[type] || type, category };
     },
@@ -2264,14 +2280,23 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Top-aligned + auto-margin centering: justify-content:center CLIPS THE
+     TOP when content overflows a scroll container — the heading became
+     unreachable once the market cards grew (found live 2026-09-19). Auto
+     margins center when short and collapse to 0 (scrollable) when tall. */
+  justify-content: flex-start;
   padding: var(--space-lg);
   overflow-y: auto;
 }
 
 .welcome-header {
   text-align: center;
+  margin-top: auto;
   margin-bottom: var(--space-lg);
+}
+
+.quick-help-overlay > :last-child {
+  margin-bottom: auto;
 }
 
 .quick-help-heading {

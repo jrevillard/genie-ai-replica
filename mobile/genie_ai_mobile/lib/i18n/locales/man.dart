@@ -1132,7 +1132,7 @@ const Map<String, dynamic> manLocale = {
     "title": "A kumo",
     "version": "Baara nding (Version)",
     "description":
-        "Genie AI mu i la londi demba moo ti mansa serivisolu ani londi kumo la.",
+        "AgroGenio mu i la londi demba moo ti El Salvador ñaamaa kumo la: kuwo kuuraa, paki kumandiraalu ani suu bataa la, i la kango la.",
     "techStack": "Baara fengo",
     "copyright": "Sariyaalu biling maratolu.",
   },

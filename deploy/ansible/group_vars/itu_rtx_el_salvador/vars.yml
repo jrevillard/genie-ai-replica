@@ -172,3 +172,10 @@ label_selector_system_prompt: |-
   ### REQUIRED OUTPUT (NO narration, NO explanation)
   Return ONLY this JSON structure:
   {"labels": ["Label1", "Label2"]}
+
+# Agricultural data service (Insights + Market Prices dialogs).
+# Defaults preserve the historical behavior; override per-deployment as needed.
+# agri_sources_enabled: ""               # e.g. "gdelt,wfp-slv" to disable a broken source
+# agri_redis_url: ""                     # unset = TRANSLATION_CACHE_*
+# agri_verbose: "1"                      # verbose pipeline tracing
+agri_prefetch_on_start: "1"

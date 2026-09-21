@@ -443,6 +443,21 @@ a transparent box under the date title, reported on dark mode). */
   border-radius: 0 !important;
 }
 
+/* Tight markdown chat rendering — override the gap the Vue scoped
+ * `.message-bubble ol/ul { margin: 0.5em 0 }` and the bundled phantom
+ * trailing whitespace text node. Specificity `:root body .message-bubble`
+ * (0,2,2) outranks the bundle's `.message-bubble[data-v-X]` (0,2,1)
+ * with equal `!important`, so this wins regardless of load order. */
+:root body .message-bubble ol,
+:root body .message-bubble ul {
+  margin-bottom: -21px !important;
+  line-height: 0 !important;
+}
+:root body .message-bubble ol > li,
+:root body .message-bubble ul > li {
+  line-height: 21px !important;
+}
+
 /* ApexCharts zoom toolbar (native +/−/reset/pan): DS-token styling so the
    chart controls match the theme in light and dark (user req 2026-09-18). */
 .apexcharts-toolbar {

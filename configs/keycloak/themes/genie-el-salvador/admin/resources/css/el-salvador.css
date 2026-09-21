@@ -1,57 +1,101 @@
-/* AgroGenio El Salvador Admin Console — Light Mode
- * Overrides parent genie theme with El Salvador AgroGenio color tokens.
+/* El Salvador Keycloak Admin Console — Light Mode
+ * Overrides parent genie theme tokens for el-salvador deployment.
  *
- * AgroGenio palette:
- *   brand        = Verde AgroGenio #176B3A
- *   brand hover  = Verde profundo #0D4B28
- *   success      = Verde cultivo #69A83B
- *   info         = Verde cultivo (lighter) #7DBC4D
+ * Palette:
+ *   brand       #1E5631
+ *   brand hover #0D4B28
+ *   secondary   #4CAF50
+ *   success     #4CAF50
+ *   info        #66C76E
  */
 
 :root {
-  /* ── Primary — Verde AgroGenio ── */
-  --pf-v5-global--primary-color--100: #176b3a;
+  /* Primary */
+  --pf-v5-global--primary-color--100: #1e5631;
   --pf-v5-global--primary-color--200: #0d4b28;
   --pf-v5-global--primary-color--300: #0d4b28;
   --pf-v5-global--primary-color--400: #f9fbfd;
   --pf-v5-global--primary-color--500: #0d4b28;
-  --pf-v5-global--primary-color--dark-100: #176b3a;
-  --pf-v5-global--primary-color--light-100: #176b3a;
+  --pf-v5-global--primary-color--dark-100: #1e5631;
+  --pf-v5-global--primary-color--light-100: #1e5631;
 
-  /* ── Active color ── */
-  --pf-v5-global--active-color--100: #176b3a;
-  --pf-v5-global--active-color--200: rgba(23, 107, 58, 0.12);
+  /* Active color */
+  --pf-v5-global--active-color--100: #1e5631;
+  --pf-v5-global--active-color--200: rgba(30, 86, 49, 0.12);
   --pf-v5-global--active-color--300: #0d4b28;
-  --pf-v5-global--active-color--400: #7dbc4d;
+  --pf-v5-global--active-color--400: #66c76e;
 
-  /* ── Background dark variants (header, toolbar) ── */
-  --pf-v5-global--BackgroundColor--dark-100: #176b3a;
+  /* Background dark variants */
+  --pf-v5-global--BackgroundColor--dark-100: #1e5631;
   --pf-v5-global--BackgroundColor--dark-200: #0d4b28;
   --pf-v5-global--BackgroundColor--dark-300: #0d4b28;
   --pf-v5-global--BackgroundColor--dark-400: #0d4b28;
 
-  /* ── Link — Verde AgroGenio ── */
-  --pf-v5-global--link--Color: #176b3a;
+  /* Link */
+  --pf-v5-global--link--Color: #1e5631;
   --pf-v5-global--link--Color--hover: #0d4b28;
-  --pf-v5-global--link--Color--dark: #176b3a;
+  --pf-v5-global--link--Color--dark: #1e5631;
   --pf-v5-global--link--Color--dark--hover: #0d4b28;
-  --pf-v5-global--link--Color--light: #176b3a;
+  --pf-v5-global--link--Color--light: #1e5631;
   --pf-v5-global--link--Color--light--hover: #0d4b28;
 
-  /* ── Info ── */
-  --pf-v5-global--info-color--100: #7dbc4d;
+  /* Info */
+  --pf-v5-global--info-color--100: #66c76e;
   --pf-v5-global--info-color--200: #0d4b28;
 
-  /* ── Success — Verde cultivo ── */
-  --pf-v5-global--success-color--100: #69a83b;
+  /* Success */
+  --pf-v5-global--success-color--100: #4caf50;
   --pf-v5-global--success-color--200: #0d4b28;
 
-  /* ── Page layout — Verde AgroGenio header ── */
-  --pf-v5-c-page__header--BackgroundColor: #176b3a;
+  /* Page layout */
+  --pf-v5-c-page__header--BackgroundColor: #1e5631;
 }
 
-/* ── Logo sizing ── */
+/* AgroGenio palette accents — consistent across login + account + admin. */
+
+/* Body gradient — light AgroGenio palette */
+body {
+  background: linear-gradient(135deg, #f7f8f4 0%, #e8f5e9 45%, #c8e6c9 100%);
+  background-attachment: fixed;
+}
+
+/* Cards — top stripe + green-tinted shadow */
+.pf-v5-c-card {
+  border-top: 4px solid #4caf50;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(30, 86, 49, 0.18);
+}
+
+/* Logo sizing */
 img.keycloak__pageheader_brand {
   height: 32px;
   width: auto;
+}
+
+/* Welcome page "Keycloak icon" — keep navbar.png as sidebar header but
+   swap the welcome-page icon back to the square logo, bigger. Approach:
+   1) hide the <img> tag (so navbar.png from src doesn't render),
+   2) overlay the parent .pf-v5-c-empty-state__content with a ::before that
+      paints logo.png via background-image. */
+img.keycloak__dashboard_icon {
+  width: 360px !important;
+  height: 360px !important;
+  max-width: 360px !important;
+  max-height: 360px !important;
+  visibility: hidden !important;
+}
+.pf-v5-c-empty-state__content {
+  position: relative !important;
+  min-height: 360px !important;
+}
+.pf-v5-c-empty-state__content::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 360px !important;
+  height: 360px !important;
+  background: url('../img/logo.png') center / contain no-repeat !important;
+  pointer-events: none;
 }

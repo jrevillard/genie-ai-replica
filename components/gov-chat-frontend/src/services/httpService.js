@@ -154,9 +154,8 @@ class HttpService {
       if (config && config.url && String(config.url).indexOf('/api/okf') !== -1) {
         const m = config.method ? config.method.toUpperCase() : 'GET';
         const u = String(config.url);
-        const auth = config.headers && config.headers.Authorization
-          ? String(config.headers.Authorization).slice(0, 30)
-          : '(none)';
+        const auth =
+          config.headers && config.headers.Authorization ? String(config.headers.Authorization).slice(0, 30) : '(none)';
         const t0 = Date.now();
         config.__okfT0 = t0;
         console.warn('[OKF-OUT]', m, u, 'baseURL=' + this.baseUrl, 'auth=' + auth, 't0=' + t0);
@@ -164,7 +163,9 @@ class HttpService {
           window.__okfLog = (window.__okfLog || []).concat(['OUT ' + m + ' ' + u + ' t0=' + t0]);
         }
       }
-    } catch (e) { /* never throw from a logger */ }
+    } catch {
+      /* never throw from a logger */
+    }
     return config;
   }
 
@@ -188,11 +189,25 @@ class HttpService {
     // response (status, headers, body) for any /api/okf call. globalThis side
     // effect so the log survives minification + we can recover it later.
     try {
-      if (response && response.config && response.config.url && String(response.config.url).indexOf('/api/okf') !== -1) {
-        console.warn('[OKF-IN]', response.status, response.config.url, 'ct=' + (response.headers && response.headers['content-type']));
-        if (typeof window !== 'undefined') { window.__okfLog = (window.__okfLog || []).concat(['IN ' + response.status + ' ' + response.config.url]); }
+      if (
+        response &&
+        response.config &&
+        response.config.url &&
+        String(response.config.url).indexOf('/api/okf') !== -1
+      ) {
+        console.warn(
+          '[OKF-IN]',
+          response.status,
+          response.config.url,
+          'ct=' + (response.headers && response.headers['content-type'])
+        );
+        if (typeof window !== 'undefined') {
+          window.__okfLog = (window.__okfLog || []).concat(['IN ' + response.status + ' ' + response.config.url]);
+        }
       }
-    } catch (e) { /* never throw from a logger */ }
+    } catch {
+      /* never throw from a logger */
+    }
     return response;
   }
 
@@ -251,27 +266,43 @@ class HttpService {
           const headers = error.response && error.response.headers;
           const data = error.response && error.response.data;
           const t0 = originalRequest.__okfT0;
-          const dt = t0 ? (Date.now() - t0) : -1;
-          console.error('[OKF-ERR]', status, originalRequest.method && originalRequest.method.toUpperCase(), originalRequest.url, {
-            statusText,
-            responseHeaders: headers,
-            responseData: data,
-            message: error.message,
-            code: error.code,
-            durationMs: dt,
-            aborted: !error.response
-          });
+          const dt = t0 ? Date.now() - t0 : -1;
+          console.error(
+            '[OKF-ERR]',
+            status,
+            originalRequest.method && originalRequest.method.toUpperCase(),
+            originalRequest.url,
+            {
+              statusText,
+              responseHeaders: headers,
+              responseData: data,
+              message: error.message,
+              code: error.code,
+              durationMs: dt,
+              aborted: !error.response
+            }
+          );
           if (typeof window !== 'undefined') {
             window.__okfLog = (window.__okfLog || []).concat([
-              'ERR ' + status + ' ' + originalRequest.url +
-              ' dt=' + dt + 'ms' +
-              ' aborted=' + (!error.response) +
-              ' msg=' + (error.message || 'n/a') +
-              ' code=' + (error.code || 'n/a')
+              'ERR ' +
+                status +
+                ' ' +
+                originalRequest.url +
+                ' dt=' +
+                dt +
+                'ms' +
+                ' aborted=' +
+                !error.response +
+                ' msg=' +
+                (error.message || 'n/a') +
+                ' code=' +
+                (error.code || 'n/a')
             ]);
           }
         }
-      } catch (e) { /* never throw from a logger */ }
+      } catch {
+        /* never throw from a logger */
+      }
 
       // Parse error for structured handling
       const parsedError = parseAuthError(error.response.data);

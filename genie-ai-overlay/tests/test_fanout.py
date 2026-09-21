@@ -22,6 +22,7 @@ from retriever.genieai_retriever_arangodb import (
 #      engages with the FULL set (the legacy graph as the first leg + N OKF
 #      graph names). The chat-side carrier is the single source of truth.
 
+
 class TestFanoutShouldEngage:
     """The engage/bypass rules for the two shape contract:
     A) empty carrier → legacy single-graph (no fan-out);

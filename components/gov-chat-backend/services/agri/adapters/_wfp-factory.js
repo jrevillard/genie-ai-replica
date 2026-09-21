@@ -10,11 +10,14 @@
  * - canonical value = USD/kg (unit drift 45 KG -> 46 KG neutralized)
  * - priceflag "actual" only (skip aggregates); wholesale and retail kept apart
  */
+const nodeCrypto = require('node:crypto');
 const { fetchUrl } = require('../http');
 const { parseCsvObjects } = require('../csv');
 const { resolveHdxResource } = require('../resolvers');
 const { wfpRowToUsdPerKg } = require('../series');
-const { docKey } = require('../keys');
+
+/** Deterministic, collision-safe Arango _key from a logical doc key. */
+const docKey = (logical) => nodeCrypto.createHash('sha1').update(logical).digest('base64url');
 
 /**
  * @param {Object} opts
@@ -24,6 +27,7 @@ const { docKey } = require('../keys');
  * @param {string} opts.file - resource filename
  * @param {string} opts.fallbackUrl - last-known-good download URL
  * @param {string} opts.country - label for docs/attribution
+ * @param {string[]} [opts.commodities] - keep only these commodities (default all)
  * @returns {Object} adapter
  */
 function createWfpAdapter(opts) {
@@ -56,6 +60,7 @@ function createWfpAdapter(opts) {
       const seen = new Set();
       for (const row of rows) {
         if (!row.date || row.priceflag !== 'actual') continue;
+        if (opts.commodities && !opts.commodities.includes(row.commodity)) continue;
 
         const conv = wfpRowToUsdPerKg(row);
         if (!conv) continue;

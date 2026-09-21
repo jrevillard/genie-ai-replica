@@ -22,10 +22,7 @@ Agent-facing conventions: [`CLAUDE.md`](CLAUDE.md) (linked from
   the 2026-09-16 research.
 - **Honest data:** regional references, proxies, and inflation-adjusted
   estimates are quality-tagged in the data and surfaced as structured
-  caveat codes the UI renders visibly (chips, About panel, dashed
-  estimate markers). The caveat envelope is the contract for any
-  future chat-side prompt injection (chatqna wiring is a planned
-  follow-up; not yet implemented).
+  caveat codes the UI renders visibly and the AI prompts inject verbatim.
 
 ## Architecture
 
@@ -77,6 +74,7 @@ the availability matrix for per-category assignment.
 | `rss-presidencia.js` | `presidencia.gob.sv/feed`                                               | Local news (official, ES)                                                     | 1 h     |                                                                                                |
 | `rss-colatino.js`    | `diariocolatino.com/feed`                                               | Local news (outlet, ES, real snippets)                                        | 1 h     | Only Salvadoran outlet with a direct feed                                                      |
 | `rss-fao.js`         | `fao.org/feeds/fao-newsroom-rss`                                        | Institutional ag news                                                         | 1 h     |                                                                                                |
+| `frankfurter.js`     | `api.frankfurter.dev`                                                   | FX contingency                                                                | 24 h    | All price sources are USD; SLV is dollarized                                                   |
 
 Factories shared by families: `_wfp-factory.js` (CSV schema),
 `_rss-factory.js` (hardened RSS 2.0 parsing). Files starting with `_` are
@@ -105,11 +103,8 @@ Every response is an envelope:
 
 Caveat codes (rendered by clients via i18n — `REGIONAL_DATA`,
 `ESTIMATED_CPI`, `GAP_YEARS`, `ANNUAL_ONLY`, `SINGLE_MARKET`,
-`COMMUNITY_DATA`, `CURATED_STAT`, `PROXY_INDEX`, `STALE_CACHE`) are
-shipped in every `/api/agri/*` envelope as structured `meta.caveats`
-and rendered by clients. *Future work:* the chatqna prompt builders
-should inject these caveats verbatim so AI responses carry the same
-caveat context — currently NOT wired (see CLAUDE.md non-negotiables).
+`COMMUNITY_DATA`, `CURATED_STAT`, `PROXY_INDEX`, `STALE_CACHE`) are the
+same text users see and the AI prompts inject.
 
 Series points are quality-tagged: `{date, value, quality: "actual" |
 "estimated", estMethod?, baseYear?, partial?}` — estimated segments render

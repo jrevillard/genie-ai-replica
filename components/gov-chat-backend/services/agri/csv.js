@@ -85,10 +85,7 @@ function parseCsv(text, opts = {}) {
 
 /**
  * Parse CSV rows into objects keyed by the header row.
- * Rows shorter than the header produce `null` for missing cells (not
- * `undefined` — downstream `parseFloat(null)` is explicitly NaN whereas
- * `parseFloat(undefined)` gives NaN with no signal that the field was
- * absent). Extra cells beyond the header are silently dropped.
+ * Rows shorter than the header keep undefined fields; longer rows are trimmed.
  *
  * @param {string} text
  * @param {Object} [opts]
@@ -101,9 +98,9 @@ function parseCsvObjects(text, opts = {}) {
   const header = rows[0];
   return rows.slice(1).map((row) => {
     const obj = {};
-    for (let i = 0; i < header.length; i++) {
-      obj[header[i]] = i < row.length ? row[i] : null;
-    }
+    header.forEach((key, idx) => {
+      obj[key] = row[idx];
+    });
     return obj;
   });
 }

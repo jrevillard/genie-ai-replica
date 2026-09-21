@@ -33,7 +33,16 @@ class AgriScheduler {
     this.db = db;
     this.redis = redis;
     this.onAdaptersRun = onAdaptersRun;
-    this.inFlight = new Set();
+    // Single-flight discipline: Map keyed by adapter id → in-flight Promise.
+    // Two concurrent calls for the same adapter share the same Promise (the
+    // second awaits the first) instead of both reaching the upstream. The
+    // Map.set is synchronous and happens BEFORE the first await, so there
+    // is no TOCTOU window between the "is it in-flight?" check and the claim.
+    // The previous Set + boolean `inFlight.has()` was racy: two callers
+    // could both pass the boolean check before either reached `inFlight.add`,
+    // and both proceeded to fetch upstream — duplicating the GDELT call and
+    // tripping its sticky rate-limiter.
+    this.inFlight = new Map();
     this.timer = null;
   }
 
@@ -69,23 +78,47 @@ class AgriScheduler {
     }
   }
 
-  async acquireLock(adapterId, ttlMs) {
+  /**
+   * Atomic single-flight guard for one adapter.
+   *
+   * - Replica-wide: Redis SET NX PX prevents two swarm replicas from
+   *   double-fetching the same adapter (GDELT sticky rate-limiter etc.).
+   * - Process-wide: the Map<adapterId, Promise> collapses concurrent
+   *   callers in the SAME replica onto one fetch by sharing the in-flight
+   *   Promise. The Promise is set into the Map synchronously BEFORE any
+   *   await, so there is no TOCTOU window between check and claim.
+   *
+   * Returns the in-flight Promise (callers await it). Resolves to the
+   * fetch result; on Redis contention resolves to `{ok: false, skipped: 'locked-by-peer'}`.
+   * Always releases the Redis lock + Map entry in its `finally`.
+   */
+  async runAdapterOnce(adapter) {
+    const existing = this.inFlight.get(adapter.id);
+    if (existing) return existing;
+
     if (this.redis) {
+      const lockTtl = cadenceMs(adapter) + 10 * 60 * 1000;
       try {
-        const ok = await this.redis.set(`agri:lock:${adapterId}`, '1', 'PX', ttlMs, 'NX');
-        return ok === 'OK';
-      } catch {
-        /* fall through to in-process guard */
+        const ok = await this.redis.set(`agri:lock:${adapter.id}`, '1', 'PX', lockTtl, 'NX');
+        if (ok !== 'OK') {
+          vlog(`${adapter.id} locked by another replica — skipping`);
+          return { ok: false, skipped: 'locked-by-peer' };
+        }
+      } catch (error) {
+        vlog(`${adapter.id} redis lock check failed (${error.message}) — proceeding in-process only`);
       }
     }
-    return !this.inFlight.has(adapterId);
-  }
 
-  releaseLock(adapterId) {
-    this.inFlight.delete(adapterId);
-    if (this.redis) {
-      this.redis.del(`agri:lock:${adapterId}`).catch(() => {});
-    }
+    const fetchPromise = (async () => {
+      try {
+        return await this.runAdapter(adapter);
+      } finally {
+        this.inFlight.delete(adapter.id);
+        if (this.redis) this.redis.del(`agri:lock:${adapter.id}`).catch(() => {});
+      }
+    })();
+    this.inFlight.set(adapter.id, fetchPromise);
+    return fetchPromise;
   }
 
   /** Run one adapter end-to-end: resolve → fetch → parse → normalize → upsert. */
@@ -187,19 +220,18 @@ class AgriScheduler {
         continue;
       }
 
-      const lockTtl = cadenceMs(adapter) + 10 * 60 * 1000;
-      if (!(await this.acquireLock(adapter.id, lockTtl))) continue;
-      this.inFlight.add(adapter.id);
-
-      try {
-        const result = await this.runAdapter(adapter);
-        if (result.ok) touched.push(adapter.id);
+      // runAdapterOnce handles both Redis locking and single-flight dedup, and
+      // returns the in-flight Promise (or a skip-sentinel if locked by another
+      // replica). Awaiting it ensures exactly one upstream fetch per adapter
+      // per pass — no manual add/releaseLock bookkeeping here.
+      const result = await this.runAdapterOnce(adapter);
+      if (result && result.skipped === 'locked-by-peer') continue;
+      if (result && result.ok) touched.push(adapter.id);
+      if (result) {
         logger.info(
           `agri scheduler: ${adapter.id} ${result.ok ? 'ok' : 'FAILED'} ` +
             `(${result.docs ?? ''} docs${result.error ? ` — ${result.error}` : ''})`
         );
-      } finally {
-        this.releaseLock(adapter.id);
       }
     }
 

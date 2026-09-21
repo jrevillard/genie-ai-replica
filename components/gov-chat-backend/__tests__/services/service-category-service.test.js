@@ -119,7 +119,9 @@ describe('ServiceCategoryService', () => {
 
   describe('upsertCategories', () => {
     it('should create categories with translations', async () => {
-      const categories = [{ name: 'Taxes', catKey: 'taxes', translations: [{ lang: 'fr', text: 'Impots' }] }];
+      const categories = [
+        { name: 'Taxes', catKey: 'taxes', translations: [{ languageCode: 'fr', translation: 'Impots' }] }
+      ];
 
       const result = await service.upsertCategories(categories, 'en');
 
@@ -181,7 +183,7 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.createServiceWithTranslations('cat-1', {
         nameEN: 'New Service',
-        translations: [{ lang: 'fr', text: 'Nouveau' }]
+        translations: [{ languageCode: 'fr', translation: 'Nouveau' }]
       });
 
       expect(result._key).toBe('svc-new');
@@ -207,7 +209,7 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.updateServiceWithTranslations('svc-1', {
         nameEN: 'Updated',
-        translations: [{ lang: 'fr', text: 'Mis a jour' }]
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
       });
 
       expect(result._key).toBe('svc-1');
@@ -378,8 +380,8 @@ describe('ServiceCategoryService', () => {
     it('should return translations for a category', async () => {
       mockDb.query.mockResolvedValue(
         createMockCursor([
-          { lang: 'en', text: 'Taxes' },
-          { lang: 'fr', text: 'Impots' }
+          { languageCode: 'en', translation: 'Taxes' },
+          { languageCode: 'fr', translation: 'Impots' }
         ])
       );
 
@@ -412,7 +414,7 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.createCategory({
         nameEN: 'New Category',
-        translations: [{ lang: 'fr', text: 'Nouvelle' }]
+        translations: [{ languageCode: 'fr', translation: 'Nouvelle' }]
       });
 
       expect(result._key).toBe('cat-new');
@@ -432,7 +434,7 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.updateCategoryWithTranslations('cat-1', {
         nameEN: 'Updated',
-        translations: [{ lang: 'fr', text: 'Mis a jour' }]
+        translations: [{ languageCode: 'fr', translation: 'Mis a jour' }]
       });
 
       expect(result).toEqual({ _key: 'cat-1', status: 'updated' });

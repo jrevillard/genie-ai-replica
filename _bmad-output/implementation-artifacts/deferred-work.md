@@ -2418,3 +2418,8 @@ status: open
 - **No reset path for the governed retrieval-config row** — after the first PUT, env `OKF_RETRIEVAL_*` changes are shadowed by the stored doc (per ADR-039 D3 design: DB overrides env). A reset control (clear the row back to env defaults) belongs to the Story 10.7 Studio retrieval card.
 - **ADR D3's `utility_gate` / `label_federation` config fields are unstorable** — `validatePatch`/LIMITS reject them as unknown. The Wave R4/R6 landing stories must extend the config shape (and LIMITS) when the utility-cost gate and KH label federation legs land.
 - **CHANGELOG + site configuration docs for GET/PUT /retrieval-config and GET /authz/graphs** — CHANGELOG entries land with the MR/release flow (docs/RELEASE.md); the site operator docs are a Story 10.7 completion gate (i18n ×14 + site/content/en/docs).
+
+## Deferred from: pipeline cleanup on feat/okf-server (2026-09-21)
+
+- **Unused `eslint-disable` directives in `components/okf-server/services/graph-lifecycle-service.js:151,153`** — `no-await-in-loop` was disabled but the rule no longer triggers. Predates Wave R4 (last touched 2026-09-10 rebase). Two `lint:okf-server` warnings, zero errors. Fix is `// eslint-disable-next-line no-await-in-loop` deletion on those two lines. Trivial — defer to next okf-server lint pass.
+- **`test_docarray_shim.test_shim_pins_real_package_and_restores_path` fails on Windows** — `import docarray` in the shim subprocess hits a circular import (the vendored `comps/cores/proto/docarray.py` shadows the real `docarray` package; pytest's tmp-path shim triggers the cycle). Pre-existing on `feat/okf-server` baseline commit 986f4ba37 (verified 2026-09-21). Passes on Linux CI. NOT introduced by Wave R4. Document in test file or skip on Windows in CI.

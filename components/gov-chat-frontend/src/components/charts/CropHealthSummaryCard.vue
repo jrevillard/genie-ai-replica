@@ -33,7 +33,7 @@
 </template>
 
 <script>
-import agriculturalService from '../../services/agriculturalService.js';
+import agriApiService from '../../services/agriApiService.js';
 import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 
@@ -112,7 +112,7 @@ export default {
     async loadData() {
       this.loading = true;
       try {
-        this.healthData = await agriculturalService.getCropHealth(this.region);
+        this.healthData = await agriApiService.getCropHealth();
       } catch (err) {
         console.error('Error loading crop health data:', err);
       } finally {

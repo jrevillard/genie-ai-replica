@@ -9,11 +9,13 @@
 # OPEA orchestrators run here (ChatQnA, Retriever, Dataprep, Reranker, etc.)
 # GPU models run on remote GPU node — gpu_node_host triggers GPU_MODEL_REPLICAS=0
 deploy_opea: "1"
-repo_branch: main
+repo_branch: release/el-salvador
+# Images promoted by CI for the release/el-salvador branch (tag slug of the branch name)
+genie_ai_global_tag: release-el-salvador
 enable_observability: "0"
 
-# Remote GPU endpoint
-gpu_node_host: "ai.assembly.govstack.global"
+# Remote GPU endpoint (10.0.0.110 = bb-ai-vm-03 GPU node; 444 = gpu_https_port)
+gpu_node_host: "10.0.0.110"
 gpu_https_port: "444"
 opea_ssl_skip_verify: "1"
 keycloak_ssl_skip_verify: "1"
@@ -32,6 +34,8 @@ self_signed_certs: true
 # =============================================================================
 vue_app_api_url: "https://10.0.0.101/api"
 vue_app_csp_connect_src: "'self' https://10.0.0.101 wss://10.0.0.101 http://localhost"
+# Active UI locales — El Salvador serves English + Spanish only
+vue_app_available_locales: "en,es"
 
 # =============================================================================
 # BACKEND

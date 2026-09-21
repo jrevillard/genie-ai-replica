@@ -21,6 +21,7 @@ import 'package:genie_ai_mobile/providers/api_providers.dart';
 // AUTHENTICATION SCREEN IMPORTS
 // ===========================================================================
 import 'package:genie_ai_mobile/components/auth/oidc_login_screen.dart';
+import 'package:genie_ai_mobile/components/charts/market_prices_page.dart';
 import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/components/user/user_profile_component.dart';
 import 'package:genie_ai_mobile/services/auth/auth_state.dart';
@@ -234,14 +235,10 @@ class _MyAppState extends ConsumerState<MyApp> {
           themeMode: ThemeManager().themeMode,
           builder: (context, child) {
             if (!_isConfigLoaded) {
-              return Scaffold(
-                backgroundColor: ThemeManager().tokens.bg,
-                body: Center(
-                  child: CircularProgressIndicator(
-                    color: ThemeManager().tokens.accent,
-                  ),
-                ),
-              );
+              // Full-screen brand splash while the config loads, matching
+              // the native launch surface (same verde), so startup reads
+              // as one screen instead of a bare spinner.
+              return const _BrandSplash();
             }
             return MediaQuery(
               data: MediaQuery.of(context).copyWith(
@@ -303,6 +300,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   // Connectivity state
   StreamSubscription<bool>? _connectivitySubscription;
   bool _isOnline = true;
+
+  /// Top-nav toggle: Market Prices screen vs the main chat home.
+  bool _showMarketPrices = false;
 
   @override
   void initState() {
@@ -410,6 +410,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   user: widget.user,
                   onLogout: widget.onLogout,
                   showRightDrawerButton: !isWideScreen,
+                  marketViewActive: _showMarketPrices,
+                  onToggleMarketView: () =>
+                      setState(() => _showMarketPrices = !_showMarketPrices),
                 ),
                 Expanded(
                   child: Row(
@@ -432,27 +435,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           ),
                         ),
 
-                      // Center Chat Area
+                      // Center area: Market Prices screen or chat home
+                      // (top-nav toggle; mobile real-estate constraint).
                       Expanded(
-                        // DISABLE CHATBOT WHEN OFFLINE
-                        child: IgnorePointer(
-                          ignoring: !_isOnline,
-                          child: Opacity(
-                            opacity: _isOnline ? 1.0 : 0.5,
-                            child: KeyedSubtree(
-                              key: const Key('main_chat_bot'),
-                              child: ChatBotComponent(
-                                key: _chatBotKey,
-                                userId: widget.user['id'] ?? widget.user['_id'],
-                                onRefreshSidebar: _refreshSidebar,
-                                onRelatedDocumentsUpdate:
-                                    _updateRelatedDocuments,
-                                httpClient: widget.httpClient,
-                                streamBaseUrl: widget.streamBaseUrl,
+                        child: _showMarketPrices
+                            ? const MarketPricesPage()
+                            // DISABLE CHATBOT WHEN OFFLINE
+                            : IgnorePointer(
+                                ignoring: !_isOnline,
+                                child: Opacity(
+                                  opacity: _isOnline ? 1.0 : 0.5,
+                                  child: KeyedSubtree(
+                                    key: const Key('main_chat_bot'),
+                                    child: ChatBotComponent(
+                                      key: _chatBotKey,
+                                      userId:
+                                          widget.user['id'] ??
+                                          widget.user['_id'],
+                                      onRefreshSidebar: _refreshSidebar,
+                                      onRelatedDocumentsUpdate:
+                                          _updateRelatedDocuments,
+                                      httpClient: widget.httpClient,
+                                      streamBaseUrl: widget.streamBaseUrl,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ),
                       ),
 
                       // Persistent Right Sidebar
@@ -499,6 +507,36 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// PRIVATE COMPONENT: FULL-SCREEN BRAND SPLASH
+// -----------------------------------------------------------------------------
+/// Startup splash: the AgroGenio farmer large on the brand verde, filling
+/// the whole screen. `assets/images/agro-genio-farmer.png` is the figure
+/// cut out of the white splash disc (transparent background) so the verde
+/// shows through instead of a white plate.
+class _BrandSplash extends StatelessWidget {
+  const _BrandSplash();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = ThemeManager().tokens;
+    return Scaffold(
+      // Same surface as the native launch theme (launch_bg), so the
+      // handover from the system splash is seamless in both modes.
+      backgroundColor: tokens.navbarBg,
+      body: Center(
+        child: FractionallySizedBox(
+          widthFactor: 0.7,
+          child: Image.asset(
+            'assets/images/agro-genio-farmer.png',
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

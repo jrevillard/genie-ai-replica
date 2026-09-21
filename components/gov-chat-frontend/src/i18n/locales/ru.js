@@ -1573,7 +1573,13 @@ export default {
     exportButton: 'Экспортировать',
     exportSuccess: 'Чат успешно экспортирован',
     exportError: 'Не удалось экспортировать чат. Пожалуйста, попробуйте снова.',
-    removeItem: 'Удалить'
+    removeItem: 'Удалить',
+    chatUpdated: 'Чат обновлён',
+    feedbackError: 'Ошибка при отправке отзыва',
+    feedbackMissingQueryId: 'Отсутствует ID запроса для отзыва',
+    feedbackSubmitted: 'Отзыв отправлен',
+    saving: 'Сохранение...',
+    savingConversation: 'Сохранение беседы...'
   },
   quickhelp: {
     // Labels (Short for UI)

@@ -65,26 +65,76 @@ void main() {
     });
   });
 
-  group('bottomTickIntervalMs (S6)', () {
-    test('monthly ticks for spans up to 24 months', () {
-      final i = bottomTickIntervalMs(DateTime(2023, 1), DateTime(2024, 12));
-      expect(i, const Duration(days: 31).inMilliseconds.toDouble());
+  group('bottomTickIntervalMs (S6) — X label density survives zooming', () {
+    /// How many ticks land inside the window, for the given bounds.
+    int ticksIn(int y1, int m1, int y2, int m2) {
+      final a = DateTime(y1, m1);
+      final b = DateTime(y2, m2);
+      final span = b.difference(a).inMilliseconds.toDouble();
+      return (span / bottomTickIntervalMs(a, b)).ceil();
+    }
+
+    test('a long history gets multi-year, not monthly, ticks', () {
+      final i = bottomTickIntervalMs(DateTime(2000, 1), DateTime(2024, 6));
+      expect(i, greaterThan(const Duration(days: 366 * 4).inMilliseconds));
+      expect(ticksIn(2000, 1, 2024, 6), lessThanOrEqualTo(7));
     });
 
-    test('yearly to 5-yearly as the span grows', () {
-      final yearly = bottomTickIntervalMs(DateTime(2015, 1), DateTime(2024, 6));
-      expect(yearly, const Duration(days: 366).inMilliseconds.toDouble());
-      final five = bottomTickIntervalMs(DateTime(2000, 1), DateTime(2024, 6));
-      expect(five, const Duration(days: 366 * 5).inMilliseconds.toDouble());
+    test('no window crowds the labels (regression)', () {
+      // A 23-month window used to return a flat 31-day step, drawing ~23
+      // overlapping "MMM yy" labels when the user zoomed in. Every window
+      // must now stay at 7 ticks or fewer.
+      const windows = [
+        [2024, 1, 2024, 3], //  2 months
+        [2024, 1, 2025, 1], // 12 months
+        [2023, 1, 2024, 12], // 23 months (the reported case)
+        [2018, 1, 2024, 6], // 65 months
+        [2015, 1, 2024, 6], // 113 months
+        [2000, 1, 2024, 6], // 293 months
+        [1991, 1, 2026, 9], // 425 months
+      ];
+      for (final w in windows) {
+        final ticks = ticksIn(w[0], w[1], w[2], w[3]);
+        expect(
+          ticks,
+          inInclusiveRange(1, 7),
+          reason: '${w[0]}-${w[1]} .. ${w[2]}-${w[3]} drew $ticks X ticks',
+        );
+      }
+    });
+
+    test('zooming in shortens the step, so the axis follows the zoom', () {
+      final wide = bottomTickIntervalMs(DateTime(1991, 1), DateTime(2026, 9));
+      final mid = bottomTickIntervalMs(DateTime(2015, 1), DateTime(2024, 6));
+      final tight = bottomTickIntervalMs(DateTime(2024, 1), DateTime(2024, 3));
+      expect(mid, lessThan(wide));
+      expect(tight, lessThan(mid));
+    });
+
+    test('years give way to QUARTERS, not straight to months', () {
+      // The reported crowding: a year-wide window stepped monthly.
+      expect(bottomTickStepMonths(DateTime(2024, 1), DateTime(2025, 1)), 3);
+      expect(bottomTickStepMonths(DateTime(2024, 1), DateTime(2025, 9)), 3);
+      // Only a genuinely short window drops to monthly.
+      expect(bottomTickStepMonths(DateTime(2024, 1), DateTime(2024, 6)), 1);
+      expect(bottomTickStepMonths(DateTime(2000, 1), DateTime(2024, 6)), 60);
+    });
+
+    test('label pattern narrows with the step (letters only)', () {
+      expect(bottomTickLabelPattern(120), 'yyyy');
+      expect(bottomTickLabelPattern(12), 'yyyy');
+      expect(bottomTickLabelPattern(6), 'MMM'); // quarterly: "Jan"
+      expect(bottomTickLabelPattern(3), 'MMM');
+      expect(bottomTickLabelPattern(1), 'MMMMM'); // monthly: "J"
     });
   });
 
   group('computeYAxis (S8) — axis tops out 20% above the data max', () {
-    test('chicken/beef 0.3-8.21 gives yMin 0, yMax 9.85', () {
+    test('chicken/beef 0.3-8.21 gives yMin 0, yMax 9.85, step 2', () {
       final a = computeYAxis(0.3, 8.21);
       expect(a.yMin, 0.0);
       expect(a.yMax, 9.85); // 8.21 * 1.2, 2-dp rounded
-      expect(a.step, 1.0);
+      expect(a.step, 2.0); // nice step ~= drawn span / 5
     });
 
     test('negative data keeps the unclamped floor', () {
@@ -97,6 +147,38 @@ void main() {
       final a = computeYAxis(7.0, 7.0);
       expect(a.step, greaterThanOrEqualTo(1));
       expect(a.yMax, 8.4);
+    });
+
+    test('dense ranges stay sparse (Crop Protection / Harvest & Storage)', () {
+      // range 20, yMax 33.6 -> span 25.6 -> step 10: four gridlines.
+      // The old floor-based step picked 1 here -> ~29 gridlines.
+      final a = computeYAxis(8.0, 28.0);
+      expect(a.step, 10.0);
+      expect(a.yMin, 0.0);
+      final gridlines = ((a.yMax - a.yMin) / a.step).ceil();
+      expect(gridlines, lessThanOrEqualTo(6));
+    });
+
+    test('gridline count stays sparse across real agri ranges', () {
+      // (min, max) pairs roughly matching the live series: grain prices,
+      // PPI/BLS indices, SDG percentages, WFP index values.
+      const cases = [
+        (170.0, 200.0), // cropProtection index
+        (5.0, 25.0), // harvest & storage %
+        (8.0, 28.0), // storage lower band
+        (1200.0, 1800.0), // fertilizer USD/mt
+        (0.3, 8.21), // livestock USD/kg
+        (2.5, 4.0), // aquaculture USD/lb
+      ];
+      for (final (lo, hi) in cases) {
+        final a = computeYAxis(lo, hi);
+        final gridlines = ((a.yMax - a.yMin) / a.step).ceil();
+        expect(
+          gridlines,
+          inInclusiveRange(3, 12),
+          reason: '($lo, $hi) produced $gridlines gridlines at step ${a.step}',
+        );
+      }
     });
   });
 

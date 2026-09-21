@@ -108,35 +108,90 @@ List<FlSpotLite> seriesToSpots(List<Map<String, dynamic>> points) {
   return (minX: minX, maxX: maxX);
 }
 
-/// S6 bottom-tick interval in CHART x units (epoch millis, since the
-/// x axis is date-keyed): span of at most 24 months ticks monthly, at
-/// most 120 months yearly, otherwise every 5 years.
-double bottomTickIntervalMs(DateTime minX, DateTime maxX) {
+/// S6 X-tick step in MONTHS: the smallest nice step in
+/// `1, 3, 6, 12, 24, 60, 120, 240, 600` that keeps at most ~7 ticks
+/// inside the window. Months → quarters → halves → years is the
+/// transition order the user asked for (2026-09-21): years first, then
+/// quarters; a flat monthly step is the last resort because it is what
+/// crowded the axis.
+int bottomTickStepMonths(DateTime minX, DateTime maxX) {
   final months = (maxX.year - minX.year) * 12 + (maxX.month - minX.month);
-  final days = months <= 24 ? 31 : (months <= 120 ? 366 : 366 * 5);
-  return Duration(days: days).inMilliseconds.toDouble();
+  if (months <= 0) return 1;
+  const ladder = [1, 3, 6, 12, 24, 60, 120, 240, 600];
+  for (final s in ladder) {
+    if (months / s <= 7) return s;
+  }
+  return ladder.last;
 }
 
-/// S8 Y-axis math for one unit group over its VISIBLE window:
-/// range = maxVal - minVal (or 1 when flat); step = 10^floor(log10(
-/// range/4)) with a floor of 1; yMin = max(0, floor((minVal -
-/// range*0.05)/step)*step) when minVal >= 0, else the unclamped
-/// floor; yMax = round(maxVal*1.2*100)/100 — the axis tops out only
-/// 20% above the highest rendered point (user req 2026-09-20: keeps
-/// the plot area tight and readable).
+/// S6 bottom-tick interval in CHART x units (epoch millis, since the
+/// x axis is date-keyed). Derived from [bottomTickStepMonths] so the
+/// X axis visibly follows the zoom instead of redrawing a fixed ladder:
+/// the old version returned a flat 31 days for every window up to 24
+/// months, so zooming into two years of data drew ~24 overlapping
+/// `MMM yy` labels (user report 2026-09-21, "the X axis gets crowded
+/// and fucked up looking on some charts when zooming").
+double bottomTickIntervalMs(DateTime minX, DateTime maxX) => Duration(
+  days: (bottomTickStepMonths(minX, maxX) * 30.44).round(),
+).inMilliseconds.toDouble();
+
+/// S6 X-label pattern matching the step [bottomTickStepMonths] picked:
+/// `yyyy` for multi-year steps, month LETTERS only (`MMM`) for
+/// quarterly/half-year steps, and the single narrow month letter
+/// (`MMMMM`, e.g. "J") for monthly steps — so the labels stay narrow
+/// enough never to overlap.
+String bottomTickLabelPattern(int stepMonths) {
+  if (stepMonths >= 12) return 'yyyy';
+  if (stepMonths >= 3) return 'MMM';
+  return 'MMMMM';
+}
+
+/// S8 Y-axis math for one unit group over its VISIBLE window.
+///
+/// The tick step is a "nice" number (1/2/5 x 10^n) sized to give
+/// ~5 gridlines over the span actually drawn (yMax down to minVal —
+/// the 20% headroom is part of the axis). The previous
+/// `10^floor(log10(range/4))` had two faults: floor() rounded the
+/// exponent down, and it measured only the data range, so dense
+/// series drew 10-40 gridlines (Crop Protection and Harvest &
+/// Storage read as solid bands of tick marks — user report
+/// 2026-09-20). Deriving from the drawn span also matches the
+/// legacy market chart's ladder.
+///
+/// yMin = max(0, floor((minVal - range*0.05)/step)*step) when
+/// minVal >= 0, else the unclamped floor; yMax = round(maxVal*1.2*100)
+/// /100 — the axis tops out only 20% above the highest rendered point.
 ({double yMin, double yMax, double step}) computeYAxis(
   double minVal,
   double maxVal,
 ) {
-  final range = (maxVal - minVal) == 0 ? 1.0 : maxVal - minVal;
-  final rawStep = range / 4;
-  var step = rawStep > 0
-      ? math.pow(10, (math.log(rawStep) / math.ln10).floorToDouble()).toDouble()
-      : 1.0;
-  if (step < 1) step = 1.0;
-  final floorVal = ((minVal - range * 0.05) / step).floorToDouble() * step;
-  final yMin = minVal >= 0 ? (floorVal < 0 ? 0.0 : floorVal) : floorVal;
+  final dataRange = (maxVal - minVal) == 0 ? 1.0 : maxVal - minVal;
   final yMax = (maxVal * 1.2 * 100).roundToDouble() / 100;
+
+  final span = (yMax - minVal).abs();
+  var step = 1.0;
+  if (span > 0) {
+    final rawStep = span / 5; // aim for ~5 gridlines
+    final magnitude = math
+        .pow(10, (math.log(rawStep) / math.ln10).floorToDouble())
+        .toDouble();
+    final normalized = rawStep / magnitude;
+    final double niceStep;
+    if (normalized > 5) {
+      niceStep = 10;
+    } else if (normalized > 2) {
+      niceStep = 5;
+    } else if (normalized > 1) {
+      niceStep = 2;
+    } else {
+      niceStep = 1;
+    }
+    step = niceStep * magnitude;
+  }
+  if (step < 1) step = 1.0;
+
+  final floorVal = ((minVal - dataRange * 0.05) / step).floorToDouble() * step;
+  final yMin = minVal >= 0 ? (floorVal < 0 ? 0.0 : floorVal) : floorVal;
   return (yMin: yMin, yMax: yMax, step: step);
 }
 

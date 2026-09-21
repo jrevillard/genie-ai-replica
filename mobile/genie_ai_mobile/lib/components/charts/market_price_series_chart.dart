@@ -124,6 +124,11 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
 
   AppTokens get _tokens => ThemeManager().tokens;
 
+  /// Pixel position of the last drawn X label, and the minimum gap below
+  /// which a tick is dropped (fl_chart draws min/max on top of the grid).
+  double? _lastBottomLabelPx;
+  static const double _minBottomLabelGapPx = 30;
+
   /// S7 dot density: dense series (more than 300 visible points)
   /// render smaller dots.
   double _dotRadius(int visiblePointCount) => visiblePointCount > 300 ? 2 : 6;
@@ -344,23 +349,18 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
     final isDark = theme.brightness == Brightness.dark;
     final background = isDark ? Colors.black : Colors.white;
     final palette = _palette();
+    // The X labels are emitted in ascending order during this build, so
+    // the collision guard starts fresh each time the chart is built.
+    _lastBottomLabelPx = null;
     final groups = _unitGroups(activeSeries, spotsPerSeries);
     final primary = groups.isNotEmpty
         ? groups.first
         : _UnitGroup('', const [], 0, 1, 1);
-    final secondary = groups.length > 1 ? groups[1] : null;
-
     // fl_chart has a single value scale, so a second unit group renders
-    // LINEARLY TRANSFORMED into the primary scale; right-axis tick
-    // labels map values back (inverse) so they read the secondary unit.
-    double fromChartScale(double chartV, _UnitGroup g) {
-      if (identical(g, primary)) return chartV;
-      final gRange = (g.yMax - g.yMin) == 0 ? 1.0 : (g.yMax - g.yMin);
-      final pRange = (primary.yMax - primary.yMin) == 0
-          ? 1.0
-          : (primary.yMax - primary.yMin);
-      return g.yMin + (chartV - primary.yMin) / pRange * gRange;
-    }
+    // LINEARLY TRANSFORMED into the primary scale. Only the LEFT axis is
+    // drawn (user decision 2026-09-21): the right-hand axis was crowded
+    // redundant noise, so a secondary-unit series is read relative to the
+    // primary scale instead.
 
     final bars = <LineChartBarData>[];
     for (var i = 0; i < activeSeries.length; i++) {
@@ -460,25 +460,8 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
               ),
             ),
           ),
-          rightTitles: AxisTitles(
-            axisNameWidget: secondary == null
-                ? null
-                : Text(
-                    secondary.unit,
-                    style: TextStyle(fontSize: 10, color: _tokens.muted),
-                  ),
-            sideTitles: SideTitles(
-              showTitles: secondary != null,
-              reservedSize: 44,
-              interval: secondary?.step ?? primary.step,
-              getTitlesWidget: (v, m) => Text(
-                yAxisTickLabel(
-                  fromChartScale(v, secondary ?? primary),
-                  secondary?.unit ?? '',
-                ),
-                style: TextStyle(fontSize: 10, color: _tokens.muted),
-              ),
-            ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
           ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -518,25 +501,39 @@ class _MarketPriceSeriesChartState extends State<MarketPriceSeriesChart> {
     return to.yMin + (v - from.yMin) / fromRange * toRange;
   }
 
-  /// S6 bottom tick label: MMM yy when the window spans at most 24
-  /// months, yyyy beyond that; localized month abbreviations.
+  /// S6 bottom tick label: the pattern tracks the tick STEP (see
+  /// [bottomTickLabelPattern]) so labels stay narrow — years for
+  /// multi-year steps, month letters for quarters, a single letter for
+  /// monthly steps. The old version keyed the format off the window span
+  /// and always printed `MMM yy`, which crowded when zoomed in.
+  ///
+  /// fl_chart's `iterateThroughAxis` yields the axis MIN and MAX as
+  /// EXTRA ticks on top of the interval grid, and the grid is aligned to
+  /// the interval (not to min), so the first grid tick can land almost on
+  /// top of the min label — the "JanFeb" overlap seen on the Crop
+  /// Protection chart. Anything that would collide with the previously
+  /// drawn label is dropped.
   Widget _bottomTickLabel(
     double value,
     TitleMeta meta,
     ({double minX, double maxX}) window,
     bool isDark,
   ) {
+    final px = meta.axisPosition;
+    final lastPx = _lastBottomLabelPx;
+    if (lastPx != null && (px - lastPx).abs() < _minBottomLabelGapPx) {
+      return const SizedBox.shrink();
+    }
+    _lastBottomLabelPx = px;
+
     final dt = DateTime.fromMillisecondsSinceEpoch(value.toInt());
-    final spanMonths =
-        (DateTime.fromMillisecondsSinceEpoch(window.maxX.toInt()).year -
-                DateTime.fromMillisecondsSinceEpoch(window.minX.toInt()).year) *
-            12 +
-        (DateTime.fromMillisecondsSinceEpoch(window.maxX.toInt()).month -
-            DateTime.fromMillisecondsSinceEpoch(window.minX.toInt()).month);
-    final locale = agriDateLocale(_locale);
-    final fmt = spanMonths <= 24
-        ? DateFormat('MMM yy', locale)
-        : DateFormat('yyyy', locale);
+    final pattern = bottomTickLabelPattern(
+      bottomTickStepMonths(
+        DateTime.fromMillisecondsSinceEpoch(window.minX.toInt()),
+        DateTime.fromMillisecondsSinceEpoch(window.maxX.toInt()),
+      ),
+    );
+    final fmt = DateFormat(pattern, agriDateLocale(_locale));
     return SideTitleWidget(
       axisSide: meta.axisSide,
       child: Text(

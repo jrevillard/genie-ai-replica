@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
+import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'pest_alert_chart.dart';
 
 /// Simple pest alert map for QuickHelp overlay
@@ -16,7 +17,7 @@ class PestAlertSummaryCard extends StatefulWidget {
 }
 
 class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
-  final AgriculturalProxy _agriculturalProxy = AgriculturalProxy();
+  final AgriApiService _agriService = AgriApiService();
   Map<String, dynamic>? _pestData;
   String _currentLangCode = '';
 
@@ -45,9 +46,7 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
 
   Future<void> _loadData() async {
     try {
-      final data = await _agriculturalProxy.getPestAlerts(
-        region: widget.region,
-      );
+      final data = await _agriService.getPestAlerts(); // region is server-side
       if (mounted) {
         setState(() {
           _pestData = data;
@@ -71,16 +70,17 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
   }
 
   Color get _alertColor {
-    if (_pestData == null) return Colors.grey;
-    if (_highSeverity > 0) return Colors.red;
-    if (_totalAlerts > 0) return Colors.orange;
-    return Colors.green;
+    // DS token values (danger/warning/success), matching the web pills.
+    final tokens = ThemeManager().tokens;
+    if (_pestData == null) return tokens.muted;
+    if (_highSeverity > 0) return tokens.danger;
+    if (_totalAlerts > 0) return tokens.warning;
+    return tokens.success;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return InkWell(
       onTap: () => _showFullChart(context),
@@ -89,7 +89,7 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
         height: 70,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+          color: ThemeManager().tokens.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _alertColor.withValues(alpha: 0.5),
@@ -192,10 +192,11 @@ class _PestAlertSummaryCardState extends State<PestAlertSummaryCard> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        insetPadding: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(),
         child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.95,
-          height: MediaQuery.of(context).size.height * 0.85,
+          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.of(context).size.height,
           child: Column(
             children: [
               // Header

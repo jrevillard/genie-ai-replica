@@ -381,7 +381,7 @@ body {
 }
 
 .notification.info {
-  background-color: var(--info);
+  background-color: var(--accent);
 }
 
 .notification.warning {

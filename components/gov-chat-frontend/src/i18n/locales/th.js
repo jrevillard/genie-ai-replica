@@ -530,8 +530,49 @@ export default {
     }
   },
   charts: {
+    news: {
+      addFromNews: 'Add from recent news',
+      insert: 'Insert selected',
+      noItems: 'No recent items'
+    },
+
+    caveats: {
+      aboutData: 'About this data',
+      source: 'Source',
+      coverage: 'Coverage',
+      estimation: 'Estimates',
+      quality: 'Quality',
+      estimated: 'Estimated',
+      actual: 'Actual',
+      estimatedSeries: '{name} (estimated)',
+      bundledSnapshot: 'Bundled snapshot',
+      savedDataAge: 'Saved data — {age} old',
+      updatedAgo: 'Updated {age} ago',
+      ageMinutes: '{n} min',
+      ageHours: '{n} h',
+      ageDays: '{n} d',
+      regionalWith: '{label}: {country}',
+      estimatedWith: '{label} ({years})',
+      annualWith: '{label} (through {year})',
+      codes: {
+        REGIONAL_DATA: 'Regional data',
+        ESTIMATED_CPI: 'Inflation-adjusted estimate',
+        GAP_YEARS: 'Missing years',
+        ANNUAL_ONLY: 'Annual data',
+        SINGLE_MARKET: 'Single market',
+        COMMUNITY_DATA: 'Community data',
+        CURATED_STAT: 'Curated statistic',
+        PROXY_INDEX: 'Proxy index',
+        STALE_CACHE: 'Cached data'
+      }
+    },
+
     loading: 'กำลังโหลดข้อมูล...',
     loadDataError: 'โหลดข้อมูลไม่สำเร็จ',
+    filterSeverity: 'Filter by severity',
+    advisory: 'Advisory',
+    regional: 'Regional',
+    sighting: 'Sighting',
     insights: 'ข้อมูลเชิงลึก',
     fastActions: 'การดำเนินการด่วน',
     cropHealth: 'สุขภาพพืชผล',
@@ -589,7 +630,7 @@ export default {
     shareError: 'เกิดข้อผิดพลาดในการแชร์',
     market: {
       sectionTitle: 'ราคาตลาด',
-      maizeGrains: 'ข้าวโพดและธัญพืช',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'การป้องกันพืชผล',
       fruitsVeggies: 'ผลไม้และผัก',
       livestock: 'ปศุสัตว์',
@@ -604,10 +645,29 @@ export default {
       latest: 'ล่าสุด',
       trend: 'แนวโน้ม',
       priceHistory: 'ประวัติราคา',
+      startYear: 'From',
+      series: 'Series',
       dataTable: 'ตารางข้อมูล',
+      period: 'Period',
+      exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'อัปเดตล่าสุด',
       commodity: 'สินค้า',
       noData: 'ไม่มีข้อมูล',
+      unitQuintal:
+        'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.',
+      unitPpi:
+        'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
+      unitIndex:
+        'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
+      unitPercent:
+        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
+      unitUsdKg: 'US dollars per kilogram.',
+      unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
+      unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',
+      unitUsdLb: 'US dollars per pound (0.4536 kg).',
+      unitDozen: 'US dollars per dozen.',
+      unitGeneric: 'Unit of measurement for this series.',
       year: 'ปี',
       value: 'ค่า',
       getPredictions: 'รับการพยากรณ์จาก AI',
@@ -1449,6 +1509,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'การตอบกลับถูกขัดจังหวะ โปรดลองอีกครั้ง',
     aiGeneratedNoDocs: 'สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร',
     welcomeMessage: 'Welcome! How can I assist you today?',

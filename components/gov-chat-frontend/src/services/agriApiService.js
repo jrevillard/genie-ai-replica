@@ -11,30 +11,11 @@
  * refresh cadence — this service exposes both get() and getCached()).
  */
 import httpService from './httpService';
-import { CACHE_PREFIX, CACHE_SCHEMA_VERSION, CACHE_KEY } from './agriCacheConfig';
 
-const SCHEMA_RE = /^agri-lkg:(v\d+):/;
+const CACHE_PREFIX = 'agri-lkg:';
+const CACHE_SCHEMA_VERSION = 'v2'; // bump to invalidate old shapes
 
 class AgriApiService {
-  constructor() {
-    // One-time migration on first instantiation: drop any stale LKG entries
-    // whose schema version is older than the current constant.  The version-
-    // comparing loop handles v1 -> v2 today and will also clean v2 -> v3,
-    // v3 -> v4, etc. without needing new migration code each time.
-    try {
-      const currentMajor = parseInt(CACHE_SCHEMA_VERSION.slice(1), 10);
-      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
-        const k = localStorage.key(i);
-        const m = k && SCHEMA_RE.exec(k);
-        if (m) {
-          const v = parseInt(m[1].slice(1), 10);
-          if (v < currentMajor) localStorage.removeItem(k);
-        }
-      }
-    } catch {
-      /* localStorage unavailable (private mode, quota exceeded) — silently no-op */
-    }
-  }
   /**
    * Fetch an agri endpoint with last-known-good fallback.
    * @param {string} endpoint - e.g. 'agri/market-prices/maize'
@@ -195,7 +176,7 @@ class AgriApiService {
 
   writeCache(endpoint, envelope) {
     try {
-      localStorage.setItem(`${CACHE_KEY}${endpoint}`, JSON.stringify(envelope));
+      localStorage.setItem(`${CACHE_PREFIX}${CACHE_SCHEMA_VERSION}:${endpoint}`, JSON.stringify(envelope));
     } catch {
       /* quota exceeded — cache is best-effort */
     }
@@ -203,7 +184,7 @@ class AgriApiService {
 
   readCache(endpoint) {
     try {
-      const raw = localStorage.getItem(`${CACHE_KEY}${endpoint}`);
+      const raw = localStorage.getItem(`${CACHE_PREFIX}${CACHE_SCHEMA_VERSION}:${endpoint}`);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;

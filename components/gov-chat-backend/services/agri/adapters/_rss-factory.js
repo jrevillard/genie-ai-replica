@@ -8,7 +8,7 @@
  */
 const { fetchUrl } = require('../http');
 const { isRelevantNews } = require('../newsfilter');
-const { docKey } = require('../keys');
+const nodeCrypto = require('node:crypto');
 
 const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'" };
 const decodeEntities = (s) => String(s || '').replace(/&(amp|lt|gt|quot|#39|apos);/g, (m) => ENTITIES[m]);
@@ -80,7 +80,7 @@ function createRssAdapter(opts) {
         const url = item.link || '';
         const logical = `${opts.id}:${url || item.title}`;
         docs.push({
-          _key: docKey(logical),
+          _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
           kind: 'news',
           scope: opts.scope,
           language: opts.language,

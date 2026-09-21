@@ -6,7 +6,7 @@
  * never as severity-graded alerts (COMMUNITY_DATA caveat).
  */
 const { fetchJson } = require('../http');
-const { docKey } = require('../keys');
+const nodeCrypto = require('node:crypto');
 
 // Target crop-pest taxa (scientific names verified via EPPO/iNaturalist)
 const TAXA = [
@@ -37,13 +37,9 @@ module.exports = {
 
   async fetch(_, cfg) {
     const since = new Date(Date.now() - cfg.withinDays * 86400000).toISOString().split('T')[0];
-    // taxon_name accepts a raw '|' separator for multi-taxon queries —
-    // encodeURIComponent would turn it into %7C and iNaturalist would treat
-    // the whole string as one bogus taxon. Encode the rest, leave '|' raw.
-    const taxaParam = encodeURIComponent(cfg.taxa).replace(/%7C/gi, '|');
     const url =
       'https://api.inaturalist.org/v1/observations' +
-      `?place_id=${cfg.placeId}&taxon_name=${taxaParam}` +
+      `?place_id=${cfg.placeId}&taxon_name=${encodeURIComponent(cfg.taxa)}` +
       `&per_page=${cfg.perPage}&order=desc&order_by=observed_on&d1=${since}`;
     return fetchJson(url, { timeoutMs: 20000 });
   },
@@ -58,7 +54,7 @@ module.exports = {
       if (!obs || !obs.taxon) continue;
       const logical = `inat:${obs.id}`;
       docs.push({
-        _key: docKey(logical),
+        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
         kind: 'sighting',
         scientificName: obs.taxon.name,
         observedOn: obs.observed_on || null,

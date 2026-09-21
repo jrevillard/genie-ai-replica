@@ -111,6 +111,7 @@ All responses share an envelope:
     "stale": false,
     "coverage": "San Salvador wholesale, Jan 2026–Aug 2026; gap 2023–2025",
     "estimation": "2023–2025 values are inflation-adjusted estimates (base: 2022 actual, WB CPI)",
+    "nextRefresh": "2026-09-17T00:00:00Z",
     "caveats": [
       { "code": "ESTIMATED_CPI", "params": { "years": "2023–2025", "baseYear": 2022 } },
       { "code": "SINGLE_MARKET", "params": { "market": "San Salvador" } }

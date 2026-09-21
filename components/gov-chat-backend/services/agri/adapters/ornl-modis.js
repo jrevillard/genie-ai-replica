@@ -8,7 +8,7 @@
  * scheduler.
  */
 const { fetchJson } = require('../http');
-const { docKey } = require('../keys');
+const nodeCrypto = require('node:crypto');
 
 // Department centroids (verified against the WFP dataset departments)
 const CENTROIDS = {
@@ -102,7 +102,7 @@ module.exports = {
         const ndvi = median(values);
         const logical = `ornl:${dept}:${date}`;
         docs.push({
-          _key: docKey(logical),
+          _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
           kind: 'ndvi',
           department: dept,
           date: date.replace(/^A(\d{4})(\d{3})$/, '$1-$2'), // A2026225 -> 2026-225

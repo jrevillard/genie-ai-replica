@@ -29,6 +29,7 @@ const CAVEAT_CODES = [
  * @param {boolean} [meta.stale=false]
  * @param {boolean} [meta.seeded=false] - served from bundled seed
  * @param {Array<{code:string, params:Object}>} [meta.caveats=[]]
+ * @param {Date|string} [meta.nextRefresh]
  */
 function buildEnvelope(data, meta = {}) {
   const caveats = (meta.caveats || []).filter((c) => CAVEAT_CODES.includes(c.code));
@@ -42,7 +43,8 @@ function buildEnvelope(data, meta = {}) {
       estimation: meta.estimation || null,
       stale: Boolean(meta.stale),
       seeded: Boolean(meta.seeded),
-      caveats
+      caveats,
+      nextRefresh: meta.nextRefresh || null
     }
   };
 }

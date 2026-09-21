@@ -58,6 +58,46 @@ main {
   color: var(--fg);
 }
 
+/* Saved Chats card — ChatFolders.vue
+   The scoped CSS sets .chat-item max-width: 412px (sized for desktop
+   .side-bar width: 450px). On narrow viewports (mobile sidebar ~90%
+   of viewport) the fixed ceiling is wider than the parent's available
+   width, so card content (title + star + archive) spills beyond the
+   sidebar edge. Constrain to parent + let flex distribute title vs
+   actions so actions stay reachable when titles are long. The scoped
+   .chat-header also lacks flex-wrap; add it so actions drop to a
+   second row when title + actions together exceed available width.
+
+   .archive-label / .archive-checkbox scoped CSS use font-size:
+   var(--text-base) which is too tall for narrow sidebars. Shrink to
+   var(--text-xs) and trim padding so the checkbox + "Archive" text
+   fit on the same row as the title on mobile. */
+:root body .chat-item {
+  max-width: 100%;
+}
+:root body .chat-title {
+  max-width: none;
+  flex: 1;
+  min-width: 0;
+}
+:root body .chat-header {
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+}
+:root body .chat-actions-group {
+  flex-shrink: 0;
+  margin-left: var(--space-sm);
+}
+:root body .archive-label {
+  font-size: var(--text-xs);
+  margin-left: var(--space-xs);
+}
+:root body .archive-checkbox {
+  padding: 2px 6px;
+  gap: 2px;
+  font-size: var(--text-xs);
+}
+
 /* --- Modal dialogs --- */
 .modal-overlay {
   background-color: var(--overlay-bg);
@@ -81,6 +121,54 @@ main {
 .dialog-footer,
 .modal-footer {
   border-top-color: var(--border);
+}
+
+/* Dialog body scroll pattern — used by FileDetailsDialog and any other
+   modal that uses DsTabs inside a fixed-height flex column container.
+
+   .tab-content-details scoped CSS uses CSS grid 2fr 1fr. Grid items
+   default to min-width: auto, so the right column's long unbreakable
+   strings (e.g. file_type MIME "application/vnd.openxmlformats-
+   officedocument.spreadsheetml.sheet") push the column beyond its
+   1fr track. Set min-width: 0 on grid items + word-break on text
+   content. Clip .info-section bg to its bounds.
+
+   .ds-tabs is the actual flex child of dialog-container, NOT
+   .tab-content (DsTabs primitive wraps its slot in <div class="ds-tabs">
+   + <div class="ds-tabs__content">). Push flex shrink onto .ds-tabs so
+   it fills remaining vertical space after dialog-header + dialog-
+   footer, then scroll inside .ds-tabs__content so the body area
+   scrolls while the DsTabs nav stays pinned. Without this, dialog-
+   footer ends up below the visible modal box because the modal's
+   max-height: 90vh is violated by the natural height of ds-tabs. */
+:root body .tab-content-details > * {
+  min-width: 0;
+}
+:root body .info-section,
+:root body .info-item,
+:root body .info-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+:root body .info-section {
+  overflow: hidden;
+}
+:root body .tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+:root body .ds-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+:root body .ds-tabs__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* --- Settings --- */
@@ -122,6 +210,21 @@ main {
 .chat-message.bot .message-bubble {
   background-color: var(--bg);
   border-bottom-left-radius: var(--radius-sm);
+}
+
+/* Analytics-section hover lift (UnifiedAnalytics.vue)
+   :root body outranks scoped. Transition on base state for reverse
+   animation when mouse leaves the card. */
+:root body .analytics-section {
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+:root body .analytics-section:hover {
+  border-color: rgba(76, 175, 80, 0.35);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 /* --- Chat bubbles --- */
@@ -235,4 +338,54 @@ td {
 :root body .message-bubble ol > li,
 :root body .message-bubble ul > li {
   line-height: 21px !important;
+}
+
+/* --- Accessibility --- */
+
+/* Keyboard a11y accent outline. Browser default is a thin blue ring
+   that clashes with the brand palette; replace with a 2px accent
+   ring + offset. :focus-visible fires only for keyboard / touch
+   navigation, not mouse clicks (those reset to outline: none via
+   :focus:not). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- Scrollbar theming --- */
+
+/* Chrome / Safari / Edge scrollbars follow DS tokens. Firefox uses
+   scrollbar-color (separate selector below) — covers both engines. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-soft);
+}
+* {
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+/* --- Placeholder polish --- */
+
+/* Inputs inherit --muted at low opacity; explicit token for
+   cross-theme consistency (--muted flips between light/dark per the
+   OKLch palette). */
+::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }

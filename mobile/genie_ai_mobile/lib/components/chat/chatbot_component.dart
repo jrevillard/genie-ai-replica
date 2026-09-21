@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:genie_ai_mobile/components/charts/crop_health_summary_card.dart';
+import 'package:genie_ai_mobile/components/charts/pest_alert_summary_card.dart';
+
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
@@ -24,6 +27,21 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
+
+/// Web-parity section header for the quick-help overlay sections
+/// (Insights / Fast Actions / Market Prices).
+Widget _agriSectionTitle(ThemeData theme, dynamic tokens, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 8),
+    child: Text(
+      text,
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: tokens.fg as Color?,
+      ),
+    ),
+  );
+}
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -64,6 +82,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
 
+  /// Timestamp of the last streaming repaint — chunks batch to ~10/s so
+  /// the UI thread stays responsive to taps while a response streams.
+  int _lastStreamUiMs = 0;
+
   bool get _canStream => httpClient != null && streamBaseUrl != null;
   http.Client? get httpClient => widget.httpClient;
   String? get streamBaseUrl => widget.streamBaseUrl;
@@ -93,9 +115,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _showNewChatConfirm = false;
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
-  bool _showExportDialog = false;
   String _exportFilename = "";
-  bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
 
   // Quick Help Overlay Visibility
@@ -205,14 +225,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         if (btn['hidden'] == true) {
           continue;
         }
-        // Safe parsing: use map access with defaults to prevent null crashes
+        // Safe parsing: use map access with defaults to prevent null crashes.
+        // Config shape (genie-ai-config.json): icon is a top-level
+        // {type, value} object — some drafts nested it under `appearance`;
+        // read both so either shape resolves.
         final appearance = btn['appearance'] as Map<String, dynamic>?;
-        final iconMap = appearance?['icon'] as Map<String, dynamic>?;
+        final iconMap =
+            (btn['icon'] ?? appearance?['icon']) as Map<String, dynamic>?;
         final iconPath = iconMap?['value']?.toString() ?? '';
 
         final String localIconAsset = iconPath.isNotEmpty
             ? 'assets/config/quickhelp/${iconPath.split('/').last}'
-            : 'assets/config/quickhelp/default.svg';
+            : '';
 
         // Resolve text with locale maps
         final resolvedTitle = resolveConfigText(btn['title'], _currentLocale);
@@ -243,7 +267,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       }
 
       setState(() {
-        _quickHelpButtons = loadedButtons;
+        // 'Just Chat' removed (user req): the composer is always on the
+        // main screen, so a chat shortcut is redundant. Chat-only
+        // buttons are the ones without an action.
+        _quickHelpButtons = loadedButtons
+            .where((b) => (b['action'] as Map<String, dynamic>).isNotEmpty)
+            .toList();
       });
     } catch (e) {
       debugPrint("[CHATBOT] Failed to load genie-ai-config.json: $e");
@@ -522,10 +551,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 switch (event) {
                   case SseChunkEvent(:final content):
                     accumulatedContent += content;
-                    setState(() {
-                      msg['content'] = accumulatedContent;
-                    });
-                    _scrollToBottom();
+                    // Throttle repaints: a setState + markdown rebuild +
+                    // scroll per SSE chunk saturates the UI thread and
+                    // drops taps on the toolbar while streaming. Batch
+                    // visual updates to ~10/s; onDone flushes the rest.
+                    final nowMs = DateTime.now().millisecondsSinceEpoch;
+                    if (nowMs - _lastStreamUiMs >= 100) {
+                      _lastStreamUiMs = nowMs;
+                      setState(() {
+                        msg['content'] = accumulatedContent;
+                      });
+                      _scrollToBottom();
+                    }
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -536,10 +573,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     isGrounded = grounded;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
-                    setState(() {
-                      msg['content'] = content;
-                    });
-                    _scrollToBottom();
+                    final nowMs = DateTime.now().millisecondsSinceEpoch;
+                    if (nowMs - _lastStreamUiMs >= 100) {
+                      _lastStreamUiMs = nowMs;
+                      setState(() {
+                        msg['content'] = content;
+                      });
+                      _scrollToBottom();
+                    }
                   case SseDoneEvent(:final queryId):
                     streamQueryId = queryId;
                   case SseErrorEvent(:final message):
@@ -925,7 +966,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       setState(() {
         _currentConversationId =
             conversationResponse['_id'] ?? _currentConversationId;
-        _showSaveDialog = false;
         _lastSavedMessageCount = _messages.length;
       });
 
@@ -1065,6 +1105,186 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// Real modal route for the PDF export filename dialog — the old
+  /// inline Dialog-in-Column rendered invisibly and its layout crash
+  /// froze the whole screen (buttons dead).
+  Future<void> _openExportDialog() async {
+    _exportFilename =
+        "chat_${DateTime.now().toIso8601String().split('T').first}";
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = ThemeManager().tokens;
+        return Dialog(
+          backgroundColor: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.xl),
+          ),
+          insetPadding: const EdgeInsets.all(DsSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.lg,
+                    DsSpacing.lg,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Text(
+                    tr('chatbot.dialogs.exportTitle'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.lg),
+                  child: TextField(
+                    controller: TextEditingController(text: _exportFilename),
+                    style: TextStyle(color: tokens.fg),
+                    decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.exportHint'),
+                      hintStyle: TextStyle(color: tokens.mutedSoft),
+                    ),
+                    onChanged: (v) => _exportFilename = v,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.md,
+                    DsSpacing.sm,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      DsButton(
+                        label: tr('common.cancel'),
+                        variant: DsButtonVariant.ghost,
+                        expand: false,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                      const SizedBox(width: DsSpacing.sm),
+                      DsButton(
+                        label: tr('chatbot.dialogs.actions.export'),
+                        variant: DsButtonVariant.primary,
+                        expand: false,
+                        onPressed: _exportFilename.trim().isEmpty
+                            ? null
+                            : () {
+                                Navigator.of(dialogContext).pop();
+                                exportChatToPDF();
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Save-Chat dialog as a real modal route. It previously rendered as an
+  /// inline Dialog in the layout tree — the theme's full-width button
+  /// constraint crashed the Row layout and nothing appeared (same bug
+  /// class as the export dialog above).
+  Future<void> _openSaveDialog() async {
+    _titleController.text = _conversationTitle;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = ThemeManager().tokens;
+        return Dialog(
+          backgroundColor: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.xl),
+          ),
+          insetPadding: const EdgeInsets.all(DsSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.lg,
+                    DsSpacing.lg,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Text(
+                    tr('chatbot.dialogs.saveTitle'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.lg),
+                  child: TextField(
+                    controller: _titleController,
+                    style: TextStyle(color: tokens.fg),
+                    decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.saveHint'),
+                      hintStyle: TextStyle(color: tokens.mutedSoft),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => _conversationTitle = v,
+                    autofocus: true,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.md,
+                    DsSpacing.sm,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      DsButton(
+                        label: tr('common.cancel'),
+                        variant: DsButtonVariant.ghost,
+                        expand: false,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                      const SizedBox(width: DsSpacing.sm),
+                      DsButton(
+                        label: tr('common.save'),
+                        variant: DsButtonVariant.primary,
+                        expand: false,
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          saveConversation().then((_) {});
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
     final tokens = ThemeManager().tokens;
@@ -1173,7 +1393,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         filename: '$filename.pdf',
       );
       NotificationService.success(tr('chatbot.exportSuccess'));
-      setState(() => _showExportDialog = false);
     } catch (e) {
       debugPrint("[PDF EXPORT] ERROR: $e");
       NotificationService.error(tr('chatbot.exportError'));
@@ -1283,145 +1502,330 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                   ),
                 ),
 
-              // Messages
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(DsSpacing.md),
-                  itemCount:
-                      _messages.length + (_isLoading || _isStreaming ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == _messages.length &&
-                        (_isLoading || _isStreaming)) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: DsSpacing.md,
-                        ),
-                        child: Row(
-                          children: [
-                            const CircularProgressIndicator(strokeWidth: 2),
-                            const SizedBox(width: 12),
-                            Text(
-                              _isStreaming
-                                  ? tr('chatbot.generating')
-                                  : tr('chatbot.thinking'),
-                              style: TextStyle(color: tokens.fg),
+              // Quick Help Overlay — occupies the SAME Expanded slot as
+              // the message list (the if/else below), so its bottom edge
+              // lands exactly on the top of the chat controls bar, which
+              // is the next sibling in this Column. It disappears as soon
+              // as the user interacts and the messages take over.
+              if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
+                Expanded(
+                  child: Container(
+                    color: tokens.bg,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DsSpacing.md,
+                      vertical: DsSpacing.xl,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            tr('chatbot.whatCanIHelp'),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: tokens.fg,
                             ),
-                          ],
-                        ),
-                      );
-                    }
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: DsSpacing.lg),
+                          _agriSectionTitle(
+                            theme,
+                            tokens,
+                            tr('charts.insights'),
+                          ),
+                          const Row(
+                            children: [
+                              Expanded(child: CropHealthSummaryCard()),
+                              Expanded(child: PestAlertSummaryCard()),
+                            ],
+                          ),
+                          const SizedBox(height: DsSpacing.lg),
+                          _agriSectionTitle(
+                            theme,
+                            tokens,
+                            tr('charts.fastActions'),
+                          ),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final int crossAxisCount =
+                                  _quickHelpLayout['columns'] as int? ?? 2;
+                              // Compact cards so all 8 fit in the
+                              // QuickHelp Expanded without scrolling.
+                              final double aspectRatio =
+                                  (_quickHelpLayout['childAspectRatio'] as num?)
+                                      ?.toDouble() ??
+                                  4.5;
 
-                    final msg = _messages[index];
-                    final bool isUser = msg['role'] == 'user';
+                              return GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                      childAspectRatio: aspectRatio,
+                                      mainAxisSpacing: 10,
+                                      crossAxisSpacing: 10,
+                                    ),
+                                itemCount: _quickHelpButtons.length,
+                                itemBuilder: (context, index) {
+                                  final button = _quickHelpButtons[index];
+                                  final labelMap =
+                                      button['appearance']?['label']
+                                          as Map<String, dynamic>? ??
+                                      {};
+                                  final String titleKey =
+                                      labelMap['text']?.toString() ?? '';
+                                  final String resolvedTitle =
+                                      button['resolvedTitle']?.toString() ?? '';
+                                  final String translatedTitle =
+                                      resolvedTitle.isNotEmpty
+                                      ? resolvedTitle
+                                      : (titleKey.isNotEmpty
+                                            ? tr(titleKey)
+                                            : '');
+                                  final String iconAsset =
+                                      button['iconAsset']?.toString() ?? '';
 
-                    return Align(
-                      alignment: isUser
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          vertical: DsSpacing.sm,
-                        ),
-                        padding: const EdgeInsets.all(DsSpacing.md),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? tokens.accent
-                              : (isDark ? tokens.surface : tokens.muted20),
-                          borderRadius: BorderRadius.circular(DsRadii.xl),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MarkdownBody(
-                              data: msg['content'] ?? '',
-                              styleSheet: MarkdownStyleSheet(
-                                p: TextStyle(
-                                  color: isUser ? tokens.accentFg : tokens.fg,
-                                  fontSize: tokens.textMd,
-                                  height: 1.5,
-                                ),
-                                codeblockDecoration: BoxDecoration(
-                                  color: isUser
-                                      ? tokens.accentFg.withValues(alpha: 0.1)
-                                      : (isDark ? tokens.fg30 : tokens.muted20),
-                                  borderRadius: BorderRadius.circular(
-                                    DsRadii.md,
-                                  ),
-                                ),
-                              ),
-                              selectable: true,
-                              onTapLink: (text, href, title) {
-                                if (href != null) {
-                                  launchUrl(
-                                    Uri.parse(href),
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                }
-                              },
-                            ),
-
-                            // Footer: Confidence & Feedback
-                            if (!isUser)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: DsSpacing.md,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    if (msg['isGrounded'] == false)
-                                      Text(
-                                        tr('chatbot.aiGeneratedNoDocs'),
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.warning,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      )
-                                    else if (msg['confidence'] != null)
-                                      Text(
-                                        "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
-                                        style: TextStyle(
-                                          fontSize: tokens.textXs,
-                                          color: tokens.fg50,
-                                          fontStyle: FontStyle.italic,
-                                        ),
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(
+                                        DsRadii.lg,
                                       ),
-                                    // Feedback Button
-                                    Tooltip(
-                                      message: tr('feedback.title'),
-                                      child: InkWell(
-                                        onTap: () => _openFeedbackDialog(msg),
-                                        borderRadius: BorderRadius.circular(
-                                          DsRadii.lg,
+                                      onTap: () => _quickHelpPressed(button),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
                                         ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(
-                                            DsSpacing.xs,
+                                        decoration: BoxDecoration(
+                                          color: tokens.surface,
+                                          borderRadius: BorderRadius.circular(
+                                            DsRadii.lg,
                                           ),
-                                          child: Icon(
-                                            Icons.thumb_up_alt_outlined,
-                                            size: 16,
-                                            color: tokens.fg50,
+                                          border: Border.all(
+                                            color: tokens.borderLight,
                                           ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            if (iconAsset.isNotEmpty)
+                                              SvgPicture.asset(
+                                                iconAsset,
+                                                width: 18,
+                                                height: 18,
+                                                placeholderBuilder: (_) => Icon(
+                                                  Icons.help_outline,
+                                                  size: 20,
+                                                  color: tokens.accent,
+                                                ),
+                                              )
+                                            else
+                                              Icon(
+                                                Icons.help_outline,
+                                                size: 20,
+                                                color: tokens.accent,
+                                              ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                translatedTitle,
+                                                style: theme
+                                                    .textTheme
+                                                    .labelMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: tokens.textXs,
+                                                      color: tokens.fg,
+                                                    ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
-                                  ],
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                          // Team hero — last item inside the QuickHelp
+                          // scroll, sized compact so it reads as
+                          // centered in the gap above the chat
+                          // controls bar. Auto-disappears with the
+                          // rest of the overlay when the user starts
+                          // chatting.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: DsSpacing.lg,
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                height: 120,
+                                width: 270,
+                                child: Image.asset(
+                                  'assets/images/team_agro.png',
+                                  fit: BoxFit.contain,
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+                  ),
+                )
+              else
+                // Messages
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(DsSpacing.md),
+                    itemCount:
+                        _messages.length + (_isLoading || _isStreaming ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length &&
+                          (_isLoading || _isStreaming)) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: DsSpacing.md,
+                          ),
+                          child: Row(
+                            children: [
+                              const CircularProgressIndicator(strokeWidth: 2),
+                              const SizedBox(width: 12),
+                              Text(
+                                _isStreaming
+                                    ? tr('chatbot.generating')
+                                    : tr('chatbot.thinking'),
+                                style: TextStyle(color: tokens.fg),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      final msg = _messages[index];
+                      final bool isUser = msg['role'] == 'user';
+
+                      return Align(
+                        alignment: isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            vertical: DsSpacing.sm,
+                          ),
+                          padding: const EdgeInsets.all(DsSpacing.md),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.75,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isUser
+                                ? tokens.accent
+                                : (isDark ? tokens.surface : tokens.muted20),
+                            borderRadius: BorderRadius.circular(DsRadii.xl),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MarkdownBody(
+                                data: msg['content'] ?? '',
+                                styleSheet: MarkdownStyleSheet(
+                                  p: TextStyle(
+                                    color: isUser ? tokens.accentFg : tokens.fg,
+                                    fontSize: tokens.textMd,
+                                    height: 1.5,
+                                  ),
+                                  codeblockDecoration: BoxDecoration(
+                                    color: isUser
+                                        ? tokens.accentFg.withValues(alpha: 0.1)
+                                        : (isDark
+                                              ? tokens.fg30
+                                              : tokens.muted20),
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.md,
+                                    ),
+                                  ),
+                                ),
+                                selectable: true,
+                                onTapLink: (text, href, title) {
+                                  if (href != null) {
+                                    launchUrl(
+                                      Uri.parse(href),
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  }
+                                },
+                              ),
+
+                              // Footer: Confidence & Feedback
+                              if (!isUser)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: DsSpacing.md,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (msg['isGrounded'] == false)
+                                        Expanded(
+                                          child: Text(
+                                            tr('chatbot.aiGeneratedNoDocs'),
+                                            softWrap: true,
+                                            style: TextStyle(
+                                              fontSize: tokens.textXs,
+                                              color: tokens.warning,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        )
+                                      else if (msg['confidence'] != null)
+                                        Expanded(
+                                          child: Text(
+                                            "${tr('sidebar.confidence')}: ${((msg['confidence'] as num) * 100).toStringAsFixed(1)}%",
+                                            softWrap: true,
+                                            style: TextStyle(
+                                              fontSize: tokens.textXs,
+                                              color: tokens.fg50,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ),
+                                      // Feedback Button
+                                      Tooltip(
+                                        message: tr('feedback.title'),
+                                        child: InkWell(
+                                          onTap: () => _openFeedbackDialog(msg),
+                                          borderRadius: BorderRadius.circular(
+                                            DsRadii.lg,
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(
+                                              DsSpacing.xs,
+                                            ),
+                                            child: Icon(
+                                              Icons.thumb_up_alt_outlined,
+                                              size: 16,
+                                              color: tokens.fg50,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
 
               // Input Area
               Container(
@@ -1451,10 +1855,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             icon: Icons.save_outlined,
                             variant: DsButtonVariant.ghost,
                             overrideFg: tokens.fg,
-                            onPressed: () {
-                              _titleController.text = _conversationTitle;
-                              setState(() => _showSaveDialog = true);
-                            },
+                            onPressed: _openSaveDialog,
                           ),
                         ),
                         Tooltip(
@@ -1464,11 +1865,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                             icon: Icons.picture_as_pdf_outlined,
                             variant: DsButtonVariant.ghost,
                             overrideFg: tokens.fg,
-                            onPressed: () {
-                              _exportFilename =
-                                  "chat_${DateTime.now().toIso8601String().split('T').first}";
-                              setState(() => _showExportDialog = true);
-                            },
+                            onPressed: _openExportDialog,
                           ),
                         ),
                         const SizedBox(width: DsSpacing.sm),
@@ -1540,116 +1937,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             ],
           ),
 
-          // Quick Help Overlay
-          if (_showQuickHelpOverlay && _quickHelpButtons.isNotEmpty)
-            Container(
-              color: tokens.bg,
-              padding: const EdgeInsets.symmetric(
-                horizontal: DsSpacing.md,
-                vertical: DsSpacing.xl,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    tr('chatbot.whatCanIHelp'),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: tokens.fg,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: DsSpacing.lg),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final int crossAxisCount =
-                            _quickHelpLayout['columns'] as int? ?? 2;
-                        final double aspectRatio =
-                            (_quickHelpLayout['childAspectRatio'] as num?)
-                                ?.toDouble() ??
-                            3.5;
-
-                        return GridView.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                childAspectRatio: aspectRatio,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
-                              ),
-                          itemCount: _quickHelpButtons.length,
-                          itemBuilder: (context, index) {
-                            final button = _quickHelpButtons[index];
-                            final labelMap =
-                                button['appearance']?['label']
-                                    as Map<String, dynamic>? ??
-                                {};
-                            final String titleKey =
-                                labelMap['text']?.toString() ?? '';
-                            final String translatedTitle = tr(titleKey);
-                            final String iconAsset =
-                                button['iconAsset']?.toString() ?? '';
-
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(DsRadii.lg),
-                                onTap: () => _quickHelpPressed(button),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: tokens.surface,
-                                    borderRadius: BorderRadius.circular(
-                                      DsRadii.lg,
-                                    ),
-                                    border: Border.all(
-                                      color: tokens.borderLight,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      SvgPicture.asset(
-                                        iconAsset,
-                                        width: 18,
-                                        height: 18,
-                                        placeholderBuilder: (_) => Icon(
-                                          Icons.help_outline,
-                                          size: 20,
-                                          color: tokens.accent,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          translatedTitle,
-                                          style: theme.textTheme.labelMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: tokens.textXs,
-                                                color: tokens.fg,
-                                              ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
           // Confirm Dialogs & Save/Export Alerts
           ConfirmDialog(
             visible: _showNewChatConfirm,
@@ -1665,8 +1952,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             onCancel: () => setState(() => _showNewChatConfirm = false),
             onSecondary: () {
               setState(() => _showNewChatConfirm = false);
-              _titleController.text = _conversationTitle;
-              setState(() => _showSaveDialog = true);
+              _openSaveDialog();
             },
           ),
           ConfirmDialog(
@@ -1683,160 +1969,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             onCancel: () => setState(() => _showLoadConfirm = false),
             onSecondary: () {
               setState(() => _showLoadConfirm = false);
-              _titleController.text = _conversationTitle;
-              setState(() => _showSaveDialog = true);
+              _openSaveDialog();
             },
           ),
-          if (_showSaveDialog)
-            Dialog(
-              backgroundColor: tokens.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DsRadii.xl),
-              ),
-              insetPadding: const EdgeInsets.all(DsSpacing.md),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.lg,
-                        DsSpacing.lg,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Text(
-                        tr('chatbot.dialogs.saveTitle'),
-                        style: TextStyle(
-                          color: tokens.fg,
-                          fontSize: tokens.textLg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(DsSpacing.lg),
-                      child: TextField(
-                        controller: _titleController,
-                        style: TextStyle(color: tokens.fg),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.dialogs.saveHint'),
-                          hintStyle: TextStyle(color: tokens.mutedSoft),
-                          border: const OutlineInputBorder(),
-                        ),
-                        onChanged: (v) => _conversationTitle = v,
-                        autofocus: true,
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.md,
-                        DsSpacing.sm,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          DsButton(
-                            label: tr('common.cancel'),
-                            variant: DsButtonVariant.ghost,
-                            onPressed: () =>
-                                setState(() => _showSaveDialog = false),
-                          ),
-                          const SizedBox(width: DsSpacing.sm),
-                          DsButton(
-                            label: tr('common.save'),
-                            variant: DsButtonVariant.primary,
-                            onPressed: () {
-                              saveConversation().then((_) {});
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (_showExportDialog)
-            Dialog(
-              backgroundColor: tokens.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(DsRadii.xl),
-              ),
-              insetPadding: const EdgeInsets.all(DsSpacing.md),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.lg,
-                        DsSpacing.lg,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Text(
-                        tr('chatbot.dialogs.exportTitle'),
-                        style: TextStyle(
-                          color: tokens.fg,
-                          fontSize: tokens.textLg,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(DsSpacing.lg),
-                      child: TextField(
-                        style: TextStyle(color: tokens.fg),
-                        decoration: InputDecoration(
-                          hintText: tr('chatbot.dialogs.exportHint'),
-                          hintStyle: TextStyle(color: tokens.mutedSoft),
-                        ),
-                        onChanged: (v) => _exportFilename = v,
-                        controller: TextEditingController(
-                          text: _exportFilename,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        DsSpacing.md,
-                        DsSpacing.sm,
-                        DsSpacing.md,
-                        DsSpacing.md,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          DsButton(
-                            label: tr('common.cancel'),
-                            variant: DsButtonVariant.ghost,
-                            onPressed: () =>
-                                setState(() => _showExportDialog = false),
-                          ),
-                          const SizedBox(width: DsSpacing.sm),
-                          DsButton(
-                            label: tr('chatbot.dialogs.actions.export'),
-                            variant: DsButtonVariant.primary,
-                            onPressed: _exportFilename.trim().isEmpty
-                                ? null
-                                : exportChatToPDF,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

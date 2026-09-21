@@ -415,6 +415,12 @@ class AgriService {
     // awaits the first instead of running the heavy setup twice (leaks
     // intervals + double prefetch).
     if (this._initPromise) return this._initPromise;
+    // NOTE on stale-`this` callers: a caller that holds a reference to a
+    // partially-initialized instance (e.g. a test harness) and calls
+    // init() on it again would re-enter this function on a dead object.
+    // Only index.js:1077 calls init() in production, and it always goes
+    // through getInstance() first, so the surface is one site. If that
+    // changes, gate with `if (this.adapters.length > 0) return;` here.
     this._initPromise = (async () => {
       try {
         const { dbService } = require('../../shared-lib');
@@ -479,6 +485,16 @@ class AgriService {
         // Cache the singleton only after a fully successful init. A prior
         // version cached this in the constructor, which leaked zombies when
         // init() threw midway (index.js catch doesn't clear the singleton).
+        //
+        // Order note: this.initialized = true is set BEFORE AgriService.instance
+        // = this. If anything in the post-init block below (scheduler.start,
+        // setInterval, setTimeout) throws, the catch clears AgriService.instance
+        // but `initialized` stays true on this `this` object. Subsequent
+        // getInstance() sees the null instance and constructs a fresh one
+        // (initialized=false), so a stale-`this` reference cannot trick a new
+        // getInstance() into returning this half-built object. The only way
+        // to observe `initialized=true` without `AgriService.instance = this`
+        // is to keep a direct reference to `this` (see stale-`this` note above).
         AgriService.instance = this;
         logger.info(
           `AgriService initialized (${this.adapters.length} adapters: ${this.adapters.map((a) => a.id).join(', ')})`

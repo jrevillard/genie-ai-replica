@@ -104,29 +104,4 @@ async function fetchJson(url, opts = {}) {
   return JSON.parse(res.data);
 }
 
-/**
- * Resolve the Redis URL for agri-side cache + scheduler locks.
- *
- * Precedence:
- *   1. AGRI_REDIS_URL — dedicated URL if the deployment separates agri
- *      from the shared translation cache.
- *   2. REDIS_URL — generic URL (test stacks / single-purpose redis).
- *   3. TRANSLATION_CACHE_* — reuse the stack's existing cache instance.
- *      The TRANSLATION_CACHE_PASSWORD is included because the shared redis
- *      service is authenticated on the deployment.
- *
- * @returns {string|null} redis:// URL or null when nothing is configured.
- */
-function resolveRedisUrl() {
-  if (process.env.AGRI_REDIS_URL) return process.env.AGRI_REDIS_URL;
-  if (process.env.REDIS_URL) return process.env.REDIS_URL;
-  const host = process.env.TRANSLATION_CACHE_HOST;
-  if (!host) return null;
-  const port = process.env.TRANSLATION_CACHE_PORT || 6379;
-  const password = process.env.TRANSLATION_CACHE_PASSWORD
-    ? `:${encodeURIComponent(process.env.TRANSLATION_CACHE_PASSWORD)}@`
-    : '';
-  return `redis://${password}${host}:${port}`;
-}
-
-module.exports = { fetchUrl, fetchJson, MAX_BYTES, resolveRedisUrl };
+module.exports = { fetchUrl, fetchJson, MAX_BYTES };

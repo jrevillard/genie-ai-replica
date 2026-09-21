@@ -1152,7 +1152,7 @@ const Map<String, dynamic> stLocale = {
     "title": "Mabapi",
     "version": "Mofuta",
     "description":
-        "Genie AI ke motataisi oa hao ea bohlale bakeng sa lits'ebeletso tsa mmuso le tlhahisoleseling.",
+        "AgroGenio ke motataisi oa hao ea bohlale bakeng sa tlhahisoleseling ea temo El Salvador: bophelo ba lijalo, litemoso tsa likokonyana le litheko tsa mmaraka, ka puo ea hao.",
     "techStack": "Mahlale a morao-rao",
     "copyright": "Litokelo tsohle li sirelelitsoe.",
   },

@@ -257,7 +257,7 @@ import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 import DsSelect from '../ds/Select.vue';
 import { useChartTheme } from '../../composables/useChartTheme.js';
-import agriculturalService from '../../services/agriculturalService.js';
+import agriApiService from '../../services/agriApiService.js';
 import chatbotService from '../../services/chatbotService.js';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
@@ -433,7 +433,7 @@ export default {
       this.error = null;
 
       try {
-        const data = await agriculturalService.getPestAlerts(this.region);
+        const data = await agriApiService.getPestAlerts(this.$i18n ? this.$i18n.locale : null);
         this.pestData = data;
       } catch (err) {
         console.error('[PestAlertChart] Failed to load pest alerts:', err);

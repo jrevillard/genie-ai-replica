@@ -6,6 +6,12 @@ const cspConnectSrc = process.env.VUE_APP_CSP_CONNECT_SRC || "'self' http://loca
 const vueProxyHost = process.env.VUE_PROXY_HOST || "localhost:3000";
 
 module.exports = {
+  pages: {
+    index: {
+      entry: 'src/main.js',
+      title: 'AgroGenio AI'
+    }
+  },
   devServer: {
     hot: true,
     port: 8090,

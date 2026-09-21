@@ -22,6 +22,10 @@ api-gateway-solution/nginx/conf/default.conf
 
 # Node modules
 node_modules/
+# A symlink named node_modules is not matched by the trailing-slash rule
+# above, which is how a machine-specific symlink (pointing into another
+# developer's worktree) once got committed. Match the name anywhere.
+node_modules
 
 # Build outputs
 dist/

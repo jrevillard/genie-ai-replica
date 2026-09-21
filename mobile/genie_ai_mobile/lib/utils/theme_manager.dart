@@ -25,7 +25,11 @@ class ThemeManager extends ChangeNotifier {
 
   double fontSize = 50.0;
 
-  late AppTokens _tokens;
+  // Initialized eagerly with defaults — the first frame builds (MaterialApp
+  // builder reads [tokens]) before the async config load calls
+  // [setConfiguration]; a `late` field here caused LateInitializationError
+  // on startup. [setConfiguration] replaces these with real config values.
+  AppTokens _tokens = AppTokens.fromConfig(config: const {}, isDark: false);
 
   AppTokens get tokens => _tokens;
 

@@ -1159,7 +1159,7 @@ const Map<String, dynamic> deLocale = {
     "title": "Über",
     "version": "Version",
     "description":
-        "Genie AI ist dein intelligenter Assistent für die Navigation durch staatliche Dienstleistungen und Informationen.",
+        "AgroGenio ist dein intelligenter Assistent für landwirtschaftliche Informationen in El Salvador – Pflanzengesundheit, Schädlingswarnungen und Marktpreise, in deiner Sprache.",
     "techStack": "Tech-Stack",
     "copyright": "Alle Rechte vorbehalten.",
   },

@@ -264,3 +264,43 @@ td {
 .apexcharts-tooltip-marker {
   background: var(--fg) !important;
 }
+
+/* Navbar logo — horizontal wordmark (1172x346 native). Override component
+   default 40x40 square so the wordmark renders proportionally. */
+.govt-logo {
+  width: auto !important;
+  height: 40px !important;
+  max-width: 200px !important;
+}
+
+/* Navbar — gradient + white text from JSON theme.navbar.background.
+   Logo PNG already carries the brand wordmark, so hide the redundant
+   title text. Keep the dark-theme icon color rule. */
+.nav-bar {
+  border-bottom: 1px solid var(--border);
+}
+.nav-bar a,
+.nav-bar button,
+.nav-bar svg {
+  color: var(--fg);
+}
+:root[data-theme='dark'] .nav-bar a,
+:root[data-theme='dark'] .nav-bar button,
+:root[data-theme='dark'] .nav-bar svg {
+  color: var(--fg);
+}
+.brand-name {
+  display: none !important;
+}
+
+/* Logo container — the component's default 40px circle behind the logo
+   clashes with the horizontal wordmark (logo appears cropped inside a
+   green disc) and crowds the hamburger button. Flatten to a wide pill-less
+   container with breathing room. */
+.logo-container {
+  width: auto !important;
+  height: 40px !important;
+  margin-left: var(--space-md) !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}

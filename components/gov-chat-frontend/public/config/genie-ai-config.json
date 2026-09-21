@@ -215,7 +215,7 @@
     "title": "AgroGenio AI",
     "icon": {
       "type": "file",
-      "value": "/config/agro-genio-icon.svg"
+      "value": "/config/agro-genio-navbar.png"
     },
     "splash": {
       "type": "file",
@@ -223,7 +223,19 @@
     }
   },
   "theme": {
-    "brandColor": "#176B3A"
+    "brandColor": "#4CAF50",
+    "bg": "#F7F8F3",
+    "fg": "#173323",
+    "navbar": {
+      "background": "linear-gradient(135deg, #1E5631 0%, #4CAF50 100%)",
+      "text": "#FFFFFF"
+    },
+    "colors": {
+      "success": "#4CAF50",
+      "warning": "#E9C46A",
+      "danger": "#D95C4F",
+      "info": "#3B82A6"
+    }
   },
   "features": {
     "chat": {

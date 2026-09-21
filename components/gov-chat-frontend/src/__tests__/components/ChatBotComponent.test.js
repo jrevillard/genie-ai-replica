@@ -877,6 +877,33 @@ describe('ChatBotComponent', () => {
       expect(payload.context.categoryLabel).toBeNull();
     });
 
+    it('a Quick Help button with no serviceLabels sends an empty filter, not its id (web/mobile parity)', async () => {
+      const wrapper = createChatBotWrapper();
+      const vm = wrapper.vm;
+
+      // Shape produced by loadQuickHelpButtons for a config button that declares
+      // no serviceLabels (all six shipped buttons): labels must be [], so the
+      // payload builder never falls back to serviceKey ("weather-week"), a
+      // button id that matches no KB chunk and blanked the retriever on web.
+      const weatherWeek = {
+        service: 'Weather this week',
+        serviceLabels: [],
+        serviceKey: 'weather-week',
+        id: 'weather-week',
+        category: null,
+        visibleText: 'What is the weather forecast for this week in my district?',
+        hiddenPrompt: 'What is the weather forecast for this week in {{location}}?'
+      };
+
+      vm.selectQuickHelpOption(weatherWeek);
+      await wrapper.vm.$nextTick();
+
+      const payload = mockSubmitQueryStream.mock.calls[mockSubmitQueryStream.mock.calls.length - 1][0];
+      const labels = payload.context?.serviceLabels || [];
+      expect(labels).not.toContain('weather-week');
+      expect(labels).toEqual([]);
+    });
+
     it('Just Chat enters free chat mode without auto-submitting', () => {
       const wrapper = createChatBotWrapper();
       const vm = wrapper.vm;
@@ -1047,7 +1074,9 @@ describe('ChatBotComponent', () => {
       await wrapper.vm.$nextTick();
 
       const btn = vm.quickHelpButtons[0];
-      expect(btn.serviceLabels).toBeNull();
+      // No labels in config -> [] (no filter), never null: null would route the
+      // item into the sidebar fallback and send the id as a KB label.
+      expect(btn.serviceLabels).toEqual([]);
       expect(btn.serviceKey).toBe('legacy');
     });
 

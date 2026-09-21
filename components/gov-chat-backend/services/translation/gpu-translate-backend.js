@@ -269,8 +269,8 @@ class GpuTranslateBackend {
    * @param {string} text - Text to translate
    * @returns {Object} Formatted request body
    */
-  formatRequest(modelId, sourceCode, targetCode, text) {
-    const body = this._buildRequest(modelId, sourceCode, targetCode, text);
+  formatRequest(modelId, sourceCode, targetCode, text, hint = '') {
+    const body = this._buildRequest(modelId, sourceCode, targetCode, text, hint);
     // Cap max_tokens from the prompt that was actually built, not a fixed
     // reserve: with a 2048-token model a 161-token prompt plus the old
     // "maxModelLen - 128" budget asked vLLM for 2081 tokens and got a 400
@@ -290,7 +290,7 @@ class GpuTranslateBackend {
     return Math.min(body.max_tokens || safe, safe);
   }
 
-  _buildRequest(modelId, sourceCode, targetCode, text) {
+  _buildRequest(modelId, sourceCode, targetCode, text, hint = '') {
     // Provisional; formatRequest replaces it with capMaxTokens(body).
     const maxTokens = Math.max(128, this.maxModelLen - 128);
 
@@ -321,7 +321,7 @@ class GpuTranslateBackend {
       const sourceLangName = this.languageMap.languageNames?.[sourceCode] || sourceCode;
       const targetLangName = this.languageMap.languageNames?.[targetCode] || targetCode;
       const prompt = this.languageMap.promptTemplate
-        ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text)
+        ? this.languageMap.promptTemplate(sourceCode, targetCode, sourceLangName, targetLangName, text, hint)
         : `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;
 
       return {
@@ -505,7 +505,7 @@ class GpuTranslateBackend {
    * @param {string} targetCode - Target language code (model-specific)
    * @returns {Promise<string[]>} Translated texts
    */
-  async translate(texts, sourceCode, targetCode) {
+  async translate(texts, sourceCode, targetCode, options = {}) {
     if (!this.initialized) {
       logger.error('[GPU-BACKEND] Not initialized. Cannot perform translation.');
       throw new Error('[GPU-BACKEND] Backend is not ready.');
@@ -533,7 +533,7 @@ class GpuTranslateBackend {
         }
 
         // Format request for this model
-        const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
+        const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text, options.hint || '');
 
         // Call vLLM service
         const translated = await this.callVllmService(requestBody);
@@ -600,6 +600,12 @@ class GpuTranslateBackend {
    * Get backend information
    * @returns {Object} Backend info
    */
+  /** Human name for a language code from the loaded map (falls back to the code). */
+  getLanguageName(lang) {
+    const code = this.getLanguageCode ? this.getLanguageCode(lang) || lang : lang;
+    return this.languageMap?.languageNames?.[code] || code;
+  }
+
   getBackendInfo() {
     return {
       type: 'gpu',

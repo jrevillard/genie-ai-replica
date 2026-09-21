@@ -61,6 +61,20 @@ describe('stream-boundary', () => {
     });
   });
 
+  describe('firstBoundaryEnd', () => {
+    test('picks the FIRST sentence boundary so a paragraph streams sentence by sentence', () => {
+      const { firstBoundaryEnd } = require('../../../services/translation/stream-boundary');
+      // 'A.' ends at index 2; the space after it is the separator.
+      expect(firstBoundaryEnd('A. B. C. ')).toEqual({ contentEnd: 2, separator: ' ' });
+    });
+
+    test('a paragraph break wins only when it comes before the first sentence end', () => {
+      const { firstBoundaryEnd } = require('../../../services/translation/stream-boundary');
+      expect(firstBoundaryEnd('Heading\n\nFirst. Second.')).toEqual({ contentEnd: 7, separator: '\n\n' });
+      expect(firstBoundaryEnd('First. Second\n\nThird.')).toEqual({ contentEnd: 6, separator: ' ' });
+    });
+  });
+
   describe('extractCommittableUnit', () => {
     test('returns null when buffer has no boundary and is small', () => {
       expect(extractCommittableUnit('partial sentence without')).toBeNull();
@@ -78,11 +92,18 @@ describe('stream-boundary', () => {
       expect(r.remainder).toBe('partial next');
     });
 
-    test('commits up to last sentence boundary — separator is the space, remainder after it', () => {
-      const r = extractCommittableUnit('Sentence one. Sentence two. partial');
-      expect(r.content).toBe('Sentence one. Sentence two.');
-      expect(r.separator).toBe(' ');
-      expect(r.remainder).toBe('partial');
+    test('commits ONE sentence at a time — the caller loops, so nothing is lost', () => {
+      // Earliest boundary wins (see firstBoundaryEnd): a Bengali reader sees the
+      // answer sentence by sentence instead of a whole paragraph at once.
+      const r1 = extractCommittableUnit('Sentence one. Sentence two. partial');
+      expect(r1.content).toBe('Sentence one.');
+      expect(r1.separator).toBe(' ');
+      expect(r1.remainder).toBe('Sentence two. partial');
+      const r2 = extractCommittableUnit(r1.remainder);
+      expect(r2.content).toBe('Sentence two.');
+      expect(r2.remainder).toBe('partial');
+      // 'partial' has no terminator -> held until more text arrives.
+      expect(extractCommittableUnit(r2.remainder)).toBeNull();
     });
 
     test('keeps the exact trailing whitespace as separator (newline, not space)', () => {

@@ -181,6 +181,58 @@ describe('TranslationService', () => {
     });
   });
 
+  describe('translate - foreign-word retry (bn)', () => {
+    it('retries once with a hint naming the leaked words, for Bengali targets only', async () => {
+      translationService.initialized = true;
+      const backend = new GpuTranslateBackend();
+      // The acronym BAMIS is shielded as ⟦0⟧ before the model sees it (see
+      // protect-tokens.js); a real translator echoes the placeholder, which the
+      // service restores. The mocks do the same.
+      backend.translate
+        .mockResolvedValueOnce(['বর্তমানে oficiais ⟦0⟧ ক্যালেন্ডার'])
+        .mockResolvedValueOnce(['বর্তমানে সরকারি ⟦0⟧ ক্যালেন্ডার']);
+      translationService.backend = backend;
+      translationService.backendType = 'gpu';
+      const out = await translationService.translate(['the official BAMIS calendar'], 'en', 'bn');
+      expect(out).toEqual(['বর্তমানে সরকারি BAMIS ক্যালেন্ডার']);
+      expect(backend.translate).toHaveBeenCalledTimes(2);
+      // The model was handed the shielded source, never the acronym itself.
+      expect(backend.translate.mock.calls[0][0]).toEqual(['the official ⟦0⟧ calendar']);
+      const [, , , opts] = backend.translate.mock.calls[1];
+      expect(opts.hint).toContain('"oficiais"');
+    });
+
+    it('keeps retrying (bounded) when a retry swaps one leaked word for another', async () => {
+      translationService.initialized = true;
+      const backend = new GpuTranslateBackend();
+      backend.translate
+        .mockResolvedValueOnce(['PACKAGE ক্যালেন্ডার'])
+        .mockResolvedValueOnce(['populaire ক্যালেন্ডার'])
+        .mockResolvedValueOnce(['জনপ্রিয় ক্যালেন্ডার']);
+      translationService.backend = backend;
+      const out = await translationService.translate(['the popular calendar'], 'en', 'bn');
+      expect(out).toEqual(['জনপ্রিয় ক্যালেন্ডার']);
+      expect(backend.translate).toHaveBeenCalledTimes(3);
+      // The second retry names both words leaked so far.
+      const [, , , opts] = backend.translate.mock.calls[2];
+      expect(opts.hint).toContain('"PACKAGE"');
+      expect(opts.hint).toContain('"populaire"');
+    });
+
+    it('does not retry when the output is clean, nor for non-Bengali targets', async () => {
+      translationService.initialized = true;
+      const backend = new GpuTranslateBackend();
+      backend.translate.mockResolvedValueOnce(['বর্তমানে সরকারি ক্যালেন্ডার']);
+      translationService.backend = backend;
+      await translationService.translate(['the official calendar'], 'en', 'bn');
+      expect(backend.translate).toHaveBeenCalledTimes(1);
+
+      backend.translate.mockClear().mockResolvedValueOnce(['calendario oficiais']);
+      await translationService.translate(['the official calendar'], 'en', 'es');
+      expect(backend.translate).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('translate', () => {
     it('should throw when not initialized', async () => {
       translationService.initialized = false;
@@ -313,12 +365,13 @@ describe('TranslationService', () => {
       };
       const result = await translationService.translateStream('hi', 'en', 'fr');
       expect(result).toBe('fallback-translated');
+      // No onToken -> the marker scrubber is not created and null is passed through.
       expect(translationService.backend.translateStream).toHaveBeenCalledWith(
         'hi',
         'English',
         'Spanish',
         undefined,
-        undefined
+        null
       );
     });
 

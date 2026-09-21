@@ -9,6 +9,11 @@ const { splitEdges } = require('./translation/text-edges');
 const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
 const { translationCacheKey } = require('./translation/translation-cache-key');
 const { repairScriptLeak } = require('./translation/script-repair');
+const { findForeignWords, foreignWordHint } = require('./translation/foreign-words');
+const { protectTokens, restoreTokens, stripUnresolved, createMarkerScrubber } = require('./translation/protect-tokens');
+
+// Max glossed retries per leaked unit (each names every word leaked so far).
+const FOREIGN_WORD_RETRIES = 3;
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -220,10 +225,26 @@ class TranslationService {
 
     try {
       // Delegate to backend
-      const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
+      // Shield proper nouns / acronyms as placeholders so the model cannot
+      // mangle them (see protect-tokens.js); restored after the retry pass so
+      // the leak check sees the placeholders, not the names.
+      const shielded = texts.map((t) => protectTokens(t));
+      const shieldedTexts = shielded.map((x) => x.text);
+      let translatedTexts = await this.backend.translate(shieldedTexts, sourceLangCode, targetLangCode);
+      translatedTexts = await this._retryForeignWords(
+        shieldedTexts,
+        translatedTexts,
+        sourceLangCode,
+        targetLangCode,
+        targetLang
+      );
+      translatedTexts = translatedTexts.map((t, i) =>
+        stripUnresolved(restoreTokens(t, shielded[i].tokens, targetLang))
+      );
       // Single choke point for every consumer (translateMarkdown, the raw
-      // /translate route, the routing translation): map any Devanagari the
-      // model leaked into Bengali output back to Bengali. No-op for other targets.
+      // /translate route, the routing translation): map any sibling-script
+      // letters the model leaked into Bengali output back to Bengali. No-op for
+      // other targets.
       return translatedTexts.map((t) => repairScriptLeak(t, targetLang));
     } catch (error) {
       // If backend is GPU and in auto mode, try falling back to CPU for this request only
@@ -252,6 +273,62 @@ class TranslationService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Re-translate, once, any text whose output kept a word in a foreign Latin
+   * language, with a hint naming the leaked words. Bengali targets only: the
+   * leak is a gemma-3 habit on Indic targets, and it is deterministic for a
+   * given input, so only a prompt that names the word cures it (a blind retry
+   * returns the same leak). The retried output is kept even if it still leaks.
+   * @private
+   */
+  async _retryForeignWords(texts, translatedTexts, sourceLangCode, targetLangCode, targetLang) {
+    if (
+      !String(targetLang || '')
+        .toLowerCase()
+        .startsWith('bn')
+    )
+      return translatedTexts;
+    if (!this.backend || typeof this.backend.translate !== 'function') return translatedTexts;
+    const leaks = translatedTexts.map((out, i) => findForeignWords(texts[i], out));
+    const idx = leaks.map((w, i) => (w.length ? i : -1)).filter((i) => i >= 0);
+    if (!idx.length) return translatedTexts;
+
+    const targetLangName = this.backend.getLanguageName ? this.backend.getLanguageName(targetLang) : 'Bengali';
+    const fixed = translatedTexts.slice();
+    for (const i of idx) {
+      // A retry can swap one leaked word for another ("PACKAGE" -> "populaire"
+      // in production), so loop: each pass names every word leaked so far and
+      // stops as soon as the output is clean. Bounded, and only leaked units
+      // pay for it.
+      const seen = new Set(leaks[i]);
+      let current = translatedTexts[i];
+      for (let attempt = 1; attempt <= FOREIGN_WORD_RETRIES; attempt++) {
+        const hint = foreignWordHint([...seen], targetLangName || 'Bengali');
+        logger.info(
+          `[TRANSLATION-SERVICE] Foreign words in ${targetLang} output (${[...seen].join(', ')}); retry ${attempt}/${FOREIGN_WORD_RETRIES}`
+        );
+        try {
+          const [retried] = await this.backend.translate([texts[i]], sourceLangCode, targetLangCode, { hint });
+          if (!retried || !retried.trim()) break;
+          current = retried;
+          const still = findForeignWords(texts[i], retried);
+          if (!still.length) break;
+          still.forEach((w) => seen.add(w));
+          if (attempt === FOREIGN_WORD_RETRIES) {
+            logger.warn(
+              `[TRANSLATION-SERVICE] Foreign words still present after ${attempt} retries: ${still.join(', ')}`
+            );
+          }
+        } catch (error) {
+          logger.warn(`[TRANSLATION-SERVICE] Foreign-word retry failed (${error.message}); keeping last output`);
+          break;
+        }
+      }
+      fixed[i] = current;
+    }
+    return fixed;
   }
 
   /**
@@ -294,7 +371,28 @@ class TranslationService {
 
     try {
       if (typeof this.backend.translateStream === 'function') {
-        return await this.backend.translateStream(unit, sourceLangCode, targetLangCode, context, onToken);
+        // Placeholders can straddle token deltas, so restore on the whole
+        // unit and hand the caller the restored text as one final delta.
+        const { text: shieldedUnit, tokens } = protectTokens(unit);
+        if (!tokens.length) {
+          // Nothing to restore, so this unit streams token by token. The model
+          // can still invent a "⟦0⟧", and a marker may straddle two deltas, so
+          // deltas pass through a scrubber that holds back a partial marker.
+          const scrub = onToken ? createMarkerScrubber(onToken) : null;
+          const out = await this.backend.translateStream(
+            unit,
+            sourceLangCode,
+            targetLangCode,
+            context,
+            scrub ? scrub.push : null
+          );
+          if (scrub) scrub.flush();
+          return stripUnresolved(out);
+        }
+        const raw = await this.backend.translateStream(shieldedUnit, sourceLangCode, targetLangCode, context, null);
+        const restored = stripUnresolved(restoreTokens(raw, tokens, targetLang));
+        if (restored && onToken) onToken(restored);
+        return restored;
       }
       // Backend has no streaming support (e.g. CPU) — translate the unit in one
       // shot and emit it as a single delta so the caller keeps streaming.

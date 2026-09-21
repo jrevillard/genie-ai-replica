@@ -361,6 +361,13 @@ function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext,
     'a question about the weather is answered with the weather alone. Unless the question itself ' +
     'asks about them, do not mention crops, pests, diseases, irrigation or drought anywhere in the ' +
     'answer — not as a section, not as a closing sentence, not as an aside. ' +
+    // With several crop profiles attached, the suppression above won: the model
+    // answered the weather half and dropped the crop half of a question that
+    // asked for both (3 profiles in context, 0 crops named). Say the exception
+    // out loud, and that it means every crop the live data lists.
+    'But when the question does ask about crops - "the crops grown here", "my crops", planting, ' +
+    'a named crop - that part of the question must be answered too, and it means every crop ' +
+    'whose official BAMIS crop calendar appears in the live data, one section each, not just one of them. ' +
     'When you quote a threshold range, check the value against it before judging it: a value ' +
     'inside the range is within it, not above or below it. ' +
     'Write for a farmer: short plain sentences, and when a pest, disease or unit has to be named, ' +

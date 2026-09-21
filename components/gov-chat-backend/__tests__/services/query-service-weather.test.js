@@ -125,6 +125,9 @@ describe('withWeatherContext', () => {
     expect(out.messages).toContain('Question: When should I plant potato?');
     expect(out.messages).toContain(context);
     expect(out.messages).toContain('do not state weather values that are not listed above.');
+    // The crop-suppression rule yields to a question that asks about crops, and
+    // then covers every attached BAMIS profile (regression: 3 attached, 0 named).
+    expect(out.messages).toContain('every crop whose official BAMIS crop calendar appears in the live data');
     expect(out.messages).toContain('🌡️ temperature, 🌧️ rain, 💨 wind, 💧 humidity and ⚠️ warnings');
     // The instruction is weighted most when it follows the question, not the data block.
     expect(out.messages.indexOf('Answer only this question')).toBeGreaterThan(

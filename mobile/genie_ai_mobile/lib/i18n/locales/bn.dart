@@ -1089,6 +1089,10 @@ const Map<String, dynamic> bnLocale = {
   },
   "quickhelp": {},
   "common": {
+    "share": "শেয়ার",
+    "zoomIn": "বড় করুন",
+    "zoomOut": "ছোট করুন",
+    "fitWidth": "প্রস্থে মানানসই",
     "retry": "আবার চেষ্টা করুন",
     "cancel": "বাতিল",
     "create": "তৈরি করুন",

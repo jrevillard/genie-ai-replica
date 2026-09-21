@@ -1086,6 +1086,10 @@ const Map<String, dynamic> enLocale = {
     // User Prompts (Visible Text - First Person)
   },
   "common": {
+    "share": "Share",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitWidth": "Fit to width",
     "retry": "Retry",
     "cancel": "Cancel",
     "create": "Create",

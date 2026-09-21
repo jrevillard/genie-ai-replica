@@ -1297,9 +1297,24 @@ _CROP_QUERY_PATTERNS = {
     "eggplant": r"\b(?:eggplant|brinjal)s?\b|(?<![ঀ-৿])বেগুন(?!ি)",
     "mango": r"\bmango(?:es)?\b|\baam\b|(?<![ঀ-৿])আম(?!ি|ার|রা|াদের|াকে|ায়|ন)",
 }
+# One emoji per supported crop, injected into the profile instruction so the
+# LLM never has to choose: told to "use a suitable crop emoji", the 4B model
+# put 🍆 on every mango disease.
+_CROP_EMOJI = {"rice_aman": "🌾", "eggplant": "🍆", "mango": "🥭"}
 _CROP_PLANTING_COMPARISON = re.compile(
     r"(?=.*\bcrops?\b)(?=.*\b(?:plant|planting|sow|sowing)\b)"
     r"(?=.*\b(?:which|what|recommend|best)\b)",
+    re.IGNORECASE,
+)
+# "the crops grown here" / "my crops" / "for the crops" - the question is about
+# the district's crops as a group, not one crop, so every configured profile is
+# attached. Without this the weather-week and crop-planning quick-help prompts
+# reached the LLM with NO profile; its only crop knowledge was whichever KB
+# chunk scraped past the retriever threshold (eggplant.pdf at 0.043), so it
+# wrote about eggplant alone and called it "the crops grown here".
+_CROP_GENERAL = re.compile(
+    r"\b(?:crops?\s+(?:grown|cultivated|farmed)\s+(?:here|there|in\b|around\b)"
+    r"|(?:my|our|local|the|these|all)\s+crops\b|for\s+crops\b)",
     re.IGNORECASE,
 )
 _CROP_PROFILE_PATH = (
@@ -1312,7 +1327,7 @@ _CROP_PROFILE_PATH = (
 def _requested_crops(query: str) -> list[str]:
     """Return named crops, or all configured crops for a planting comparison."""
     normalized = re.sub(r"[_-]+", " ", query.casefold())
-    if _CROP_PLANTING_COMPARISON.search(normalized):
+    if _CROP_PLANTING_COMPARISON.search(normalized) or _CROP_GENERAL.search(normalized):
         return list(EWS_CROPS)
     return [
         crop
@@ -1336,6 +1351,26 @@ def _crop_profile_context(district: str, crops: list[str], today) -> list[str]:
     profiles = _crop_profiles()
     sections: list[str] = []
     iso_week = today.isocalendar()[1]
+    attached = [
+        (profile.get("crop_display_name") or _crop_label(crop))
+        for crop in crops
+        for profile in [
+            next((p for p in profiles.values() if p.get("crop") == crop), None)
+        ]
+        if profile
+    ]
+    if len(attached) > 1:
+        # The per-crop instruction below is written for one crop; given three
+        # profiles the model answered for one of them and called it "the crops
+        # grown here" (3 attached, 1 named). Ask for every crop explicitly.
+        names = ", ".join(attached)
+        sections.append(
+            f"Official BAMIS crop calendars are attached for ALL of these crops grown in "
+            f"{district}: {names}. When the question is about the district's crops in "
+            "general, cover every one of them: one section per crop, in that order, "
+            "each opened with that crop's own emoji. Do not answer for a single crop "
+            "and present it as the crops of the district."
+        )
     for crop in crops:
         profile = next(
             (item for item in profiles.values() if item.get("crop") == crop), None
@@ -1344,6 +1379,7 @@ def _crop_profile_context(district: str, crops: list[str], today) -> list[str]:
             continue
         label = profile.get("crop_display_name") or _crop_label(crop)
         region = str(profile.get("region") or "unknown").title()
+        crop_emoji = _CROP_EMOJI.get(crop, "🌱")
         current_stages = [
             stage.get("stage")
             for stage in profile.get("growth_stages") or []
@@ -1384,8 +1420,14 @@ def _crop_profile_context(district: str, crops: list[str], today) -> list[str]:
             "retrieved document is unclear or conflicts with it, use this profile. "
             "For questions about today or the current crop stage, copy "
             "current_calendar_status exactly; do not choose another stage from the "
-            "calendar. Call the source the official BAMIS crop calendar and use at "
-            "most one suitable crop or stage emoji per crop. "
+            "calendar. Call the source the official BAMIS crop calendar. "
+            f"The emoji for {label} is {crop_emoji}. Any answer about {label} "
+            "uses this shape: open with one sentence that starts with "
+            f"{crop_emoji} naming the crop and its current stage, then a bulleted "
+            "list, one item per point (a disease, pest, stage, forecast effect or "
+            f"outlook), each item starting with {crop_emoji} and the point's name "
+            "in bold, then what the source says and whether today's weather meets "
+            f"it. Never use any other crop's emoji for {label}. "
             "Use favorable_conditions_by_stage only for questions about favorable "
             "or ideal requirements. historical_weekly_climate_normals are calendar "
             "observations, not favorable requirements. Empty or absent values mean "

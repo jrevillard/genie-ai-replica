@@ -27,7 +27,14 @@
 // 2 = Devanagari->Bengali script-leak repair on bn output (script-repair.js).
 // 3 = target-language-only guard in the gemma-3 prompt + English decorated with
 //     emojis before translation (chat-response-emojis.js).
-const TRANSLATION_LOGIC_VERSION = '3';
+// 4 = glossed retry when a foreign Latin word is left in bn output
+//     (foreign-words.js) + sibling-script repair covers all Indic blocks.
+// 5 = proper nouns/acronyms shielded as placeholders (protect-tokens.js);
+//     leak check covers non-Latin scripts (Arabic) too.
+// 6 = district names shielded and restored in Bengali (place-names-bn.js).
+//     Bumped separately from 5: the v5 entries were cached with the model's
+//     own guess for a bare district ("সাফার") before the shield existed.
+const TRANSLATION_LOGIC_VERSION = '6';
 
 function translationCacheKey(docHash, targetLang, modelId) {
   return `translation:${docHash}:${targetLang}:${modelId || 'unknown'}:${TRANSLATION_LOGIC_VERSION}`;

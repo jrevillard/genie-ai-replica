@@ -6,6 +6,16 @@ describe('repairScriptLeak', () => {
     expect(repairScriptLeak('রাজशाहীতে', 'bn')).toBe('রাজশাহীতে');
   });
 
+  test('maps leaked Gujarati letters inside a Bengali word (mildew, as the translator emitted it)', () => {
+    // মা + Gujarati I, LA, VIRAMA, DDA + উই + Gujarati JA
+    expect(repairScriptLeak('মা\u0a87\u0ab2\u0acd\u0aa1উই\u0a9c', 'bn')).toBe('মাইল্ডউইজ');
+  });
+
+  test('is a no-op for non-Bengali Indic targets (Gujarati is correct Gujarati output)', () => {
+    const gu = '\u0a97\u0ac1\u0a9c\u0ab0\u0abe\u0aa4\u0ac0';
+    expect(repairScriptLeak(gu, 'gu')).toBe(gu);
+  });
+
   test('leaves pure Bengali untouched (and returns the same string)', () => {
     const s = 'আজ আমে কী রোগ হতে পারে?';
     expect(repairScriptLeak(s, 'bn')).toBe(s);

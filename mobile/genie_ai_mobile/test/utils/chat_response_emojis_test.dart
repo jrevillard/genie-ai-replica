@@ -39,6 +39,22 @@ void main() {
       );
     });
 
+    test('never decorates a markdown link destination', () {
+      const response =
+          'সাপাহার অঞ্চলের খরা পরিস্থিতি স্থিতিশীল।\n\n'
+          '[পুরো খরা প্রতিবেদন দেখুন](/api/weather/drought-report/drought_sapahar_20260921.pdf)';
+      expect(decorateChatResponse(response), response);
+    });
+
+    test('still decorates the prose around a link, leaving the URL alone', () {
+      expect(
+        decorateChatResponse(
+          'Drought is easing. [View full drought report](/api/weather/drought-report/x.pdf)',
+        ),
+        '🏜️ Drought is easing. [View full drought report](/api/weather/drought-report/x.pdf)',
+      );
+    });
+
     test('leaves blank input untouched', () {
       expect(decorateChatResponse(''), '');
       expect(decorateChatResponse('   '), '   ');

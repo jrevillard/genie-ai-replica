@@ -492,17 +492,12 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     final needsLocation =
         (hiddenPrompt?.contains(LocationService.placeholder) ?? false) ||
         text.contains(LocationService.placeholder);
-    if (needsLocation) {
-      setState(() => _isLoading = true);
-      await _ensureLocationReady();
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-    }
-    final location = LocationService();
-    hiddenPrompt = location.fillPlaceholder(hiddenPrompt);
-    text = location.fillPlaceholder(text)!;
-
-    final userMessage = {
+    // Web parity (ChatBotComponent.vue): the question goes into the transcript
+    // before anything is awaited, so the thinking indicator never appears above
+    // the message that caused it. Resolving the district needs a GPS + geocode
+    // round trip, and doing that first left the user watching the assistant
+    // "think" about a question still sitting in the input box.
+    final userMessage = <String, dynamic>{
       'role': 'user',
       'content': text.trim(),
       'actualContent': hiddenPrompt ?? text.trim(),
@@ -518,6 +513,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _inputController.clear();
     _scrollToBottom();
     _updateQuickHelpVisibility();
+
+    if (needsLocation) {
+      await _ensureLocationReady();
+      if (!mounted) return;
+    }
+    final location = LocationService();
+    hiddenPrompt = location.fillPlaceholder(hiddenPrompt);
+    text = location.fillPlaceholder(text)!;
+    // Normally {{location}} lives only in the hidden prompt, but a deployment
+    // config may put it in the visible text too — refresh the bubble in place.
+    setState(() {
+      userMessage['content'] = text.trim();
+      userMessage['actualContent'] = hiddenPrompt ?? text.trim();
+    });
 
     final String sessionId =
         _currentConversationId ?? 'session_${widget.userId}';
@@ -564,7 +573,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           },
           'contextOption': 'conversation-with-context-labels',
         } else ...{
-          'messages': messagesForApi,
+          // Web parity: with no context filter the web app sends only the
+          // current message as `text`, not the conversation history
+          // (ChatBotComponent.vue, `contextOption === 'single-message'`).
+          // Sending the history here let the model answer from earlier turns —
+          // a weather question came back with crop advisory picked up from a
+          // previous crop turn, so the two clients gave different answers.
+          // The backend wraps `text` into a one-message array (query-service
+          // `queryData.messages = [{ role: 'user', content: queryData.text }]`).
+          'text': messagesForApi.last['content'],
           'context': {
             'language': I18nService().currentLocale.languageCode.toUpperCase(),
           },

@@ -273,7 +273,8 @@
 
 <script>
 import { Loader2, Plus, Save, FileText } from '@lucide/vue';
-import { fillLocationPlaceholder } from '@/config/defaultLocation';
+import { fillLocationPlaceholder, LOCATION_PLACEHOLDER } from '@/config/defaultLocation';
+import { isBareMapIntent, parseMapPlace } from '@/utils/mapIntent';
 import { decorateChatResponse } from '@/utils/chatResponseEmojis';
 import { eventBus } from '../eventBus.js';
 import notificationService from '../services/notificationService';
@@ -643,8 +644,21 @@ export default {
         warnings.push(this.translate('chatbot.categoryNotFound', '').replace('{label}', context.categoryLabel));
       }
       const hasServiceFilter = Array.isArray(context.serviceLabels) && context.serviceLabels.length > 0;
-      const isJustChat = this.selectedContextItems.some((item) => item.id === 'just-chat');
-      if (this.selectedContextItems.length > 0 && !hasServiceFilter && !context.categoryLabel && !isJustChat) {
+      // A Quick Help button that declares no serviceLabels is an unfiltered
+      // query by design (all six shipped buttons; the mobile app sends [] too),
+      // not a misconfiguration - the same case as Just Chat. Only a null
+      // (never-resolved) label set is the misconfig this guard exists for.
+      const isUnfilteredByDesign = this.selectedContextItems.some(
+        (item) =>
+          item.id === 'just-chat' ||
+          (item.source === 'quickHelp' && Array.isArray(item.serviceLabels) && item.serviceLabels.length === 0)
+      );
+      if (
+        this.selectedContextItems.length > 0 &&
+        !hasServiceFilter &&
+        !context.categoryLabel &&
+        !isUnfilteredByDesign
+      ) {
         blocked = true;
         warnings.push(this.translate('chatbot.noFilterWarning', 'No context filter active.'));
       }
@@ -733,12 +747,19 @@ export default {
             const title = resolveConfigText(button.title, locale);
             const visibleText = resolveConfigText(button.action?.visibleText, locale);
             const hiddenPrompt = resolveConfigText(button.action?.hiddenPrompt, locale);
-            const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : null;
+            // A Quick Help button without explicit labels means "no retriever
+            // filter", the same as the mobile app. It must be [] here, never
+            // null: null routes the item into the sidebar fallback in
+            // sendMessage, which sends serviceKey (the button id, e.g.
+            // "weather-week") as a KB label. No chunk carries a button id, so
+            // the retriever returned nothing and the web answer lost its
+            // knowledge-base grounding while mobile kept it.
+            const explicitLabels = Array.isArray(button.serviceLabels) ? button.serviceLabels : [];
 
             return {
               service: title,
               serviceLabels: explicitLabels,
-              serviceKey: explicitLabels ? explicitLabels[0] : button.id || title,
+              serviceKey: explicitLabels.length ? explicitLabels[0] : button.id || title,
               textKey: button.title,
               visibleText: visibleText,
               hiddenPrompt: hiddenPrompt,
@@ -751,6 +772,16 @@ export default {
         console.error('[ChatBotComponent] Failed to load Quick Help config:', error);
         this.quickHelpButtons = [];
       }
+    },
+
+    /**
+     * Hidden prompt for the bare map intent: the configured "Map my field"
+     * button's prompt when there is one, else the built-in delineation prompt.
+     * {{location}} is filled later by sendMessage like any config prompt.
+     */
+    fieldMapHiddenPrompt() {
+      const btn = (this.quickHelpButtons || []).find((b) => b.id === 'field-map' && b.hiddenPrompt);
+      return btn ? btn.hiddenPrompt : `Delineate field boundaries around ${LOCATION_PLACEHOLDER}`;
     },
 
     getWelcomeMessage() {
@@ -901,16 +932,22 @@ export default {
       const content = this.newMessage.trim();
       if (!content) return;
 
+      // Bare "show me the map" (no place): the user means their own area, so
+      // run the "Map my field" quick-help flow - field delineation around the
+      // resolved district, map opened from the response metadata - instead of
+      // asking the LLM, which has no map. Parity with the mobile app.
+      if (!this.hiddenPromptForNextMessage && isBareMapIntent(content)) {
+        this.hiddenPromptForNextMessage = this.fieldMapHiddenPrompt();
+      }
+
       // Map intent - intercept before the backend call (PolisenseAI f68d0fc46).
       // `show me the map <location>` opens the MapView overlay via the geocoder
       // and echoes a bot reply so the request shows in the transcript.
       // English "show me the map <place>", Banglish "manchitro dekhao <place>",
       // Bengali "<place> এর মানচিত্র দেখাও" / "মানচিত্র দেখাও <place>".
-      const mapMatch =
-        content.match(/^(?:show me the map|manchitro dekhao|মানচিত্র দেখা[ওন])\s+(.+)$/i) ||
-        content.match(/^(.+?)\s*(?:এর)?\s*মানচিত্র\s*দেখা[ওন]$/);
-      if (mapMatch) {
-        const location = mapMatch[1].trim();
+      const mapPlace = this.hiddenPromptForNextMessage ? null : parseMapPlace(content);
+      if (mapPlace) {
+        const location = mapPlace;
         this.chatMessages.push({ sender: 'user', content, timestamp: new Date().toISOString(), isSaved: false });
         this.newMessage = '';
         this.showQuickHelp = false;

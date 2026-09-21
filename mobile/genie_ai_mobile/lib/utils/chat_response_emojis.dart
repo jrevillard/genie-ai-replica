@@ -59,6 +59,12 @@ final List<_Topic> _weatherEmojis = [
   ),
 ];
 
+// Markdown link destinations: "](" up to the closing ")". These are URLs, not
+// prose, and must never be decorated. In a translated (e.g. Bengali) answer the
+// only Latin "drought" left is the one inside "/api/weather/drought-report/..."
+// — decorating it broke the report link.
+final RegExp _linkDestination = RegExp(r'\]\([^)]*\)');
+
 final RegExp _leadingSpaceBeforeEmoji = RegExp(
   r'^[ \t]+(?=(?:🌾|🍆|🥭|⚠️|⛈️|🌧️|☀️|☁️|🌡️|💧|💨|🏜️|🌊))',
   multiLine: true,
@@ -83,12 +89,21 @@ String _decorateTopic(String content, _Topic topic) {
 }
 
 /// Web `decorateChatResponse`. Non-string / blank input is returned as is.
+String _decorateProse(String content) =>
+    [..._cropEmojis, ..._weatherEmojis].fold(content, _decorateTopic);
+
 String decorateChatResponse(String? content) {
   if (content == null || content.trim().isEmpty) return content ?? '';
-  final decorated = [
-    ..._cropEmojis,
-    ..._weatherEmojis,
-  ].fold(content, _decorateTopic);
+  // Decorate only the text between link destinations; splice the destinations
+  // back verbatim.
+  final links = _linkDestination.allMatches(content).map((m) => m[0]!).toList();
+  final prose = content.split(_linkDestination).map(_decorateProse).toList();
+  final buffer = StringBuffer();
+  for (var i = 0; i < prose.length; i++) {
+    buffer.write(prose[i]);
+    if (i < links.length) buffer.write(links[i]);
+  }
+  final decorated = buffer.toString();
   return decorated
       .replaceAll(_leadingSpaceBeforeEmoji, '')
       .replaceAllMapped(_spaceBeforePunct, (m) => m[1]!)

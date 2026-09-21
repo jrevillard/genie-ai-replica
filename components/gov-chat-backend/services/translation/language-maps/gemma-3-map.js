@@ -111,7 +111,9 @@ module.exports = {
   },
 
   // Gemma-3 requires prompt-based translation
-  promptTemplate: (sourceCode, targetCode, sourceLangName, targetLangName, text) => {
+  // `hint` (optional) is a retry instruction naming words a previous attempt
+  // left in a foreign language (see foreign-words.js); appended before the text.
+  promptTemplate: (sourceCode, targetCode, sourceLangName, targetLangName, text, hint = '') => {
     // The target-only sentence is load-bearing: gemma-3-4b-it has drifted into
     // Spanish mid-sentence in Bengali output ("বৃষ্টি প্রতিদিন previstas") and
     // rewritten "Sapahar" as "Sapa city". Pinning names/numbers/emojis/links
@@ -119,7 +121,17 @@ module.exports = {
     return (
       `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation. ` +
       `Write the whole translation in ${targetLangName} only: do not leave any word in ${sourceLangName} and do not use any ` +
-      `other language. Keep place names, numbers, units, emojis and markdown links exactly as they are.\n\nText: ${text}`
+      `other language. Keep place names, numbers, units, emojis and markdown links exactly as they are. ` +
+      // Only explain the placeholders when the text actually carries some.
+      // Shown unconditionally, the example token taught the model the literal
+      // "\u27e60\u27e7" and it emitted one into text that had no placeholder at
+      // all, which then reached the user verbatim ("বৃষ্টি \u27e60\u27e7-এ ছয় দিনে").
+      (/\u27e6\d+\u27e7/.test(text)
+        ? `Tokens like \u27e60\u27e7 are placeholders for names that must not be translated: copy each one exactly ` +
+          `where it stands, do not translate, reorder or remove them. `
+        : '') +
+      (hint ? `${hint} ` : '') +
+      `\n\nText: ${text}`
     );
   },
 

@@ -75,12 +75,11 @@ volumes:
 x-logging: &fluent-logging
   driver: fluentd
   options:
-    fluentd-address: "localhost:24224"
-    fluentd-async: "true"
-    tag: "genie.{{.Name}}"
+    fluentd-address: 'localhost:24224'
+    fluentd-async: 'true'
+    tag: 'genie.{{.Name}}'
 
 services:
-
   # ===========================================================================
   # API Gateway Stack (node.labels.gateway == true)
   # ===========================================================================
@@ -111,7 +110,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-genieai}", "-d", "${POSTGRES_DB:-kong}"]
+      test: ['CMD', 'pg_isready', '-U', '${POSTGRES_USER:-genieai}', '-d', '${POSTGRES_DB:-kong}']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -135,7 +134,7 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     image: kong:3.9.3
-    restart: "no"
+    restart: 'no'
     depends_on:
       postgres:
         condition: service_healthy
@@ -172,7 +171,7 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
-    restart: "no"
+    restart: 'no'
     depends_on:
       kong:
         condition: service_healthy
@@ -186,7 +185,7 @@ services:
       - TARGET_HOST=backend
       - TARGET_PORT=3000
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
-    command: ["-b", "/opt/kong-config/kong_config.json"]
+    command: ['-b', '/opt/kong-config/kong_config.json']
     deploy:
       replicas: 1
       placement:
@@ -233,7 +232,7 @@ services:
       - KONG_TRUSTED_IPS=${KONG_TRUSTED_IPS:-172.16.0.0/12}
       - ENABLE_OBSERVABILITY=${ENABLE_OBSERVABILITY:-0}
     healthcheck:
-      test: ["CMD", "kong", "health"]
+      test: ['CMD', 'kong', 'health']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -249,7 +248,7 @@ services:
     # ports:
     #   - "8001:8001"
     volumes:
-      - "${DATA_DIR:-./data}/logs/kong:/var/log/kong"
+      - '${DATA_DIR:-./data}/logs/kong:/var/log/kong'
     deploy:
       replicas: 1
       placement:
@@ -298,13 +297,13 @@ services:
       - NGINX_FRONTEND_PORT=${NGINX_FRONTEND_PORT:-8090}
       - NGINX_PERMISSIONS_POLICY=${NGINX_PERMISSIONS_POLICY:-camera=(), microphone=(), geolocation=()}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost/ | grep -qE '^[23]' || exit 1"]
+      test: ['CMD-SHELL', "curl -sk -o /dev/null -w '%{http_code}' https://localhost/ | grep -qE '^[23]' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     volumes:
-      - ./secrets/ssl:/etc/nginx/ssl:ro  # directory mount — tracks inode changes from certbot renewals
+      - ./secrets/ssl:/etc/nginx/ssl:ro # directory mount — tracks inode changes from certbot renewals
       - certbot-webroot:/var/www/certbot:ro
     networks:
       - genieai_network
@@ -337,7 +336,7 @@ services:
     profiles: [letsencrypt]
     restart: unless-stopped
     image: certbot/certbot:v5.7.0
-    entrypoint: ["/certbot-entrypoint.sh"]
+    entrypoint: ['/certbot-entrypoint.sh']
     environment:
       - CERTBOT_EMAIL=${CERTBOT_EMAIL:-}
       - NGINX_PUBLIC_DOMAIN=${NGINX_PUBLIC_DOMAIN:-localhost}
@@ -387,7 +386,7 @@ services:
     # ports:
     #   - "${FRONTEND_PORT:-8090}:8090"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8090/health || exit 1"]
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://127.0.0.1:8090/health || exit 1']
       interval: 15s
       timeout: 5s
       retries: 3
@@ -427,7 +426,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "sh", "-c", "redis-cli ping"]
+      test: ['CMD', 'sh', '-c', 'redis-cli ping']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -450,7 +449,7 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *fluent-logging
-    restart: "no"
+    restart: 'no'
     depends_on:
       arango-vector-db:
         condition: service_healthy
@@ -500,16 +499,16 @@ services:
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
     volumes:
-      - "${DATA_DIR:-./data}/database_backups:/app/database_backups"
-      - "${DATA_DIR:-./data}/logs/backend:/app/logs"
+      - '${DATA_DIR:-./data}/database_backups:/app/database_backups'
+      - '${DATA_DIR:-./data}/logs/backend:/app/logs'
       - backend_data:/app/data
       - backend_uploads:/app/Uploads
     # Allow backend to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the Docker host,
     # so OIDC discovery and JWKS fetches reach NGINX (which publishes 80/443 via mode: host).
     extra_hosts:
-      - "${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway"
+      - '${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway'
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/api/health']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -559,6 +558,16 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       # OPEA AI/ML service override (code default is deployment-specific: 'e2e-109-198')
       - OPEA_HOST=${OPEA_HOST:-chatqna-xeon-backend-server}
+      # Agri data service (Section 15 of env) — declared explicitly here so
+      # Docker Swarm doesn't depend on the root env file (Swarm secrets/env
+      # are explicit per service). Production must set AGRI_PREFETCH_ON_START=1
+      # to preserve the historical default (prefetch on cold start). Tests /
+      # CI may leave it unset (opt-out via the `!== '0'` check in code) — see
+      # docs/security/mr388-followups.md H-11.
+      - AGRI_SOURCES_ENABLED=${AGRI_SOURCES_ENABLED:-}
+      - AGRI_REDIS_URL=${AGRI_REDIS_URL:-}
+      - AGRI_VERBOSE=${AGRI_VERBOSE:-}
+      - AGRI_PREFETCH_ON_START=${AGRI_PREFETCH_ON_START:-1}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)
@@ -618,17 +627,17 @@ services:
     # Allow document-repository to resolve NGINX_PUBLIC_DOMAIN (e.g. localhost) to the
     # Docker host, so OIDC discovery and JWKS fetches reach NGINX for JWT validation.
     extra_hosts:
-      - "${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway"
+      - '${NGINX_PUBLIC_DOMAIN:-localhost}:host-gateway'
     # Internal only - no host port mapping needed
     # ports:
     #   - "${DOC_REPO_PORT:-3001}:3001"
     networks:
       - genieai_network
     volumes:
-      - "${DATA_DIR:-./data}/logs/doc-repo:/app/logs"
+      - '${DATA_DIR:-./data}/logs/doc-repo:/app/logs'
       - doc_repo_uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -664,7 +673,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 3310 || exit 1"]
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 3310 || exit 1']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -703,9 +712,13 @@ services:
       - arango_data:/var/lib/arangodb3
     environment:
       ARANGO_ROOT_PASSWORD: ${ARANGO_PASSWORD}
-    command: ["--experimental-vector-index=true"]
+    command: ['--experimental-vector-index=true']
     healthcheck:
-      test: ["CMD-SHELL", "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password \"${ARANGO_PASSWORD}\" --javascript.execute-string \"db._version();\""]
+      test:
+        [
+          'CMD-SHELL',
+          'arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password "${ARANGO_PASSWORD}" --javascript.execute-string "db._version();"'
+        ]
       interval: 10s
       timeout: 10s
       retries: 12
@@ -721,7 +734,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 10
-
 
   # ===========================================================================
   # GPU Model Services (profile: gpu-models, node.labels.gpu == true)
@@ -757,7 +769,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
       interval: 10s
       timeout: 5s
       retries: 20
@@ -796,7 +808,11 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/health', timeout=3)\" || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:9000/health'', timeout=3)" || exit 1'
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -845,7 +861,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9031/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:9031/health']
       interval: 10s
       timeout: 5s
       retries: 20
@@ -879,7 +895,11 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)\" || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:8888/health'', timeout=3)" || exit 1'
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -915,7 +935,11 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:9090/health', timeout=3)\" || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:9090/health'', timeout=3)" || exit 1'
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -945,13 +969,13 @@ services:
     # ports:
     #   - "${TEI_EMBEDDING_PORT:-7000}:80"
     volumes:
-      - "${DATA_DIR:-./data}/huggingface:/data"
+      - '${DATA_DIR:-./data}/huggingface:/data'
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:80/health']
       interval: 10s
       timeout: 6s
       retries: 48
@@ -994,7 +1018,11 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:6000/health', timeout=3)\" || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'python3 -c "import urllib.request; urllib.request.urlopen(''http://localhost:6000/health'', timeout=3)" || exit 1'
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -1024,13 +1052,13 @@ services:
     # ports:
     #   - "7100:80"
     volumes:
-      - "${DATA_DIR:-./data}/huggingface:/data"
+      - '${DATA_DIR:-./data}/huggingface:/data'
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:80/health']
       interval: 10s
       timeout: 6s
       retries: 48
@@ -1081,7 +1109,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      test: ['CMD-SHELL', 'curl -sf http://localhost:8000/health || exit 1']
       interval: 15s
       timeout: 10s
       retries: 10
@@ -1173,11 +1201,11 @@ services:
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
     extra_hosts:
-      - "localhost:host-gateway"
+      - 'localhost:host-gateway'
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:5000/health']
       interval: 15s
       timeout: 10s
       retries: 10
@@ -1266,7 +1294,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:7000/health || exit 1"]
+      test: ['CMD-SHELL', 'curl -sf http://localhost:7000/health || exit 1']
       interval: 15s
       timeout: 10s
       retries: 10
@@ -1370,7 +1398,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8888/health || exit 1"]
+      test: ['CMD-SHELL', 'curl -sf http://localhost:8888/health || exit 1']
       interval: 15s
       timeout: 10s
       retries: 10
@@ -1395,7 +1423,7 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
-    restart: "no"
+    restart: 'no'
     image: opea/chatqna-ui:1.5
     # Internal OPEA service - no host port needed
     # ports:
@@ -1405,7 +1433,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/5173' || exit 1"]
+      test: ['CMD-SHELL', "timeout 5 bash -c 'echo > /dev/tcp/localhost/5173' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -1432,7 +1460,7 @@ services:
       - no-new-privileges:true
     logging: *fluent-logging
     profiles: [opea]
-    restart: "no"
+    restart: 'no'
     image: opea/nginx:1.5
     # Internal OPEA service - no host port needed
     # ports:
@@ -1448,7 +1476,7 @@ services:
     networks:
       - genieai_network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 5 bash -c 'echo > /dev/tcp/localhost/80' || exit 1"]
+      test: ['CMD-SHELL', "timeout 5 bash -c 'echo > /dev/tcp/localhost/80' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1480,7 +1508,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - KONG_DB_PASSWORD=${KONG_DB_PASSWORD}
       - KEYCLOAK_DB_PASSWORD=${KEYCLOAK_DB_PASSWORD}
-    entrypoint: ["sh", "/init-databases.sh"]
+    entrypoint: ['sh', '/init-databases.sh']
     networks:
       - genieai_network
     deploy:
@@ -1534,7 +1562,7 @@ services:
       - KC_SMTP_PASSWORD=${EMAIL_PASSWORD:-}
       - KC_SMTP_FROM=${EMAIL_FROM:-}
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
+      test: ['CMD-SHELL', "bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -1606,7 +1634,7 @@ services:
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
     healthcheck:
-      test: ["CMD", "sh", "-c", "test -f /tmp/config-done"]
+      test: ['CMD', 'sh', '-c', 'test -f /tmp/config-done']
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1651,7 +1679,8 @@ services:
       - no-new-privileges:true
     profiles: [observability]
     image: busybox:1.38.0
-    command: ["sh", "-c", "mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol"]
+    command:
+      ['sh', '-c', 'mkdir -p /var/lib/otelcol/file_storage/victoriatraces && chown -R 10001:10001 /var/lib/otelcol']
     volumes:
       - otel-queue:/var/lib/otelcol
     networks:
@@ -1719,13 +1748,13 @@ services:
     restart: unless-stopped
     image: victoriametrics/victoria-metrics:v1.138.0
     command:
-      - "--storageDataPath=/var/lib/victoria-metrics"
-      - "--retentionPeriod=${VICTORIAMETRICS_RETENTION:-30d}"
-      - "--httpListenAddr=:8428"
+      - '--storageDataPath=/var/lib/victoria-metrics'
+      - '--retentionPeriod=${VICTORIAMETRICS_RETENTION:-30d}'
+      - '--httpListenAddr=:8428'
     volumes:
       - vm-data:/var/lib/victoria-metrics
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8428/health"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:8428/health']
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1753,13 +1782,13 @@ services:
     restart: unless-stopped
     image: victoriametrics/victoria-logs:v1.50.0
     command:
-      - "--storageDataPath=/var/lib/victoria-logs"
-      - "--retentionPeriod=${VICTORIALOGS_RETENTION:-30d}"
-      - "--httpListenAddr=:9428"
+      - '--storageDataPath=/var/lib/victoria-logs'
+      - '--retentionPeriod=${VICTORIALOGS_RETENTION:-30d}'
+      - '--httpListenAddr=:9428'
     volumes:
       - vlogs-data:/var/lib/victoria-logs
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9428/health"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:9428/health']
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1787,13 +1816,13 @@ services:
     restart: unless-stopped
     image: victoriametrics/victoria-traces:v0.9.2
     command:
-      - "--storageDataPath=/var/lib/victoria-traces"
-      - "--retentionPeriod=${VICTORIATRACES_RETENTION:-30d}"
-      - "--httpListenAddr=:10428"
+      - '--storageDataPath=/var/lib/victoria-traces'
+      - '--retentionPeriod=${VICTORIATRACES_RETENTION:-30d}'
+      - '--httpListenAddr=:10428'
     volumes:
       - vtraces-data:/var/lib/victoria-traces
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:10428/-/healthy"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:10428/-/healthy']
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1830,7 +1859,7 @@ services:
       victoriatraces:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:10429/health"]
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:10429/health']
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1898,7 +1927,7 @@ services:
     # ports:
     #   - "${GRAFANA_PORT:-3002}:3000"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://127.0.0.1:3000/api/health']
       interval: 10s
       timeout: 5s
       retries: 3

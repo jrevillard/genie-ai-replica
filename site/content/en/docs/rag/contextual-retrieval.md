@@ -30,15 +30,14 @@ generation fails for a chunk, the raw chunk is embedded as a fallback.
 
 ## Strategies
 
-- **`doc_level`** (default) — one context-generation call per document, and the
-  *same* context is prepended to every chunk in that document. N× cheaper than
+- **`per_chunk`** (default) — one context-generation call per chunk. Each chunk
+  gets a context tailored to its own section; this is the canonical Anthropic
+  recipe. Highest precision, highest cost (N calls for N chunks). The right
+  default for retrieval-precision-first deployments.
+- **`doc_level`** — one context-generation call per document, and the *same*
+  context is prepended to every chunk in that document. N× cheaper than
   per-chunk, and enough to propagate the document's subject into every chunk's
-  vector. The right default for cost-sensitive deployments where subject
-  propagation is the goal.
-- **`per_chunk`** — one context-generation call per chunk. Each chunk gets a
-  context tailored to its own section; this is the canonical Anthropic recipe.
-  Highest precision, highest cost (N calls for N chunks). Choose it when the
-  extra ingest cost is acceptable for maximum retrieval precision.
+  vector. Choose it when ingest cost matters more than section-level precision.
 
 ## Decoupled labelling (`CONTEXTUAL_LABEL_RAW`)
 

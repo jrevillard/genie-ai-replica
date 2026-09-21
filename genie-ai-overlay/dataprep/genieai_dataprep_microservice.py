@@ -235,13 +235,9 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
                     return
                 fcntl.flock(lock_file, fcntl.LOCK_UN)
                 lock_file.close()
-                logger.info(
-                    "[ ingest ] Released slot FD synchronously — task never claimed or already done"
-                )
+                logger.info("[ ingest ] Released slot FD synchronously — task never claimed or already done")
             except Exception as e:  # noqa: BLE001 — last-resort cleanup
-                logger.warning(
-                    f"[ ingest ] slot-FD synchronous release failed: {e}"
-                )
+                logger.warning(f"[ ingest ] slot-FD synchronous release failed: {e}")
 
         # --- Environment-specific Arango config ---
         ARANGO_GRAPH_NAME = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")

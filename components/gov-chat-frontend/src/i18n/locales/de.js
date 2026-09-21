@@ -1576,7 +1576,13 @@ export default {
     exportButton: 'Exportieren',
     exportSuccess: 'Chat erfolgreich exportiert',
     exportError: 'Fehler beim Exportieren des Chats. Bitte versuchen Sie es erneut.',
-    removeItem: 'Entfernen'
+    removeItem: 'Entfernen',
+    chatUpdated: 'Chat aktualisiert',
+    feedbackError: 'Fehler beim Senden des Feedbacks',
+    feedbackMissingQueryId: 'Abfrage-ID für Feedback fehlt',
+    feedbackSubmitted: 'Feedback gesendet',
+    saving: 'Speichern...',
+    savingConversation: 'Konversation speichern...'
   },
   quickhelp: {
     // Labels (Short for UI)

@@ -1570,7 +1570,13 @@ export default {
     exportButton: 'Ntshetsa Kantle',
     exportSuccess: 'Moqoqo o ntsheditswe kantle ka katleho',
     exportError: 'Ho hlolehile ho ntshetsa moqoqo kantle. Ka kopo leka hape.',
-    removeItem: 'Susa'
+    removeItem: 'Susa',
+    chatUpdated: 'Puisano e ntlafalitsoe',
+    feedbackError: 'Phoso ha ho romela maikutlo',
+    feedbackMissingQueryId: 'Ha ho ID ya potso bakeng sa maikutlo',
+    feedbackSubmitted: 'Maikutlo a rometsoe',
+    saving: 'E boloka...',
+    savingConversation: 'E boloka puisano...'
   },
   quickhelp: {
     // Labels (Short for UI)

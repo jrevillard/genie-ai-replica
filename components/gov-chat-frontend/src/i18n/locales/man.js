@@ -1516,7 +1516,13 @@ export default {
     exportButton: 'Kii banta',
     exportSuccess: 'Kuma kiyata banta benta',
     exportError: 'Filiyata kuma kii to. I si a ñining tugung.',
-    removeItem: 'Bɔ yi'
+    removeItem: 'Bɔ yi',
+    chatUpdated: '聊天已更新',
+    feedbackError: '提交反馈时出错',
+    feedbackMissingQueryId: '反馈缺少查询ID',
+    feedbackSubmitted: '反馈已提交',
+    saving: '正在保存...',
+    savingConversation: '正在保存对话...'
   },
   quickhelp: {
     // Labels (Short for UI)

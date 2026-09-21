@@ -154,3 +154,14 @@ reranker_model_id: BAAI/bge-reranker-v2-m3
 # --- Reranker strategy defaults ---
 #   reranking_strategy: slice           # slice (default; top-N by TEI score) | threshold | adaptive | knee_threshold | slice_threshold
 #   reranker_top_n: 3                   # chunks kept for slice/slice_threshold strategies
+
+# =============================================================================
+# AGRICULTURAL DATA SERVICE (opt-in: only meaningful when deploying el-salvador)
+# =============================================================================
+# See docs/security/mr388-followups.md H-11 for the AGRI_PREFETCH_ON_START
+# semantics. Defaults preserve the historical behavior (prefetch on cold
+# start) unless explicitly disabled.
+# agri_sources_enabled: ""               # comma-separated adapter ids; unset = all
+# agri_redis_url: ""                     # redis URL; unset = TRANSLATION_CACHE_*
+# agri_verbose: ""                       # 1 = verbose pipeline tracing in scheduler.log
+agri_prefetch_on_start: "1"            # 1 = run initial prefetch pass at startup

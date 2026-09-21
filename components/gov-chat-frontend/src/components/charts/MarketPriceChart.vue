@@ -280,6 +280,38 @@ export default {
       };
       return map[this.trend] || map.unknown;
     },
+    caveatChips() {
+      const seen = new Set();
+      const chips = [];
+      for (const c of this.meta.caveats || []) {
+        const label = this.caveatLabel(c);
+        // Skip exact duplicates AND any caveat whose label collides with the
+        // freshness pill (e.g. "Bundled snapshot" appears in both lists).
+        if (this.freshnessLabel && label === this.freshnessLabel) continue;
+        if (seen.has(label)) continue;
+        seen.add(label);
+        chips.push({
+          label,
+          severity: c.code === 'ESTIMATED_CPI' || c.code === 'PROXY_INDEX' ? 'warning' : 'info'
+        });
+      }
+      return chips;
+    },
+    freshnessLabel() {
+      if (!this.meta.fetchedAt) return '';
+      const ageHours = (Date.now() - new Date(this.meta.fetchedAt).getTime()) / 3600000;
+      if (this.meta.seeded) return this.$t('charts.caveats.bundledSnapshot', 'Bundled snapshot');
+      if (this.meta.stale) {
+        return this.$t('charts.caveats.savedDataAge', 'Saved data — {age} old', {
+          age: this.humanizeAge(ageHours)
+        });
+      }
+      return this.$t('charts.caveats.updatedAgo', 'Updated {age} ago', { age: this.humanizeAge(ageHours) });
+    },
+    freshnessVariant() {
+      if (this.meta.stale || this.meta.seeded) return 'warning';
+      return 'success';
+    },
     timeFrameOptions() {
       return [
         { value: '3 months', label: this.$t('charts.market.timeFrame3Months', '3 months') },

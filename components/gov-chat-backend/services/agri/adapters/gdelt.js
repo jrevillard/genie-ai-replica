@@ -40,11 +40,29 @@ const QUERIES = [
 ];
 
 const GDELT_MIN_SPACING_MS = 10500; // measured sticky limiter (gap-check §5)
+const GDELT_BACKOFF_KEY = 'agri:gdelt:backoff';
+const GDELT_BACKOFF_MS = 2 * 3600 * 1000;
+// Per-process last-call timestamp (cheap, doesn't need cross-replica sync).
+// The 429 backoff state IS shared via Redis below so two swarm replicas
+// stop hammering after one of them hits the sticky limiter.
 let lastCallAt = 0;
-// Hard backoff after a 429: the limiter is sticky for hours, and retrying
-// into it extends the block. One 429 → quiet for 2 h (found live 2026-09-18:
-// every pass failed "0 documents" while the picker went empty).
-let backoffUntil = 0;
+// Lazy Redis client for cross-replica 429 backoff. Null when Redis is
+// unavailable — falls back to per-process state (same as before).
+let redisClient = null;
+async function getRedis() {
+  if (redisClient) return redisClient;
+  try {
+    const { resolveRedisUrl } = require('../http');
+    const url = resolveRedisUrl();
+    if (!url) return null;
+    const Redis = require('ioredis');
+    redisClient = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
+    await redisClient.connect();
+    return redisClient;
+  } catch {
+    return null;
+  }
+}
 
 module.exports = {
   id: 'gdelt',
@@ -67,8 +85,18 @@ module.exports = {
   },
 
   async fetch(urls) {
-    if (Date.now() < backoffUntil) {
-      throw new Error(`GDELT rate-limited (429) — backing off until ${new Date(backoffUntil).toISOString()}`);
+    // Cross-replica 429 backoff: read the shared backoff expiry from Redis
+    // (one replica's 429 stops the others from hammering).
+    const redis = await getRedis();
+    if (redis) {
+      try {
+        const until = await redis.get(GDELT_BACKOFF_KEY);
+        if (until && Date.now() < Number(until)) {
+          throw new Error(`GDELT rate-limited (429) — backing off until ${new Date(Number(until)).toISOString()}`);
+        }
+      } catch {
+        /* Redis read failure → fall through to per-process check */
+      }
     }
     const out = [];
     for (const { lang, scope, url } of urls) {
@@ -79,10 +107,20 @@ module.exports = {
         out.push({ lang, scope, json: await fetchJson(url, { timeoutMs: 25000, maxRetries: 1 }) });
       } catch (error) {
         if (/429/.test(error.message)) {
-          backoffUntil = Date.now() + 2 * 3600 * 1000;
-          throw new Error(`GDELT 429 rate-limited — backing off until ${new Date(backoffUntil).toISOString()}`, {
-            cause: error
-          });
+          // Publish to Redis so other replicas see it (key has its own TTL).
+          if (redis) {
+            try {
+              await redis.set(GDELT_BACKOFF_KEY, String(Date.now() + GDELT_BACKOFF_MS), 'PX', GDELT_BACKOFF_MS);
+            } catch {
+              /* best-effort */
+            }
+          }
+          throw new Error(
+            `GDELT 429 rate-limited — backing off until ${new Date(Date.now() + GDELT_BACKOFF_MS).toISOString()}`,
+            {
+              cause: error
+            }
+          );
         }
         out.push({ lang, scope, error: error.message });
       }

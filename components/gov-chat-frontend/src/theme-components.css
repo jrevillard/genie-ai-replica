@@ -70,7 +70,6 @@ main {
    :root body selector raises specificity above Vue's [data-v-X] attribute
    selector that scoped CSS uses, so global rules win without touching
    component templates. */
-:root body .panel,
 :root body .chat-message.bot .message-bubble,
 :root body .analytics-section {
   background-color: var(--surface);
@@ -279,4 +278,62 @@ td {
 :root body .chat-sub-tab:hover {
   background-color: var(--accent-muted);
   color: var(--accent-fg);
+}
+
+/* --- Analytics section hover lift ---
+   :root body outranks scoped. Transition on base state for reverse animation. */
+:root body .analytics-section {
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+:root body .analytics-section:hover {
+  border-color: rgba(76, 175, 80, 0.35);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Focus-visible global outline ---
+   Keyboard a11y accent. Browser default is a thin blue ring that clashes
+   with the brand; replace with a 2px accent ring + offset. Excludes mouse
+   clicks via :focus-visible (keyboard / touch only). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- Webkit scrollbar theming ---
+   Chrome / Safari / Edge scrollbars follow DS tokens. Firefox uses
+   scrollbar-color (separate selector below). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-soft);
+}
+* {
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+/* --- Placeholder polish ---
+   Inputs inherit --muted at low opacity; explicit token for cross-theme
+   consistency (--muted flips between light/dark). */
+::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }

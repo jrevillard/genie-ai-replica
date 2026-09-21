@@ -939,20 +939,35 @@ export default {
                   : [] // explicitly empty (Just Chat) — no filter contribution
                 : [item.serviceKey || item.service] // null/undefined — sidebar fallback
           );
-          const messagesForQuery = this.chatMessages.map((msg) => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content
-          }));
+          // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
+          // a UI stub, not part of the conversation. Without this filter, the
+          // empty placeholder becomes the tail of the messages array, and the
+          // backend's `text = messages[messages.length-1].content` derivation
+          // stores an empty string in queries.text for Quick Help queries.
+          // The `msg &&` guard tolerates corrupted-cache null entries (localStorage
+          // round-trip can introduce them); the inner access would otherwise throw.
+          const baseMessages = this.chatMessages
+            .filter((msg) => msg && !msg.isStreaming)
+            .map((msg) => ({
+              role: msg.sender === 'user' ? 'user' : 'assistant',
+              content: msg.content
+            }));
 
-          const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user');
+          const lastUserMsgIndex = baseMessages.map((m) => m.role).lastIndexOf('user');
+          // Dual-prompt swap: send the hidden prompt to OPEA as the last user
+          // message so the LLM gets the persona + domain context, while
+          // `messageForDisplay` (the visibleText) is what the user actually
+          // clicked/typed. `userQuestion` below carries the visible text to
+          // the analytics layer so the Query Inspector shows it.
           if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            messagesForQuery[lastUserMsgIndex].content = messageForBackend;
+            baseMessages[lastUserMsgIndex].content = messageForBackend;
           }
 
           queryData = {
             conversationId: this.conversationId,
             sessionId: this.currentSessionId || 'new-session',
-            messages: messagesForQuery,
+            messages: baseMessages,
+            userQuestion: messageForDisplay,
             context: {
               categoryLabel: categoryLabel,
               serviceLabels: serviceLabels,
@@ -965,6 +980,7 @@ export default {
           queryData = {
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
+            userQuestion: messageForDisplay,
             context: {
               language: this.currentLocale.toUpperCase()
             },

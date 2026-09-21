@@ -577,6 +577,30 @@ describe('QueryService', () => {
       expect(result.response).toBeDefined();
       delete process.env.CONTEXT_OPTION;
     });
+
+    // Same regression as initStreamQuery test above — proves the bug fix in
+    // the non-streaming path too.
+    it('saves text=userQuestion (visible text) when messages tail is the hidden persona prompt', async () => {
+      process.env.CONTEXT_OPTION = 'test-mode';
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [
+          { role: 'assistant', content: 'Welcome!' },
+          { role: 'user', content: 'You are an expert Agricultural Extension Assistant for CENTA...' },
+          { role: 'assistant', content: '' }
+        ],
+        userQuestion: 'Quiero instrucciones para sembrar maíz',
+        context: { categoryLabel: 'Crops', serviceLabels: ['Maize'] }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'q-2' });
+      mockQueriesCollection.update.mockResolvedValueOnce({ new: { _key: 'q-2', isAnswered: true } });
+      await queryService.createQuery(data);
+      expect(mockQueriesCollection.save).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Quiero instrucciones para sembrar maíz' })
+      );
+      delete process.env.CONTEXT_OPTION;
+    });
   });
 
   describe('initStreamQuery', () => {
@@ -625,6 +649,32 @@ describe('QueryService', () => {
       mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'stream-1' });
       const result = await queryService.initStreamQuery(data, {});
       expect(result.opeaPayload.context.categoryLabel).toBe('Crops');
+    });
+
+    // Regression test for the Query Inspector empty-text bug: when the frontend
+    // sends the dual-prompt shape (messages ends with a hidden persona prompt +
+    // empty assistant placeholder + a separate `userQuestion` field), the saved
+    // `text` MUST be the visible text, not the persona prompt and not empty.
+    it('saves text=userQuestion (visible text) when messages tail is the hidden persona prompt', async () => {
+      const data = {
+        userId: 'u1',
+        sessionId: 's1',
+        messages: [
+          { role: 'assistant', content: 'Welcome! How can I assist you today?' },
+          {
+            role: 'user',
+            content: 'You are an expert Agricultural Extension Assistant for CENTA...'
+          },
+          { role: 'assistant', content: '' }
+        ],
+        userQuestion: 'Quiero instrucciones paso a paso para sembrar maíz',
+        context: { categoryLabel: 'Crops', serviceLabels: ['Maize'] }
+      };
+      mockQueriesCollection.save.mockResolvedValueOnce({ _key: 'q-1' });
+      await queryService.initStreamQuery(data, {});
+      expect(mockQueriesCollection.save).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Quiero instrucciones paso a paso para sembrar maíz' })
+      );
     });
   });
 
@@ -1368,6 +1418,83 @@ describe('QueryService', () => {
     it('should return empty array when query text has only stop words', async () => {
       const result = await queryService.getSimilarQueries('the a an is are');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('pickUserText', () => {
+    it('prefers the explicit userQuestion field over the messages tail', () => {
+      // Quick Help scenario: the dual-prompt mechanism leaves the long hidden
+      // persona prompt as the last user message in `messages`, but the
+      // frontend also sends the visibleText as `userQuestion`.
+      const messages = [
+        { role: 'assistant', content: 'Welcome! How can I assist you today?' },
+        {
+          role: 'user',
+          content:
+            'You are an expert Agricultural Extension Assistant for CENTA (Centro Nacional de Tecnología Agropecuaria y Forestal) in El Salvador...'
+        },
+        { role: 'assistant', content: '' }
+      ];
+      expect(queryService.pickUserText(messages, 'Quiero instrucciones paso a paso para sembrar maíz')).toBe(
+        'Quiero instrucciones paso a paso para sembrar maíz'
+      );
+    });
+
+    it('falls back to the last user-role message when userQuestion is absent', () => {
+      const messages = [
+        { role: 'assistant', content: 'Welcome!' },
+        { role: 'user', content: 'pasos para sembrar maiz' },
+        { role: 'assistant', content: '...' }
+      ];
+      expect(queryService.pickUserText(messages, undefined)).toBe('pasos para sembrar maiz');
+    });
+
+    it('skips an empty streaming placeholder tail and returns the last real user message', () => {
+      // Defensive: legacy clients (or older builds that still push the empty
+      // streaming bot into `messages`) must not have their queries.text
+      // polluted by the placeholder.
+      const messages = [
+        { role: 'user', content: 'instrucciones para sembrar maiz' },
+        { role: 'assistant', content: '' }
+      ];
+      expect(queryService.pickUserText(messages, undefined)).toBe('instrucciones para sembrar maiz');
+    });
+
+    it('skips a whitespace-only userQuestion and falls back to messages', () => {
+      const messages = [{ role: 'user', content: 'real question' }];
+      expect(queryService.pickUserText(messages, '   ')).toBe('real question');
+    });
+
+    it('returns an empty string when nothing usable is present', () => {
+      expect(queryService.pickUserText([], undefined)).toBe('');
+      expect(queryService.pickUserText([{ role: 'assistant', content: '' }], undefined)).toBe('');
+      expect(queryService.pickUserText(undefined, undefined)).toBe('');
+    });
+
+    it('rejects non-string userQuestion (object) and falls back to messages', () => {
+      // Silent-failure-hunter finding: a non-string explicit would coerce to
+      // "[object Object]" without the type guard. Reject and fall through.
+      const messages = [{ role: 'user', content: 'real question' }];
+      expect(queryService.pickUserText(messages, { foo: 'bar' })).toBe('real question');
+    });
+
+    it('rejects non-string userQuestion (number) and falls back to messages', () => {
+      const messages = [{ role: 'user', content: 'real question' }];
+      expect(queryService.pickUserText(messages, 42)).toBe('real question');
+    });
+
+    it('rejects null userQuestion and falls back to messages', () => {
+      const messages = [{ role: 'user', content: 'real question' }];
+      expect(queryService.pickUserText(messages, null)).toBe('real question');
+    });
+
+    it('trims leading/trailing whitespace from the returned userQuestion', () => {
+      expect(queryService.pickUserText([], '  How do I plant corn?  ')).toBe('How do I plant corn?');
+    });
+
+    it('trims leading/trailing whitespace from a fallback message content', () => {
+      const messages = [{ role: 'user', content: '  How do I plant corn?  ' }];
+      expect(queryService.pickUserText(messages, undefined)).toBe('How do I plant corn?');
     });
   });
 });

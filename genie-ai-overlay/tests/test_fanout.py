@@ -16,27 +16,34 @@ from retriever.genieai_retriever_arangodb import (
 )
 
 # ─── Decision D: fanout_should_engage ────────────────────────────────────────
-
+# David, 2026-09-21: the retriever must work smoothly in BOTH shapes —
+#   A: legacy single graph only → empty carrier → fan-out does NOT engage.
+#   B: legacy graph + one or more OKF graphs → ≥1 element carrier → fan-out
+#      engages with the FULL set (the legacy graph as the first leg + N OKF
+#      graph names). The chat-side carrier is the single source of truth.
 
 class TestFanoutShouldEngage:
-    """The graceful-bypass rules: empty / single-element / feature-off all
-    fall through to the legacy single-graph path."""
+    """The engage/bypass rules for the two shape contract:
+    A) empty carrier → legacy single-graph (no fan-out);
+    B) ≥1 graph → fan-out engages with the FULL set.
+    """
 
-    def test_empty_carrier_bypasses(self):
+    def test_empty_carrier_bypasses_case_A(self):
         assert _fanout_should_engage([]) is False
 
-    def test_none_carrier_bypasses(self):
+    def test_none_carrier_bypasses_case_A(self):
         assert _fanout_should_engage(None) is False
 
-    def test_single_element_carrier_bypasses(self):
-        """Single-element list = the legacy single-graph call. Fan-out
-        would change behavior; legacy gets the fast path."""
-        assert _fanout_should_engage(["GRAPH"]) is False
+    def test_single_graph_engages_case_B(self):
+        """Case B: even a single-element carrier engages fan-out (David,
+        2026-09-21). The legacy graph is the first leg; one OKF graph
+        could be added later without changing the contract."""
+        assert _fanout_should_engage(["GRAPH"]) is True
 
-    def test_two_graphs_engage(self):
+    def test_legacy_plus_one_okf_graph_engages_case_B(self):
         assert _fanout_should_engage(["GRAPH", "OKF_kenya-gov_v3"]) is True
 
-    def test_many_graphs_engage(self):
+    def test_many_graphs_engage_case_B(self):
         assert _fanout_should_engage([f"OKF_{slug}_v1" for slug in ("kenya", "health", "water")]) is True
 
     def test_feature_off_bypasses_regardless_of_count(self):

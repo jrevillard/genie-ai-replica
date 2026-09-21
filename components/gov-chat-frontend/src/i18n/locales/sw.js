@@ -1565,7 +1565,13 @@ export default {
     exportButton: 'Hamisha',
     exportSuccess: 'Mazungumzo yamehamishwa kwa mafanikio',
     exportError: 'Imeshindwa kuhamisha mazungumzo. Tafadhali jaribu tena.',
-    removeItem: 'Ondoa'
+    removeItem: 'Ondoa',
+    chatUpdated: 'Mazungumzo yamesasishwa',
+    feedbackError: 'Hitilafu katika kutuma maoni',
+    feedbackMissingQueryId: 'Kitambulisho cha swali hakipo kwa maoni',
+    feedbackSubmitted: 'Maoni yametumwa',
+    saving: 'Inahifadhi...',
+    savingConversation: 'Inahifadhi mazungumzo...'
   },
   quickhelp: {
     // Labels (Short for UI)

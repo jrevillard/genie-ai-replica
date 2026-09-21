@@ -1542,7 +1542,13 @@ export default {
     exportButton: 'এক্সপোর্ট',
     exportSuccess: 'চ্যাট সফলভাবে এক্সপোর্ট করা হয়েছে',
     exportError: 'চ্যাট এক্সপোর্ট করতে ব্যর্থ। অনুগ্রহ করে আবার চেষ্টা করুন।',
-    removeItem: 'আইটেম সরান'
+    removeItem: 'আইটেম সরান',
+    chatUpdated: 'চ্যাট আপডেট হয়েছে',
+    feedbackError: 'মতামত পাঠাতে ত্রুটি',
+    feedbackMissingQueryId: 'মতামতের জন্য প্রশ্ন আইডি অনুপস্থিত',
+    feedbackSubmitted: 'মতামত জমা হয়েছে',
+    saving: 'সংরক্ষণ করা হচ্ছে...',
+    savingConversation: 'কথোপকথন সংরক্ষণ করা হচ্ছে...'
   },
   quickhelp: {
     // Labels (Short for UI)

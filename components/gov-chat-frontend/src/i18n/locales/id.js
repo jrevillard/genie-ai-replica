@@ -1563,7 +1563,13 @@ export default {
     exportButton: 'Ekspor',
     exportSuccess: 'Obrolan berhasil diekspor',
     exportError: 'Gagal mengekspor obrolan. Silakan coba lagi.',
-    removeItem: 'Hapus'
+    removeItem: 'Hapus',
+    chatUpdated: 'Obrolan diperbarui',
+    feedbackError: 'Gagal mengirim umpan balik',
+    feedbackMissingQueryId: 'ID kueri tidak ada untuk umpan balik',
+    feedbackSubmitted: 'Umpan balik terkirim',
+    saving: 'Menyimpan...',
+    savingConversation: 'Menyimpan percakapan...'
   },
   quickhelp: {
     // Labels (Short for UI)

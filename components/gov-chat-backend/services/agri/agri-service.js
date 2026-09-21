@@ -460,6 +460,17 @@ class AgriService {
               /* already exists */
             }
           }
+          // Bound the agri_fetch_log collection: with 18 adapters at 24h
+          // cadence that's ~650 rows/day. After 1 year that's 240k rows
+          // and the lastSuccess() sort degrades. Arango's TTL index purges
+          // rows older than 90 days automatically on read.
+          try {
+            await this.db
+              .collection('agri_fetch_log')
+              .createIndex({ type: 'ttl', expireAfter: 90 * 86400, fields: ['ranAt'] });
+          } catch {
+            /* index already exists or unsupported — non-fatal */
+          }
         }
 
         this.adapters = enabledAdapters();

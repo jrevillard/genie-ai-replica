@@ -1570,7 +1570,13 @@ export default {
     exportButton: 'ส่งออก',
     exportSuccess: 'ส่งออกแชทสำเร็จ',
     exportError: 'ล้มเหลวในการส่งออกแชท โปรดลองอีกครั้ง',
-    removeItem: 'ลบ'
+    removeItem: 'ลบ',
+    chatUpdated: 'อัปเดตการสนทนาแล้ว',
+    feedbackError: 'เกิดข้อผิดพลาดในการส่งความคิดเห็น',
+    feedbackMissingQueryId: 'ไม่มีรหัสคำถามสำหรับความคิดเห็น',
+    feedbackSubmitted: 'ส่งความคิดเห็นแล้ว',
+    saving: 'กำลังบันทึก...',
+    savingConversation: 'กำลังบันทึกการสนทนา...'
   },
   quickhelp: {
     // Labels (Short for UI)

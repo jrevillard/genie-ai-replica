@@ -102,6 +102,10 @@ flutter {
 }
 
 dependencies {
+    // Android 12+ SplashScreen API — used by the manifest metadata to
+    // override the system splash with the AgroGenio farmer hero.
+    implementation "androidx.core:core-splashscreen:1.0.1"
+
     // PatrolJUnitRunner is added to main APK by Flutter via debugApi.
     // We need it in the androidTest APK too — reference the Gradle subproject directly.
     androidTestImplementation(project(":patrol"))

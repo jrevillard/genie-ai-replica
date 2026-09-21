@@ -546,6 +546,47 @@ export default {
     usageTrend: 'Tendencia de Uso',
     loading: 'Cargando datos...',
     loadDataError: 'Error al cargar datos',
+    filterSeverity: 'Filtrar por gravedad',
+
+    advisory: 'Advertencia',
+    regional: 'Regional',
+    sighting: 'Avistamiento',
+    news: {
+      addFromNews: 'Añadir de noticias recientes',
+      insert: 'Insertar seleccionadas',
+      noItems: 'No hay elementos recientes'
+    },
+
+    caveats: {
+      aboutData: 'Sobre estos datos',
+      source: 'Fuente',
+      coverage: 'Cobertura',
+      estimation: 'Estimaciones',
+      quality: 'Calidad',
+      estimated: 'Estimado',
+      actual: 'Real',
+      estimatedSeries: '{name} (estimado)',
+      bundledSnapshot: 'Instantánea incluida',
+      savedDataAge: 'Datos guardados — hace {age}',
+      updatedAgo: 'Actualizado hace {age}',
+      ageMinutes: '{n} min',
+      ageHours: '{n} h',
+      ageDays: '{n} d',
+      regionalWith: '{label}: {country}',
+      estimatedWith: '{label} ({years})',
+      annualWith: '{label} (hasta {year})',
+      codes: {
+        REGIONAL_DATA: 'Datos regionales',
+        ESTIMATED_CPI: 'Estimación ajustada por inflación',
+        GAP_YEARS: 'Años faltantes',
+        ANNUAL_ONLY: 'Datos anuales',
+        SINGLE_MARKET: 'Mercado único',
+        COMMUNITY_DATA: 'Datos comunitarios',
+        CURATED_STAT: 'Estadística curada',
+        PROXY_INDEX: 'Índice proxy',
+        STALE_CACHE: 'Datos en caché'
+      }
+    },
 
     insights: 'Perspectivas',
     fastActions: 'Acciones Rápidas',
@@ -607,7 +648,7 @@ export default {
 
     market: {
       sectionTitle: 'Precios de Mercado',
-      maizeGrains: 'Maíz y Granos',
+      maizeGrains: 'Maíz, Frijoles y Granos',
       cropProtection: 'Protección de Cultivos',
       fruitsVeggies: 'Frutas y Verduras',
       livestock: 'Ganadería',
@@ -622,10 +663,29 @@ export default {
       latest: 'Último',
       trend: 'Tendencia',
       priceHistory: 'Historial de Precios',
+      startYear: 'Desde',
+      series: 'Series',
       dataTable: 'Tabla de Datos',
+      period: 'Periodo',
+      exportCsv: 'Exportar CSV',
+      latestTip: 'Último precio de fin de mes de {name} — {value}{unit}',
       lastUpdated: 'Última actualización',
       commodity: 'Producto',
       noData: 'Sin datos disponibles',
+      unitQuintal:
+        'Precios en dólares estadounidenses por quintal, la medida centroamericana de puerta de finca. 1 quintal = 46 kg; los datos fuente en USD/kg se convierten a 45,97 kg por quintal.',
+      unitPpi:
+        'Índice de Precios al Productor de EE. UU. para la fabricación de pesticidas y productos químicos agrícolas (BLS). Los valores del índice son relativos a un período base, no precios absolutos — la tendencia muestra la dirección del costo, no un nivel de precio.',
+      unitIndex:
+        'Los valores del índice son relativos a un período base (por ejemplo 2016 = 100), no precios absolutos — la tendencia muestra dirección y magnitud del cambio.',
+      unitPercent:
+        'Último = la proporción de la cosecha alimentaria centroamericana, en masa, que se pierde entre la cosecha y la venta al por menor (estimación regional modelada FAO SDG 12.3.1 — no es un precio). Ejemplo: 8.3 significa que unos 8 de cada 100 kg de alimentos producidos nunca llegan al consumidor.',
+      unitUsdKg: 'Dólares estadounidenses por kilogramo.',
+      unitUsdMt: 'Dólares estadounidenses por tonelada métrica (1.000 kg) — mercados internacionales de referencia.',
+      unitShortTon: 'Dólares estadounidenses por tonelada corta (907,18 kg) — convención del mercado de EE. UU.',
+      unitUsdLb: 'Dólares estadounidenses por libra (0,4536 kg).',
+      unitDozen: 'Dólares estadounidenses por docena.',
+      unitGeneric: 'Unidad de medida de esta serie.',
       year: 'Año',
       value: 'Valor',
       getPredictions: 'Obtener Predicciones IA',
@@ -1468,6 +1528,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Pensando...',
     streamingError: 'Se interrumpió la respuesta. Inténtelo de nuevo.',
     welcomeMessage: 'Welcome! How can I assist you today?',
     aiGeneratedNoDocs: 'Generado por IA — no basado en los documentos de la biblioteca',

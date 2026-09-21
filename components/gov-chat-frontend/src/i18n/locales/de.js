@@ -535,8 +535,49 @@ export default {
     }
   },
   charts: {
+    news: {
+      addFromNews: 'Aus aktuellen Nachrichten hinzufügen',
+      insert: 'Auswahl einfügen',
+      noItems: 'Keine aktuellen Meldungen'
+    },
+
+    caveats: {
+      aboutData: 'Über diese Daten',
+      source: 'Quelle',
+      coverage: 'Abdeckung',
+      estimation: 'Schätzungen',
+      quality: 'Qualität',
+      estimated: 'Geschätzt',
+      actual: 'Tatsächlich',
+      estimatedSeries: '{name} (geschätzt)',
+      bundledSnapshot: 'Mitgelieferte Momentaufnahme',
+      savedDataAge: 'Gespeicherte Daten — vor {age}',
+      updatedAgo: 'Aktualisiert vor {age}',
+      ageMinutes: '{n} Min.',
+      ageHours: '{n} Std.',
+      ageDays: '{n} T',
+      regionalWith: '{label}: {country}',
+      estimatedWith: '{label} ({years})',
+      annualWith: '{label} (bis {year})',
+      codes: {
+        REGIONAL_DATA: 'Regionale Daten',
+        ESTIMATED_CPI: 'Inflationsbereinigte Schätzung',
+        GAP_YEARS: 'Fehlende Jahre',
+        ANNUAL_ONLY: 'Jährliche Daten',
+        SINGLE_MARKET: 'Einzelmarkt',
+        COMMUNITY_DATA: 'Community-Daten',
+        CURATED_STAT: 'Kuratierte Statistik',
+        PROXY_INDEX: 'Proxy-Index',
+        STALE_CACHE: 'Zwischengespeicherte Daten'
+      }
+    },
+
     loading: 'Daten werden geladen...',
     loadDataError: 'Daten konnten nicht geladen werden',
+    filterSeverity: 'Filter by severity',
+    advisory: 'Advisory',
+    regional: 'Regional',
+    sighting: 'Sighting',
     insights: 'Einblicke',
     fastActions: 'Schnellaktionen',
     cropHealth: 'Pflanzengesundheit',
@@ -594,7 +635,7 @@ export default {
     shareError: 'Fehler beim Teilen',
     market: {
       sectionTitle: 'Marktpreise',
-      maizeGrains: 'Mais & Getreide',
+      maizeGrains: 'Maize, Beans & Grains',
       cropProtection: 'Pflanzenschutz',
       fruitsVeggies: 'Obst & Gemüse',
       livestock: 'Vieh',
@@ -609,10 +650,29 @@ export default {
       latest: 'Aktuell',
       trend: 'Trend',
       priceHistory: 'Preisverlauf',
+      startYear: 'From',
+      series: 'Series',
       dataTable: 'Datentabelle',
+      period: 'Period',
+      exportCsv: 'Export CSV',
+      latestTip: 'Latest month-end price of {name} — {value}{unit}',
       lastUpdated: 'Zuletzt aktualisiert',
       commodity: 'Ware',
       noData: 'Keine Daten verfügbar',
+      unitQuintal:
+        'Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.',
+      unitPpi:
+        'US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.',
+      unitIndex:
+        'Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.',
+      unitPercent:
+        'Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.',
+      unitUsdKg: 'US dollars per kilogram.',
+      unitUsdMt: 'US dollars per metric tonne (1,000 kg) — international benchmark markets.',
+      unitShortTon: 'US dollars per short ton (907.18 kg) — US market convention.',
+      unitUsdLb: 'US dollars per pound (0.4536 kg).',
+      unitDozen: 'US dollars per dozen.',
+      unitGeneric: 'Unit of measurement for this series.',
       year: 'Jahr',
       value: 'Wert',
       getPredictions: 'KI-Vorhersagen erhalten',
@@ -1464,6 +1524,7 @@ export default {
     }
   },
   chatbot: {
+    thinking: 'Thinking...',
     streamingError: 'Die Antwort wurde unterbrochen. Bitte versuchen Sie es erneut.',
     aiGeneratedNoDocs: 'KI-generiert — nicht auf Bibliotheksdokumenten basierend',
     welcomeMessage: 'Welcome! How can I assist you today?',

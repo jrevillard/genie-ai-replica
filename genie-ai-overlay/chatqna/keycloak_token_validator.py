@@ -18,7 +18,12 @@ logger = logging.getLogger("GENIE.AI_CHATQNA")
 
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
+# Allowed client id(s) for the azp claim. Accepts a comma-separated list so
+# several first-party clients (web genie-app, mobile genie-mobile-dev / -staging
+# / elsalvador flavors) can share the service. Whitespace is ignored; the
+# default keeps the historical single-client behavior.
 KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "genie-app")
+KC_ALLOWED_CLIENT_IDS = {c.strip() for c in KC_CLIENT_ID.split(",") if c.strip()}
 KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 
 # JWKS cache
@@ -107,8 +112,9 @@ async def validate_token(token: str) -> dict | None:
         )
 
         # Validate azp (authorized party) — the client that requested the token
-        if "azp" in payload and payload["azp"] != KC_CLIENT_ID:
-            logger.warning(f"Token azp mismatch: {payload['azp']} != {KC_CLIENT_ID}")
+        azp = payload.get("azp")
+        if azp is not None and azp not in KC_ALLOWED_CLIENT_IDS:
+            logger.warning(f"Token azp mismatch: {azp} not in {sorted(KC_ALLOWED_CLIENT_IDS)}")
             return None
 
         return payload

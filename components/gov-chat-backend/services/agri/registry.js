@@ -3,16 +3,13 @@
  *
  * Registers every non-underscore module in adapters/; AGRI_SOURCES_ENABLED
  * filters the active set. Adding a source = drop a file here + register.
- *
- * The registry is built once at module load to avoid repeated fs.readdirSync
- * and require() calls on every enabledAdapters() invocation.
  */
 const fs = require('fs');
 const path = require('path');
 const { enabledSources } = require('./config');
 const { logger } = require('../../shared-lib');
 
-function buildRegistry() {
+function loadRegistry() {
   const dir = path.join(__dirname, 'adapters');
   const registry = new Map();
 
@@ -28,18 +25,12 @@ function buildRegistry() {
   return registry;
 }
 
-// Build once at module load — same lifetime as the backend process.
-const REGISTRY = buildRegistry();
-
-function loadRegistry() {
-  return REGISTRY;
-}
-
 /** All registered adapters, filtered by AGRI_SOURCES_ENABLED. */
 function enabledAdapters() {
-  const ids = [...REGISTRY.keys()];
+  const registry = loadRegistry();
+  const ids = [...registry.keys()];
   const enabled = enabledSources(ids);
-  return ids.filter((id) => enabled.has(id)).map((id) => REGISTRY.get(id));
+  return ids.filter((id) => enabled.has(id)).map((id) => registry.get(id));
 }
 
 module.exports = { loadRegistry, enabledAdapters };

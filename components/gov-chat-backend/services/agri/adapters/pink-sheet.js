@@ -13,7 +13,7 @@
 const XLSX = require('xlsx');
 const { fetchUrl } = require('../http');
 const { resolvePinkSheet } = require('../resolvers');
-const { docKey } = require('../keys');
+const nodeCrypto = require('node:crypto');
 
 const LANDING_URL = 'https://www.worldbank.org/en/research/commodity-markets';
 const FALLBACK_URL =
@@ -96,7 +96,7 @@ module.exports = {
         if (typeof value !== 'number' || !Number.isFinite(value)) continue; // "…" gaps
         const logical = `${def.key}:${date}`;
         docs.push({
-          _key: docKey(logical),
+          _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
           key: def.key,
           kind: 'intl-price',
           date,

@@ -7,8 +7,12 @@ jest.mock('../../services/chatbotService.js', () => ({
 }));
 
 const mockGetPestAlerts = jest.fn();
-jest.mock('../../services/agriculturalService.js', () => ({
-  getPestAlerts: mockGetPestAlerts
+jest.mock('../../services/agriApiService.js', () => ({
+  getPestAlerts: mockGetPestAlerts,
+  getCropHealth: jest.fn(),
+  getMarketPrices: jest.fn(),
+  getNews: jest.fn(),
+  get: jest.fn()
 }));
 
 jest.mock('../../composables/useChartTheme.js', () => ({

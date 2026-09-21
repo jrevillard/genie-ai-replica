@@ -14,6 +14,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  intl: ^0.20.2 # localized chart date labels (agri DateFormats)
 
   # OpenAPI generated client
   openapi:
@@ -108,7 +109,7 @@ flutter:
 flutter_launcher_icons:
   android: "ic_launcher" # This generates the Android icons
   ios: true              # This generates the iOS icons
-  image_path: "assets/images/genie_ai_icon.png" # YOUR custom icon path
+  image_path: "assets/images/agro-genio-logo.png" # green AgroGenio mark
   min_sdk_android: 21
 # Per-flavor overrides live in separate files flutter_launcher_icons-<flavor>.yaml
 # (the tool's convention); the default above is the generic genie icon and each

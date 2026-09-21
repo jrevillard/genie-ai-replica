@@ -108,12 +108,13 @@ flutter {
 }
 
 dependencies {
-    // PatrolJUnitRunner was added to main APK by Flutter via debugApi, but the
-    // Gradle subproject no longer exists (patrol removed from dev_dependencies
-    // because it auto-registered PatrolPlugin in GeneratedPluginRegistrant.java
-    // and broke release builds). Re-add the line below if/when a test that
-    // needs the native runner is in scope.
-    // androidTestImplementation(project(":patrol"))
+    // Android 12+ SplashScreen API — used by the manifest metadata to
+    // override the system splash with the AgroGenio farmer hero.
+    implementation "androidx.core:core-splashscreen:1.0.1"
+
+    // PatrolJUnitRunner is added to main APK by Flutter via debugApi.
+    // We need it in the androidTest APK too — reference the Gradle subproject directly.
+    androidTestImplementation(project(":patrol"))
 
     androidTestImplementation("androidx.test:core:1.5.0")
     androidTestImplementation("androidx.test:rules:1.2.0")

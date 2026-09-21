@@ -1,14 +1,16 @@
 # Story 1.0 — Retriever provenance materialization (fusion-time attribution)
 
-**Status:** IN-PROGRESS → implementation decisions documented this session.
+**Status:** DONE 2026-09-21 (implementation + design decisions + behavioral
+correction to `fanout_should_engage`).
 **Sources:** epics.md 1.0 (G18); [fan-out course-correction](../planning-artifacts/okf-fanout-course-correction-2026-09-20.md)
 amendment C (provenance = fusion-time attribution; chunk `file_id == concept_id`
 from content-only chunking); David, 2026-09-20: the graph existence must
 maintain parity AND RELATIONSHIP with the ingested OKF repo — the retriever's
 "graph exists" check is the lens through which the chat path knows the
-repo's current serving reality; David, 2026-09-20 (re-affirmed): "the
-graph existence must maintain parity and relationship with the ingested
-OKF repo" — this is the contract that governs the fan-out implementation.
+repo's current serving reality; David, 2026-09-21: "always fan out when >1
+graph is encoded" + "the retriever must work smoothly and consistently
+when we have A: the single legacy graph only, B: fan out with the legacy
+graph and one or more OKF graphs if they exist".
 
 ## Story
 
@@ -118,15 +120,29 @@ one focused change, no future rework, the legacy path is byte-identical
 because the same body runs through the new helper with one argument
 substituted.
 
-### Decision D — Orchestrator MUST handle zero-OKF-graph case gracefully
+### Decision D — Orchestrator MUST handle two shapes smoothly (David, 2026-09-21)
 
-When the chat orchestrator runs with ONLY the default free-form corpus
-graph and zero OKF graphs, `_encoded_graph_names` is empty. The fan-out
-guard `fanout_should_engage(encoded_graph_names)` returns False on
-empty list and the orchestrator is bypassed entirely — the legacy
-single-graph path runs unchanged against `ARANGO_GRAPH_NAME`. Single-
-element list also bypasses (legacy guard). Only ≥2 graphs engage the
-fan-out. **Selected.**
+The retriever must handle BOTH shapes the chat can produce:
+
+- **Case A — legacy single graph only**: the carrier is empty; fan-out
+  does not engage; the legacy single-graph path runs unchanged against
+  `ARANGO_GRAPH_NAME`.
+- **Case B — legacy graph + one or more OKF graphs**: the carrier
+  carries the legacy graph (`GRAPH`) as the first element plus N OKF
+  graph names. Fan-out engages with the **full set** (every entry
+  treated equally — the legacy graph is just one leg, not a special
+  case).
+
+This is the corrected rule (2026-09-21, supersedes the earlier "≥2
+graphs" gate): the carrier is the single source of truth, the chat
+forwarder MUST send `[GRAPH, OKF_<repo_a>_v<N_a>, ...]` whenever it
+wants the legacy graph included, and the retriever treats every entry
+as one leg. There is NO implicit "default legacy graph" fallback in
+the fan-out path — once ≥1 graph is encoded, the carrier is exhaustive.
+
+The single-element carrier IS the fan-out shape with one leg (the
+legacy graph). The empty carrier IS the legacy single-graph shape.
+**Selected.**
 
 ### Decision E — Per-leg timeout (ADR-039 D8)
 

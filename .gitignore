@@ -145,3 +145,5 @@ _bmad-output/implementation-artifacts/bmad-build-auto-result-*.md
 
 # Legacy file-mode log artefacts (T8 deleted the code path)
 components/gov-chat-backend/logs/
+
+.playwright-mcp/

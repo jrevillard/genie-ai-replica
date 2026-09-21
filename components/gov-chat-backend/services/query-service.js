@@ -7,6 +7,32 @@ const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
+// Pick the user-visible question to store in queries.text for the Query Inspector.
+// Order of preference:
+//   1. `queryData.userQuestion` — the frontend's visibleText/typed text (the only
+//      value that matches what the user saw in the chat, even when the dual-prompt
+//      mechanism replaces the last user message in `messages` with a hidden
+//      persona/system prompt for OPEA).
+//   2. The last user-role message in `messages` — correct for un-swapped flows.
+//   3. The tail of `messages` — last-resort fallback for legacy clients that
+//      only send a flat `text` field synthesized into a single-element messages
+//      array. Skips empty/whitespace entries so a leftover streaming placeholder
+//      can never win.
+function pickUserText(messages, explicit) {
+  if (explicit && String(explicit).trim()) return String(explicit);
+  if (Array.isArray(messages)) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === 'user' && m.content && String(m.content).trim()) {
+        return m.content;
+      }
+    }
+    const tail = messages[messages.length - 1];
+    if (tail && tail.content && String(tail.content).trim()) return tail.content;
+  }
+  return '';
+}
+
 class QueryService {
   constructor() {
     this.dbService = dbService; // Store the service reference instead of the promise
@@ -312,8 +338,7 @@ class QueryService {
       throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
     }
 
-    const lastMessage = queryData.messages[queryData.messages.length - 1];
-    const queryText = lastMessage ? lastMessage.content : '';
+    const queryText = pickUserText(queryData.messages, queryData.userQuestion);
 
     // Resolve categoryId
     let categoryId = queryData.categoryId || null;
@@ -506,8 +531,7 @@ class QueryService {
       logger.info('[DEBUG] All validations passed successfully.');
 
       // Derive text from the last message for backward compatibility and analytics
-      const lastMessage = queryData.messages[queryData.messages.length - 1];
-      const queryText = lastMessage ? lastMessage.content : '';
+      const queryText = pickUserText(queryData.messages, queryData.userQuestion);
       if (!queryText) {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
@@ -1782,3 +1806,4 @@ class QueryService {
 // Singleton instance
 const instance = new QueryService();
 module.exports = instance;
+module.exports.pickUserText = pickUserText;

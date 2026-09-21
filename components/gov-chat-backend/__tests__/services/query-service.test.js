@@ -1370,4 +1370,55 @@ describe('QueryService', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('pickUserText', () => {
+    it('prefers the explicit userQuestion field over the messages tail', () => {
+      // Quick Help scenario: the dual-prompt mechanism leaves the long hidden
+      // persona prompt as the last user message in `messages`, but the
+      // frontend also sends the visibleText as `userQuestion`.
+      const messages = [
+        { role: 'assistant', content: 'Welcome! How can I assist you today?' },
+        {
+          role: 'user',
+          content:
+            'You are an expert Agricultural Extension Assistant for CENTA (Centro Nacional de Tecnología Agropecuaria y Forestal) in El Salvador...'
+        },
+        { role: 'assistant', content: '' }
+      ];
+      expect(queryService.pickUserText(messages, 'Quiero instrucciones paso a paso para sembrar maíz')).toBe(
+        'Quiero instrucciones paso a paso para sembrar maíz'
+      );
+    });
+
+    it('falls back to the last user-role message when userQuestion is absent', () => {
+      const messages = [
+        { role: 'assistant', content: 'Welcome!' },
+        { role: 'user', content: 'pasos para sembrar maiz' },
+        { role: 'assistant', content: '...' }
+      ];
+      expect(queryService.pickUserText(messages, undefined)).toBe('pasos para sembrar maiz');
+    });
+
+    it('skips an empty streaming placeholder tail and returns the last real user message', () => {
+      // Defensive: legacy clients (or older builds that still push the empty
+      // streaming bot into `messages`) must not have their queries.text
+      // polluted by the placeholder.
+      const messages = [
+        { role: 'user', content: 'instrucciones para sembrar maiz' },
+        { role: 'assistant', content: '' }
+      ];
+      expect(queryService.pickUserText(messages, undefined)).toBe('instrucciones para sembrar maiz');
+    });
+
+    it('skips a whitespace-only userQuestion and falls back to messages', () => {
+      const messages = [{ role: 'user', content: 'real question' }];
+      expect(queryService.pickUserText(messages, '   ')).toBe('real question');
+    });
+
+    it('returns an empty string when nothing usable is present', () => {
+      expect(queryService.pickUserText([], undefined)).toBe('');
+      expect(queryService.pickUserText([{ role: 'assistant', content: '' }], undefined)).toBe('');
+      expect(queryService.pickUserText(undefined, undefined)).toBe('');
+    });
+  });
 });

@@ -944,8 +944,10 @@ export default {
           // empty placeholder becomes the tail of the messages array, and the
           // backend's `text = messages[messages.length-1].content` derivation
           // stores an empty string in queries.text for Quick Help queries.
+          // The `msg &&` guard tolerates corrupted-cache null entries (localStorage
+          // round-trip can introduce them); the inner access would otherwise throw.
           const baseMessages = this.chatMessages
-            .filter((msg) => !msg.isStreaming)
+            .filter((msg) => msg && !msg.isStreaming)
             .map((msg) => ({
               role: msg.sender === 'user' ? 'user' : 'assistant',
               content: msg.content

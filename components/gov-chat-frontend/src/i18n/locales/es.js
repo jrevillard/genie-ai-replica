@@ -1580,7 +1580,13 @@ export default {
     exportButton: 'Exportar',
     exportSuccess: 'Chat exportado con éxito',
     exportError: 'Falló la exportación del chat. Por favor, intente nuevamente.',
-    removeItem: 'Eliminar'
+    removeItem: 'Eliminar',
+    chatUpdated: 'Conversación actualizada',
+    feedbackError: 'Error al enviar comentarios',
+    feedbackMissingQueryId: 'Falta el ID de consulta para los comentarios',
+    feedbackSubmitted: 'Comentarios enviados',
+    saving: 'Guardando...',
+    savingConversation: 'Guardando conversación...'
   },
   quickhelp: {
     // Labels (Short for UI)

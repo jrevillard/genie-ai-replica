@@ -1591,7 +1591,13 @@ export default {
     exportButton: 'Exporter',
     exportSuccess: 'Discussion exportée avec succès',
     exportError: "Échec de l'exportation de la discussion. Veuillez réessayer.",
-    removeItem: 'Supprimer'
+    removeItem: 'Supprimer',
+    chatUpdated: 'Conversation mise à jour',
+    feedbackError: "Erreur lors de l'envoi des commentaires",
+    feedbackMissingQueryId: 'ID de requête manquant pour les commentaires',
+    feedbackSubmitted: 'Commentaires envoyés',
+    saving: 'Enregistrement...',
+    savingConversation: 'Enregistrement de la conversation...'
   },
   quickhelp: {
     // Labels (Short for UI)

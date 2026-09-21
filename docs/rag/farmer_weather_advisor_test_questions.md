@@ -1,69 +1,81 @@
-# Farmer Questions for Weather Advisor Testing
+# Farmer Weather Advisor — Test Questions
 
-## Part 1: Questions Directly from the Use Case
+A single pass through what one farmer asks across a season, in the order they
+would ask it. Stages move from single-source lookups to judgment calls that
+combine sources. 16 questions, one idea each.
 
-1. When should I plant this year?
-2. Is the wet (rainy/monsoon) season delayed this year?
-3. If rains are delayed, what crops should I consider planting?
-4. Will there be sufficient rainfall for my village to plant in the next months?
-5. Is there a high risk of drought later during the season?
-6. Which crops are best suited for the upcoming season based on the forecast for the next 3 months?
-7. What practices do you recommend for me for the upcoming planting season?
-8. Please notify me if there is a high chance of dry spells during planting or harvesting time.
+See [`farmer-user-journey.md`](farmer-user-journey.md) for the same stages
+told as a narrative, from the farmer's side of the screen.
 
-## Part 2: Additional Farmer Questions for Testing
+## Scope of this MVP
 
-### Rainfall & Weather
+- **Crops**: Aman rice, mango, eggplant. Nothing else has a crop profile.
+- **Place**: Naogaon district / Sapahar sub-district (the default location).
+- **Sources the answer may use**: the ingested crop documents (calendar, pests,
+  thresholds) and the live context block (today's date, season position, 7-day
+  forecast, crop risk, seasonal outlook, drought, flood).
+- **Not in the system**: observed or historical rainfall, notifications and
+  subscriptions, the agromet bulletin (no `bulletin.md` shipped), the flood-map
+  image (`flood` command doesn't render), official BMD warnings (not answered
+  correctly), any crop outside the three above.
 
-9. Will it rain in my village tomorrow?
-10. Will it rain this week?
-11. How much rain is expected in the next 7 days?
-12. When is the next significant rainfall expected?
-13. Has rainfall been lower than normal this month?
-14. Will there be a long dry period in the next two weeks?
-15. Is heavy rain expected this week?
-16. Is there a risk of flooding after the expected rainfall?
-17. Will the rain be enough to refill my pond?
-18. Should I wait for rain before planting?
+## How to read the table
 
-### Planting
+`Must use` says where the answer has to come from. `Pass when` is the check —
+an answer that is fluent but sources a number from the wrong place is a fail.
+Any live figure presented as coming from "the document" is a fail everywhere.
 
-19. Is this a good time to plant rice?
-20. Should I plant rice now or wait another week?
-21. If the rain does not come next week, what should I do?
-22. What crops can I plant if the monsoon arrives late?
-23. Which crop is safer to plant given the current weather forecast?
-24. Will the expected rainfall be enough for my crop to germinate?
-25. Is it too late to plant my crop this season?
-26. What should I plant if the next three months are expected to be dry?
+---
 
-### Irrigation & Water Management
+## Stage 1 — Basic lookups (initial capabilities)
 
-27. Should I irrigate my field today?
-28. When should I irrigate my crop this week?
-29. How much water will my crop likely need this week?
-30. Can I skip irrigation because rain is expected?
-31. There has been no rain for several days. What should I do?
-32. How can I save water during a dry spell?
-33. When should I irrigate before a dry period?
-34. Is there enough expected rainfall that I can reduce irrigation?
+Single-source, deterministic retrieval. No comparison, no judgment call — the
+kind of question that should never come back wrong or ambiguous.
 
-### Crop-Specific
+| #   | Question                                                     | Must use       | Pass when                                                    |
+| --- | ------------------------------------------------------------- | ---------------- | --------------------------------------------------------------- |
+| 1   | What are the months for Aman rice in Naogaon?                | Crop calendar   | Months come from the calendar, not the model's own knowledge  |
+| 2   | Tell me the crop calendar for eggplant.                      | Crop calendar   | Stages and months listed; no weather figures mixed in          |
+| 3   | What's today's date, and where are we in the rice season?    | Live context    | Uses today's date and the season position line for rice        |
 
-35. Is the weather suitable for growing mangoes this season?
-36. Will the expected weather affect my rice crop?
-37. What should I do to protect my eggplant during a dry spell?
-38. Is the coming weather dangerous for my crop?
-39. Which crops need less water if there is a drought?
-40. Which crop would be more resilient if rainfall is below normal?
+## Stage 2 — Deciding what to plant
 
-### Extreme Weather & Warnings
+Judgment questions that combine the calendar with the seasonal outlook.
+Phrasing like "is the season late" is inherently comparative — it needs a
+baseline and can read differently depending on which one is picked, so it
+belongs here, not in the basic-lookup stage.
 
-41. Is there a drought warning for my area?
-42. How serious is the drought risk for my village?
-43. When could the next dry spell occur?
-44. How long is the expected dry spell?
-45. Should I harvest earlier because of the upcoming weather?
-46. Is heavy rainfall expected during my harvest period?
-47. Is there a risk of extreme heat this week?
-48. What should I do if there is no rain for the next two weeks?
+| #   | Question                                                      | Must use                | Pass when                                                       |
+| --- | --------------------------------------------------------------| ------------------------ | ------------------------------------------------------------------ |
+| 4   | When should I plant eggplant this year?                       | Calendar + live context  | Names the calendar's Kharif window (May); recognizes it has already passed — today (week 38) is the calendar's own harvesting stage — instead of inventing a September window |
+
+| 6   | If the rains come late, is rice or eggplant the safer choice?  | Calendar + outlook       | Compares the two crops actually grown here                          |
+| 7   | What should I do to get ready for this planting season?        | Crop documents           | Practices come from the documents; says so when they contain none  |
+
+## Stage 3 — The week ahead
+
+| #   | Question                                          | Must use                  | Pass when                                                          |
+| --- | -------------------------------------------------- | -------------------------- | -------------------------------------------------------------------- |
+| 8   | What is the weather for the next week in my region?                            | Seasonal outlook + date  | States the baseline it's comparing against; says so if it canno             | 7-day forecast             | Quotes forecast days and totals, with the district named             |
+| 9   | Should I irrigate my eggplant this week?          | Forecast + soil moisture   | Uses the soil moisture band; says when the documents give no irrigation guidance |
+
+## Stage 4 — Looking after the crop
+
+| #   | Question                                        | Must use        | Pass when                                          |
+| --- | ------------------------------------------------ | ---------------- | ----------------------------------------------------- |
+| 11  | What are the pests and diseases of Aman rice?   | Crop documents   | Complete list from the document, not a partial two    |
+| 12  | Will this week's weather damage my rice?        | Risk + forecast  | Links a specific forecast value to a crop threshold    |
+
+## Stage 5 — Drought, flood, and field maps
+
+| #   | Question                                                  | Must use            | Pass when                                          |
+| --- | ----------------------------------------------------------| ---------------------- | ------------------------------------------------------ |
+| 13  | Is there a drought risk in Naogaon next week?             | Drought assessment  | Uses the stored assessment, not the forecast alone     |
+| 14  | Is my area at risk of flooding in the next ten days?      | Flood outlook       | Uses the flood outlook horizon as given                |
+| 15  | Show me my field boundaries on the map.                   | `delineate` command | Delineation job runs; image returned                   |
+
+## Stage 6 — What the system must refuse
+
+| #   | Question                                      | Expected                                            |
+| --- | ------------------------------------------------| ------------------------------------------------------ |
+| 16  | Is the weather good for planting potato here? | Says potato has no crop profile; does not invent one   |

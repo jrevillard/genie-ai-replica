@@ -12,40 +12,99 @@ build_crop_profiles_pipeline.py, so this workflow stays crop-agnostic.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from importlib import import_module
+from typing import TYPE_CHECKING, Any
 
-from app.core.storage import StorageLayer
+from app.core.crop_profile_loader import CropProfileLoader
+
+if TYPE_CHECKING:
+    from app.core.storage import StorageLayer
 
 logger = logging.getLogger(__name__)
 
-# Category keywords used to deduplicate triggers from multiple forecast days.
-# The first keyword that matches determines the category bucket.
-_TRIGGER_CATEGORIES = [
-    "max temperature",
-    "min temperature",
-    "humidity",
-    "critical rainfall",
-    "high rainfall",
-    "wind",
-]
+_TIER_LABELS = {0: "Normal", 1: "Advisory", 2: "Warning", 3: "Severe"}
+_SEVERITY_RANK = {"advisory": 1, "warning": 2}
 
 
-def _dedup_by_category(triggers: list[str]) -> list[str]:
-    """
-    Keep at most one trigger per category (the first encountered, which is the
-    earlier/more-imminent day). Prevents the same breach on two consecutive
-    days from doubling the severe count and inflating the tier.
-    """
-    seen: set[str] = set()
-    result: list[str] = []
-    for trig in triggers:
-        lower = trig.lower()
-        bucket = next((cat for cat in _TRIGGER_CATEGORIES if cat in lower), lower[:30])
-        if bucket not in seen:
-            seen.add(bucket)
-            result.append(trig)
-    return result
+def _point_value(point, metric: str) -> float | None:
+    if metric == "temp_mean":
+        return (point.temp_min + point.temp_max) / 2.0
+    value = getattr(point, metric, None)
+    return float(value) if value is not None else None
+
+
+def _condition_matches(point, condition: dict) -> bool:
+    value = _point_value(point, condition.get("metric", ""))
+    if value is None:
+        return False
+    operator = condition.get("operator")
+    threshold = condition.get("value")
+    if operator == ">":
+        return value > float(threshold)
+    if operator == "<":
+        return value < float(threshold)
+    if operator == "between":
+        low, high = threshold
+        return float(low) <= value <= float(high)
+    return False
+
+
+def _rule_matches(point, rule: dict) -> bool:
+    if "all" in rule:
+        return all(_condition_matches(point, condition) for condition in rule["all"])
+    if "any" in rule:
+        return any(_condition_matches(point, condition) for condition in rule["any"])
+    return _condition_matches(point, rule)
+
+
+def _condition_text(point, condition: dict) -> str:
+    metric = condition["metric"]
+    value = _point_value(point, metric)
+    labels = {
+        "rain_mm": ("Rainfall", "mm/day"),
+        "wind_kmh": ("Wind", "km/h"),
+        "temp_min": ("minimum temperature", "°C"),
+        "temp_max": ("maximum temperature", "°C"),
+        "temp_mean": ("mean temperature", "°C"),
+        "humidity_min": ("minimum humidity", "%"),
+        "humidity_max": ("maximum humidity", "%"),
+    }
+    label, unit = labels.get(metric, (metric.replace("_", " "), ""))
+    operator = condition["operator"]
+    threshold = condition["value"]
+    if operator == "between":
+        expected = f"within {threshold[0]}–{threshold[1]}{unit}"
+    else:
+        expected = f"{operator} {threshold}{unit}"
+    return f"{label} {value:.1f}{unit} ({expected})"
+
+
+def _rule_description(point, stage: str, rule: dict) -> str:
+    conditions = rule.get("all") or rule.get("any") or [rule]
+    joiner = " and " if "all" in rule else " or " if "any" in rule else ""
+    details = joiner.join(_condition_text(point, condition) for condition in conditions)
+    return f"{details} matches the BAMIS {stage} warning"
+
+
+def _evaluate_stage_rules(point, stage: str, rules: list[dict]) -> list[dict]:
+    """Return one highest-severity event per source warning category."""
+    events: dict[str, dict] = {}
+    for rule in rules:
+        if not _rule_matches(point, rule):
+            continue
+        event = {
+            "category": rule["category"],
+            "severity": rule.get("severity", "warning"),
+            "description": _rule_description(point, stage, rule),
+        }
+        previous = events.get(event["category"])
+        if (
+            previous is None
+            or _SEVERITY_RANK[event["severity"]] > _SEVERITY_RANK[previous["severity"]]
+        ):
+            events[event["category"]] = event
+    return list(events.values())
 
 
 class CropShortTermEWS:
@@ -59,6 +118,7 @@ class CropShortTermEWS:
         storage: StorageLayer,
         crop: str,
         thresholds=None,
+        profile_loader: CropProfileLoader | None = None,
     ) -> None:
         self._storage = storage
         self._crop = crop
@@ -67,7 +127,16 @@ class CropShortTermEWS:
         self._thresholds = (
             thresholds or getattr(self._profile, f"load_{crop}_thresholds")()
         )
-        self._evaluate_day = getattr(self._engine, f"evaluate_{crop}_day")
+        self._profile_loader = profile_loader or CropProfileLoader()
+        threshold_region = getattr(self._thresholds, "region", "")
+        available_regions = self._profile_loader.regions_for_crop(crop)
+        self._region = (
+            threshold_region
+            if self._profile_loader.get_profile(crop, threshold_region)
+            else available_regions[0]
+            if available_regions
+            else threshold_region
+        )
 
     @property
     def crop(self) -> str:
@@ -113,21 +182,67 @@ class CropShortTermEWS:
             self._engine.to_point_from_dict(day, source) for day in forecast_entries
         ]
 
-        # Evaluate thresholds across both forecast days
-        triggers: list[str] = []
+        # Evaluate only forecast dates that belong to the crop's BAMIS season.
+        warning_events: list[dict[str, Any]] = []
         disease_risks: list[str] = []
+        active_stages: list[str] = []
         for point in points:
-            triggers.extend(self._evaluate_day(point, self._thresholds))
+            try:
+                forecast_day = date.fromisoformat(point.date)
+            except ValueError:
+                logger.warning(
+                    "[CROP_EWS] Invalid forecast date %r for %s — skipped",
+                    point.date,
+                    self._crop,
+                )
+                continue
+            stage = self._profile_loader.get_stage_for_week(
+                self._crop, self._region, forecast_day.isocalendar()[1]
+            )
+            if not stage:
+                continue
+            if stage not in active_stages:
+                active_stages.append(stage)
+            rules = self._profile_loader.get_weather_warning_rules(
+                self._crop, self._region, stage
+            )
+            warning_events.extend(_evaluate_stage_rules(point, stage, rules))
             disease_risks.extend(self._engine.get_disease_risks(point))
 
-        # Deduplicate by category — keep the worst value per trigger type
-        # (e.g. heat breach on day 1 and day 2 counts as one severe trigger)
-        triggers = _dedup_by_category(triggers)
+        # Keep the highest-severity result for each source warning category.
+        deduplicated_events: dict[str, dict] = {}
+        for event in warning_events:
+            previous = deduplicated_events.get(event["category"])
+            if (
+                previous is None
+                or _SEVERITY_RANK[event["severity"]]
+                > _SEVERITY_RANK[previous["severity"]]
+            ):
+                deduplicated_events[event["category"]] = event
+        warning_events = list(deduplicated_events.values())
+        triggers = [event["description"] for event in warning_events]
         disease_risks = list(dict.fromkeys(disease_risks))
 
-        tier, label = self._engine.classify_tier(
-            triggers + disease_risks, flood_confirmed=False
+        warning_count = sum(event["severity"] == "warning" for event in warning_events)
+        advisory_count = sum(
+            event["severity"] == "advisory" for event in warning_events
         )
+        if warning_count >= 2:
+            tier = 3
+        elif warning_count == 1:
+            tier = 2
+        elif advisory_count or disease_risks:
+            tier = 1
+        else:
+            tier = 0
+        label = _TIER_LABELS[tier]
+        in_season = bool(active_stages)
+
+        if not in_season:
+            triggers = []
+            disease_risks = []
+            tier = 0
+            label = _TIER_LABELS[tier]
 
         assessment = {
             "location": location,
@@ -140,16 +255,23 @@ class CropShortTermEWS:
             "forecast_source": source,
             "sense_check_passed": om_doc.get("sense_check_passed") if om_doc else None,
             "fallback_used": source != "open_meteo",
+            "in_season": in_season,
+            "crop_stages": active_stages,
+            "profile_region": self._region,
             "triggers": triggers,
             "disease_risks": disease_risks,
-            "message": self._engine.build_push_message(
-                {
-                    "location": location,
-                    "forecast_date": points[0].date,
-                    "tier": tier,
-                    "triggers": triggers,
-                    "disease_risks": disease_risks,
-                }
+            "message": (
+                f"{self._crop.replace('_', ' ').title()} is outside its BAMIS crop season for {location}."
+                if not in_season
+                else self._engine.build_push_message(
+                    {
+                        "location": location,
+                        "forecast_date": points[0].date,
+                        "tier": tier,
+                        "triggers": triggers,
+                        "disease_risks": disease_risks,
+                    }
+                )
             ),
         }
 

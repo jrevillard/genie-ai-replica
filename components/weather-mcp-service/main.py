@@ -1272,10 +1272,30 @@ def _crop_label(crop: str) -> str:
     return crop.replace("_", " ").title()
 
 
+# Crop names in English, Bengali script, and romanised Bengali ("Banglish").
+#
+# The Bengali forms are load-bearing, not a nicety. The caller passes the
+# translated English AND the user's original message (query-service.js
+# fetchWeatherContext), because the routing translator is a 4B model that
+# mangles the locative "-ে" ending on short questions:
+#   "আজ আমে কী রোগ হতে পারে?"   -> "What illness could I have today?"  (আমে read as আমি, "I")
+#   "আজ বেগুনে কী রোগ হতে পারে?" -> "...in the skin in shades of purple?" (বেগুনে read as বেগুনি, "purple")
+# With no crop name surviving, no profile was attached and the LLM answered
+# about whichever crop the live assessments happened to lead with. Matching the
+# original text rescues the crop the translator lost. (ধান survives translation
+# today, but the same gap applies to it whenever translation drops out.)
+#
+# আম (mango) needs its negative lookahead: it prefixes the first-person
+# pronouns (আমি/আমার/আমরা/আমাদের/আমাকে/আমায়) and আমন (Aman rice), so a bare
+# match would read "আমার ধান" ("my rice") as a mango question. বেগুন likewise
+# excludes বেগুনি ("purple"). The leading lookbehind keeps each stem from
+# matching inside a longer Bengali word.
+# Romanised "begun" is deliberately absent: it is also the English participle
+# ("the rains have begun").
 _CROP_QUERY_PATTERNS = {
-    "rice_aman": r"\brice\b",
-    "eggplant": r"\b(?:eggplant|brinjal)s?\b",
-    "mango": r"\bmango(?:es)?\b",
+    "rice_aman": r"\b(?:rice|paddy|dhan|aman)\b|(?<![ঀ-৿])(?:ধান|আমন)",
+    "eggplant": r"\b(?:eggplant|brinjal)s?\b|(?<![ঀ-৿])বেগুন(?!ি)",
+    "mango": r"\bmango(?:es)?\b|\baam\b|(?<![ঀ-৿])আম(?!ি|ার|রা|াদের|াকে|ায়|ন)",
 }
 _CROP_PLANTING_COMPARISON = re.compile(
     r"(?=.*\bcrops?\b)(?=.*\b(?:plant|planting|sow|sowing)\b)"
@@ -1430,12 +1450,19 @@ def _season_lines(assessments: list[dict], today, crop: str) -> list[str]:
 
 def _build_weather_context(
     district: str, days: int = 7, crops: list[str] | None = None
-) -> str:
-    """Plain-text weather context with profiles only for requested crops."""
+) -> tuple[str, list[str]]:
+    """Plain-text weather context with profiles only for requested crops.
+
+    Returns ``(text, sources)``. ``sources`` names the data providers whose
+    output actually made it into ``text`` (e.g. ``["BMD", "Open-Meteo"]``), in
+    the order they appear, so the chat backend can ask the model to cite them
+    at the end of a weather answer without guessing.
+    """
     from datetime import datetime, timezone
 
     if storage_layer is None:
-        return ""
+        return "", []
+    sources: list[str] = []
     now = datetime.now(timezone.utc)
     today = now.date()
     sections: list[str] = [
@@ -1500,6 +1527,7 @@ def _build_weather_context(
         source = (
             "Open-Meteo" if stored.source == "open_meteo" else stored.source.upper()
         )
+        sources.append(source)
         check = ""
         if stored.sense_check_passed is not None:
             check = ", cross-checked against BAMIS" + (
@@ -1524,6 +1552,7 @@ def _build_weather_context(
     except Exception:
         seasonal = None
     if seasonal and seasonal.get("outlook"):
+        sources.append("Copernicus SEAS5")
         lines = []
         for rec in seasonal["outlook"]:
             line = f"  {_month_label(rec.get('valid_month', ''))}: mean {rec.get('mean_temp_c', '?')}°C, rain {rec.get('total_precip_mm', '?')} mm"
@@ -1582,8 +1611,10 @@ def _build_weather_context(
         sections.append(
             f"Official BMD warnings in force for {district}:\n" + "\n".join(lines)
         )
+        sources.append("BMD")
     else:
         sections.append(f"Official BMD warnings in force for {district}: none.")
+        sources.append("BMD")
 
     limits = (
         "Not available in this system: observed rainfall records for past weeks or months, "
@@ -1592,7 +1623,7 @@ def _build_weather_context(
     if forecast_horizon:
         limits += " " + forecast_horizon
     sections.append(limits)
-    return "\n\n".join(sections)
+    return "\n\n".join(sections), list(dict.fromkeys(sources))
 
 
 _PUBLIC_DROUGHT_REPORT_BASE = os.getenv(
@@ -1624,10 +1655,8 @@ async def get_weather_context(
     district_info = _find_district_64(location) or _find_drought_district(location)
     district = district_info[0] if district_info else _DEFAULT_DISTRICT
     wanted = _requested_crops(crop or location)
-    return {
-        "location": district,
-        "text": _build_weather_context(district, days, wanted),
-    }
+    text, sources = _build_weather_context(district, days, wanted)
+    return {"location": district, "text": text, "sources": sources}
 
 
 @app.get("/drought/risk/latest")

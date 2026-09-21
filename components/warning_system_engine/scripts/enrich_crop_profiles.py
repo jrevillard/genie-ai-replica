@@ -40,6 +40,20 @@ _HERE = Path(__file__).parent.parent
 _BAMIS_META = _HERE / "data" / "bamis_metadata.json"
 _OUTPUT_FILE = _HERE / "data" / "example_crop_profile.json"
 
+
+def _load_curated_stage_warning_rules() -> dict[str, dict]:
+    """Keep PDF-transcribed stage rules when regenerating the profiles."""
+    if not _OUTPUT_FILE.exists():
+        return {}
+    with open(_OUTPUT_FILE, encoding="utf-8") as file:
+        profiles = json.load(file)
+    return {
+        profile["crop"]: profile["weather_warning_rules_by_stage"]
+        for profile in profiles.values()
+        if profile.get("weather_warning_rules_by_stage")
+    }
+
+
 # ---------------------------------------------------------------------------
 # Week/month ordering helpers
 # ---------------------------------------------------------------------------
@@ -786,6 +800,9 @@ def main() -> None:
     parser.add_argument("--output", default=str(_OUTPUT_FILE), help="Output JSON path")
     args = parser.parse_args()
 
+    # Preserve the manually transcribed, stage-aligned rules from the BAMIS PDFs.
+    stage_warning_rules = _load_curated_stage_warning_rules()
+
     # ── Load source data ─────────────────────────────────────────────────────
     print(f"[INFO] Loading {_BAMIS_META} ...")
     with open(_BAMIS_META, encoding="utf-8") as f:
@@ -838,6 +855,15 @@ def main() -> None:
             climate_records=climate_by_key[key],
             advisory_records=adv_records + global_adv,
         )
+        if crop in stage_warning_rules:
+            profile["weather_warning_rules_by_stage"] = stage_warning_rules[crop]
+            profile["source_coverage"] = {
+                "weather_warning_rules_by_stage": (
+                    "Transcribed from the stage-aligned Weather Warning table in "
+                    "the source BAMIS PDF. Rules requiring unavailable cloud, hail, "
+                    "soil-wetness, or multi-day wet-spell data are not evaluated."
+                )
+            }
         profiles[key] = profile
         print(
             f"  [OK] {key:40s} weeks={profile['season_span']['duration_weeks']:3d}  stages={len(profile['growth_stages'])}"

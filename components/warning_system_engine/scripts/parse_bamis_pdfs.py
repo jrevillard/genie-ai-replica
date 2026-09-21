@@ -214,6 +214,7 @@ def _extract_period(text: str) -> str:
 # name instead ("Region: Aman Rice"), with the region on the next line.
 _REGION_HEADER_PATTERNS = [
     re.compile(r":\s*([A-Za-z]+)\s+Region\b", re.IGNORECASE),
+    re.compile(r"Districts:\s*([A-Za-z]+)\b", re.IGNORECASE),
     re.compile(r"^\s*Region:\s*([A-Za-z]+)\s*$", re.MULTILINE),
 ]
 
@@ -879,10 +880,10 @@ def _extract_advisories(pdf: Any, crop: str, region: str) -> list[dict]:
 
             for row in table[1:]:
 
-                def _cell(idx: int | None) -> str:
-                    if idx is None or idx >= len(row):
+                def _cell(idx: int | None, current_row: list = row) -> str:
+                    if idx is None or idx >= len(current_row):
                         return ""
-                    return str(row[idx] or "").strip()
+                    return str(current_row[idx] or "").strip()
 
                 name = _cell(name_idx)
                 if not name:
@@ -957,7 +958,7 @@ def parse_pdf(pdf_path: Path) -> list[dict]:
             if not advisory_records:
                 advisory_records = _extract_advisories(pdf, crop, region)
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - one malformed PDF must not stop the batch
         print(f"  [WARN] Failed to parse {pdf_path.name}: {exc}", file=sys.stderr)
         return []
 

@@ -270,7 +270,28 @@ class GpuTranslateBackend {
    * @returns {Object} Formatted request body
    */
   formatRequest(modelId, sourceCode, targetCode, text) {
-    // Reserve tokens for the prompt (~128 tokens) so total stays within maxModelLen
+    const body = this._buildRequest(modelId, sourceCode, targetCode, text);
+    // Cap max_tokens from the prompt that was actually built, not a fixed
+    // reserve: with a 2048-token model a 161-token prompt plus the old
+    // "maxModelLen - 128" budget asked vLLM for 2081 tokens and got a 400
+    // for every Bengali answer. Same estimator translateStream uses.
+    body.max_tokens = this.capMaxTokens(body);
+    return body;
+  }
+
+  /**
+   * Cap `max_tokens` so prompt + completion fits the model context.
+   * @param {Object} body - request body with `messages`
+   * @returns {number} safe max_tokens
+   */
+  capMaxTokens(body) {
+    const inputTokens = Math.ceil(JSON.stringify(body.messages).length / 4);
+    const safe = Math.max(256, this.maxModelLen - inputTokens - 128);
+    return Math.min(body.max_tokens || safe, safe);
+  }
+
+  _buildRequest(modelId, sourceCode, targetCode, text) {
+    // Provisional; formatRequest replaces it with capMaxTokens(body).
     const maxTokens = Math.max(128, this.maxModelLen - 128);
 
     // TranslateGemma format (structured chat with language codes)
@@ -570,9 +591,7 @@ class GpuTranslateBackend {
     // context window) + output never exceeds maxModelLen. formatRequest derives
     // max_tokens from maxModelLen assuming only the text input; the context window
     // adds extra input tokens that can overflow (vLLM 400).
-    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
-    const safeMaxTokens = Math.max(256, this.maxModelLen - inputTokens - 128);
-    requestBody.max_tokens = Math.min(requestBody.max_tokens || safeMaxTokens, safeMaxTokens);
+    requestBody.max_tokens = this.capMaxTokens(requestBody);
 
     return this.callVllmStream(requestBody, onToken);
   }

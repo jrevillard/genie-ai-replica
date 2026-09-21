@@ -25,7 +25,8 @@ jest.mock('worker_threads', () => ({ Worker: jest.fn() }));
 jest.mock('path', () => ({ join: jest.fn((...parts) => parts.join('/')) }));
 
 const { _weather } = require('../../services/query-service');
-const { isWeatherCommand, weatherCommandKind, ensureCommandKeyword, withWeatherContext } = _weather;
+const { isWeatherCommand, weatherCommandKind, ensureCommandKeyword, withWeatherContext, withEnglishQuestion } =
+  _weather;
 
 describe('isWeatherCommand', () => {
   const previous = process.env.WEATHER_ENABLED;
@@ -150,5 +151,91 @@ describe('withWeatherContext', () => {
     expect(out.messages[2].content).toContain('Question: Should I irrigate today?');
     expect(out.context).toEqual({ language: 'en' });
     expect(payload.messages[2].content).toBe('Should I irrigate today?');
+  });
+});
+
+describe('withWeatherContext - sources citation line', () => {
+  const context = 'Today is Sunday 13 September 2026.\n7-day forecast for Sapahar (Open-Meteo): ...';
+  const payload = { messages: 'Will it rain tomorrow?', stream: true };
+
+  it('tells the model the exact closing line built from the providers weather-mcp used', () => {
+    const out = withWeatherContext(payload, 'single-message', 'Will it rain tomorrow?', context, ['Open-Meteo', 'BMD']);
+    expect(out.messages).toContain('exactly: Sources: Open-Meteo, BMD.');
+    expect(out.messages).toContain('For a question that is not about the weather, do not add that line.');
+  });
+
+  it('adds no citation instruction when weather-mcp reported no sources', () => {
+    const out = withWeatherContext(payload, 'single-message', 'Will it rain tomorrow?', context, []);
+    expect(out.messages).not.toContain('Sources:');
+    // Fifth argument is optional: existing 4-arg callers behave the same.
+    expect(withWeatherContext(payload, 'single-message', 'Will it rain tomorrow?', context).messages).toBe(
+      out.messages
+    );
+  });
+});
+
+describe('withEnglishQuestion - Bengali questions reach chatqna in English', () => {
+  const bn = 'আমার জেলায় এই সপ্তাহের আবহাওয়ার পূর্বাভাস কী?';
+  const en = 'What is the weather forecast for this week in my district?';
+
+  it('swaps the last user turn for the English text, keeps the Bengali under it, and labels the payload EN', () => {
+    const payload = {
+      messages: [
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'hi' },
+        { role: 'user', content: bn },
+        { role: 'assistant', content: '' }
+      ],
+      context: { categoryLabel: null, serviceLabels: [], language: 'BN' },
+      stream: true
+    };
+    const { payload: out, question } = withEnglishQuestion(payload, 'conversation-with-context-labels', bn, en);
+    expect(question).toBe(`${en}\n(Original question in Bengali: ${bn})`);
+    expect(out.messages[2].content).toBe(question);
+    expect(out.messages[3]).toEqual({ role: 'assistant', content: '' });
+    expect(out.context).toEqual({ categoryLabel: null, serviceLabels: [], language: 'EN' });
+    // The caller's payload (and the stored query built from it) is untouched.
+    expect(payload.messages[2].content).toBe(bn);
+    expect(payload.context.language).toBe('BN');
+  });
+
+  it('targets the same message withWeatherContext wraps, so the live data wraps the English question', () => {
+    const payload = {
+      messages: [
+        { role: 'user', content: bn },
+        { role: 'assistant', content: '' }
+      ],
+      context: { language: 'BN' },
+      stream: true
+    };
+    const { payload: swapped, question } = withEnglishQuestion(payload, 'conversation-with-context-labels', bn, en);
+    const out = withWeatherContext(swapped, 'conversation-with-context-labels', question, 'Today is Monday.', ['BMD']);
+    expect(out.messages[0].content).toContain(`Question: ${en}`);
+    expect(out.messages[0].content).toContain(bn);
+    expect(out.context.language).toBe('EN');
+  });
+
+  it('handles single-message mode', () => {
+    const { payload: out, question } = withEnglishQuestion({ messages: bn, stream: true }, 'single-message', bn, en);
+    expect(out.messages).toBe(question);
+    expect(out.context).toEqual({ language: 'EN' });
+  });
+
+  it('keeps the Bengali text when the routing translation failed, but still labels the payload EN', () => {
+    // chatqna would otherwise re-run its capped history translation and empty the query.
+    const payload = { messages: [{ role: 'user', content: bn }], context: { language: 'BN' } };
+    const { payload: out, question } = withEnglishQuestion(payload, 'conversation-with-context-labels', bn, bn);
+    expect(question).toBe(bn);
+    expect(out.messages[0].content).toBe(bn);
+    expect(out.context.language).toBe('EN');
+  });
+
+  it('labels an English preset prompt EN too, leaving the text alone (quick-help buttons under a Bengali UI)', () => {
+    const preset = 'What is the weather forecast for this week in Sapahar?';
+    const payload = { messages: [{ role: 'user', content: preset }], context: { language: 'BN' } };
+    const { payload: out, question } = withEnglishQuestion(payload, 'conversation-with-context-labels', preset, preset);
+    expect(question).toBe(preset);
+    expect(out.messages[0].content).toBe(preset);
+    expect(out.context.language).toBe('EN');
   });
 });

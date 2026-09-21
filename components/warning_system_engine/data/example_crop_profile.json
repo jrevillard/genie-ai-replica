@@ -1524,7 +1524,90 @@
       }
     ],
     "source_coverage": {
-      "favorable_conditions_by_stage": "Provided in the source PDF; only printed values are included."
+      "favorable_conditions_by_stage": "Provided in the source PDF; only printed values are included.",
+      "weather_warning_rules_by_stage": "Transcribed from the stage-aligned Weather Warning table in the source BAMIS PDF. Rules requiring unavailable cloud, hail, soil-wetness, or multi-day wet-spell data are not evaluated."
+    },
+    "weather_warning_rules_by_stage": {
+      "Germination & Seedling": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 10.0,
+          "severity": "warning"
+        },
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 5.0,
+          "severity": "advisory"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 40.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_mean",
+          "operator": "between",
+          "value": [
+            32.5,
+            35.5
+          ],
+          "severity": "warning"
+        }
+      ],
+      "Vegetative Growth": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 10.0,
+          "severity": "warning"
+        },
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 5.0,
+          "severity": "advisory"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 40.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_mean",
+          "operator": "between",
+          "value": [
+            32.5,
+            35.5
+          ],
+          "severity": "warning"
+        }
+      ],
+      "Flowering": [
+        {
+          "category": "temperature",
+          "metric": "temp_mean",
+          "operator": "between",
+          "value": [
+            32.5,
+            35.5
+          ],
+          "severity": "warning"
+        }
+      ],
+      "Fruiting": [],
+      "Harvesting": []
     }
   },
   "mango_rajshahi": {
@@ -2782,7 +2865,204 @@
     },
     "favorable_conditions_by_stage": [],
     "source_coverage": {
-      "favorable_conditions_by_stage": "Not provided in the source PDF."
+      "favorable_conditions_by_stage": "Not provided in the source PDF.",
+      "weather_warning_rules_by_stage": "Transcribed from the stage-aligned Weather Warning table in the source BAMIS PDF. Rules requiring unavailable cloud, hail, soil-wetness, or multi-day wet-spell data are not evaluated."
+    },
+    "weather_warning_rules_by_stage": {
+      "Swelling Of Apical Buds": [],
+      "Panicle Elongation": [],
+      "Panicle Growth & Flowering": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 3.0,
+          "severity": "warning"
+        },
+        {
+          "category": "humidity",
+          "any": [
+            {
+              "metric": "humidity_max",
+              "operator": ">",
+              "value": 90.0
+            },
+            {
+              "metric": "humidity_min",
+              "operator": "<",
+              "value": 43.0
+            }
+          ],
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 20.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "all": [
+            {
+              "metric": "temp_max",
+              "operator": ">",
+              "value": 28.0
+            },
+            {
+              "metric": "temp_min",
+              "operator": "<",
+              "value": 18.0
+            }
+          ],
+          "severity": "warning"
+        }
+      ],
+      "Pea Stage": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 3.0,
+          "severity": "warning"
+        },
+        {
+          "category": "humidity",
+          "any": [
+            {
+              "metric": "humidity_max",
+              "operator": ">",
+              "value": 90.0
+            },
+            {
+              "metric": "humidity_min",
+              "operator": "<",
+              "value": 43.0
+            }
+          ],
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 20.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "all": [
+            {
+              "metric": "temp_max",
+              "operator": ">",
+              "value": 28.0
+            },
+            {
+              "metric": "temp_min",
+              "operator": "<",
+              "value": 18.0
+            }
+          ],
+          "severity": "warning"
+        }
+      ],
+      "Fruit Development /Fruit Growing Stage": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 44.0,
+          "severity": "warning"
+        },
+        {
+          "category": "humidity",
+          "any": [
+            {
+              "metric": "humidity_max",
+              "operator": ">",
+              "value": 92.0
+            },
+            {
+              "metric": "humidity_min",
+              "operator": "<",
+              "value": 70.0
+            }
+          ],
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 20.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "all": [
+            {
+              "metric": "temp_max",
+              "operator": ">",
+              "value": 32.0
+            },
+            {
+              "metric": "temp_min",
+              "operator": "<",
+              "value": 25.0
+            }
+          ],
+          "severity": "warning"
+        }
+      ],
+      "Maturity/Ripening/Harvesting": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 44.0,
+          "severity": "warning"
+        },
+        {
+          "category": "humidity",
+          "any": [
+            {
+              "metric": "humidity_max",
+              "operator": ">",
+              "value": 92.0
+            },
+            {
+              "metric": "humidity_min",
+              "operator": "<",
+              "value": 70.0
+            }
+          ],
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 20.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "all": [
+            {
+              "metric": "temp_max",
+              "operator": ">",
+              "value": 32.0
+            },
+            {
+              "metric": "temp_min",
+              "operator": "<",
+              "value": 25.0
+            }
+          ],
+          "severity": "warning"
+        }
+      ]
     }
   },
   "rice_aman_rajshahi": {
@@ -4092,7 +4372,149 @@
       }
     ],
     "source_coverage": {
-      "favorable_conditions_by_stage": "Provided in the source PDF; empty stage conditions mean the source gives no value."
+      "favorable_conditions_by_stage": "Provided in the source PDF; empty stage conditions mean the source gives no value.",
+      "weather_warning_rules_by_stage": "Transcribed from the stage-aligned Weather Warning table in the source BAMIS PDF. Rules requiring unavailable cloud, hail, soil-wetness, or multi-day wet-spell data are not evaluated."
+    },
+    "weather_warning_rules_by_stage": {
+      "Seedbed": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 50.0,
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 50.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_min",
+          "operator": "<",
+          "value": 10.0,
+          "severity": "warning"
+        }
+      ],
+      "Transplanting": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 100.0,
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 40.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_min",
+          "operator": "<",
+          "value": 10.0,
+          "severity": "warning"
+        }
+      ],
+      "Tillering": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 100.0,
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 40.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_min",
+          "operator": "<",
+          "value": 10.0,
+          "severity": "warning"
+        }
+      ],
+      "Heading": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 100.0,
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 40.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_min",
+          "operator": "<",
+          "value": 10.0,
+          "severity": "warning"
+        }
+      ],
+      "Flowering": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 50.0,
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 30.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_min",
+          "operator": "<",
+          "value": 10.0,
+          "severity": "warning"
+        }
+      ],
+      "Grain Formation": [
+        {
+          "category": "rainfall",
+          "metric": "rain_mm",
+          "operator": ">",
+          "value": 50.0,
+          "severity": "warning"
+        },
+        {
+          "category": "wind",
+          "metric": "wind_kmh",
+          "operator": ">",
+          "value": 30.0,
+          "severity": "warning"
+        },
+        {
+          "category": "temperature",
+          "metric": "temp_min",
+          "operator": "<",
+          "value": 10.0,
+          "severity": "warning"
+        }
+      ],
+      "Maturity to Harvesting": []
     }
   }
 }

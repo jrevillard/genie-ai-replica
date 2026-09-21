@@ -1,3 +1,16 @@
+/**
+ * Backend twin of the web client's `utils/chatResponseEmojis.js`.
+ *
+ * The client decorates answers by matching ENGLISH words ("rain", "drought"),
+ * so a translated Bengali answer never gets emojis: by the time it reaches the
+ * client the words are Bengali. The translator, however, carries emojis
+ * through untouched (verified 4/4 on gemma-3-4b-it), so decorating the English
+ * text BEFORE it is translated gives Bengali answers the same emojis English
+ * ones get. The client skips text that already carries an emoji, so an
+ * English answer decorated here is not decorated twice.
+ *
+ * Keep the patterns in step with the client file. Pure / synchronous.
+ */
 const CROP_EMOJIS = [
   { emoji: '🌾', pattern: /\b(?:rice aman|aman rice|rice)\b/i },
   { emoji: '🍆', pattern: /\beggplant\b/i },
@@ -17,36 +30,31 @@ const WEATHER_EMOJIS = [
   { emoji: '🌊', pattern: /\b(?:floods?|flooded|flooding)\b/i }
 ];
 
+// Markdown link destinations are URLs, not prose: never decorate them
+// ("/drought-report/" would otherwise become "/🏜️ drought-report/").
+const LINK_DESTINATION = /\]\([^)]*\)/g;
+
 function decorateTopic(content, { emoji, pattern }) {
   if (!pattern.test(content)) return content;
-
-  const plainEmoji = emoji.replace('\ufe0f', '');
+  const plainEmoji = emoji.replace('️', '');
   const withoutMisplacedEmoji = content.split(emoji).join('').split(plainEmoji).join('');
   return withoutMisplacedEmoji.replace(pattern, (topic) => `${emoji} ${topic}`);
 }
-
-// Markdown link destinations: "](" up to the closing ")". These are URLs, not
-// prose, and must never be decorated. In a translated (e.g. Bengali) answer
-// the only Latin "drought" left is the one inside
-// "/api/weather/drought-report/..." — decorating it broke the report link.
-const LINK_DESTINATION = /\]\([^)]*\)/g;
 
 function decorateProse(content) {
   return [...CROP_EMOJIS, ...WEATHER_EMOJIS].reduce(decorateTopic, content);
 }
 
-export function decorateChatResponse(content) {
+function decorateChatResponse(content) {
   if (typeof content !== 'string' || !content.trim()) return content;
-
-  // Decorate only the text between link destinations; splice the destinations
-  // back verbatim.
   const links = content.match(LINK_DESTINATION) || [];
   const prose = content.split(LINK_DESTINATION).map(decorateProse);
   const decorated = prose.reduce((out, part, i) => out + part + (links[i] || ''), '');
-
   return decorated
     .replace(/^[ \t]+(?=(?:🌾|🍆|🥭|⚠️|⛈️|🌧️|☀️|☁️|🌡️|💧|💨|🏜️|🌊))/gm, '')
     .replace(/[ \t]+([,.;:!?])/g, '$1')
     .replace(/([.!?])[,;:]/g, '$1')
     .replace(/[ \t]+$/gm, '');
 }
+
+module.exports = { decorateChatResponse };

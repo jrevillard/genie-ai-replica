@@ -24,7 +24,10 @@
  * @returns {string} Redis key
  */
 // Bump on any translation-logic change. 1 = edge-preservation + run-in normalize.
-const TRANSLATION_LOGIC_VERSION = '1';
+// 2 = Devanagari->Bengali script-leak repair on bn output (script-repair.js).
+// 3 = target-language-only guard in the gemma-3 prompt + English decorated with
+//     emojis before translation (chat-response-emojis.js).
+const TRANSLATION_LOGIC_VERSION = '3';
 
 function translationCacheKey(docHash, targetLang, modelId) {
   return `translation:${docHash}:${targetLang}:${modelId || 'unknown'}:${TRANSLATION_LOGIC_VERSION}`;

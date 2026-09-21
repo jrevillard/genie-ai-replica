@@ -29,4 +29,17 @@ describe('decorateChatResponse', () => {
         '💧 Humidity will be high. 💨 Wind speeds will be moderate. These conditions are not ideal for planting 🍆 eggplant.'
     );
   });
+
+  it('never decorates a markdown link destination (the drought report link in a Bengali answer)', () => {
+    const response =
+      'সাপাহার অঞ্চলের খরা পরিস্থিতি স্থিতিশীল।\n\n' +
+      '[পুরো খরা প্রতিবেদন দেখুন](/api/weather/drought-report/drought_sapahar_20260921.pdf)';
+    expect(decorateChatResponse(response)).toBe(response);
+  });
+
+  it('still decorates the prose around a link, leaving the URL alone', () => {
+    expect(
+      decorateChatResponse('Drought is easing. [View full drought report](/api/weather/drought-report/x.pdf)')
+    ).toBe('🏜️ Drought is easing. [View full drought report](/api/weather/drought-report/x.pdf)');
+  });
 });

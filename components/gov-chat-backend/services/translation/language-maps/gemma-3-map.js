@@ -112,7 +112,15 @@ module.exports = {
 
   // Gemma-3 requires prompt-based translation
   promptTemplate: (sourceCode, targetCode, sourceLangName, targetLangName, text) => {
-    return `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation.\n\nText: ${text}`;
+    // The target-only sentence is load-bearing: gemma-3-4b-it has drifted into
+    // Spanish mid-sentence in Bengali output ("বৃষ্টি প্রতিদিন previstas") and
+    // rewritten "Sapahar" as "Sapa city". Pinning names/numbers/emojis/links
+    // keeps the parts the client and the report link depend on intact.
+    return (
+      `Translate the following text from ${sourceLangName} to ${targetLangName}. Only return the translation, no explanation. ` +
+      `Write the whole translation in ${targetLangName} only: do not leave any word in ${sourceLangName} and do not use any ` +
+      `other language. Keep place names, numbers, units, emojis and markdown links exactly as they are.\n\nText: ${text}`
+    );
   },
 
   // Language names for prompt generation

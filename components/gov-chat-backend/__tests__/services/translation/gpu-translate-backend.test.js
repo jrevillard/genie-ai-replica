@@ -127,6 +127,19 @@ describe('GpuTranslateBackend streaming', () => {
       spy.mockRestore();
     });
 
+    it('caps max_tokens on the batch path too, so prompt + completion fits a 2048-token model', () => {
+      // The batch path (translate -> formatRequest) used a fixed 128-token
+      // reserve; a longer prompt pushed the request to 2081 > 2048 -> vLLM 400.
+      const prev = backend.maxModelLen;
+      backend.maxModelLen = 2048;
+      const text = 'The week ahead in Sapahar will bring heavy rain. '.repeat(12);
+      const requestBody = backend.formatRequest('google/gemma-3-4b-it', 'en', 'bn', text);
+      const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+      expect(requestBody.max_tokens + inputTokens).toBeLessThanOrEqual(2048);
+      expect(requestBody.max_tokens).toBeGreaterThanOrEqual(256);
+      backend.maxModelLen = prev;
+    });
+
     it('keeps generous max_tokens for short input without context', async () => {
       const spy = jest.spyOn(backend, 'callVllmStream').mockResolvedValue('OK');
       await backend.translateStream('Short text.', 'en', 'es', null, () => {});

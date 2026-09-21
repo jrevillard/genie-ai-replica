@@ -11,6 +11,8 @@ Companion documents:
   produced the chunking change, with before/after chunk dumps.
 - [`../farmer_weather_advisor_test_questions.md`](../farmer_weather_advisor_test_questions.md)
   — the 48-question harness quoted throughout.
+- [`farmer-user-journey.md`](farmer-user-journey.md) — the same capabilities
+  as a narrative walk-through, from the farmer's side of the screen.
 
 ---
 

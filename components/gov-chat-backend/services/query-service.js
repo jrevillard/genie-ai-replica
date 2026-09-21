@@ -280,23 +280,75 @@ function ensureCommandKeyword(text, kind) {
  * blocks a knowledge-base answer.
  */
 async function fetchWeatherContext(message) {
-  if (process.env.WEATHER_ENABLED !== 'true') return '';
+  const empty = { text: '', sources: [] };
+  if (process.env.WEATHER_ENABLED !== 'true') return empty;
   const weatherMcpUrl = process.env.WEATHER_MCP_URL || 'http://weather-mcp-service:8000';
   try {
     const resp = await axios.get(`${weatherMcpUrl}/context`, { params: { location: message }, timeout: 5000 });
-    return String(resp.data?.text || '');
+    // `sources` names the providers whose data is in `text` (BMD, Open-Meteo,
+    // Copernicus SEAS5), so the citation line asked for below never names a
+    // provider the answer could not have used.
+    const sources = Array.isArray(resp.data?.sources) ? resp.data.sources.filter(Boolean).map(String) : [];
+    return { text: String(resp.data?.text || ''), sources };
   } catch (err) {
     logger.warn(`[WEATHER] context fetch failed (${err.message}) - answering without it`);
-    return '';
+    return empty;
   }
+}
+
+/**
+ * Send chatqna the English form of a Bengali question and label the payload EN.
+ *
+ * chatqna translates non-English history itself before retrieval, but only up
+ * to MAX_TRANSLATION_CHARS (2000) per request and newest message first. The
+ * live-data wrapper below is ~4-5k chars, so the whole user turn was skipped:
+ * chatqna embedded an empty (or hallucinated) search query and the LLM never
+ * saw the forecast or the question. Bengali users got an abstention, or an
+ * answer built from whatever documents the junk query happened to match.
+ *
+ * The backend already holds an English routing translation and already
+ * translates the answer back (streaming, or post-stream in query-routes), so
+ * chatqna is given the English question and `language: 'EN'`: it then skips
+ * its own translation and answers in English, exactly the path that works for
+ * English users. The original Bengali is kept under the English text so the
+ * model can recover names the routing translator dropped (crop, district).
+ * Only the payload changes; the stored query keeps the user's own words.
+ */
+function withEnglishQuestion(opeaPayload, backendMode, queryText, englishText) {
+  const english = String(englishText || '').trim();
+  const question =
+    english && english !== queryText ? `${english}\n(Original question in Bengali: ${queryText})` : queryText;
+  // Set in both modes: without it chatqna auto-detects the language from the
+  // text, and the Bengali line below would send it back into its own translation.
+  const context = { ...(opeaPayload.context || {}), language: 'EN' };
+  if (backendMode === 'single-message') {
+    return { payload: { ...opeaPayload, messages: question, context }, question };
+  }
+  const msgs = [...opeaPayload.messages];
+  for (let i = msgs.length - 1; i >= 0; i -= 1) {
+    if (msgs[i]?.role === 'user') {
+      msgs[i] = { ...msgs[i], content: question };
+      break;
+    }
+  }
+  return { payload: { ...opeaPayload, messages: msgs, context }, question };
 }
 
 /**
  * Prepend the context block to the question in the OPEA payload. Only the
  * payload changes: the stored query and the text shown to the user do not.
  */
-function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext) {
+function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext, sources = []) {
   if (!weatherContext) return opeaPayload;
+  // Same mechanism as the drought-report link below: the model is told the
+  // exact closing line, so it only has to decide whether the answer is about
+  // the weather. Data-driven from weather-mcp, so a district with no seasonal
+  // outlook does not get "Copernicus SEAS5" cited.
+  const sourcesLine = sources.length ? `Sources: ${sources.join(', ')}` : '';
+  const sourcesRule = sourcesLine
+    ? `When the answer reports weather - the forecast, the seasonal outlook, or official warnings - end it with this line, ` +
+      `on its own line, exactly: ${sourcesLine}. For a question that is not about the weather, do not add that line. `
+    : '';
   // Data first, question after it, instruction last: the instruction that
   // follows the question is the one the model weights most, so it is not
   // buried under the data block.
@@ -315,6 +367,7 @@ function withWeatherContext(opeaPayload, backendMode, queryText, weatherContext)
     'add a few plain words saying what it is. ' +
     'For a weather forecast, use emojis sparingly beside matching facts: 🌡️ temperature, 🌧️ rain, ' +
     '💨 wind, 💧 humidity and ⚠️ warnings. Do not add decorative emojis. ' +
+    sourcesRule +
     'Only when the question itself asks about drought or water shortage, and the live data above has ' +
     'a "Drought assessment" line with a "Full report:" link, end your answer with that link on its ' +
     'own line, exactly like this: [View full drought report](THE_LINK_URL). ' +
@@ -809,11 +862,31 @@ class QueryService {
       return { queryId, weatherResult, authHeaders, queryData };
     }
     // For Bengali messages the district scan sees both texts (Bengali names resolve natively).
-    const weatherContext = await fetchWeatherContext(
+    const { text: weatherContext, sources: weatherSources } = await fetchWeatherContext(
       routing.sourceLang === 'bn' && routing.text !== queryText ? `${routing.text}\n${queryText}` : routing.text
     );
-    if (weatherContext) logger.info('[WEATHER] live context attached to the knowledge-base query');
-    opeaPayload = withWeatherContext(opeaPayload, backendMode, queryText, weatherContext);
+    if (weatherContext) {
+      logger.info(
+        `[WEATHER] live context attached to the knowledge-base query (sources: ${weatherSources.join(', ') || 'none'})`
+      );
+    }
+    // Also when the UI is non-English but the text is not Bengali: the
+    // dashboard quick-help buttons send an English preset prompt under a
+    // Bengali label, and chatqna would still run its capped translation on the
+    // BN-labelled payload and empty the query.
+    const uiLanguage = String(queryData.context?.language || '')
+      .trim()
+      .toUpperCase();
+    let questionForOpea = queryText;
+    if (routing.sourceLang === 'bn' || (uiLanguage && uiLanguage !== 'EN')) {
+      const swapped = withEnglishQuestion(opeaPayload, backendMode, queryText, routing.text);
+      opeaPayload = swapped.payload;
+      questionForOpea = swapped.question;
+      logger.info(
+        '[WEATHER] chatqna payload labelled EN (question in English where translated); the answer is translated back here'
+      );
+    }
+    opeaPayload = withWeatherContext(opeaPayload, backendMode, questionForOpea, weatherContext, weatherSources);
 
     return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
   }
@@ -2208,4 +2281,10 @@ class QueryService {
 const instance = new QueryService();
 module.exports = instance;
 // Pure helpers of the weather-aware path, exported for unit tests.
-module.exports._weather = { isWeatherCommand, weatherCommandKind, ensureCommandKeyword, withWeatherContext };
+module.exports._weather = {
+  isWeatherCommand,
+  weatherCommandKind,
+  ensureCommandKeyword,
+  withWeatherContext,
+  withEnglishQuestion
+};

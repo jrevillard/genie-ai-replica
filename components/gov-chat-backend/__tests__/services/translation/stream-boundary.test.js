@@ -27,6 +27,19 @@ describe('stream-boundary', () => {
       expect(lastBoundaryEnd('Really?')).toBeNull();
     });
 
+    test('keeps a markdown hard break ("  \\n") whole as the separator', () => {
+      // 'level.' period at index 5; the separator is the full '  \n' run, so the
+      // line break survives re-append and the link that follows starts a new line.
+      expect(lastBoundaryEnd('level.  \n[View full drought report](/x.pdf)')).toEqual({
+        contentEnd: 6,
+        separator: '  \n'
+      });
+      const unit = extractCommittableUnit('level.  \n[View full drought report](/x.pdf)  \n');
+      expect(unit.content).toBe('level.');
+      expect(unit.separator).toBe('  \n');
+      expect(unit.remainder).toBe('[View full drought report](/x.pdf)  \n');
+    });
+
     test('handles closing quote/paren after terminator', () => {
       // '.' + '"' (group 1, stays in content); ' ' is the separator.
       expect(lastBoundaryEnd('He said "hi." Then')).toEqual({ contentEnd: 13, separator: ' ' });

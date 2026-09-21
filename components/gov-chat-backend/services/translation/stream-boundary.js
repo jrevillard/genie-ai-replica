@@ -39,10 +39,14 @@ function lastBoundaryEnd(buffer) {
   }
 
   // Sentence terminators. group 1 = terminator + optional closing quote/bracket
-  // (stays in the content); group 2 = trailing whitespace (the separator).
+  // (stays in the content); group 2 = the WHOLE trailing whitespace run (the
+  // separator). It must be the whole run: a markdown hard break is "  \n", and
+  // capturing one char split it into " " (separator) + " \n" (start of the next
+  // unit), which the translator then trimmed - the line break vanished and the
+  // "[View full drought report](...)" link ran on inline after the sentence.
   // Negative lookbehind on a digit skips list markers ("1.") and decimals.
   // Requires an actual whitespace char (not end-of-string): see header note.
-  const re = /(?<![0-9])([.!?]["')\]]?)(\s)/g;
+  const re = /(?<![0-9])([.!?]["')\]]?)(\s+)/g;
   let m;
   while ((m = re.exec(buffer)) !== null) {
     const candidate = { contentEnd: m.index + m[1].length, separator: m[2] };

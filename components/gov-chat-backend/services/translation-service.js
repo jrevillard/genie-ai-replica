@@ -8,6 +8,7 @@ const GpuTranslateBackend = require('./translation/gpu-translate-backend');
 const { splitEdges } = require('./translation/text-edges');
 const { normalizeInlineSpacing } = require('./translation/markdown-normalize');
 const { translationCacheKey } = require('./translation/translation-cache-key');
+const { repairScriptLeak } = require('./translation/script-repair');
 
 // --- Read settings from environment variables ---
 const DEFAULT_THREADS = 4;
@@ -220,7 +221,10 @@ class TranslationService {
     try {
       // Delegate to backend
       const translatedTexts = await this.backend.translate(texts, sourceLangCode, targetLangCode);
-      return translatedTexts;
+      // Single choke point for every consumer (translateMarkdown, the raw
+      // /translate route, the routing translation): map any Devanagari the
+      // model leaked into Bengali output back to Bengali. No-op for other targets.
+      return translatedTexts.map((t) => repairScriptLeak(t, targetLang));
     } catch (error) {
       // If backend is GPU and in auto mode, try falling back to CPU for this request only
       if (this.backendType === 'gpu' && translationBackend === 'auto') {
@@ -232,7 +236,8 @@ class TranslationService {
 
           const sourceCode = cpuBackend.getLanguageCode(sourceLang);
           const targetCode = cpuBackend.getLanguageCode(targetLang);
-          return await cpuBackend.translate(texts, sourceCode, targetCode);
+          const cpuTexts = await cpuBackend.translate(texts, sourceCode, targetCode);
+          return cpuTexts.map((t) => repairScriptLeak(t, targetLang));
         } catch (cpuError) {
           logger.error(`[TRANSLATION-SERVICE] CPU fallback also failed: ${cpuError.message}`);
           throw new Error(`Translation failed on both GPU and CPU backends`, { cause: cpuError });

@@ -16,7 +16,7 @@ _PROFILE_PATH = os.path.abspath(
     )
 )
 
-AVAILABLE_REGIONS: list[str] = ["dinajpur"]
+AVAILABLE_REGIONS: list[str] = ["rajshahi"]
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class MangoThresholds:
 
 
 def load_mango_thresholds(
-    region: str = "dinajpur",
+    region: str = "rajshahi",
     path: str = _PROFILE_PATH,
 ) -> MangoThresholds:
     """Load Mango thresholds for *region* from the crop profile JSON."""

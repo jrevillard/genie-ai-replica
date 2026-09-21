@@ -52,6 +52,13 @@ class CropProfileLoader:
     def get_disease_risks(self, crop: str, region: str) -> list[dict]:
         return self.get_profile(crop, region).get("disease_risks", [])
 
+    def get_weather_warning_rules(
+        self, crop: str, region: str, stage: str
+    ) -> list[dict]:
+        """Source-backed short-term warning rules for one crop stage."""
+        rules = self.get_profile(crop, region).get("weather_warning_rules_by_stage", {})
+        return rules.get(stage, [])
+
     # ------------------------------------------------------------------
     # Week-level lookups
     # ------------------------------------------------------------------

@@ -6,6 +6,7 @@ const https = require('https');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 const translationService = require('../services/translation-service');
+const { decorateChatResponse } = require('../services/translation/chat-response-emojis');
 const { extractCommittableUnit } = require('../services/translation/stream-boundary');
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
@@ -260,7 +261,14 @@ module.exports = (queryService) => {
           if (res.writableEnded) return;
           try {
             await translationService.init();
-            const translated = await translationService.translateMarkdown(content, 'en', targetLanguage);
+            // Decorate the English first: the client adds emojis by matching
+            // English words, which a Bengali answer no longer has. Emojis survive
+            // translation, so they arrive in the target language too.
+            const translated = await translationService.translateMarkdown(
+              decorateChatResponse(content),
+              'en',
+              targetLanguage
+            );
             const body =
               translated && translated.trim() ? `${translated.trim()}${separator}` : `${content}${separator}`;
             // Debug instrumentation for the streaming-translation path: the unit
@@ -471,7 +479,7 @@ module.exports = (queryService) => {
       try {
         await translationService.init();
         const translated = await translationService.translateMarkdown(
-          fullResponseText,
+          decorateChatResponse(fullResponseText),
           'en',
           userLanguage.toLowerCase()
         );

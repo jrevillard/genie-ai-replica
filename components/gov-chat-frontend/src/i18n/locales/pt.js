@@ -1590,7 +1590,13 @@ export default {
     exportButton: 'Exportar',
     exportSuccess: 'Chat exportado com sucesso',
     exportError: 'Falha ao exportar chat. Por favor, tente novamente.',
-    removeItem: 'Remover'
+    removeItem: 'Remover',
+    chatUpdated: 'Conversa atualizada',
+    feedbackError: 'Erro ao enviar feedback',
+    feedbackMissingQueryId: 'ID da consulta ausente para feedback',
+    feedbackSubmitted: 'Feedback enviado',
+    saving: 'Salvando...',
+    savingConversation: 'Salvando conversa...'
   },
   quickhelp: {
     applyForIDPrompt:

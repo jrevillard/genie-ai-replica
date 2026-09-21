@@ -1569,7 +1569,13 @@ export default {
     exportButton: 'تصدير',
     exportSuccess: 'تم تصدير المحادثة بنجاح',
     exportError: 'فشل تصدير المحادثة. يرجى المحاولة مرة أخرى.',
-    removeItem: 'إزالة العنصر'
+    removeItem: 'إزالة العنصر',
+    chatUpdated: 'تم تحديث المحادثة',
+    feedbackError: 'خطأ في إرسال التعليقات',
+    feedbackMissingQueryId: 'معرّف الاستعلام مفقود للتعليقات',
+    feedbackSubmitted: 'تم إرسال التعليقات',
+    saving: 'جارٍ الحفظ...',
+    savingConversation: 'جار虧保存 المحادثة...'
   },
   quickhelp: {
     applyForIDPrompt:

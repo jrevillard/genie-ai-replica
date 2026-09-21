@@ -11,7 +11,6 @@
  */
 const { logger } = require('../../shared-lib');
 const { ServingCache } = require('./cache');
-const { resolveRedisUrl } = require('./http');
 const { AgriScheduler } = require('./scheduler');
 const { enabledAdapters } = require('./registry');
 const { cadenceMs } = require('./config');
@@ -366,178 +365,134 @@ const TAXA_NAMES = {
   'Hypothenemus hampei': { en: 'Coffee Berry Borer', es: 'Broca del Café' }
 };
 
+/**
+ * Redis URL for the hot cache tier. Explicit AGRI_REDIS_URL/REDIS_URL win;
+ * otherwise reuse the stack's existing cache instance — the TRANSLATION_CACHE_*
+ * vars point at the shared redis-cache service (password included), so the
+ * default engages the top tier on deployments that define no agri-specific URL.
+ * @returns {string|null} redis:// URL or null when nothing is configured
+ */
+function resolveRedisUrl() {
+  if (process.env.AGRI_REDIS_URL) return process.env.AGRI_REDIS_URL;
+  if (process.env.REDIS_URL) return process.env.REDIS_URL;
+  const host = process.env.TRANSLATION_CACHE_HOST;
+  if (!host) return null;
+  const port = process.env.TRANSLATION_CACHE_PORT || 6379;
+  const password = process.env.TRANSLATION_CACHE_PASSWORD
+    ? `:${encodeURIComponent(process.env.TRANSLATION_CACHE_PASSWORD)}@`
+    : '';
+  return `redis://${password}${host}:${port}`;
+}
+
 class AgriService {
   constructor() {
-    // Do NOT cache `AgriService.instance = this` here — caching in the
-    // constructor leaks a half-initialized instance if init() throws midway
-    // (the index.js catch only sees the throw case, not the partial state).
-    // getInstance() caches a successful instance explicitly.
+    if (AgriService.instance) return AgriService.instance;
     this.initialized = false;
     this.db = null;
     this.redis = null;
     this.cache = null;
     this.scheduler = null;
     this.adapters = [];
-    this._initPromise = null;
-    // Per-key single-flight map for rebuildAllEndpoints. Prevents concurrent
-    // rebuilds (periodic scheduler + onAdaptersRun + manual kick) from
-    // interleaving cache.set calls for the same key.
-    this._rebuildInFlight = null;
+    AgriService.instance = this;
+    return this;
   }
 
   static getInstance() {
-    if (!AgriService.instance || !AgriService.instance.initialized) {
-      // Replace stale or failed instance with a fresh one. A previous init
-      // that threw clears AgriService.instance (see init() catch), so a
-      // getInstance() here always returns a clean object.
-      AgriService.instance = new AgriService();
-    }
+    if (!AgriService.instance) AgriService.instance = new AgriService();
     return AgriService.instance;
   }
 
   async init(deps = {}) {
     if (this.initialized) return;
-    // Concurrent init() calls collapse onto one promise — second caller
-    // awaits the first instead of running the heavy setup twice (leaks
-    // intervals + double prefetch).
-    if (this._initPromise) return this._initPromise;
-    // NOTE on stale-`this` callers: a caller that holds a reference to a
-    // partially-initialized instance (e.g. a test harness) and calls
-    // init() on it again would re-enter this function on a dead object.
-    // Only index.js:1077 calls init() in production, and it always goes
-    // through getInstance() first, so the surface is one site. If that
-    // changes, gate with `if (this.adapters.length > 0) return;` here.
-    this._initPromise = (async () => {
+    const { dbService } = require('../../shared-lib');
+    // Real shared-lib getConnection() is async (the Jest mock returns
+    // synchronously) — without the await this.db was a Promise and every
+    // .collection() call failed (found on the 10.0.0.101 deploy)
+    this.db = deps.db || null;
+    if (!this.db) {
       try {
-        const { dbService } = require('../../shared-lib');
-        // Real shared-lib getConnection() is async (the Jest mock returns
-        // synchronously) — without the await this.db was a Promise and every
-        // .collection() call failed (found on the 10.0.0.101 deploy)
-        this.db = deps.db || null;
-        if (!this.db) {
-          try {
-            this.db = await dbService.getConnection();
-          } catch (error) {
-            logger.warn(`agri: Arango connection failed (${error.message}) — seed tier only`);
-          }
-        }
-
-        // Optional Redis — degrade gracefully (never-fail design)
-        try {
-          const Redis = require('ioredis');
-          const url = resolveRedisUrl();
-          if (url) {
-            this.redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
-            await this.redis.connect();
-            logger.info('agri: redis connected');
-          } else {
-            logger.info('agri: no Redis URL configured — Arango+seed tiers only');
-          }
-        } catch (error) {
-          logger.warn(`agri: redis unavailable (${error.message}) — continuing without`);
-          this.redis = null;
-        }
-
-        if (this.db) {
-          for (const name of COLLECTIONS) {
-            try {
-              await this.db.createCollection(name);
-            } catch {
-              /* already exists */
-            }
-          }
-          // Bound the agri_fetch_log collection: with 18 adapters at 24h
-          // cadence that's ~650 rows/day. After 1 year that's 240k rows
-          // and the lastSuccess() sort degrades. Arango's TTL index purges
-          // rows older than 90 days automatically on read.
-          try {
-            await this.db
-              .collection('agri_fetch_log')
-              .createIndex({ type: 'ttl', expireAfter: 90 * 86400, fields: ['ranAt'] });
-          } catch {
-            /* index already exists or unsupported — non-fatal */
-          }
-        }
-
-        this.adapters = enabledAdapters();
-        this.cache = new ServingCache({ redis: this.redis, db: this.db, seeds });
-
-        // Idempotent seed import (startup floor for cold deployments)
-        for (const [key, envelope] of Object.entries(seeds)) {
-          if (!envelope) continue;
-          const { origin } = await this.cache.get(key);
-          if (origin === null) {
-            await this.cache.set(key, { ...envelope, meta: { ...envelope.meta, seeded: true } }, 24 * 3600 * 1000);
-          }
-        }
-
-        this.scheduler = new AgriScheduler({
-          adapters: this.adapters,
-          db: this.db,
-          redis: this.redis,
-          onAdaptersRun: async () => this.rebuildAllEndpoints()
-        });
-
-        this.initialized = true;
-        // Cache the singleton only after a fully successful init. A prior
-        // version cached this in the constructor, which leaked zombies when
-        // init() threw midway (index.js catch doesn't clear the singleton).
-        //
-        // Order note: this.initialized = true is set BEFORE AgriService.instance
-        // = this. If anything in the post-init block below (scheduler.start,
-        // setInterval, setTimeout) throws, the catch clears AgriService.instance
-        // but `initialized` stays true on this `this` object. Subsequent
-        // getInstance() sees the null instance and constructs a fresh one
-        // (initialized=false), so a stale-`this` reference cannot trick a new
-        // getInstance() into returning this half-built object. The only way
-        // to observe `initialized=true` without `AgriService.instance = this`
-        // is to keep a direct reference to `this` (see stale-`this` note above).
-        AgriService.instance = this;
-        logger.info(
-          `AgriService initialized (${this.adapters.length} adapters: ${this.adapters.map((a) => a.id).join(', ')})`
-        );
-
-        // First prefetch pass in the background (never blocks startup).
-        // Opt-IN: the previous `!== '0'` default ran prefetch unless tests
-        // explicitly disabled it, which caused test:backend to hit live
-        // upstream APIs. Now prod must opt in via AGRI_PREFETCH_ON_START=1
-        // in .env (see env Section 15). Tests / CI leave it unset → no
-        // prefetch → no live API calls.
-        if (process.env.AGRI_PREFETCH_ON_START === '1') {
-          setImmediate(() =>
-            this.scheduler.runOnce().catch((e) => logger.error(`agri initial prefetch failed: ${e.message}`))
-          );
-        }
-        const shortest = Math.min(...this.adapters.map((a) => cadenceMs(a)), 3600 * 1000);
-        this.scheduler.start(shortest);
-
-        // Envelope rebuilds run on their OWN cadence, independent of fetch
-        // outcomes: a pass where only dead adapters are due (0 ok) must not
-        // leave new series mappings or recovered data unwritten for a full
-        // cadence cycle (found live 2026-09-17: vegetables stayed 'pending'
-        // for hours after its mapping fix deployed).
-        this.rebuildTimer = setInterval(
-          () => {
-            this.rebuildAllEndpoints().catch((e) => logger.error(`agri periodic rebuild failed: ${e.message}`));
-          },
-          15 * 60 * 1000
-        );
-        this.rebuildTimer.unref();
-        // First periodic rebuild shortly after the startup pass begins —
-        // rebuilds are cheap local queries and idempotent.
-        setTimeout(() => {
-          this.rebuildAllEndpoints().catch(() => {});
-        }, 90 * 1000).unref();
+        this.db = await dbService.getConnection();
       } catch (error) {
-        // Init failed: clear the singleton so the next getInstance() returns
-        // a fresh object instead of this half-initialized zombie.
-        AgriService.instance = null;
-        throw error;
-      } finally {
-        this._initPromise = null;
+        logger.warn(`agri: Arango connection failed (${error.message}) — seed tier only`);
       }
-    })();
-    return this._initPromise;
+    }
+
+    // Optional Redis — degrade gracefully (never-fail design)
+    try {
+      const Redis = require('ioredis');
+      const url = resolveRedisUrl();
+      if (url) {
+        this.redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
+        await this.redis.connect();
+        logger.info('agri: redis connected');
+      } else {
+        logger.info('agri: no Redis URL configured — Arango+seed tiers only');
+      }
+    } catch (error) {
+      logger.warn(`agri: redis unavailable (${error.message}) — continuing without`);
+      this.redis = null;
+    }
+
+    if (this.db) {
+      for (const name of COLLECTIONS) {
+        try {
+          await this.db.createCollection(name);
+        } catch {
+          /* already exists */
+        }
+      }
+    }
+
+    this.adapters = enabledAdapters();
+    this.cache = new ServingCache({ redis: this.redis, db: this.db, seeds });
+
+    // Idempotent seed import (startup floor for cold deployments)
+    for (const [key, envelope] of Object.entries(seeds)) {
+      if (!envelope) continue;
+      const { origin } = await this.cache.get(key);
+      if (origin === null) {
+        await this.cache.set(key, { ...envelope, meta: { ...envelope.meta, seeded: true } }, 24 * 3600 * 1000);
+      }
+    }
+
+    this.scheduler = new AgriScheduler({
+      adapters: this.adapters,
+      db: this.db,
+      redis: this.redis,
+      onAdaptersRun: async () => this.rebuildAllEndpoints()
+    });
+
+    this.initialized = true;
+    logger.info(
+      `AgriService initialized (${this.adapters.length} adapters: ${this.adapters.map((a) => a.id).join(', ')})`
+    );
+
+    // First prefetch pass in the background (never blocks startup)
+    if (process.env.AGRI_PREFETCH_ON_START !== '0') {
+      setImmediate(() =>
+        this.scheduler.runOnce().catch((e) => logger.error(`agri initial prefetch failed: ${e.message}`))
+      );
+    }
+    const shortest = Math.min(...this.adapters.map((a) => cadenceMs(a)), 3600 * 1000);
+    this.scheduler.start(shortest);
+
+    // Envelope rebuilds run on their OWN cadence, independent of fetch
+    // outcomes: a pass where only dead adapters are due (0 ok) must not
+    // leave new series mappings or recovered data unwritten for a full
+    // cadence cycle (found live 2026-09-17: vegetables stayed 'pending'
+    // for hours after its mapping fix deployed).
+    this.rebuildTimer = setInterval(
+      () => {
+        this.rebuildAllEndpoints().catch((e) => logger.error(`agri periodic rebuild failed: ${e.message}`));
+      },
+      15 * 60 * 1000
+    );
+    this.rebuildTimer.unref();
+    // First periodic rebuild shortly after the startup pass begins —
+    // rebuilds are cheap local queries and idempotent.
+    setTimeout(() => {
+      this.rebuildAllEndpoints().catch(() => {});
+    }, 90 * 1000).unref();
   }
 
   // ==================== SERVING ====================
@@ -650,79 +605,39 @@ class AgriService {
       'news:global:es',
       'news:global:en'
     ];
-
-    // Per-key single-flight: if a rebuild for this key is already in
-    // flight, await it instead of running a second one. Concurrent
-    // onAdaptersRun + periodic rebuild + manual kick now collapse.
-    if (!this._rebuildInFlight) this._rebuildInFlight = new Map();
-
     for (const key of keys) {
-      const existing = this._rebuildInFlight.get(key);
-      if (existing) {
-        await existing.catch(() => {}); // never propagate from the awaited rebuild
-        continue;
-      }
-
-      // Claim the slot BEFORE any await so concurrent callers get this
-      // Promise rather than seeing undefined.
-      let settle;
-      const claim = new Promise((res) => {
-        settle = res;
-      });
-      this._rebuildInFlight.set(key, claim);
-
-      const work = (async () => {
-        try {
-          const builder =
-            key === 'crop-health'
-              ? () => this.buildCropHealth()
-              : key === 'pest-alerts'
-                ? () => this.buildPestAlerts()
-                : key.startsWith('news:')
-                  ? () => this.buildNews(key.split(':')[1], key.split(':')[2])
-                  : () => this.buildMarketPrices(key.replace('market-prices:', ''));
-          const envelope = await builder();
-          // Never-fail floor: an empty rebuild ('pending' placeholder) must not
-          // overwrite data already cached or seeded — e.g. when a pass fails
-          // mid-way. Keep what we have; the next good pass replaces it.
-          if (this.constructor.isEmptyEnvelope(envelope)) {
-            const { envelope: existingEnv } = await this.cache.get(key);
-            if (existingEnv && !this.constructor.isEmptyEnvelope(existingEnv)) {
-              logger.warn(`agri rebuild: empty result for ${key} — keeping cached data`);
-              return;
-            }
-            // Also skip writing the empty envelope if there is nothing to
-            // fall back to — better to serve seed (or a 503) than persist a
-            // short-TTL "pending" placeholder.
-            logger.warn(`agri rebuild: empty result for ${key} and no LKG — skipping cache.set`);
-            return;
-          }
-          const detail =
-            envelope.data && envelope.data.departments
-              ? `${envelope.data.departments.length} depts`
-              : envelope.data && envelope.data.series
-                ? `${envelope.data.series.length} series`
-                : envelope.data && envelope.data.items
-                  ? `${envelope.data.items.length} items`
-                  : 'empty';
-          logger.info(`agri rebuild ${key}: wrote ${detail} (source=${envelope.meta.source})`);
-          await this.cache.set(key, envelope, this.endpointTtlMs(key));
-        } catch (error) {
-          logger.warn(`agri rebuild failed for ${key}: ${error.message} | ${error.stack}`);
-        } finally {
-          this._rebuildInFlight.delete(key);
-          settle();
-        }
-      })();
-
-      // Replace claim with the actual work so subsequent callers for this key
-      // during this tick get the work result (not just the settle signal).
-      this._rebuildInFlight.set(key, work);
-
       try {
-        await work;
+        const builder =
+          key === 'crop-health'
+            ? () => this.buildCropHealth()
+            : key === 'pest-alerts'
+              ? () => this.buildPestAlerts()
+              : key.startsWith('news:')
+                ? () => this.buildNews(key.split(':')[1], key.split(':')[2])
+                : () => this.buildMarketPrices(key.replace('market-prices:', ''));
+        const envelope = await builder();
+        // Never-fail floor: an empty rebuild ('pending' placeholder) must not
+        // overwrite data already cached or seeded — e.g. when a pass fails
+        // mid-way. Keep what we have; the next good pass replaces it.
+        if (this.constructor.isEmptyEnvelope(envelope)) {
+          const { envelope: existing } = await this.cache.get(key);
+          if (existing && !this.constructor.isEmptyEnvelope(existing)) {
+            logger.warn(`agri rebuild: empty result for ${key} — keeping cached data`);
+            continue;
+          }
+        }
+        const detail =
+          envelope.data && envelope.data.departments
+            ? `${envelope.data.departments.length} depts`
+            : envelope.data && envelope.data.series
+              ? `${envelope.data.series.length} series`
+              : envelope.data && envelope.data.items
+                ? `${envelope.data.items.length} items`
+                : 'empty';
+        logger.info(`agri rebuild ${key}: wrote ${detail} (source=${envelope.meta.source})`);
+        await this.cache.set(key, envelope, this.endpointTtlMs(key));
       } catch (error) {
-        logger.warn(`agri rebuild failed: ${error.message}`);
+        logger.warn(`agri rebuild failed for ${key}: ${error.message} | ${error.stack}`);
       }
     }
   }
@@ -805,7 +720,6 @@ class AgriService {
       name: def.name,
       source: 'wfp-vam',
       country: def.country,
-      market: rows[0].market || null,
       data,
       trend: computeTrend(data, { dense: true })
     };
@@ -1070,14 +984,8 @@ class AgriService {
     const targetUnit = series[0].unit;
     const MT = 'USD/mt';
     const UNIT_FACTORS = {
-      // Direction-pairs across the three charted units. Every direction is
-      // explicit so a reordered seriesDefs (targetUnit taken from series[0])
-      // always finds a factor. Quintal = 46 kg (Salvadoran convention).
-      [`${MT}|${QUINTAL}`]: 46 / 1000,
+      [`${MT}|${QUINTAL}`]: 46 / 1000, // 1 quintal = 46 kg
       [`${MT}|USD/kg`]: 1 / 1000,
-      [`${QUINTAL}|${MT}`]: 1000 / 46,
-      [`${QUINTAL}|USD/kg`]: 1 / 46,
-      [`${KG}|${MT}`]: 1000,
       [`${KG}|${QUINTAL}`]: 46 // vegetables: FAOSTAT tomatoes USD/kg → quintal axis
     };
     for (const s of series) {
@@ -1101,35 +1009,10 @@ class AgriService {
       if (aggregated) aggregatedAny = true;
     }
 
-    // Derive gap range from the actual data: find the longest gap between
-    // consecutive observation dates in any series (YYYY-MM-DD string compare
-    // works for ISO dates) and emit gapYears with that range.
-    const GAP_THRESHOLD_MS = 365 * 24 * 60 * 60 * 1000; // > 1 year = gap caveat
-    let gapRange = null;
-    for (const s of series) {
-      const dates = s.data
-        .map((p) => p.date)
-        .filter(Boolean)
-        .sort();
-      for (let i = 1; i < dates.length; i++) {
-        const dt = Date.parse(dates[i]) - Date.parse(dates[i - 1]);
-        if (dt > GAP_THRESHOLD_MS) {
-          const yr0 = dates[i - 1].slice(0, 4);
-          const yr1 = dates[i].slice(0, 4);
-          const candidate = `${yr0}–${yr1}`;
-          if (!gapRange || candidate.length > gapRange.length) gapRange = candidate;
-        }
-      }
-    }
-    if (gapRange) caveats.push(caveat.gapYears(gapRange));
-
-    // Derive single-market from the actual unique markets across series.
-    const markets = new Set(series.map((s) => s.market).filter(Boolean));
-    if (markets.size === 1) {
-      caveats.push(caveat.singleMarket([...markets][0]));
-    }
-
     const primary = series[0];
+    const hasGap = series.some((s) => s.name.includes('San Salvador'));
+    if (hasGap) caveats.push(caveat.gapYears('2023–2025'));
+    if (def.seriesDefs.some((sd) => sd.adapter === 'wfp-slv')) caveats.push(caveat.singleMarket('San Salvador'));
 
     return buildEnvelope(
       {

@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 
 class ColorUtils {
+  /// Relative-luminance heuristic: true when the color reads as dark and
+  /// needs light content on top (used to pick logo variants, etc.).
+  static bool isDarkColor(Color c) {
+    final l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    return l < 0.5;
+  }
+
   static Color parseHex(String hex) {
     final cleaned = hex.replaceAll('#', '');
     if (cleaned.length == 3) {

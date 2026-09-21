@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:genie_ai_mobile/components/charts/crop_health_summary_card.dart';
+import 'package:genie_ai_mobile/components/charts/pest_alert_summary_card.dart';
+
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
 import 'package:genie_ai_mobile/components/chat/answer_sources_bar.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
@@ -45,6 +48,21 @@ typedef _RestoredTitleSource = ({
   String? buttonId,
   String? key,
 });
+
+/// Web-parity section header for the quick-help overlay sections
+/// (Insights / Fast Actions / Market Prices).
+Widget _agriSectionTitle(ThemeData theme, dynamic tokens, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 8),
+    child: Text(
+      text,
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: tokens.fg as Color?,
+      ),
+    ),
+  );
+}
 
 class ChatBotComponent extends ConsumerStatefulWidget {
   final String userId;
@@ -92,6 +110,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _isLoading = false;
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
+
+  /// Timestamp of the last streaming repaint — chunks batch to ~10/s so
+  /// the UI thread stays responsive to taps while a response streams.
+  int _lastStreamUiMs = 0;
 
   bool get _canStream => httpClient != null && streamBaseUrl != null;
   http.Client? get httpClient => widget.httpClient;
@@ -171,9 +193,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   bool _showNewChatConfirm = false;
   bool _showLoadConfirm = false;
   String? _pendingLoadConversationId;
-  bool _showExportDialog = false;
   String _exportFilename = "";
-  bool _showSaveDialog = false;
   final TextEditingController _titleController = TextEditingController();
 
   // Quick Help Overlay Visibility
@@ -1272,10 +1292,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 switch (event) {
                   case SseChunkEvent(:final content):
                     accumulatedContent += content;
-                    setState(() {
-                      msg['content'] = accumulatedContent;
-                    });
-                    _scrollToBottom();
+                    // Throttle repaints: a setState + markdown rebuild +
+                    // scroll per SSE chunk saturates the UI thread and
+                    // drops taps on the toolbar while streaming. Batch
+                    // visual updates to ~10/s; onDone flushes the rest.
+                    final nowMs = DateTime.now().millisecondsSinceEpoch;
+                    if (nowMs - _lastStreamUiMs >= 100) {
+                      _lastStreamUiMs = nowMs;
+                      setState(() {
+                        msg['content'] = accumulatedContent;
+                      });
+                      _scrollToBottom();
+                    }
                   case SseMetadataEvent(
                     :final sourceDocuments,
                     :final confidenceScore,
@@ -1288,10 +1316,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     streamQueryTranslationStatus = queryTranslationStatus;
                   case SseTranslationEvent(:final content):
                     accumulatedContent = content;
-                    setState(() {
-                      msg['content'] = content;
-                    });
-                    _scrollToBottom();
+                    final nowMs = DateTime.now().millisecondsSinceEpoch;
+                    if (nowMs - _lastStreamUiMs >= 100) {
+                      _lastStreamUiMs = nowMs;
+                      setState(() {
+                        msg['content'] = content;
+                      });
+                      _scrollToBottom();
+                    }
                   case SseDoneEvent(:final queryId, :final translationFailed):
                     streamQueryId = queryId;
                     answerTranslationFailed = translationFailed;
@@ -2023,7 +2055,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       setState(() {
         _currentConversationId =
             conversationResponse['_id'] ?? _currentConversationId;
-        _showSaveDialog = false;
         _lastSavedMessageCount = _messages.length;
       });
 
@@ -2163,6 +2194,186 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     );
   }
 
+  /// Real modal route for the PDF export filename dialog — the old
+  /// inline Dialog-in-Column rendered invisibly and its layout crash
+  /// froze the whole screen (buttons dead).
+  Future<void> _openExportDialog() async {
+    _exportFilename =
+        "chat_${DateTime.now().toIso8601String().split('T').first}";
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = ThemeManager().tokens;
+        return Dialog(
+          backgroundColor: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.xl),
+          ),
+          insetPadding: const EdgeInsets.all(DsSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.lg,
+                    DsSpacing.lg,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Text(
+                    tr('chatbot.dialogs.exportTitle'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.lg),
+                  child: TextField(
+                    controller: TextEditingController(text: _exportFilename),
+                    style: TextStyle(color: tokens.fg),
+                    decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.exportHint'),
+                      hintStyle: TextStyle(color: tokens.mutedSoft),
+                    ),
+                    onChanged: (v) => _exportFilename = v,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.md,
+                    DsSpacing.sm,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      DsButton(
+                        label: tr('common.cancel'),
+                        variant: DsButtonVariant.ghost,
+                        expand: false,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                      const SizedBox(width: DsSpacing.sm),
+                      DsButton(
+                        label: tr('chatbot.dialogs.actions.export'),
+                        variant: DsButtonVariant.primary,
+                        expand: false,
+                        onPressed: _exportFilename.trim().isEmpty
+                            ? null
+                            : () {
+                                Navigator.of(dialogContext).pop();
+                                exportChatToPDF();
+                              },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Save-Chat dialog as a real modal route. It previously rendered as an
+  /// inline Dialog in the layout tree — the theme's full-width button
+  /// constraint crashed the Row layout and nothing appeared (same bug
+  /// class as the export dialog above).
+  Future<void> _openSaveDialog() async {
+    _titleController.text = _conversationTitle;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final tokens = ThemeManager().tokens;
+        return Dialog(
+          backgroundColor: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DsRadii.xl),
+          ),
+          insetPadding: const EdgeInsets.all(DsSpacing.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.lg,
+                    DsSpacing.lg,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Text(
+                    tr('chatbot.dialogs.saveTitle'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(DsSpacing.lg),
+                  child: TextField(
+                    controller: _titleController,
+                    style: TextStyle(color: tokens.fg),
+                    decoration: InputDecoration(
+                      hintText: tr('chatbot.dialogs.saveHint'),
+                      hintStyle: TextStyle(color: tokens.mutedSoft),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => _conversationTitle = v,
+                    autofocus: true,
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.md,
+                    DsSpacing.sm,
+                    DsSpacing.md,
+                    DsSpacing.md,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      DsButton(
+                        label: tr('common.cancel'),
+                        variant: DsButtonVariant.ghost,
+                        expand: false,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                      ),
+                      const SizedBox(width: DsSpacing.sm),
+                      DsButton(
+                        label: tr('common.save'),
+                        variant: DsButtonVariant.primary,
+                        expand: false,
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          saveConversation().then((_) {});
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> exportChatToPDF() async {
     final pdf = pw.Document();
     final tokens = ThemeManager().tokens;
@@ -2271,7 +2482,6 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         filename: '$filename.pdf',
       );
       NotificationService.success(tr('chatbot.exportSuccess'));
-      setState(() => _showExportDialog = false);
     } catch (e) {
       debugPrint("[PDF EXPORT] ERROR: $e");
       NotificationService.error(tr('chatbot.exportError'));
@@ -2848,6 +3058,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: DsSpacing.lg),
+                  _agriSectionTitle(
+                    theme,
+                    tokens,
+                    tr('charts.insights'),
+                  ),
+                  const Row(
+                    children: [
+                      Expanded(child: CropHealthSummaryCard()),
+                      Expanded(child: PestAlertSummaryCard()),
+                    ],
+                  ),
+                  const SizedBox(height: DsSpacing.lg),
+                  _agriSectionTitle(
+                    theme,
+                    tokens,
+                    tr('charts.fastActions'),
+                  ),
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {

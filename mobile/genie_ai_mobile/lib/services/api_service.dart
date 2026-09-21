@@ -4,14 +4,27 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Changed from static const to instance getter
-  // This allows instance access (_api.baseUrl) while keeping the value constant
-  //String get baseUrl => 'https://localhost/api';
-  // For production, you can easily switch:
-  //String get baseUrl => 'https://genie-ai.itu.int/api';
-  String get baseUrl => 'https://mvp.ai.assembly.govstack.global/api';
+  // Dev flavor override: pass --dart-define=DEV_SERVER=<host> (see
+  // .vscode/launch.json) to point the API at a lab backend in debug
+  // builds; release (and builds without DEV_SERVER) keep the MVP host.
+  static const _devServer = String.fromEnvironment('DEV_SERVER');
+  static const _isRelease = bool.fromEnvironment('dart.vm.product');
+
+  String get baseUrl => (!_isRelease && _devServer.isNotEmpty)
+      ? 'https://$_devServer/api'
+      // This allows instance access (_api.baseUrl) while keeping the value constant
+      //String get baseUrl => 'https://localhost/api';
+      //String get baseUrl => 'https://genie-ai.itu.int/api';
+      : 'https://mvp.ai.assembly.govstack.global/api';
 
   String? _accessToken;
+
+  /// Installed by the auth layer at bootstrap: performs a token refresh
+  /// and returns true when a (possibly renewed) token is available, so
+  /// a 401 request can be retried once. Agri and other plain-http
+  /// features rely on this — the openapi clients have their own
+  /// AuthInterceptor.
+  static Future<bool> Function()? refreshHook;
 
   // Singleton pattern
   static final ApiService _instance = ApiService._internal();
@@ -56,13 +69,33 @@ class ApiService {
     debugPrint('URL: $uri');
 
     try {
-      final response = await http.get(uri, headers: getHeaders());
+      var response = await http.get(uri, headers: getHeaders());
+      if (response.statusCode == 401) {
+        response = await _retryAfterRefresh(
+          () => http.get(uri, headers: getHeaders()),
+          response,
+        );
+      }
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
       _logError(e, stackTrace);
       rethrow;
     }
+  }
+
+  /// Single retry after the auth-layer refresh hook ran. Returns the
+  /// original response when no hook is installed or the refresh failed.
+  Future<http.Response> _retryAfterRefresh(
+    Future<http.Response> Function() repeat,
+    http.Response failed,
+  ) async {
+    final hook = ApiService.refreshHook;
+    if (hook == null) return failed;
+    final ok = await hook();
+    if (!ok) return failed;
+    debugPrint('[ApiService] 401 — retried after token refresh');
+    return repeat();
   }
 
   Future<http.Response> post(String endpoint, Map<String, dynamic> data) async {

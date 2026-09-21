@@ -3,8 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class GenieAiConfig {
-  static String title = "Genie AI"; // Default fallback
-  static String iconPath = "images/genie-ai-icon-light.svg"; // Default fallback
+  static String title = "AgroGenio AI"; // Default fallback
+  // The login/splash branding uses the green AgroGenio leaf PNG
+  // (transparent) — the user pinned this specifically for the
+  // login screen, regardless of what the bundled config points at.
+  static String iconPath = "assets/images/agro-genio-logo.png";
   static bool _loaded = false;
 
   /// Loads the configuration from assets/genie-ai-config.json
@@ -43,6 +46,11 @@ class GenieAiConfig {
           }
         }
       }
+
+      // The login screen uses the green AgroGenio leaf PNG
+      // (transparent) regardless of what the bundled config
+      // points at — pinned by the user.
+      iconPath = 'assets/images/agro-genio-logo.png';
       _loaded = true;
     } catch (e) {
       debugPrint("Error loading Genie AI Config: $e");

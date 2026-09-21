@@ -12,6 +12,7 @@ import 'connectivity_checker.dart';
 import 'network_error_classifier.dart';
 import 'token_refresher.dart';
 import 'token_storage.dart';
+import '../../services/api_service.dart';
 import '../../providers/api_providers.dart';
 import '../i18n_service.dart';
 import '../keycloak/keycloak_service.dart';
@@ -132,6 +133,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     if (expiration != null && expiration.isAfter(DateTime.now())) {
       final idToken = await _tokenStorage.getIdToken();
       final userId = extractSub(idToken);
+      _installApiServiceRefreshHook();
+      await _pushTokenToApiService();
+      if (!ref.mounted) return;
       state = AuthState.authenticated(userId: userId);
       _authLogger.logAuthEvent(
         message: 'Authenticated from stored tokens',
@@ -233,6 +237,9 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         message: 'Authorization successful',
         source: 'AuthNotifier.authorize',
       );
+      _installApiServiceRefreshHook();
+      await _pushTokenToApiService();
+      if (!ref.mounted) return;
       state = AuthState.authenticated(
         userId: extractSub(tokenResponse.idToken),
       );
@@ -320,6 +327,28 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     }
   }
 
+  /// Pushes the current access token into the plain ApiService used by
+  /// the agri features (they do not go through the openapi
+  /// AuthInterceptor). Called on every authenticated transition.
+  Future<void> _pushTokenToApiService() async {
+    final token = await _tokenStorage.getAccessToken();
+    if (token != null && token.isNotEmpty) {
+      ApiService().setToken(token);
+    } else {
+      ApiService().clearToken();
+    }
+  }
+
+  /// Installed once: lets ApiService retry a 401 after a real refresh.
+  void _installApiServiceRefreshHook() {
+    ApiService.refreshHook = () async {
+      await refreshToken();
+      final token = await _tokenStorage.getAccessToken();
+      if (token != null && token.isNotEmpty) ApiService().setToken(token);
+      return token != null && token.isNotEmpty;
+    };
+  }
+
   Future<void> refreshToken() async {
     // #2019: concurrent callers share the in-flight refresh inside
     // TokenRefresher — the same single flight the interceptor-driven path
@@ -336,6 +365,13 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   /// mappings, log sources unchanged.
   void _onRefreshOutcome(RefreshOutcome outcome) {
     if (!ref.mounted) return;
+    if (outcome is RefreshSuccess) {
+      // The agri ApiService does not ride the AuthInterceptor — push the
+      // freshly refreshed token into it on every authenticated transition
+      // (the old inline refreshToken body did this; the refactor moved the
+      // success site here). Fire-and-forget: a local assignment.
+      unawaited(_pushTokenToApiService());
+    }
     final (AuthState next, bool clearRetry) = switch (outcome) {
       RefreshSuccess(:final userId) => (
         AuthState.authenticated(userId: userId),

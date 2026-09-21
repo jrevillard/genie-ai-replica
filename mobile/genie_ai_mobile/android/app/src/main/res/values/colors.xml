@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash background — Verde AgroGenio oscuro from the brand sheet
+         (#1E5631) so the launch screen reads as the same surface the app
+         opens onto. -->
+    <color name="launch_bg">#1E5631</color>
+</resources>

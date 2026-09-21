@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash background — deep brand-tinted verde (#0F1A12) for dark mode
+         so the launch screen reads as the same surface the app opens
+         onto. Matches the dark AppTokens.bg. -->
+    <color name="launch_bg">#0F1A12</color>
+</resources>

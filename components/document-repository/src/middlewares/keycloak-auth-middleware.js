@@ -164,10 +164,18 @@ const authenticateToken = async (req, res, next) => {
         err_message: err && err.message,
         expected_issuer: expectedIssuer,
         token_issuer: (() => {
-          try { return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).iss; } catch { return 'unparseable'; }
+          try {
+            return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).iss;
+          } catch {
+            return 'unparseable';
+          }
         })(),
         token_exp: (() => {
-          try { return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).exp; } catch { return 0; }
+          try {
+            return JSON.parse(Buffer.from(String(token).split('.')[1] + '==', 'base64').toString()).exp;
+          } catch {
+            return 0;
+          }
         })()
       });
       if (err.name === 'JWTExpired') {

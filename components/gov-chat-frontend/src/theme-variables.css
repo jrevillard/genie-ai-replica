@@ -26,11 +26,15 @@
   --navbar-bg: var(--brand);
   --navbar-fg: #fcfdfa;
 
-  /* --- Semantic status --- */
+  /* --- Semantic status ---
+     AgroGenio brand pivot: --info collapses into the brand green family
+     because the conventional blue clashes with the green-primary palette.
+     DsStatusTag / DsPill `info` variants and the top notification banner
+     all consume this token, so they render green across the app. */
   --success: #4caf50;
   --warning: #e9c46a;
   --danger: #d95c4f;
-  --info: #3b82a6;
+  --info: #4caf50;
 
   /* --- Typography --- */
   --font-scale: 1;
@@ -130,7 +134,7 @@ body[data-theme='dark'],
   /* --- Semantic status (brightened for dark bg contrast) --- */
   --success: #7ed48a;
   --warning: #e9c46a;
-  --info: #4a8dcb;
+  --info: #66c76e;
   --danger: #e85a4f;
 
   /* --- Navbar --- */
@@ -191,7 +195,7 @@ body[data-theme='dark'],
     --brand: #1e5631;
     --success: #7ed48a;
     --warning: #e9c46a;
-    --info: #4a8dcb;
+    --info: #66c76e;
     --danger: #e85a4f;
 
     --navbar-fg: #f2f4ee;

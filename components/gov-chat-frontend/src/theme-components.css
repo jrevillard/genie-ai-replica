@@ -109,27 +109,32 @@ main {
   border-radius: var(--radius-md);
 }
 
-/* --- Cards and panels --- */
-.panel,
-.chat-message.bot .message-bubble,
-.analytics-section {
+/* --- Cards and panels ---
+   :root body selector raises specificity above Vue's [data-v-X] attribute
+   selector that scoped CSS uses, so global rules win without touching
+   component templates. */
+:root body .panel,
+:root body .chat-message.bot .message-bubble,
+:root body .analytics-section {
   background-color: var(--surface);
   color: var(--fg);
-  border-color: var(--border);
+  border-color: var(--border-light);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
-.chat-message.bot .message-bubble {
-  background-color: var(--bg);
+:root body .chat-message.bot .message-bubble {
+  background-color: var(--bg-tertiary);
   border-bottom-left-radius: var(--radius-sm);
 }
 
 /* --- Chat bubbles --- */
-.chat-message.user .message-bubble {
+:root body .chat-message.user .message-bubble {
   background-color: var(--accent);
   color: var(--accent-fg);
   border: none;
   border-bottom-right-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.18);
 }
 
 /* --- Theme toggles --- */
@@ -282,6 +287,7 @@ td {
    title text. Keep the dark-theme icon color rule. */
 .nav-bar {
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
 }
 .nav-bar a,
 .nav-bar button,
@@ -307,4 +313,39 @@ td {
   margin-left: var(--space-md) !important;
   background: transparent !important;
   border-radius: 0 !important;
+}
+
+/* --- Sidebar elevation --- */
+:root body .side-bar {
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- FAQ item hover lift ---
+   :root body selector outranks Vue scoped attribute selector. Transition on
+   base state so reverse animation runs on mouse-leave. */
+:root body .faq-item {
+  background-color: transparent;
+  border-color: var(--border-light);
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+:root body .faq-item:hover {
+  border-color: rgba(76, 175, 80, 0.35);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Sidebar sub-tab hover ---
+   Generic DS interaction: tint + ease on chat history sub-tabs. Works on
+   All/Folders/Starred/Archived (DsButton ghost wrapper). */
+:root body .chat-sub-tab {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+:root body .chat-sub-tab:hover {
+  background-color: var(--accent-muted);
+  color: var(--accent-fg);
 }

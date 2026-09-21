@@ -700,10 +700,21 @@ export default {
       return map[this.trend] || map.unknown;
     },
     caveatChips() {
-      return (this.meta.caveats || []).map((c) => ({
-        label: this.caveatLabel(c),
-        severity: c.code === 'ESTIMATED_CPI' || c.code === 'PROXY_INDEX' ? 'warning' : 'info'
-      }));
+      const seen = new Set();
+      const chips = [];
+      for (const c of this.meta.caveats || []) {
+        const label = this.caveatLabel(c);
+        // Skip exact duplicates AND any caveat whose label collides with the
+        // freshness pill (e.g. "Bundled snapshot" appears in both lists).
+        if (this.freshnessLabel && label === this.freshnessLabel) continue;
+        if (seen.has(label)) continue;
+        seen.add(label);
+        chips.push({
+          label,
+          severity: c.code === 'ESTIMATED_CPI' || c.code === 'PROXY_INDEX' ? 'warning' : 'info'
+        });
+      }
+      return chips;
     },
     freshnessLabel() {
       if (!this.meta.fetchedAt) return '';

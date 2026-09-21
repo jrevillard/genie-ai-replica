@@ -16,7 +16,7 @@
     <style name="LaunchSplashTheme" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/launch_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/launch_image</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/launch_bg</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <item name="postSplashScreenTheme">@style/NormalTheme</item>
     </style>
 </resources>

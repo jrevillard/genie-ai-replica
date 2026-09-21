@@ -7,8 +7,12 @@
 
   - windowSplashScreenBackground: brand verde background (#1E5631)
   - windowSplashScreenAnimatedIcon: the mipmap-scaled farmer PNG,
-    rendered at 40% of the slot (iconBackgroundColor = transparent so
-    the verde background shows through).
+    rendered at 40% of the slot.
+  - windowSplashScreenIconBackgroundColor: TRANSPARENT. Android 12+
+    draws a circular background behind the icon when this is set to any
+    non-transparent colour (user-visible "white circle behind the
+    farmer"); @android:color/transparent lets the verde slot
+    background show through unclamped.
   - postSplashScreenTheme: the Flutter NormalTheme takes over once
     installSplashScreen() finishes and the framework signals ready.
 -->
@@ -16,7 +20,7 @@
     <style name="LaunchSplashTheme" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/launch_bg</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/launch_image</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/launch_bg</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <item name="postSplashScreenTheme">@style/NormalTheme</item>
     </style>
 </resources>

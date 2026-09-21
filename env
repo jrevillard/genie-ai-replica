@@ -152,8 +152,8 @@ HUGGING_FACE_HUB_TOKEN=
 # EMBEDDING_SERVER_ENDPOINT=
 
 # Embedding model for vector search
-# Default: BAAI/bge-base-en-v1.5
-# Options: BAAI/bge-large-en-v1.5 (better, slower), multilingual models
+# Default: BAAI/bge-large-en-v1.5 (better recall, ~3× slower than bge-base, ~1.3 GB VRAM)
+# Options: BAAI/bge-base-en-v1.5 (faster, smaller), multilingual models
 # EMBEDDING_MODEL_ID=
 
 # Reranking model for search result refinement

@@ -1,5 +1,6 @@
 # Copyright (c) 2024-2026 International Telecommunication Union (ITU)
 
+import ast
 import copy
 from datetime import date
 from enum import Enum
@@ -2066,6 +2067,138 @@ class TestStreamWithMetadata:
         assert "|<-MSG->|" not in decoded
         assert "Réponse" in decoded
         assert "über Straße" in decoded
+
+
+# ===========================================================================
+# Excess-blank-line collapse (_EXCESS_BLANK_RE)
+# Applied in both _stream_with_metadata and _finalize_llm_response. The
+# regression around granite emitting `\n\n\n` between sections (header→list,
+# list→next header) shows up as extra visual blank lines in the rendered
+# chat. The unit below pins the contract for both paths and the boundary
+# case (partial triple split across token chunks).
+# ===========================================================================
+class TestExcessBlankCollapse:
+    """Pin the `\n{3,}` → `\n\n` collapse on both paths + cross-chunk boundary."""
+
+    @staticmethod
+    def _streamed_text(out):
+        # Strip the metadata JSON event and the [DONE] terminator from the
+        # streamed yield list, leaving only the chunk payloads (whose content
+        # is repr-encoded, so decode with ast.literal_eval).
+        chunks = []
+        for item in out:
+            if not item.startswith("data: "):
+                continue
+            if item.startswith("data: [DONE]"):
+                continue
+            try:
+                payload = ast.literal_eval(item[len("data: ") :].rstrip("\n"))
+            except (SyntaxError, ValueError):
+                continue
+            if isinstance(payload, (bytes, bytearray)):
+                chunks.append(payload.decode("utf-8"))
+            elif isinstance(payload, str):
+                chunks.append(payload)
+        return "".join(chunks)
+
+    @pytest.mark.asyncio
+    async def test_streaming_collapses_triple_newlines_within_a_chunk(self):
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, False))
+        body = TestStreamWithMetadata._make_body(
+            [
+                "data: b'**Header:**\\n\\n\\n\\n* item\\n\\n\\n* next item'\n\n",
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        text = self._streamed_text(out)
+        # Triple+ newlines reduced to single paragraph break; no 3+ runs survive.
+        assert "\n\n\n" not in text
+        # Single paragraph breaks preserved.
+        assert "\n\n* item" in text
+        assert "**Header:**" in text
+
+    @pytest.mark.asyncio
+    async def test_streaming_collapses_across_chunk_boundary(self):
+        """A triple-newline run that straddles a token-chunk boundary must not
+        survive: collapsing on every buffer accumulation (before marker-tail
+        handling) keeps the held-back tail consistent with what has already
+        been emitted, so the second chunk's leading newlines can only add
+        onto an already-collapsed tail."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, False))
+        body = TestStreamWithMetadata._make_body(
+            [
+                "data: b'**Header:**\\n\\n'\n\n",  # ends with \n\n
+                "data: b'\\n\\n* item'\n\n",  # would form \n\n\n\n at join
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        text = self._streamed_text(out)
+        assert "\n\n\n" not in text
+        assert "**Header:**" in text
+        assert "* item" in text
+
+    @pytest.mark.asyncio
+    async def test_streaming_preserves_single_blank_line(self):
+        """A single paragraph break must survive untouched — collapsing only
+        fires on 3+ runs."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, False))
+        body = TestStreamWithMetadata._make_body(
+            [
+                "data: b'paragraph one\\n\\nparagraph two'\n\n",
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        text = self._streamed_text(out)
+        assert "paragraph one\n\nparagraph two" in text
+
+    @pytest.mark.asyncio
+    async def test_streaming_collapses_in_held_back_tail(self):
+        """Regression: if the tail-withhold logic is in play (a partial
+        marker at end), the collapse must still apply before the buffer is
+        settled. No multi-blank run can leak via the tail."""
+        svc = create_chatqna_service()
+        svc._assemble_source_documents = AsyncMock(return_value=([], 0.5, False))
+        body = TestStreamWithMetadata._make_body(
+            [
+                "data: b'answer\\n\\n\\n\\n\\n'\n\n",  # triple then withheld tail
+                "data: [DONE]\n\n",
+            ]
+        )
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        text = self._streamed_text(out)
+        # The final flush emits the held-back tail as part of the answer.
+        assert "\n\n\n" not in text
+
+    @pytest.mark.asyncio
+    async def test_finalize_collapses_excess_blanks_before_translation(self, monkeypatch):
+        """The non-streaming path collapses excess blanks BEFORE handing
+        content to the translator — same invariant the streaming path applies
+        at emission. Without this, the translation cache would persist entries
+        pre-collapse that re-introduce blanks on cache hit."""
+        monkeypatch.setattr(chatqna_module, "LLM_SELF_CONFIDENCE_ENABLED", False)
+        svc = create_chatqna_service()
+        svc.load_language_codes = MagicMock(return_value={})
+        captured = {}
+
+        async def fake_translate(text, target_lang, original_language):
+            captured["text"] = text
+            return f"[ES]{text}"
+
+        svc._translate_with_chunking = fake_translate
+        # 4 newlines then 5 newlines between the three paragraphs.
+        await svc._finalize_llm_response(
+            "respuesta.\n\n\n\nsiguiente párrafo\n\n\n\n\núltimo",
+            "ES",
+        )
+        # Translator received collapsed text (3+ runs → \n\n).
+        assert "\n\n\n" not in captured["text"]
+        assert captured["text"] == "respuesta.\n\nsiguiente párrafo\n\núltimo"
 
 
 # ===========================================================================

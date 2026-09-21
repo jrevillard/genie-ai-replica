@@ -550,8 +550,8 @@ chunks = chunk_text(
 **Configuration**:
 ```python
 BATCH_SIZE = 32  # Process 32 chunks at once
-EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
-DIMENSIONS = 768
+EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
+DIMENSIONS = 1024
 ```
 
 ### Stage 5: Graph Construction

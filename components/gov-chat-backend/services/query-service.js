@@ -7,6 +7,45 @@ const { NotFoundError } = require('../middleware/errors');
 const api = require('@opentelemetry/api');
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 
+// Pick the user-visible question to store in queries.text for the Query Inspector.
+// Order of preference:
+//   1. `queryData.userQuestion` — the frontend's visibleText/typed text (the only
+//      value that matches what the user saw in the chat, even when the dual-prompt
+//      mechanism replaces the last user message in `messages` with a hidden
+//      persona/system prompt for OPEA). MUST be a string — non-string inputs
+//      (objects, arrays, numbers) would coerce to "[object Object]" and pollute
+//      the Inspector. We log + reject.
+//   2. The last user-role message in `messages` — correct for un-swapped flows.
+//   3. The tail of `messages` — defensive fallback for any shape we don't
+//      recognise. Skips empty/whitespace entries so a leftover streaming
+//      placeholder (isStreaming flag absent OR content empty) can never win.
+//
+// Returned values are always trimmed strings (never raw, never null).
+function pickUserText(messages, explicit) {
+  if (explicit != null) {
+    if (typeof explicit === 'string' && explicit.trim()) {
+      return explicit.trim();
+    }
+    if (typeof explicit !== 'undefined') {
+      logger.warn('pickUserText.ignored_non_string_userQuestion', {
+        type: typeof explicit,
+        isArray: Array.isArray(explicit)
+      });
+    }
+  }
+  if (Array.isArray(messages)) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      const content = m && typeof m.content === 'string' ? m.content.trim() : '';
+      if (m && m.role === 'user' && content) return content;
+    }
+    const tail = messages[messages.length - 1];
+    const tailContent = tail && typeof tail.content === 'string' ? tail.content.trim() : '';
+    if (tailContent) return tailContent;
+  }
+  return '';
+}
+
 class QueryService {
   constructor() {
     this.dbService = dbService; // Store the service reference instead of the promise
@@ -312,8 +351,14 @@ class QueryService {
       throw new Error(`Missing required query data. Fields: ${missingFields.join(', ')}`);
     }
 
-    const lastMessage = queryData.messages[queryData.messages.length - 1];
-    const queryText = lastMessage ? lastMessage.content : '';
+    const queryText = pickUserText(queryData.messages, queryData.userQuestion);
+    if (!queryText) {
+      logger.warn('QueryService.init_stream_no_extractable_text', {
+        sessionId: queryData.sessionId,
+        messagesLen: Array.isArray(queryData.messages) ? queryData.messages.length : 0,
+        hasUserQuestion: queryData.userQuestion != null
+      });
+    }
 
     // Resolve categoryId
     let categoryId = queryData.categoryId || null;
@@ -506,8 +551,7 @@ class QueryService {
       logger.info('[DEBUG] All validations passed successfully.');
 
       // Derive text from the last message for backward compatibility and analytics
-      const lastMessage = queryData.messages[queryData.messages.length - 1];
-      const queryText = lastMessage ? lastMessage.content : '';
+      const queryText = pickUserText(queryData.messages, queryData.userQuestion);
       if (!queryText) {
         logger.warn('No extractable text from messages; analytics may be affected.');
       }
@@ -1782,3 +1826,7 @@ class QueryService {
 // Singleton instance
 const instance = new QueryService();
 module.exports = instance;
+// Attached for unit-test access. Pure helper, no instance state — safe to expose
+// on the singleton object; do not refactor into a class method without also
+// updating the unit tests (query-service.test.js: pickUserText suite).
+module.exports.pickUserText = pickUserText;

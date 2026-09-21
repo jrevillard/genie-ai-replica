@@ -348,6 +348,89 @@ import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import { resolveConfigText } from '../utils/configResolver';
 
+// Tight-list renderer override: chat-tuned model output puts a parent
+// label and its nested sub-list on adjacent lines in the markdown source,
+// but GFM `marked` emits that as `<li><p>Label</p><ul>...</ul></li>` —
+// the `<p>` wraps the label as a block element, which inserts a vertical
+// margin between the label and its sub-list and reads as an extra blank
+// line in the rendered chat. We split the listitem's children into
+// inline-safe tokens (text/strong/em/link/...) and block tokens
+// (heading/paragraph/blockquote/code/list/html/...), route the former
+// through `parser.parseInline` (no `<p>` wrap) and the latter through
+// `parser.parse`, so the output becomes
+// `<li><strong>Label:</strong><ul>...</ul></li>` — tight list mode
+// matching the source's structure.
+//
+// Routing block tokens to `parseInline` — e.g. when the model emits
+// `### heading` inside a listitem — crashes with
+// "Token with 'heading' type was not found." Routing by type fixes that
+// while still preserving the tight layout for the common case.
+//
+// `marked.use({ renderer })` only picks up OWN properties of the supplied
+// object — class-prototype methods are ignored. We merge our override
+// onto a Renderer instance via `Object.assign` so `listitem` lands as an
+// own property and is actually used by the parser.
+const INLINE_TOKEN_TYPES = new Set([
+  'text',
+  'escape',
+  'html',
+  'link',
+  'image',
+  'strong',
+  'em',
+  'codespan',
+  'br',
+  'del',
+  'tag'
+]);
+const BLOCK_TOKEN_TYPES = new Set([
+  'paragraph',
+  'heading',
+  'code',
+  'blockquote',
+  'list',
+  'table',
+  'html',
+  'def',
+  'footnote',
+  'hr'
+]);
+
+const tightListRenderer = Object.assign(new Renderer(), {
+  listitem(token) {
+    const children = (token.tokens || []).filter((t) => t.type !== 'space');
+    const inline = [];
+    const blocks = [];
+    for (const child of children) {
+      if (BLOCK_TOKEN_TYPES.has(child.type)) {
+        blocks.push(child);
+      } else if (INLINE_TOKEN_TYPES.has(child.type)) {
+        inline.push(child);
+      } else {
+        // Unknown type — render as a block to avoid feeding a non-inline
+        // token to parseInline and crashing the renderer.
+        blocks.push(child);
+      }
+    }
+    let html = '';
+    if (inline.length > 0) {
+      html += this.parser.parseInline(inline);
+    }
+    if (blocks.length > 0) {
+      html += this.parser.parse(blocks);
+    }
+    const taskBox =
+      token.task && token.checked
+        ? '<input checked="" type="checkbox" disabled> '
+        : token.task
+          ? '<input type="checkbox" disabled> '
+          : '';
+    return `<li>${taskBox}${html}</li>\n`;
+  }
+});
+
+marked.use({ renderer: tightListRenderer });
+
 export default {
   name: 'ChatBotComponent',
   components: {
@@ -944,20 +1027,35 @@ export default {
                   : [] // explicitly empty (Just Chat) — no filter contribution
                 : [item.serviceKey || item.service] // null/undefined — sidebar fallback
           );
-          const messagesForQuery = this.chatMessages.map((msg) => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content
-          }));
+          // Drop the streaming bot placeholder pushed for the in-flight SSE — it is
+          // a UI stub, not part of the conversation. Without this filter, the
+          // empty placeholder becomes the tail of the messages array, and the
+          // backend's `text = messages[messages.length-1].content` derivation
+          // stores an empty string in queries.text for Quick Help queries.
+          // The `msg &&` guard tolerates corrupted-cache null entries (localStorage
+          // round-trip can introduce them); the inner access would otherwise throw.
+          const baseMessages = this.chatMessages
+            .filter((msg) => msg && !msg.isStreaming)
+            .map((msg) => ({
+              role: msg.sender === 'user' ? 'user' : 'assistant',
+              content: msg.content
+            }));
 
-          const lastUserMsgIndex = messagesForQuery.map((m) => m.role).lastIndexOf('user');
+          const lastUserMsgIndex = baseMessages.map((m) => m.role).lastIndexOf('user');
+          // Dual-prompt swap: send the hidden prompt to OPEA as the last user
+          // message so the LLM gets the persona + domain context, while
+          // `messageForDisplay` (the visibleText) is what the user actually
+          // clicked/typed. `userQuestion` below carries the visible text to
+          // the analytics layer so the Query Inspector shows it.
           if (lastUserMsgIndex !== -1 && messageForBackend !== messageForDisplay) {
-            messagesForQuery[lastUserMsgIndex].content = messageForBackend;
+            baseMessages[lastUserMsgIndex].content = messageForBackend;
           }
 
           queryData = {
             conversationId: this.conversationId,
             sessionId: this.currentSessionId || 'new-session',
-            messages: messagesForQuery,
+            messages: baseMessages,
+            userQuestion: messageForDisplay,
             context: {
               categoryLabel: categoryLabel,
               serviceLabels: serviceLabels,
@@ -970,6 +1068,7 @@ export default {
           queryData = {
             sessionId: this.currentSessionId || 'new-session',
             text: messageForBackend,
+            userQuestion: messageForDisplay,
             context: {
               language: this.currentLocale.toUpperCase()
             },

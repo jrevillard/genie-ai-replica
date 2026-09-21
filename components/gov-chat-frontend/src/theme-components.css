@@ -4,6 +4,12 @@
  * All color references use the canonical token names from theme-variables.css.
  */
 
+/* theme-components.css — GENIE.AI Design System component layer
+ *
+ * Applies DS tokens to component selectors.
+ * All color references use the canonical token names from theme-variables.css.
+ */
+
 /* --- Typography foundation --- */
 body {
   font-family: var(--font-body);
@@ -31,76 +37,27 @@ main {
   color: var(--fg);
 }
 
-/* --- Navbar --- */
-.nav-bar {
-  background: var(--navbar-bg, var(--accent));
-  color: var(--navbar-fg, var(--accent-fg));
-}
-
-.brand-name,
-.nav-bar h4,
-.nav-bar .brand-name,
-[class*='brand-name'],
-.nav-bar [class*='title'],
-.nav-bar [class*='heading'] {
-  color: var(--accent-fg);
-}
-
-/* --- Sidebar --- */
-.side-bar {
-  background-color: var(--bg-sidebar);
-  color: var(--fg);
-  border-right: 1px solid var(--border);
-}
-
-.knowledge-areas {
-  background-color: var(--bg-sidebar);
-  color: var(--fg);
-}
-
-/* --- Modal dialogs --- */
-.modal-overlay {
-  background-color: var(--overlay-bg);
-}
-
-.modal-content,
-.settings-dialog,
-.analytics-content,
-.dialog-content,
-.feedback-dialog .dialog-content {
+/* --- Modal dialogs (live selectors only) ---
+   :root body prefix outranks Vue scoped [data-v-X] attribute selectors. */
+:root body .modal-content,
+:root body .analytics-content,
+:root body .dialog-content,
+:root body .feedback-dialog .dialog-content {
   background-color: var(--surface);
   color: var(--fg);
   border-color: var(--border);
 }
 
-.dialog-header,
-.modal-header {
+:root body .dialog-header {
   border-bottom-color: var(--border);
 }
 
-.dialog-footer,
-.modal-footer {
+:root body .dialog-footer,
+:root body .modal-footer {
   border-top-color: var(--border);
 }
 
-/* --- Settings --- */
-.settings-section {
-  border-bottom-color: var(--border);
-}
-
-.settings-dialog {
-  background-color: var(--surface);
-  color: var(--fg);
-}
-
-.settings-dialog .section-title,
-.settings-dialog .dialog-header,
-.settings-dialog label {
-  color: var(--fg);
-}
-
 /* --- Form controls (non-DS: checkbox, file, range) --- */
-.dropdown,
 .search-box {
   background-color: var(--surface);
   color: var(--fg);
@@ -200,28 +157,7 @@ td {
   border-color: var(--border-light);
 }
 
-/* --- Weather panel --- */
-.weather-forecast {
-  background-color: var(--surface);
-  color: var(--fg);
-}
-
-/* --- Settings dialog overrides --- */
-.settings-dialog .theme-toggle {
-  background-color: var(--btn-secondary-bg);
-  color: var(--btn-secondary-fg);
-}
-
-.settings-dialog .theme-toggle.active {
-  background-color: var(--accent);
-  color: var(--accent-fg);
-}
-
 /* --- Misc --- */
-.app-name {
-  color: var(--accent-fg);
-}
-
 .node-name {
   flex: 1;
   color: var(--fg);
@@ -284,7 +220,7 @@ td {
 
 /* Navbar — gradient + white text from JSON theme.navbar.background.
    Logo PNG already carries the brand wordmark, so hide the redundant
-   title text. Keep the dark-theme icon color rule. */
+   title text. --fg is theme-aware, so no per-mode override needed. */
 .nav-bar {
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-md);
@@ -292,11 +228,6 @@ td {
 .nav-bar a,
 .nav-bar button,
 .nav-bar svg {
-  color: var(--fg);
-}
-:root[data-theme='dark'] .nav-bar a,
-:root[data-theme='dark'] .nav-bar button,
-:root[data-theme='dark'] .nav-bar svg {
   color: var(--fg);
 }
 .brand-name {

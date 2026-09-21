@@ -220,6 +220,26 @@ Set in `group_vars/<env>/vars.yml`:
 | `csp_connect_src` | `""` | Nginx CSP connect sources |
 | `log_level` | `info` | Log level for backend and document-repository: `error`, `warn`, `info`, `debug` |
 
+### Agricultural Data Service (optional — el-salvador only)
+
+Feeds `/api/agri/*` for the Insights and Market Prices dialogs (NDVI crop
+health, pest advisories, market prices, news). Sources are free + keyless;
+the backend prefetches and caches (Redis → Arango → bundled seeds), so the
+app works even when upstreams are unavailable. See
+`docs/security/mr388-followups.md` for the full triage.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `agri_sources_enabled` | `""` | Comma-separated adapter ids to enable. Unset = all registered adapters. Useful to disable a broken source without a code change |
+| `agri_redis_url` | `""` | Redis URL for the hot cache + scheduler locks. Unset = `TRANSLATION_CACHE_*` is reused |
+| `agri_verbose` | `""` | Verbose agri pipeline tracing (`1` enables per-adapter resolve/fetch/parse/normalize/cache-tier/rebuild logs). Pairs with `LOG_LEVEL=debug` for full detail |
+| `agri_prefetch_on_start` | `"1"` | Opt-in flag. When `"1"`, runs the first prefetch pass at startup. The code checks `=== '1'`, so unset (test env without `.env`) means no prefetch → no live API calls. Production deployments inherit `"1"` via `docker-compose.yaml` (`- AGRI_PREFETCH_ON_START=${AGRI_PREFETCH_ON_START:-1}`) |
+
+Per-adapter overrides follow the pattern `AGRI_<PREFIX>_<KEY>` where
+`<PREFIX>` is the adapter's `configPrefix` (e.g. `WFP_SLV`, `HDX_NDVI`,
+`GDELT`, `COMTRADE`, `OIRSA`, `RSS_MAG`). Keys match the adapter's
+`defaults` object — most commonly `FALLBACKURL` or `DATASET`.
+
 ### Email Configuration (non-secret)
 
 | Variable | Default | Description |

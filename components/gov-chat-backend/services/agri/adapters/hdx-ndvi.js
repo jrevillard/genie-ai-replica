@@ -8,7 +8,7 @@
 const { fetchUrl } = require('../http');
 const { parseCsvObjects } = require('../csv');
 const { resolveHdxResource } = require('../resolvers');
-const { docKey } = require('../keys');
+const nodeCrypto = require('node:crypto');
 
 // PCODE -> department name (verified against the dataset)
 const DEPARTMENTS = {
@@ -69,7 +69,7 @@ module.exports = {
       if (existing && existing.nPixels >= pixels) continue; // SV11 sliver loses
 
       best.set(logical, {
-        _key: docKey(logical),
+        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
         kind: 'ndvi',
         department: name,
         pcode: row.PCODE,

@@ -386,113 +386,140 @@ function resolveRedisUrl() {
 
 class AgriService {
   constructor() {
-    if (AgriService.instance) return AgriService.instance;
+    // Do NOT cache `AgriService.instance = this` here — caching in the
+    // constructor leaks a half-initialized instance if init() throws midway
+    // (the index.js catch only sees the throw case, not the partial state).
+    // getInstance() caches a successful instance explicitly.
     this.initialized = false;
     this.db = null;
     this.redis = null;
     this.cache = null;
     this.scheduler = null;
     this.adapters = [];
-    AgriService.instance = this;
-    return this;
+    this._initPromise = null;
   }
 
   static getInstance() {
-    if (!AgriService.instance) AgriService.instance = new AgriService();
+    if (!AgriService.instance || !AgriService.instance.initialized) {
+      // Replace stale or failed instance with a fresh one. A previous init
+      // that threw clears AgriService.instance (see init() catch), so a
+      // getInstance() here always returns a clean object.
+      AgriService.instance = new AgriService();
+    }
     return AgriService.instance;
   }
 
   async init(deps = {}) {
     if (this.initialized) return;
-    const { dbService } = require('../../shared-lib');
-    // Real shared-lib getConnection() is async (the Jest mock returns
-    // synchronously) — without the await this.db was a Promise and every
-    // .collection() call failed (found on the 10.0.0.101 deploy)
-    this.db = deps.db || null;
-    if (!this.db) {
+    // Concurrent init() calls collapse onto one promise — second caller
+    // awaits the first instead of running the heavy setup twice (leaks
+    // intervals + double prefetch).
+    if (this._initPromise) return this._initPromise;
+    this._initPromise = (async () => {
       try {
-        this.db = await dbService.getConnection();
-      } catch (error) {
-        logger.warn(`agri: Arango connection failed (${error.message}) — seed tier only`);
-      }
-    }
-
-    // Optional Redis — degrade gracefully (never-fail design)
-    try {
-      const Redis = require('ioredis');
-      const url = resolveRedisUrl();
-      if (url) {
-        this.redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
-        await this.redis.connect();
-        logger.info('agri: redis connected');
-      } else {
-        logger.info('agri: no Redis URL configured — Arango+seed tiers only');
-      }
-    } catch (error) {
-      logger.warn(`agri: redis unavailable (${error.message}) — continuing without`);
-      this.redis = null;
-    }
-
-    if (this.db) {
-      for (const name of COLLECTIONS) {
-        try {
-          await this.db.createCollection(name);
-        } catch {
-          /* already exists */
+        const { dbService } = require('../../shared-lib');
+        // Real shared-lib getConnection() is async (the Jest mock returns
+        // synchronously) — without the await this.db was a Promise and every
+        // .collection() call failed (found on the 10.0.0.101 deploy)
+        this.db = deps.db || null;
+        if (!this.db) {
+          try {
+            this.db = await dbService.getConnection();
+          } catch (error) {
+            logger.warn(`agri: Arango connection failed (${error.message}) — seed tier only`);
+          }
         }
+
+        // Optional Redis — degrade gracefully (never-fail design)
+        try {
+          const Redis = require('ioredis');
+          const url = resolveRedisUrl();
+          if (url) {
+            this.redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
+            await this.redis.connect();
+            logger.info('agri: redis connected');
+          } else {
+            logger.info('agri: no Redis URL configured — Arango+seed tiers only');
+          }
+        } catch (error) {
+          logger.warn(`agri: redis unavailable (${error.message}) — continuing without`);
+          this.redis = null;
+        }
+
+        if (this.db) {
+          for (const name of COLLECTIONS) {
+            try {
+              await this.db.createCollection(name);
+            } catch {
+              /* already exists */
+            }
+          }
+        }
+
+        this.adapters = enabledAdapters();
+        this.cache = new ServingCache({ redis: this.redis, db: this.db, seeds });
+
+        // Idempotent seed import (startup floor for cold deployments)
+        for (const [key, envelope] of Object.entries(seeds)) {
+          if (!envelope) continue;
+          const { origin } = await this.cache.get(key);
+          if (origin === null) {
+            await this.cache.set(key, { ...envelope, meta: { ...envelope.meta, seeded: true } }, 24 * 3600 * 1000);
+          }
+        }
+
+        this.scheduler = new AgriScheduler({
+          adapters: this.adapters,
+          db: this.db,
+          redis: this.redis,
+          onAdaptersRun: async () => this.rebuildAllEndpoints()
+        });
+
+        this.initialized = true;
+        // Cache the singleton only after a fully successful init. A prior
+        // version cached this in the constructor, which leaked zombies when
+        // init() threw midway (index.js catch doesn't clear the singleton).
+        AgriService.instance = this;
+        logger.info(
+          `AgriService initialized (${this.adapters.length} adapters: ${this.adapters.map((a) => a.id).join(', ')})`
+        );
+
+        // First prefetch pass in the background (never blocks startup)
+        if (process.env.AGRI_PREFETCH_ON_START !== '0') {
+          setImmediate(() =>
+            this.scheduler.runOnce().catch((e) => logger.error(`agri initial prefetch failed: ${e.message}`))
+          );
+        }
+        const shortest = Math.min(...this.adapters.map((a) => cadenceMs(a)), 3600 * 1000);
+        this.scheduler.start(shortest);
+
+        // Envelope rebuilds run on their OWN cadence, independent of fetch
+        // outcomes: a pass where only dead adapters are due (0 ok) must not
+        // leave new series mappings or recovered data unwritten for a full
+        // cadence cycle (found live 2026-09-17: vegetables stayed 'pending'
+        // for hours after its mapping fix deployed).
+        this.rebuildTimer = setInterval(
+          () => {
+            this.rebuildAllEndpoints().catch((e) => logger.error(`agri periodic rebuild failed: ${e.message}`));
+          },
+          15 * 60 * 1000
+        );
+        this.rebuildTimer.unref();
+        // First periodic rebuild shortly after the startup pass begins —
+        // rebuilds are cheap local queries and idempotent.
+        setTimeout(() => {
+          this.rebuildAllEndpoints().catch(() => {});
+        }, 90 * 1000).unref();
+      } catch (error) {
+        // Init failed: clear the singleton so the next getInstance() returns
+        // a fresh object instead of this half-initialized zombie.
+        AgriService.instance = null;
+        throw error;
+      } finally {
+        this._initPromise = null;
       }
-    }
-
-    this.adapters = enabledAdapters();
-    this.cache = new ServingCache({ redis: this.redis, db: this.db, seeds });
-
-    // Idempotent seed import (startup floor for cold deployments)
-    for (const [key, envelope] of Object.entries(seeds)) {
-      if (!envelope) continue;
-      const { origin } = await this.cache.get(key);
-      if (origin === null) {
-        await this.cache.set(key, { ...envelope, meta: { ...envelope.meta, seeded: true } }, 24 * 3600 * 1000);
-      }
-    }
-
-    this.scheduler = new AgriScheduler({
-      adapters: this.adapters,
-      db: this.db,
-      redis: this.redis,
-      onAdaptersRun: async () => this.rebuildAllEndpoints()
-    });
-
-    this.initialized = true;
-    logger.info(
-      `AgriService initialized (${this.adapters.length} adapters: ${this.adapters.map((a) => a.id).join(', ')})`
-    );
-
-    // First prefetch pass in the background (never blocks startup)
-    if (process.env.AGRI_PREFETCH_ON_START !== '0') {
-      setImmediate(() =>
-        this.scheduler.runOnce().catch((e) => logger.error(`agri initial prefetch failed: ${e.message}`))
-      );
-    }
-    const shortest = Math.min(...this.adapters.map((a) => cadenceMs(a)), 3600 * 1000);
-    this.scheduler.start(shortest);
-
-    // Envelope rebuilds run on their OWN cadence, independent of fetch
-    // outcomes: a pass where only dead adapters are due (0 ok) must not
-    // leave new series mappings or recovered data unwritten for a full
-    // cadence cycle (found live 2026-09-17: vegetables stayed 'pending'
-    // for hours after its mapping fix deployed).
-    this.rebuildTimer = setInterval(
-      () => {
-        this.rebuildAllEndpoints().catch((e) => logger.error(`agri periodic rebuild failed: ${e.message}`));
-      },
-      15 * 60 * 1000
-    );
-    this.rebuildTimer.unref();
-    // First periodic rebuild shortly after the startup pass begins —
-    // rebuilds are cheap local queries and idempotent.
-    setTimeout(() => {
-      this.rebuildAllEndpoints().catch(() => {});
-    }, 90 * 1000).unref();
+    })();
+    return this._initPromise;
   }
 
   // ==================== SERVING ====================

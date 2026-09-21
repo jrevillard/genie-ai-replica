@@ -273,6 +273,32 @@ describe('ChatHistoryService', () => {
       );
       expect(result.title).toBe('Updated');
     });
+
+    it('ignores null fields so a partial update cannot erase stored values', async () => {
+      // Regression: the Flutter OpenAPI client's generated toJson() serialises
+      // every optional field, emitting null for the ones the caller never set.
+      // A star toggle therefore arrived as { isStarred: true, isArchived: null,
+      // title: null }. Letting those nulls through overwrote isArchived: false,
+      // and the list query filters on `isArchived == false` — in AQL
+      // `null == false` is false — so the conversation disappeared from the
+      // user's own list and from the web app.
+      mockConversations.update.mockResolvedValueOnce({
+        new: { _key: 'conv-1', isStarred: true, isArchived: false }
+      });
+
+      await chatHistoryService.updateConversation('conv-1', {
+        isStarred: true,
+        isArchived: null,
+        title: null,
+        tags: [],
+        categoryId: null
+      });
+
+      const patch = mockConversations.update.mock.calls[0][1];
+      expect(patch.isStarred).toBe(true);
+      expect(patch).not.toHaveProperty('isArchived');
+      expect(patch).not.toHaveProperty('title');
+    });
   });
 
   describe('deleteConversation', () => {

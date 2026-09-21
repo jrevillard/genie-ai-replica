@@ -698,10 +698,19 @@ class ChatHistoryService {
 
       const allowedFields = ['title', 'isStarred', 'isArchived', 'tags', 'category'];
 
-      // Filter out non-allowed fields
+      // Filter out non-allowed fields, and treat null exactly like absent.
+      //
+      // Several clients serialise *every* optional field, writing null for the
+      // ones the caller did not set (the Flutter OpenAPI client's generated
+      // toJson() does this — see api_chat_conversations_conversation_id_patch_request.dart
+      // which emits "isArchived": null on a body that only meant to set a title).
+      // Letting null through wrote `isArchived: null` over a stored `false`, and
+      // the list queries filter on `isArchived == false` — in AQL `null == false`
+      // is false, so the record vanished from the user's own list. A partial
+      // update must never erase a field the caller did not intend to set.
       const filteredData = {};
       for (const field of allowedFields) {
-        if (updateData[field] !== undefined) {
+        if (updateData[field] !== undefined && updateData[field] !== null) {
           filteredData[field] = updateData[field];
         }
       }
@@ -1731,10 +1740,19 @@ class ChatHistoryService {
 
       const allowedFields = ['name', 'description', 'isArchived', 'color', 'icon', 'parentFolderId', 'order'];
 
-      // Filter out non-allowed fields
+      // Filter out non-allowed fields, and treat null exactly like absent.
+      //
+      // Several clients serialise *every* optional field, writing null for the
+      // ones the caller did not set (the Flutter OpenAPI client's generated
+      // toJson() does this — see api_chat_conversations_conversation_id_patch_request.dart
+      // which emits "isArchived": null on a body that only meant to set a title).
+      // Letting null through wrote `isArchived: null` over a stored `false`, and
+      // the list queries filter on `isArchived == false` — in AQL `null == false`
+      // is false, so the record vanished from the user's own list. A partial
+      // update must never erase a field the caller did not intend to set.
       const filteredData = {};
       for (const field of allowedFields) {
-        if (updateData[field] !== undefined) {
+        if (updateData[field] !== undefined && updateData[field] !== null) {
           filteredData[field] = updateData[field];
         }
       }

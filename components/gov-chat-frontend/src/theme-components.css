@@ -386,3 +386,49 @@ td {
   gap: 2px;
   font-size: var(--text-xs);
 }
+
+/* FileDetailsDialog modal — Details tab uses CSS grid 2fr 1fr
+   (.tab-content-details). Grid items default to min-width: auto, so the
+   right column's long unbreakable strings (e.g. file_type MIME
+   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+   push the column beyond its 1fr track and overflow the modal. Set
+   min-width: 0 on grid items + word-break on text content. */
+:root body .tab-content-details > * {
+  min-width: 0;
+}
+:root body .info-section,
+:root body .info-item,
+:root body .info-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The cream background of .info-section extends beyond the modal edge
+   when long content pushes the grid track. Clip the bg to its bounds. */
+:root body .info-section {
+  overflow: hidden;
+}
+/* FileDetailsDialog dialog-container has max-height: 90vh + flex column.
+   The actual flex child of dialog-container is .ds-tabs (DsTabs wrapper).
+   .tab-content sits inside .ds-tabs__content (DsTabs slot wrapper) — that
+   nesting breaks flex shrink rules applied directly to .tab-content.
+
+   Push the flex shrink onto .ds-tabs so it fills remaining vertical space
+   after dialog-header + dialog-footer, then clip + scroll inside
+   .ds-tabs__content so the body area scrolls while the DsTabs nav stays
+   pinned at the top of the modal.
+
+   Without this, dialog-footer ends up below the visible modal box because
+   the modal's max-height: 90vh is violated by the natural height of
+   ds-tabs (which contains the scrollable tab-content). */
+:root body .ds-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+:root body .ds-tabs__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

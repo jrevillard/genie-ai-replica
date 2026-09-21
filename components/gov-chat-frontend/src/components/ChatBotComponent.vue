@@ -343,7 +343,7 @@ import MarketPriceSummaryCard from './charts/MarketPriceSummaryCard.vue';
 import CropHealthChart from './charts/CropHealthChart.vue';
 import PestAlertChart from './charts/PestAlertChart.vue';
 import MarketPriceChart from './charts/MarketPriceChart.vue';
-import { marked } from 'marked';
+import { marked, Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 import jsPDF from 'jspdf';
 import { resolveConfigText } from '../utils/configResolver';

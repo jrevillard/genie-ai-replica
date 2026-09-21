@@ -337,3 +337,52 @@ td {
   color: var(--muted);
   opacity: 0.7;
 }
+
+/* --- Chat history card overflow ---
+   .chat-item in ChatFolders.vue sets max-width: 412px and width:
+   calc(100% - 10px). On narrow viewports (mobile sidebar ~90% width) the
+   fixed 412px ceiling is larger than the parent's available width, so the
+   card content (title + star + archive actions) spills beyond the sidebar
+   edge and gets clipped. Constrain to parent width.
+
+   .chat-title scoped CSS uses max-width: calc(100% - 100px), which reserves
+   100px for the actions group. Long titles with multi-word actions (star +
+   Archive text) push the actions off-screen even with overflow:visible.
+
+   Three coordinated overrides:
+   - .chat-item: max-width: 100% (never exceeds parent)
+   - .chat-title: drop fixed 100px reservation, let flex handle ellipsis
+   - .chat-header: flex-wrap: wrap so actions drop to next line when the
+     title + actions group exceeds available width; combined with flex:1 +
+     min-width:0 on the title, ellipsis stays active when there's room.
+   - .chat-actions-group: shrink:0 to never compress when wrapping */
+:root body .chat-item {
+  max-width: 100%;
+}
+:root body .chat-title {
+  max-width: none;
+  flex: 1;
+  min-width: 0;
+}
+:root body .chat-header {
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+}
+:root body .chat-actions-group {
+  flex-shrink: 0;
+  margin-left: var(--space-sm);
+}
+/* Archive control carries a checkbox + a text label (.archive-label). The
+   scoped CSS gives .archive-label font-size: var(--text-base) which is
+   too tall + wide for narrow sidebars. Shrink to var(--text-xs) and trim
+   padding on the surrounding .archive-checkbox so the entire control fits
+   on the same row as the title on mobile (~324px sidebar width). */
+:root body .archive-label {
+  font-size: var(--text-xs);
+  margin-left: var(--space-xs);
+}
+:root body .archive-checkbox {
+  padding: 2px 6px;
+  gap: 2px;
+  font-size: var(--text-xs);
+}

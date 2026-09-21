@@ -56,7 +56,7 @@ import DsCard from '../ds/Card.vue';
 import DsSpinner from '../ds/Spinner.vue';
 import DsPill from '../ds/Pill.vue';
 import agriApiService from '../../services/agriApiService.js';
-import { agriDateLocale, localizeFullName } from '../../utils/agri-i18n.js';
+import { localizeFullName } from '../../utils/agri-i18n.js';
 
 export default {
   name: 'MarketPriceSummaryCard',
@@ -269,22 +269,10 @@ export default {
           show: false
         },
         tooltip: {
-          // Mouse-overs show date + value everywhere (user requirement) —
-          // including the sparkline. Theme/colors come from the global
-          // apexcharts DS-token CSS in theme-components.css.
-          enabled: true,
-          x: {
-            formatter: (val) => {
-              const point = this.timeSeries.find((d) => String(d.year) === String(val));
-              return this.formatSparkTooltipDate(point ? point.year : val);
-            }
-          },
-          y: {
-            formatter: (v) => {
-              const unit = (this.priceData && this.priceData.unit) || '';
-              return `${v}${unit ? ` ${unit}` : ''}`;
-            }
-          }
+          // Disabled on the sparkline (60x60 button) — full chart details
+          // are available by clicking through to the panel. The ApexCharts
+          // dark tooltip on a small surface is also hard to read.
+          enabled: false
         },
         dataLabels: {
           enabled: false
@@ -414,25 +402,6 @@ export default {
       ).slice(0, 3);
       const tag = this.chipCountryTag(raw);
       return tag ? `${base}-${tag}` : base;
-    },
-    /** Sparkline tooltip date — handles daily, monthly and annual keys;
-     *  rendered in the UI language, not the browser's. */
-    formatSparkTooltipDate(value) {
-      if (value === null || value === undefined) return '';
-      const s = String(value);
-      const locale = agriDateLocale(this.uiLocale());
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        return new Date(`${s}T00:00:00`).toLocaleDateString(locale, {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric'
-        });
-      }
-      if (/^\d{4}-\d{2}$/.test(s)) {
-        return new Date(`${s}-01T00:00:00`).toLocaleDateString(locale, { year: 'numeric', month: 'long' });
-      }
-      if (/^\d{4}$/.test(s)) return s;
-      return s;
     },
     async loadPriceData() {
       this.loading = true;

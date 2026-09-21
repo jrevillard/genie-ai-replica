@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // REQUIRED for kIsWeb check
 import 'package:flutter/material.dart';
+import 'package:genie_ai_mobile/services/genie_ai_config.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -36,6 +37,16 @@ class _AboutScreenState extends State<AboutScreen> {
     String dartVer = "";
     String os = "";
 
+    // 0. The product name is the configured brand (AgroGenio), never the
+    //    Android manifest label — About must reflect the app, not the
+    //    underlying GENIE.AI framework.
+    try {
+      await GenieAiConfig.load();
+    } catch (e) {
+      debugPrint("[ABOUT] Error loading brand config: $e");
+    }
+    final brandName = GenieAiConfig.title;
+
     // 1. Get Platform/OS Info (Cross-platform safe)
     if (kIsWeb) {
       // Safe fallback for Web where Platform.* throws errors
@@ -57,7 +68,7 @@ class _AboutScreenState extends State<AboutScreen> {
       final info = await PackageInfo.fromPlatform();
       if (mounted) {
         setState(() {
-          _appName = info.appName.isEmpty ? "Genie AI" : info.appName;
+          _appName = brandName;
           _packageName = info.packageName;
           _version = info.version;
           _buildNumber = info.buildNumber;
@@ -70,7 +81,7 @@ class _AboutScreenState extends State<AboutScreen> {
       // Fallback if package_info_plus fails or isn't installed
       if (mounted) {
         setState(() {
-          _appName = "Genie AI";
+          _appName = brandName;
           _dartVersion = dartVer;
           _osVersion = os;
           _version = "Unknown";
@@ -98,17 +109,21 @@ class _AboutScreenState extends State<AboutScreen> {
           children: [
             const SizedBox(height: DsSpacing.xl),
             // --- Logo Section ---
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: tokens.accentMuted,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.smart_toy_outlined,
-                size: 48,
-                color: tokens.accent,
+            // AgroGenio leaf mark (transparent PNG), the same asset the
+            // login screen and the app icon use.
+            SizedBox(
+              width: 120,
+              height: 120,
+              child: Image.asset(
+                'assets/images/agro-genio-logo.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.eco_outlined,
+                    size: 64,
+                    color: tokens.accent,
+                  );
+                },
               ),
             ),
             const SizedBox(height: DsSpacing.lg),

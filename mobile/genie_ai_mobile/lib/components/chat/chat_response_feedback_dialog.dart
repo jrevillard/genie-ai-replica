@@ -227,12 +227,16 @@ class _ChatResponseFeedbackDialogState
                     DsButton(
                       label: tr("responseRating.cancel"),
                       variant: DsButtonVariant.ghost,
+                      // Unbounded Row: full-width theme minimumSize
+                      // would crash layout (blank frozen dialog).
+                      expand: false,
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     const SizedBox(width: DsSpacing.sm),
                     DsButton(
                       label: tr("responseRating.submit"),
                       variant: DsButtonVariant.primary,
+                      expand: false,
                       onPressed:
                           (_selectedRating != null || _thumbFeedback != null)
                           ? _submit

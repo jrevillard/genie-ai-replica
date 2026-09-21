@@ -1444,6 +1444,7 @@ export default {
       publish: {
         body: "执行 publish 将生成版本 v{'{'}n{'}'}，并将资产包“{'{'}file{'}'}\"存储在文档库中，取代以往的任何 zip。在对其执行 Ingest 之前，新版本暂不处于 serving 状态。",
         confirm: '发布',
+        inProgress: '正在发布 — 正在导出并传输资产包…',
         title: '发布'
       },
       readonly: '只读',

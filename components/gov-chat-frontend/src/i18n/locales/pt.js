@@ -1474,6 +1474,7 @@ export default {
       publish: {
         body: "Ao executar publish, cria-se a v{'{'}n{'}'} e armazena-se o pacote \"{'{'}file{'}'}\" no repositório de documentos, substituindo qualquer zip anterior. A nova versão não estará em serving até que você execute Ingest.",
         confirm: 'Publicar',
+        inProgress: 'Publicando — exportando e transferindo o pacote…',
         title: 'Publicar'
       },
       readonly: 'SOMENTE LEITURA',

@@ -1465,6 +1465,7 @@ export default {
       publish: {
         body: "Kufanya publish kunatoa v{'{'}n{'}'} na kuhifadhi kifurushi cha \"{'{'}file{'}'}\" katika ghala la nyaraka, kikichukua nafasi ya zip yoyote ya awali. Toleo jipya halitakuwa katika serving hadi utakapofanya Ingest.",
         confirm: 'Chapisha',
+        inProgress: 'Inachapishwa — kunasafirisha na kuhamisha kifurushi…',
         title: 'Chapisha'
       },
       readonly: 'SOMA TU',

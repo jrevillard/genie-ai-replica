@@ -4,6 +4,12 @@
  * All color references use the canonical token names from theme-variables.css.
  */
 
+/* theme-components.css — GENIE.AI Design System component layer
+ *
+ * Applies DS tokens to component selectors.
+ * All color references use the canonical token names from theme-variables.css.
+ */
+
 /* --- Typography foundation --- */
 body {
   font-family: var(--font-body);
@@ -113,13 +119,12 @@ main {
   border-color: var(--border);
 }
 
-.dialog-header,
-.modal-header {
+:root body .dialog-header {
   border-bottom-color: var(--border);
 }
 
-.dialog-footer,
-.modal-footer {
+:root body .dialog-footer,
+:root body .modal-footer {
   border-top-color: var(--border);
 }
 
@@ -186,9 +191,7 @@ main {
 .settings-dialog label {
   color: var(--fg);
 }
-
 /* --- Form controls (non-DS: checkbox, file, range) --- */
-.dropdown,
 .search-box {
   background-color: var(--surface);
   color: var(--fg);
@@ -197,18 +200,21 @@ main {
   border-radius: var(--radius-md);
 }
 
-/* --- Cards and panels --- */
-.panel,
-.chat-message.bot .message-bubble,
-.analytics-section {
+/* --- Cards and panels ---
+   :root body selector raises specificity above Vue's [data-v-X] attribute
+   selector that scoped CSS uses, so global rules win without touching
+   component templates. */
+:root body .chat-message.bot .message-bubble,
+:root body .analytics-section {
   background-color: var(--surface);
   color: var(--fg);
-  border-color: var(--border);
+  border-color: var(--border-light);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
-.chat-message.bot .message-bubble {
-  background-color: var(--bg);
+:root body .chat-message.bot .message-bubble {
+  background-color: var(--bg-tertiary);
   border-bottom-left-radius: var(--radius-sm);
 }
 
@@ -228,11 +234,12 @@ main {
 }
 
 /* --- Chat bubbles --- */
-.chat-message.user .message-bubble {
+:root body .chat-message.user .message-bubble {
   background-color: var(--accent);
   color: var(--accent-fg);
   border: none;
   border-bottom-right-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.18);
 }
 
 /* --- Theme toggles --- */
@@ -298,28 +305,7 @@ td {
   border-color: var(--border-light);
 }
 
-/* --- Weather panel --- */
-.weather-forecast {
-  background-color: var(--surface);
-  color: var(--fg);
-}
-
-/* --- Settings dialog overrides --- */
-.settings-dialog .theme-toggle {
-  background-color: var(--btn-secondary-bg);
-  color: var(--btn-secondary-fg);
-}
-
-.settings-dialog .theme-toggle.active {
-  background-color: var(--accent);
-  color: var(--accent-fg);
-}
-
 /* --- Misc --- */
-.app-name {
-  color: var(--accent-fg);
-}
-
 .node-name {
   flex: 1;
   color: var(--fg);
@@ -417,6 +403,46 @@ a transparent box under the date title, reported on dark mode). */
   box-shadow: none !important;
 }
 
+/* Navbar logo — horizontal wordmark (1172x346 native). Override component
+   default 40x40 square so the wordmark renders proportionally.
+   The white-on-transparent variant lives at /config/agro-genio-navbar-white.png
+   so contrast holds on the green gradient navbar; drop-shadow tightens the
+   edge against the mid-gradient stop. */
+.govt-logo {
+  width: auto !important;
+  height: 40px !important;
+  max-width: 200px !important;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+/* Navbar — gradient + white text from JSON theme.navbar.background.
+   Logo PNG already carries the brand wordmark, so hide the redundant
+   title text. --fg is theme-aware, so no per-mode override needed. */
+.nav-bar {
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+.nav-bar a,
+.nav-bar button,
+.nav-bar svg {
+  color: var(--fg);
+}
+.brand-name {
+  display: none !important;
+}
+
+/* Logo container — the component's default 40px circle behind the logo
+   clashes with the horizontal wordmark (logo appears cropped inside a
+   green disc) and crowds the hamburger button. Flatten to a wide pill-less
+   container with breathing room. */
+.logo-container {
+  width: auto !important;
+  height: 40px !important;
+  margin-left: var(--space-md) !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
 /* ApexCharts zoom toolbar (native +/−/reset/pan): DS-token styling so the
    chart controls match the theme in light and dark (user req 2026-09-18). */
 .apexcharts-toolbar {
@@ -444,4 +470,192 @@ a transparent box under the date title, reported on dark mode). */
 }
 .apexcharts-toolbar svg {
   fill: var(--fg) !important;
+}
+
+/* --- Sidebar elevation --- */
+:root body .side-bar {
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- FAQ item hover lift ---
+   :root body selector outranks Vue scoped attribute selector. Transition on
+   base state so reverse animation runs on mouse-leave. */
+:root body .faq-item {
+  background-color: transparent;
+  border-color: var(--border-light);
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+:root body .faq-item:hover {
+  border-color: rgba(76, 175, 80, 0.35);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Sidebar sub-tab hover ---
+   Generic DS interaction: tint + ease on chat history sub-tabs. Works on
+   All/Folders/Starred/Archived (DsButton ghost wrapper). */
+:root body .chat-sub-tab {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+:root body .chat-sub-tab:hover {
+  background-color: var(--accent-muted);
+  color: var(--accent-fg);
+}
+
+/* --- Analytics section hover lift ---
+   :root body outranks scoped. Transition on base state for reverse animation. */
+:root body .analytics-section {
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+:root body .analytics-section:hover {
+  border-color: rgba(76, 175, 80, 0.35);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Focus-visible global outline ---
+   Keyboard a11y accent. Browser default is a thin blue ring that clashes
+   with the brand; replace with a 2px accent ring + offset. Excludes mouse
+   clicks via :focus-visible (keyboard / touch only). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- Webkit scrollbar theming ---
+   Chrome / Safari / Edge scrollbars follow DS tokens. Firefox uses
+   scrollbar-color (separate selector below). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-soft);
+}
+* {
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+/* --- Placeholder polish ---
+   Inputs inherit --muted at low opacity; explicit token for cross-theme
+   consistency (--muted flips between light/dark). */
+::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* --- Chat history card overflow ---
+   .chat-item in ChatFolders.vue sets max-width: 412px and width:
+   calc(100% - 10px). On narrow viewports (mobile sidebar ~90% width) the
+   fixed 412px ceiling is larger than the parent's available width, so the
+   card content (title + star + archive actions) spills beyond the sidebar
+   edge and gets clipped. Constrain to parent width.
+
+   .chat-title scoped CSS uses max-width: calc(100% - 100px), which reserves
+   100px for the actions group. Long titles with multi-word actions (star +
+   Archive text) push the actions off-screen even with overflow:visible.
+
+   Three coordinated overrides:
+   - .chat-item: max-width: 100% (never exceeds parent)
+   - .chat-title: drop fixed 100px reservation, let flex handle ellipsis
+   - .chat-header: flex-wrap: wrap so actions drop to next line when the
+     title + actions group exceeds available width; combined with flex:1 +
+     min-width:0 on the title, ellipsis stays active when there's room.
+   - .chat-actions-group: shrink:0 to never compress when wrapping */
+:root body .chat-item {
+  max-width: 100%;
+}
+:root body .chat-title {
+  max-width: none;
+  flex: 1;
+  min-width: 0;
+}
+:root body .chat-header {
+  flex-wrap: wrap;
+  row-gap: var(--space-xs);
+}
+:root body .chat-actions-group {
+  flex-shrink: 0;
+  margin-left: var(--space-sm);
+}
+/* Archive control carries a checkbox + a text label (.archive-label). The
+   scoped CSS gives .archive-label font-size: var(--text-base) which is
+   too tall + wide for narrow sidebars. Shrink to var(--text-xs) and trim
+   padding on the surrounding .archive-checkbox so the entire control fits
+   on the same row as the title on mobile (~324px sidebar width). */
+:root body .archive-label {
+  font-size: var(--text-xs);
+  margin-left: var(--space-xs);
+}
+:root body .archive-checkbox {
+  padding: 2px 6px;
+  gap: 2px;
+  font-size: var(--text-xs);
+}
+
+/* FileDetailsDialog modal — Details tab uses CSS grid 2fr 1fr
+   (.tab-content-details). Grid items default to min-width: auto, so the
+   right column's long unbreakable strings (e.g. file_type MIME
+   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+   push the column beyond its 1fr track and overflow the modal. Set
+   min-width: 0 on grid items + word-break on text content. */
+:root body .tab-content-details > * {
+  min-width: 0;
+}
+:root body .info-section,
+:root body .info-item,
+:root body .info-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The cream background of .info-section extends beyond the modal edge
+   when long content pushes the grid track. Clip the bg to its bounds. */
+:root body .info-section {
+  overflow: hidden;
+}
+/* FileDetailsDialog dialog-container has max-height: 90vh + flex column.
+   The actual flex child of dialog-container is .ds-tabs (DsTabs wrapper).
+   .tab-content sits inside .ds-tabs__content (DsTabs slot wrapper) — that
+   nesting breaks flex shrink rules applied directly to .tab-content.
+
+   Push the flex shrink onto .ds-tabs so it fills remaining vertical space
+   after dialog-header + dialog-footer, then clip + scroll inside
+   .ds-tabs__content so the body area scrolls while the DsTabs nav stays
+   pinned at the top of the modal.
+
+   Without this, dialog-footer ends up below the visible modal box because
+   the modal's max-height: 90vh is violated by the natural height of
+   ds-tabs (which contains the scrollable tab-content). */
+:root body .ds-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+:root body .ds-tabs__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }

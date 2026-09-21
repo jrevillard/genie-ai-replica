@@ -1150,7 +1150,7 @@ const Map<String, dynamic> enLocale = {
     "title": "About",
     "version": "Version",
     "description":
-        "Genie AI is your intelligent assistant for navigating government services and information.",
+        "AgroGenio is your intelligent assistant for agricultural information in El Salvador — crop health, pest alerts and market prices, in your language.",
     "techStack": "Tech Stack",
     "copyright": "All rights reserved.",
   },

@@ -1150,7 +1150,7 @@ const Map<String, dynamic> esLocale = {
     "title": "Acerca de",
     "version": "Versión",
     "description":
-        "Genie AI es tu asistente inteligente para navegar por los servicios e información gubernamentales.",
+        "AgroGenio es tu asistente inteligente para la información agrícola de El Salvador: salud de los cultivos, alertas de plagas y precios de mercado, en tu idioma.",
     "techStack": "Stack Tecnológico",
     "copyright": "Todos los derechos reservados.",
   },

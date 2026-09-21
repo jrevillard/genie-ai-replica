@@ -310,8 +310,8 @@
   "app": {
     "title": "AgroGenio AI",
     "icon": {
-      "type": "file",
-      "value": "/config/agro-genio-icon.svg"
+      "type": "inline",
+      "value": "<img src=\"/config/agro-genio-navbar-white.png\" alt=\"AgroGenio\" style=\"height:40px;width:auto\">"
     },
     "splash": {
       "type": "file",

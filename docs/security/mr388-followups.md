@@ -26,21 +26,21 @@
 
 ---
 
-## 🔴 HIGH — 11 items remaining
+## 🔴 HIGH — 11 items remaining (all done as of 2026-09-21)
 
 | ID   | Area            | Item                                                                                                                          | Status |
 |------|-----------------|-------------------------------------------------------------------------------------------------------------------------------|--------|
-| H-2  | docs/agri       | `services/agri/AGENTS.md` is a 1-line stub (`CLAUDE.md` plain text, no link) — replace with `[CLAUDE.md](CLAUDE.md)` or delete + drop dead pointer | open |
-| H-3  | tests           | `services/agri/cache.js` (3-tier Redis → Arango → seed) has **zero coverage**. Add `__tests__/services/agri/cache.test.js` with Redis hit/miss/TTL/seed-fallback cases | open |
-| H-4  | tests           | `services/agri/scheduler.js` single-flight untested. Add `__tests__/services/agri/scheduler.test.js` proving two concurrent `runAdapter(id)` calls collapse to one upstream fetch | open |
-| H-5  | tests           | 11/20 adapters untested (frankfurter, inaturalist, ornl-modis, wb-cpi, wfp-gtm, wfp-nic, all rss-*). Add fixture-based parse/normalize tests | open |
-| H-6  | tests           | `genie-ai-overlay/chatqna/keycloak_token_validator.py` (KC_ALLOWED_CLIENT_IDS widening — defense-in-depth) has zero tests. Add pytest cases: valid/expired/wrong-azp/JWKS cache hit/refresh | open |
-| H-7  | backend         | `/api/agri/*` has no `rateLimit` middleware (other routers do). Single auth'd user can DoS Arango during cold-start cache miss | open |
-| H-8  | ops             | `agri_fetch_log` collection grows unbounded (~650 rows/day). Add TTL index (`expireAfter: 90d`) or periodic sweep | open |
-| H-9  | backend         | GDELT `backoffUntil` is module-level (per-process), not distributed. Replica B keeps hammering after replica A's 429. Persist to Redis (NX + 2h expiry) | open |
-| H-10 | ops             | `scripts/export-agri-seeds.js` writes to prod Arango with no `NODE_ENV` / `--confirm` guard. Typo from dev workstation can overwrite `agri_cache` live. Add guard + redact `ARANGO_PASSWORD` from error paths | open |
-| H-11 | backend         | `AGRI_PREFETCH_ON_START=1` default in `env` Section 15 → backend `test:backend` triggers live upstream prefetch on first init. Default to `0` or set in `test:backend` CI job | open |
-| H-12 | backend         | `frankfurter.js` adapter is dead — writes `FX:EUR:USD` daily, no endpoint surfaces it. Delete + drop registry row (per `feedback_no_dead_code`) | open |
+| H-2  | docs/agri       | `services/agri/AGENTS.md` is a 1-line stub (`CLAUDE.md` plain text, no link) — replace with `[CLAUDE.md](CLAUDE.md)` or delete + drop dead pointer | **done** (`f57fdee2a`) |
+| H-3  | tests           | `services/agri/cache.js` (3-tier Redis → Arango → seed) has **zero coverage**. Add `__tests__/services/agri/cache.test.js` with Redis hit/miss/TTL/seed-fallback cases | **done** (`1246f4bae`, 8/8) |
+| H-4  | tests           | `services/agri/scheduler.js` single-flight untested. Add `__tests__/services/agri/scheduler.test.js` proving two concurrent `runAdapter(id)` calls collapse to one upstream fetch | **done** (`a04dc5a21`, 5/5) |
+| H-5  | tests           | 11/20 adapters untested (frankfurter, inaturalist, ornl-modis, wb-cpi, wfp-gtm, wfp-nic, all rss-*). Add fixture-based parse/normalize tests | **done** (`c85c63c27`, 46/46 structural smoke; frankfurter deleted in H-12) |
+| H-6  | tests           | `genie-ai-overlay/chatqna/keycloak_token_validator.py` (KC_ALLOWED_CLIENT_IDS widening — defense-in-depth) has zero tests. Add pytest cases: valid/expired/wrong-azp/JWKS cache hit/refresh | **done** (`4b9532a13`, 16/16) |
+| H-7  | backend         | `/api/agri/*` has no `rateLimit` middleware (other routers do). Single auth'd user can DoS Arango during cold-start cache miss | **done** (`ab7693492`, 60 req/min/user, RFC draft-7) |
+| H-8  | ops             | `agri_fetch_log` collection grows unbounded (~650 rows/day). Add TTL index (`expireAfter: 90d`) or periodic sweep | **done** (`964b30561`, TTL 90d, idempotent) |
+| H-9  | backend         | GDELT `backoffUntil` is module-level (per-process), not distributed. Replica B keeps hammering after replica A's 429. Persist to Redis (NX + 2h expiry) | **done** (`8ad7583a7`, Redis key `agri:gdelt:backoff` + 2h PX) |
+| H-10 | ops             | `scripts/export-agri-seeds.js` writes to prod Arango with no `NODE_ENV` / `--confirm` guard. Typo from dev workstation can overwrite `agri_cache` live. Add guard + redact `ARANGO_PASSWORD` from error paths | **done** (`015bce729`, SAFE_DBS + AGRI_SEEDS_REGEN_CONFIRM=1) |
+| H-11 | backend         | `AGRI_PREFETCH_ON_START=1` default in `env` Section 15 → backend `test:backend` triggers live upstream prefetch on first init. Default to `0` or set in `test:backend` CI job | **done** (`46ac99074`, now `=== "1"` — opt-in; prod must set in `.env`) |
+| H-12 | backend         | `frankfurter.js` adapter is dead — writes `FX:EUR:USD` daily, no endpoint surfaces it. Delete + drop registry row (per `feedback_no_dead_code`) | **done** (`2f6b7e8e5`, file + README row deleted) |
 
 ---
 

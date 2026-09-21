@@ -362,6 +362,14 @@ module.exports = (serviceCategoryService) => {
    *                 type: array
    *                 items:
    *                   type: object
+   *                   properties:
+   *                     languageCode:
+   *                       type: string
+   *                       description: ISO 639-1 code (e.g. "ES", "FR"). Stored uppercased.
+   *                     translation:
+   *                       type: string
+   *                       description: Localized display name.
+   *                   required: [languageCode, translation]
    *     responses:
    *       '201':
    *         description: Category created successfully
@@ -542,6 +550,14 @@ module.exports = (serviceCategoryService) => {
    *                 type: array
    *                 items:
    *                   type: object
+   *                   properties:
+   *                     languageCode:
+   *                       type: string
+   *                       description: ISO 639-1 code (e.g. "ES", "FR"). Stored uppercased.
+   *                     translation:
+   *                       type: string
+   *                       description: Localized display name.
+   *                   required: [languageCode, translation]
    *     responses:
    *       '201':
    *         description: Service created successfully
@@ -595,6 +611,14 @@ module.exports = (serviceCategoryService) => {
    *                 type: array
    *                 items:
    *                   type: object
+   *                   properties:
+   *                     languageCode:
+   *                       type: string
+   *                       description: ISO 639-1 code (e.g. "ES", "FR"). Stored uppercased.
+   *                     translation:
+   *                       type: string
+   *                       description: Localized display name.
+   *                   required: [languageCode, translation]
    *     responses:
    *       '200':
    *         description: Category updated successfully
@@ -648,6 +672,14 @@ module.exports = (serviceCategoryService) => {
    *                 type: array
    *                 items:
    *                   type: object
+   *                   properties:
+   *                     languageCode:
+   *                       type: string
+   *                       description: ISO 639-1 code (e.g. "ES", "FR"). Stored uppercased.
+   *                     translation:
+   *                       type: string
+   *                       description: Localized display name.
+   *                   required: [languageCode, translation]
    *     responses:
    *       '200':
    *         description: Service updated successfully

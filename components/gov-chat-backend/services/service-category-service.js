@@ -132,14 +132,14 @@ class ServiceCategoryService {
         if (categoryData.translations && Array.isArray(categoryData.translations)) {
           logger.info(`Processing ${categoryData.translations.length} additional translations.`);
           for (const trans of categoryData.translations) {
-            if (trans.lang && trans.text) {
-              const transLocale = trans.lang.toUpperCase();
+            if (trans.languageCode && trans.translation) {
+              const transLocale = String(trans.languageCode).toUpperCase();
               const translationKey = `${newCategory._key}_${transLocale}`;
               const translationDoc = {
                 _key: translationKey,
                 serviceCategoryId: newCategory._key,
                 languageCode: transLocale,
-                translation: trans.text,
+                translation: trans.translation,
                 isActive: true,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
@@ -355,13 +355,13 @@ class ServiceCategoryService {
 
       if (payload.translations && Array.isArray(payload.translations)) {
         for (const trans of payload.translations) {
-          if (trans.lang && trans.text) {
-            const transLocale = trans.lang.toUpperCase();
+          if (trans.languageCode && trans.translation) {
+            const transLocale = String(trans.languageCode).toUpperCase();
             const translationDoc = {
               _key: `${serviceKey}_${transLocale}`,
               serviceId: serviceKey,
               languageCode: transLocale,
-              translation: trans.text,
+              translation: trans.translation,
               isActive: true,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
@@ -900,13 +900,13 @@ class ServiceCategoryService {
       `);
 
         for (const trans of payload.translations) {
-          if (trans.lang && trans.text) {
-            const transLocale = trans.lang.toUpperCase();
+          if (trans.languageCode && trans.translation) {
+            const transLocale = String(trans.languageCode).toUpperCase();
             const translationDoc = {
               _key: `${categoryKey}_${transLocale}`,
               serviceCategoryId: categoryKey,
               languageCode: transLocale,
-              translation: trans.text,
+              translation: trans.translation,
               isActive: true,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()

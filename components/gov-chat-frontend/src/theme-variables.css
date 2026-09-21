@@ -88,7 +88,7 @@
   --success-bg: #4caf501f;
   --warning-bg: #e9c46a1f;
   --danger-bg: #d95c4f1f;
-  --info-bg: #3b82a61f;
+  --info-bg: #4caf501f;
 
   /* --- Semantic surfaces --- */
   --bg-tertiary: #ede8df;
@@ -160,7 +160,7 @@ body[data-theme='dark'],
   --success-bg: #4caf5033;
   --warning-bg: #e9c46a33;
   --danger-bg: #b4231833;
-  --info-bg: #1565a833;
+  --info-bg: #66c76e33;
 
   /* --- Form elements --- */
   --slider-track: #2a3b30;
@@ -215,7 +215,7 @@ body[data-theme='dark'],
     --success-bg: #4caf5033;
     --warning-bg: #e9c46a33;
     --danger-bg: #b4231833;
-    --info-bg: #1565a833;
+    --info-bg: #66c76e33;
 
     --slider-track: #2a3b30;
     --switch-track-off: #2a3b30;

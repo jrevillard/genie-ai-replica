@@ -159,31 +159,32 @@ export default {
         // Fallback data if historicalData is empty
         data = [
           {
-            label: 'Current',
+            // Labels reuse analytics.timePeriods — already translated in all locales.
+            label: this.$t('analytics.timePeriods.current', 'Current'),
             value: this.actualSatisfactionValue || 0,
             periodStart: new Date().toISOString(),
             periodEnd: new Date().toISOString()
           },
           {
-            label: 'Last Week',
+            label: this.$t('analytics.timePeriods.week1', 'Last Week'),
             value: 0,
             periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
           },
           {
-            label: '2 Weeks Ago',
+            label: this.$t('analytics.timePeriods.week2', '2 Weeks Ago'),
             value: 0,
             periodStart: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
           },
           {
-            label: '3 Weeks Ago',
+            label: this.$t('analytics.timePeriods.week3', '3 Weeks Ago'),
             value: 0,
             periodStart: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString()
           },
           {
-            label: '4 Weeks Ago',
+            label: this.$t('analytics.timePeriods.week4', '4 Weeks Ago'),
             value: 0,
             periodStart: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
             periodEnd: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()

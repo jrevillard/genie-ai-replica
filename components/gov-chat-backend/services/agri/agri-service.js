@@ -11,6 +11,7 @@
  */
 const { logger } = require('../../shared-lib');
 const { ServingCache } = require('./cache');
+const { resolveRedisUrl } = require('./http');
 const { AgriScheduler } = require('./scheduler');
 const { enabledAdapters } = require('./registry');
 const { cadenceMs } = require('./config');
@@ -364,25 +365,6 @@ const TAXA_NAMES = {
   'Phytophthora infestans': { en: 'Late Blight', es: 'Tizón Tardío' },
   'Hypothenemus hampei': { en: 'Coffee Berry Borer', es: 'Broca del Café' }
 };
-
-/**
- * Redis URL for the hot cache tier. Explicit AGRI_REDIS_URL/REDIS_URL win;
- * otherwise reuse the stack's existing cache instance — the TRANSLATION_CACHE_*
- * vars point at the shared redis-cache service (password included), so the
- * default engages the top tier on deployments that define no agri-specific URL.
- * @returns {string|null} redis:// URL or null when nothing is configured
- */
-function resolveRedisUrl() {
-  if (process.env.AGRI_REDIS_URL) return process.env.AGRI_REDIS_URL;
-  if (process.env.REDIS_URL) return process.env.REDIS_URL;
-  const host = process.env.TRANSLATION_CACHE_HOST;
-  if (!host) return null;
-  const port = process.env.TRANSLATION_CACHE_PORT || 6379;
-  const password = process.env.TRANSLATION_CACHE_PASSWORD
-    ? `:${encodeURIComponent(process.env.TRANSLATION_CACHE_PASSWORD)}@`
-    : '';
-  return `redis://${password}${host}:${port}`;
-}
 
 class AgriService {
   constructor() {

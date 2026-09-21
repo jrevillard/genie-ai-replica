@@ -1,69 +1,83 @@
-/* AgroGenio El Salvador Keycloak Login Theme — Light Mode
- * Overrides parent genie theme with El Salvador AgroGenio color tokens.
+/* El Salvador Keycloak Login Theme — Light Mode
+ * Overrides parent genie theme tokens for el-salvador deployment.
  *
- * AgroGenio palette:
- *   brand        = Verde AgroGenio #176B3A
- *   brand hover  = Verde profundo #0D4B28
- *   success      = Verde cultivo #69A83B
- *   warning      = Ámbar alerta #B86B00
- *   danger       = Rojo crítico #B42318
- *   info         = Azul servicio #1565A8
- *   text         = Texto principal #17231C
- *   border       = Borde #D6DED8
- *   bg           = Fondo cálido #F7F8F4
- *   tertiary     = Tierra #76543E
+ * Palette:
+ *   brand        #1E5631
+ *   brand hover  #0D4B28
+ *   secondary    #4CAF50
+ *   success      #4CAF50
+ *   warning      #B86B00
+ *   danger       #B42318
+ *   info         #1565A8
+ *   text         #17231C
+ *   bg           #F7F8F4
  */
 
 :root {
-  /* Primary — Verde AgroGenio */
-  --pf-v5-global--primary-color--100: #176b3a;
+  /* Primary */
+  --pf-v5-global--primary-color--100: #1e5631;
   --pf-v5-global--primary-color--200: #0d4b28;
 
-  /* Link — Verde AgroGenio */
-  --pf-v5-global--link--Color: #176b3a;
+  /* Link */
+  --pf-v5-global--link--Color: #1e5631;
   --pf-v5-global--link--Color--hover: #0d4b28;
 
-  /* Buttons — Verde AgroGenio */
-  --pf-v5-c-button--m-primary--BackgroundColor: #176b3a;
+  /* Buttons */
+  --pf-v5-c-button--m-primary--BackgroundColor: #1e5631;
   --pf-v5-c-button--m-primary--hover--BackgroundColor: #0d4b28;
   --pf-v5-c-button--m-primary--active--BackgroundColor: #0a3a1f;
-  --pf-v5-c-button--m-primary--focus--BackgroundColor: #176b3a;
-  --pf-v5-c-button--m-secondary--BorderColor: #176b3a;
-  --pf-v5-c-button--m-secondary--Color: #176b3a;
+  --pf-v5-c-button--m-primary--focus--BackgroundColor: #1e5631;
+  --pf-v5-c-button--m-secondary--BorderColor: #1e5631;
+  --pf-v5-c-button--m-secondary--Color: #1e5631;
 
-  /* Form focus — Verde AgroGenio */
-  --pf-v5-c-form-control--focus--BorderColor: #176b3a;
-  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(23, 107, 58, 0.25);
+  /* Form focus */
+  --pf-v5-c-form-control--focus--BorderColor: #1e5631;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(30, 86, 49, 0.25);
 
-  /* Login header — Verde AgroGenio */
-  --pf-v5-c-login__main-header--BorderTopColor: #176b3a;
+  /* Login header */
+  --pf-v5-c-login__main-header--BorderTopColor: #1e5631;
 
-  /* Success — Verde cultivo */
-  --pf-v5-global--success-color--100: #69a83b;
+  /* Success */
+  --pf-v5-global--success-color--100: #4caf50;
 }
 
-/* Header brand — Verde AgroGenio */
 #kc-header-wrapper {
-  color: #176b3a;
+  color: #1e5631;
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Collapse the raw "genie" text node rendered after the <img> in the
+     template; the logo carries the brand wordmark. font-size:0 hides the
+     text node (unwrappable by selectors) while leaving the <img> size
+     unaffected. */
+  font-size: 0;
 }
 #kc-header-wrapper img {
-  width: 200px;
+  width: 320px;
+  max-width: 90%;
   height: auto;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
 }
-/* Hide the realm displayName ("genie") that the template renders next to the
-   logo, and surface our own brand label "AgroGenio" via ::after so the header
-   reads as one cohesive unit. */
-#kc-header-wrapper > *:not(img) {
-  display: none;
+
+/* Login splash — farmer hero image mirrors web splash + mobile launch splash.
+   Layered on a subtle AgroGenio gradient using the brand palette. */
+.login-pf-page {
+  background:
+    url('../img/team_agro.png') no-repeat right bottom / 40% auto fixed,
+    linear-gradient(135deg, #f7f8f4 0%, #e8f5e9 45%, #c8e6c9 100%);
 }
-#kc-header-wrapper::after {
-  content: "AgroGenio";
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #176b3a;
-  letter-spacing: 0.02em;
+@media (max-width: 768px) {
+  .login-pf-page {
+    background:
+      url('../img/team_agro.png') no-repeat right bottom / 80% auto fixed,
+      linear-gradient(135deg, #f7f8f4 0%, #e8f5e9 45%, #c8e6c9 100%);
+  }
+}
+
+/* Form card — AgroGenio accents: top stripe in brand green, green-tinted
+   border + shadow, rounded corners. */
+.pf-v5-c-login__main {
+  border-top: 4px solid #4caf50;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(30, 86, 49, 0.18);
 }

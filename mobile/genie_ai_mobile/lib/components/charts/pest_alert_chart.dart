@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:genie_ai_mobile/services/agricultural_proxy.dart';
+import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
+import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -31,7 +33,7 @@ class PestAlertChart extends StatefulWidget {
 }
 
 class _PestAlertChartState extends State<PestAlertChart> {
-  final AgriculturalProxy _agriculturalProxy = AgriculturalProxy();
+  final AgriApiService _agriService = AgriApiService();
   final ChatbotProxy _chatbotProxy = ChatbotProxy();
   final TextEditingController _userContextController = TextEditingController();
   Map<String, dynamic>? _pestData;
@@ -64,9 +66,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
     });
 
     try {
-      final data = await _agriculturalProxy.getPestAlerts(
-        region: widget.region,
-      );
+      final data = await _agriService.getPestAlerts(); // region is server-side
       setState(() {
         _pestData = data;
         _loading = false;
@@ -149,6 +149,25 @@ class _PestAlertChartState extends State<PestAlertChart> {
                     tooltip: _translate('charts.refresh') ?? 'Refresh',
                   ),
               ],
+            ),
+            // Data caveats + About-this-data panel (user requirement)
+            AgriCaveatBanner(
+              data: _pestData == null
+                  ? null
+                  : {
+                      'caveats': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['caveats'],
+                      'coverage': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['coverage'],
+                      'dataSource': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['source'],
+                      'fetchedAt': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['fetchedAt'],
+                      'seeded': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['seeded'],
+                      'stale': (_pestData!['meta'] as Map?)
+                          ?.cast<String, dynamic>()['stale'],
+                    },
             ),
             const SizedBox(height: 16),
 
@@ -251,7 +270,8 @@ class _PestAlertChartState extends State<PestAlertChart> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(DateTime.now())}',
+                        // Server fetch time, not DateTime.now() (Vue parity)
+                        '${_translate('charts.lastUpdated') ?? 'Last updated'}: ${_formatDate(_fetchedAt ?? DateTime.now())}',
                         style: TextStyle(
                           fontSize: 12,
                           color: theme.colorScheme.onSurface.withValues(
@@ -277,7 +297,7 @@ class _PestAlertChartState extends State<PestAlertChart> {
   ) {
     final isDark = theme.brightness == Brightness.dark;
     final isSelected = _selectedSeverity == severity;
-    final summary = _pestData?['summary'] as Map<String, dynamic>?;
+    final summary = (_pestData?['summary'] as Map?)?.cast<String, dynamic>();
 
     int count = 0;
     if (severity == 'all') {
@@ -313,11 +333,13 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   Widget _buildSummaryChart(ThemeData theme) {
-    final summary = _pestData!['summary'] as Map<String, dynamic>;
-    final high = summary['high'] as int? ?? 0;
-    final moderate = summary['moderate'] as int? ?? 0;
-    final low = summary['low'] as int? ?? 0;
-    final total = summary['total'] as int? ?? 0;
+    final summary = (_pestData!['summary'] as Map).cast<String, dynamic>();
+    // JSON numbers may arrive as double (2.0) — read via num first.
+    int asCount(String k) => (summary[k] as num?)?.toInt() ?? 0;
+    final high = asCount('high');
+    final moderate = asCount('moderate');
+    final low = asCount('low');
+    final total = asCount('total');
 
     if (total == 0) return const SizedBox.shrink();
 
@@ -384,14 +406,14 @@ class _PestAlertChartState extends State<PestAlertChart> {
     ThemeData theme,
     bool isDark,
   ) {
-    final severity = alert['severity'] as String;
-    final pest = alert['pest'] as String;
-    final scientific = alert['scientificName'] as String;
-    final description = alert['description'] as String;
+    final severity = alert['severity'] as String? ?? '';
+    final pest = alert['pest'] as String? ?? '';
+    final scientific = alert['scientificName'] as String? ?? '';
+    final description = alert['description'] as String? ?? '';
     final crops = (alert['affectedCrops'] as List<dynamic>).join(', ');
     final departments = (alert['departments'] as List<dynamic>).join(', ');
-    final recommendations = alert['recommendations'] as String;
-    final firstDetected = alert['firstDetected'] as String;
+    final recommendations = alert['recommendations'] as String? ?? '';
+    final firstDetected = alert['firstDetected'] as String? ?? '';
     final isExpanded = _expandedAlerts.contains(alert['id']);
 
     final severityColor = _getSeverityColor(severity);
@@ -527,13 +549,17 @@ class _PestAlertChartState extends State<PestAlertChart> {
                     departments,
                     theme,
                   ),
-                  _buildDetailItem(
-                    context,
-                    Icons.calendar_today,
-                    _translate('charts.firstDetected') ?? 'First Detected',
-                    _formatDate(DateTime.parse(firstDetected)),
-                    theme,
-                  ),
+                  // firstDetected is null on live data (the curated payload
+                  // has no detection date) — DateTime.parse('') threw
+                  // FormatException here; only render when a real date exists.
+                  if (DateTime.tryParse(firstDetected) != null)
+                    _buildDetailItem(
+                      context,
+                      Icons.calendar_today,
+                      _translate('charts.firstDetected') ?? 'First Detected',
+                      _formatDate(DateTime.parse(firstDetected)),
+                      theme,
+                    ),
                   const SizedBox(height: 12),
 
                   // Recommendations
@@ -683,15 +709,18 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   Color _getSeverityColor(String severity) {
+    // DS token values — same mapping as the web's getSeverityPillVariant
+    // (high→danger, moderate→warning, low→success, default→info).
+    final tokens = ThemeManager().tokens;
     switch (severity) {
       case 'high':
-        return Colors.red;
+        return tokens.danger;
       case 'moderate':
-        return Colors.orange;
+        return tokens.warning;
       case 'low':
-        return Colors.blue;
+        return tokens.success;
       default:
-        return Colors.grey;
+        return tokens.info;
     }
   }
 
@@ -760,13 +789,13 @@ class _PestAlertChartState extends State<PestAlertChart> {
   }
 
   void _shareAlert(Map<String, dynamic> alert) async {
-    final pest = alert['pest'] as String;
-    final scientific = alert['scientificName'] as String;
-    final severity = alert['severity'] as String;
-    final description = alert['description'] as String;
+    final pest = alert['pest'] as String? ?? '';
+    final scientific = alert['scientificName'] as String? ?? '';
+    final severity = alert['severity'] as String? ?? '';
+    final description = alert['description'] as String? ?? '';
     final crops = (alert['affectedCrops'] as List<dynamic>).join(', ');
     final departments = (alert['departments'] as List<dynamic>).join(', ');
-    final recommendations = alert['recommendations'] as String;
+    final recommendations = alert['recommendations'] as String? ?? '';
     final source = alert['source'] as String?;
 
     // Format the pest alert for sharing
@@ -812,12 +841,12 @@ ${_translate('charts.sharedVia') ?? 'Shared via'} AgroGenio AI
   }
 
   void _getAssistance(Map<String, dynamic> alert) async {
-    final pest = alert['pest'] as String;
-    final scientific = alert['scientificName'] as String;
-    final severity = alert['severity'] as String;
+    final pest = alert['pest'] as String? ?? '';
+    final scientific = alert['scientificName'] as String? ?? '';
+    final severity = alert['severity'] as String? ?? '';
     final crops = (alert['affectedCrops'] as List<dynamic>).join(', ');
     final departments = (alert['departments'] as List<dynamic>).join(', ');
-    final recommendations = alert['recommendations'] as String;
+    final recommendations = alert['recommendations'] as String? ?? '';
 
     // Clear previous user input
     _userContextController.clear();
@@ -987,6 +1016,14 @@ Recommendations: $recommendations''';
       default:
         return severity.toUpperCase();
     }
+  }
+
+  /// Server fetch timestamp from the envelope meta (null on legacy payloads).
+  DateTime? get _fetchedAt {
+    final meta = (_pestData?['meta'] as Map?)?.cast<String, dynamic>();
+    final raw = meta?['fetchedAt'] as String?;
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
   }
 
   String _formatDate(DateTime date) {
@@ -1184,7 +1221,7 @@ class _ResponseDialog extends StatelessWidget {
             // Header
             Row(
               children: [
-                Icon(Icons.psychology, color: theme.colorScheme.primary),
+                Icon(Icons.psychology, color: ThemeManager().tokens.accentGold),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

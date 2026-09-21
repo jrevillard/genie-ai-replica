@@ -7,7 +7,7 @@
  * publishes no severity fields).
  */
 const { fetchJson } = require('../http');
-const { docKey } = require('../keys');
+const nodeCrypto = require('node:crypto');
 
 const PEST_LEXICON = [
   'langosta',
@@ -61,7 +61,7 @@ module.exports = {
 
       const logical = `oirsa:${post.id}`;
       docs.push({
-        _key: docKey(logical),
+        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
         kind: 'regional-news',
         title: title.replace(/&#\d+;/g, '').trim(),
         publishedAt: post.date || null,

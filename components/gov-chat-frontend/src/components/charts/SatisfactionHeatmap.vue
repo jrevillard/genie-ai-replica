@@ -227,7 +227,7 @@ export default {
           this.updateChart();
         }
       } catch {
-        this.error = this.translate('analytics.error.loading', 'Failed to load satisfaction data.');
+        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data.');
         this.chartData = [];
         this.updateChart();
       } finally {

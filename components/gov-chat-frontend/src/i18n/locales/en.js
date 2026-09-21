@@ -1622,7 +1622,13 @@ export default {
     streamTimeout: 'The assistant is not responding — the request timed out.',
     nothingToSave: 'Nothing can be saved yet — every answer failed. Retry the conversation first.',
     unsupportedLanguage: 'This language is not available for this deployment.',
-    removeItem: 'Remove item'
+    removeItem: 'Remove item',
+    chatUpdated: 'Chat updated',
+    feedbackError: 'Error submitting feedback',
+    feedbackMissingQueryId: 'Missing query ID for feedback',
+    feedbackSubmitted: 'Feedback submitted',
+    saving: 'Saving...',
+    savingConversation: 'Saving conversation...'
   },
   quickhelp: {
     // Labels (Short for UI)

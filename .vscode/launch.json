@@ -1,0 +1,52 @@
+{
+    // Flutter mobile app (mobile/genie_ai_mobile) debug configurations.
+    // The Android Gradle config defines 5 product flavors (dev, staging, e2e,
+    // itu, el_salvador), so every run MUST pass --flavor.
+    //
+    // Device selection: use the device picker in the status bar (bottom-right)
+    // before pressing F5. An Android emulator ("Medium_Phone_API_36.1") is
+    // available via the picker; the Dart extension boots it automatically.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // DEV_SERVER points the dev flavor at the deployed test backend
+            // (bb-ai-vm-02). Use 10.0.2.2 instead to hit a local Docker stack
+            // from inside the emulator, or a LAN IP for a physical device.
+            "name": "Mobile (dev)",
+            "type": "dart",
+            "request": "launch",
+            "program": "${workspaceFolder}/mobile/genie_ai_mobile/lib/main.dart",
+            "cwd": "${workspaceFolder}/mobile/genie_ai_mobile",
+            "args": [
+                "--flavor", "dev",
+                "--dart-define=DEV_SERVER=10.0.0.101"
+            ]
+        },
+        {
+            "name": "Mobile (staging)",
+            "type": "dart",
+            "request": "launch",
+            "program": "${workspaceFolder}/mobile/genie_ai_mobile/lib/main.dart",
+            "cwd": "${workspaceFolder}/mobile/genie_ai_mobile",
+            "args": ["--flavor", "staging"]
+        },
+        {
+            "name": "Mobile (El Salvador)",
+            "type": "dart",
+            "request": "launch",
+            "program": "${workspaceFolder}/mobile/genie_ai_mobile/lib/main.dart",
+            "cwd": "${workspaceFolder}/mobile/genie_ai_mobile",
+            "args": ["--flavor", "el_salvador"]
+        },
+        {
+            // Patrol integration tests: run with `patrol test` (see patrol-wrapper.sh)
+            // or launch this config against a device for manual e2e exploration.
+            "name": "Mobile (e2e flavor)",
+            "type": "dart",
+            "request": "launch",
+            "program": "${workspaceFolder}/mobile/genie_ai_mobile/lib/main.dart",
+            "cwd": "${workspaceFolder}/mobile/genie_ai_mobile",
+            "args": ["--flavor", "e2e"]
+        }
+    ]
+}

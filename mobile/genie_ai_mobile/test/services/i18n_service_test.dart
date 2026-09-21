@@ -27,11 +27,12 @@ void main() {
       });
 
       test('supported languages has expected count', () {
-        // Default (dev) flavor exposes every shipped locale; the el-salvador
-        // flavor restricts to ['en','es'] at runtime (see locale whitelist group).
+        // The dev flavor restricts the dropdown to the deployment's active
+        // locales (AgroGenio ships en/es). The remaining locale files stay in
+        // source for other flavors — see the locale whitelist group.
         expect(
           service.supportedLanguages.length,
-          allSupportedLocaleCodes.length,
+          getConfig().supportedLocaleCodes.length,
         );
       });
 
@@ -160,13 +161,29 @@ void main() {
     });
 
     group('per-deployment locale whitelist', () {
-      test('default flavor exposes every shipped locale', () {
-        expect(getConfig().supportedLocaleCodes, allSupportedLocaleCodes);
+      test('dev flavor restricts the dropdown to its active locales', () {
+        // AgroGenio (El Salvador) ships English + Spanish only. The other 12
+        // locale files stay in source for other deployments but must not
+        // surface in the dropdown on this flavor.
+        expect(getConfig().supportedLocaleCodes, ['en', 'es']);
         final I18nService service = I18nService();
-        expect(
-          service.supportedLanguages.length,
-          allSupportedLocaleCodes.length,
+        expect(service.supportedLanguages.length, 2);
+        expect(service.supportedLanguages.containsKey('en'), isTrue);
+        expect(service.supportedLanguages.containsKey('es'), isTrue);
+      });
+
+      test('a bare KeycloakConfig still exposes every shipped locale', () {
+        // Guard: restricting one flavor must not shrink the shipped locale
+        // set — a deployment without a whitelist still gets all of them.
+        final KeycloakConfig unrestricted = KeycloakConfig(
+          keycloakUrl: 'https://example.com',
+          realm: 'genie',
+          clientId: 'genie-app',
+          redirectScheme: 'sv.gov.agrogenio',
+          backendUrl: 'https://example.com/api',
         );
+        expect(unrestricted.supportedLocaleCodes, allSupportedLocaleCodes);
+        expect(allSupportedLocaleCodes.length, 14);
       });
 
       test('a flavor can restrict to a subset (e.g. el-salvador en/es)', () {

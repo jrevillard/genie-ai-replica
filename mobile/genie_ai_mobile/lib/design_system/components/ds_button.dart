@@ -15,6 +15,13 @@ class DsButton extends StatelessWidget {
   final bool small;
   final bool disabled;
   final bool iconOnly;
+
+  /// Whether the button stretches to the available width (default). The app
+  /// theme does this via `minimumSize: Size(double.infinity, 48)`, which
+  /// CRASHES layout ("BoxConstraints forces an infinite width") when a
+  /// DsButton is placed directly inside an unbounded Row — pass
+  /// `expand: false` there to hug content instead.
+  final bool expand;
   final Color? overrideBg;
   final Color? overrideFg;
 
@@ -27,6 +34,7 @@ class DsButton extends StatelessWidget {
     this.small = false,
     this.disabled = false,
     this.iconOnly = false,
+    this.expand = true,
     this.overrideBg,
     this.overrideFg,
   });
@@ -66,6 +74,11 @@ class DsButton extends StatelessWidget {
           backgroundColor: colors.bg,
           foregroundColor: colors.fg,
           disabledBackgroundColor: colors.bg.withValues(alpha: 0.5),
+          // Explicit (not inherited from the theme): expand=false must opt out
+          // of the theme's infinite minimumSize, see [expand].
+          minimumSize: expand
+              ? const Size(double.infinity, 48)
+              : const Size(0, 48),
           elevation: 0,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(

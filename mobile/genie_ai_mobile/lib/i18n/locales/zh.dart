@@ -1037,7 +1037,7 @@ const Map<String, dynamic> zhLocale = {
   "about": {
     "title": "关于",
     "version": "版本",
-    "description": "Genie AI 是您浏览政府服务和信息的智能助手。",
+    "description": "AgroGenio 是您在萨尔瓦多获取农业信息的智能助手——作物健康、病虫害预警和市场行情，以您的语言呈现。",
     "techStack": "技术栈",
     "copyright": "版权所有。",
   },

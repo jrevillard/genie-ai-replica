@@ -29,7 +29,7 @@
     <div class="chart-metrics">
       <div class="metric-card">
         <div class="metric-value">{{ totalQueries.toLocaleString() }}</div>
-        <div class="metric-label">{{ $t('analytics.totalQueries') }}</div>
+        <div class="metric-label">{{ $t('analytics.metrics.totalQueries', 'Total Queries') }}</div>
       </div>
       <div class="metric-card">
         <div class="metric-value">{{ uniqueUsers.toLocaleString() }}</div>
@@ -37,7 +37,7 @@
       </div>
       <div class="metric-card">
         <div class="metric-value">{{ averageResponseTime.toFixed(1) }}s</div>
-        <div class="metric-label">{{ $t('analytics.avgResponseTime') }}</div>
+        <div class="metric-label">{{ $t('analytics.metrics.avgResponseTime', 'Avg Response Time') }}</div>
       </div>
       <div class="metric-card">
         <div class="metric-value">{{ (satisfactionRate * 100).toFixed(1) }}%</div>
@@ -366,7 +366,7 @@ export default {
 
           this.chartSeries = [
             {
-              name: this.$t('analytics.totalQueries'),
+              name: this.$t('analytics.metrics.totalQueries', 'Total Queries'),
               type: 'line',
               data: data.map((item) => item.queries)
             },

@@ -1145,7 +1145,7 @@ const Map<String, dynamic> idLocale = {
     "title": "Tentang",
     "version": "Versi",
     "description":
-        "Genie AI adalah asisten cerdas Anda untuk menavigasi layanan dan informasi pemerintah.",
+        "AgroGenio adalah asisten cerdas Anda untuk informasi pertanian di El Salvador — kesehatan tanaman, peringatan hama, dan harga pasar, dalam bahasa Anda.",
     "techStack": "Tech Stack",
     "copyright": "Hak cipta dilindungi undang-undang.",
   },

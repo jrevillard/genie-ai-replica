@@ -33,6 +33,38 @@ const i18n = createI18n({
   messages
 });
 
+/**
+ * $t(key, 'Fallback text') compatibility wrapper.
+ *
+ * vue-i18n has NO default-message argument: a string second argument is
+ * interpreted as a LOCALE NAME. Every call of the shape
+ * `$t('charts.market.latest', 'Latest')` therefore translated the key in
+ * an unregistered locale "Latest", fell back to `fallbackLocale: 'en'`,
+ * and rendered ENGLISH no matter which UI language was selected.
+ *
+ * This wrapper gives the codebase-wide (key, defaultMsg) idiom its
+ * intended semantics: a string second argument that is NOT a registered
+ * locale code is the default message, returned only when the key itself
+ * misses. Legit calls — $t(key), $t(key, valuesObj), $t(key, n) plural,
+ * $t(key, registeredLocale[, values]) — pass through untouched, and
+ * interpolation still works via the original third argument.
+ */
+const globalT = i18n.global.t;
+const registeredLocales = new Set(Object.keys(messages));
+i18n.global.t = function wrappedT(key, arg1, arg2) {
+  if (typeof arg1 === 'string' && !registeredLocales.has(arg1)) {
+    const res = globalT.call(i18n.global, key, i18n.global.locale, arg2);
+    if (res !== key) return res;
+    // Key missing everywhere: interpolate the named params into the
+    // default message ourselves (vue-i18n returns the raw template).
+    if (arg2 && typeof arg2 === 'object') {
+      return arg1.replace(/\{(\w+)\}/g, (m, p) => (p in arg2 ? String(arg2[p]) : m));
+    }
+    return arg1;
+  }
+  return globalT.call(i18n.global, key, arg1, arg2);
+};
+
 // Locales loaded from ./locales/, after applying the optional per-deployment
 // whitelist above. Reflects the active set for this deployment.
 export const availableLocales = Object.keys(messages);

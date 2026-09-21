@@ -142,7 +142,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
           });
           currentAnswer.clear();
         }
-        currentQuestion = line.substring(3).trim();
+        // Strip the optional `**…**` emphasis the FAQ author uses so the
+        // mobile question text doesn't ship literal asterisks. The Vue
+        // parser relies on marked.parseInline for the same cleanup.
+        currentQuestion = line.substring(3).trim().replaceAll('**', '').trim();
       } else {
         if (currentQuestion != null) {
           currentAnswer.writeln(line);

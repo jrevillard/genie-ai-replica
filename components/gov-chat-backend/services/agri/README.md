@@ -22,7 +22,10 @@ Agent-facing conventions: [`CLAUDE.md`](CLAUDE.md) (linked from
   the 2026-09-16 research.
 - **Honest data:** regional references, proxies, and inflation-adjusted
   estimates are quality-tagged in the data and surfaced as structured
-  caveat codes the UI renders visibly and the AI prompts inject verbatim.
+  caveat codes the UI renders visibly (chips, About panel, dashed
+  estimate markers). The caveat envelope is the contract for any
+  future chat-side prompt injection (chatqna wiring is a planned
+  follow-up; not yet implemented).
 
 ## Architecture
 
@@ -103,8 +106,11 @@ Every response is an envelope:
 
 Caveat codes (rendered by clients via i18n — `REGIONAL_DATA`,
 `ESTIMATED_CPI`, `GAP_YEARS`, `ANNUAL_ONLY`, `SINGLE_MARKET`,
-`COMMUNITY_DATA`, `CURATED_STAT`, `PROXY_INDEX`, `STALE_CACHE`) are the
-same text users see and the AI prompts inject.
+`COMMUNITY_DATA`, `CURATED_STAT`, `PROXY_INDEX`, `STALE_CACHE`) are
+shipped in every `/api/agri/*` envelope as structured `meta.caveats`
+and rendered by clients. *Future work:* the chatqna prompt builders
+should inject these caveats verbatim so AI responses carry the same
+caveat context — currently NOT wired (see CLAUDE.md non-negotiables).
 
 Series points are quality-tagged: `{date, value, quality: "actual" |
 "estimated", estMethod?, baseYear?, partial?}` — estimated segments render

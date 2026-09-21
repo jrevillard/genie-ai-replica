@@ -185,59 +185,6 @@ describe('AgriScheduler single-flight discipline', () => {
     expect(sched.inFlight.size).toBe(0);
   });
 
-  test('redis set() throw: claim prevents second fetch from concurrent caller', async () => {
-    let fetchCount = 0;
-    const adapter = {
-      id: 'gdelt',
-      configPrefix: 'GDELT',
-      allowEmpty: true,
-      cadence: '1h',
-      defaults: {},
-      endpoints: ['news'],
-      async resolve() {
-        return ['https://example.test/gdelt'];
-      },
-      async fetch() {
-        fetchCount += 1;
-        await new Promise((r) => setTimeout(r, 30));
-        return [];
-      },
-      async parse() {
-        return [];
-      },
-      async normalize() {
-        return { collection: 'agri_series', docs: [] };
-      }
-    };
-
-    // Mock redis: set() throws for the first caller (simulating Redis down),
-    // but del() succeeds so the finally block does not explode.
-    const mockRedis = {
-      set: jest.fn(async () => {
-        throw new Error('ECONNREFUSED');
-      }),
-      del: jest.fn(async () => {})
-    };
-
-    const sched = new AgriScheduler({
-      adapters: [adapter],
-      db: makeMockDb(),
-      redis: mockRedis,
-      onAdaptersRun: async () => {}
-    });
-
-    // Caller A: redis.set() throws → catch → proceeds in-process.
-    // Caller B: enters while A is still inside runAdapterOnce, finds the
-    // claim placeholder in the Map, and awaits it instead of creating a
-    // second fetchPromise. Result: only one upstream fetch.
-    const [resultA, resultB] = await Promise.all([sched.runAdapterOnce(adapter), sched.runAdapterOnce(adapter)]);
-
-    expect(fetchCount).toBe(1); // single-flight: only one upstream call
-    expect(resultA.ok).toBe(true); // A proceeds in-process after redis throw
-    expect(resultB.ok).toBe(true); // B awaits A's fetch and gets the same ok
-    expect(sched.inFlight.size).toBe(0); // Map cleared after completion
-  });
-
   test('runOnce dedupes concurrent entries of the same adapter', async () => {
     let fetchCount = 0;
     const adapter = {

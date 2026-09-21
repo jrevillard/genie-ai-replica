@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:genie_ai_mobile/components/charts/agri_caveat_banner.dart';
+import 'package:genie_ai_mobile/components/charts/market_price_series_chart.dart';
 import 'package:genie_ai_mobile/services/agri_api_service.dart';
 import 'package:genie_ai_mobile/services/chatbot_proxy.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
+import 'package:genie_ai_mobile/utils/theme_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,12 +30,43 @@ class MarketPriceChart extends StatefulWidget {
 
 class _MarketPriceChartState extends State<MarketPriceChart> {
   String _currentLangCode = '';
+  final AgriApiService _agriService = AgriApiService();
+
+  /// Phase-B multi-series envelope (parity spec S1). Fetched on open;
+  /// null until loaded or on failure — the legacy single-series chart
+  /// stays as fallback so the dialog never regresses.
+  Map<String, dynamic>? _fullEnvelope;
+  bool _fullLoading = true;
 
   @override
   void initState() {
     super.initState();
     _currentLangCode = I18nService().currentLocale.languageCode;
     I18nService().addListener(_onLanguageChange);
+    _loadFullEnvelope();
+  }
+
+  Future<void> _loadFullEnvelope() async {
+    try {
+      final envelope = await _agriService.getMarketPricesFull(widget.category);
+      if (mounted) {
+        setState(() {
+          _fullEnvelope = envelope;
+          _fullLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint(
+        '[MarketPriceChart] Full envelope unavailable, legacy fallback: $e',
+      );
+      if (mounted) setState(() => _fullLoading = false);
+    }
+  }
+
+  bool get _hasFullSeries {
+    if (_fullEnvelope == null) return false;
+    final series = _fullEnvelope!['series'] as List?;
+    return series != null && series.isNotEmpty;
   }
 
   @override
@@ -147,24 +180,20 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
           // Summary Cards
           Row(
             children: [
-              Expanded(
-                child: _buildSummaryCard(
-                  context,
-                  tr('market.latest'),
-                  _latestValue,
-                  _unit,
-                  _categoryColor,
-                ),
+              _buildSummaryCard(
+                context,
+                tr('market.latest'),
+                _latestValue,
+                _unit,
+                _categoryColor,
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: _buildSummaryCard(
-                  context,
-                  tr('market.trend'),
-                  _trendLabel,
-                  '',
-                  _trendColor,
-                ),
+              _buildSummaryCard(
+                context,
+                tr('market.trend'),
+                _trendLabel,
+                '',
+                _trendColor,
               ),
             ],
           ),
@@ -219,150 +248,177 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
             ),
           ),
           const SizedBox(height: 12),
-          // Line Chart — dense series scroll horizontally so every data
-          // point stays neatly spaced instead of crowding (user req).
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final pointCount = _timeSeries.length;
-              final chartWidth = math.max(
-                constraints.maxWidth,
-                pointCount * 14.0,
-              );
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: chartWidth,
-                  height: 250,
-                  child: LineChart(
-                    LineChartData(
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        horizontalInterval: _calculateYInterval(),
-                        getDrawingHorizontalLine: (value) {
-                          return FlLine(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.1,
-                            ),
-                            strokeWidth: 1,
-                          );
-                        },
-                      ),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        rightTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(showTitles: false),
-                        ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            interval: _calculateXInterval(),
-                            getTitlesWidget: (value, meta) {
-                              return _buildXAxisLabel(value, theme);
-                            },
-                          ),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 50,
-                            interval: _calculateYInterval(),
-                            getTitlesWidget: (value, meta) {
-                              return _buildYAxisLabel(value, theme);
-                            },
-                          ),
-                        ),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      minX: 0,
-                      maxX: (_timeSeries.length - 1).toDouble(),
-                      minY: _minY,
-                      maxY: _maxY,
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: _buildSpots(),
-                          isCurved: true,
-                          curveSmoothness: 0.3,
-                          color: _categoryColor,
-                          barWidth: 3,
-                          isStrokeCapRound: true,
-                          dotData: FlDotData(
-                            show: true,
-                            getDotPainter: (spot, percent, barData, index) {
-                              return FlDotCirclePainter(
-                                radius: 4,
-                                color: _categoryColor,
-                                strokeWidth: 2,
-                                strokeColor: isDark
-                                    ? Colors.black
-                                    : Colors.white,
-                              );
-                            },
-                          ),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: _categoryColor.withValues(alpha: 0.15),
-                          ),
-                        ),
-                      ],
-                      lineTouchData: LineTouchData(
-                        enabled: true,
-                        touchTooltipData: LineTouchTooltipData(
-                          getTooltipItems: (touchedSpots) {
-                            return touchedSpots.map((spot) {
-                              final index = spot.x.toInt();
-                              if (index >= 0 && index < _timeSeries.length) {
-                                final dataPoint = _timeSeries[index];
-                                final year = dataPoint['year'] as String? ?? '';
-                                final value = _formatValue(
-                                  dataPoint['value'] as double?,
-                                );
-                                return LineTooltipItem(
-                                  '$year\n$value',
-                                  TextStyle(
-                                    color: isDark ? Colors.white : Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                );
-                              }
-                              return null;
-                            }).toList();
+          // Line Chart — Phase B multi-series chart when the full
+          // envelope is available; legacy single-series chart stays as
+          // fallback (and while loading) so the dialog never regresses.
+          if (_hasFullSeries)
+            MarketPriceSeriesChart(
+              key: ValueKey('series-chart-${widget.category}'),
+              category: widget.category,
+              envelope: _fullEnvelope!,
+            )
+          else if (_fullLoading)
+            const SizedBox(
+              height: 320,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final pointCount = _timeSeries.length;
+                final chartWidth = math.max(
+                  constraints.maxWidth,
+                  pointCount * 14.0,
+                );
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: chartWidth,
+                    height: 250,
+                    child: LineChart(
+                      LineChartData(
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          horizontalInterval: _calculateYInterval(),
+                          getDrawingHorizontalLine: (value) {
+                            return FlLine(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.1,
+                              ),
+                              strokeWidth: 1,
+                            );
                           },
+                        ),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 30,
+                              interval: _calculateXInterval(),
+                              getTitlesWidget: (value, meta) {
+                                return _buildXAxisLabel(value, theme);
+                              },
+                            ),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 50,
+                              interval: _calculateYInterval(),
+                              getTitlesWidget: (value, meta) {
+                                return _buildYAxisLabel(value, theme);
+                              },
+                            ),
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        minX: 0,
+                        maxX: (_timeSeries.length - 1).toDouble(),
+                        minY: _minY,
+                        maxY: _maxY,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: _buildSpots(),
+                            isCurved: true,
+                            curveSmoothness: 0.3,
+                            color: _categoryColor,
+                            barWidth: 3,
+                            isStrokeCapRound: true,
+                            dotData: FlDotData(
+                              show: true,
+                              getDotPainter: (spot, percent, barData, index) {
+                                return FlDotCirclePainter(
+                                  radius: 4,
+                                  color: _categoryColor,
+                                  strokeWidth: 2,
+                                  strokeColor: isDark
+                                      ? Colors.black
+                                      : Colors.white,
+                                );
+                              },
+                            ),
+                            belowBarData: BarAreaData(
+                              show: true,
+                              color: _categoryColor.withValues(alpha: 0.15),
+                            ),
+                          ),
+                        ],
+                        lineTouchData: LineTouchData(
+                          enabled: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                final index = spot.x.toInt();
+                                if (index >= 0 && index < _timeSeries.length) {
+                                  final dataPoint = _timeSeries[index];
+                                  final year =
+                                      dataPoint['year'] as String? ?? '';
+                                  final value = _formatValue(
+                                    dataPoint['value'] as double?,
+                                  );
+                                  return LineTooltipItem(
+                                    '$year\n$value',
+                                    TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                }
+                                return null;
+                              }).toList();
+                            },
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
+                );
+              },
+            ),
           const SizedBox(height: 16),
           // Data Table (exportable — CSV via the system share sheet,
           // spreadsheet-ready: opens in Excel/Sheets)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                tr('market.dataTable'),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+          if (!_hasFullSeries)
+            Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      tr('market.dataTable'),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _exportCsv,
+                      icon: const Icon(Icons.file_download, size: 18),
+                      label: Text(tr('market.exportCsv')),
+                      // App theme forces full-width TextButtons; in an
+                      // unbounded Row that crashes layout — hug content.
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              TextButton.icon(
-                onPressed: _exportCsv,
-                icon: const Icon(Icons.file_download, size: 18),
-                label: Text(tr('market.exportCsv')),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildDataTable(theme, isDark),
-          const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                _buildDataTable(theme, isDark),
+                const SizedBox(height: 16),
+              ],
+            ),
           // Footer
           Center(
             child: Text(
@@ -661,9 +717,9 @@ class _MarketPriceChartState extends State<MarketPriceChart> {
         .toList();
     if (values.isEmpty) return 100;
     final max = values.reduce((a, b) => a > b ? a : b);
-    // 1.5× the top series value — user-prescribed headroom (2026-09-18):
-    // emphasizes the price range without crowding the plot top
-    return max * 1.5;
+    // 1.2× the top series value (user req 2026-09-20): the axis tops out
+    // only 20% above the highest rendered point — neat, readable plots.
+    return max * 1.2;
   }
 
   double _calculateXInterval() {
@@ -996,10 +1052,12 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
     final theme = Theme.of(context);
 
     return Dialog(
+      insetPadding: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height,
+          maxWidth: MediaQuery.of(context).size.width,
         ),
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1009,7 +1067,7 @@ class _PredictionInputDialogState extends State<_PredictionInputDialog> {
             // Header
             Row(
               children: [
-                Icon(Icons.psychology, color: widget.categoryColor),
+                Icon(Icons.psychology, color: ThemeManager().tokens.accentGold),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -1291,10 +1349,12 @@ ${tr('market.sharedVia')}
     final theme = Theme.of(context);
 
     return Dialog(
+      insetPadding: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-          maxWidth: MediaQuery.of(context).size.width * 0.95,
+          maxHeight: MediaQuery.of(context).size.height,
+          maxWidth: MediaQuery.of(context).size.width,
         ),
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -1310,7 +1370,11 @@ ${tr('market.sharedVia')}
                     color: categoryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.psychology, color: categoryColor, size: 24),
+                  child: Icon(
+                    Icons.psychology,
+                    color: ThemeManager().tokens.accentGold,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1554,45 +1618,88 @@ class _NewsPickerSectionState extends State<_NewsPickerSection> {
                       style: theme.textTheme.bodySmall,
                     ),
                   )
-                : ListView(
-                    shrinkWrap: true,
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      ..._items.map((item) {
-                        final key = '${item['url'] ?? item['title']}';
-                        return CheckboxListTile(
-                          dense: true,
-                          value: _selected.contains(key),
-                          title: Text(
-                            item['title']?.toString() ?? '',
-                            style: theme.textTheme.bodySmall,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${item['source'] ?? ''}'
-                            '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: 11,
-                            ),
-                          ),
-                          onChanged: (v) => setState(() {
-                            if (v == true) {
-                              _selected.add(key);
-                            } else {
-                              _selected.remove(key);
-                            }
-                          }),
-                        );
-                      }),
-                      if (_selected.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: ElevatedButton.icon(
-                            onPressed: _insert,
-                            icon: const Icon(Icons.add, size: 16),
-                            label: Text(tr('market.insertSelected')),
-                          ),
+                      // Sleek insert bar pinned ABOVE the list (user req:
+                      // the add control was buried at the bottom).
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${_selected.length}/5',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: _selected.isEmpty ? null : _insert,
+                              icon: const Icon(Icons.playlist_add, size: 16),
+                              label: Text(tr('market.insertSelected')),
+                              style: TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            ..._items.map((item) {
+                              final key = '${item['url'] ?? item['title']}';
+                              return CheckboxListTile(
+                                dense: true,
+                                value: _selected.contains(key),
+                                title: Text(
+                                  item['title']?.toString() ?? '',
+                                  style: theme.textTheme.bodySmall,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  '${item['source'] ?? ''}'
+                                  '${item['publishedAt'] != null ? ' · ${item['publishedAt'].toString().split('T').first}' : ''}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                onChanged: (v) => setState(() {
+                                  if (v == true) {
+                                    _selected.add(key);
+                                  } else {
+                                    _selected.remove(key);
+                                  }
+                                }),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
           ),

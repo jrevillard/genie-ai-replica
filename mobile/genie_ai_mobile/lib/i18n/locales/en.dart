@@ -1081,6 +1081,7 @@ const Map<String, dynamic> enLocale = {
     // User Prompts (Visible Text - First Person)
   },
   "common": {
+    "submit": "Submit",
     "cancel": "Cancel",
     "create": "Create",
     "save": "Save",
@@ -1149,7 +1150,7 @@ const Map<String, dynamic> enLocale = {
     "title": "About",
     "version": "Version",
     "description":
-        "Genie AI is your intelligent assistant for navigating government services and information.",
+        "AgroGenio is your intelligent assistant for agricultural information in El Salvador — crop health, pest alerts and market prices, in your language.",
     "techStack": "Tech Stack",
     "copyright": "All rights reserved.",
   },
@@ -1157,6 +1158,33 @@ const Map<String, dynamic> enLocale = {
 
   // Agricultural intelligence charts (market prices, crop health, pest alerts)
   "charts": {
+    "activeAlerts": "Active Alerts",
+    "affectedCrops": "Affected Crops",
+    "all": "All",
+    "areas": "Affected Areas",
+    "averageNDVI": "Average NDVI",
+    "byDepartment": "By Department",
+    "cropHealthSubtitle": "Vegetation health across departments",
+    "cropHealthTitle": "Crop Health - NDVI Index",
+    "departments": "departments",
+    "description": "Description",
+    "firstDetected": "First Detected",
+    "lastUpdated": "Last updated",
+    "noPestAlerts": "No Active Pest Alerts",
+    "noPestAlertsDesc": "No pest alerts for the selected severity level.",
+    "overallHealth": "Overall Health",
+    "pestAlertSubtitle": "Current pest and disease warnings",
+    "pestAlertTitle": "Pest Alerts",
+    "recommendations": "Recommendations",
+    "refresh": "Refresh",
+    "severityHigh": "High",
+    "severityLow": "Low",
+    "severityModerate": "Moderate",
+    "share": "Share",
+    "shareError": "Error sharing",
+    "sharedVia": "Shared via",
+    "source": "Source",
+    "viewMap": "View on Map",
     "active": "Active",
     "aiResponse": "AI Response",
     "assistanceHint": "E.g., What does this alert mean for my crops?",
@@ -1178,8 +1206,37 @@ const Map<String, dynamic> enLocale = {
     "pestAlerts": "Pest Alerts",
     "responseCopied": "Response copied to clipboard",
     "submitQuery": "Submit",
+    "insights": "Insights",
+    "fastActions": "Fast Actions",
   },
   "market": {
+    "unitQuintal":
+        "Prices are US dollars per quintal, the Central American farm-gate measure. 1 quintal = 46 kg; source data in USD/kg is converted at 45.97 kg per quintal.",
+    "unitPpi":
+        "US Producer Price Index for pesticide and agricultural chemical manufacturing (BLS). Index values are relative to a base period, not absolute prices — the trend shows input-cost direction, not a price level.",
+    "unitIndex":
+        "Index values are relative to a base period (for example 2016 = 100), not absolute prices — the trend shows direction and magnitude of change.",
+    "unitPercent":
+        "Latest = the share of the Central American food harvest, by mass, lost between harvest and retail (FAO SDG 12.3.1 modeled regional estimate — not a price). Example: 8.3 means about 8 of every 100 kg of food grown never reaches a consumer.",
+    "unitUsdKg": "US dollars per kilogram.",
+    "unitUsdMt":
+        "US dollars per metric tonne (1,000 kg) — international benchmark markets.",
+    "unitShortTon":
+        "US dollars per short ton (907.18 kg) — US market convention.",
+    "unitUsdLb": "US dollars per pound (0.4536 kg).",
+    "unitDozen": "US dollars per dozen.",
+    "unitGeneric": "Unit of measurement for this series.",
+    "startYear": "From",
+    "fit": "Fit",
+    "sectionTitle": "Market Prices",
+    "maizeGrains": "Maize, Beans & Grains",
+    "cropProtection": "Crop Protection",
+    "fruitsVeggies": "Fruits & Veggies",
+    "livestock": "Livestock",
+    "fertilizer": "Fertilizer",
+    "apiary": "Apiary & Honey",
+    "aquaculture": "Aquaculture",
+    "harvestStorage": "Harvest & Storage",
     "addFromNews": "Add from recent news",
     "analyzing": "Analyzing market data...",
     "close": "Close",

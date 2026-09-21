@@ -61,6 +61,57 @@ class AgriApiService {
   Future<Map<String, dynamic>> getMarketPrices(String category) =>
       get('agri/market-prices/$category');
 
+  /// Market prices mapped to the full multi-series shape (parity spec S1):
+  /// EVERY series passes through as
+  /// {name, unit, country, points: [{date, value, quality}]} with the
+  /// value typed as double and the date kept as the raw String; the
+  /// envelope meta rides along; primarySeries = series[0] so screens
+  /// built before Phase B keep working unchanged.
+  Future<Map<String, dynamic>?> getMarketPricesFull(String category) async {
+    final envelope = await getMarketPrices(category);
+    return mapMarketPricesEnvelope(category, envelope);
+  }
+
+  /// Pure envelope → multi-series mapper (static: unit-testable without
+  /// HTTP, per spec §14 test 1). Never throws on malformed/empty envelopes
+  /// — missing fields map to empty structures (S2 never-fail semantics).
+  static Map<String, dynamic> mapMarketPricesEnvelope(
+    String category,
+    Map<String, dynamic> envelope,
+  ) {
+    final data = (envelope['data'] as Map<String, dynamic>?) ?? {};
+    final meta = (envelope['meta'] as Map<String, dynamic>?) ?? {};
+    final rawSeries = (data['series'] as List?) ?? const [];
+    final series = rawSeries.whereType<Map>().map<Map<String, dynamic>>((s) {
+      final m = s.cast<String, dynamic>();
+      final rawPoints = (m['data'] as List?) ?? const [];
+      final points = rawPoints.whereType<Map>().map<Map<String, dynamic>>((p) {
+        final pm = p.cast<String, dynamic>();
+        return {
+          'date': pm['date'] as String? ?? '',
+          'value': (pm['value'] as num?)?.toDouble(),
+          'quality': pm['quality'] as String?,
+        };
+      }).toList();
+      return {
+        'name': m['name'] as String? ?? '',
+        'unit': m['unit'] as String? ?? '',
+        'country': m['country'] as String? ?? '',
+        'points': points,
+      };
+    }).toList();
+    return {
+      'category': category,
+      'title': data['title'],
+      'unit': data['unit'],
+      'trend': data['trend'],
+      'latest': data['latest'],
+      'series': series,
+      'primarySeries': series.isEmpty ? null : series[0],
+      'meta': meta,
+    };
+  }
+
   /// Market prices mapped to the widgets' legacy shape
   /// ({title, unit, data:[{year, value, decimal}], trend, lastUpdated}).
   Future<Map<String, dynamic>?> getMarketPricesLegacy(String category) async {
@@ -81,8 +132,10 @@ class AgriApiService {
           .map(
             (p) => {
               'year': p['date'],
-              'value': p['value'],
-              'decimal': p['value'],
+              // ints from JSON must not leak into the double? casts the
+              // cards use (Fertilizer card crashed on exactly this)
+              'value': (p['value'] as num?)?.toDouble(),
+              'decimal': (p['value'] as num?)?.toDouble(),
               'quality': p['quality'],
             },
           )
@@ -92,6 +145,8 @@ class AgriApiService {
       'estimation': meta['estimation'],
       'coverage': meta['coverage'],
       'lastUpdated': meta['fetchedAt'],
+      'seeded': meta['seeded'],
+      'stale': meta['stale'],
     };
   }
 

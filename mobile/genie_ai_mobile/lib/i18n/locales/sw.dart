@@ -1152,7 +1152,7 @@ const Map<String, dynamic> swLocale = {
     "title": "Kuhusu",
     "version": "Toleo",
     "description":
-        "Genie AI ni msaidizi wako mahiri wa kuvinjari huduma na taarifa za serikali.",
+        "AgroGenio ni msaidizi wako mahiri wa taarifa za kilimo nchini El Salvador — afya ya mazao, tahadhari za wadudu na bei za soko, kwa lugha yako.",
     "techStack": "Teknolojia",
     "copyright": "Haki zote zimehifadhiwa.",
   },

@@ -148,3 +148,5 @@ components/gov-chat-backend/logs/
 
 # Core dumps from test runs (pytest, bench, etc.)
 core.*
+
+.playwright-mcp/

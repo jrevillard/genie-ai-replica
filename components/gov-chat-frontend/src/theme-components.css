@@ -222,21 +222,6 @@ td {
   color: var(--fg);
 }
 
-/* Tight markdown chat rendering — override the gap the Vue scoped
- * `.message-bubble ol/ul { margin: 0.5em 0 }` and the bundled phantom
- * trailing whitespace text node. Specificity `:root body .message-bubble`
- * (0,2,2) outranks the bundle's `.message-bubble[data-v-X]` (0,2,1)
- * with equal `!important`, so this wins regardless of load order. */
-:root body .message-bubble ol,
-:root body .message-bubble ul {
-  margin-bottom: -21px !important;
-  line-height: 0 !important;
-}
-:root body .message-bubble ol > li,
-:root body .message-bubble ul > li {
-  line-height: 21px !important;
-}
-
 /* ================================================================
    APEXCHARTS TOOLTIP — override hardcoded colors with DS tokens
    ApexCharts renders tooltips portal-style at body level with inline
@@ -257,10 +242,53 @@ td {
   border-bottom: 1px solid var(--border) !important;
   font-weight: 600;
 }
-.apexcharts-tooltip-series-group apexcharts-tooltip-text,
-.apexcharts-tooltip-series-group apexcharts-tooltip-text-y-value {
+/* ApexCharts tooltip text nodes use CLASS selectors (the previous element-
+selector spelling never matched, leaving the series/value row invisible —
+a transparent box under the date title, reported on dark mode). */
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text,
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text-y-label,
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text-y-value,
+.apexcharts-tooltip-series-group .apexcharts-tooltip-text-z-value {
   color: var(--fg) !important;
+  opacity: 1 !important;
 }
 .apexcharts-tooltip-marker {
   background: var(--fg) !important;
+}
+
+/* Modal close (X): bare glyph — kills the border that survived scoped-rule
+   injection order on the deployed build (reported twice, 2026-09-18). */
+.ds-modal .ds-modal__close {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ApexCharts zoom toolbar (native +/−/reset/pan): DS-token styling so the
+   chart controls match the theme in light and dark (user req 2026-09-18). */
+.apexcharts-toolbar {
+  background: var(--bg, transparent) !important;
+  border: none !important;
+}
+.apexcharts-toolbar .apexcharts-menu-icon,
+.apexcharts-toolbar .apexcharts-zoom-icon,
+.apexcharts-toolbar .apexcharts-zoomin-icon,
+.apexcharts-toolbar .apexcharts-zoomout-icon,
+.apexcharts-toolbar .apexcharts-pan-icon,
+.apexcharts-toolbar .apexcharts-reset-icon {
+  color: var(--fg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm, 6px) !important;
+  background: var(--bg-elevated, transparent) !important;
+}
+.apexcharts-toolbar .apexcharts-menu-icon:hover,
+.apexcharts-toolbar .apexcharts-zoom-icon:hover,
+.apexcharts-toolbar .apexcharts-zoomin-icon:hover,
+.apexcharts-toolbar .apexcharts-zoomout-icon:hover,
+.apexcharts-toolbar .apexcharts-pan-icon:hover,
+.apexcharts-toolbar .apexcharts-reset-icon:hover {
+  background: var(--bg) !important;
+}
+.apexcharts-toolbar svg {
+  fill: var(--fg) !important;
 }

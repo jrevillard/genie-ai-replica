@@ -1,44 +1,44 @@
-/* AgroGenio El Salvador Admin Console — Dark Mode
+/* El Salvador Keycloak Admin Console — Dark Mode
  * Activated by upstream keycloak.v2 darkMode=true via pf-v5-theme-dark class.
  *
- * AgroGenio dark tokens:
- *   accent  = Verde cultivo #69A83B
- *   bg      = #0F1A12
- *   surface = #16241A
- *   fg      = #F2F4EE
+ * Palette:
+ *   accent  #4CAF50
+ *   bg      #0F1A12
+ *   surface #16241A
+ *   fg      #F2F4EE
  */
 
 .pf-v5-theme-dark {
-  /* ── Primary — Verde cultivo (bright on dark) ── */
-  --pf-v5-global--primary-color--100: #69a83b;
-  --pf-v5-global--primary-color--200: #58a82e;
-  --pf-v5-global--primary-color--300: #7dbc4d;
+  /* Primary (bright on dark) */
+  --pf-v5-global--primary-color--100: #4caf50;
+  --pf-v5-global--primary-color--200: #3d8c40;
+  --pf-v5-global--primary-color--300: #66c76e;
   --pf-v5-global--primary-color--400: #f2f4ee;
-  --pf-v5-global--primary-color--500: #69a83b;
-  --pf-v5-global--primary-color--dark-100: #69a83b;
-  --pf-v5-global--primary-color--light-100: #69a83b;
+  --pf-v5-global--primary-color--500: #4caf50;
+  --pf-v5-global--primary-color--dark-100: #4caf50;
+  --pf-v5-global--primary-color--light-100: #4caf50;
 
-  /* ── Active color ── */
-  --pf-v5-global--active-color--100: #69a83b;
-  --pf-v5-global--active-color--200: rgba(105, 168, 59, 0.15);
-  --pf-v5-global--active-color--300: #58a82e;
-  --pf-v5-global--active-color--400: #7dbc4d;
+  /* Active color */
+  --pf-v5-global--active-color--100: #4caf50;
+  --pf-v5-global--active-color--200: rgba(76, 175, 80, 0.15);
+  --pf-v5-global--active-color--300: #3d8c40;
+  --pf-v5-global--active-color--400: #66c76e;
 
-  /* ── Background ── */
+  /* Background */
   --pf-v5-global--BackgroundColor--100: #0f1a12;
   --pf-v5-global--BackgroundColor--150: #142019;
   --pf-v5-global--BackgroundColor--200: #16241a;
   --pf-v5-global--BackgroundColor--300: #1b2a20;
   --pf-v5-global--BackgroundColor--400: #2a3b30;
-  --pf-v5-global--BackgroundColor--dark-100: #69a83b;
-  --pf-v5-global--BackgroundColor--dark-200: #58a82e;
-  --pf-v5-global--BackgroundColor--dark-300: #7dbc4d;
-  --pf-v5-global--BackgroundColor--dark-400: #7dbc4d;
+  --pf-v5-global--BackgroundColor--dark-100: #4caf50;
+  --pf-v5-global--BackgroundColor--dark-200: #3d8c40;
+  --pf-v5-global--BackgroundColor--dark-300: #66c76e;
+  --pf-v5-global--BackgroundColor--dark-400: #66c76e;
   --pf-v5-global--BackgroundColor--light-100: #0f1a12;
   --pf-v5-global--BackgroundColor--light-200: #16241a;
   --pf-v5-global--BackgroundColor--light-300: #1b2a20;
 
-  /* ── Text ── */
+  /* Text */
   --pf-v5-global--Color--100: #f2f4ee;
   --pf-v5-global--Color--200: #9ca3af;
   --pf-v5-global--Color--300: #6b7280;
@@ -49,7 +49,7 @@
   --pf-v5-global--Color--light-200: #9ca3af;
   --pf-v5-global--Color--light-300: #6b7280;
 
-  /* ── Borders ── */
+  /* Borders */
   --pf-v5-global--BorderColor--100: #2a3b30;
   --pf-v5-global--BorderColor--200: #2a3b30;
   --pf-v5-global--BorderColor--300: #364a3d;
@@ -57,29 +57,29 @@
   --pf-v5-global--BorderColor--dark-100: #2a3b30;
   --pf-v5-global--BorderColor--light-100: #2a3b30;
 
-  /* ── Link ── */
-  --pf-v5-global--link--Color: #69a83b;
-  --pf-v5-global--link--Color--hover: #7dbc4d;
+  /* Link */
+  --pf-v5-global--link--Color: #4caf50;
+  --pf-v5-global--link--Color--hover: #66c76e;
   --pf-v5-global--link--Color--visited: #a78bfa;
-  --pf-v5-global--link--Color--dark: #69a83b;
-  --pf-v5-global--link--Color--dark--hover: #7dbc4d;
-  --pf-v5-global--link--Color--light: #69a83b;
-  --pf-v5-global--link--Color--light--hover: #7dbc4d;
+  --pf-v5-global--link--Color--dark: #4caf50;
+  --pf-v5-global--link--Color--dark--hover: #66c76e;
+  --pf-v5-global--link--Color--light: #4caf50;
+  --pf-v5-global--link--Color--light--hover: #66c76e;
 
-  /* ── Success — Verde cultivo (lighter on dark) ── */
-  --pf-v5-global--success-color--100: #9bc97b;
-  --pf-v5-global--success-color--200: #7dbc4d;
+  /* Success */
+  --pf-v5-global--success-color--100: #7ed48a;
+  --pf-v5-global--success-color--200: #66c76e;
 
-  /* ── Info ── */
-  --pf-v5-global--info-color--100: #69a83b;
-  --pf-v5-global--info-color--200: #7dbc4d;
+  /* Info */
+  --pf-v5-global--info-color--100: #4caf50;
+  --pf-v5-global--info-color--200: #66c76e;
 
-  /* ── Disabled ── */
+  /* Disabled */
   --pf-v5-global--disabled-color--100: #6b7280;
   --pf-v5-global--disabled-color--200: #4a5568;
   --pf-v5-global--disabled-color--300: #6b7280;
 
-  /* ── Icon ── */
+  /* Icon */
   --pf-v5-global--icon--Color--dark: #f2f4ee;
   --pf-v5-global--icon--Color--light: #9ca3af;
   --pf-v5-global--icon--Color--dark--dark: #f2f4ee;
@@ -87,10 +87,10 @@
   --pf-v5-global--icon--Color--light--dark: #6b7280;
   --pf-v5-global--icon--Color--light--light: #6b7280;
 
-  /* ── Secondary ── */
+  /* Secondary */
   --pf-v5-global--secondary-color--100: #6b7280;
 
-  /* ── Palette — black scale ── */
+  /* Black scale */
   --pf-v5-global--palette--black-50: #f2f4ee;
   --pf-v5-global--palette--black-100: #9ca3af;
   --pf-v5-global--palette--black-150: #6b7280;
@@ -105,7 +105,7 @@
   --pf-v5-global--palette--black-900: #080c11;
   --pf-v5-global--palette--black-1000: #000000;
 
-  /* ── Page layout ── */
+  /* Page layout */
   --pf-v5-c-page__header--BackgroundColor: #16241a;
   --pf-v5-c-page__header-brand-link--c-brand--Color: #f2f4ee;
   --pf-v5-c-page__sidebar--BackgroundColor: #142019;
@@ -114,14 +114,29 @@
   --pf-v5-c-page--BackgroundColor: #16241a;
 }
 
-/* ── Nav: selected item ── */
+/* Nav: selected item */
 .pf-v5-theme-dark .pf-v5-c-nav__link.pf-m-current,
 .pf-v5-theme-dark .pf-v5-c-nav__item.pf-m-current:not(.pf-m-expanded) .pf-v5-c-nav__link {
   color: #f2f4ee !important;
 }
 
-/* ── Logo sizing ── */
+/* Logo sizing */
 img.keycloak__pageheader_brand {
   height: 32px;
   width: auto;
+}
+
+/* AgroGenio palette accents — dark variant. */
+
+/* Body gradient — dark AgroGenio palette */
+body {
+  background: linear-gradient(135deg, #0f1a12 0%, #142019 45%, #1b2a20 100%);
+  background-attachment: fixed;
+}
+
+/* Cards — accent stripe + dark-tinted shadow */
+.pf-v5-c-card {
+  border-top: 4px solid #4caf50;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }

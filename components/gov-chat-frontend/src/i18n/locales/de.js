@@ -1476,6 +1476,7 @@ export default {
       publish: {
         body: "Das Ausführen von publish erstellt v{'{'}n{'}'} und speichert das Bundle „{'{'}file{'}'}“ im Dokumenten-Repository, wodurch jede vorherige zip ersetzt wird. Die neue Version ist erst im Status serving, wenn Sie Ingest ausführen.",
         confirm: 'Veröffentlichen',
+        inProgress: 'Wird veröffentlicht — Bundle wird exportiert und übertragen…',
         title: 'Veröffentlichen'
       },
       readonly: 'NUR LESEN',

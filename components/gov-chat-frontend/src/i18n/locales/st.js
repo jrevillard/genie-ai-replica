@@ -1476,6 +1476,7 @@ export default {
       publish: {
         body: "Ho etsa publish ho theha v{'{'}n{'}'} le ho boloka ngata ea \"{'{'}file{'}'}\" polokelong ea litokomane, ho nka sebaka sa zip efe kapa efe e fetileng. Mofuta o mocha ha o na ho serving ho fihlela o etsa Ingest ho oona.",
         confirm: 'Phatlalatsa',
+        inProgress: 'E phatlalatsa — ho romela le ho fetisetsa ngata…',
         title: 'Phatlalatsa'
       },
       readonly: 'PALA FELA',

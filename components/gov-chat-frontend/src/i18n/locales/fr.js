@@ -1478,6 +1478,7 @@ export default {
       publish: {
         body: "L'action publish génère la version v{'{'}n{'}'} et stocke l'archive « {'{'}file{'}'} » dans le référentiel de documents, remplaçant tout zip précédent. La nouvelle version n'est pas en état serving tant que vous n'avez pas exécuté Ingest.",
         confirm: 'Publier',
+        inProgress: 'Publication en cours — export et transfert de l’archive…',
         title: 'Publier'
       },
       readonly: 'LECTURE SEULE',

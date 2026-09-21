@@ -1471,6 +1471,7 @@ export default {
       publish: {
         body: "Melakukan publish akan mencetak v{'{'}n{'}'} dan menyimpan bundel \"{'{'}file{'}'}\" di repositori dokumen, menggantikan zip sebelumnya. Versi baru tidak akan serving sampai Anda melakukan Ingest.",
         confirm: 'Publikasikan',
+        inProgress: 'Menerbitkan — mengekspor dan mentransfer bundel…',
         title: 'Publikasikan'
       },
       readonly: 'BACA SAJA',

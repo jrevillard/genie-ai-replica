@@ -1454,6 +1454,7 @@ export default {
       publish: {
         body: "Publishing ej kōm̦m̦an v{'{'}n{'}'} im kakkwon bundle \"{'{'}file{'}'}\" ilo jikin kakwōn peba, bōk jikin jabdewōt zip m̦okta. Wāween in ekāāl ejjab serving m̦ae iien kwoj Ingest e.",
         confirm: 'A ke',
+        inProgress: 'A kabuḷo publishing — a bōk eddo kakkwon bundle im jōt e…',
         title: 'A ke'
       },
       readonly: 'A KARAN DAMA',

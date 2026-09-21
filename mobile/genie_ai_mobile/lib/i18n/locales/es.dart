@@ -1212,13 +1212,19 @@ const Map<String, dynamic> esLocale = {
     "fastActions": "Acciones Rápidas",
   },
   "market": {
-    "unitQuintal": "Precios en dólares estadounidenses por quintal, la medida centroamericana de puerta de finca. 1 quintal = 46 kg; los datos fuente en USD/kg se convierten a 45,97 kg por quintal.",
-    "unitPpi": "Índice de Precios al Productor de EE. UU. para la fabricación de pesticidas y productos químicos agrícolas (BLS). Los valores del índice son relativos a un período base, no precios absolutos — la tendencia muestra la dirección del costo, no un nivel de precio.",
-    "unitIndex": "Los valores del índice son relativos a un período base (por ejemplo 2016 = 100), no precios absolutos — la tendencia muestra dirección y magnitud del cambio.",
-    "unitPercent": "Último = la proporción de la cosecha alimentaria centroamericana, en masa, que se pierde entre la cosecha y la venta al por menor (estimación regional modelada FAO SDG 12.3.1 — no es un precio). Ejemplo: 8.3 significa que unos 8 de cada 100 kg de alimentos producidos nunca llegan al consumidor.",
+    "unitQuintal":
+        "Precios en dólares estadounidenses por quintal, la medida centroamericana de puerta de finca. 1 quintal = 46 kg; los datos fuente en USD/kg se convierten a 45,97 kg por quintal.",
+    "unitPpi":
+        "Índice de Precios al Productor de EE. UU. para la fabricación de pesticidas y productos químicos agrícolas (BLS). Los valores del índice son relativos a un período base, no precios absolutos — la tendencia muestra la dirección del costo, no un nivel de precio.",
+    "unitIndex":
+        "Los valores del índice son relativos a un período base (por ejemplo 2016 = 100), no precios absolutos — la tendencia muestra dirección y magnitud del cambio.",
+    "unitPercent":
+        "Último = la proporción de la cosecha alimentaria centroamericana, en masa, que se pierde entre la cosecha y la venta al por menor (estimación regional modelada FAO SDG 12.3.1 — no es un precio). Ejemplo: 8.3 significa que unos 8 de cada 100 kg de alimentos producidos nunca llegan al consumidor.",
     "unitUsdKg": "Dólares estadounidenses por kilogramo.",
-    "unitUsdMt": "Dólares estadounidenses por tonelada métrica (1.000 kg) — mercados internacionales de referencia.",
-    "unitShortTon": "Dólares estadounidenses por tonelada corta (907,18 kg) — convención del mercado de EE. UU.",
+    "unitUsdMt":
+        "Dólares estadounidenses por tonelada métrica (1.000 kg) — mercados internacionales de referencia.",
+    "unitShortTon":
+        "Dólares estadounidenses por tonelada corta (907,18 kg) — convención del mercado de EE. UU.",
     "unitUsdLb": "Dólares estadounidenses por libra (0,4536 kg).",
     "unitDozen": "Dólares estadounidenses por docena.",
     "unitGeneric": "Unidad de medida de esta serie.",

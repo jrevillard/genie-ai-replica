@@ -527,11 +527,7 @@ sequenceDiagram
 **Example**:
 ```python
 # Original text (3000 tokens)
-chunks = chunk_text(
-    text=original_text,
-    chunk_size=1000,
-    overlap=200
-)
+chunks = chunk_text(text=original_text, chunk_size=1000, overlap=200)
 
 # Result: 3 chunks with overlap
 # Chunk 1: tokens 0-1000
@@ -667,9 +663,7 @@ pytest tests/e2e/
 
 2. **Register Extractor**:
    ```python
-   EXTRACTORS = {
-       ".custom": CustomExtractor()
-   }
+   EXTRACTORS = {".custom": CustomExtractor()}
    ```
 
 3. **Add Tests**:

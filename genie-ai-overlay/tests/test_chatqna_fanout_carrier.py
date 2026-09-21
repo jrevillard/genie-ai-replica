@@ -15,6 +15,7 @@ These tests are MOCKED (chatqna's existing pattern) — the live LG-5
 boundary probe lives in scripts/check-okf-retriever-boundary.py
 (queued for Wave R5 alongside the production forwarding it gates).
 """
+
 from unittest.mock import MagicMock, patch
 
 from chatqna.genieai_chatqna import _gp, align_inputs
@@ -78,8 +79,8 @@ class TestRetrieverCarrierFanoutShape:
             import sys
 
             sys.modules["core.label_contract"].encode.side_effect = fake_encode
-            sys.modules["core.label_contract"].encode_filter_labels.side_effect = (
-                lambda base, labels: fake_encode(base, labels=labels, graphs=None)
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: fake_encode(
+                base, labels=labels, graphs=None
             )
             _ = align_inputs(
                 self_mock,
@@ -113,8 +114,8 @@ class TestRetrieverCarrierFanoutShape:
             import sys
 
             sys.modules["core.label_contract"].encode.side_effect = fake_encode
-            sys.modules["core.label_contract"].encode_filter_labels.side_effect = (
-                lambda base, labels: fake_encode(base, labels=labels, graphs=None)
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: fake_encode(
+                base, labels=labels, graphs=None
             )
             _ = align_inputs(
                 self_mock,
@@ -160,8 +161,8 @@ class TestRetrieverCarrierFanoutShape:
             import sys
 
             sys.modules["core.label_contract"].encode.side_effect = fake_encode
-            sys.modules["core.label_contract"].encode_filter_labels.side_effect = (
-                lambda base, labels: fake_encode(base, labels=labels, graphs=None)
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: fake_encode(
+                base, labels=labels, graphs=None
             )
             _ = align_inputs(
                 self_mock,
@@ -195,8 +196,8 @@ class TestRetrieverCarrierFanoutShape:
             import sys
 
             sys.modules["core.label_contract"].encode.side_effect = fake_encode
-            sys.modules["core.label_contract"].encode_filter_labels.side_effect = (
-                lambda base, labels: fake_encode(base, labels=labels, graphs=None)
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: fake_encode(
+                base, labels=labels, graphs=None
             )
             _ = align_inputs(
                 self_mock,
@@ -232,8 +233,8 @@ class TestRetrieverCarrierFanoutShape:
             import sys
 
             sys.modules["core.label_contract"].encode.side_effect = fake_encode
-            sys.modules["core.label_contract"].encode_filter_labels.side_effect = (
-                lambda base, labels: fake_encode(base, labels=labels, graphs=None)
+            sys.modules["core.label_contract"].encode_filter_labels.side_effect = lambda base, labels: fake_encode(
+                base, labels=labels, graphs=None
             )
             _ = align_inputs(
                 self_mock,

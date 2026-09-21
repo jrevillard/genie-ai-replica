@@ -798,25 +798,21 @@ class GenieaiArangoRetriever(OpeaComponent):
                 logger.error("Query is empty. Please provide a valid query.")
                 return []
 
-            # Resolve the per-call graph name (Story 1.0/1.1): explicit input
-            # attr > carrier single-graph (legacy single-element list) >
-            # ARANGO_GRAPH_NAME default. Fan-out (≥2 graphs) routes through
-            # `invoke_fanout` once per graph; here we resolve the single-graph
-            # call site's effective graph name.
-            if input_dict.get("graph_name"):
-                graph_name = input_dict["graph_name"]
-            elif len(_encoded_graphs) == 1:
-                # Backwards-compat: a single-element carrier list predates the
-                # fan-out feature — treat it as the legacy single-graph call.
-                graph_name = _encoded_graphs[0]
-            else:
-                graph_name = ARANGO_GRAPH_NAME
-            # STORY 1.1/1.4/1.5 — additive fan-out branch. Engages only when
-            # ≥2 graphs are encoded (single-graph legacy bypass, plus the
-            # "free-form-only with zero OKF graphs" case both fall through to
-            # the single-graph path). The orchestrator invokes the SAME
-            # `_extract_for_graph` body once per authorized graph — zero
-            # mutation of legacy model state, byte-identical per-leg behavior.
+            # STORY 1.1/1.4/1.5 — additive fan-out branch.
+            #
+            # Two shapes the retriever must handle smoothly (David, 2026-09-21):
+            #   A: legacy single graph only (no carrier) — the carrier-decoded
+            #      list is empty, fan-out does NOT engage, the legacy
+            #      single-graph path runs unchanged against ARANGO_GRAPH_NAME.
+            #   B: legacy graph PLUS one or more OKF graphs (the fan-out shape)
+            #      — the carrier carries the legacy graph as the first element +
+            #      N OKF graph names (Wave R5 chatqna forwards
+            #      GRAPH + OKF_<repo>_v<N>). Fan-out engages with the FULL set,
+            #      including the legacy graph as one leg. Every entry is
+            #      treated equally — the carrier is the single source of truth.
+            #
+            # Empty carrier → legacy single-graph (case A).
+            # ≥1 graph → fan-out engages (case B).
             if _fanout_should_engage(_encoded_graphs, fanout_enabled=FANOUT_ENABLED):
                 try:
                     return await self.invoke_fanout(
@@ -827,6 +823,15 @@ class GenieaiArangoRetriever(OpeaComponent):
                 except Exception:
                     span.end()
                     raise
+            # No carrier → legacy single-graph default (case A).
+            # NOTE: `graph_name = ARANGO_GRAPH_NAME` here is the legacy
+            # free-form-only contract; case B always hits the fan-out branch
+            # above because `_encoded_graphs` is non-empty. The chatqna
+            # forwarder MUST send `[ARANGO_GRAPH_NAME, OKF_<repo>_v<N>, ...]`
+            # in its carrier whenever it wants the legacy graph included; the
+            # retriever never falls back to ARANGO_GRAPH_NAME when ≥1 graph is
+            # encoded.
+            graph_name = ARANGO_GRAPH_NAME
             return await self._extract_for_graph(
                 graph_name=graph_name,
                 input_dict=input_dict,
@@ -1327,17 +1332,29 @@ class GenieaiArangoRetriever(OpeaComponent):
 def _fanout_should_engage(encoded_graph_names, fanout_enabled: bool = True) -> bool:
     """Decide whether the additive fan-out path engages (Decision D).
 
-    Empty list (legacy free-form-only case) OR single-element list both
-    bypass fan-out — the legacy single-graph path runs unchanged. Only ≥2
-    graphs engage the fan-out. The chat-side `fanout_enabled` flag lets
-    Wave R4 keep the feature off in places where it hasn't been validated
+    David, 2026-09-21: the retriever must work smoothly in BOTH shapes —
+    A: legacy single graph only (no carrier, default ARANGO_GRAPH_NAME),
+       → the carrier-decoded list is empty, fan-out does not engage,
+       → legacy single-graph path runs unchanged against ARANGO_GRAPH_NAME.
+    B: legacy graph PLUS one or more OKF graphs (the fan-out shape),
+       → the carrier carries the legacy graph as the first element +
+         N OKF graph names (Wave R5 chatqna forwards GRAPH + OKF_<repo>_v<N>),
+       → fan-out engages with the FULL set (including the legacy graph as
+         one leg). The legacy graph contributes its hits through the same
+         fan-out pipeline — the chatqna doesn't have to think about which
+         graph is "default" vs "OKF"; the carrier is the single source of
+         truth and the retriever treats every entry equally.
+
+    Empty list → legacy single-graph (case A). Anything ≥1 → fan-out
+    engages (case B). The chat-side `fanout_enabled` flag lets Wave R4
+    keep the feature off in places where it hasn't been validated
     end-to-end yet (matches RETRIEVER_FANOUT_ENABLED default).
     """
     if not fanout_enabled:
         return False
     if not encoded_graph_names:
         return False
-    return len(encoded_graph_names) >= 2
+    return len(encoded_graph_names) >= 1
 
 
 def _attach_provenance(items, graph_name, repo_id=None):

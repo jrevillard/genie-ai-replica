@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { keycloakAuthMiddleware } = require('../middleware/keycloak-auth-middleware');
 const { logger } = require('../shared-lib');
 
@@ -6,6 +7,21 @@ module.exports = (agriService) => {
   // Router created per mount so each factory call binds its own service
   const router = express.Router();
   router.use(keycloakAuthMiddleware.authenticate);
+
+  // Per-user rate limit. /api/agri/* serves from Redis→Arango→seed tiers
+  // and never hits upstream on the request path, but a flood of cold-cache
+  // requests still runs multi-step AQL queries against Arango on each miss.
+  // 60/min/user is enough for a chat-with-data UX; tighter if upstream calls
+  // are added to the request path in the future.
+  const agriLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 60,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => (req.user && req.user.sub) || req.ip || 'anonymous',
+    message: { error: 'RATE_LIMITED', message: 'Too many agri requests; retry in 60s.' }
+  });
+  router.use(agriLimiter);
 
   /**
    * @swagger

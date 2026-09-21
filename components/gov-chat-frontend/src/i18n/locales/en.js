@@ -1588,7 +1588,13 @@ export default {
     exportError: 'Failed to export chat. Please try again.',
     streamingError: 'Response was interrupted. Please try again.',
     unsupportedLanguage: 'This language is not available for this deployment.',
-    removeItem: 'Remove item'
+    removeItem: 'Remove item',
+    chatUpdated: 'Chat updated',
+    feedbackError: 'Error submitting feedback',
+    feedbackMissingQueryId: 'Missing query ID for feedback',
+    feedbackSubmitted: 'Feedback submitted',
+    saving: 'Saving...',
+    savingConversation: 'Saving conversation...'
   },
   quickhelp: {
     // Labels (Short for UI)

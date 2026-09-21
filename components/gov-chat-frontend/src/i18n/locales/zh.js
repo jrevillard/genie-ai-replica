@@ -1502,7 +1502,13 @@ export default {
     exportButton: '导出',
     exportSuccess: '聊天导出成功',
     exportError: '导出聊天失败。请重试。',
-    removeItem: '移除'
+    removeItem: '移除',
+    chatUpdated: '对话已更新',
+    feedbackError: '提交反馈时出错',
+    feedbackMissingQueryId: '提交反馈时缺少查询ID',
+    feedbackSubmitted: '反馈已提交',
+    saving: '正在保存...',
+    savingConversation: '正在保存对话...'
   },
   quickhelp: {
     // Labels (Short for UI)

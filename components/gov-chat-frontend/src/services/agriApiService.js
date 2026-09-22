@@ -11,9 +11,8 @@
  * refresh cadence — this service exposes both get() and getCached()).
  */
 import httpService from './httpService';
+import { CACHE_PREFIX, CACHE_SCHEMA_VERSION, CACHE_KEY } from './agriCacheConfig';
 
-const CACHE_PREFIX = 'agri-lkg:';
-const CACHE_SCHEMA_VERSION = 'v2'; // bump to invalidate old shapes
 const SCHEMA_RE = /^agri-lkg:(v\d+):/;
 
 class AgriApiService {
@@ -196,7 +195,7 @@ class AgriApiService {
 
   writeCache(endpoint, envelope) {
     try {
-      localStorage.setItem(`${CACHE_PREFIX}${CACHE_SCHEMA_VERSION}:${endpoint}`, JSON.stringify(envelope));
+      localStorage.setItem(`${CACHE_KEY}${endpoint}`, JSON.stringify(envelope));
     } catch {
       /* quota exceeded — cache is best-effort */
     }
@@ -204,7 +203,7 @@ class AgriApiService {
 
   readCache(endpoint) {
     try {
-      const raw = localStorage.getItem(`${CACHE_PREFIX}${CACHE_SCHEMA_VERSION}:${endpoint}`);
+      const raw = localStorage.getItem(`${CACHE_KEY}${endpoint}`);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;

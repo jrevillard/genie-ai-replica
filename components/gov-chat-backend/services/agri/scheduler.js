@@ -96,29 +96,44 @@ class AgriScheduler {
     const existing = this.inFlight.get(adapter.id);
     if (existing) return existing;
 
-    if (this.redis) {
-      const lockTtl = cadenceMs(adapter) + 10 * 60 * 1000;
-      try {
-        const ok = await this.redis.set(`agri:lock:${adapter.id}`, '1', 'PX', lockTtl, 'NX');
-        if (ok !== 'OK') {
-          vlog(`${adapter.id} locked by another replica — skipping`);
-          return { ok: false, skipped: 'locked-by-peer' };
-        }
-      } catch (error) {
-        vlog(`${adapter.id} redis lock check failed (${error.message}) — proceeding in-process only`);
-      }
-    }
+    // Claim synchronously BEFORE any await — concurrent callers get this
+    // Promise (or whatever we settle it with) instead of seeing undefined.
+    let settle;
+    const claim = new Promise((resolve) => {
+      settle = resolve;
+    });
+    this.inFlight.set(adapter.id, claim);
 
-    const fetchPromise = (async () => {
-      try {
-        return await this.runAdapter(adapter);
-      } finally {
-        this.inFlight.delete(adapter.id);
-        if (this.redis) this.redis.del(`agri:lock:${adapter.id}`).catch(() => {});
+    try {
+      if (this.redis) {
+        const lockTtl = cadenceMs(adapter) + 10 * 60 * 1000;
+        try {
+          const ok = await this.redis.set(`agri:lock:${adapter.id}`, '1', 'PX', lockTtl, 'NX');
+          if (ok !== 'OK') {
+            vlog(`${adapter.id} locked by another replica — skipping`);
+            this.inFlight.delete(adapter.id);
+            return { ok: false, skipped: 'locked-by-peer' };
+          }
+        } catch (error) {
+          vlog(`${adapter.id} redis lock check failed (${error.message}) — proceeding in-process only`);
+        }
       }
-    })();
-    this.inFlight.set(adapter.id, fetchPromise);
-    return fetchPromise;
+
+      const fetchPromise = (async () => {
+        try {
+          return await this.runAdapter(adapter);
+        } finally {
+          this.inFlight.delete(adapter.id);
+          if (this.redis) this.redis.del(`agri:lock:${adapter.id}`).catch(() => {});
+        }
+      })();
+      settle(fetchPromise);
+      return fetchPromise;
+    } catch (err) {
+      // Anything unexpected before settle(): release the claim.
+      this.inFlight.delete(adapter.id);
+      throw err;
+    }
   }
 
   /** Run one adapter end-to-end: resolve → fetch → parse → normalize → upsert. */

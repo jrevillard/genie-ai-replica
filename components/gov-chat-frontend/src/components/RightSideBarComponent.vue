@@ -166,6 +166,7 @@ export default {
     DsStateDisplay,
     Languages
   },
+  inject: ['config'],
 
   props: {
     currentLocale: {

@@ -117,7 +117,7 @@ reranker_model_id: BAAI/bge-reranker-v2-m3
 # in adaptive mode (selection is value-driven, not top-N).
 reranking_strategy: "adaptive"
 context_decay_factor: "0.0006"
-min_value_threshold: "-1.0"
+min_value_threshold: "-0.25"
 chatqna_enforce_abstention: "false"
 # Opt-in LLM self-grade: the model appends [[CONF:<0-100>]] rating how well the
 # retrieved docs support its answer; chatqna strips it before the user/translation

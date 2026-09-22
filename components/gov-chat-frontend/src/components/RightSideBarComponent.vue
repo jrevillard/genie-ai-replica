@@ -397,11 +397,6 @@ export default {
   opacity: 0.72;
   filter: brightness(1.1);
 }
-  z-index: 0;
-}
-[data-theme='dark'] .sidebar-header-leaves {
-  opacity: 0.72;
-}
 
 .sidebar-toggle:hover {
   background: var(--bg);

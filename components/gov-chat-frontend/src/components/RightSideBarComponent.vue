@@ -124,6 +124,7 @@ export default {
     FileSpreadsheet,
     FileImage
   },
+  inject: ['config'],
 
   props: {
     currentChatId: {

@@ -14,8 +14,28 @@ import httpService from './httpService';
 
 const CACHE_PREFIX = 'agri-lkg:';
 const CACHE_SCHEMA_VERSION = 'v2'; // bump to invalidate old shapes
+const SCHEMA_RE = /^agri-lkg:(v\d+):/;
 
 class AgriApiService {
+  constructor() {
+    // One-time migration on first instantiation: drop any stale LKG entries
+    // whose schema version is older than the current constant.  The version-
+    // comparing loop handles v1 -> v2 today and will also clean v2 -> v3,
+    // v3 -> v4, etc. without needing new migration code each time.
+    try {
+      const currentMajor = parseInt(CACHE_SCHEMA_VERSION.slice(1), 10);
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const k = localStorage.key(i);
+        const m = k && SCHEMA_RE.exec(k);
+        if (m) {
+          const v = parseInt(m[1].slice(1), 10);
+          if (v < currentMajor) localStorage.removeItem(k);
+        }
+      }
+    } catch {
+      /* localStorage unavailable (private mode, quota exceeded) — silently no-op */
+    }
+  }
   /**
    * Fetch an agri endpoint with last-known-good fallback.
    * @param {string} endpoint - e.g. 'agri/market-prices/maize'

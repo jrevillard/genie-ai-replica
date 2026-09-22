@@ -13,5 +13,9 @@ window.APP_CONFIG = {
   keycloak: {
     url: "",
     client_id: "genie-app"
+  },
+  app: {
+    banner: { url: "/assets/agrogenio/banner.png" },
+    mascot: { url: "/assets/agrogenio/mascot-avatar.png", alt: "AgroGenio mascot" }
   }
 };

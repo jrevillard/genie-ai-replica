@@ -1886,15 +1886,35 @@ describe('ChatBotComponent', () => {
   // -----------------------------------------------------------------------
   // AgroGenio brand integration — banner sits above welcome-header inside
   // quick-help-overlay so it appears ABOVE the Insights section on the
-  // dashboard, not as a full-width hero strip.
+  // dashboard. The welcome-header also carries a mascot avatar + speech
+  // bubble ("mascot-as-guide" signature) — the mascot reads as a guide
+  // character because it speaks, not just decoration.
   // -----------------------------------------------------------------------
-  describe('AgroGenio banner integration', () => {
+  describe('AgroGenio banner + mascot-guide integration', () => {
     it('renders .welcome-banner + .welcome-banner-leaves inside .quick-help-overlay', () => {
       const wrapper = createChatBotWrapper();
       const overlay = wrapper.find('.quick-help-overlay');
       expect(overlay.exists()).toBe(true);
       expect(overlay.find('.welcome-banner').exists()).toBe(true);
       expect(overlay.find('.welcome-banner-leaves').exists()).toBe(true);
+    });
+
+    it('renders mascot avatar inside .welcome-header pointing users to chat', () => {
+      const wrapper = createChatBotWrapper();
+      const header = wrapper.find('.welcome-header');
+      expect(header.exists()).toBe(true);
+      const mascot = header.find('.welcome-mascot');
+      expect(mascot.exists()).toBe(true);
+      expect(mascot.attributes('src')).toBe('/assets/agrogenio/mascot-avatar.png');
+    });
+
+    it('renders speech bubble with the welcome text', () => {
+      const wrapper = createChatBotWrapper();
+      const bubble = wrapper.find('.welcome-mascot-bubble');
+      expect(bubble.exists()).toBe(true);
+      // translate() is stubbed in tests to echo the key (no real i18n),
+      // so the bubble renders the i18n key verbatim.
+      expect(bubble.text()).toContain('chatbot.whatCanIHelp');
     });
 
     it('preserves the market-prices section (regression check)', () => {

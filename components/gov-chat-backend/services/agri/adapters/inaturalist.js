@@ -37,9 +37,13 @@ module.exports = {
 
   async fetch(_, cfg) {
     const since = new Date(Date.now() - cfg.withinDays * 86400000).toISOString().split('T')[0];
+    // taxon_name accepts a raw '|' separator for multi-taxon queries —
+    // encodeURIComponent would turn it into %7C and iNaturalist would treat
+    // the whole string as one bogus taxon. Encode the rest, leave '|' raw.
+    const taxaParam = encodeURIComponent(cfg.taxa).replace(/%7C/gi, '|');
     const url =
       'https://api.inaturalist.org/v1/observations' +
-      `?place_id=${cfg.placeId}&taxon_name=${encodeURIComponent(cfg.taxa)}` +
+      `?place_id=${cfg.placeId}&taxon_name=${taxaParam}` +
       `&per_page=${cfg.perPage}&order=desc&order_by=observed_on&d1=${since}`;
     return fetchJson(url, { timeoutMs: 20000 });
   },

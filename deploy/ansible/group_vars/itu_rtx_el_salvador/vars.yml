@@ -110,6 +110,14 @@ dataprep_chunk_overlap: 300
 # Overrides here previously masked a bge-base / 1024-dim mismatch that broke
 # retriever retrieval on el-salvador (see CHANGELOG [Unreleased] entry).
 reranker_model_id: BAAI/bge-reranker-v2-m3
+# Adaptive reranker tuning (validated against the v2 gold dataset:
+# recall 0.758 [slice] → 0.900 [adaptive] on el-salvador). CONTEXT_DECAY_FACTOR
+# is tuned for our MD chunk_size=2000 override (compose default would be 500);
+# slice's TOP_N=3 stays in the resolved.yaml for backwards compat but is inert
+# in adaptive mode (selection is value-driven, not top-N).
+reranking_strategy: "adaptive"
+context_decay_factor: "0.0006"
+min_value_threshold: "-1.0"
 chatqna_enforce_abstention: "false"
 # Opt-in LLM self-grade: the model appends [[CONF:<0-100>]] rating how well the
 # retrieved docs support its answer; chatqna strips it before the user/translation

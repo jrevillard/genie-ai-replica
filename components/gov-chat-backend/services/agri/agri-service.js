@@ -379,6 +379,10 @@ class AgriService {
     this.scheduler = null;
     this.adapters = [];
     this._initPromise = null;
+    // Per-key single-flight map for rebuildAllEndpoints. Prevents concurrent
+    // rebuilds (periodic scheduler + onAdaptersRun + manual kick) from
+    // interleaving cache.set calls for the same key.
+    this._rebuildInFlight = null;
   }
 
   static getInstance() {
@@ -646,39 +650,79 @@ class AgriService {
       'news:global:es',
       'news:global:en'
     ];
+
+    // Per-key single-flight: if a rebuild for this key is already in
+    // flight, await it instead of running a second one. Concurrent
+    // onAdaptersRun + periodic rebuild + manual kick now collapse.
+    if (!this._rebuildInFlight) this._rebuildInFlight = new Map();
+
     for (const key of keys) {
-      try {
-        const builder =
-          key === 'crop-health'
-            ? () => this.buildCropHealth()
-            : key === 'pest-alerts'
-              ? () => this.buildPestAlerts()
-              : key.startsWith('news:')
-                ? () => this.buildNews(key.split(':')[1], key.split(':')[2])
-                : () => this.buildMarketPrices(key.replace('market-prices:', ''));
-        const envelope = await builder();
-        // Never-fail floor: an empty rebuild ('pending' placeholder) must not
-        // overwrite data already cached or seeded — e.g. when a pass fails
-        // mid-way. Keep what we have; the next good pass replaces it.
-        if (this.constructor.isEmptyEnvelope(envelope)) {
-          const { envelope: existing } = await this.cache.get(key);
-          if (existing && !this.constructor.isEmptyEnvelope(existing)) {
-            logger.warn(`agri rebuild: empty result for ${key} — keeping cached data`);
-            continue;
+      const existing = this._rebuildInFlight.get(key);
+      if (existing) {
+        await existing.catch(() => {}); // never propagate from the awaited rebuild
+        continue;
+      }
+
+      // Claim the slot BEFORE any await so concurrent callers get this
+      // Promise rather than seeing undefined.
+      let settle;
+      const claim = new Promise((res) => {
+        settle = res;
+      });
+      this._rebuildInFlight.set(key, claim);
+
+      const work = (async () => {
+        try {
+          const builder =
+            key === 'crop-health'
+              ? () => this.buildCropHealth()
+              : key === 'pest-alerts'
+                ? () => this.buildPestAlerts()
+                : key.startsWith('news:')
+                  ? () => this.buildNews(key.split(':')[1], key.split(':')[2])
+                  : () => this.buildMarketPrices(key.replace('market-prices:', ''));
+          const envelope = await builder();
+          // Never-fail floor: an empty rebuild ('pending' placeholder) must not
+          // overwrite data already cached or seeded — e.g. when a pass fails
+          // mid-way. Keep what we have; the next good pass replaces it.
+          if (this.constructor.isEmptyEnvelope(envelope)) {
+            const { envelope: existingEnv } = await this.cache.get(key);
+            if (existingEnv && !this.constructor.isEmptyEnvelope(existingEnv)) {
+              logger.warn(`agri rebuild: empty result for ${key} — keeping cached data`);
+              return;
+            }
+            // Also skip writing the empty envelope if there is nothing to
+            // fall back to — better to serve seed (or a 503) than persist a
+            // short-TTL "pending" placeholder.
+            logger.warn(`agri rebuild: empty result for ${key} and no LKG — skipping cache.set`);
+            return;
           }
+          const detail =
+            envelope.data && envelope.data.departments
+              ? `${envelope.data.departments.length} depts`
+              : envelope.data && envelope.data.series
+                ? `${envelope.data.series.length} series`
+                : envelope.data && envelope.data.items
+                  ? `${envelope.data.items.length} items`
+                  : 'empty';
+          logger.info(`agri rebuild ${key}: wrote ${detail} (source=${envelope.meta.source})`);
+          await this.cache.set(key, envelope, this.endpointTtlMs(key));
+        } catch (error) {
+          logger.warn(`agri rebuild failed for ${key}: ${error.message} | ${error.stack}`);
+        } finally {
+          this._rebuildInFlight.delete(key);
+          settle();
         }
-        const detail =
-          envelope.data && envelope.data.departments
-            ? `${envelope.data.departments.length} depts`
-            : envelope.data && envelope.data.series
-              ? `${envelope.data.series.length} series`
-              : envelope.data && envelope.data.items
-                ? `${envelope.data.items.length} items`
-                : 'empty';
-        logger.info(`agri rebuild ${key}: wrote ${detail} (source=${envelope.meta.source})`);
-        await this.cache.set(key, envelope, this.endpointTtlMs(key));
+      })();
+
+      // Replace claim with the actual work so subsequent callers for this key
+      // during this tick get the work result (not just the settle signal).
+      this._rebuildInFlight.set(key, work);
+
+      try {
+        await work;
       } catch (error) {
-        logger.warn(`agri rebuild failed for ${key}: ${error.message} | ${error.stack}`);
+        logger.warn(`agri rebuild failed: ${error.message}`);
       }
     }
   }

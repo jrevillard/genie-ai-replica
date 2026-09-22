@@ -16,6 +16,7 @@ import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
+import 'package:genie_ai_mobile/services/auth/auth_interceptor.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 import 'package:genie_ai_mobile/services/notification_service.dart';
 import 'package:genie_ai_mobile/services/sse_parser.dart';
@@ -657,7 +658,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 setState(() {
                   msg['content'] = accumulatedContent.isNotEmpty
                       ? accumulatedContent
-                      : 'Streaming error';
+                      : _streamErrorMessage(error);
                 });
               }
               setState(() {
@@ -668,23 +669,26 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             cancelOnError: true,
           );
     } catch (e) {
-      debugPrint('[SSE] Connection error: $e');
+      debugPrint('[SSE] Stream connection failed: $e');
       if (!mounted) return;
+      final failureMessage = _streamErrorMessage(e);
       final msg = findStreamingMessage();
       if (msg != null) {
         setState(() {
           msg['content'] = accumulatedContent.isNotEmpty
               ? accumulatedContent
-              : 'Connection error';
+              : failureMessage;
         });
       }
       setState(() {
         _isStreaming = false;
         _isLoading = false;
       });
-      NotificationService.error(tr('chatbot.processingError'));
+      NotificationService.error(failureMessage);
     }
   }
+
+  String _streamErrorMessage(Object error) => tr(streamErrorKey(error));
 
   void _sendNonStreaming(
     String sessionId,
@@ -1976,4 +1980,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       ),
     );
   }
+}
+
+/// i18n key for the message shown when a chat stream or send fails.
+///
+/// A failed session must never surface as the opaque "Connection error" (M32):
+/// the user needs to know whether to retry or to sign in again. The codes come
+/// from [AuthInterceptor], which distinguishes a session that has genuinely
+/// ended from a refresh that merely could not complete this time — the former
+/// sends the user to login (see `main.dart`), the latter is worth retrying.
+String streamErrorKey(Object error) {
+  if (error is AuthException) {
+    return error.code == AuthException.transientFailure
+        ? 'auth.timeout'
+        : 'auth.sessionExpired';
+  }
+  return 'chatbot.processingError';
 }

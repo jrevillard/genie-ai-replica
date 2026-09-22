@@ -220,6 +220,13 @@
     "splash": {
       "type": "file",
       "value": "/config/agro-genio-splash.png"
+    },
+    "banner": {
+      "url": "/assets/agrogenio/banner.png"
+    },
+    "mascot": {
+      "url": "/assets/agrogenio/mascot-avatar.png",
+      "alt": "AgroGenio mascot"
     }
   },
   "theme": {

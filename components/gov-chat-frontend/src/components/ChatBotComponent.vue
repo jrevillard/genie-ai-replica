@@ -141,8 +141,19 @@
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
         <div class="welcome-header">
-          <div class="welcome-banner" aria-hidden="true"></div>
-          <img class="welcome-leaves" src="/assets/agrogenio/leaves-large.png" alt="" aria-hidden="true" />
+          <div
+            v-if="config.app.banner && config.app.banner.url"
+            class="welcome-banner"
+            :style="{ backgroundImage: `url(${config.app.banner.url})` }"
+            aria-hidden="true"
+          ></div>
+          <img
+            v-if="config.app.leaves && config.app.leaves.url"
+            class="welcome-leaves"
+            :src="config.app.leaves.url"
+            alt=""
+            aria-hidden="true"
+          />
           <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
         </div>
 
@@ -2302,7 +2313,6 @@ export default {
 .welcome-banner {
   position: absolute;
   inset: 0;
-  background-image: url('/assets/agrogenio/banner.png');
   background-repeat: no-repeat;
   background-position: center 60%;
   background-size: cover;
@@ -2330,16 +2340,13 @@ export default {
   filter: brightness(1.1);
 }
 
-.quick-help-heading {
-  position: relative;
-  z-index: 2;
-}
-
 .quick-help-overlay > :last-child {
   margin-bottom: auto;
 }
 
 .quick-help-heading {
+  position: relative;
+  z-index: 2;
   text-align: center;
   font-size: var(--text-xl);
   font-weight: 600;

@@ -18,7 +18,6 @@ logger = logging.getLogger("GENIE.AI_CHATQNA")
 
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
-KC_CLIENT_ID = os.getenv("KC_CLIENT_ID", "genie-app")
 KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 
 # JWKS cache
@@ -64,7 +63,7 @@ async def validate_token(token: str) -> dict | None:
     """
     Validate a Keycloak JWT token using JWKS.
 
-    Validates: signature, issuer, expiration, audience (azp).
+    Validates: signature, issuer, expiration.
 
     Args:
         token: Raw JWT string
@@ -103,13 +102,8 @@ async def validate_token(token: str) -> dict | None:
             token,
             public_key,
             issuer=expected_issuer,
-            options={"verify_aud": False},  # Keycloak 26+ uses aud=account; azp is checked below
+            options={"verify_aud": False},
         )
-
-        # Validate azp (authorized party) — the client that requested the token
-        if "azp" in payload and payload["azp"] != KC_CLIENT_ID:
-            logger.warning(f"Token azp mismatch: {payload['azp']} != {KC_CLIENT_ID}")
-            return None
 
         return payload
 

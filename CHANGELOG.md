@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Weather third-party API removal:** Removed the `ipapi.co` (server location) and `nominatim.openstreetmap.org` (reverse geocoding) dependencies. Weather service now uses a bundled GeoNames cities500 dataset for offline reverse geocoding — no third-party calls for user-location resolution.
 - **Chat markdown rendering:** Tightened the markdown renderer — strips the stray `<p>` wrap around list items and collapses the phantom `<ol>`/`<ul>` gap. Chat output no longer shows broken spacing around bullet lists.
 - **Splash image from runtime config:** `SplashScreen.vue` previously hardcoded `src="/config/splash.png"`, ignoring `config.app.splash.value` which lets each deployment point at a branded splash. Every brand-customized splash image was invisible. `SplashScreen.vue` now accepts a `splashPath` prop (default `/config/splash.png`) and `App.vue` passes it from `config.app.splash.value`. (#394)
+- **Mobile auth regression on ChatQnA:** drop `azp` claim check in `genie-ai-overlay/chatqna/keycloak_token_validator.py` to align with the Node.js services (`gov-chat-backend`, `document-repository`) which deliberately skip `azp` per standard OIDC Resource Server behavior. Token validation still enforces signature, issuer, and expiry. Resolves the per-flavor `KEYCLOAK_CLIENT_ID` deployment configuration that broke mobile auth on new country deployments.
 
 ### Changed
 

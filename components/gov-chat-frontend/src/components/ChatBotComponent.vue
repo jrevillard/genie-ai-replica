@@ -140,6 +140,21 @@
       </div>
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
+        <div
+          v-if="config.app.banner && config.app.banner.url"
+          class="welcome-banner"
+          :style="{ backgroundImage: `url(${config.app.banner.url})` }"
+          role="img"
+          aria-label="AgroGenio hero banner"
+        >
+          <img
+            v-if="config.app.leaves && config.app.leaves.url"
+            class="welcome-banner-leaves"
+            :src="config.app.leaves.url"
+            alt=""
+            aria-hidden="true"
+          />
+        </div>
         <div class="welcome-header">
           <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
         </div>
@@ -2292,10 +2307,43 @@ export default {
 
 .welcome-header {
   text-align: center;
-  margin-top: auto;
   margin-bottom: var(--space-lg);
   position: relative;
   overflow: hidden;
+}
+
+.welcome-banner {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto var(--space-md);
+  /* Maintain 2019:464 ratio — aspect-ratio is unreliable when the parent's
+     flex sizing collapses height to 0 in some browsers; padding-bottom
+     always works. */
+  padding-bottom: calc(464 / 2019 * 100%);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+[data-theme='dark'] .welcome-banner {
+  filter: brightness(0.85);
+}
+
+.welcome-banner-leaves {
+  position: absolute;
+  right: 4%;
+  top: -10px;
+  width: 14%;
+  max-width: 80px;
+  height: auto;
+  pointer-events: none;
+  transform: rotate(-12deg);
+  opacity: 0.9;
+}
+[data-theme='dark'] .welcome-banner-leaves {
+  opacity: 0.78;
 }
 
 .quick-help-overlay > :last-child {

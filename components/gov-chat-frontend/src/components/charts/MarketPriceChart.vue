@@ -139,6 +139,7 @@
       <DsCard variant="elevated" padding="lg">
         <div ref="chartScroll" class="chart-scroll">
           <apexchart
+            :key="themeKey"
             type="line"
             :height="chartHeight"
             :width="chartPixelWidth"
@@ -373,7 +374,8 @@ export default {
       newsGlobal: [],
       newsLocal: [],
       selectedNewsGlobal: [],
-      selectedNewsLocal: []
+      selectedNewsLocal: [],
+      themeKey: 1 // incremented on theme flip to force apexchart remount
     };
   },
   computed: {
@@ -1051,6 +1053,12 @@ export default {
     // envelope loads (e.g. cropProtection starts 2024 — default 2015 clamps).
     earliestDataYear(year) {
       if (this.startYear < year) this.startYear = year;
+    },
+    // ApexCharts caches strokeColors/borderColor/gridColor etc. from the
+    // initial chartOptions bundle. Incrementing themeKey forces the
+    // apexchart to remount with fresh resolvedCssVars on every theme flip.
+    isDarkMode() {
+      this.themeKey += 1;
     }
   },
   mounted() {

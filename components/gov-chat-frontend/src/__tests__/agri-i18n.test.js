@@ -3,7 +3,7 @@
  */
 'use strict';
 
-const { displayName, localizeFullName } = require('../utils/agri-i18n.js');
+const { displayName, localizeFullName, FULL_NAMES_BY_LOCALE } = require('../utils/agri-i18n.js');
 
 describe('agri-i18n key parity via displayName', () => {
   // Sample key to verify locale routing works
@@ -29,42 +29,19 @@ describe('agri-i18n key parity via displayName', () => {
     expect(displayName('Unknown series name', 'fr')).toBe('Unknown series name');
   });
 
-  // Key parity: every key in FULL_NAMES_ES must be translated in FR and PT
-  // (not fall back to the English input). We test this by checking that
-  // displayName does NOT return the English key for any known Spanish key.
-  test('all FULL_NAMES_ES keys translate in French (no fallback)', () => {
-    // Key parity is proven by: every key that displayName looks up in the dict
-    // for es returns a non-identical translation string.
-    // We use a representative sample set of keys from FULL_NAMES_ES.
-    const sampleKeys = [
-      'Beef (intl benchmark)',
-      'Maize (US #2, US Gulf intl benchmark)',
-      'Tilapia fillets, Honduras exports (FOB) [regional]',
-      'Central America post-harvest food loss (FAO SDG 12.3.1)',
-      'Whole tilapia, Costa Rica exports (FOB) [regional]'
-    ];
-    for (const key of sampleKeys) {
-      const frResult = displayName(key, 'fr');
-      const esResult = displayName(key); // single-arg = es
-      expect(frResult).not.toBe(key); // fr must translate
-      expect(frResult).not.toBe(esResult); // fr must differ from es
-    }
+  // Key parity: every key in FULL_NAMES_ES must be translated in FR and PT.
+  test('all FULL_NAMES_ES keys have FR and PT entries', () => {
+    expect(Object.keys(FULL_NAMES_BY_LOCALE.es).every((k) => k in FULL_NAMES_BY_LOCALE.fr)).toBe(true);
+    expect(Object.keys(FULL_NAMES_BY_LOCALE.es).every((k) => k in FULL_NAMES_BY_LOCALE.pt)).toBe(true);
   });
 
-  test('all FULL_NAMES_ES keys translate in Portuguese (no fallback)', () => {
-    const sampleKeys = [
-      'Beef (intl benchmark)',
-      'Maize (US #2, US Gulf intl benchmark)',
-      'Tilapia fillets, Honduras exports (FOB) [regional]',
-      'Central America post-harvest food loss (FAO SDG 12.3.1)',
-      'Whole tilapia, Costa Rica exports (FOB) [regional]'
-    ];
-    for (const key of sampleKeys) {
-      const ptResult = displayName(key, 'pt');
-      const esResult = displayName(key);
-      expect(ptResult).not.toBe(key);
-      expect(ptResult).not.toBe(esResult);
-    }
+  // Detect English fallback (e.g. a value that still contains English crop names).
+  test('FR and PT dict values contain no English fallback', () => {
+    const enWords = ['Beans (', 'Maize (', 'Rice,', 'Sorghum,', 'wheat', 'tomatoes'];
+    const hasEnglishFallback = (dict) =>
+      Object.values(dict).some((v) => enWords.some((w) => v.toLowerCase().includes(w.toLowerCase())));
+    expect(hasEnglishFallback(FULL_NAMES_BY_LOCALE.fr)).toBe(false);
+    expect(hasEnglishFallback(FULL_NAMES_BY_LOCALE.pt)).toBe(false);
   });
 
   test('localizeFullName delegates to displayName', () => {

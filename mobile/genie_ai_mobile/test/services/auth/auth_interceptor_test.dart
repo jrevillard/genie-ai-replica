@@ -358,6 +358,64 @@ void main() {
 
       expect(() => interceptor.send(request), throwsA(isA<AuthException>()));
     });
+
+    // DW-325: the notifier PRESERVES tokens on a transient failure, so the
+    // access token can come back unchanged. That must not be mistaken for a
+    // successful refresh (which would retry with the stale token and report an
+    // expired session), nor for a dead session (which would send a user with a
+    // perfectly good refresh token back to login).
+    test('reports TRANSIENT_FAILURE when the refresh token survives', () async {
+      tokenStorage.accessToken = 'stale-token';
+      tokenStorage.refreshToken = 'still-valid-rt';
+
+      interceptor = makeInterceptor(
+        // Refresh produced nothing, but the session was preserved.
+        onRefreshToken: () async {},
+        responseFn: (_) => streamedResponse(401, 'Unauthorized'),
+      );
+
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
+
+      await expectLater(
+        interceptor.send(request),
+        throwsA(
+          isA<AuthException>().having(
+            (e) => e.code,
+            'code',
+            AuthException.transientFailure,
+          ),
+        ),
+      );
+    });
+
+    test('reports SESSION_EXPIRED when the refresh token is gone', () async {
+      tokenStorage.accessToken = 'stale-token';
+      tokenStorage.refreshToken = null;
+
+      interceptor = makeInterceptor(
+        onRefreshToken: () async {},
+        responseFn: (_) => streamedResponse(401, 'Unauthorized'),
+      );
+
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
+
+      await expectLater(
+        interceptor.send(request),
+        throwsA(
+          isA<AuthException>().having(
+            (e) => e.code,
+            'code',
+            AuthException.sessionExpired,
+          ),
+        ),
+      );
+    });
   });
 
   // --- Task 4.9: Non-401 errors pass through ---

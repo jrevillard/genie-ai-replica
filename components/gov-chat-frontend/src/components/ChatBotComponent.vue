@@ -141,6 +141,8 @@
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
         <div class="welcome-header">
+          <div class="welcome-banner" aria-hidden="true"></div>
+          <img class="welcome-leaves" src="/assets/agrogenio/leaves-large.png" alt="" aria-hidden="true" />
           <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
         </div>
 
@@ -2293,6 +2295,39 @@ export default {
   text-align: center;
   margin-top: auto;
   margin-bottom: var(--space-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.welcome-banner {
+  position: absolute;
+  inset: 0;
+  background-image: url('/assets/agrogenio/banner.png');
+  background-repeat: no-repeat;
+  background-position: center 60%;
+  background-size: cover;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+[data-theme='dark'] .welcome-banner { opacity: 0.25; }
+
+.welcome-leaves {
+  position: absolute;
+  right: 8%;
+  top: -8px;
+  width: 90px;
+  height: auto;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.85;
+  transform: rotate(-12deg);
+}
+[data-theme='dark'] .welcome-leaves { opacity: 0.72; filter: brightness(1.1); }
+
+.quick-help-heading {
+  position: relative;
+  z-index: 2;
 }
 
 .quick-help-overlay > :last-child {

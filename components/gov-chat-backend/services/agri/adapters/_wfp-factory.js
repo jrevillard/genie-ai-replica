@@ -27,7 +27,6 @@ const docKey = (logical) => nodeCrypto.createHash('sha1').update(logical).digest
  * @param {string} opts.file - resource filename
  * @param {string} opts.fallbackUrl - last-known-good download URL
  * @param {string} opts.country - label for docs/attribution
- * @param {string[]} [opts.commodities] - keep only these commodities (default all)
  * @returns {Object} adapter
  */
 function createWfpAdapter(opts) {
@@ -60,7 +59,6 @@ function createWfpAdapter(opts) {
       const seen = new Set();
       for (const row of rows) {
         if (!row.date || row.priceflag !== 'actual') continue;
-        if (opts.commodities && !opts.commodities.includes(row.commodity)) continue;
 
         const conv = wfpRowToUsdPerKg(row);
         if (!conv) continue;

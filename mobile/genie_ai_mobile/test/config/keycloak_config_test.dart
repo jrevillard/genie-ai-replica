@@ -82,16 +82,18 @@ void main() {
     });
 
     test('has dev-specific values', () {
-      // devConfig uses dart-defines DEV_SERVER/DEV_PORT (default: localhost/443)
-      expect(devConfig.keycloakUrl, equals('https://localhost:443/auth'));
+      // devConfig uses dart-defines DEV_SERVER/DEV_PORT. The default target is
+      // the project dev server 10.0.0.101 (no dart-defines needed to test
+      // against it); override with --dart-define=DEV_SERVER=localhost.
+      expect(devConfig.keycloakUrl, equals('https://10.0.0.101:443/auth'));
       expect(devConfig.realm, equals('genie'));
       expect(
         devConfig.realmUrl,
-        equals('https://localhost:443/auth/realms/genie'),
+        equals('https://10.0.0.101:443/auth/realms/genie'),
       );
       expect(devConfig.clientId, equals('genie-mobile-dev'));
       expect(devConfig.redirectScheme, equals('com.itu.genieai.dev'));
-      expect(devConfig.backendUrl, equals('https://localhost:443'));
+      expect(devConfig.backendUrl, equals('https://10.0.0.101:443'));
     });
   });
 

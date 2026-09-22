@@ -174,6 +174,33 @@ void main() {
 
       expect(captured.headers.containsKey('Authorization'), isFalse);
     });
+
+    // DW-325: previously the 401 branch required `token != null`, so once the
+    // session had been cleared every request returned a bare 401 with no
+    // attempt to recover — a dead end. A 401 must always try to get a token.
+    test('a 401 with no token still attempts a refresh (path back)', () async {
+      tokenStorage.accessToken = null;
+      var refreshCalls = 0;
+      interceptor = makeInterceptor(
+        onRefreshToken: () async {
+          refreshCalls++;
+          tokenStorage.accessToken = 'recovered-token';
+        },
+        responseFn: (req) =>
+            req.headers['Authorization'] == 'Bearer recovered-token'
+            ? streamedResponse(200, 'ok')
+            : streamedResponse(401, 'unauthorized'),
+      );
+
+      final request = http.Request(
+        'GET',
+        Uri.parse('https://api.example.com/data'),
+      );
+      final response = await interceptor.send(request);
+
+      expect(refreshCalls, equals(1));
+      expect(response.statusCode, equals(200));
+    });
   });
 
   // --- Task 4.4: 401 → refresh → retry ---

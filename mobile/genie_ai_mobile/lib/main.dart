@@ -75,6 +75,9 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
+  /// Lets the auth layer reset navigation when a session ends (M25).
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
   bool _isConfigLoaded = false;
   late final AppLinks _appLinks;
   StreamSubscription<Uri>? _appLinkSubscription;
@@ -215,11 +218,29 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
+    // M25: when a session genuinely ENDS, drop every pushed route so no screen
+    // keeps rendering "Session expired" behind the login screen — previously
+    // the only way back to login was restarting the app.
+    //
+    // Deliberately keyed on `unauthenticated` and not `error`: a TRANSIENT
+    // failure (network blip, timeout) preserves the tokens and leaves the user
+    // where they are, which is the network-vs-auth distinction M25 asks for.
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      final wasAuthenticated = previous?.status == AuthStatus.authenticated;
+      if (wasAuthenticated && next.status == AuthStatus.unauthenticated) {
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
+    });
+
     return AnimatedBuilder(
       animation: Listenable.merge([ThemeManager(), I18nService()]),
       builder: (context, child) {
         return MaterialApp(
           title: 'Genie AI',
+          navigatorKey: _navigatorKey,
           debugShowCheckedModeBanner: false,
           locale: I18nService().currentLocale,
           supportedLocales: I18nService().supportedLanguages.keys.map(

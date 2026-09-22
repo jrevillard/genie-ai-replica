@@ -39,6 +39,34 @@ String? _extractSub(String? idToken) {
   }
 }
 
+/// True only when the token endpoint definitively rejected the grant — i.e. the
+/// refresh token is dead and no amount of retrying will help.
+///
+/// Everything else (network drops, timeouts, malformed bodies, unknown platform
+/// errors) is treated as TRANSIENT and must not end the session. DW-325 was
+/// exactly this mistake: the catch-all cleared every token on any failure, so a
+/// single hiccup logged the user out permanently with no path back.
+bool _isUnrecoverableGrantError(Object error) {
+  final buffer = StringBuffer(error.toString());
+  if (error is FlutterAppAuthPlatformException) {
+    buffer
+      ..write(' ')
+      ..write(error.code);
+    if (error.message != null) {
+      buffer
+        ..write(' ')
+        ..write(error.message);
+    }
+    buffer
+      ..write(' ')
+      ..write(error.platformErrorDetails);
+  }
+  final text = buffer.toString().toLowerCase();
+  return text.contains('invalid_grant') ||
+      text.contains('invalid_token') ||
+      text.contains('unauthorized_client');
+}
+
 enum _FailedOperation { none, authorize, refreshToken, validateTokens }
 
 class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
@@ -55,10 +83,21 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       NetworkErrorClassifier();
 
   bool _isAuthorizing = false;
-  bool _isRefreshing = false;
   _FailedOperation _lastFailedOperation = _FailedOperation.none;
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _debounceTimer;
+
+  /// Completes when an in-flight refresh finishes. Callers that arrive while a
+  /// refresh is running must AWAIT this instead of returning early — returning
+  /// early left them reading the previous (already expired) token and retrying
+  /// straight into a second 401.
+  Completer<void>? _refreshInFlight;
+
+  /// Refreshes shortly before the access token expires so the ordinary case
+  /// never reaches a 401 at all. Realm `genie` issues 5-minute tokens
+  /// (`accessTokenLifespan=300`), so without this a foregrounded app 401s every
+  /// few minutes and depends entirely on reactive recovery.
+  Timer? _proactiveRefreshTimer;
 
   @override
   AuthState build() {
@@ -73,6 +112,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       WidgetsBinding.instance.removeObserver(this);
       _connectivitySubscription?.cancel();
       _debounceTimer?.cancel();
+      _proactiveRefreshTimer?.cancel();
     });
 
     _connectivitySubscription = _connectivityChecker.onConnectivityChanged
@@ -139,6 +179,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     if (expiration != null && expiration.isAfter(DateTime.now())) {
       final idToken = await _tokenStorage.getIdToken();
       final userId = _extractSub(idToken);
+      _scheduleProactiveRefresh(expiration);
       _installApiServiceRefreshHook();
       await _pushTokenToApiService();
       if (!ref.mounted) return;
@@ -239,6 +280,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       if (!ref.mounted) return;
 
       _lastFailedOperation = _FailedOperation.none;
+      _scheduleProactiveRefresh(expiration);
       _authLogger.logAuthEvent(
         message: 'Authorization successful',
         source: 'AuthNotifier.authorize',
@@ -355,9 +397,45 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     };
   }
 
+  /// Schedules a refresh at ~80% of the token's remaining lifetime.
+  ///
+  /// The lead is clamped to [15s, 120s] so a short-lived token still refreshes
+  /// promptly and a long-lived one does not fire absurdly early.
+  void _scheduleProactiveRefresh(DateTime expiration) {
+    _proactiveRefreshTimer?.cancel();
+    final remaining = expiration.difference(DateTime.now());
+    if (remaining.isNegative) return;
+
+    var leadSeconds = (remaining.inSeconds * 0.2).round();
+    if (leadSeconds < 15) leadSeconds = 15;
+    if (leadSeconds > 120) leadSeconds = 120;
+
+    final delay = remaining - Duration(seconds: leadSeconds);
+    if (delay.isNegative) return;
+
+    _proactiveRefreshTimer = Timer(delay, () {
+      if (!ref.mounted) return;
+      if (state.status != AuthStatus.authenticated) return;
+      _authLogger.logAuthEvent(
+        message: 'Proactive token refresh (expires in ${leadSeconds}s)',
+        source: 'AuthNotifier._scheduleProactiveRefresh',
+      );
+      refreshToken();
+    });
+  }
+
   Future<void> refreshToken() async {
-    if (_isRefreshing) return;
-    _isRefreshing = true;
+    // A caller arriving while a refresh is already running must WAIT for it.
+    // The old `if (_isRefreshing) return;` returned immediately, so the caller
+    // went on to read the still-expired token and retried into a second 401
+    // (`AuthException: Session expired after refresh`).
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      await inFlight.future;
+      return;
+    }
+    final completer = Completer<void>();
+    _refreshInFlight = completer;
     _lastFailedOperation = _FailedOperation.refreshToken;
     try {
       _authLogger.logAuthEvent(
@@ -462,6 +540,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         if (!ref.mounted) return;
 
         _lastFailedOperation = _FailedOperation.none;
+        _scheduleProactiveRefresh(expiration);
         _authLogger.logAuthEvent(
           message: 'Token refresh successful',
           source: 'AuthNotifier.refreshToken',
@@ -472,19 +551,16 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
           userId: _extractSub(tokenResponse.idToken),
         );
       } on FormatException catch (e) {
+        // A malformed body is a server/proxy hiccup, not a rejected grant.
+        // Tokens are preserved so the next attempt can succeed.
+        _lastFailedOperation = _FailedOperation.refreshToken;
         _authLogger.logAuthFailure(
           errorCode: 'REFRESH_MALFORMED_RESPONSE',
           keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-          message: 'Malformed token response: $e',
+          message: 'Malformed token response (tokens preserved): $e',
           source: 'AuthNotifier.refreshToken',
         );
-        _lastFailedOperation = _FailedOperation.none;
-        await _tokenStorage.deleteAll();
-        if (!ref.mounted) return;
-        state = AuthState(
-          status: AuthStatus.unauthenticated,
-          errorMessage: tr('auth.sessionExpired'),
-        );
+        state = AuthState.error(message: tr('auth.timeout'), retryable: true);
       } on TimeoutException catch (e) {
         final isDiscovery =
             (e.message?.contains('Discovery') ?? false) ||
@@ -513,11 +589,27 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
           );
           return;
         }
+        // Only a definitive grant rejection may end the session. Clearing
+        // tokens on anything else (the previous behaviour) logged the user out
+        // permanently with no path back — see DW-325.
+        if (!_isUnrecoverableGrantError(e)) {
+          _lastFailedOperation = _FailedOperation.refreshToken;
+          _authLogger.logAuthFailure(
+            errorCode: 'REFRESH_TRANSIENT_FAILURE',
+            networkReachable: _connectivityChecker.isOnline,
+            keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
+            message: 'Token refresh failed transiently — tokens preserved: $e',
+            source: 'AuthNotifier.refreshToken',
+          );
+          state = AuthState.error(message: tr('auth.timeout'), retryable: true);
+          return;
+        }
         _lastFailedOperation = _FailedOperation.none;
+        _proactiveRefreshTimer?.cancel();
         _authLogger.logAuthFailure(
-          errorCode: 'REFRESH_FAILED',
+          errorCode: 'REFRESH_GRANT_REJECTED',
           keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-          message: 'Token refresh failed — tokens cleared',
+          message: 'Refresh token rejected — session ended: $e',
           source: 'AuthNotifier.refreshToken',
         );
         await _tokenStorage.deleteAll();
@@ -528,11 +620,15 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         );
       }
     } finally {
-      _isRefreshing = false;
+      _refreshInFlight = null;
+      if (!completer.isCompleted) completer.complete();
     }
   }
 
   Future<void> logout() async {
+    // Stop the proactive timer first: a refresh firing mid-logout would race
+    // the token wipe and could re-establish a session the user just ended.
+    _proactiveRefreshTimer?.cancel();
     _authLogger.logAuthEvent(
       message: 'Logout initiated',
       source: 'AuthNotifier.logout',

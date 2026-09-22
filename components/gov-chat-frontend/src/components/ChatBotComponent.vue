@@ -147,22 +147,8 @@
           role="img"
           aria-label="AgroGenio hero banner"
         >
-          <img
-            v-if="config.app.leaves && config.app.leaves.url"
-            class="welcome-banner-leaves"
-            :src="config.app.leaves.url"
-            alt=""
-            aria-hidden="true"
-          />
-        </div>
-        <div class="welcome-header">
-          <img
-            v-if="config.app.mascot && config.app.mascot.url"
-            class="welcome-mascot"
-            :src="config.app.mascot.url"
-            :alt="config.app.mascot.alt || 'AgroGenio mascot'"
-            aria-hidden="false"
-          />
+          <!-- Bubble visually anchored to the banner's mascot (right side):
+               the farmer in the banner image appears to be speaking. -->
           <div class="welcome-mascot-bubble" role="note">
             {{ translate('chatbot.whatCanIHelp') }}
           </div>
@@ -2332,7 +2318,7 @@ export default {
 
 .welcome-banner {
   width: 100%;
-  margin: 0 auto var(--space-md);
+  margin: calc(-1 * var(--space-lg)) auto var(--space-md);
   /* Maintain 2019:464 ratio — aspect-ratio is unreliable when the parent's
      flex sizing collapses height to 0 in some browsers; padding-bottom
      always works. */
@@ -2341,7 +2327,9 @@ export default {
   background-position: center;
   background-size: contain;
   position: relative;
-  border-radius: var(--radius-md);
+  /* Banner is flush against the navbar — no top radius, rounded only at
+     the bottom corners. */
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   overflow: hidden;
   /* flex child of .quick-help-overlay — never shrink the banner down. */
   flex-shrink: 0;
@@ -2350,41 +2338,14 @@ export default {
   filter: brightness(0.85);
 }
 
-.welcome-banner-leaves {
-  position: absolute;
-  right: 4%;
-  top: -10px;
-  width: 14%;
-  max-width: 80px;
-  height: auto;
-  pointer-events: none;
-  transform: rotate(-12deg);
-  opacity: 0.9;
-}
-[data-theme='dark'] .welcome-banner-leaves {
-  opacity: 0.78;
-}
-
-/* Mascot-as-guide: small floating avatar + speech bubble that points the
-   user toward the Just Chat action below. The mascot reads as a guide
-   character (not just decoration) because it speaks. */
-.welcome-mascot {
-  display: block;
-  width: 64px;
-  height: auto;
-  margin: 0 auto var(--space-sm);
-  transform: rotate(-4deg);
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
-}
-[data-theme='dark'] .welcome-mascot {
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
-}
-
+/* Mascot guide bubble: framed speech-bubble carrying the welcome text.
+   Positioned INSIDE the banner (bottom-right), arrow pointing UP — so
+   the mascot inside the banner image visually appears to be speaking. */
 .welcome-mascot-bubble {
-  display: inline-block;
-  position: relative;
-  max-width: 280px;
-  margin: 0 auto var(--space-md);
+  position: absolute;
+  right: 6%;
+  bottom: 14%;
+  max-width: 260px;
   padding: var(--space-xs) var(--space-md);
   background: var(--ag-bubble, var(--surface));
   color: var(--fg);
@@ -2394,19 +2355,19 @@ export default {
   font-weight: 500;
   line-height: 1.35;
   text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .welcome-mascot-bubble::after {
   content: '';
   position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%) rotate(45deg);
+  top: -7px;
+  right: 24%;
+  transform: rotate(45deg);
   width: 12px;
   height: 12px;
   background: var(--ag-bubble, var(--surface));
-  border-right: 1.5px solid var(--ag-sol, var(--accent-gold));
-  border-bottom: 1.5px solid var(--ag-sol, var(--accent-gold));
+  border-top: 1.5px solid var(--ag-sol, var(--accent-gold));
+  border-left: 1.5px solid var(--ag-sol, var(--accent-gold));
 }
 [data-theme='dark'] .welcome-mascot-bubble {
   background: var(--ag-bubble, var(--surface));

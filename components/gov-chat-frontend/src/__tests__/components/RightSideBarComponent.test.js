@@ -27,6 +27,11 @@ function createRightSideBarWrapper(propsOverrides = {}) {
     },
     global: {
       mocks: {
+        config: {
+          app: {
+            sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
+          }
+        },
         $t: (key) => key,
         $i18n: { locale: 'en' }
       },

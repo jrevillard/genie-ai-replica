@@ -156,7 +156,16 @@
           />
         </div>
         <div class="welcome-header">
-          <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
+          <img
+            v-if="config.app.mascot && config.app.mascot.url"
+            class="welcome-mascot"
+            :src="config.app.mascot.url"
+            :alt="config.app.mascot.alt || 'AgroGenio mascot'"
+            aria-hidden="false"
+          />
+          <div class="welcome-mascot-bubble" role="note">
+            {{ translate('chatbot.whatCanIHelp') }}
+          </div>
         </div>
 
         <!-- Insights Section -->
@@ -2309,12 +2318,20 @@ export default {
   text-align: center;
   margin-bottom: var(--space-lg);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  /* flex children of .quick-help-overlay — never let the flex container
+     collapse our mascot + bubble + heading down to height 0 when the
+     overlay's content exceeds its scroll viewport. */
+  flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 .welcome-banner {
   width: 100%;
-  max-width: 780px;
   margin: 0 auto var(--space-md);
   /* Maintain 2019:464 ratio — aspect-ratio is unreliable when the parent's
      flex sizing collapses height to 0 in some browsers; padding-bottom
@@ -2326,6 +2343,8 @@ export default {
   position: relative;
   border-radius: var(--radius-md);
   overflow: hidden;
+  /* flex child of .quick-help-overlay — never shrink the banner down. */
+  flex-shrink: 0;
 }
 [data-theme='dark'] .welcome-banner {
   filter: brightness(0.85);
@@ -2344,6 +2363,57 @@ export default {
 }
 [data-theme='dark'] .welcome-banner-leaves {
   opacity: 0.78;
+}
+
+/* Mascot-as-guide: small floating avatar + speech bubble that points the
+   user toward the Just Chat action below. The mascot reads as a guide
+   character (not just decoration) because it speaks. */
+.welcome-mascot {
+  display: block;
+  width: 64px;
+  height: auto;
+  margin: 0 auto var(--space-sm);
+  transform: rotate(-4deg);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+}
+[data-theme='dark'] .welcome-mascot {
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+.welcome-mascot-bubble {
+  display: inline-block;
+  position: relative;
+  max-width: 280px;
+  margin: 0 auto var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  background: var(--ag-bubble, var(--surface));
+  color: var(--fg);
+  border: 1.5px solid var(--ag-sol, var(--accent-gold));
+  border-radius: 18px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.welcome-mascot-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 12px;
+  height: 12px;
+  background: var(--ag-bubble, var(--surface));
+  border-right: 1.5px solid var(--ag-sol, var(--accent-gold));
+  border-bottom: 1.5px solid var(--ag-sol, var(--accent-gold));
+}
+[data-theme='dark'] .welcome-mascot-bubble {
+  background: var(--ag-bubble, var(--surface));
+  color: var(--fg);
+}
+[data-theme='dark'] .welcome-mascot-bubble::after {
+  background: var(--ag-bubble, var(--surface));
 }
 
 .quick-help-overlay > :last-child {
@@ -2376,6 +2446,12 @@ export default {
   font-weight: 600;
   color: var(--fg);
   margin: 0;
+  /* "Field notebook" accent — soft underline in the AgroGenio sol (sun)
+     tone. Visually anchors the section without competing with the
+     mascot hero. */
+  display: inline-block;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ag-sol, var(--accent-gold));
 }
 
 .insights-cards {

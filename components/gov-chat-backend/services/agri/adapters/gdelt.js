@@ -14,7 +14,7 @@
  */
 const { fetchJson } = require('../http');
 const { isRelevantNews } = require('../newsfilter');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 const QUERIES = [
   {
@@ -144,7 +144,7 @@ module.exports = {
           : null;
         const logical = `gdelt:${article.url}`;
         docs.push({
-          _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+          _key: docKey(logical),
           kind: 'news',
           scope,
           language: lang,

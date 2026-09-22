@@ -3114,6 +3114,7 @@ export default {
   }
 }
 
+<<<<<<< HEAD
 .quick-help-content {
   /* The veil wraps the title and its subtitle instead of spanning the
      banner: the reference carries the text directly on the artwork, and
@@ -3135,6 +3136,42 @@ export default {
   max-width: calc(100% - 2 * var(--qh-veil-pad));
   margin-inline: auto;
   padding-inline: var(--qh-veil-pad);
+=======
+.welcome-banner {
+  position: absolute;
+  inset: 0;
+  background-image: url('/assets/agrogenio/banner.png');
+  background-repeat: no-repeat;
+  background-position: center 60%;
+  background-size: cover;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+[data-theme='dark'] .welcome-banner {
+  opacity: 0.25;
+}
+
+.welcome-leaves {
+  position: absolute;
+  right: 8%;
+  top: -8px;
+  width: 90px;
+  height: auto;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.85;
+  transform: rotate(-12deg);
+}
+[data-theme='dark'] .welcome-leaves {
+  opacity: 0.72;
+  filter: brightness(1.1);
+}
+
+.quick-help-heading {
+  position: relative;
+  z-index: 2;
+>>>>>>> dd26f5a8b (style: apply prettier formatting to AgroGenio integration files)
 }
 
 /* The narrow panel. With both sidebars in flow the centre column is at

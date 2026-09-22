@@ -251,13 +251,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
           _currentLocale,
         );
 
-        // Explicit English KB labels for the retriever filter (may be null).
+        // Explicit English KB labels for the retriever filter. `null` MUST be
+        // preserved: `quickHelpServiceLabels` falls back to the button id when
+        // the key is absent, and normalizing absent -> `[]` here made that
+        // fallback unreachable, so the retriever filter was silently disabled
+        // (issue #1000).
         final serviceLabels = btn['serviceLabels'] as List<dynamic>?;
 
         loadedButtons.add({
           'id': btn['id'],
           'category': btn['category'],
-          'serviceLabels': serviceLabels ?? const <dynamic>[],
+          'serviceLabels': serviceLabels,
           'action': action ?? {},
           'appearance': appearance ?? {},
           'iconAsset': localIconAsset,
@@ -806,13 +810,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         button['resolvedHiddenPrompt'] ??
         (hiddenPromptKey.isNotEmpty ? tr(hiddenPromptKey) : visibleText);
 
-    // Set the retriever filter labels from the button config (English KB labels).
+    // Retriever filter labels from the button config (English KB labels).
     // Consumed by _sendStreaming when building the request context.
-    final List<String> labels =
-        (button['serviceLabels'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        const [];
+    // Never empty — see quickHelpServiceLabels for why that matters.
+    final List<String> labels = quickHelpServiceLabels(button);
 
     setState(() {
       _showQuickHelpOverlay = false;
@@ -1996,4 +1997,45 @@ String streamErrorKey(Object error) {
         : 'auth.sessionExpired';
   }
   return 'chatbot.processingError';
+}
+
+/// Derives the knowledge-base filter labels for a quick-help button.
+///
+/// Mirrors the Vue client exactly (`ChatBotComponent.vue`), because the two
+/// clients must filter identically:
+///
+///   * explicit, non-empty `serviceLabels` -> use that array as-is
+///   * absent / null / empty               -> `[button id]` (Vue: `button.id || title`)
+///
+/// The fallback is what prevents an unfiltered search. The retriever reads an
+/// EMPTY `serviceLabels` list as "no filter" rather than "no matching content"
+/// (in `genieai_retriever_arangodb.py`, `if filter_data.get("serviceLabels")`
+/// is falsy for `[]`), so an empty list searches the whole corpus and returns
+/// its top-K chunks whatever the topic. Those chunks are then reported as
+/// grounded and the strict-grounding system prompt forces an answer built from
+/// them — e.g. Manage Poultry & Pigs replying with maize content (issue #1000).
+///
+/// So this function must NEVER return an empty list. An empty list is treated
+/// as "absent" rather than forwarded: `_loadQuickHelpConfig` used to normalize
+/// an absent key to `[]`, which silently disabled the filter for exactly the
+/// buttons that need it. Vue never sends an empty list for a quick-help button,
+/// so its filter stays active: a topic with no knowledge-base coverage filters
+/// to zero documents, `is_grounded` becomes false, and the UI marks the reply
+/// AI-generated. This derivation is copied from Vue deliberately rather than
+/// "improved" — a "corrected" label would make the two clients diverge in the
+/// other direction.
+List<String> quickHelpServiceLabels(Map<String, dynamic> button) {
+  final Object? rawLabels = button['serviceLabels'];
+  if (rawLabels is List && rawLabels.isNotEmpty) {
+    return rawLabels.map((e) => e.toString()).toList();
+  }
+
+  final String id = (button['id'] ?? '').toString();
+  if (id.isNotEmpty) return <String>[id];
+
+  final Object? title = button['title'];
+  final String titleText = title is Map
+      ? (title['en'] ?? '').toString()
+      : (title ?? '').toString();
+  return <String>[titleText];
 }

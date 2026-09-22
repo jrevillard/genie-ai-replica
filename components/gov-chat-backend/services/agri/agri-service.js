@@ -761,6 +761,7 @@ class AgriService {
       name: def.name,
       source: 'wfp-vam',
       country: def.country,
+      market: rows[0].market || null,
       data,
       trend: computeTrend(data, { dense: true })
     };
@@ -1056,10 +1057,35 @@ class AgriService {
       if (aggregated) aggregatedAny = true;
     }
 
+    // Derive gap range from the actual data: find the longest gap between
+    // consecutive observation dates in any series (YYYY-MM-DD string compare
+    // works for ISO dates) and emit gapYears with that range.
+    const GAP_THRESHOLD_MS = 365 * 24 * 60 * 60 * 1000; // > 1 year = gap caveat
+    let gapRange = null;
+    for (const s of series) {
+      const dates = s.data
+        .map((p) => p.date)
+        .filter(Boolean)
+        .sort();
+      for (let i = 1; i < dates.length; i++) {
+        const dt = Date.parse(dates[i]) - Date.parse(dates[i - 1]);
+        if (dt > GAP_THRESHOLD_MS) {
+          const yr0 = dates[i - 1].slice(0, 4);
+          const yr1 = dates[i].slice(0, 4);
+          const candidate = `${yr0}–${yr1}`;
+          if (!gapRange || candidate.length > gapRange.length) gapRange = candidate;
+        }
+      }
+    }
+    if (gapRange) caveats.push(caveat.gapYears(gapRange));
+
+    // Derive single-market from the actual unique markets across series.
+    const markets = new Set(series.map((s) => s.market).filter(Boolean));
+    if (markets.size === 1) {
+      caveats.push(caveat.singleMarket([...markets][0]));
+    }
+
     const primary = series[0];
-    const hasGap = series.some((s) => s.name.includes('San Salvador'));
-    if (hasGap) caveats.push(caveat.gapYears('2023–2025'));
-    if (def.seriesDefs.some((sd) => sd.adapter === 'wfp-slv')) caveats.push(caveat.singleMarket('San Salvador'));
 
     return buildEnvelope(
       {

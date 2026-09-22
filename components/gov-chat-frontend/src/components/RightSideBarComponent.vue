@@ -25,16 +25,42 @@
       @collapse="toggleSidebar"
       @reset="$emit('update:width', defaultWidth)"
     />
+<<<<<<< HEAD
+=======
+=======
+  <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+    <div class="sidebar-header">
+      <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
+      <DsButton
+        variant="ghost"
+        :small="true"
+        class="sidebar-toggle"
+        :aria-label="sidebarCollapsed ? $t('sidebar.expand') : $t('sidebar.collapse')"
+        @click="toggleSidebar"
+      >
+        <ChevronRight v-if="!sidebarCollapsed" :size="20" /><ChevronLeft v-else :size="20" />
+      </DsButton>
+      <img
+        v-if="!sidebarCollapsed && config.app.sidebarLeaf && config.app.sidebarLeaf.url"
+        :src="config.app.sidebarLeaf.url"
+        alt=""
+        aria-hidden="true"
+        class="sidebar-header-leaves"
+      />
+    </div>
+>>>>>>> bde4a3e94 (feat(sidebar): add leaf decoration to Info & Resources header)
+>>>>>>> e31f4ca55 (fix(agrogenio): address review feedback (config-driven assets + DS tokens))
 
     <div class="sidebar-inner-wrap">
       <div class="sidebar-header">
         <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
         <!-- Decorative leaf particles, behind the header content (the
              header declares position: relative). Hidden when collapsed —
-             same gate as the title. -->
+             same gate as the title. Config-driven with a failsafe guard:
+             a non-AgroGenio deployment (no app.sidebarLeaf) renders none. -->
         <img
-          v-if="!sidebarCollapsed"
-          src="/assets/agrogenio/leaf-particles.png"
+          v-if="!sidebarCollapsed && config.app.sidebarLeaf && config.app.sidebarLeaf.url"
+          :src="config.app.sidebarLeaf.url"
           alt=""
           aria-hidden="true"
           class="sidebar-header-leaves"
@@ -228,6 +254,13 @@ export default {
     currentLocale: {
       type: String,
       default: 'en'
+    },
+    // GENIE.AI configuration (brand assets live under app.*). Optional
+    // with a safe default: the decorations guard on the leaf entry.
+    config: {
+      type: Object,
+      required: false,
+      default: () => ({ app: {} })
     },
     relatedDocuments: {
       type: Array,
@@ -628,6 +661,10 @@ export default {
   opacity: 0.85;
   transform: rotate(15deg);
   z-index: 0;
+}
+[data-theme='dark'] .sidebar-header-leaves {
+  opacity: 0.72;
+  filter: brightness(1.1);
 }
 
 [data-theme='dark'] .sidebar-header-leaves {

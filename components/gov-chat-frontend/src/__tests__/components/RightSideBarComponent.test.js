@@ -89,6 +89,7 @@ describe('RightSideBarComponent OKF concept citations', () => {
     expect(badge.text()).toBe('OKF');
   });
 
+<<<<<<< HEAD
   it('keeps the file-extension badge for a repository document', () => {
     const wrapper = mountSidebar({
       relatedDocuments: [{ id: 'doc-1', title: 'Guide', fileName: 'guide.pdf' }]
@@ -96,6 +97,35 @@ describe('RightSideBarComponent OKF concept citations', () => {
     const badge = wrapper.find('.file-type-badge');
     expect(badge.exists()).toBe(true);
     expect(badge.text()).toBe('PDF');
+=======
+  return mount(RightSideBarComponent, {
+    props: {
+      currentLocale: 'en',
+      relatedDocuments: [],
+      ...propsOverrides
+    },
+    global: {
+      mocks: {
+        config: {
+          app: {
+            sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
+          }
+        },
+        $t: (key) => key,
+        $i18n: { locale: 'en' }
+      },
+      stubs: {
+        DsButton: {
+          template: '<button :disabled="disabled" :aria-label="ariaLabel" @click="$emit(\'click\')"><slot /></button>',
+          props: ['disabled', 'variant', 'small', 'tag', 'ariaLabel'],
+          emits: ['click']
+        },
+        FileText: true,
+        ChevronRight: true,
+        ChevronLeft: true
+      }
+    }
+>>>>>>> e31f4ca55 (fix(agrogenio): address review feedback (config-driven assets + DS tokens))
   });
 
   // Review fix (2026-11-07): the origin-row TEMPLATE block had no render

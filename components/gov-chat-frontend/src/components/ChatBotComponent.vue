@@ -4568,6 +4568,8 @@ export default {
    declaration, the shape this component already uses for the veil's
    padding. */
 .quick-help-heading {
+  position: relative;
+  z-index: 2;
   text-align: center;
   font-family: var(--font-display);
   font-size: calc(var(--text-xl) * var(--qh-heading-scale));

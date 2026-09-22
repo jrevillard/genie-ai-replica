@@ -140,6 +140,7 @@ sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http", MagicMock())
 sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http.trace_exporter", MagicMock())
 sys.modules.setdefault("opentelemetry.exporter.otlp.proto.http.metric_exporter", MagicMock())
 sys.modules.setdefault("opentelemetry.instrumentation", MagicMock())
+sys.modules.setdefault("opentelemetry.instrumentation.aiohttp_client", MagicMock())
 sys.modules.setdefault("opentelemetry.instrumentation.fastapi", MagicMock())
 sys.modules.setdefault("opentelemetry.instrumentation.httpx", MagicMock())
 

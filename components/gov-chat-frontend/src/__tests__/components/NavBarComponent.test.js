@@ -302,4 +302,40 @@ describe('NavBarComponent', () => {
       expect(wrapper.emitted('toggleSidebar')).toBeTruthy();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Mascot pastille (AgroGenio brand)
+  // -----------------------------------------------------------------------
+  describe('mascot pastille', () => {
+    it('renders nav-mascot when config.app.mascot is provided', () => {
+      const wrapper = createNavBarWrapper({
+        props: {
+          config: {
+            app: {
+              title: 'AgroGenio',
+              icon: { type: 'file', value: '/logo.png' },
+              mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'AgroGenio mascot' }
+            },
+            theme: { navbar: {} }
+          }
+        }
+      });
+      const mascot = wrapper.find('[data-test-id="nav-mascot"]');
+      expect(mascot.exists()).toBe(true);
+      expect(mascot.attributes('src')).toBe('/assets/agrogenio/mascot-avatar.png');
+      expect(mascot.attributes('alt')).toBe('AgroGenio mascot');
+    });
+
+    it('hides nav-mascot when config.app.mascot is absent', () => {
+      const wrapper = createNavBarWrapper({
+        props: {
+          config: {
+            app: { title: 'AgroGenio', icon: { type: 'file', value: '/logo.png' } },
+            theme: { navbar: {} }
+          }
+        }
+      });
+      expect(wrapper.find('[data-test-id="nav-mascot"]').exists()).toBe(false);
+    });
+  });
 });

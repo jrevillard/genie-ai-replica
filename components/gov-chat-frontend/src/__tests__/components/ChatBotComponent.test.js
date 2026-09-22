@@ -291,6 +291,16 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false, renderSt
       renderStubDefaultSlot,
       provide: { config: configMock },
       mocks: {
+        config: {
+          app: {
+            icon: { type: 'inline', value: '' },
+            title: 'AgroGenio',
+            banner: { url: '/assets/agrogenio/banner.png' },
+            mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'Mascot' },
+            leaves: { url: '/assets/agrogenio/leaves-large.png' },
+            sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
+          }
+        },
         $t: (key) => key,
         // Reactive, so a test can switch the locale the way the app does and
         // the component's locale watchers run.

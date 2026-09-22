@@ -394,7 +394,9 @@ export default {
   transform: rotate(15deg);
   z-index: 0;
 }
-[data-theme='dark'] .sidebar-header-leaves { opacity: 0.72; }
+[data-theme='dark'] .sidebar-header-leaves {
+  opacity: 0.72;
+}
 
 .sidebar-toggle:hover {
   background: var(--bg);

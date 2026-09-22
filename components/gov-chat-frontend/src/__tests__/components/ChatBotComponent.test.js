@@ -187,17 +187,9 @@ function createChatBotWrapper(storeOverrides = {}, { rehydrate = false } = {}) {
   return mount(ChatBotComponent, {
     global: {
       plugins: [store],
+      provide: { config: configMock },
       mocks: {
-        config: {
-          app: {
-            icon: { type: 'inline', value: '' },
-            title: 'AgroGenio',
-            banner: { url: '/assets/agrogenio/banner.png' },
-            mascot: { url: '/assets/agrogenio/mascot-avatar.png', alt: 'Mascot' },
-            leaves: { url: '/assets/agrogenio/leaves-large.png' },
-            sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
-          }
-        },
+        config: configMock,
         $t: (key) => key,
         $i18n: { locale: 'en' }
       },

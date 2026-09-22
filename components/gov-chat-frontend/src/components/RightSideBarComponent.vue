@@ -11,6 +11,13 @@
       >
         <ChevronRight v-if="!sidebarCollapsed" :size="20" /><ChevronLeft v-else :size="20" />
       </DsButton>
+      <img
+        v-if="!sidebarCollapsed"
+        src="/assets/agrogenio/leaf-particles.png"
+        alt=""
+        aria-hidden="true"
+        class="sidebar-header-leaves"
+      />
     </div>
 
     <div v-if="!sidebarCollapsed">
@@ -375,6 +382,19 @@ export default {
   justify-content: center;
   z-index: 10;
 }
+
+.sidebar-header-leaves {
+  position: absolute;
+  right: -8px;
+  top: -10px;
+  width: 90px;
+  height: auto;
+  pointer-events: none;
+  opacity: 0.85;
+  transform: rotate(15deg);
+  z-index: 0;
+}
+[data-theme='dark'] .sidebar-header-leaves { opacity: 0.72; }
 
 .sidebar-toggle:hover {
   background: var(--bg);

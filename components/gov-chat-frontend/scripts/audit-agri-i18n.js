@@ -23,6 +23,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const vm = require('node:vm');
 
 const SRC = path.join(__dirname, '..', 'src');
 const COMPONENTS = [
@@ -88,13 +89,14 @@ for (const rel of COMPONENTS) {
 
 function loadLocale(name) {
   const file = path.join(SRC, 'i18n', 'locales', `${name}.js`);
-  let src = fs.readFileSync(file, 'utf8');
-  // Strip ESM `export default` wrapper to make `require`-able in Node.
-  src = src.replace(/export\s+default\s*/, 'module.exports =');
-  const req = new Function('module', 'exports', src);
-  const mod = { exports: {} };
-  req(mod, mod.exports);
-  return mod.exports;
+  const src = fs.readFileSync(file, 'utf8');
+  const ctx = { module: { exports: {} }, exports: {}, console };
+  vm.createContext(ctx);
+  // Strip ESM `export default` so the module.exports assignment targets the
+  // vm context's module.exports (which mirrors CommonJS semantics).
+  const transformed = src.replace(/export\s+default\s*/, 'module.exports =');
+  vm.runInContext(transformed, ctx, { filename: file });
+  return ctx.module.exports;
 }
 
 function flatten(obj, prefix = '', out = {}) {

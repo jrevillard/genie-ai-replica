@@ -3295,6 +3295,12 @@ export default {
   font-weight: 600;
   color: var(--fg);
   margin: 0;
+  /* "Field notebook" accent — soft underline in the AgroGenio sol (sun)
+     tone. Visually anchors the section without competing with the
+     mascot hero. */
+  display: inline-block;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ag-sol, var(--accent-gold));
 }
 
 .insights-cards {

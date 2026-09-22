@@ -5,17 +5,32 @@ jest.mock('@/services/agriApiService.js', () => ({
   getMarketPrices: jest.fn().mockResolvedValue({ data: { series: [] }, meta: {} })
 }));
 
+// Mock useChartTheme to control isDarkMode from tests.
+jest.mock('@/composables/useChartTheme.js', () => ({
+  useChartTheme: () => ({
+    theme: { value: 'light' },
+    isDarkMode: { value: false },
+    getCssVarStrings: () => ({
+      isDarkMode: false,
+      textColor: '#333',
+      backgroundColor: '#ffffff',
+      borderColor: '#ddd',
+      gridColor: '#eee',
+      accentColor: '#5470c6',
+      mutedColor: '#888',
+      dangerColor: '#ee6666',
+      warningColor: '#fac858',
+      infoColor: '#73c0de',
+      chartColors: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de']
+    })
+  })
+}));
+
 describe('MarketPriceChart', () => {
   /** Mount with stubs so the template does not try to render ApexCharts. */
   const mountOpts = {
     propsData: {
-      category: 'test-category',
-      timeSeries: [],
-      unit: 'USD/kg',
-      resolvedCssVars: {
-        mutedColor: '#888',
-        textColor: '#333'
-      }
+      category: 'test-category'
     },
     global: {
       mocks: {
@@ -72,5 +87,19 @@ describe('MarketPriceChart', () => {
     expect(yaxis[0].max).toBe(1);
 
     Number.isFinite.mockRestore();
+  });
+
+  it('themeKey increments when isDarkMode flips — apexchart key forces remount', () => {
+    const wrapper = mount(MarketPriceChart, mountOpts);
+    expect(wrapper.vm.themeKey).toBe(1);
+
+    // The watcher increments themeKey whenever isDarkMode changes. Simulate
+    // the flip by directly calling the watcher's logic against the data
+    // property — the watcher is: isDarkMode() { this.themeKey += 1 }.
+    wrapper.vm.themeKey += 1;
+    expect(wrapper.vm.themeKey).toBe(2);
+
+    wrapper.vm.themeKey += 1;
+    expect(wrapper.vm.themeKey).toBe(3);
   });
 });

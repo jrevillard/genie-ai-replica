@@ -832,7 +832,11 @@ export default {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 95% 50%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 35%);
+  background-image: radial-gradient(
+    circle at 95% 50%,
+    color-mix(in srgb, var(--brand) 22%, transparent),
+    transparent 35%
+  );
   pointer-events: none;
   z-index: 0;
 }

@@ -1670,6 +1670,11 @@ services:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
       - ALL
+    # Init job chowns the bind-mounted volume to the otelcol user (10001).
+    # SAST wave-4 cap_drop:ALL stripped CAP_CHOWN — re-add it here only.
+    # The runtime otel-collector keeps cap_drop:ALL (read/write only).
+    cap_add:
+      - CHOWN
     security_opt:
       - no-new-privileges:true
     profiles: [observability]

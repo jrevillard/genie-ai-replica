@@ -1870,4 +1870,27 @@ describe('ChatBotComponent', () => {
       expect(mockNotificationWarning).toHaveBeenCalled();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // AgroGenio brand integration (welcome-header banner + leaves)
+  // -----------------------------------------------------------------------
+  describe('AgroGenio banner integration', () => {
+    it('renders welcome-banner + welcome-leaves inside .welcome-header', () => {
+      const wrapper = createChatBotWrapper();
+      const header = wrapper.find('.welcome-header');
+      expect(header.exists()).toBe(true);
+      expect(header.find('.welcome-banner').exists()).toBe(true);
+      expect(header.find('.welcome-leaves').exists()).toBe(true);
+    });
+
+    it('preserves the market-prices section (regression check)', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.find('.market-prices-section').exists()).toBe(true);
+    });
+
+    it('preserves the chat-input area (regression check)', () => {
+      const wrapper = createChatBotWrapper();
+      expect(wrapper.find('.chat-input').exists()).toBe(true);
+    });
+  });
 });

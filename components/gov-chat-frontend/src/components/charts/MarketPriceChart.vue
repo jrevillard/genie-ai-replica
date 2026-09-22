@@ -215,7 +215,7 @@
           <div class="news-picker">
             <button type="button" class="news-picker__toggle" @click="toggleNewsPicker('global')">
               {{ $t('charts.news.addFromNews', 'Add from recent news') }}
-              <span class="news-picker__count" v-if="newsGlobal.length">({{ newsGlobal.length }})</span>
+              <span v-if="newsGlobal.length" class="news-picker__count">({{ newsGlobal.length }})</span>
             </button>
             <div v-if="newsPickerOpen === 'global'" class="news-picker__list">
               <DsSpinner v-if="newsLoading" size="sm" />
@@ -246,7 +246,7 @@
           <div class="news-picker">
             <button type="button" class="news-picker__toggle" @click="toggleNewsPicker('local')">
               {{ $t('charts.news.addFromNews', 'Add from recent news') }}
-              <span class="news-picker__count" v-if="newsLocal.length">({{ newsLocal.length }})</span>
+              <span v-if="newsLocal.length" class="news-picker__count">({{ newsLocal.length }})</span>
             </button>
             <div v-if="newsPickerOpen === 'local'" class="news-picker__list">
               <DsSpinner v-if="newsLoading" size="sm" />
@@ -779,8 +779,27 @@ export default {
         }
       }
       const axisFor = (g) => {
-        const minVal = g.values.length > 0 ? Math.min(...g.values) : 0;
-        const maxVal = g.values.length > 0 ? Math.max(...g.values) : 1;
+        // Guard: if all values are non-finite (Infinity slipped past the
+        // loop's filter, or arithmetic upstream turned a finite into
+        // Infinity), fall back to a benign [0, 1] axis instead of returning
+        // NaN/Infinity to ApexCharts (renders blank, crashes tooltip).
+        const safeValues = (g.values || []).filter(Number.isFinite);
+        if (safeValues.length === 0) {
+          return {
+            min: 0,
+            max: 1,
+            labels: {
+              style: { colors: cssVars.mutedColor },
+              formatter: (v) => this.formatAxisValue(v)
+            },
+            title: {
+              text: groups.length > 1 && g.unit ? g.unit : '',
+              style: { color: cssVars.mutedColor, fontSize: '11px', fontWeight: 500 }
+            }
+          };
+        }
+        const minVal = Math.min(...safeValues);
+        const maxVal = Math.max(...safeValues);
         const range = maxVal - minVal || 1;
         const step = Math.pow(10, Math.floor(Math.log10(range / 4))) || 1;
         const floor = Math.floor((minVal - range * 0.05) / step) * step;

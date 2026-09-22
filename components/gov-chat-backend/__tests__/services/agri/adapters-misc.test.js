@@ -95,6 +95,18 @@ describe('normalize() shape (empty-input smoke)', () => {
   });
 });
 
+describe('WFP adapters normalize() shape', () => {
+  test.each([
+    ['wfp-gtm', wfpGtm],
+    ['wfp-nic', wfpNic]
+  ])('%s.normalize([]) returns agri_series collection', async (_name, mod) => {
+    // The commodities filter was dead code (no caller passed it) and has
+    // been removed. Verify normalize still produces the expected shape.
+    const result = await mod.normalize([]);
+    expect(result).toMatchObject({ collection: 'agri_series', docs: [] });
+  });
+});
+
 describe('resolve() returns a list of URLs', () => {
   test.each(ADAPTERS.map(([name]) => [name]))(
     '%s.resolve(cfg) returns a non-empty value (string, array, or object)',

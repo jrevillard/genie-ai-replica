@@ -27,7 +27,7 @@
 
         <!-- Mascot pastille (AgroGenio brand) — hidden if config absent -->
         <img
-          v-if="config.app.mascot"
+          v-if="config.app.mascot && config.app.mascot.url"
           :src="config.app.mascot.url"
           :alt="config.app.mascot.alt || 'Mascot'"
           class="nav-mascot"
@@ -824,15 +824,16 @@ export default {
   margin-left: var(--space-sm);
   border-radius: 50%;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+  position: relative;
+  z-index: 1;
 }
 
 .nav-bar::after {
   content: '';
   position: absolute;
   inset: 0;
-  background-image:
-    radial-gradient(circle at 95% 50%, rgba(76, 175, 80, 0.22), transparent 35%),
-    radial-gradient(circle at 5% 110%, rgba(255, 255, 255, 0.08), transparent 30%);
+  background-image: radial-gradient(circle at 95% 50%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 35%);
   pointer-events: none;
+  z-index: 0;
 }
 </style>

@@ -13,7 +13,7 @@
  * SV import declarations (SV unit values implausibly low — disclosed).
  */
 const { fetchJson } = require('../http');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 const QUERIES = [
   { label: 'urea-import-parity', reporter: '222', flow: 'M', code: '3102' },
@@ -89,7 +89,7 @@ module.exports = {
 
       const logical = `comtrade:${label}:${period}`;
       docs.push({
-        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+        _key: docKey(logical),
         key: `COMTRADE:${label}`,
         kind: 'trade-unit-value',
         year: parseInt(period, 10),

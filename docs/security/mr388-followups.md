@@ -69,7 +69,7 @@
 
 | ID   | Area     | Item                                                                                                                          | Status |
 |------|----------|-------------------------------------------------------------------------------------------------------------------------------|--------|
-| L-1  | backend  | `docKey` uses SHA-1 (collision risk = overwrite only, no security issue). Switch to SHA-256                                              | open |
+| L-1  | backend  | `docKey` uses SHA-1 (collision risk = overwrite only, no security issue). Switch to SHA-256                                              | **done** (shared `services/agri/keys.js`, all 13 adapters updated) |
 | L-2  | backend  | `registry.js` re-reads `fs.readdirSync` on every `enabledAdapters()` call. Memoize at module load                                          | open |
 | L-3  | backend  | `_wfp-factory.js` exposes `commodities` option never used by any variant (`opts.commodities && !opts.commodities.includes(...)` short-circuits). Drop the option | open |
 | L-4  | backend  | `buildEnvelope.meta.nextRefresh` documented but never set by any caller (dead parameter). Compute + set or drop from schema                | open |
@@ -84,7 +84,7 @@
 
 ## Operational follow-up (separate from code)
 
-**O-1** — `release/el-salvador` deployed stack (10.0.0.102) may have chunks ingested with `bge-base-en-v1.5` (768-dim) before the `f8b0ffa13` cleanup. With `all.yml:152` now defaulting to `bge-large-en-v1.5` (1024-dim) + the override removed in B-8, new queries will mismatch stored chunks → retriever returns `[]`. **Re-ingest required before production deploy** of the current `release/el-salvador` tip.
+**O-1** — `release/el-salvador` deployed stack (10.0.0.102) may have chunks ingested with `bge-base-en-v1.5` (768-dim) before the `f8b0ffa13` cleanup. With `all.yml:152` now defaulting to `bge-large-en-v1.5` (1024-dim) + the override removed in B-8, new queries will mismatch stored chunks → retriever returns `[]`. **Re-ingest required before production deploy** of the current `release/el-salvador` tip. Separately, **L-1** (`docKey` SHA-1 → SHA-256) changes the key length from 27 to 43 chars; existing SHA-1-keyed agri docs in Arango are NOT migrated by the code change and will remain as orphans until re-ingested. The bge re-ingest above is the natural moment to also drop the old SHA-1 agri docs (the `_key` field of every agri doc will differ after L-1, so no doc is overwritten — old SHA-1 keys simply become dead weight until purged).
 
 ---
 

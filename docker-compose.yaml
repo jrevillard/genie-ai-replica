@@ -611,7 +611,6 @@ services:
       - ARANGO_URL=http://arango-vector-db:8529
       - KEYCLOAK_URL=https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       - KC_REALM=${KEYCLOAK_REALM:-genie}
-      - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # TLS verification for document-repository → NGINX OIDC discovery/JWKS fetches.
       # Default: 1 (strict, for production). Set to 0 in .env for dev with self-signed certs.
@@ -1350,7 +1349,6 @@ services:
       BACKEND_SERVICE_URL: http://backend:3000
       KEYCLOAK_URL: https://${NGINX_PUBLIC_DOMAIN:-localhost}${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}}/auth
       KC_REALM: ${KEYCLOAK_REALM:-genie}
-      KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-genie-app}
       CHATQNA_SYSTEM_PROMPT: ${CHATQNA_SYSTEM_PROMPT:-}
       CHATQNA_ENFORCE_ABSTENTION: ${CHATQNA_ENFORCE_ABSTENTION:-true}
       # Confidence scoring — rank-weighted aggregate of calibrated reranker scores.

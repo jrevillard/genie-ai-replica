@@ -256,8 +256,7 @@ describe('Security Middleware Tests', () => {
       jest.mock('../../config/appConfig', () => ({
         security: {
           keycloakUrl: 'https://localhost/auth',
-          keycloakRealm: 'genie',
-          keycloakClientId: 'genie-app'
+          keycloakRealm: 'genie'
         }
       }));
 

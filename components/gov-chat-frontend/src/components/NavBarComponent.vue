@@ -25,6 +25,15 @@
         <!-- Title from GENIE.AI config - Hide on mobile -->
         <router-link to="/dashboard" class="brand-name hide-on-mobile">{{ config.app.title }}</router-link>
 
+        <!-- Mascot pastille (AgroGenio brand) — hidden if config absent -->
+        <img
+          v-if="config.app.mascot"
+          :src="config.app.mascot.url"
+          :alt="config.app.mascot.alt || 'Mascot'"
+          class="nav-mascot"
+          data-test-id="nav-mascot"
+        />
+
         <!-- Mobile controls - Only shown on mobile devices -->
         <div class="mobile-controls">
           <!-- Language Selector for Mobile -->
@@ -807,5 +816,23 @@ export default {
     width: 50px;
     margin-left: var(--space-sm);
   }
+}
+
+.nav-mascot {
+  width: 44px;
+  height: 44px;
+  margin-left: var(--space-sm);
+  border-radius: 50%;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3));
+}
+
+.nav-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 95% 50%, rgba(76, 175, 80, 0.22), transparent 35%),
+    radial-gradient(circle at 5% 110%, rgba(255, 255, 255, 0.08), transparent 30%);
+  pointer-events: none;
 }
 </style>

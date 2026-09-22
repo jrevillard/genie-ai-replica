@@ -47,4 +47,17 @@ describe('agri-i18n key parity via displayName', () => {
   test('localizeFullName delegates to displayName', () => {
     expect(localizeFullName('Beef (intl benchmark)', 'fr')).toBe(displayName('Beef (intl benchmark)', 'fr'));
   });
+
+  // Guardrail: no value may equal the English source key (catches "ataque"→"atacado"-class typos
+  // where the value is non-empty but semantically wrong).
+  test('all non-ES dict values are non-empty strings with minimum length', () => {
+    for (const [locale, dict] of Object.entries(FULL_NAMES_BY_LOCALE)) {
+      if (locale === 'es') continue;
+      for (const value of Object.values(dict)) {
+        expect(value).toBeTruthy();
+        expect(typeof value).toBe('string');
+        expect(value.length).toBeGreaterThan(3);
+      }
+    }
+  });
 });

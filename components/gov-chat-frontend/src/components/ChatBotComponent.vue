@@ -2351,7 +2351,9 @@ export default {
   z-index: 0;
   opacity: 0.35;
 }
-[data-theme='dark'] .welcome-banner { opacity: 0.25; }
+[data-theme='dark'] .welcome-banner {
+  opacity: 0.25;
+}
 
 .welcome-leaves {
   position: absolute;
@@ -2364,7 +2366,10 @@ export default {
   opacity: 0.85;
   transform: rotate(-12deg);
 }
-[data-theme='dark'] .welcome-leaves { opacity: 0.72; filter: brightness(1.1); }
+[data-theme='dark'] .welcome-leaves {
+  opacity: 0.72;
+  filter: brightness(1.1);
+}
 
 .quick-help-heading {
   position: relative;

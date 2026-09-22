@@ -30,8 +30,8 @@ working on the pluggable agricultural data harness. Human-oriented overview:
    `{id, configPrefix, cadence ('1h'|'24h'|'1w'), defaults, endpoints,
   async resolve(cfg), async fetch(resolved, cfg), parse(raw),
   normalize(parsed) -> {collection, docs}}`
-2. Docs need deterministic `_key` (sha1 of a logical key via
-   `node:crypto`) and go to `agri_series` (prices/indexes),
+2. Docs need deterministic `_key` (sha256 of a logical key via
+   `node:crypto`, shared `services/agri/keys.js`) and go to `agri_series` (prices/indexes),
    `agri_ndvi`, `agri_alerts` (pest) or `agri_news`.
 3. Use `http.js` (`fetchUrl`/`fetchJson`) — never axios directly; it
    enforces timeouts, retries, and the 5 MB cap.

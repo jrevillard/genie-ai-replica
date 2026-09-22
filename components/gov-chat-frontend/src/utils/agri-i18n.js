@@ -101,6 +101,111 @@ const FULL_NAMES_ES = {
   'Whole tilapia, Costa Rica exports (FOB) [regional]': 'Tilapia entera, exportaciones de Costa Rica (FOB) [regional]'
 };
 
+/** Full served series names (def names, incl. market detail + tags) → FR. */
+const FULL_NAMES_FR = {
+  'Beans (black), Guatemala La Terminal [regional]': 'Haricot (noir), La Terminal du Guatemala [régional]',
+  'Beans (pinto), Nicaragua national average [regional]': 'Haricot (pinto), moyenne nationale du Nicaragua [régional]',
+  'Beans (red), Nicaragua national average [regional]': 'Haricot (rouge), moyenne nationale du Nicaragua [régional]',
+  'Beans (red), San Salvador wholesale': 'Haricot (rouge), vente en gros San Salvador',
+  'Beans (silk red), San Salvador wholesale': 'Haricot (rouge soyeux), vente en gros San Salvador',
+  'Beef (intl benchmark)': 'Bœuf (référence internationale)',
+  'Cabbage, Guatemala La Terminal wholesale [regional]': 'Chou, vente en gros La Terminal du Guatemala [régional]',
+  'Carrots, Guatemala La Terminal wholesale [regional]': 'Carottes, vente en gros La Terminal du Guatemala [régional]',
+  'Central America food lost after harvest, before retail (share of food harvest by mass) (FAO SDG 12.3.1)':
+    'Amérique centrale — pertes alimentaires après récolte, avant le commerce de détail (part de la récolte en masse) (FAO ODD 12.3.1)',
+  'Central America post-harvest food loss (FAO SDG 12.3.1)':
+    'Amérique centrale — pertes alimentaires post-récolte (FAO ODD 12.3.1)',
+  'Chicken (Brazil wholesale, intl benchmark)': 'Poulet (Brésil vente en gros, référence internationale)',
+  'Chicken, Nicaragua national average [regional]': 'Poulet, moyenne nationale du Nicaragua [régional]',
+  'DAP (US Gulf spot)': 'DAP (comptant Golfe des États-Unis)',
+  'Eggs, Nicaragua national average [regional]': 'Œufs, moyenne nationale du Nicaragua [régional]',
+  'Fish meal feed cost (intl benchmark)': 'Coût de la farine de poisson (référence internationale)',
+  'Honey export unit value (El Salvador)': "Valeur unitaire d'exportation du miel (El Salvador)",
+  'Honey producer price (El Salvador)': 'Prix au producteur de miel (El Salvador)',
+  'MOP (Brazil CFR granular)': 'MOP (Brésil CFR granulé)',
+  'Maize (US #2, US Gulf intl benchmark)': 'Maïs (US #2, Golfe des États-Unis, référence internationale)',
+  'Maize (white), Guatemala City (La Terminal) [regional]':
+    'Maïs (blanc), Ciudad de Guatemala (La Terminal) [régional]',
+  'Maize (white), Nicaragua national average [regional]': 'Maïs (blanc), moyenne nationale du Nicaragua [régional]',
+  'Maize (white), San Salvador wholesale': 'Maïs (blanc), vente en gros San Salvador',
+  'PPI pesticide & ag-chemical manufacturing': 'IPP fabrication de pesticides et agrochimiques',
+  'Pesticide import parity (El Salvador CIF)': "Parité d'importation de pesticides (CIF El Salvador)",
+  'Pork, Nicaragua national average [regional]': 'Porc, moyenne nationale du Nicaragua [régional]',
+  'Rice (first quality), Guatemala La Terminal [regional]':
+    'Riz (première qualité), La Terminal du Guatemala [régional]',
+  'Rice (intl benchmark)': 'Riz (référence internationale)',
+  'Rice, San Salvador wholesale': 'Riz, vente en gros San Salvador',
+  'Sorghum (intl benchmark)': 'Sorgho (référence internationale)',
+  'Sorghum, Nicaragua national average [regional]': 'Sorgho, moyenne nationale du Nicaragua [régional]',
+  'Sorghum, San Salvador wholesale': 'Sorgho, vente en gros San Salvador',
+  'TSP (US Gulf)': 'TSP (Golfe des États-Unis)',
+  'Tilapia fillets, Honduras exports (FOB) [regional]': 'Filets de tilapia,Exportations du Honduras (FOB) [régional]',
+  'Tomatoes producer price (El Salvador)': 'Prix au producteur de tomates (El Salvador)',
+  'Tomatoes producer price (Honduras) [regional]': 'Prix au producteur de tomates (Honduras) [régional]',
+  'Urea (Middle East f.o.b.)': 'Urée (Moyen-Orient f.o.b.)',
+  'Urea import parity (El Salvador CIF)': "Parité d'importation d'urée (CIF El Salvador)",
+  'Watermelons, Guatemala La Terminal wholesale [regional]':
+    'Pastèques, vente en gros La Terminal du Guatemala [régional]',
+  'Wheat (intl benchmark)': 'Blé (référence internationale)',
+  'Whole tilapia, Costa Rica exports (FOB) [regional]':
+    'Tilapia entière, moyennes nationales du Costa Rica (FOB) [régional]'
+};
+
+/** Full served series names (def names, incl. market detail + tags) → PT-BR. */
+const FULL_NAMES_PT = {
+  'Beans (black), Guatemala La Terminal [regional]': 'Feijão (preto), La Terminal da Guatemala [regional]',
+  'Beans (pinto), Nicaragua national average [regional]': 'Feijão (pinto), média nacional da Nicarágua [regional]',
+  'Beans (red), Nicaragua national average [regional]': 'Feijão (vermelho), média nacional da Nicarágua [regional]',
+  'Beans (red), San Salvador wholesale': 'Feijão (vermelho), atacado San Salvador',
+  'Beans (silk red), San Salvador wholesale': 'Feijão (vermelho seda), atacado San Salvador',
+  'Beef (intl benchmark)': 'Carne bovina (referência internacional)',
+  'Cabbage, Guatemala La Terminal wholesale [regional]': 'Repolho, atacado La Terminal da Guatemala [regional]',
+  'Carrots, Guatemala La Terminal wholesale [regional]': 'Cenouras, ataque La Terminal da Guatemala [regional]',
+  'Central America food lost after harvest, before retail (share of food harvest by mass) (FAO SDG 12.3.1)':
+    'América Central — perdas de alimentos pós-colheita, antes do varejo (proporção da colheita em massa) (FAO ODS 12.3.1)',
+  'Central America post-harvest food loss (FAO SDG 12.3.1)':
+    'América Central — perdas pós-colheita de alimentos (FAO ODS 12.3.1)',
+  'Chicken (Brazil wholesale, intl benchmark)': 'Frango (atacado Brasil, referência internacional)',
+  'Chicken, Nicaragua national average [regional]': 'Frango, média nacional da Nicarágua [regional]',
+  'DAP (US Gulf spot)': 'DAP (à vista Golfo dos EUA)',
+  'Eggs, Nicaragua national average [regional]': 'Ovos, média nacional da Nicarágua [regional]',
+  'Fish meal feed cost (intl benchmark)': 'Custo de farinha de peixe (referência internacional)',
+  'Honey export unit value (El Salvador)': 'Valor unitário de exportação de mel (El Salvador)',
+  'Honey producer price (El Salvador)': 'Preço ao produtor de mel (El Salvador)',
+  'MOP (Brazil CFR granular)': 'MOP (Brasil CFR granular)',
+  'Maize (US #2, US Gulf intl benchmark)': 'Milho (US #2, Golfo dos EUA, referência internacional)',
+  'Maize (white), Guatemala City (La Terminal) [regional]':
+    'Milho (branco), Cidade da Guatemala (La Terminal) [regional]',
+  'Maize (white), Nicaragua national average [regional]': 'Milho (branco), média nacional da Nicarágua [regional]',
+  'Maize (white), San Salvador wholesale': 'Milho (branco), ataque San Salvador',
+  'PPI pesticide & ag-chemical manufacturing': 'IPP de fabricação de agrotóxicos e agroquímicos',
+  'Pesticide import parity (El Salvador CIF)': 'Paridade de importação de agrotóxicos (CIF El Salvador)',
+  'Pork, Nicaragua national average [regional]': 'Suíno, média nacional da Nicarágua [regional]',
+  'Rice (first quality), Guatemala La Terminal [regional]':
+    'Arroz (primeira qualidade), La Terminal da Guatemala [regional]',
+  'Rice (intl benchmark)': 'Arroz (referência internacional)',
+  'Rice, San Salvador wholesale': 'Arroz, ataque San Salvador',
+  'Sorghum (intl benchmark)': 'Sorgo (referência internacional)',
+  'Sorghum, Nicaragua national average [regional]': 'Sorgo, média nacional da Nicarágua [regional]',
+  'Sorghum, San Salvador wholesale': 'Sorgo, ataque San Salvador',
+  'TSP (US Gulf)': 'TSP (Golfo dos EUA)',
+  'Tilapia fillets, Honduras exports (FOB) [regional]': 'Filés de tilápia, exportações de Honduras (FOB) [regional]',
+  'Tomatoes producer price (El Salvador)': 'Preço ao produtor de tomate (El Salvador)',
+  'Tomatoes producer price (Honduras) [regional]': 'Preço ao produtor de tomate (Honduras) [regional]',
+  'Urea (Middle East f.o.b.)': 'Ureia (Oriente Médio f.o.b.)',
+  'Urea import parity (El Salvador CIF)': 'Paridade de importação de ureia (CIF El Salvador)',
+  'Watermelons, Guatemala La Terminal wholesale [regional]': 'Melancias, ataque La Terminal da Guatemala [regional]',
+  'Wheat (intl benchmark)': 'Trigo (referência internacional)',
+  'Whole tilapia, Costa Rica exports (FOB) [regional]': 'Tilapia inteira, exportações de Costa Rica (FOB) [regional]'
+};
+
+/** Locale → full-names dictionary map. */
+const FULL_NAMES_BY_LOCALE = {
+  es: FULL_NAMES_ES,
+  fr: FULL_NAMES_FR,
+  pt: FULL_NAMES_PT
+};
+
 const COUNTRIES_ES = {
   Brazil: 'Brasil',
   'US Gulf': 'Golfo de EE. UU.',
@@ -154,10 +259,20 @@ function lookupFullName(name) {
   return name;
 }
 
+/** Localize a full served series name by locale.
+ *  Single-arg form defaults to Spanish for backward compatibility. */
+export function displayName(name, locale) {
+  const dict = locale ? FULL_NAMES_BY_LOCALE[locale] : FULL_NAMES_ES;
+  if (!dict) return name;
+  if (dict[name]) return dict[name];
+  const m = name.match(/^([A-Z][A-Za-z]+(?: \([^)]+\))?)/);
+  if (m && dict[m[1]]) return dict[m[1]] + name.slice(m[1].length);
+  return dict[name] || name;
+}
+
 /** Localize a full served series name. Unknown → input. */
 export function localizeFullName(fullName, locale) {
-  if (locale !== 'es') return fullName;
-  return FULL_NAMES_ES[fullName] || fullName;
+  return displayName(fullName, locale);
 }
 
 /**

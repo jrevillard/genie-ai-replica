@@ -29,6 +29,16 @@
     <div class="sidebar-inner-wrap">
       <div class="sidebar-header">
         <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
+        <!-- Decorative leaf particles, behind the header content (the
+             header declares position: relative). Hidden when collapsed —
+             same gate as the title. -->
+        <img
+          v-if="!sidebarCollapsed"
+          src="/assets/agrogenio/leaf-particles.png"
+          alt=""
+          aria-hidden="true"
+          class="sidebar-header-leaves"
+        />
       </div>
 
       <div v-if="!sidebarCollapsed">
@@ -604,6 +614,24 @@ export default {
   padding: var(--space-md) 0;
   justify-content: center;
   border-bottom: none;
+}
+
+/* Decorative leaf particles: top-right of the header, behind the
+   content (z-index 0). pointer-events none — pure decoration. */
+.sidebar-header-leaves {
+  position: absolute;
+  right: -8px;
+  top: -10px;
+  width: 90px;
+  height: auto;
+  pointer-events: none;
+  opacity: 0.85;
+  transform: rotate(15deg);
+  z-index: 0;
+}
+
+[data-theme='dark'] .sidebar-header-leaves {
+  opacity: 0.72;
 }
 
 .sidebar-section {

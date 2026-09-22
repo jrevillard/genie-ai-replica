@@ -283,11 +283,25 @@ def test_invoke_hybrid_path_calls_rrf_fuse_and_flag_on(comps):
     the pure tests while silently disabling fusion. The call site lives in the
     retriever re-graft, not in langchain-arangodb — this is the guard against
     the re-graft breaking it.
+
+    Story 1.0 (2026-09-21, additive multi-graph fan-out): the per-leg hybrid
+    fusion moved out of ``invoke()`` into the per-leg helper ``_extract_for_graph``
+    so each graph leg fuses its dense+bm25 results independently before the
+    cross-graph Level-2 RRF. The intent of this contract is "fusion still
+    happens on the hybrid path" — so we accept the call living in either
+    ``invoke`` or ``_extract_for_graph`` (both are part of the hybrid path).
     """
     mod = _retriever_module()
     cls = getattr(mod, "GenieaiArangoRetriever", None)
     assert cls is not None, "retriever class missing from the real module"
     assert hasattr(cls, "invoke"), "retriever invoke missing from the real module"
-    src = inspect.getsource(cls.invoke)
-    assert "rrf_fuse(" in src, "hybrid fusion call missing from the retriever invoke"
+    invoke_src = inspect.getsource(cls.invoke)
+    # Story 1.0: fusion call site may live in _extract_for_graph (per-leg).
+    extract = getattr(cls, "_extract_for_graph", None)
+    extract_src = inspect.getsource(extract) if extract is not None else ""
+    combined = invoke_src + "\n" + extract_src
+    assert "rrf_fuse(" in combined, (
+        "hybrid fusion call missing from the retriever invoke (or per-leg "
+        "_extract_for_graph); both must participate in the hybrid path"
+    )
     assert mod.HYBRID_RETRIEVAL_ENABLED is True, "hybrid retrieval default flipped OFF"

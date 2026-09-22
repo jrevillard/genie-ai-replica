@@ -7,7 +7,7 @@
  */
 const XLSX = require('xlsx');
 const { fetchUrl } = require('../http');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 const PCPS_URL = 'https://www.imf.org/-/media/files/research/commodityprices/monthly/external-data.xlsx';
 
@@ -95,7 +95,7 @@ module.exports = {
         if (typeof value !== 'number' || !Number.isFinite(value)) continue;
         const logical = `${def.key}:${date}`;
         docs.push({
-          _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+          _key: docKey(logical),
           key: def.key,
           kind: 'intl-price',
           date,

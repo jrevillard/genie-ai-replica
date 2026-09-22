@@ -1,12 +1,15 @@
 'use strict';
 
 /**
- * RightSideBarComponent — FAQ language contract.
+ * RightSideBarComponent — FAQ language contract + AgroGenio brand integration.
  *
- * The FAQ is written in English and translated for the interface language.
- * When the translation cannot be produced, the English original is still
- * shown, but the user has to be told: an English FAQ presented as a
- * translated one is the failure these tests pin.
+ * FAQ language contract: the FAQ is written in English and translated for the
+ * interface language. When the translation cannot be produced, the English
+ * original is still shown, but the user has to be told: an English FAQ
+ * presented as a translated one is the failure these tests pin.
+ *
+ * Brand integration: the AgroGenio leaf decoration renders with the expanded
+ * sidebar and hides with the collapsed one.
  */
 
 const { mount, flushPromises } = require('@vue/test-utils');
@@ -73,6 +76,39 @@ function mockFetch({ faqAvailable, translation }) {
 }
 
 const TRANSLATED_FAQ = { translated_markdown: '## Qu est-ce que GENIE.AI ?' };
+
+function createRightSideBarWrapper(propsOverrides = {}) {
+  // RightSideBarComponent fetches /FAQ.md on mount — provide a minimal stub
+  // so the fetch resolves cleanly without touching the network.
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    text: () => Promise.resolve('# FAQ\n\n## Q1\nA1\n')
+  });
+
+  return mount(RightSideBarComponent, {
+    props: {
+      currentLocale: 'en',
+      relatedDocuments: [],
+      ...propsOverrides
+    },
+    global: {
+      mocks: {
+        $t: (key) => key,
+        $i18n: { locale: 'en' }
+      },
+      stubs: {
+        DsButton: {
+          template: '<button :disabled="disabled" :aria-label="ariaLabel" @click="$emit(\'click\')"><slot /></button>',
+          props: ['disabled', 'variant', 'small', 'tag', 'ariaLabel'],
+          emits: ['click']
+        },
+        FileText: true,
+        ChevronRight: true,
+        ChevronLeft: true
+      }
+    }
+  });
+}
 
 describe('RightSideBarComponent FAQ language contract', () => {
   let originalFetch;
@@ -164,5 +200,36 @@ describe('RightSideBarComponent FAQ language contract', () => {
     // The endpoint is authenticated: an anonymous request comes back
     // unauthorized and the user is left with the English original.
     expect(call[1].headers.Authorization).toBe('Bearer mock-access-token');
+  });
+});
+
+describe('RightSideBarComponent', () => {
+  describe('AgroGenio leaf decoration', () => {
+    it('renders sidebar-header-leaves when sidebar is expanded', () => {
+      const wrapper = createRightSideBarWrapper();
+      const leaves = wrapper.find('.sidebar-header-leaves');
+      expect(leaves.exists()).toBe(true);
+      expect(leaves.attributes('src')).toBe('/assets/agrogenio/leaf-particles.png');
+      expect(leaves.attributes('aria-hidden')).toBe('true');
+    });
+
+    it('hides sidebar-header-leaves when sidebar is collapsed', async () => {
+      const wrapper = createRightSideBarWrapper();
+      await wrapper.setData({ sidebarCollapsed: true });
+      expect(wrapper.find('.sidebar-header-leaves').exists()).toBe(false);
+    });
+  });
+
+  describe('basic rendering', () => {
+    it('renders the sidebar container', () => {
+      const wrapper = createRightSideBarWrapper();
+      expect(wrapper.find('.sidebar').exists()).toBe(true);
+    });
+
+    it('renders the sidebar header with title and toggle', () => {
+      const wrapper = createRightSideBarWrapper();
+      expect(wrapper.find('.sidebar-header').exists()).toBe(true);
+      expect(wrapper.find('.sidebar-toggle').exists()).toBe(true);
+    });
   });
 });

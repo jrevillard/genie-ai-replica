@@ -1,4 +1,5 @@
 <template>
+<<<<<<< HEAD
   <div class="sidebar" :class="{ collapsed: sidebarCollapsed }" :style="{ '--sidebar-width': `${width}px` }">
     <!-- The handle comes FIRST in the flex row. On the right panel
          the seam with the centre is the panel's LEFT edge, so a handle
@@ -19,6 +20,28 @@
       @collapse="toggleSidebar"
       @reset="$emit('update:width', defaultWidth)"
     />
+=======
+  <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+    <div class="sidebar-header">
+      <h3 v-if="!sidebarCollapsed">{{ $t('sidebar.title') }}</h3>
+      <DsButton
+        variant="ghost"
+        :small="true"
+        class="sidebar-toggle"
+        :aria-label="sidebarCollapsed ? $t('sidebar.expand') : $t('sidebar.collapse')"
+        @click="toggleSidebar"
+      >
+        <ChevronRight v-if="!sidebarCollapsed" :size="20" /><ChevronLeft v-else :size="20" />
+      </DsButton>
+      <img
+        v-if="!sidebarCollapsed"
+        src="/assets/agrogenio/leaf-particles.png"
+        alt=""
+        aria-hidden="true"
+        class="sidebar-header-leaves"
+      />
+    </div>
+>>>>>>> bde4a3e94 (feat(sidebar): add leaf decoration to Info & Resources header)
 
     <div class="sidebar-inner-wrap">
       <div class="sidebar-header">
@@ -454,6 +477,36 @@ export default {
   border-bottom: none;
 }
 
+<<<<<<< HEAD
+=======
+.sidebar-toggle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.sidebar-header-leaves {
+  position: absolute;
+  right: -8px;
+  top: -10px;
+  width: 90px;
+  height: auto;
+  pointer-events: none;
+  opacity: 0.85;
+  transform: rotate(15deg);
+  z-index: 0;
+}
+[data-theme='dark'] .sidebar-header-leaves { opacity: 0.72; }
+
+.sidebar-toggle:hover {
+  background: var(--bg);
+  color: var(--muted);
+}
+
+>>>>>>> bde4a3e94 (feat(sidebar): add leaf decoration to Info & Resources header)
 .sidebar-section {
   padding: var(--space-md);
   border-bottom: 1px solid var(--border);

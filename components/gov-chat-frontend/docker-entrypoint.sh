@@ -33,6 +33,12 @@ window.APP_CONFIG = {
   keycloak: {
     url: "${KEYCLOAK_URL}",
     client_id: "${KEYCLOAK_CLIENT_ID}"
+  },
+  app: {
+    banner: { url: "${APP_BANNER_URL:-/assets/agrogenio/banner.png}" },
+    mascot: { url: "${APP_MASCOT_URL:-/assets/agrogenio/mascot-avatar.png}", alt: "${APP_MASCOT_ALT:-AgroGenio mascot}" },
+    leaves: { url: "${APP_LEAVES_URL:-/assets/agrogenio/leaves-large.png}" },
+    sidebarLeaf: { url: "${APP_SIDEBAR_LEAF_URL:-/assets/agrogenio/leaf-particles.png}" }
   }
 };
 EOF

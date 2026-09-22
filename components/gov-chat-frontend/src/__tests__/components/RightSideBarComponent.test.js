@@ -19,6 +19,11 @@ function createRightSideBarWrapper(propsOverrides = {}) {
     text: () => Promise.resolve('# FAQ\n\n## Q1\nA1\n')
   });
 
+  const configMock = {
+    app: {
+      sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
+    }
+  };
   return mount(RightSideBarComponent, {
     props: {
       currentLocale: 'en',
@@ -26,12 +31,9 @@ function createRightSideBarWrapper(propsOverrides = {}) {
       ...propsOverrides
     },
     global: {
+      provide: { config: configMock },
       mocks: {
-        config: {
-          app: {
-            sidebarLeaf: { url: '/assets/agrogenio/leaf-particles.png' }
-          }
-        },
+        config: configMock,
         $t: (key) => key,
         $i18n: { locale: 'en' }
       },

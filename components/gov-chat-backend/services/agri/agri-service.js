@@ -1025,8 +1025,14 @@ class AgriService {
     const targetUnit = series[0].unit;
     const MT = 'USD/mt';
     const UNIT_FACTORS = {
-      [`${MT}|${QUINTAL}`]: 46 / 1000, // 1 quintal = 46 kg
+      // Direction-pairs across the three charted units. Every direction is
+      // explicit so a reordered seriesDefs (targetUnit taken from series[0])
+      // always finds a factor. Quintal = 46 kg (Salvadoran convention).
+      [`${MT}|${QUINTAL}`]: 46 / 1000,
       [`${MT}|USD/kg`]: 1 / 1000,
+      [`${QUINTAL}|${MT}`]: 1000 / 46,
+      [`${QUINTAL}|USD/kg`]: 1 / 46,
+      [`${KG}|${MT}`]: 1000,
       [`${KG}|${QUINTAL}`]: 46 // vegetables: FAOSTAT tomatoes USD/kg → quintal axis
     };
     for (const s of series) {

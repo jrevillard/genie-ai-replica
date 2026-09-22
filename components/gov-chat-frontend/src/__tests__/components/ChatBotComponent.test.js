@@ -1884,15 +1884,15 @@ describe('ChatBotComponent', () => {
   });
 
   // -----------------------------------------------------------------------
-  // AgroGenio brand integration (welcome-header banner + leaves)
+  // AgroGenio brand integration — banner moved to DashboardView so it stays
+  // visible regardless of chat state; ChatBotComponent no longer renders it.
   // -----------------------------------------------------------------------
-  describe('AgroGenio banner integration', () => {
-    it('renders welcome-banner + welcome-leaves inside .welcome-header', () => {
+  describe('AgroGenio brand integration', () => {
+    it('does NOT render banner/leaves in ChatBotComponent (moved to DashboardView)', () => {
       const wrapper = createChatBotWrapper();
-      const header = wrapper.find('.welcome-header');
-      expect(header.exists()).toBe(true);
-      expect(header.find('.welcome-banner').exists()).toBe(true);
-      expect(header.find('.welcome-leaves').exists()).toBe(true);
+      expect(wrapper.find('.welcome-banner').exists()).toBe(false);
+      expect(wrapper.find('.welcome-leaves').exists()).toBe(false);
+      expect(wrapper.find('.dashboard-banner').exists()).toBe(false);
     });
 
     it('preserves the market-prices section (regression check)', () => {

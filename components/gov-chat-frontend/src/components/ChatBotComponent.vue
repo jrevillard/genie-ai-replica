@@ -141,19 +141,6 @@
       <!-- Quick Help Overlay -->
       <div v-if="showQuickHelp && selectedContextItems.length === 0" class="quick-help-overlay">
         <div class="welcome-header">
-          <div
-            v-if="config.app.banner && config.app.banner.url"
-            class="welcome-banner"
-            :style="{ backgroundImage: `url(${config.app.banner.url})` }"
-            aria-hidden="true"
-          ></div>
-          <img
-            v-if="config.app.leaves && config.app.leaves.url"
-            class="welcome-leaves"
-            :src="config.app.leaves.url"
-            alt=""
-            aria-hidden="true"
-          />
           <h2 class="quick-help-heading">{{ translate('chatbot.whatCanIHelp') }}</h2>
         </div>
 
@@ -2309,36 +2296,6 @@ export default {
   margin-bottom: var(--space-lg);
   position: relative;
   overflow: hidden;
-}
-
-.welcome-banner {
-  position: absolute;
-  inset: 0;
-  background-repeat: no-repeat;
-  background-position: center 60%;
-  background-size: cover;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.35;
-}
-[data-theme='dark'] .welcome-banner {
-  opacity: 0.25;
-}
-
-.welcome-leaves {
-  position: absolute;
-  right: 8%;
-  top: -8px;
-  width: 90px;
-  height: auto;
-  pointer-events: none;
-  z-index: 3;
-  opacity: 0.85;
-  transform: rotate(-12deg);
-}
-[data-theme='dark'] .welcome-leaves {
-  opacity: 0.72;
-  filter: brightness(1.1);
 }
 
 .quick-help-overlay > :last-child {

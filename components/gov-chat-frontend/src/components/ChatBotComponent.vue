@@ -4552,7 +4552,6 @@ export default {
     --qh-veil-pad: 8px;
     --qh-heading-scale: 0.92;
   }
->>>>>>> 23d19b40e (fix(agrogenio): move dashboard banner from ChatBotComponent to DashboardView)
 }
 
 /* The heading and the subtitle under it share one gap: the heading
@@ -4667,6 +4666,12 @@ export default {
   font-weight: 600;
   color: var(--fg);
   margin: 0;
+  /* "Field notebook" accent — soft underline in the AgroGenio sol (sun)
+     tone. Visually anchors the section without competing with the
+     mascot hero. */
+  display: inline-block;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ag-sol, var(--accent-gold));
 }
 
 .insights-cards {

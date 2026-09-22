@@ -6,7 +6,7 @@
  * never as severity-graded alerts (COMMUNITY_DATA caveat).
  */
 const { fetchJson } = require('../http');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 // Target crop-pest taxa (scientific names verified via EPPO/iNaturalist)
 const TAXA = [
@@ -58,7 +58,7 @@ module.exports = {
       if (!obs || !obs.taxon) continue;
       const logical = `inat:${obs.id}`;
       docs.push({
-        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+        _key: docKey(logical),
         kind: 'sighting',
         scientificName: obs.taxon.name,
         observedOn: obs.observed_on || null,

@@ -4552,6 +4552,7 @@ export default {
     --qh-veil-pad: 8px;
     --qh-heading-scale: 0.92;
   }
+>>>>>>> 23d19b40e (fix(agrogenio): move dashboard banner from ChatBotComponent to DashboardView)
 }
 
 /* The heading and the subtitle under it share one gap: the heading

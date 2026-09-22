@@ -666,10 +666,13 @@ export default {
   opacity: 0.72;
   filter: brightness(1.1);
 }
+<<<<<<< HEAD
 
 [data-theme='dark'] .sidebar-header-leaves {
   opacity: 0.72;
 }
+=======
+>>>>>>> 2d65b1929 (fix(sidebar): remove duplicate .sidebar-header-leaves block + orphan brace)
 
 .sidebar-section {
   padding: var(--space-md);

@@ -143,6 +143,7 @@ export default {
     FileImage,
     Languages
   },
+  inject: ['config'],
 
   props: {
     currentChatId: {

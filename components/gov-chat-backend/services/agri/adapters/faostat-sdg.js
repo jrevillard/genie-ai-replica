@@ -8,7 +8,7 @@
  */
 const { fetchUrl } = require('../http');
 const { extractEntry } = require('../zip');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 const ZIP_URL = 'https://bulks-faostat.fao.org/production/SDG_BulkDownloads_E_All_Data_(Normalized).zip';
 
@@ -70,7 +70,7 @@ module.exports = {
 
       const logical = `FAOSTAT:SDG:${row.area}:${year}`;
       docs.push({
-        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+        _key: docKey(logical),
         key: `FAOSTAT:SDG:${row.area}`,
         kind: 'loss-rate',
         year,

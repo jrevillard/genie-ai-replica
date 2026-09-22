@@ -66,7 +66,11 @@ async function extractEntry(buffer, name, opts = {}) {
   const localNameLen = buffer.readUInt16LE(entry.localHeaderOffset + 26);
   const localExtraLen = buffer.readUInt16LE(entry.localHeaderOffset + 28);
   const dataStart = entry.localHeaderOffset + 30 + localNameLen + localExtraLen;
-  const compressed = buffer.slice(dataStart, dataStart + entry.compressedSize);
+  const dataEnd = dataStart + entry.compressedSize;
+  if (dataEnd > buffer.length) {
+    throw new Error(`zip: entry ${name} truncated (dataEnd=${dataEnd} > buffer.length=${buffer.length})`);
+  }
+  const compressed = buffer.slice(dataStart, dataEnd);
 
   const maxBytes = opts.maxBytes || MAX_INFLATED_BYTES;
   const inflated =

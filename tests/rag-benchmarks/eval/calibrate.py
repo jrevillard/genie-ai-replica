@@ -50,8 +50,7 @@ from pathlib import Path
 
 # Optional: reuse the live metrics so definitions match exactly.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import metrics  # noqa: E402
-
+import metrics
 
 # --- confusion-cost formulas -------------------------------------------------
 # Each takes (score, max_score, avg_score, idx, n) and returns a float >= 0.
@@ -201,15 +200,36 @@ def f1(m):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("report", help="instrumented anchor_results JSON (with adaptive_breakdown per query)")
-    ap.add_argument("--factors", help="comma-separated CONTEXT_DECAY_FACTOR values (default: 7-step sweep)")
-    ap.add_argument("--thresholds", help="comma-separated MIN_VALUE_THRESHOLD values (default: 5-step sweep)")
-    ap.add_argument("--top", type=int, default=10, help="print top-N combos by F1 (default 10)")
-    ap.add_argument("--metric", choices=["f1", "recall", "recall_at_precision"], default="f1",
-                    help="rank combos by this metric (default f1)")
-    ap.add_argument("--precision-floor", type=float, default=0.5,
-                    help="for recall_at_precision: min precision to qualify (default 0.5)")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "report",
+        help="instrumented anchor_results JSON (with adaptive_breakdown per query)",
+    )
+    ap.add_argument(
+        "--factors",
+        help="comma-separated CONTEXT_DECAY_FACTOR values (default: 7-step sweep)",
+    )
+    ap.add_argument(
+        "--thresholds",
+        help="comma-separated MIN_VALUE_THRESHOLD values (default: 5-step sweep)",
+    )
+    ap.add_argument(
+        "--top", type=int, default=10, help="print top-N combos by F1 (default 10)"
+    )
+    ap.add_argument(
+        "--metric",
+        choices=["f1", "recall", "recall_at_precision"],
+        default="f1",
+        help="rank combos by this metric (default f1)",
+    )
+    ap.add_argument(
+        "--precision-floor",
+        type=float,
+        default=0.5,
+        help="for recall_at_precision: min precision to qualify (default 0.5)",
+    )
     args = ap.parse_args()
 
     report = json.load(open(args.report))
@@ -227,12 +247,17 @@ def main():
 
     # Baseline (current production params) for reference.
     base = score_combo(report, 0.0025, conf_current, -1.0)
-    print(f"Baseline (factor=0.0025, current, threshold=-1.0): "
-          f"recall={base['recall']:.3f} precision={base['precision']:.3f} "
-          f"avg_sel={base['avg_selected']:.2f} empty={base['empty_queries']}/{base['n']}", file=sys.stderr)
-    print(f"Sweep: {len(factors)} factors x {len(CONFUSION_FORMULAS)} formulas x "
-          f"{len(thresholds)} thresholds = {len(factors) * len(CONFUSION_FORMULAS) * len(thresholds)} combos\n",
-          file=sys.stderr)
+    print(
+        f"Baseline (factor=0.0025, current, threshold=-1.0): "
+        f"recall={base['recall']:.3f} precision={base['precision']:.3f} "
+        f"avg_sel={base['avg_selected']:.2f} empty={base['empty_queries']}/{base['n']}",
+        file=sys.stderr,
+    )
+    print(
+        f"Sweep: {len(factors)} factors x {len(CONFUSION_FORMULAS)} formulas x "
+        f"{len(thresholds)} thresholds = {len(factors) * len(CONFUSION_FORMULAS) * len(thresholds)} combos\n",
+        file=sys.stderr,
+    )
 
     results = []
     for factor, (conf_name, conf_fn), threshold in itertools.product(
@@ -242,26 +267,39 @@ def main():
         if m is None:
             continue
         m.update(factor=factor, confusion=conf_name, threshold=threshold, f1=f1(m))
-        m["recall_at_precision"] = m["recall"] if m["precision"] >= args.precision_floor else 0.0
+        m["recall_at_precision"] = (
+            m["recall"] if m["precision"] >= args.precision_floor else 0.0
+        )
         results.append(m)
 
     rank_key = args.metric
     results.sort(key=lambda r: r[rank_key], reverse=True)
 
-    print(f"{'rank':<5}{'metric':<8}{'recall':<8}{'prec':<8}{'f1':<8}"
-          f"{'avg_sel':<9}{'empty':<7}{'factor':<9}{'confusion':<14}{'thresh':<7}")
+    print(
+        f"{'rank':<5}{'metric':<8}{'recall':<8}{'prec':<8}{'f1':<8}"
+        f"{'avg_sel':<9}{'empty':<7}{'factor':<9}{'confusion':<14}{'thresh':<7}"
+    )
     print("-" * 90)
     for i, r in enumerate(results[: args.top], 1):
-        print(f"{i:<5}{rank_key[:6]:<8}{r['recall']:<8.3f}{r['precision']:<8.3f}"
-              f"{r['f1']:<8.3f}{r['avg_selected']:<9.2f}{r['empty_queries']:<7}"
-              f"{r['factor']:<9.4f}{r['confusion']:<14}{r['threshold']:<7.2f}")
+        print(
+            f"{i:<5}{rank_key[:6]:<8}{r['recall']:<8.3f}{r['precision']:<8.3f}"
+            f"{r['f1']:<8.3f}{r['avg_selected']:<9.2f}{r['empty_queries']:<7}"
+            f"{r['factor']:<9.4f}{r['confusion']:<14}{r['threshold']:<7.2f}"
+        )
 
     # Save full grid for the team.
     out = Path(args.report).with_name(Path(args.report).stem + "_calibration.json")
     json.dump(
-        {"baseline": {"factor": 0.0025, "confusion": "current", "threshold": -1.0, **base},
-         "ranking_metric": rank_key,
-         "all_combos": results},
+        {
+            "baseline": {
+                "factor": 0.0025,
+                "confusion": "current",
+                "threshold": -1.0,
+                **base,
+            },
+            "ranking_metric": rank_key,
+            "all_combos": results,
+        },
         open(out, "w"),
         indent=2,
     )

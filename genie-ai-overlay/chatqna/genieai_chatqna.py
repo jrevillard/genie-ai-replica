@@ -26,9 +26,11 @@ setup_tracing("genieai-chatqna")
 
 import aiohttp  # for async http requests
 import httpx
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 HTTPXClientInstrumentor().instrument()
+AioHttpClientInstrumentor().instrument()
 
 from comps import CustomLogger, MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType
 from comps.cores.proto.docarray import LLMParams, RerankerParms, RetrieverParms

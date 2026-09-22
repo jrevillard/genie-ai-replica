@@ -140,6 +140,7 @@ const app = createApp(App);
 
 // Make config available globally for GENIE.AI framework customization (e.g., title, icon, navbar colors)
 app.config.globalProperties.$config = config;
+app.provide('config', config);
 
 // Use router, i18n, and store
 app.use(router);

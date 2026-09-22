@@ -159,7 +159,7 @@ const FULL_NAMES_PT = {
   'Beans (silk red), San Salvador wholesale': 'Feijão (vermelho seda), atacado San Salvador',
   'Beef (intl benchmark)': 'Carne bovina (referência internacional)',
   'Cabbage, Guatemala La Terminal wholesale [regional]': 'Repolho, atacado La Terminal da Guatemala [regional]',
-  'Carrots, Guatemala La Terminal wholesale [regional]': 'Cenouras, ataque La Terminal da Guatemala [regional]',
+  'Carrots, Guatemala La Terminal wholesale [regional]': 'Cenouras, atacado La Terminal da Guatemala [regional]',
   'Central America food lost after harvest, before retail (share of food harvest by mass) (FAO SDG 12.3.1)':
     'América Central — perdas de alimentos pós-colheita, antes do varejo (proporção da colheita em massa) (FAO ODS 12.3.1)',
   'Central America post-harvest food loss (FAO SDG 12.3.1)':
@@ -176,24 +176,24 @@ const FULL_NAMES_PT = {
   'Maize (white), Guatemala City (La Terminal) [regional]':
     'Milho (branco), Cidade da Guatemala (La Terminal) [regional]',
   'Maize (white), Nicaragua national average [regional]': 'Milho (branco), média nacional da Nicarágua [regional]',
-  'Maize (white), San Salvador wholesale': 'Milho (branco), ataque San Salvador',
+  'Maize (white), San Salvador wholesale': 'Milho (branco), atacado San Salvador',
   'PPI pesticide & ag-chemical manufacturing': 'IPP de fabricação de agrotóxicos e agroquímicos',
   'Pesticide import parity (El Salvador CIF)': 'Paridade de importação de agrotóxicos (CIF El Salvador)',
   'Pork, Nicaragua national average [regional]': 'Suíno, média nacional da Nicarágua [regional]',
   'Rice (first quality), Guatemala La Terminal [regional]':
     'Arroz (primeira qualidade), La Terminal da Guatemala [regional]',
   'Rice (intl benchmark)': 'Arroz (referência internacional)',
-  'Rice, San Salvador wholesale': 'Arroz, ataque San Salvador',
+  'Rice, San Salvador wholesale': 'Arroz, atacado San Salvador',
   'Sorghum (intl benchmark)': 'Sorgo (referência internacional)',
   'Sorghum, Nicaragua national average [regional]': 'Sorgo, média nacional da Nicarágua [regional]',
-  'Sorghum, San Salvador wholesale': 'Sorgo, ataque San Salvador',
+  'Sorghum, San Salvador wholesale': 'Sorgo, atacado San Salvador',
   'TSP (US Gulf)': 'TSP (Golfo dos EUA)',
   'Tilapia fillets, Honduras exports (FOB) [regional]': 'Filés de tilápia, exportações de Honduras (FOB) [regional]',
   'Tomatoes producer price (El Salvador)': 'Preço ao produtor de tomate (El Salvador)',
   'Tomatoes producer price (Honduras) [regional]': 'Preço ao produtor de tomate (Honduras) [regional]',
   'Urea (Middle East f.o.b.)': 'Ureia (Oriente Médio f.o.b.)',
   'Urea import parity (El Salvador CIF)': 'Paridade de importação de ureia (CIF El Salvador)',
-  'Watermelons, Guatemala La Terminal wholesale [regional]': 'Melancias, ataque La Terminal da Guatemala [regional]',
+  'Watermelons, Guatemala La Terminal wholesale [regional]': 'Melancias, atacado La Terminal da Guatemala [regional]',
   'Wheat (intl benchmark)': 'Trigo (referência internacional)',
   'Whole tilapia, Costa Rica exports (FOB) [regional]': 'Tilapia inteira, exportações de Costa Rica (FOB) [regional]'
 };

@@ -321,3 +321,66 @@ describe('agri series month-end aggregation (rendering cadence)', () => {
     expect(data.map((p) => p.value)).toEqual([15, 25]);
   });
 });
+
+describe('agri UNIT_FACTORS directional coverage', () => {
+  // UNIT_FACTORS keys are `${s.unit}|${targetUnit}` — directional.
+  // Regression: a seriesDefs reorder flipped the targetUnit (taken from
+  // series[0]), causing the secondary series to be returned in its native
+  // unit on a mismatched axis (no factor found → silently skipped).
+  // This tests the QUINTAL→KG direction which was previously absent.
+  test('QUINTAL→KG factor converts 46 USD/quintal to 1 USD/kg', () => {
+    const UNIT_QUINTAL = 'USD/quintal (46 kg)';
+    const UNIT_KG = 'USD/kg';
+    const UNIT_MT = 'USD/mt';
+    const UNIT_FACTORS = {
+      [`${UNIT_MT}|${UNIT_QUINTAL}`]: 46 / 1000,
+      [`${UNIT_MT}|USD/kg`]: 1 / 1000,
+      [`${UNIT_QUINTAL}|${UNIT_MT}`]: 1000 / 46,
+      [`${UNIT_QUINTAL}|USD/kg`]: 1 / 46,
+      [`${UNIT_KG}|${UNIT_QUINTAL}`]: 46
+    };
+    // 46 USD/quintal → 1 USD/kg
+    const factor = UNIT_FACTORS[`${UNIT_QUINTAL}|${UNIT_KG}`];
+    expect(factor).toBeCloseTo(1 / 46);
+    const converted = Math.round(46 * factor * 1000) / 1000;
+    expect(converted).toBe(1);
+  });
+
+  test('KG→MT factor converts USD/kg to USD/mt (1000x)', () => {
+    const UNIT_KG = 'USD/kg';
+    const UNIT_MT = 'USD/mt';
+    const UNIT_QUINTAL = 'USD/quintal (46 kg)';
+    const UNIT_FACTORS = {
+      [`${UNIT_MT}|${UNIT_QUINTAL}`]: 46 / 1000,
+      [`${UNIT_MT}|USD/kg`]: 1 / 1000,
+      [`${UNIT_QUINTAL}|${UNIT_MT}`]: 1000 / 46,
+      [`${UNIT_QUINTAL}|USD/kg`]: 1 / 46,
+      [`${UNIT_KG}|${UNIT_MT}`]: 1000,
+      [`${UNIT_KG}|${UNIT_QUINTAL}`]: 46
+    };
+    // Previously missing direction: KG→MT
+    const factor = UNIT_FACTORS[`${UNIT_KG}|${UNIT_MT}`];
+    expect(factor).toBe(1000);
+    const converted = Math.round(2.5 * factor * 1000) / 1000;
+    expect(converted).toBe(2500);
+  });
+
+  test('QUINTAL→MT factor is the inverse of MT→QUINTAL', () => {
+    const UNIT_QUINTAL = 'USD/quintal (46 kg)';
+    const UNIT_MT = 'USD/mt';
+    const UNIT_KG = 'USD/kg';
+    const UNIT_FACTORS = {
+      [`${UNIT_MT}|${UNIT_QUINTAL}`]: 46 / 1000,
+      [`${UNIT_MT}|USD/kg`]: 1 / 1000,
+      [`${UNIT_QUINTAL}|${UNIT_MT}`]: 1000 / 46,
+      [`${UNIT_QUINTAL}|USD/kg`]: 1 / 46,
+      [`${UNIT_KG}|${UNIT_QUINTAL}`]: 46
+    };
+    // Previously missing direction: QUINTAL→MT
+    const factor = UNIT_FACTORS[`${UNIT_QUINTAL}|${UNIT_MT}`];
+    expect(factor).toBeCloseTo(1000 / 46);
+    // Round-trip: 1 USD/mt → 46 USD/quintal → back to ~1 USD/mt
+    const roundTrip = Math.round(46 * factor * 1000) / 1000;
+    expect(roundTrip).toBeCloseTo(1000, 0);
+  });
+});

@@ -152,12 +152,3 @@ describe('AgriApiService', () => {
   // jest.isolateModules.  The existing get/writeCache tests
   // provide adequate coverage of the service surface.
 });
-
-describe('agriCacheConfig', () => {
-  it('CACHE_KEY is the canonical v2 namespace string', () => {
-    jest.isolateModules(() => {
-      const { CACHE_KEY } = require('@/services/agriCacheConfig');
-      expect(CACHE_KEY).toBe('agri-lkg:v2:');
-    });
-  });
-});

@@ -1885,36 +1885,33 @@ describe('ChatBotComponent', () => {
 
   // -----------------------------------------------------------------------
   // AgroGenio brand integration — banner sits above welcome-header inside
-  // quick-help-overlay so it appears ABOVE the Insights section on the
-  // dashboard. The welcome-header also carries a mascot avatar + speech
-  // bubble ("mascot-as-guide" signature) — the mascot reads as a guide
-  // character because it speaks, not just decoration.
+  // quick-help-overlay so it appears ABOVE the Insights section. The
+  // mascot lives in the banner image (single source of truth, no
+  // duplicate floating avatar); only a framed speech bubble carries
+  // the welcome prompt below the banner.
   // -----------------------------------------------------------------------
-  describe('AgroGenio banner + mascot-guide integration', () => {
-    it('renders .welcome-banner + .welcome-banner-leaves inside .quick-help-overlay', () => {
+  describe('AgroGenio banner + speech-bubble integration', () => {
+    it('renders .welcome-banner inside .quick-help-overlay (no leaves on banner)', () => {
       const wrapper = createChatBotWrapper();
       const overlay = wrapper.find('.quick-help-overlay');
       expect(overlay.exists()).toBe(true);
       expect(overlay.find('.welcome-banner').exists()).toBe(true);
-      expect(overlay.find('.welcome-banner-leaves').exists()).toBe(true);
+      // Leaves decoration was moved to the right sidebar only —
+      // banner stays clean so the mascot+bubble read as a single scene.
+      expect(wrapper.find('.welcome-banner-leaves').exists()).toBe(false);
     });
 
-    it('renders mascot avatar inside .welcome-header pointing users to chat', () => {
+    it('anchors speech bubble INSIDE the banner so the mascot appears to speak', () => {
       const wrapper = createChatBotWrapper();
-      const header = wrapper.find('.welcome-header');
-      expect(header.exists()).toBe(true);
-      const mascot = header.find('.welcome-mascot');
-      expect(mascot.exists()).toBe(true);
-      expect(mascot.attributes('src')).toBe('/assets/agrogenio/mascot-avatar.png');
-    });
-
-    it('renders speech bubble with the welcome text', () => {
-      const wrapper = createChatBotWrapper();
-      const bubble = wrapper.find('.welcome-mascot-bubble');
+      const banner = wrapper.find('.welcome-banner');
+      expect(banner.exists()).toBe(true);
+      const bubble = banner.find('.welcome-mascot-bubble');
       expect(bubble.exists()).toBe(true);
       // translate() is stubbed in tests to echo the key (no real i18n),
       // so the bubble renders the i18n key verbatim.
       expect(bubble.text()).toContain('chatbot.whatCanIHelp');
+      // No duplicate raw h2 outside the banner.
+      expect(wrapper.find('.welcome-header h2').exists()).toBe(false);
     });
 
     it('preserves the market-prices section (regression check)', () => {

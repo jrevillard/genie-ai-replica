@@ -124,8 +124,7 @@ const FULL_NAMES_FR = {
   'Honey producer price (El Salvador)': 'Prix au producteur de miel (El Salvador)',
   'MOP (Brazil CFR granular)': 'MOP (Brésil CFR granulé)',
   'Maize (US #2, US Gulf intl benchmark)': 'Maïs (US #2, Golfe des États-Unis, référence internationale)',
-  'Maize (white), Guatemala City (La Terminal) [regional]':
-    'Maïs (blanc), Ciudad de Guatemala (La Terminal) [régional]',
+  'Maize (white), Guatemala City (La Terminal) [regional]': 'Maïs (blanc), Ville de Guatemala (La Terminal) [régional]',
   'Maize (white), Nicaragua national average [regional]': 'Maïs (blanc), moyenne nationale du Nicaragua [régional]',
   'Maize (white), San Salvador wholesale': 'Maïs (blanc), vente en gros San Salvador',
   'PPI pesticide & ag-chemical manufacturing': 'IPP fabrication de pesticides et agrochimiques',
@@ -139,7 +138,7 @@ const FULL_NAMES_FR = {
   'Sorghum, Nicaragua national average [regional]': 'Sorgho, moyenne nationale du Nicaragua [régional]',
   'Sorghum, San Salvador wholesale': 'Sorgho, vente en gros San Salvador',
   'TSP (US Gulf)': 'TSP (Golfe des États-Unis)',
-  'Tilapia fillets, Honduras exports (FOB) [regional]': 'Filets de tilapia,Exportations du Honduras (FOB) [régional]',
+  'Tilapia fillets, Honduras exports (FOB) [regional]': 'Filets de tilapia, Exportations du Honduras (FOB) [régional]',
   'Tomatoes producer price (El Salvador)': 'Prix au producteur de tomates (El Salvador)',
   'Tomatoes producer price (Honduras) [regional]': 'Prix au producteur de tomates (Honduras) [régional]',
   'Urea (Middle East f.o.b.)': 'Urée (Moyen-Orient f.o.b.)',
@@ -200,7 +199,7 @@ const FULL_NAMES_PT = {
 };
 
 /** Locale → full-names dictionary map. */
-const FULL_NAMES_BY_LOCALE = {
+export const FULL_NAMES_BY_LOCALE = {
   es: FULL_NAMES_ES,
   fr: FULL_NAMES_FR,
   pt: FULL_NAMES_PT

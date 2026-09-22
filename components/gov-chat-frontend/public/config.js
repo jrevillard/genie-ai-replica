@@ -8,6 +8,8 @@ window.APP_CONFIG = {
   },
   app: {
     banner: { url: "/assets/agrogenio/banner.png" },
-    mascot: { url: "/assets/agrogenio/mascot-avatar.png", alt: "AgroGenio mascot" }
+    mascot: { url: "/assets/agrogenio/mascot-avatar.png", alt: "AgroGenio mascot" },
+    leaves: { url: "/assets/agrogenio/leaves-large.png" },
+    sidebarLeaf: { url: "/assets/agrogenio/leaf-particles.png" }
   }
 };

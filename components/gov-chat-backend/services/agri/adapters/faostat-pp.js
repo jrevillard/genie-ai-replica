@@ -16,7 +16,7 @@
  */
 const { fetchUrl } = require('../http');
 const { extractEntry } = require('../zip');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 const ZIP_URL = 'https://bulks-faostat.fao.org/production/Prices_E_All_Data_(Normalized).zip';
 const INNER_CSV = 'Prices_E_All_Data_(Normalized).csv';
@@ -90,7 +90,7 @@ module.exports = {
       const key = `FAOSTAT:PP:${country}:${itemName}`;
       const logical = `${key}:${year}`;
       docs.push({
-        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+        _key: docKey(logical),
         key,
         kind: 'producer-price',
         year,

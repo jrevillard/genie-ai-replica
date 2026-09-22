@@ -871,6 +871,7 @@ export default {
     PestAlertChart,
     MarketPriceChart
   },
+  inject: ['config'],
 
   data() {
     return {

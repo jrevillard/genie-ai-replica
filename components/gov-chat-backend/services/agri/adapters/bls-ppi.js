@@ -6,7 +6,7 @@
  * fine for a daily scheduler call), CORS-open.
  */
 const { fetchUrl } = require('../http');
-const nodeCrypto = require('node:crypto');
+const { docKey } = require('../keys');
 
 module.exports = {
   id: 'bls-ppi',
@@ -49,7 +49,7 @@ module.exports = {
       const date = `${year}-${m[1]}-01`;
       const logical = `bls-ppi:${date}`;
       docs.push({
-        _key: nodeCrypto.createHash('sha1').update(logical).digest('base64url'),
+        _key: docKey(logical),
         key: 'BLS:PPI:PESTICIDE',
         kind: 'index',
         date,

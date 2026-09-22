@@ -10,14 +10,11 @@
  * - canonical value = USD/kg (unit drift 45 KG -> 46 KG neutralized)
  * - priceflag "actual" only (skip aggregates); wholesale and retail kept apart
  */
-const nodeCrypto = require('node:crypto');
 const { fetchUrl } = require('../http');
 const { parseCsvObjects } = require('../csv');
 const { resolveHdxResource } = require('../resolvers');
 const { wfpRowToUsdPerKg } = require('../series');
-
-/** Deterministic, collision-safe Arango _key from a logical doc key. */
-const docKey = (logical) => nodeCrypto.createHash('sha1').update(logical).digest('base64url');
+const { docKey } = require('../keys');
 
 /**
  * @param {Object} opts

@@ -2339,35 +2339,42 @@ export default {
 }
 
 /* Mascot guide bubble: framed speech-bubble carrying the welcome text.
-   Positioned INSIDE the banner (bottom-right), arrow pointing UP — so
-   the mascot inside the banner image visually appears to be speaking. */
+   Positioned INSIDE the banner (bottom-right), arrow at top-LEFT pointing
+   UP — so the mascot inside the banner image visually appears to be
+   speaking. Sized responsively: every dimension is a percentage or
+   clamp() so the bubble scales with the banner, never overflows it,
+   and stays legible from 360px mobile to 1920px desktop. */
 .welcome-mascot-bubble {
   position: absolute;
-  right: 6%;
+  right: 4%;
   bottom: 14%;
-  max-width: 260px;
-  padding: var(--space-xs) var(--space-md);
+  width: clamp(180px, 36%, 340px);
+  padding: clamp(6px, 0.9cqw, 12px) clamp(10px, 1.5cqw, 20px);
   background: var(--ag-bubble, var(--surface));
   color: var(--fg);
-  border: 1.5px solid var(--ag-sol, var(--accent-gold));
-  border-radius: 18px;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  line-height: 1.35;
+  border: 2px solid var(--ag-sol, var(--accent-gold));
+  border-radius: 16px;
+  font-size: clamp(14px, 1.8cqw, 22px);
+  font-weight: 600;
+  line-height: 1.3;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
+.welcome-banner {
+  container-type: inline-size;
+}
+
 .welcome-mascot-bubble::after {
   content: '';
   position: absolute;
   top: -7px;
-  right: 24%;
+  left: 16%;
   transform: rotate(45deg);
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   background: var(--ag-bubble, var(--surface));
-  border-top: 1.5px solid var(--ag-sol, var(--accent-gold));
-  border-left: 1.5px solid var(--ag-sol, var(--accent-gold));
+  border-top: 2px solid var(--ag-sol, var(--accent-gold));
+  border-left: 2px solid var(--ag-sol, var(--accent-gold));
 }
 [data-theme='dark'] .welcome-mascot-bubble {
   background: var(--ag-bubble, var(--surface));

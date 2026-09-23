@@ -109,11 +109,17 @@ class ApiService {
     debugPrint('Body: ${jsonEncode(data)}');
 
     try {
-      final response = await http.post(
+      var response = await http.post(
         uri,
         headers: getHeaders(),
         body: jsonEncode(data),
       );
+      if (response.statusCode == 401) {
+        response = await _retryAfterRefresh(
+          () => http.post(uri, headers: getHeaders(), body: jsonEncode(data)),
+          response,
+        );
+      }
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
@@ -133,11 +139,17 @@ class ApiService {
     debugPrint('Body: ${jsonEncode(data)}');
 
     try {
-      final response = await http.put(
+      var response = await http.put(
         uri,
         headers: getHeaders(),
         body: jsonEncode(data),
       );
+      if (response.statusCode == 401) {
+        response = await _retryAfterRefresh(
+          () => http.put(uri, headers: getHeaders(), body: jsonEncode(data)),
+          response,
+        );
+      }
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
@@ -160,11 +172,17 @@ class ApiService {
     debugPrint('Body: ${jsonEncode(data)}');
 
     try {
-      final response = await http.patch(
+      var response = await http.patch(
         uri,
         headers: getHeaders(),
         body: jsonEncode(data),
       );
+      if (response.statusCode == 401) {
+        response = await _retryAfterRefresh(
+          () => http.patch(uri, headers: getHeaders(), body: jsonEncode(data)),
+          response,
+        );
+      }
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {
@@ -188,7 +206,13 @@ class ApiService {
     debugPrint('URL: $uri');
 
     try {
-      final response = await http.delete(uri, headers: getHeaders());
+      var response = await http.delete(uri, headers: getHeaders());
+      if (response.statusCode == 401) {
+        response = await _retryAfterRefresh(
+          () => http.delete(uri, headers: getHeaders()),
+          response,
+        );
+      }
       _logResponse(response);
       return response;
     } catch (e, stackTrace) {

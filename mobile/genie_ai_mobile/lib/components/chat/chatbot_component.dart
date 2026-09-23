@@ -19,6 +19,7 @@ import 'package:genie_ai_mobile/design_system/tokens/color_utils.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
+import 'package:genie_ai_mobile/services/auth/auth_interceptor.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart'; // IMPORTED I18N
 import 'package:genie_ai_mobile/services/language_refusal.dart';
 import 'package:genie_ai_mobile/services/notification_service.dart';
@@ -183,6 +184,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // serviceLabels. Set in _quickHelpPressed, kept for the conversation's turns.
   // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
   List<String> _activeServiceLabels = [];
+
+  /// The id of the Quick Help button that produced [_activeServiceLabels]. Used
+  /// to render a visible, removable chip mirroring Vue's `context-panel`
+  /// (`ChatBotComponent.vue:77-88`) so the user can always see what is
+  /// filtering their typed messages and clear it.
+  ///
+  /// M28 — previously this state was invisible, so for buttons whose labels
+  /// do not exist in the corpus (e.g. Pest/Disease), a stale filter silently
+  /// returned zero documents.
+  String? _activeQuickHelpId;
   List<dynamic> _relatedDocuments = [];
 
   // Quick Help Configuration
@@ -923,6 +934,33 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
   }
 
+  /// M28: drops the Quick Help context filter so a typed follow-up is no
+  /// longer scoped to that topic. Mirrors Vue's "X" on the context pill.
+  void clearQuickHelpContext() {
+    setState(() {
+      _activeServiceLabels = [];
+      _activeQuickHelpId = null;
+    });
+  }
+
+  /// M28: text for the context bar — uses the Quick Help title when one is
+  /// active, falls back to the sidebar selection, otherwise empty (the bar
+  /// itself is hidden in that case).
+  String _contextBarText() {
+    if (_activeQuickHelpId != null) {
+      final button = _quickHelpButtons.firstWhere(
+        (b) => b['id'] == _activeQuickHelpId,
+        orElse: () => const {},
+      );
+      final title =
+          (button['resolvedTitle'] as String?) ??
+          (button['id'] as String?) ??
+          _activeQuickHelpId!;
+      return '${tr('chatbot.contextPrefix')} $title';
+    }
+    return '${tr('chatbot.contextPrefix')} $_selectedCategoryName';
+  }
+
   Future<void> loadConversation(String conversationId) async {
     if (_isStreaming) return;
     if (_hasUnsavedChanges) {
@@ -1084,6 +1122,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _titleController.text = _conversationTitle;
       _messages = [];
       _relatedDocuments = [];
+      // M28: a fresh chat drops the previous Quick Help context so the new
+      // session is unfiltered.
+      _activeServiceLabels = [];
+      _activeQuickHelpId = null;
       if (!keepLoading) _isLoading = false;
       // A new chat inherits NOTHING from the previous one: a scope left
       // standing would filter the new conversation's questions and be
@@ -1286,7 +1328,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               for (final event in parser.parseChunk(chunk)) {
                 final msg = findStreamingMessage();
                 if (msg == null) {
+                  // The streaming placeholder was wiped (e.g. session
+                  // reset race). Bail cleanly: cancel the subscription and
+                  // reset both flags so the UI doesn't get stuck streaming.
+                  // Without this, _isStreaming stays true and the next
+                  // _sendMessage silently returns at the guard above.
+                  debugPrint(
+                    '[SSE] Streaming placeholder missing — cancelling',
+                  );
                   _streamSubscription?.cancel();
+                  if (mounted) {
+                    setState(() {
+                      _isStreaming = false;
+                      _isLoading = false;
+                    });
+                  }
                   return;
                 }
                 switch (event) {
@@ -1386,8 +1442,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               // NOTE: _activeServiceLabels is NOT cleared here. Quick Help is a
               // persistent mode (parity with web: the selection stays in
               // selectedContextItems until replaced/removed). Follow-up manual
-              // messages in the same Quick Help session remain filtered by the
-              // labels. Cleared only in _quickHelpPressed (re-set) or on context reset.
+              // Filter stays in place for follow-up turns in the same session
+              // (matches Vue's `selectedContextItems` persistence — M28/D1a).
+              // Cleared explicitly via the context-bar chip, on new chat, or
+              // when another Quick Help button is pressed.
 
               if (sources != null && sources!.isNotEmpty) {
                 _relatedDocuments = _mergeUniqueDocs(
@@ -1406,7 +1464,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                 setState(() {
                   msg['content'] = accumulatedContent.isNotEmpty
                       ? accumulatedContent
-                      : tr('chatbot.processingError');
+                      : _failureMessage(error);
                 });
               }
               setState(() {
@@ -1417,21 +1475,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
             cancelOnError: true,
           );
     } catch (e) {
-      debugPrint('[SSE] Connection error: $e');
+      debugPrint('[SSE] Stream connection failed: $e');
       if (!mounted) return;
+      final failureMessage = _failureMessage(e);
       final msg = findStreamingMessage();
       if (msg != null) {
         setState(() {
           msg['content'] = accumulatedContent.isNotEmpty
               ? accumulatedContent
-              : _failureMessage(e);
+              : failureMessage;
         });
       }
       setState(() {
         _isStreaming = false;
         _isLoading = false;
       });
-      NotificationService.error(_failureMessage(e));
+      NotificationService.error(failureMessage);
     }
   }
 
@@ -1536,11 +1595,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _isLoading = false;
       });
 
+      // M31 (DW-247): the non-streaming path never reset the Quick Help
+      // filter — the labels silently survived every non-streaming send
+      // and could leak into unrelated typed follow-ups. The chip (M28)
+      // makes the leak visible, but the leak itself is still a defect.
+      // Reset on success so a non-streaming session stays in sync with
+      // the streaming one.
+      clearQuickHelpContext();
+
       widget.onRelatedDocumentsUpdate(_relatedDocuments);
       _scrollToBottom();
       _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
+      // Same reset on failure: an errored non-streaming request still
+      // counts as the request having been made, so leaving the filter
+      // active would leak the same way.
+      clearQuickHelpContext();
       NotificationService.error(_failureMessage(e));
       debugPrint("[CHATBOT] Send error: $e");
     }
@@ -1555,7 +1626,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (error is LanguageRefusal && error.code == unsupportedLanguageCode) {
       return tr('chatbot.unsupportedLanguage');
     }
-    return tr('chatbot.processingError');
+    return tr(streamErrorKey(error));
   }
 
   List<dynamic> _mergeUniqueDocs(
@@ -2700,7 +2771,18 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         icon: Icons.close,
                         variant: DsButtonVariant.ghost,
                         overrideFg: tokens.fg,
-                        onPressed: () => setCategoryContext("", ""),
+                        onPressed: () {
+                          // M28 race-window fix: clear BOTH filter sources
+                          // unconditionally. The two sources are mutually
+                          // exclusive at press time, but a session-load or
+                          // partial state reset could leave both set — calling
+                          // only one would leak the cleared filter into the
+                          // next typed message. Both setters are idempotent
+                          // so the extra call when only one source was active
+                          // is a no-op.
+                          clearQuickHelpContext();
+                          setCategoryContext("", "");
+                        },
                       ),
                     ],
                   ),
@@ -3403,4 +3485,61 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       ),
     );
   }
+}
+
+/// Derives the knowledge-base filter labels for a quick-help button.
+///
+/// Mirrors the Vue client exactly (`ChatBotComponent.vue`), because the two
+/// clients must filter identically:
+///
+///   * explicit, non-empty `serviceLabels` -> use that array as-is
+///   * absent / null / empty               -> `[button id]` (Vue: `button.id || title`)
+///
+/// The fallback is what prevents an unfiltered search. The retriever reads an
+/// EMPTY `serviceLabels` list as "no filter" rather than "no matching content"
+/// (in `genieai_retriever_arangodb.py`, `if filter_data.get("serviceLabels")`
+/// is falsy for `[]`), so an empty list searches the whole corpus and returns
+/// its top-K chunks whatever the topic. Those chunks are then reported as
+/// grounded and the strict-grounding system prompt forces an answer built from
+/// them — e.g. Manage Poultry & Pigs replying with maize content (issue #1000).
+///
+/// So this function must NEVER return an empty list. An empty list is treated
+/// as "absent" rather than forwarded: `_loadQuickHelpConfig` used to normalize
+/// an absent key to `[]`, which silently disabled the filter for exactly the
+/// buttons that need it. Vue never sends an empty list for a quick-help button,
+/// so its filter stays active: a topic with no knowledge-base coverage filters
+/// to zero documents, `is_grounded` becomes false, and the UI marks the reply
+/// AI-generated. This derivation is copied from Vue deliberately rather than
+/// "improved" — a "corrected" label would make the two clients diverge in the
+/// other direction.
+List<String> quickHelpServiceLabels(Map<String, dynamic> button) {
+  final Object? rawLabels = button['serviceLabels'];
+  if (rawLabels is List && rawLabels.isNotEmpty) {
+    return rawLabels.map((e) => e.toString()).toList();
+  }
+
+  final String id = (button['id'] ?? '').toString();
+  if (id.isNotEmpty) return <String>[id];
+
+  final Object? title = button['title'];
+  final String titleText = title is Map
+      ? (title['en'] ?? '').toString()
+      : (title ?? '').toString();
+  return <String>[titleText];
+}
+
+/// i18n key for the message shown when a chat stream or send fails.
+///
+/// A failed session must never surface as the opaque "Connection error" (M32):
+/// the user needs to know whether to retry or to sign in again. The codes come
+/// from [AuthInterceptor], which distinguishes a session that has genuinely
+/// ended from a refresh that merely could not complete this time — the former
+/// sends the user to login (see `main.dart`), the latter is worth retrying.
+String streamErrorKey(Object error) {
+  if (error is AuthException) {
+    return error.code == AuthException.transientFailure
+        ? 'auth.timeout'
+        : 'auth.sessionExpired';
+  }
+  return 'chatbot.processingError';
 }

@@ -90,6 +90,15 @@ android {
 
     buildTypes {
         release {
+            // R8/ProGuard: shrink resources and obfuscate in release. ProGuard
+            // rules live in proguard-rules.pro next to this file — they silence
+            // missing-class warnings for compile-time-only annotations
+            // (flutter_secure_storage -> Tink -> javax.annotation.*,
+            // errorprone.*). The release build fails without these lines.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
             signingConfig = keystorePropertiesFile.exists()
                 ? signingConfigs.release
                 : signingConfigs.debug

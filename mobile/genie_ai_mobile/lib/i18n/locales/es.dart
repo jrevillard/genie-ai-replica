@@ -1014,6 +1014,8 @@ const Map<String, dynamic> esLocale = {
     "placeholder": "Escribe tu consulta aquí...",
     "aiGeneratedNoDocs":
         "Generado por IA — no basado en los documentos de la biblioteca",
+    "noDocsMatchingFilter":
+        "El filtro activo no encontró documentos. Quítalo y vuelve a intentar, o reformula tu pregunta.",
     "sendButton": "Enviar",
     "fileReceived": "Archivo recibido con éxito.",
     "fileUploadError": "Error al subir archivo.",

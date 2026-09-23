@@ -77,10 +77,16 @@ to the dev branch build:
 
 ```bash
 ansible-playbook -i inventory/test.ini deploy.yml \
-  --extra-vars "repo_branch=release/el-salvador \
-                genie_ai_global_tag=release-el-salvador \
-                image_tag_overrides={'genie-ai-reranker': 'dev-el-salvador'}"
+  --vault-id test@prompt \
+  --extra-vars '{"repo_branch":"release/el-salvador","genie_ai_global_tag":"release-el-salvador","image_tag_overrides":{"genie-ai-reranker":"dev-el-salvador"}}'
 ```
+
+**IMPORTANT**: ansible-core 2.20 silently drops nested dicts in
+mixed `key=value` CLI strings. Always pass `--extra-vars` as a
+**single JSON object** (as above), not as a mix of `key=value` and
+JSON values. Symptom of the bug: the `Validate image_tag_overrides
+keys against known image names` task is missing from the deploy
+output (skipped because the dict is empty).
 
 **Use the branch name as the tag**, not the commit SHA. The
 `.gitlab-ci.yml` `promote` step tags each build with both the

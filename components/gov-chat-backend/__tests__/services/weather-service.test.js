@@ -459,8 +459,8 @@ describe('WeatherService', () => {
         windSpeed: 10
       });
       expect(logger.warn).toHaveBeenCalledWith(
-        'WeatherService.request_persistence_skipped',
-        expect.objectContaining({ reason: 'collection_unavailable' })
+        'WeatherService.persistence_unavailable_skipping_save',
+        expect.objectContaining({ reason: 'weatherRequests collection not initialized (init() likely failed)' })
       );
     });
 

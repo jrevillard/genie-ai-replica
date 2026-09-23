@@ -25,7 +25,11 @@ void main() {
         'plant-basic-grains',
       ]) {
         final labels = quickHelpServiceLabels(<String, dynamic>{'id': id});
-        expect(labels, isNotEmpty, reason: 'button $id must filter on something');
+        expect(
+          labels,
+          isNotEmpty,
+          reason: 'button $id must filter on something',
+        );
       }
     });
   });

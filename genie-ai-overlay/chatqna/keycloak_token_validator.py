@@ -7,6 +7,7 @@ Validates Bearer tokens forwarded by the backend using JWKS.
 Provides defense-in-depth: each service validates tokens independently.
 """
 
+import asyncio
 import logging
 import os
 from datetime import UTC, datetime
@@ -20,35 +21,64 @@ KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
 KC_REALM = os.getenv("KC_REALM", "genie")
 KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
 
-# JWKS cache
-_jwks_keys = None
-_jwks_fetched_at = 0
+# JWKS cache + single-flight lock. JWKS validation runs on every authenticated
+# request, so concurrent requests at the TTL boundary must coalesce into a single
+# Keycloak fetch instead of each issuing its own GET /certs request.
+_jwks_keys: list | None = None
+_jwks_fetched_at: float = 0.0
 _JWKS_CACHE_TTL = 300  # 5 minutes
+# One lock per running event loop. ``asyncio.Lock`` binds to whichever loop
+# created it; pytest-asyncio spawns a fresh loop per test, so a module-level
+# lock breaks across the second test. Key by ``id(loop)`` to stay portable.
+#
+# The dict lookup + ``Lock()`` construction between awaits is single-threaded by
+# asyncio's cooperative scheduling, so the get-or-create is race-free within one
+# loop. In rare CPython builds the same address could be reused after a loop is
+# GC'd; the operational impact is one extra Keycloak fetch on the next cold
+# request, not a correctness bug.
+_jwks_locks: dict[int, asyncio.Lock] = {}
+
+
+def _jwks_lock() -> asyncio.Lock:
+    """Return the single-flight lock bound to the current running event loop."""
+    loop = asyncio.get_running_loop()
+    lock = _jwks_locks.get(id(loop))
+    if lock is None:
+        lock = asyncio.Lock()
+        _jwks_locks[id(loop)] = lock
+    return lock
 
 
 async def _fetch_jwks():
-    """Fetch JWKS from Keycloak with caching."""
+    """Fetch JWKS from Keycloak with caching. Concurrent callers share one HTTP GET."""
     global _jwks_keys, _jwks_fetched_at
 
     now = datetime.now(UTC).timestamp()
+    # Fast path: cached and still fresh → return without taking the lock.
     if _jwks_keys and (now - _jwks_fetched_at) < _JWKS_CACHE_TTL:
         return _jwks_keys
 
-    jwks_uri = f"{KEYCLOAK_INTERNAL_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(jwks_uri)
-            response.raise_for_status()
-            _jwks_keys = response.json().get("keys", [])
-            _jwks_fetched_at = now
-            logger.info(f"JWKS refreshed from {jwks_uri} ({len(_jwks_keys)} keys)")
+    async with _jwks_lock():
+        # Double-check under the lock: a parallel fetcher may have just refreshed it.
+        now = datetime.now(UTC).timestamp()
+        if _jwks_keys and (now - _jwks_fetched_at) < _JWKS_CACHE_TTL:
             return _jwks_keys
-    except Exception as e:
-        if _jwks_keys:
-            logger.warning(f"JWKS refresh failed, using cached keys: {e}")
-            return _jwks_keys
-        logger.error(f"JWKS fetch failed and no cached keys: {e}")
-        return None
+
+        jwks_uri = f"{KEYCLOAK_INTERNAL_URL}/realms/{KC_REALM}/protocol/openid-connect/certs"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(jwks_uri)
+                response.raise_for_status()
+                _jwks_keys = response.json().get("keys", [])
+                _jwks_fetched_at = now
+                logger.info(f"JWKS refreshed from {jwks_uri} ({len(_jwks_keys)} keys)")
+                return _jwks_keys
+        except Exception as e:
+            if _jwks_keys:
+                logger.warning(f"JWKS refresh failed, using cached keys: {e}")
+                return _jwks_keys
+            logger.error(f"JWKS fetch failed and no cached keys: {e}")
+            return None
 
 
 def _find_key(keys, kid):

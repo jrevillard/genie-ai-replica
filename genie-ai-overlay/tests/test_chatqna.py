@@ -7,6 +7,7 @@ from enum import Enum
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 import chatqna.genieai_chatqna as chatqna_module
 from chatqna.genieai_chatqna import (
@@ -51,10 +52,17 @@ def create_chatqna_service():
 
 
 def create_mock_request(data=None, headers=None):
-    """Create a mock FastAPI Request with configurable JSON body and headers."""
+    """Create a mock FastAPI Request with configurable JSON body and headers.
+
+    ``request.state`` is a real ``SimpleNamespace`` (not a child Mock) so tests
+    that ``setattr`` / ``getattr`` attributes on it observe the real values.
+    """
+    from types import SimpleNamespace
+
     req = MagicMock()
     req.json = AsyncMock(return_value=data or {})
     req.headers = headers or {}
+    req.state = SimpleNamespace()
     return req
 
 
@@ -297,62 +305,53 @@ class TestUserContextBuilderBuildString:
 # Task 5: Test GenieUserProfileClient
 # ===========================================================================
 class TestGenieUserProfileClient:
-    def test_set_token_stores_token(self):
-        client = GenieUserProfileClient()
-        client.set_token("my-token")
-        assert client._token == "my-token"
-
     @pytest.mark.asyncio
     async def test_get_user_profile_valid_token_returns_profile(self):
         client = GenieUserProfileClient()
-        client.set_token("valid-token")
         mock_session, mock_timeout = create_mock_aiohttp_session(status=200, json_data={"firstName": "John"})
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
         ):
-            result = await client.get_user_profile()
+            result = await client.get_user_profile(token="valid-token")
         assert result == {"firstName": "John"}
 
     @pytest.mark.asyncio
     async def test_get_user_profile_no_token_returns_none(self):
         client = GenieUserProfileClient()
-        result = await client.get_user_profile()
+        result = await client.get_user_profile(token=None)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_get_user_profile_401_returns_none(self):
         client = GenieUserProfileClient()
-        client.set_token("bad-token")
         mock_session, mock_timeout = create_mock_aiohttp_session(status=401)
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
         ):
-            result = await client.get_user_profile()
+            result = await client.get_user_profile(token="bad-token")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_get_user_profile_404_returns_none(self):
         client = GenieUserProfileClient()
-        client.set_token("valid-token")
         mock_session, mock_timeout = create_mock_aiohttp_session(status=404)
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
         ):
-            result = await client.get_user_profile()
+            result = await client.get_user_profile(token="valid-token")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_get_user_profile_connection_exception_returns_none(self):
         client = GenieUserProfileClient()
-        client.set_token("valid-token")
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", side_effect=Exception("Connection refused")),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=MagicMock()),
         ):
-            result = await client.get_user_profile()
+            result = await client.get_user_profile(token="valid-token")
         assert result is None
 
 
@@ -1547,50 +1546,166 @@ class TestFetchFileMetadata:
     @pytest.mark.asyncio
     async def test_valid_file_id_and_token(self):
         svc = create_chatqna_service()
-        svc.user_profile_client.set_token("valid-token")
         metadata = {"success": True, "data": {"categoryLabels": "Health", "serviceLabels": ["H1"]}}
         mock_session, mock_timeout = create_mock_aiohttp_session(status=200, json_data=metadata)
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
         ):
-            result = await svc.fetch_file_metadata("file123")
+            result = await svc.fetch_file_metadata("file123", token="valid-token")
         assert result == {"categoryLabels": "Health", "serviceLabels": ["H1"]}
 
     @pytest.mark.asyncio
     async def test_empty_file_id_returns_default(self):
         svc = create_chatqna_service()
-        result = await svc.fetch_file_metadata("")
+        result = await svc.fetch_file_metadata("", token="valid-token")
         assert result == {"categoryLabels": None, "serviceLabels": []}
 
     @pytest.mark.asyncio
     async def test_no_token_returns_none(self):
+        """No token → return None. Caller must pass token explicitly."""
         svc = create_chatqna_service()
-        result = await svc.fetch_file_metadata("file123")
+        result = await svc.fetch_file_metadata("file123", token=None)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_http_error_returns_none(self):
         svc = create_chatqna_service()
-        svc.user_profile_client.set_token("valid-token")
         mock_session, mock_timeout = create_mock_aiohttp_session(status=500)
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
         ):
-            result = await svc.fetch_file_metadata("file123")
+            result = await svc.fetch_file_metadata("file123", token="valid-token")
         assert result is None
 
     @pytest.mark.asyncio
     async def test_connection_exception_returns_none(self):
         svc = create_chatqna_service()
-        svc.user_profile_client.set_token("valid-token")
         with (
             patch("chatqna.genieai_chatqna.aiohttp.ClientSession", side_effect=Exception("Connection refused")),
             patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=MagicMock()),
         ):
-            result = await svc.fetch_file_metadata("file123")
+            result = await svc.fetch_file_metadata("file123", token="valid-token")
         assert result is None
+
+
+# ===========================================================================
+# Test fetch_file_metadata() and get_user_profile() — per-request token threading
+# ===========================================================================
+class TestTokenThreading:
+    """``GenieUserProfileClient`` carries no token state. Every call to
+    ``get_user_profile`` must receive the validated Bearer explicitly; the
+    caller (``handle_request``) forwards the token from the request's
+    ``Authorization`` header."""
+
+    @pytest.mark.asyncio
+    async def test_get_user_profile_requires_token(self):
+        svc = create_chatqna_service()
+        result = await svc.user_profile_client.get_user_profile(token=None)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_user_profile_passes_token_to_backend(self):
+        svc = create_chatqna_service()
+        profile = {"name": "DAVID Forden", "role": "admin"}
+        mock_session, mock_timeout = create_mock_aiohttp_session(status=200, json_data=profile)
+        # Capture the headers forwarded to the backend.
+        captured_headers: dict[str, str] = {}
+        original_get = mock_session.get
+
+        def _capture_get(url, **kwargs):
+            captured_headers.update(kwargs.get("headers") or {})
+            return original_get.return_value
+
+        mock_session.get.side_effect = _capture_get
+        with (
+            patch("chatqna.genieai_chatqna.aiohttp.ClientSession", return_value=mock_session),
+            patch("chatqna.genieai_chatqna.aiohttp.ClientTimeout", return_value=mock_timeout),
+        ):
+            result = await svc.user_profile_client.get_user_profile(token="user-jwt-abc")
+        assert captured_headers.get("Authorization") == "Bearer user-jwt-abc"
+        assert result == profile
+
+
+# ===========================================================================
+# Test handle_request() — auth gating
+# ===========================================================================
+class TestHandleRequestAuth:
+    """chatqna requires every call to carry a valid Bearer token. handle_request
+    raises ``HTTPException(401)`` if the token is missing, malformed, or fails
+    JWKS validation. The validated Bearer token is forwarded to downstream
+    methods as a function argument (not stashed on ``request.state``)."""
+
+    @pytest.mark.asyncio
+    async def test_missing_authorization_header_raises_401(self):
+        svc = create_chatqna_service()
+        req = create_mock_request(data={"messages": []}, headers={})
+        with pytest.raises(HTTPException) as exc_info:
+            await svc.handle_request(req)
+        assert exc_info.value.status_code == 401
+        assert "Missing or malformed" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_authorization_without_bearer_prefix_raises_401(self):
+        svc = create_chatqna_service()
+        req = create_mock_request(data={}, headers={"Authorization": "Basic dXNlcjpwYXNz"})
+        with pytest.raises(HTTPException) as exc_info:
+            await svc.handle_request(req)
+        assert exc_info.value.status_code == 401
+        assert "Bearer scheme" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_empty_bearer_token_raises_401(self):
+        svc = create_chatqna_service()
+        # ``"Bearer "`` with no token → partition yields empty token.
+        req = create_mock_request(data={}, headers={"Authorization": "Bearer "})
+        with pytest.raises(HTTPException) as exc_info:
+            await svc.handle_request(req)
+        assert exc_info.value.status_code == 401
+        assert "Bearer scheme" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_jwks_validation_failure_raises_401(self):
+        svc = create_chatqna_service()
+        req = create_mock_request(data={}, headers={"Authorization": "Bearer invalid.token.here"})
+        with (
+            patch("chatqna.genieai_chatqna.validate_token", new=AsyncMock(return_value=None)),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            await svc.handle_request(req)
+        assert exc_info.value.status_code == 401
+        assert "Token validation failed" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_bearer_scheme_is_case_insensitive(self):
+        """RFC 7235 §2.1: auth-scheme is case-insensitive — ``bearer`` works.
+
+        Rather than rely on ``suppress(Exception)`` (which would hide auth
+        regressions), we patch ``validate_token`` to raise a sentinel the test
+        recognises. The reachable sentinel proves the lowercase scheme passed
+        auth and reached the JWKS validator.
+        """
+        from contextlib import suppress
+
+        svc = create_chatqna_service()
+        req = create_mock_request(data={}, headers={"Authorization": "bearer eyJ.fake.token"})
+        validate_sentinel = AsyncMock(side_effect=Exception("REACHED_VALIDATE"))
+        with (
+            patch("chatqna.genieai_chatqna.validate_token", new=validate_sentinel),
+            suppress(Exception),
+        ):
+            await svc.handle_request(req)
+        validate_sentinel.assert_awaited_once_with("eyJ.fake.token")
+
+    def test_user_profile_client_carries_no_token_state(self):
+        """Invariant pinned by the CHANGELOG: GenieUserProfileClient exposes no
+        ``set_token`` / ``_token`` attribute — the singleton state we removed
+        to fix the cross-request leak. A future contributor who re-adds them
+        trips this test."""
+        client = GenieUserProfileClient()
+        assert not hasattr(client, "_token")
+        assert not hasattr(client, "set_token")
 
 
 # ===========================================================================
@@ -1627,7 +1742,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert grounded is True
         # Rank-weighted confidence (CONFIDENCE_RANK_DECAY default 0.5): the top doc
         # (0.95) dominates the second (0.85), so the result (~0.91) sits above the
@@ -1655,7 +1770,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         # Only the resolvable doc is surfaced; no synthetic 'error' document.
         assert [d["document_id"] for d in docs] == ["f1"]
         assert all(d["document_id"] != "error" for d in docs)
@@ -1681,7 +1796,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         # Per-doc displayed scores are the calibrated values, not the raw logits.
         assert 0.880 <= docs[0]["score"] <= 0.881  # sigmoid(2.0) ~ 0.8808
         assert docs[1]["score"] == 0.5
@@ -1699,7 +1814,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}],
             file_id_pairs={"d1": "f1"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert docs == []
         assert confidence == 0.0
         assert grounded is False
@@ -1720,7 +1835,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f1"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert docs == []  # nothing surfaced
         assert confidence == 0.0  # no invisible-doc score counted
         assert grounded is False
@@ -1740,7 +1855,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f1"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         # One source row (deduped), but both scores count toward confidence.
         assert [d["document_id"] for d in docs] == ["f1"]
         assert 0.90 < confidence < 0.95  # rank-weighted over [0.95, 0.90]
@@ -1756,7 +1871,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "jocote", "metadata": {"score": 0.72}}],
             file_id_pairs={"d1": "f1"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         # The irrelevant retriever hits must NOT leak into the response.
         assert grounded is False
         assert docs == []
@@ -1772,7 +1887,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives"}, {"id": "d2", "text": "honey"}],
             file_id_pairs={"d1": "f1", "d2": "f2"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert grounded is True
         assert [d["document_id"] for d in docs] == ["f2"]
         assert confidence == 0.92
@@ -1786,7 +1901,7 @@ class TestAssembleSourceDocuments:
             retrieved_docs=[{"id": "d1", "text": "hives", "metadata": {"score": 0.7}}],
             file_id_pairs={"d1": "f1"},
         )
-        docs, confidence, grounded = await svc._assemble_source_documents(result_dict)
+        docs, confidence, grounded = await svc._assemble_source_documents(result_dict, token="t")
         assert grounded is True
         assert [d["document_id"] for d in docs] == ["f1"]
         assert confidence == 0.7
@@ -1820,7 +1935,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1", "score": 0.95}], 0.95, True))
         body = self._make_body(["data: b'Hello'\n\n", "data: b' world'\n\n", "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         # Token chunks forwarded verbatim
         assert "data: b'Hello'\n\n" in joined
@@ -1837,7 +1952,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         assert '"is_grounded": false' in joined
         assert '"source_documents": []' in joined
@@ -1847,7 +1962,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body(["data: b'Hi'\n\n"])  # no [DONE]
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         assert '"type": "metadata"' in joined
         assert joined.rstrip().endswith("data: [DONE]")
@@ -1897,7 +2012,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("Hello |<-MSG->| World"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "|<-MSG->|" not in decoded
         assert "Hello" in decoded
@@ -1908,7 +2023,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("Hello |<-M"), self._chunk("SG->| World"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "|<-MSG->|" not in decoded
         assert "Hello" in decoded
@@ -1919,7 +2034,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("|<-MSG->| USER: what is genai?"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "|<-MSG->|" not in decoded
         assert "USER:" not in decoded
@@ -1930,7 +2045,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("|<-MSG->| ASSISTANT: it is ai."), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "ASSISTANT:" not in decoded
         assert "it is ai." in decoded
@@ -1950,7 +2065,7 @@ class TestStreamWithMetadata:
                 "data: [DONE]\n\n",
             ]
         )
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "|<-MSG->|" not in decoded
         assert "USER:" not in decoded
@@ -1967,7 +2082,7 @@ class TestStreamWithMetadata:
                 "data: [DONE]\n\n",
             ]
         )
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "ASSISTANT:" not in decoded
         assert "ASS" not in decoded
@@ -1981,7 +2096,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("intro\nUS"), self._chunk("ER: hello"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "USER:" not in decoded
         assert "intro" in decoded
@@ -1995,7 +2110,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("a" + " " * 200 + "b"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert decoded.startswith("a")
         assert decoded.endswith("b")
@@ -2005,7 +2120,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("The capital of France is Paris."), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         assert self._decode_content(out) == "The capital of France is Paris."
 
     @pytest.mark.asyncio
@@ -2014,7 +2129,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("Use cmd | grep | sort"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         assert self._decode_content(out) == "Use cmd | grep | sort"
 
     @pytest.mark.asyncio
@@ -2024,7 +2139,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("result |<-M"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         assert self._decode_content(out) == "result |<-M"
 
     @pytest.mark.asyncio
@@ -2034,7 +2149,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body(["data: not-bytes-repr\n\n", "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         assert "data: not-bytes-repr\n\n" in joined
 
@@ -2048,7 +2163,7 @@ class TestStreamWithMetadata:
             "|<-MSG->| USER: previous question\n|<-MSG->| ASSISTANT: previous answer\nThe real answer is here."
         )
         body = self._make_body([self._chunk(history_echo), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "|<-MSG->|" not in decoded
         assert "USER:" not in decoded
@@ -2062,7 +2177,7 @@ class TestStreamWithMetadata:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = self._make_body([self._chunk("Réponse |<-MSG->| über Straße"), "data: [DONE]\n\n"])
-        out = await self._drain(svc._stream_with_metadata(body, {}))
+        out = await self._drain(svc._stream_with_metadata(body, {}, token="t"))
         decoded = self._decode_content(out)
         assert "|<-MSG->|" not in decoded
         assert "Réponse" in decoded
@@ -2111,7 +2226,7 @@ class TestExcessBlankCollapse:
                 "data: [DONE]\n\n",
             ]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         text = self._streamed_text(out)
         # Triple+ newlines reduced to single paragraph break; no 3+ runs survive.
         assert "\n\n\n" not in text
@@ -2135,7 +2250,7 @@ class TestExcessBlankCollapse:
                 "data: [DONE]\n\n",
             ]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         text = self._streamed_text(out)
         assert "\n\n\n" not in text
         assert "**Header:**" in text
@@ -2153,7 +2268,7 @@ class TestExcessBlankCollapse:
                 "data: [DONE]\n\n",
             ]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         text = self._streamed_text(out)
         assert "paragraph one\n\nparagraph two" in text
 
@@ -2170,7 +2285,7 @@ class TestExcessBlankCollapse:
                 "data: [DONE]\n\n",
             ]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         text = self._streamed_text(out)
         # The final flush emits the held-back tail as part of the answer.
         assert "\n\n\n" not in text
@@ -2363,7 +2478,7 @@ class TestSelfConfidenceSentinel:
         body = TestStreamWithMetadata._make_body(
             ["data: b'It is 42.'\n\n", "data: b'[[CONF:80]]'\n\n", "data: [DONE]\n\n"]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         # The sentinel never reaches the user.
         assert "[[CONF:" not in joined
@@ -2382,7 +2497,7 @@ class TestSelfConfidenceSentinel:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = TestStreamWithMetadata._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         assert '"self_confidence": null' in joined
         # Fallback: with no sentinel, the citizen-facing confidence_score falls back
@@ -2396,7 +2511,7 @@ class TestSelfConfidenceSentinel:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([], 0.0, False))
         body = TestStreamWithMetadata._make_body(["data: b'Hi'\n\n", "data: [DONE]\n\n"])
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         assert "self_confidence" not in joined
         # retrieval_confidence_score is always present (admin/eval) even with the
@@ -2414,7 +2529,7 @@ class TestSelfConfidenceSentinel:
         body = TestStreamWithMetadata._make_body(
             ["data: b'It is 42.'\n\n", "data: b'[[CO'\n\n", "data: b'NF:80]]'\n\n", "data: [DONE]\n\n"]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         # No fragment of the sentinel leaks to the user.
         assert "[[CO" not in joined
@@ -2437,7 +2552,7 @@ class TestSelfConfidenceSentinel:
         body = TestStreamWithMetadata._make_body(
             ["data: b'It is 42.'\n\n", "data: b'\\n[[CONF:'\n\n", "data: b'100]]'\n\n", "data: [DONE]\n\n"]
         )
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         # No fragment of the sentinel leaks.
         assert "[[CONF:" not in joined
@@ -2471,7 +2586,7 @@ class TestSelfConfidenceSentinel:
         svc = create_chatqna_service()
         svc._assemble_source_documents = AsyncMock(return_value=([{"document_id": "f1"}], 0.04, True))
         body = TestStreamWithMetadata._make_body([f"data: b'{c}'\n\n" for c in chunks] + ["data: [DONE]\n\n"])
-        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}))
+        out = await TestStreamWithMetadata._drain(svc._stream_with_metadata(body, {}, token="t"))
         joined = "".join(out)
         # No fragment of the sentinel leaks (uppercase CONF:/brackets only appear in it;
         # the metadata JSON is lowercase "confidence_*").

@@ -111,10 +111,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def split_passages(cell: str | None, separator: str) -> list[str]:
-    """Split a 'Relevant Text Passages (Verbatim)' cell into clean preview strings."""
+    """Split a 'Relevant Text Passages (Verbatim)' cell into clean preview strings.
+
+    Returns an empty list for cells marked N/A / Out-of-Scope — the eval then
+    scores these queries against an empty gold set (expected behaviour for
+    unanswerable queries: the RAG pipeline MUST NOT surface any 'gold' chunk).
+    """
     if not cell:
         return []
-    parts = re.split(separator, cell.strip())
+    text = cell.strip()
+    if re.match(r"^(n/?a|out[-_ ]of[-_ ]scope|not\s+applicable)\b", text, re.IGNORECASE):
+        return []
+    parts = re.split(separator, text)
     return [p.strip() for p in parts if p.strip()]
 
 

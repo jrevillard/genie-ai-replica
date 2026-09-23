@@ -40,13 +40,28 @@ class AuthInterceptor extends http.BaseClient {
     if (response.statusCode == 401 && token != null) {
       final newToken = await _refreshMutex();
       if (newToken == null) {
+        // Distinguish "the session is over" from "we could not refresh right
+        // now". A surviving refresh token means the user is still logged in and
+        // the failure is transient, so callers should offer a retry rather than
+        // a re-login.
+        final stillHasSession =
+            (await tokenStorage.getRefreshToken())?.isNotEmpty ?? false;
         _logger?.logAuthFailure(
-          errorCode: 'INTERCEPTOR_REFRESH_FAILED',
+          errorCode: stillHasSession
+              ? 'INTERCEPTOR_REFRESH_TRANSIENT'
+              : 'INTERCEPTOR_REFRESH_FAILED',
           httpStatus: 401,
-          message: 'Token refresh failed — session expired',
+          message: stillHasSession
+              ? 'Token refresh failed — session preserved, retryable'
+              : 'Token refresh failed — session expired',
           source: 'AuthInterceptor.send',
         );
-        throw AuthException('Session expired');
+        throw AuthException(
+          stillHasSession ? 'Could not refresh the session' : 'Session expired',
+          code: stillHasSession
+              ? AuthException.transientFailure
+              : AuthException.sessionExpired,
+        );
       }
 
       final retryRequest = _buildRetryRequest(request, newToken, bodyBytes);
@@ -106,10 +121,26 @@ class AuthInterceptor extends http.BaseClient {
         message: 'Token refresh triggered by 401',
         source: 'AuthInterceptor._refreshMutex',
       );
+      final tokenBefore = await tokenStorage.getAccessToken();
       await onRefreshToken();
       final newToken = await tokenStorage.getAccessToken();
-      _refreshCompleter!.complete(newToken);
-      return newToken;
+
+      // A refresh that leaves the SAME token in place did not succeed. The
+      // notifier deliberately PRESERVES tokens on a transient failure, so
+      // without this check the interceptor would retry with the stale token,
+      // collect another 401, and misreport a network blip as an expired
+      // session.
+      final refreshed = newToken != null && newToken != tokenBefore;
+      if (!refreshed) {
+        _logger?.logAuthFailure(
+          errorCode: 'INTERCEPTOR_REFRESH_NO_NEW_TOKEN',
+          httpStatus: 401,
+          message: 'Refresh produced no new token',
+          source: 'AuthInterceptor._refreshMutex',
+        );
+      }
+      _refreshCompleter!.complete(refreshed ? newToken : null);
+      return refreshed ? newToken : null;
     } catch (e) {
       _refreshCompleter!.complete(null);
       return null;
@@ -120,8 +151,23 @@ class AuthInterceptor extends http.BaseClient {
 }
 
 class AuthException implements Exception {
+  /// No usable access token could be obtained and the refresh token was
+  /// rejected or absent: the caller must route the user back to login rather
+  /// than render a raw error.
+  static const String sessionExpired = 'SESSION_EXPIRED';
+
+  /// The refresh could not complete right now but the session was PRESERVED
+  /// (the refresh token survives), so the caller should offer a retry rather
+  /// than sending the user back to login.
+  static const String transientFailure = 'TRANSIENT_FAILURE';
+
   final String message;
-  AuthException(this.message);
+
+  /// Machine-readable discriminator, so a dead session can be distinguished
+  /// from a transient failure without parsing [message].
+  final String code;
+
+  AuthException(this.message, {this.code = sessionExpired});
 
   @override
   String toString() => 'AuthException: $message';

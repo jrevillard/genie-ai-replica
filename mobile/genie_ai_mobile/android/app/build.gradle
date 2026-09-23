@@ -97,7 +97,7 @@ android {
             // flutter_secure_storage's bundled Tink library references
             // com.google.errorprone.annotations.* and javax.annotation.*,
             // which are compile-time-only. Without these rules R8 errors
-            // on the missing classes during `flutter build apk --release`.
+            // on the missing classes.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

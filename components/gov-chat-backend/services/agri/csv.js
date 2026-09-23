@@ -88,8 +88,7 @@ function parseCsv(text, opts = {}) {
  * Rows shorter than the header produce `null` for missing cells (not
  * `undefined` — downstream `parseFloat(null)` is explicitly NaN whereas
  * `parseFloat(undefined)` gives NaN with no signal that the field was
- * absent). Extra cells beyond the header are kept on `_extras` so they
- * are not silently dropped.
+ * absent). Extra cells beyond the header are silently dropped.
  *
  * @param {string} text
  * @param {Object} [opts]
@@ -104,9 +103,6 @@ function parseCsvObjects(text, opts = {}) {
     const obj = {};
     for (let i = 0; i < header.length; i++) {
       obj[header[i]] = i < row.length ? row[i] : null;
-    }
-    if (row.length > header.length) {
-      obj._extras = row.slice(header.length);
     }
     return obj;
   });

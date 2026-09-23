@@ -112,10 +112,9 @@ dependencies {
     // override the system splash with the AgroGenio farmer hero.
     implementation "androidx.core:core-splashscreen:1.0.1"
 
-    // PatrolJUnitRunner is added to main APK by Flutter via debugApi.
-    // We need it in the androidTest APK too — reference the Gradle subproject directly.
-    androidTestImplementation(project(":patrol"))
-
+    // Patrol was removed from dev_dependencies (was breaking release builds by
+    // auto-registering PatrolPlugin in GeneratedPluginRegistrant.java). Re-add
+    // only here when an integration test that needs the native runner is in scope.
     androidTestImplementation("androidx.test:core:1.5.0")
     androidTestImplementation("androidx.test:rules:1.2.0")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

@@ -1732,6 +1732,61 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // M30: zero-doc retrieval is ungrounded AND a
+                              // filter was active at the time of the request,
+                              // so surface that explicitly — otherwise the
+                              // answer looks like a confident AI response
+                              // with no hint that the KB was filtered out.
+                              if (!isUser &&
+                                  msg['isGrounded'] == false &&
+                                  _activeServiceLabels.isNotEmpty)
+                                Container(
+                                  margin: const EdgeInsets.only(
+                                    bottom: DsSpacing.sm,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: DsSpacing.sm,
+                                    vertical: DsSpacing.xs,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tokens.warning.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      DsRadii.md,
+                                    ),
+                                    border: Border.all(
+                                      color: tokens.warning.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline,
+                                        size: 16,
+                                        color: tokens.warning,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          // The active Quick Help chip
+                                          // already names the filter, so the
+                                          // message just explains that no
+                                          // documents matched.
+                                          tr('chatbot.noDocsMatchingFilter'),
+                                          softWrap: true,
+                                          style: TextStyle(
+                                            fontSize: tokens.textXs,
+                                            color: tokens.fg,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               MarkdownBody(
                                 data: msg['content'] ?? '',
                                 styleSheet: MarkdownStyleSheet(

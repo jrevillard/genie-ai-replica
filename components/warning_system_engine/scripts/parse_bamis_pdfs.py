@@ -214,6 +214,9 @@ def _extract_period(text: str) -> str:
 # name instead ("Region: Aman Rice"), with the region on the next line.
 _REGION_HEADER_PATTERNS = [
     re.compile(r":\s*([A-Za-z]+)\s+Region\b", re.IGNORECASE),
+    # "Crop Weather Calendar of Turmeric for Rajshahi Region, Bangladesh" —
+    # no colon before the region, so the first pattern misses it.
+    re.compile(r"\bfor\s+([A-Za-z]+)\s+Region\b", re.IGNORECASE),
     re.compile(r"Districts:\s*([A-Za-z]+)\b", re.IGNORECASE),
     re.compile(r"^\s*Region:\s*([A-Za-z]+)\s*$", re.MULTILINE),
 ]
@@ -364,6 +367,11 @@ _WARNING_SECTION = re.compile(r"^weather\s+warning", re.IGNORECASE)
 _FAVORABLE_SECTION = re.compile(
     r"^favou?rable\s+(environment|weather\s+condition)", re.IGNORECASE
 )
+# "Variety production information from BARI" — released cultivars with their
+# duration, planting window and yield. Not an alert rule, so it closes the
+# warning block instead of extending it (without this the BARI Holud rows land
+# in the profile as weather warnings).
+_VARIETY_SECTION = re.compile(r"^variet(?:y|ies)\b", re.IGNORECASE)
 
 
 def _cells(row: list[Any]) -> list[tuple[int, str]]:
@@ -427,6 +435,24 @@ def _align_to_weeks(
     return result
 
 
+# Month span appended to a stage label by the continuation-line join, e.g.
+# "Land preparation & planting (April–May)". The calendar already carries the
+# month per week, and the bracket would follow the stage name into every alert.
+_STAGE_MONTH_SPAN = re.compile(
+    r"\s*\((?:"
+    + "|".join(_MONTH_NAMES)
+    + r")\s*[-–—]\s*(?:"
+    + "|".join(_MONTH_NAMES)
+    + r")\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_stage_month_span(label: str) -> str:
+    """Drop a trailing "(April–May)" month range from a stage label."""
+    return _STAGE_MONTH_SPAN.sub("", label).strip()
+
+
 def _span_labels(
     rows: list[list[Any]],
     week_cols: list[tuple[int, int]],
@@ -457,7 +483,7 @@ def _span_labels(
         # The stage whose span starts at or before this week's column
         candidates = [s for s in starts if s <= ci]
         if candidates:
-            assigned[week] = labels[candidates[-1]]
+            assigned[week] = _strip_stage_month_span(labels[candidates[-1]])
     return assigned
 
 
@@ -493,6 +519,7 @@ def _extract_transposed_rows(
             _PEST_SECTION.search(label)
             or _WARNING_SECTION.match(label)
             or _FAVORABLE_SECTION.match(label)
+            or _VARIETY_SECTION.match(label)
         ):
             break
         for pattern, field in _TRANSPOSED_FIELDS:
@@ -514,6 +541,7 @@ def _extract_transposed_rows(
             _PEST_SECTION.search(label)
             or _WARNING_SECTION.match(label)
             or _FAVORABLE_SECTION.match(label)
+            or _VARIETY_SECTION.match(label)
         ):
             end = ri
             break
@@ -716,13 +744,21 @@ def _extract_transposed_advisories(
             # Per-stage optimum ranges — context, not an alert rule
             category = None
             continue
+        if _VARIETY_SECTION.match(label):
+            category = "Variety"
+            continue
         if category is None or len(filled) < 2:
             continue
 
         description = " ".join(text for _, text in filled[1:])
         # Weather-warning rows name the variable in the label ("Rain", "High
         # wind") and keep only the value in the cells, so mine both together.
-        when, extras = _parse_conditions(f"{label} {description}")
+        # Variety rows carry durations and yields ("270–280 days", "28–32 t/ha")
+        # that the condition miner would read as temperature ranges.
+        if category == "Variety":
+            when, extras = {}, []
+        else:
+            when, extras = _parse_conditions(f"{label} {description}")
 
         record = {
             "crop": crop,
@@ -1031,6 +1067,40 @@ def parse_all_pdfs(
 # ---------------------------------------------------------------------------
 
 
+def merge_records(existing: list[dict], new: list[dict]) -> list[dict]:
+    """
+    Fold *new* records into *existing*, replacing whole (crop, region) groups.
+
+    A filtered run (--crop turmeric) only parses one PDF, so writing its output
+    straight to bamis_metadata.json would delete every other crop. Merging keeps
+    the untouched crops byte-identical and leaves each group where it already
+    sat, so adding a crop produces a one-crop diff.
+    """
+
+    def key(rec: dict) -> tuple[str, str]:
+        return rec.get("crop", ""), rec.get("region", "")
+
+    new_keys = {key(r) for r in new}
+    order: list[tuple[str, str]] = []
+    groups: dict[tuple[str, str], list[dict]] = {}
+
+    for rec in existing:
+        k = key(rec)
+        if k not in order:
+            order.append(k)
+        if k in new_keys:
+            continue  # replaced wholesale by the fresh parse
+        groups.setdefault(k, []).append(rec)
+
+    for rec in new:
+        k = key(rec)
+        if k not in order:
+            order.append(k)
+        groups.setdefault(k, []).append(rec)
+
+    return [rec for k in order for rec in groups.get(k, [])]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Parse BAMIS crop-calendar PDFs → JSON records"
@@ -1045,6 +1115,11 @@ def main() -> None:
     )
     ap.add_argument("--crop", default=None, help="Filter to this crop name")
     ap.add_argument("--region", default=None, help="Filter to this region name")
+    ap.add_argument(
+        "--no-merge",
+        action="store_true",
+        help="Overwrite --out instead of merging a filtered run into it",
+    )
     ap.add_argument("--quiet", action="store_true", help="Suppress per-file messages")
     args = ap.parse_args()
 
@@ -1057,6 +1132,15 @@ def main() -> None:
             region_filter=args.region,
             verbose=not args.quiet,
         )
+
+    if (
+        args.out
+        and args.out.exists()
+        and not args.no_merge
+        and (args.crop or args.region or args.pdf)
+    ):
+        existing = json.loads(args.out.read_text(encoding="utf-8"))
+        records = merge_records(existing, records)
 
     payload = json.dumps(records, ensure_ascii=False, indent=2)
     if args.out:

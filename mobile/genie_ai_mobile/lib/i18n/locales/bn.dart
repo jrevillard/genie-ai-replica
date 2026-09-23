@@ -1171,6 +1171,8 @@ const Map<String, dynamic> bnLocale = {
     "potato": "আলু",
     "eggplant": "বেগুন",
     "rice_aman": "আমন ধান",
+    "mango": "আম",
+    "turmeric": "হলুদ",
     "crop": "ফসল",
     "drought": "খরা",
     "flood": "বন্যা",

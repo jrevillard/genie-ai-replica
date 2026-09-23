@@ -55,15 +55,21 @@ Standalone Docker container that owns the full early warning pipeline for the ME
 |---|---|---|---|---|
 | `eggplant` | `data/eggplant.pdf` — Rajshahi region | Rabi (weeks 44–12) + Kharif (weeks 18–39) | Germination & Seedling, Vegetative Growth, Flowering, Fruiting, Harvesting | 8 |
 | `rice_aman` | `data/rice_aman.pdf` — Rajshahi region | Aman (weeks 24–42, June–October) | Seedbed, Transplanting, Tillering, Heading, Flowering, Grain Formation, Maturity to Harvesting | 8 |
+| `mango` | `data/mango.pdf` — Rajshahi region | Weeks 2–25 (January–July) | Swelling of Apical Buds, Panicle Elongation, Panicle Growth & Flowering, Pea Stage, Fruit Development, Maturity/Ripening/Harvesting | 5 |
+| `turmeric` | `data/turmeric.pdf` — Rajshahi region | Weeks 13–8 (April–February, 270–300 days) | Land Preparation & Planting, Germination & Establishment, Vegetative Growth, Rhizome Initiation, Rhizome Enlargement, Maturity & Harvesting | 6 |
 
-Both calendars cover the Rajshahi region (Rajshahi, Chapainawabganj, Naogaon,
+All calendars cover the Rajshahi region (Rajshahi, Chapainawabganj, Naogaon,
 Natore). The eggplant calendar carries both its seasons in one profile, so that
-crop is in season for most of the year.
+crop is in season for most of the year. Turmeric runs almost the whole year —
+it is planted in April and harvested the following January–February.
 
-The crop list comes from `EWS_CROPS` (default `eggplant,rice_aman`). Adding a
-crop means dropping its BAMIS PDF into `data/`, re-running
-`scripts/build_crop_profiles_pipeline.py`, and adding its name to `EWS_CROPS` —
-no workflow code changes.
+The crop list comes from `EWS_CROPS` (default
+`eggplant,rice_aman,mango,turmeric`). Adding a crop means dropping its BAMIS PDF
+into `data/` named `<crop>.pdf`, re-running
+`scripts/build_crop_profiles_pipeline.py --crop <crop>`, and adding its name to
+`EWS_CROPS` — no workflow code changes. A filtered run merges the crop into the
+existing `bamis_metadata.json` and `example_crop_profile.json`; pass
+`--no-merge` to rebuild them from scratch instead.
 
 ---
 
@@ -233,7 +239,7 @@ Pipeline flags:
 | `--pdf-dir PATH` | Root directory of raw BAMIS PDFs |
 | `--data-dir PATH` | Output directory for JSON artefacts (default: `data/`) |
 | `--crops-dir PATH` | Output directory for Python modules (default: `app/crops/`) |
-| `--crop NAME` | Process only this crop (e.g. `eggplant`, `rice_aman`) |
+| `--crop NAME` | Process only this crop (e.g. `eggplant`, `turmeric`); merged into the existing JSON artefacts |
 | `--region NAME` | Process only this region (e.g. `dhaka`, `bogura`) |
 | `--skip-parse` | Use existing `bamis_metadata.json` |
 | `--skip-enrich` | Use existing `example_crop_profile.json` |
@@ -635,7 +641,7 @@ Copy `.env.example` to `.env`. All variables are optional unless marked Required
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `EWS_CROPS` | No | `eggplant,rice_aman` | Comma-separated crops to watch; each needs a module in `app/crops/<crop>/` |
+| `EWS_CROPS` | No | `eggplant,rice_aman,mango,turmeric` | Comma-separated crops to watch; each needs a module in `app/crops/<crop>/` |
 | `ARANGO_URL` | Yes | `http://arango-vector-db:8529` | ArangoDB host |
 | `ARANGO_DB_NAME` | Yes | `genie-ai` | Database name |
 | `ARANGO_USER` | Yes | `root` | ArangoDB user |

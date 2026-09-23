@@ -837,7 +837,7 @@ services:
       - DROUGHT_MONITORING_URL=http://drought-monitoring:8001
       # Crops assessed by the EWS; must match weather-mcp-service so its
       # /potato/risk/latest reads the assessments this engine writes
-      - EWS_CROPS=${EWS_CROPS:-eggplant,rice_aman,mango}
+      - EWS_CROPS=${EWS_CROPS:-eggplant,rice_aman,mango,turmeric}
       # Fallback district, always included in the district tables/loops
       - DEFAULT_LOCATION=${DEFAULT_LOCATION:-Dhaka}
       - DEFAULT_LAT=${DEFAULT_LAT:-23.8103}
@@ -904,7 +904,7 @@ services:
       # drought-monitoring on-demand GEE assessment (chat: "drought risk in X over the next N days")
       - DROUGHT_MONITORING_URL=${DROUGHT_MONITORING_URL:-http://drought-monitoring:8001}
       # Crops whose assessments this service serves; must match warning-system-engine
-      - EWS_CROPS=${EWS_CROPS:-eggplant,rice_aman,mango}
+      - EWS_CROPS=${EWS_CROPS:-eggplant,rice_aman,mango,turmeric}
       # Crops grown in the region (superset of EWS_CROPS); extras have no crop profile yet
       - REGION_CROPS=${REGION_CROPS:-}
       # Fallback district when the user names no place

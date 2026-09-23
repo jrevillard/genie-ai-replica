@@ -959,7 +959,7 @@ NOTIFICATION_BROADCAST_SECRET=
 # every crop farmers grow in the deployment region; entries beyond EWS_CROPS have
 # no crop profile yet, so the advisor gives only general weather guidance for
 # them and says so. Both are snake_case, comma-separated.
-# EWS_CROPS=eggplant,rice_aman,mango
+# EWS_CROPS=eggplant,rice_aman,mango,turmeric
 # REGION_CROPS=rice_aman,eggplant,mango,turmeric
 
 # Google Earth Engine (drought-monitoring, geo-inference-worker). Place the GEE

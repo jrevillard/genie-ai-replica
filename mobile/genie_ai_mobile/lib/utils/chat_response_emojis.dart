@@ -20,6 +20,7 @@ final List<_Topic> _cropEmojis = [
   ),
   _Topic('🍆', RegExp(r'\beggplant\b', caseSensitive: false)),
   _Topic('🥭', RegExp(r'\bmango\b', caseSensitive: false)),
+  _Topic('🫚', RegExp(r'\bturmeric\b', caseSensitive: false)),
 ];
 
 final List<_Topic> _weatherEmojis = [

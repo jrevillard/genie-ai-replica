@@ -1167,6 +1167,8 @@ const Map<String, dynamic> enLocale = {
     "potato": "Potato",
     "eggplant": "Eggplant",
     "rice_aman": "Aman Rice",
+    "mango": "Mango",
+    "turmeric": "Turmeric",
     "crop": "Crop",
     "drought": "Drought",
     "flood": "Flood",

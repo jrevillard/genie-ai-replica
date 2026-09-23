@@ -23,7 +23,7 @@ _BUILT_IN_LAT = 23.8103
 _BUILT_IN_LON = 90.4125
 
 # Must match the warning_system_engine default (app/main.py DEFAULT_EWS_CROPS)
-_BUILT_IN_CROPS = ("eggplant", "rice_aman", "mango")
+_BUILT_IN_CROPS = ("eggplant", "rice_aman", "mango", "turmeric")
 
 
 def _crop_list() -> list[str]:
@@ -42,7 +42,8 @@ def _region_crop_list() -> list[str]:
     Crops grown in the deployment region (REGION_CROPS), in display order.
     Every EWS crop is always included; the extra entries are crops the farmers
     grow but for which no crop profile (thresholds, calendar) exists yet, e.g.
-    REGION_CROPS=rice_aman,eggplant,mango,turmeric with EWS_CROPS=eggplant,rice_aman,mango.
+    REGION_CROPS=rice_aman,eggplant,mango,potato with
+    EWS_CROPS=eggplant,rice_aman,mango,turmeric.
     """
     raw = os.getenv("REGION_CROPS", "").strip()
     crops = [crop.strip() for crop in raw.split(",") if crop.strip()]

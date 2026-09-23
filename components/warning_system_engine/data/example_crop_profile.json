@@ -4516,5 +4516,1443 @@
       ],
       "Maturity to Harvesting": []
     }
+  },
+  "turmeric_rajshahi": {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "crop_display_name": "Turmeric",
+    "season_span": {
+      "weeks": [
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "months": [
+        "January",
+        "February",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December"
+      ],
+      "duration_weeks": 48
+    },
+    "growth_stages": [
+      {
+        "stage": "Vegetative Growth",
+        "weeks": [
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          26
+        ],
+        "months": [
+          "June",
+          "July",
+          "August"
+        ],
+        "week_count": 7,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 22.8,
+            "min": 20.5,
+            "max": 25.1,
+            "sum": 159.6,
+            "stdev": 1.94
+          },
+          "temp_max_c": {
+            "mean": 32.0,
+            "min": 30.5,
+            "max": 33.2,
+            "sum": 224.0,
+            "stdev": 1.05
+          },
+          "temp_mean_c": {
+            "mean": 27.4,
+            "min": 25.5,
+            "max": 28.95,
+            "sum": 191.8,
+            "stdev": 1.48
+          },
+          "rainfall_mm": {
+            "mean": 47.0,
+            "min": 28.0,
+            "max": 59.0,
+            "sum": 329.0,
+            "stdev": 11.78
+          },
+          "rh_max_pct": {
+            "mean": 93.86,
+            "min": 91.0,
+            "max": 96.0,
+            "sum": 657.0,
+            "stdev": 1.95
+          },
+          "rh_min_pct": {
+            "mean": 58.71,
+            "min": 49.0,
+            "max": 67.0,
+            "sum": 411.0,
+            "stdev": 7.11
+          }
+        }
+      },
+      {
+        "stage": "Rhizome Initiation",
+        "weeks": [
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39
+        ],
+        "months": [
+          "August",
+          "September"
+        ],
+        "week_count": 7,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 19.14,
+            "min": 18.0,
+            "max": 20.2,
+            "sum": 134.0,
+            "stdev": 0.86
+          },
+          "temp_max_c": {
+            "mean": 29.74,
+            "min": 29.4,
+            "max": 30.1,
+            "sum": 208.2,
+            "stdev": 0.26
+          },
+          "temp_mean_c": {
+            "mean": 24.44,
+            "min": 23.9,
+            "max": 25.15,
+            "sum": 171.1,
+            "stdev": 0.48
+          },
+          "rainfall_mm": {
+            "mean": 12.14,
+            "min": 5.0,
+            "max": 28.0,
+            "sum": 85.0,
+            "stdev": 8.73
+          },
+          "rh_max_pct": {
+            "mean": 87.57,
+            "min": 86.0,
+            "max": 90.0,
+            "sum": 613.0,
+            "stdev": 1.51
+          },
+          "rh_min_pct": {
+            "mean": 39.14,
+            "min": 35.0,
+            "max": 46.0,
+            "sum": 274.0,
+            "stdev": 4.1
+          }
+        }
+      },
+      {
+        "stage": "Rhizome Enlargement",
+        "weeks": [
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          1
+        ],
+        "months": [
+          "January",
+          "October",
+          "November",
+          "December"
+        ],
+        "week_count": 14,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 22.25,
+            "min": 19.0,
+            "max": 25.5,
+            "sum": 311.5,
+            "stdev": 2.09
+          },
+          "temp_max_c": {
+            "mean": 31.74,
+            "min": 29.5,
+            "max": 33.5,
+            "sum": 444.3,
+            "stdev": 1.39
+          },
+          "temp_mean_c": {
+            "mean": 26.99,
+            "min": 24.5,
+            "max": 29.5,
+            "sum": 377.9,
+            "stdev": 1.73
+          },
+          "rainfall_mm": {
+            "mean": 8.93,
+            "min": 3.0,
+            "max": 18.0,
+            "sum": 125.0,
+            "stdev": 4.7
+          },
+          "rh_max_pct": {
+            "mean": 91.29,
+            "min": 86.0,
+            "max": 95.0,
+            "sum": 1278.0,
+            "stdev": 3.29
+          },
+          "rh_min_pct": {
+            "mean": 51.36,
+            "min": 36.0,
+            "max": 72.0,
+            "sum": 719.0,
+            "stdev": 13.36
+          }
+        }
+      },
+      {
+        "stage": "Maturity & Harvesting",
+        "weeks": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "months": [
+          "January",
+          "February"
+        ],
+        "week_count": 7,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 27.5,
+            "min": 26.0,
+            "max": 29.0,
+            "sum": 192.5,
+            "stdev": 1.08
+          },
+          "temp_max_c": {
+            "mean": 33.44,
+            "min": 33.0,
+            "max": 34.0,
+            "sum": 234.1,
+            "stdev": 0.39
+          },
+          "temp_mean_c": {
+            "mean": 30.47,
+            "min": 29.8,
+            "max": 31.1,
+            "sum": 213.3,
+            "stdev": 0.41
+          },
+          "rainfall_mm": {
+            "mean": 18.86,
+            "min": 12.0,
+            "max": 24.0,
+            "sum": 132.0,
+            "stdev": 3.8
+          },
+          "rh_max_pct": {
+            "mean": 95.0,
+            "min": 95.0,
+            "max": 95.0,
+            "sum": 665.0,
+            "stdev": 0.0
+          },
+          "rh_min_pct": {
+            "mean": 80.29,
+            "min": 75.0,
+            "max": 86.0,
+            "sum": 562.0,
+            "stdev": 3.95
+          }
+        }
+      },
+      {
+        "stage": "Land Preparation & Planting",
+        "weeks": [
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19
+        ],
+        "months": [
+          "April",
+          "May"
+        ],
+        "week_count": 7,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 25.29,
+            "min": 22.5,
+            "max": 26.5,
+            "sum": 177.0,
+            "stdev": 1.55
+          },
+          "temp_max_c": {
+            "mean": 33.57,
+            "min": 32.6,
+            "max": 34.5,
+            "sum": 235.0,
+            "stdev": 0.73
+          },
+          "temp_mean_c": {
+            "mean": 29.43,
+            "min": 28.5,
+            "max": 29.85,
+            "sum": 206.0,
+            "stdev": 0.48
+          },
+          "rainfall_mm": {
+            "mean": 59.43,
+            "min": 36.0,
+            "max": 78.0,
+            "sum": 416.0,
+            "stdev": 16.35
+          },
+          "rh_max_pct": {
+            "mean": 96.0,
+            "min": 95.0,
+            "max": 97.0,
+            "sum": 672.0,
+            "stdev": 0.82
+          },
+          "rh_min_pct": {
+            "mean": 67.14,
+            "min": 52.0,
+            "max": 75.0,
+            "sum": 470.0,
+            "stdev": 9.1
+          }
+        }
+      },
+      {
+        "stage": "Germination & Establishment",
+        "weeks": [
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "months": [
+          "May",
+          "June"
+        ],
+        "week_count": 6,
+        "climate_stats": {
+          "temp_min_c": {
+            "mean": 25.6,
+            "min": 25.3,
+            "max": 26.0,
+            "sum": 153.6,
+            "stdev": 0.26
+          },
+          "temp_max_c": {
+            "mean": 32.22,
+            "min": 32.0,
+            "max": 32.4,
+            "sum": 193.3,
+            "stdev": 0.17
+          },
+          "temp_mean_c": {
+            "mean": 28.91,
+            "min": 28.75,
+            "max": 29.2,
+            "sum": 173.45,
+            "stdev": 0.18
+          },
+          "rainfall_mm": {
+            "mean": 62.17,
+            "min": 52.0,
+            "max": 75.0,
+            "sum": 373.0,
+            "stdev": 9.79
+          },
+          "rh_max_pct": {
+            "mean": 96.0,
+            "min": 96.0,
+            "max": 96.0,
+            "sum": 576.0,
+            "stdev": 0.0
+          },
+          "rh_min_pct": {
+            "mean": 70.5,
+            "min": 68.0,
+            "max": 73.0,
+            "sum": 423.0,
+            "stdev": 1.87
+          }
+        }
+      }
+    ],
+    "weekly_calendar": [
+      {
+        "week": 27,
+        "month": "July",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 24.8,
+        "temp_max_c": 33.0,
+        "temp_mean_c": 28.9,
+        "rainfall_mm": 54.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 66.0
+      },
+      {
+        "week": 28,
+        "month": "July",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 24.5,
+        "temp_max_c": 33.2,
+        "temp_mean_c": 28.85,
+        "rainfall_mm": 59.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 64.0
+      },
+      {
+        "week": 29,
+        "month": "July",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 22.1,
+        "temp_max_c": 32.0,
+        "temp_mean_c": 27.05,
+        "rainfall_mm": 52.0,
+        "rh_max_pct": 94.0,
+        "rh_min_pct": 58.0
+      },
+      {
+        "week": 30,
+        "month": "July",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 21.5,
+        "temp_max_c": 31.5,
+        "temp_mean_c": 26.5,
+        "rainfall_mm": 44.0,
+        "rh_max_pct": 93.0,
+        "rh_min_pct": 55.0
+      },
+      {
+        "week": 31,
+        "month": "August",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 21.1,
+        "temp_max_c": 31.0,
+        "temp_mean_c": 26.05,
+        "rainfall_mm": 35.0,
+        "rh_max_pct": 92.0,
+        "rh_min_pct": 52.0
+      },
+      {
+        "week": 32,
+        "month": "August",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 20.5,
+        "temp_max_c": 30.5,
+        "temp_mean_c": 25.5,
+        "rainfall_mm": 28.0,
+        "rh_max_pct": 91.0,
+        "rh_min_pct": 49.0
+      },
+      {
+        "week": 33,
+        "month": "August",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 20.2,
+        "temp_max_c": 30.1,
+        "temp_mean_c": 25.15,
+        "rainfall_mm": 28.0,
+        "rh_max_pct": 90.0,
+        "rh_min_pct": 46.0
+      },
+      {
+        "week": 34,
+        "month": "August",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 20.0,
+        "temp_max_c": 29.8,
+        "temp_mean_c": 24.9,
+        "rainfall_mm": 20.0,
+        "rh_max_pct": 89.0,
+        "rh_min_pct": 43.0
+      },
+      {
+        "week": 35,
+        "month": "September",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 19.8,
+        "temp_max_c": 29.6,
+        "temp_mean_c": 24.7,
+        "rainfall_mm": 12.0,
+        "rh_max_pct": 88.0,
+        "rh_min_pct": 40.0
+      },
+      {
+        "week": 36,
+        "month": "September",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 19.0,
+        "temp_max_c": 29.4,
+        "temp_mean_c": 24.2,
+        "rainfall_mm": 8.0,
+        "rh_max_pct": 87.0,
+        "rh_min_pct": 38.0
+      },
+      {
+        "week": 37,
+        "month": "September",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 18.5,
+        "temp_max_c": 29.5,
+        "temp_mean_c": 24.0,
+        "rainfall_mm": 6.0,
+        "rh_max_pct": 86.0,
+        "rh_min_pct": 36.0
+      },
+      {
+        "week": 38,
+        "month": "September",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 18.0,
+        "temp_max_c": 29.8,
+        "temp_mean_c": 23.9,
+        "rainfall_mm": 5.0,
+        "rh_max_pct": 86.0,
+        "rh_min_pct": 35.0
+      },
+      {
+        "week": 39,
+        "month": "September",
+        "stage": "Rhizome Initiation",
+        "temp_min_c": 18.5,
+        "temp_max_c": 30.0,
+        "temp_mean_c": 24.25,
+        "rainfall_mm": 6.0,
+        "rh_max_pct": 87.0,
+        "rh_min_pct": 36.0
+      },
+      {
+        "week": 40,
+        "month": "October",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 19.0,
+        "temp_max_c": 30.4,
+        "temp_mean_c": 24.7,
+        "rainfall_mm": 8.0,
+        "rh_max_pct": 88.0,
+        "rh_min_pct": 38.0
+      },
+      {
+        "week": 41,
+        "month": "October",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 19.5,
+        "temp_max_c": 29.5,
+        "temp_mean_c": 24.5,
+        "rainfall_mm": 10.0,
+        "rh_max_pct": 86.0,
+        "rh_min_pct": 36.0
+      },
+      {
+        "week": 42,
+        "month": "October",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 20.0,
+        "temp_max_c": 29.7,
+        "temp_mean_c": 24.85,
+        "rainfall_mm": 12.0,
+        "rh_max_pct": 87.0,
+        "rh_min_pct": 36.0
+      },
+      {
+        "week": 43,
+        "month": "October",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 20.5,
+        "temp_max_c": 30.4,
+        "temp_mean_c": 25.45,
+        "rainfall_mm": 16.0,
+        "rh_max_pct": 88.0,
+        "rh_min_pct": 38.0
+      },
+      {
+        "week": 44,
+        "month": "November",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 21.0,
+        "temp_max_c": 30.8,
+        "temp_mean_c": 25.9,
+        "rainfall_mm": 18.0,
+        "rh_max_pct": 89.0,
+        "rh_min_pct": 40.0
+      },
+      {
+        "week": 45,
+        "month": "November",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 21.5,
+        "temp_max_c": 31.2,
+        "temp_mean_c": 26.35,
+        "rainfall_mm": 14.0,
+        "rh_max_pct": 90.0,
+        "rh_min_pct": 43.0
+      },
+      {
+        "week": 46,
+        "month": "November",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 22.0,
+        "temp_max_c": 31.8,
+        "temp_mean_c": 26.9,
+        "rainfall_mm": 10.0,
+        "rh_max_pct": 91.0,
+        "rh_min_pct": 47.0
+      },
+      {
+        "week": 47,
+        "month": "November",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 22.5,
+        "temp_max_c": 32.2,
+        "temp_mean_c": 27.35,
+        "rainfall_mm": 8.0,
+        "rh_max_pct": 92.0,
+        "rh_min_pct": 52.0
+      },
+      {
+        "week": 48,
+        "month": "November",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 23.0,
+        "temp_max_c": 32.5,
+        "temp_mean_c": 27.75,
+        "rainfall_mm": 5.0,
+        "rh_max_pct": 93.0,
+        "rh_min_pct": 56.0
+      },
+      {
+        "week": 49,
+        "month": "December",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 23.5,
+        "temp_max_c": 32.8,
+        "temp_mean_c": 28.15,
+        "rainfall_mm": 4.0,
+        "rh_max_pct": 94.0,
+        "rh_min_pct": 60.0
+      },
+      {
+        "week": 50,
+        "month": "December",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 24.0,
+        "temp_max_c": 33.0,
+        "temp_mean_c": 28.5,
+        "rainfall_mm": 3.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 64.0
+      },
+      {
+        "week": 51,
+        "month": "December",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 24.5,
+        "temp_max_c": 33.2,
+        "temp_mean_c": 28.85,
+        "rainfall_mm": 4.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 67.0
+      },
+      {
+        "week": 52,
+        "month": "December",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 25.0,
+        "temp_max_c": 33.3,
+        "temp_mean_c": 29.15,
+        "rainfall_mm": 5.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 70.0
+      },
+      {
+        "week": 1,
+        "month": "January",
+        "stage": "Rhizome Enlargement",
+        "temp_min_c": 25.5,
+        "temp_max_c": 33.5,
+        "temp_mean_c": 29.5,
+        "rainfall_mm": 8.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 72.0
+      },
+      {
+        "week": 2,
+        "month": "January",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 26.0,
+        "temp_max_c": 33.6,
+        "temp_mean_c": 29.8,
+        "rainfall_mm": 12.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 75.0
+      },
+      {
+        "week": 3,
+        "month": "January",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 26.5,
+        "temp_max_c": 33.8,
+        "temp_mean_c": 30.15,
+        "rainfall_mm": 18.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 77.0
+      },
+      {
+        "week": 4,
+        "month": "January",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 27.0,
+        "temp_max_c": 34.0,
+        "temp_mean_c": 30.5,
+        "rainfall_mm": 20.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 78.0
+      },
+      {
+        "week": 5,
+        "month": "February",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 27.5,
+        "temp_max_c": 33.5,
+        "temp_mean_c": 30.5,
+        "rainfall_mm": 22.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 80.0
+      },
+      {
+        "week": 6,
+        "month": "February",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 28.0,
+        "temp_max_c": 33.0,
+        "temp_mean_c": 30.5,
+        "rainfall_mm": 24.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 82.0
+      },
+      {
+        "week": 7,
+        "month": "February",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 28.5,
+        "temp_max_c": 33.0,
+        "temp_mean_c": 30.75,
+        "rainfall_mm": 18.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 84.0
+      },
+      {
+        "week": 8,
+        "month": "February",
+        "stage": "Maturity & Harvesting",
+        "temp_min_c": 29.0,
+        "temp_max_c": 33.2,
+        "temp_mean_c": 31.1,
+        "rainfall_mm": 18.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 86.0
+      },
+      {
+        "week": 13,
+        "month": "April",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 22.5,
+        "temp_max_c": 34.5,
+        "temp_mean_c": 28.5,
+        "rainfall_mm": 36.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 52.0
+      },
+      {
+        "week": 14,
+        "month": "April",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 24.0,
+        "temp_max_c": 34.2,
+        "temp_mean_c": 29.1,
+        "rainfall_mm": 42.0,
+        "rh_max_pct": 95.0,
+        "rh_min_pct": 58.0
+      },
+      {
+        "week": 15,
+        "month": "April",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 25.0,
+        "temp_max_c": 34.1,
+        "temp_mean_c": 29.55,
+        "rainfall_mm": 51.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 65.0
+      },
+      {
+        "week": 16,
+        "month": "April",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 26.0,
+        "temp_max_c": 33.6,
+        "temp_mean_c": 29.8,
+        "rainfall_mm": 78.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 72.0
+      },
+      {
+        "week": 17,
+        "month": "April",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 26.5,
+        "temp_max_c": 33.2,
+        "temp_mean_c": 29.85,
+        "rainfall_mm": 72.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 74.0
+      },
+      {
+        "week": 18,
+        "month": "May",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 26.5,
+        "temp_max_c": 32.8,
+        "temp_mean_c": 29.65,
+        "rainfall_mm": 66.0,
+        "rh_max_pct": 97.0,
+        "rh_min_pct": 75.0
+      },
+      {
+        "week": 19,
+        "month": "May",
+        "stage": "Land Preparation & Planting",
+        "temp_min_c": 26.5,
+        "temp_max_c": 32.6,
+        "temp_mean_c": 29.55,
+        "rainfall_mm": 71.0,
+        "rh_max_pct": 97.0,
+        "rh_min_pct": 74.0
+      },
+      {
+        "week": 20,
+        "month": "May",
+        "stage": "Germination & Establishment",
+        "temp_min_c": 26.0,
+        "temp_max_c": 32.4,
+        "temp_mean_c": 29.2,
+        "rainfall_mm": 75.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 73.0
+      },
+      {
+        "week": 21,
+        "month": "May",
+        "stage": "Germination & Establishment",
+        "temp_min_c": 25.8,
+        "temp_max_c": 32.3,
+        "temp_mean_c": 29.05,
+        "rainfall_mm": 72.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 72.0
+      },
+      {
+        "week": 22,
+        "month": "May",
+        "stage": "Germination & Establishment",
+        "temp_min_c": 25.6,
+        "temp_max_c": 32.1,
+        "temp_mean_c": 28.85,
+        "rainfall_mm": 52.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 71.0
+      },
+      {
+        "week": 23,
+        "month": "June",
+        "stage": "Germination & Establishment",
+        "temp_min_c": 25.5,
+        "temp_max_c": 32.0,
+        "temp_mean_c": 28.75,
+        "rainfall_mm": 57.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 70.0
+      },
+      {
+        "week": 24,
+        "month": "June",
+        "stage": "Germination & Establishment",
+        "temp_min_c": 25.4,
+        "temp_max_c": 32.1,
+        "temp_mean_c": 28.75,
+        "rainfall_mm": 64.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 69.0
+      },
+      {
+        "week": 25,
+        "month": "June",
+        "stage": "Germination & Establishment",
+        "temp_min_c": 25.3,
+        "temp_max_c": 32.4,
+        "temp_mean_c": 28.85,
+        "rainfall_mm": 53.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 68.0
+      },
+      {
+        "week": 26,
+        "month": "June",
+        "stage": "Vegetative Growth",
+        "temp_min_c": 25.1,
+        "temp_max_c": 32.8,
+        "temp_mean_c": 28.95,
+        "rainfall_mm": 57.0,
+        "rh_max_pct": 96.0,
+        "rh_min_pct": 67.0
+      }
+    ],
+    "derived_thresholds": {
+      "temp_min_observed_c": {
+        "absolute_min": 18.0,
+        "absolute_max": 29.0,
+        "mean": 23.5
+      },
+      "temp_max_observed_c": {
+        "absolute_min": 29.4,
+        "absolute_max": 34.5,
+        "mean": 32.06
+      },
+      "rainfall_mm": {
+        "weekly_mean": 30.42,
+        "weekly_max": 78.0,
+        "weekly_min": 3.0,
+        "season_total": 1460.0
+      },
+      "relative_humidity_pct": {
+        "rh_max_mean": 92.94,
+        "rh_min_mean": 59.56,
+        "rh_max_peak": 97.0,
+        "rh_min_trough": 35.0
+      }
+    },
+    "crop_rules": {
+      "temperature_min": {
+        "min": 10.0,
+        "source_section": "Weather Warning"
+      },
+      "temperature_max": {
+        "max": 35.0,
+        "source_section": "Weather Warning"
+      },
+      "humidity": {
+        "min": 59.6,
+        "max": 85.5,
+        "source_section": "derived_from_season_data"
+      },
+      "rainfall_daily": [
+        {
+          "severity": "medium",
+          "min": 50.0,
+          "source_section": "Weather Warning"
+        },
+        {
+          "severity": "critical",
+          "min": 100.0,
+          "source_section": "Weather Warning"
+        }
+      ],
+      "wind_speed_kmh": {
+        "max": 40.0,
+        "source_section": "Weather Warning"
+      }
+    },
+    "disease_risks": [
+      {
+        "name": "rhizome_rot",
+        "source_section": "Pest/Disease",
+        "description": "High soil moisture, temperature 25–28°C, high relative humidity (>80%), prolonged cloudy/rainy weather",
+        "applicable_period": "General / Spans multiple weeks",
+        "message": "Rhizome rot: High soil moisture, temperature 25–28°C, high relative humidity (>80%), prolonged cloudy/rainy weather",
+        "when": {
+          "temperature_mean": {
+            "min": 25.0,
+            "max": 28.0
+          },
+          "humidity": {
+            "min": 80.0
+          }
+        },
+        "evaluable_with_current_feeds": true,
+        "requires_additional_variables": [
+          "cloud_cover",
+          "soil_temperature"
+        ]
+      },
+      {
+        "name": "leaf_spot",
+        "source_section": "Pest/Disease",
+        "description": "Temperature 25–32°C, high relative humidity, cloudy weather, frequent rain",
+        "applicable_period": "General / Spans multiple weeks",
+        "message": "Leaf spot: Temperature 25–32°C, high relative humidity, cloudy weather, frequent rain",
+        "when": {
+          "temperature_mean": {
+            "min": 25.0,
+            "max": 32.0
+          }
+        },
+        "evaluable_with_current_feeds": true,
+        "requires_additional_variables": [
+          "cloud_cover"
+        ]
+      },
+      {
+        "name": "leaf_blotch",
+        "source_section": "Pest/Disease",
+        "description": "Temperature 25–32°C, high relative humidity, cloudy weather",
+        "applicable_period": "General / Spans multiple weeks",
+        "message": "Leaf blotch: Temperature 25–32°C, high relative humidity, cloudy weather",
+        "when": {
+          "temperature_mean": {
+            "min": 25.0,
+            "max": 32.0
+          }
+        },
+        "evaluable_with_current_feeds": true,
+        "requires_additional_variables": [
+          "cloud_cover"
+        ]
+      },
+      {
+        "name": "shoot_stem_borer",
+        "source_section": "Pest/Disease",
+        "description": "Minimum temperature >20°C, maximum 29–34°C, higher morning RH (>84%), dry weather",
+        "applicable_period": "General / Spans multiple weeks",
+        "message": "Shoot/stem borer: Minimum temperature >20°C, maximum 29–34°C, higher morning RH (>84%), dry weather",
+        "when": {
+          "temperature_min": {
+            "min": 20.0
+          },
+          "humidity": {
+            "min": 84.0
+          }
+        },
+        "evaluable_with_current_feeds": true
+      },
+      {
+        "name": "leaf_roller",
+        "source_section": "Pest/Disease",
+        "description": "Maximum temperature 32–33°C, relative humidity 92–95%",
+        "applicable_period": "General / Spans multiple weeks",
+        "message": "Leaf roller: Maximum temperature 32–33°C, relative humidity 92–95%",
+        "when": {
+          "temperature_max": {
+            "min": 32.0,
+            "max": 33.0
+          },
+          "humidity": {
+            "min": 92.0,
+            "max": 95.0
+          }
+        },
+        "evaluable_with_current_feeds": true
+      },
+      {
+        "name": "other_insects_e_g_scale_mealy_bug",
+        "source_section": "Pest/Disease",
+        "description": "High temperature (>32°C), high relative humidity (80–90%), intermittent rain",
+        "applicable_period": "General / Spans multiple weeks",
+        "message": "Other insects (e.g. scale, mealy bug): High temperature (>32°C), high relative humidity (80–90%), intermittent rain",
+        "when": {
+          "temperature_max": {
+            "min": 32.0
+          },
+          "humidity": {
+            "min": 80.0,
+            "max": 90.0
+          }
+        },
+        "evaluable_with_current_feeds": true
+      }
+    ],
+    "weather_warnings": [
+      {
+        "name": "Heavy Rain",
+        "description": ">50 mm/day: drainage/field inspection; >100 mm/day: high risk of waterlogging and rhizome disease",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Heavy rain: >50 mm/day: drainage/field inspection; >100 mm/day: high risk of waterlogging and rhizome disease"
+      },
+      {
+        "name": "Wet Spell",
+        "description": ">25 mm for 3 days or >50 mm for 4 days: drainage and disease surveillance",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Wet spell: >25 mm for 3 days or >50 mm for 4 days: drainage and disease surveillance"
+      },
+      {
+        "name": "High Wind",
+        "description": ">40–50 km/hr: risk of lodging/leaf damage; secure vulnerable fields",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "High wind: >40–50 km/hr: risk of lodging/leaf damage; secure vulnerable fields"
+      },
+      {
+        "name": "Low Temperature",
+        "description": "Minimum <10°C: unusual cold stress risk, especially for young crop",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Low temperature: Minimum <10°C: unusual cold stress risk, especially for young crop"
+      },
+      {
+        "name": "High Temperature",
+        "description": "Maximum >35°C: moisture-stress risk; prioritize irrigation/mulching where needed",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "High temperature: Maximum >35°C: moisture-stress risk; prioritize irrigation/mulching where needed"
+      }
+    ],
+    "pest_disease_advisories": [
+      {
+        "name": "Rhizome Rot",
+        "description": "High soil moisture, temperature 25–28°C, high relative humidity (>80%), prolonged cloudy/rainy weather",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Rhizome rot: High soil moisture, temperature 25–28°C, high relative humidity (>80%), prolonged cloudy/rainy weather"
+      },
+      {
+        "name": "Leaf Spot",
+        "description": "Temperature 25–32°C, high relative humidity, cloudy weather, frequent rain",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Leaf spot: Temperature 25–32°C, high relative humidity, cloudy weather, frequent rain"
+      },
+      {
+        "name": "Leaf Blotch",
+        "description": "Temperature 25–32°C, high relative humidity, cloudy weather",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Leaf blotch: Temperature 25–32°C, high relative humidity, cloudy weather"
+      },
+      {
+        "name": "Shoot/Stem Borer",
+        "description": "Minimum temperature >20°C, maximum 29–34°C, higher morning RH (>84%), dry weather",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Shoot/stem borer: Minimum temperature >20°C, maximum 29–34°C, higher morning RH (>84%), dry weather"
+      },
+      {
+        "name": "Leaf Roller",
+        "description": "Maximum temperature 32–33°C, relative humidity 92–95%",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Leaf roller: Maximum temperature 32–33°C, relative humidity 92–95%"
+      },
+      {
+        "name": "Other Insects (E.G. Scale, Mealy Bug)",
+        "description": "High temperature (>32°C), high relative humidity (80–90%), intermittent rain",
+        "applicable_period": "General / Spans multiple weeks",
+        "raw_text": "Other insects (e.g. scale, mealy bug): High temperature (>32°C), high relative humidity (80–90%), intermittent rain"
+      }
+    ],
+    "risk_by_stage": [
+      {
+        "stage": "Vegetative Growth",
+        "has_manual_rules": true,
+        "risk_weeks": [
+          {
+            "week": 27,
+            "month": "July",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 54.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 28,
+            "month": "July",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 59.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 29,
+            "month": "July",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 52.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 26,
+            "month": "June",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 57.0,
+                "severity": "medium"
+              }
+            ]
+          }
+        ],
+        "risk_week_count": 4
+      },
+      {
+        "stage": "Rhizome Initiation",
+        "has_manual_rules": true,
+        "risk_weeks": [],
+        "risk_week_count": 0
+      },
+      {
+        "stage": "Rhizome Enlargement",
+        "has_manual_rules": true,
+        "risk_weeks": [],
+        "risk_week_count": 0
+      },
+      {
+        "stage": "Maturity & Harvesting",
+        "has_manual_rules": true,
+        "risk_weeks": [],
+        "risk_week_count": 0
+      },
+      {
+        "stage": "Land Preparation & Planting",
+        "has_manual_rules": true,
+        "risk_weeks": [
+          {
+            "week": 15,
+            "month": "April",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 51.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 16,
+            "month": "April",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 78.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 17,
+            "month": "April",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 72.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 18,
+            "month": "May",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 66.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 19,
+            "month": "May",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 71.0,
+                "severity": "medium"
+              }
+            ]
+          }
+        ],
+        "risk_week_count": 5
+      },
+      {
+        "stage": "Germination & Establishment",
+        "has_manual_rules": true,
+        "risk_weeks": [
+          {
+            "week": 20,
+            "month": "May",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 75.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 21,
+            "month": "May",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 72.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 22,
+            "month": "May",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 52.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 23,
+            "month": "June",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 57.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 24,
+            "month": "June",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 64.0,
+                "severity": "medium"
+              }
+            ]
+          },
+          {
+            "week": 25,
+            "month": "June",
+            "alerts": [
+              {
+                "type": "excess_rainfall",
+                "threshold": 50.0,
+                "observed": 53.0,
+                "severity": "medium"
+              }
+            ]
+          }
+        ],
+        "risk_week_count": 6
+      }
+    ],
+    "source_chunks": {
+      "climate_count": 0,
+      "advisory_count": 0,
+      "climate_chunk_ids": [],
+      "advisory_chunk_ids": []
+    }
   }
 }

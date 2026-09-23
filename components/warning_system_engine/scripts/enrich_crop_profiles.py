@@ -798,6 +798,11 @@ def main() -> None:
         "--region", default=None, help="Only process this region (default: all)"
     )
     parser.add_argument("--output", default=str(_OUTPUT_FILE), help="Output JSON path")
+    parser.add_argument(
+        "--no-merge",
+        action="store_true",
+        help="Overwrite the output instead of merging a filtered run into it",
+    )
     args = parser.parse_args()
 
     # Preserve the manually transcribed, stage-aligned rules from the BAMIS PDFs.
@@ -871,6 +876,17 @@ def main() -> None:
 
     # ── Write output ──────────────────────────────────────────────────────────
     output_path = Path(args.output)
+
+    # A filtered run only rebuilds the crops it was asked for. Writing those
+    # alone would drop every other profile, so fold them into the existing file
+    # (same-key profiles are replaced, the rest are kept untouched).
+    if (args.crop or args.region) and not args.no_merge and output_path.exists():
+        existing = json.loads(output_path.read_text(encoding="utf-8"))
+        merged = dict(existing)
+        merged.update(profiles)
+        profiles = {key: merged[key] for key in sorted(merged)}
+        print(f"[INFO] Merged into {len(existing)} existing profiles")
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(profiles, f, ensure_ascii=False, indent=2)
 

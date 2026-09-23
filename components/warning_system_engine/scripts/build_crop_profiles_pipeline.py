@@ -23,7 +23,8 @@ Usage
   python scripts/build_crop_profiles_pipeline.py \\
       --pdf-dir /data/raw_pdfs --skip-parse
 
-  # Single crop × region (e.g. after re-crawling only potato)
+  # Single crop × region (e.g. after re-crawling only potato). The filtered
+  # crop is merged into the existing JSON artefacts; the other crops are kept.
   python scripts/build_crop_profiles_pipeline.py \\
       --pdf-dir /data/raw_pdfs --crop potato --region dhaka
 
@@ -48,11 +49,12 @@ from pathlib import Path
 
 # Allow running from any working directory inside the container
 _SCRIPTS_DIR = Path(__file__).resolve().parent
-_ENGINE_ROOT  = _SCRIPTS_DIR.parent
+_ENGINE_ROOT = _SCRIPTS_DIR.parent
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
 import enrich_crop_profiles
 import generate_crop_modules
+
 # parse_bamis_pdfs is imported lazily in step_parse() — it requires pdfplumber
 # which may not be installed in all environments.
 
@@ -60,7 +62,7 @@ import generate_crop_modules
 # ---------------------------------------------------------------------------
 # Defaults (can be overridden via env vars or CLI flags)
 # ---------------------------------------------------------------------------
-_DEFAULT_PDF_DIR  = Path(os.getenv("BAMIS_PDF_DIR",  ""))
+_DEFAULT_PDF_DIR = Path(os.getenv("BAMIS_PDF_DIR", ""))
 _DEFAULT_DATA_DIR = Path(os.getenv("BAMIS_DATA_DIR", str(_ENGINE_ROOT / "data")))
 
 
@@ -68,14 +70,20 @@ _DEFAULT_DATA_DIR = Path(os.getenv("BAMIS_DATA_DIR", str(_ENGINE_ROOT / "data"))
 # Step 1 – Parse PDFs → bamis_metadata.json
 # ---------------------------------------------------------------------------
 
+
 def step_parse(
     pdf_dir: Path,
     data_dir: Path,
     crop_filter: str | None,
     region_filter: str | None,
     verbose: bool,
+    merge: bool = True,
 ) -> int:
-    """Parse PDFs and write bamis_metadata.json. Returns number of records."""
+    """Parse PDFs and write bamis_metadata.json. Returns number of records.
+
+    With a --crop/--region filter, the parsed records are merged into the
+    existing bamis_metadata.json so adding one crop leaves the others intact.
+    """
     print("\n── Step 1: Parse PDFs ─────────────────────────────────────────")
     print(f"   PDF dir  : {pdf_dir}")
 
@@ -100,12 +108,18 @@ def step_parse(
 
     meta_path = data_dir / "bamis_metadata.json"
     data_dir.mkdir(parents=True, exist_ok=True)
+
+    if merge and (crop_filter or region_filter) and meta_path.exists():
+        existing = json.loads(meta_path.read_text(encoding="utf-8"))
+        records = parse_bamis_pdfs.merge_records(existing, records)
+        print(f"   Merged into {len(existing)} existing records")
+
     meta_path.write_text(
         json.dumps(records, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
-    climate_n  = sum(1 for r in records if "week_number" in r)
+    climate_n = sum(1 for r in records if "week_number" in r)
     advisory_n = len(records) - climate_n
     elapsed = time.time() - t0
     print(
@@ -119,11 +133,13 @@ def step_parse(
 # Step 2 – Enrich crop profiles
 # ---------------------------------------------------------------------------
 
+
 def step_enrich(
     data_dir: Path,
     crop_filter: str | None,
     region_filter: str | None,
     output_path: Path | None,
+    merge: bool = True,
 ) -> int:
     """Run enrich_crop_profiles and write example_crop_profile.json. Returns profile count."""
     print("\n── Step 2: Enrich crop profiles ───────────────────────────────")
@@ -139,7 +155,7 @@ def step_enrich(
     t0 = time.time()
 
     # Monkey-patch the module-level path constants so enrich uses our paths
-    enrich_crop_profiles._BAMIS_META  = meta_path
+    enrich_crop_profiles._BAMIS_META = meta_path
     enrich_crop_profiles._OUTPUT_FILE = out
 
     # Build argv for enrich's argparse
@@ -150,6 +166,8 @@ def step_enrich(
     if region_filter:
         sys.argv += ["--region", region_filter]
     sys.argv += ["--output", str(out)]
+    if not merge:
+        sys.argv += ["--no-merge"]
 
     try:
         enrich_crop_profiles.main()
@@ -165,6 +183,7 @@ def step_enrich(
 # ---------------------------------------------------------------------------
 # Step 3 – Generate Python crop modules
 # ---------------------------------------------------------------------------
+
 
 def step_generate(
     data_dir: Path,
@@ -201,6 +220,7 @@ def step_generate(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="BAMIS PDF → crop profile pipeline for warning_system_engine",
@@ -208,40 +228,58 @@ def main() -> None:
         epilog=__doc__,
     )
     ap.add_argument(
-        "--pdf-dir", type=Path,
+        "--pdf-dir",
+        type=Path,
         default=_DEFAULT_PDF_DIR if _DEFAULT_PDF_DIR.parts else None,
         help="Root directory of BAMIS PDFs (raw/<crop>/<region>/<crop>_<region>.pdf)",
     )
     ap.add_argument(
-        "--data-dir", type=Path,
+        "--data-dir",
+        type=Path,
         default=_DEFAULT_DATA_DIR,
         help=f"Output directory for JSON artefacts (default: {_DEFAULT_DATA_DIR})",
     )
     ap.add_argument(
-        "--crops-dir", type=Path,
+        "--crops-dir",
+        type=Path,
         default=_ENGINE_ROOT / "app" / "crops",
         help="Parent directory for generated crop modules (default: app/crops/)",
     )
-    ap.add_argument("--crop",   default=None, help="Process only this crop")
+    ap.add_argument("--crop", default=None, help="Process only this crop")
     ap.add_argument("--region", default=None, help="Process only this region")
     ap.add_argument(
-        "--skip-parse", action="store_true",
+        "--skip-parse",
+        action="store_true",
         help="Skip PDF parsing; use existing bamis_metadata.json",
     )
     ap.add_argument(
-        "--skip-enrich", action="store_true",
+        "--skip-enrich",
+        action="store_true",
         help="Skip profile enrichment; use existing example_crop_profile.json",
     )
     ap.add_argument(
-        "--skip-generate", action="store_true",
+        "--skip-generate",
+        action="store_true",
         help="Skip Python module generation (steps 1–2 only)",
     )
     ap.add_argument(
-        "--no-overwrite", action="store_true",
+        "--no-overwrite",
+        action="store_true",
         help="Do not overwrite existing crop module files",
     )
     ap.add_argument(
-        "--output", type=Path, default=None,
+        "--no-merge",
+        action="store_true",
+        help=(
+            "With --crop/--region, replace bamis_metadata.json and "
+            "example_crop_profile.json instead of merging the filtered crop "
+            "into them (drops every crop the filter excluded)"
+        ),
+    )
+    ap.add_argument(
+        "--output",
+        type=Path,
+        default=None,
         help="Override output path for example_crop_profile.json",
     )
     ap.add_argument("--quiet", action="store_true", help="Suppress per-file messages")
@@ -269,6 +307,7 @@ def main() -> None:
             crop_filter=args.crop,
             region_filter=args.region,
             verbose=not args.quiet,
+            merge=not args.no_merge,
         )
 
     # ── Step 2: Enrich profiles ──────────────────────────────────
@@ -280,6 +319,7 @@ def main() -> None:
             crop_filter=args.crop,
             region_filter=args.region,
             output_path=args.output,
+            merge=not args.no_merge,
         )
 
     # ── Step 3: Generate Python modules ─────────────────────────
@@ -295,9 +335,9 @@ def main() -> None:
         )
 
     total = time.time() - t_start
-    print(f"\n{'═'*60}")
+    print(f"\n{'═' * 60}")
     print(f"  Pipeline complete in {total:.1f}s")
-    print(f"{'═'*60}")
+    print(f"{'═' * 60}")
 
 
 if __name__ == "__main__":

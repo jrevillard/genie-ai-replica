@@ -1597,5 +1597,925 @@
       }
     },
     "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 13,
+    "month": "April",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 36.0,
+    "max_temp_c": 34.5,
+    "min_temp_c": 22.5,
+    "mean_temp_c": 28.5,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 52.0,
+    "wind_speed_kmh": 7.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 14,
+    "month": "April",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 42.0,
+    "max_temp_c": 34.2,
+    "min_temp_c": 24.0,
+    "mean_temp_c": 29.1,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 58.0,
+    "wind_speed_kmh": 6.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 15,
+    "month": "April",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 51.0,
+    "max_temp_c": 34.1,
+    "min_temp_c": 25.0,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 65.0,
+    "wind_speed_kmh": 6.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 16,
+    "month": "April",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 78.0,
+    "max_temp_c": 33.6,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.8,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 72.0,
+    "wind_speed_kmh": 6.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 17,
+    "month": "April",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 72.0,
+    "max_temp_c": 33.2,
+    "min_temp_c": 26.5,
+    "mean_temp_c": 29.9,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 74.0,
+    "wind_speed_kmh": 6.1
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 18,
+    "month": "May",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 66.0,
+    "max_temp_c": 32.8,
+    "min_temp_c": 26.5,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 97.0,
+    "rh_min_percent": 75.0,
+    "wind_speed_kmh": 6.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 19,
+    "month": "May",
+    "crop_stage": "Land preparation & planting",
+    "rainfall_mm": 71.0,
+    "max_temp_c": 32.6,
+    "min_temp_c": 26.5,
+    "mean_temp_c": 29.6,
+    "rh_max_percent": 97.0,
+    "rh_min_percent": 74.0,
+    "wind_speed_kmh": 5.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 20,
+    "month": "May",
+    "crop_stage": "Germination & establishment",
+    "rainfall_mm": 75.0,
+    "max_temp_c": 32.4,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.2,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 73.0,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 21,
+    "month": "May",
+    "crop_stage": "Germination & establishment",
+    "rainfall_mm": 72.0,
+    "max_temp_c": 32.3,
+    "min_temp_c": 25.8,
+    "mean_temp_c": 29.0,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 72.0,
+    "wind_speed_kmh": 5.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 22,
+    "month": "May",
+    "crop_stage": "Germination & establishment",
+    "rainfall_mm": 52.0,
+    "max_temp_c": 32.1,
+    "min_temp_c": 25.6,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 71.0,
+    "wind_speed_kmh": 5.4
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 23,
+    "month": "June",
+    "crop_stage": "Germination & establishment",
+    "rainfall_mm": 57.0,
+    "max_temp_c": 32.0,
+    "min_temp_c": 25.5,
+    "mean_temp_c": 28.8,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 70.0,
+    "wind_speed_kmh": 5.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 24,
+    "month": "June",
+    "crop_stage": "Germination & establishment",
+    "rainfall_mm": 64.0,
+    "max_temp_c": 32.1,
+    "min_temp_c": 25.4,
+    "mean_temp_c": 28.8,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 69.0,
+    "wind_speed_kmh": 5.1
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 25,
+    "month": "June",
+    "crop_stage": "Germination & establishment",
+    "rainfall_mm": 53.0,
+    "max_temp_c": 32.4,
+    "min_temp_c": 25.3,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 68.0,
+    "wind_speed_kmh": 5.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 26,
+    "month": "June",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 57.0,
+    "max_temp_c": 32.8,
+    "min_temp_c": 25.1,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 67.0,
+    "wind_speed_kmh": 4.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 27,
+    "month": "July",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 54.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 24.8,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 96.0,
+    "rh_min_percent": 66.0,
+    "wind_speed_kmh": 4.7
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 28,
+    "month": "July",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 59.0,
+    "max_temp_c": 33.2,
+    "min_temp_c": 24.5,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 64.0,
+    "wind_speed_kmh": 4.6
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 29,
+    "month": "July",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 52.0,
+    "max_temp_c": 32.0,
+    "min_temp_c": 22.1,
+    "mean_temp_c": 27.1,
+    "rh_max_percent": 94.0,
+    "rh_min_percent": 58.0,
+    "wind_speed_kmh": 4.4
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 30,
+    "month": "July",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 44.0,
+    "max_temp_c": 31.5,
+    "min_temp_c": 21.5,
+    "mean_temp_c": 26.5,
+    "rh_max_percent": 93.0,
+    "rh_min_percent": 55.0,
+    "wind_speed_kmh": 4.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 31,
+    "month": "August",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 35.0,
+    "max_temp_c": 31.0,
+    "min_temp_c": 21.1,
+    "mean_temp_c": 26.1,
+    "rh_max_percent": 92.0,
+    "rh_min_percent": 52.0,
+    "wind_speed_kmh": 4.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 32,
+    "month": "August",
+    "crop_stage": "Vegetative growth",
+    "rainfall_mm": 28.0,
+    "max_temp_c": 30.5,
+    "min_temp_c": 20.5,
+    "mean_temp_c": 25.5,
+    "rh_max_percent": 91.0,
+    "rh_min_percent": 49.0,
+    "wind_speed_kmh": 3.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 33,
+    "month": "August",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 28.0,
+    "max_temp_c": 30.1,
+    "min_temp_c": 20.2,
+    "mean_temp_c": 25.1,
+    "rh_max_percent": 90.0,
+    "rh_min_percent": 46.0,
+    "wind_speed_kmh": 3.6
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 34,
+    "month": "August",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 20.0,
+    "max_temp_c": 29.8,
+    "min_temp_c": 20.0,
+    "mean_temp_c": 24.9,
+    "rh_max_percent": 89.0,
+    "rh_min_percent": 43.0,
+    "wind_speed_kmh": 3.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 35,
+    "month": "September",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 12.0,
+    "max_temp_c": 29.6,
+    "min_temp_c": 19.8,
+    "mean_temp_c": 24.7,
+    "rh_max_percent": 88.0,
+    "rh_min_percent": 40.0,
+    "wind_speed_kmh": 3.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 36,
+    "month": "September",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 8.0,
+    "max_temp_c": 29.4,
+    "min_temp_c": 19.0,
+    "mean_temp_c": 24.2,
+    "rh_max_percent": 87.0,
+    "rh_min_percent": 38.0,
+    "wind_speed_kmh": 3.6
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 37,
+    "month": "September",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 6.0,
+    "max_temp_c": 29.5,
+    "min_temp_c": 18.5,
+    "mean_temp_c": 24.0,
+    "rh_max_percent": 86.0,
+    "rh_min_percent": 36.0,
+    "wind_speed_kmh": 3.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 38,
+    "month": "September",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 5.0,
+    "max_temp_c": 29.8,
+    "min_temp_c": 18.0,
+    "mean_temp_c": 23.9,
+    "rh_max_percent": 86.0,
+    "rh_min_percent": 35.0,
+    "wind_speed_kmh": 4.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 39,
+    "month": "September",
+    "crop_stage": "Rhizome initiation",
+    "rainfall_mm": 6.0,
+    "max_temp_c": 30.0,
+    "min_temp_c": 18.5,
+    "mean_temp_c": 24.2,
+    "rh_max_percent": 87.0,
+    "rh_min_percent": 36.0,
+    "wind_speed_kmh": 4.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 40,
+    "month": "October",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 8.0,
+    "max_temp_c": 30.4,
+    "min_temp_c": 19.0,
+    "mean_temp_c": 24.7,
+    "rh_max_percent": 88.0,
+    "rh_min_percent": 38.0,
+    "wind_speed_kmh": 4.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 41,
+    "month": "October",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 10.0,
+    "max_temp_c": 29.5,
+    "min_temp_c": 19.5,
+    "mean_temp_c": 24.5,
+    "rh_max_percent": 86.0,
+    "rh_min_percent": 36.0,
+    "wind_speed_kmh": 4.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 42,
+    "month": "October",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 12.0,
+    "max_temp_c": 29.7,
+    "min_temp_c": 20.0,
+    "mean_temp_c": 24.9,
+    "rh_max_percent": 87.0,
+    "rh_min_percent": 36.0,
+    "wind_speed_kmh": 5.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 43,
+    "month": "October",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 16.0,
+    "max_temp_c": 30.4,
+    "min_temp_c": 20.5,
+    "mean_temp_c": 25.4,
+    "rh_max_percent": 88.0,
+    "rh_min_percent": 38.0,
+    "wind_speed_kmh": 5.6
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 44,
+    "month": "November",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 18.0,
+    "max_temp_c": 30.8,
+    "min_temp_c": 21.0,
+    "mean_temp_c": 25.9,
+    "rh_max_percent": 89.0,
+    "rh_min_percent": 40.0,
+    "wind_speed_kmh": 6.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 45,
+    "month": "November",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 14.0,
+    "max_temp_c": 31.2,
+    "min_temp_c": 21.5,
+    "mean_temp_c": 26.4,
+    "rh_max_percent": 90.0,
+    "rh_min_percent": 43.0,
+    "wind_speed_kmh": 6.4
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 46,
+    "month": "November",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 10.0,
+    "max_temp_c": 31.8,
+    "min_temp_c": 22.0,
+    "mean_temp_c": 26.9,
+    "rh_max_percent": 91.0,
+    "rh_min_percent": 47.0,
+    "wind_speed_kmh": 6.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 47,
+    "month": "November",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 8.0,
+    "max_temp_c": 32.2,
+    "min_temp_c": 22.5,
+    "mean_temp_c": 27.4,
+    "rh_max_percent": 92.0,
+    "rh_min_percent": 52.0,
+    "wind_speed_kmh": 7.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 48,
+    "month": "November",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 5.0,
+    "max_temp_c": 32.5,
+    "min_temp_c": 23.0,
+    "mean_temp_c": 27.8,
+    "rh_max_percent": 93.0,
+    "rh_min_percent": 56.0,
+    "wind_speed_kmh": 7.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 49,
+    "month": "December",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 4.0,
+    "max_temp_c": 32.8,
+    "min_temp_c": 23.5,
+    "mean_temp_c": 28.1,
+    "rh_max_percent": 94.0,
+    "rh_min_percent": 60.0,
+    "wind_speed_kmh": 7.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 50,
+    "month": "December",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 3.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 24.0,
+    "mean_temp_c": 28.5,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 64.0,
+    "wind_speed_kmh": 8.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 51,
+    "month": "December",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 4.0,
+    "max_temp_c": 33.2,
+    "min_temp_c": 24.5,
+    "mean_temp_c": 28.9,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 67.0,
+    "wind_speed_kmh": 8.2
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 52,
+    "month": "December",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 5.0,
+    "max_temp_c": 33.3,
+    "min_temp_c": 25.0,
+    "mean_temp_c": 29.1,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 70.0,
+    "wind_speed_kmh": 8.5
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 1,
+    "month": "January",
+    "crop_stage": "Rhizome enlargement",
+    "rainfall_mm": 8.0,
+    "max_temp_c": 33.5,
+    "min_temp_c": 25.5,
+    "mean_temp_c": 29.5,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 72.0,
+    "wind_speed_kmh": 8.7
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 2,
+    "month": "January",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 12.0,
+    "max_temp_c": 33.6,
+    "min_temp_c": 26.0,
+    "mean_temp_c": 29.8,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 75.0,
+    "wind_speed_kmh": 8.9
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 3,
+    "month": "January",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 18.0,
+    "max_temp_c": 33.8,
+    "min_temp_c": 26.5,
+    "mean_temp_c": 30.1,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 77.0,
+    "wind_speed_kmh": 9.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 4,
+    "month": "January",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 20.0,
+    "max_temp_c": 34.0,
+    "min_temp_c": 27.0,
+    "mean_temp_c": 30.5,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 78.0,
+    "wind_speed_kmh": 9.1
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 5,
+    "month": "February",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 22.0,
+    "max_temp_c": 33.5,
+    "min_temp_c": 27.5,
+    "mean_temp_c": 30.5,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 80.0,
+    "wind_speed_kmh": 9.0
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 6,
+    "month": "February",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 24.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 28.0,
+    "mean_temp_c": 30.5,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 82.0,
+    "wind_speed_kmh": 8.8
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 7,
+    "month": "February",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 18.0,
+    "max_temp_c": 33.0,
+    "min_temp_c": 28.5,
+    "mean_temp_c": 30.8,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 84.0,
+    "wind_speed_kmh": 8.6
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "week_number": 8,
+    "month": "February",
+    "crop_stage": "Maturity & harvesting",
+    "rainfall_mm": 18.0,
+    "max_temp_c": 33.2,
+    "min_temp_c": 29.0,
+    "mean_temp_c": 31.1,
+    "rh_max_percent": 95.0,
+    "rh_min_percent": 86.0,
+    "wind_speed_kmh": 8.4
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Rhizome Rot",
+    "description": "High soil moisture, temperature 25–28°C, high relative humidity (>80%), prolonged cloudy/rainy weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Rhizome rot: High soil moisture, temperature 25–28°C, high relative humidity (>80%), prolonged cloudy/rainy weather",
+    "when": {
+      "temperature_mean": {
+        "min": 25.0,
+        "max": 28.0
+      },
+      "humidity": {
+        "min": 80.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover",
+      "soil_temperature"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Leaf Spot",
+    "description": "Temperature 25–32°C, high relative humidity, cloudy weather, frequent rain",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Leaf spot: Temperature 25–32°C, high relative humidity, cloudy weather, frequent rain",
+    "when": {
+      "temperature_mean": {
+        "min": 25.0,
+        "max": 32.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Leaf Blotch",
+    "description": "Temperature 25–32°C, high relative humidity, cloudy weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Leaf blotch: Temperature 25–32°C, high relative humidity, cloudy weather",
+    "when": {
+      "temperature_mean": {
+        "min": 25.0,
+        "max": 32.0
+      }
+    },
+    "requires_additional_variables": [
+      "cloud_cover"
+    ],
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Shoot/Stem Borer",
+    "description": "Minimum temperature >20°C, maximum 29–34°C, higher morning RH (>84%), dry weather",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Shoot/stem borer: Minimum temperature >20°C, maximum 29–34°C, higher morning RH (>84%), dry weather",
+    "when": {
+      "temperature_min": {
+        "min": 20.0
+      },
+      "humidity": {
+        "min": 84.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Leaf Roller",
+    "description": "Maximum temperature 32–33°C, relative humidity 92–95%",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Leaf roller: Maximum temperature 32–33°C, relative humidity 92–95%",
+    "when": {
+      "temperature_max": {
+        "min": 32.0,
+        "max": 33.0
+      },
+      "humidity": {
+        "min": 92.0,
+        "max": 95.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Pest/Disease",
+    "name": "Other Insects (E.G. Scale, Mealy Bug)",
+    "description": "High temperature (>32°C), high relative humidity (80–90%), intermittent rain",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Other insects (e.g. scale, mealy bug): High temperature (>32°C), high relative humidity (80–90%), intermittent rain",
+    "when": {
+      "temperature_max": {
+        "min": 32.0
+      },
+      "humidity": {
+        "min": 80.0,
+        "max": 90.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Heavy Rain",
+    "description": ">50 mm/day: drainage/field inspection; >100 mm/day: high risk of waterlogging and rhizome disease",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Heavy rain: >50 mm/day: drainage/field inspection; >100 mm/day: high risk of waterlogging and rhizome disease",
+    "when": {
+      "rainfall_mm": {
+        "min": 50.0
+      }
+    },
+    "evaluable_with_current_feeds": true,
+    "thresholds": {
+      "rainfall_mm": [
+        50.0,
+        100.0
+      ]
+    }
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Wet Spell",
+    "description": ">25 mm for 3 days or >50 mm for 4 days: drainage and disease surveillance",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Wet spell: >25 mm for 3 days or >50 mm for 4 days: drainage and disease surveillance",
+    "requires_additional_variables": [
+      "wet_spell_duration"
+    ],
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "High Wind",
+    "description": ">40–50 km/hr: risk of lodging/leaf damage; secure vulnerable fields",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "High wind: >40–50 km/hr: risk of lodging/leaf damage; secure vulnerable fields",
+    "evaluable_with_current_feeds": false,
+    "thresholds": {
+      "wind_speed_kmh": [
+        40.0,
+        50.0
+      ]
+    }
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "Low Temperature",
+    "description": "Minimum <10°C: unusual cold stress risk, especially for young crop",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "Low temperature: Minimum <10°C: unusual cold stress risk, especially for young crop",
+    "when": {
+      "temperature_min": {
+        "max": 10.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Weather Warning",
+    "name": "High Temperature",
+    "description": "Maximum >35°C: moisture-stress risk; prioritize irrigation/mulching where needed",
+    "applicable_period": "General / Spans multiple weeks",
+    "raw_text": "High temperature: Maximum >35°C: moisture-stress risk; prioritize irrigation/mulching where needed",
+    "when": {
+      "temperature_max": {
+        "min": 35.0
+      }
+    },
+    "evaluable_with_current_feeds": true
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Variety",
+    "name": "Bari Holud-1 (Dimla)",
+    "description": "270–280 days; planting late March–early April; harvest late January–early March; 28–32 t/ha",
+    "applicable_period": "March",
+    "raw_text": "BARI Holud-1 (Dimla): 270–280 days; planting late March–early April; harvest late January–early March; 28–32 t/ha",
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Variety",
+    "name": "Bari Holud-2 (Sinduri)",
+    "description": "270–280 days; planting late March–early April; harvest late January–early March; 25–28 t/ha",
+    "applicable_period": "March",
+    "raw_text": "BARI Holud-2 (Sinduri): 270–280 days; planting late March–early April; harvest late January–early March; 25–28 t/ha",
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Variety",
+    "name": "Bari Holud-3",
+    "description": "270–290 days; planting late March–early April; harvest late January–early March; 25–30 t/ha",
+    "applicable_period": "March",
+    "raw_text": "BARI Holud-3: 270–290 days; planting late March–early April; harvest late January–early March; 25–30 t/ha",
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Variety",
+    "name": "Bari Holud-4",
+    "description": "270–290 days; planting mid-April–early May; harvest mid/late February; 28–30 t/ha",
+    "applicable_period": "April",
+    "raw_text": "BARI Holud-4: 270–290 days; planting mid-April–early May; harvest mid/late February; 28–30 t/ha",
+    "evaluable_with_current_feeds": false
+  },
+  {
+    "crop": "turmeric",
+    "region": "rajshahi",
+    "category": "Variety",
+    "name": "Bari Holud-5",
+    "description": "270–300 days; planting mid-April–early May; harvest mid/late February; 18–20 t/ha",
+    "applicable_period": "April",
+    "raw_text": "BARI Holud-5: 270–300 days; planting mid-April–early May; harvest mid/late February; 18–20 t/ha",
+    "evaluable_with_current_feeds": false
   }
 ]

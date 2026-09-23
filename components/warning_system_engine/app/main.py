@@ -10,7 +10,8 @@ Long-term (weekly Mon 06:00 UTC):
   → LongTermCropEWS compares against example_crop_profile.json thresholds
   → stores seasonal_assessments → logs seasonal advisory alerts
 
-The crops under watch come from EWS_CROPS (default: eggplant,rice_aman,mango). Each
+The crops under watch come from EWS_CROPS (default:
+eggplant,rice_aman,mango,turmeric). Each
 must have a generated module in app/crops/<crop>/ — see
 scripts/build_crop_profiles_pipeline.py.
 
@@ -38,7 +39,7 @@ logger = logging.getLogger("warning_system_engine")
 
 # Crops watched by the short-term and seasonal pipelines. Each needs a module
 # in app/crops/<crop>/ generated from its BAMIS calendar PDF.
-DEFAULT_EWS_CROPS = "eggplant,rice_aman,mango"
+DEFAULT_EWS_CROPS = "eggplant,rice_aman,mango,turmeric"
 
 
 def _configured_crops() -> list[str]:

@@ -1,7 +1,8 @@
 const CROP_EMOJIS = [
   { emoji: '🌾', pattern: /\b(?:rice aman|aman rice|rice)\b/i },
   { emoji: '🍆', pattern: /\beggplant\b/i },
-  { emoji: '🥭', pattern: /\bmango\b/i }
+  { emoji: '🥭', pattern: /\bmango\b/i },
+  { emoji: '🫚', pattern: /\bturmeric\b/i }
 ];
 
 const WEATHER_EMOJIS = [

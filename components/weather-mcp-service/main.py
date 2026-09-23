@@ -1292,15 +1292,32 @@ def _crop_label(crop: str) -> str:
 # matching inside a longer Bengali word.
 # Romanised "begun" is deliberately absent: it is also the English participle
 # ("the rains have begun").
+#
+# হলুদ (turmeric) is also the adjective "yellow", so a disease question about
+# yellow leaves ("হলুদ পাতা") would otherwise attach the turmeric profile. The
+# lookahead excludes the things farmers describe as yellow; the crop reading
+# survives everywhere else.
 _CROP_QUERY_PATTERNS = {
     "rice_aman": r"\b(?:rice|paddy|dhan|aman)\b|(?<![ঀ-৿])(?:ধান|আমন)",
     "eggplant": r"\b(?:eggplant|brinjal)s?\b|(?<![ঀ-৿])বেগুন(?!ি)",
     "mango": r"\bmango(?:es)?\b|\baam\b|(?<![ঀ-৿])আম(?!ি|ার|রা|াদের|াকে|ায়|ন)",
+    "turmeric": (
+        r"\bturmeric\b|\bholud\b"
+        r"|(?<![ঀ-৿])(?<!রং )(?<!রঙ )হলুদ(?!ে|ি)"
+        r"(?!\s*(?:পাতা|পাতার|ফুল|রং|রঙ|রঙের|দাগ))"
+    ),
 }
 # One emoji per supported crop, injected into the profile instruction so the
 # LLM never has to choose: told to "use a suitable crop emoji", the 4B model
 # put 🍆 on every mango disease.
-_CROP_EMOJI = {"rice_aman": "🌾", "eggplant": "🍆", "mango": "🥭"}
+_CROP_EMOJI = {
+    "rice_aman": "🌾",
+    "eggplant": "🍆",
+    "mango": "🥭",
+    # No turmeric emoji exists; the rhizome is the harvested part, so the root
+    # vegetable reads closer than a leaf or flower.
+    "turmeric": "🫚",
+}
 _CROP_PLANTING_COMPARISON = re.compile(
     r"(?=.*\bcrops?\b)(?=.*\b(?:plant|planting|sow|sowing)\b)"
     r"(?=.*\b(?:which|what|recommend|best)\b)",

@@ -88,22 +88,13 @@ class TestEnsureVectorIndex:
 
     @pytest.mark.asyncio
     async def test_dim_staleness_recreates(self):
-        # Canonical `vector_index` is present at the wrong dim. Must be dropped
-        # and recreated at the current dim. Any orphan `idx_embedding_*` with
-        # the same wrong dim must also be pruned in the same pass.
         existing = [
             {
                 "name": "vector_index",
                 "type": "vector",
                 "fields": ["embedding"],
                 "params": {"dimension": 768, "metric": "cosine", "nLists": 1},
-            },
-            {
-                "name": "idx_embedding_768",
-                "type": "vector",
-                "fields": ["embedding"],
-                "params": {"dimension": 768, "metric": "cosine", "nLists": 1},
-            },
+            }
         ]
         coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
         write_log = AsyncMock()
@@ -117,12 +108,8 @@ class TestEnsureVectorIndex:
         )
 
         assert name == "vector_index"
-        # Both indexes must be dropped (canonical first, then orphan prune).
-        delete_calls = [c.args[0] for c in coll.delete_index.call_args_list]
-        assert "vector_index" in delete_calls
-        assert "idx_embedding_768" in delete_calls
+        coll.delete_index.assert_called_once_with("vector_index")
         coll.add_index.assert_called_once()
-        assert coll.add_index.call_args.args[0]["name"] == "vector_index"
         assert coll.add_index.call_args.args[0]["params"]["dimension"] == 1024
         log_msg = write_log.call_args.args[3]
         assert "Recreated" in log_msg
@@ -268,62 +255,6 @@ class TestEnsureVectorIndex:
         assert name == "vector_index"
         coll.add_index.assert_not_called()
         coll.delete_index.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_legacy_idx_embedding_orphan_pruned_on_dim_staleness(self):
-        """An old-helper-name `idx_embedding_<dim>` orphan with stale dim is pruned and replaced by `vector_index`."""
-        existing = [
-            {
-                "name": "idx_embedding_768",
-                "type": "vector",
-                "fields": ["embedding"],
-                "params": {"dimension": 768, "metric": "cosine", "nLists": 1},
-            }
-        ]
-        coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
-        write_log = AsyncMock()
-
-        await ensure_vector_index(
-            coll,
-            metric="cosine",
-            n_lists=1,
-            file_id="file-1",
-            write_ingestion_log=write_log,
-        )
-        # The old-helper orphan is dropped because the collection moved to 1024-dim.
-        coll.delete_index.assert_called_once_with("idx_embedding_768")
-        # The canonical `vector_index` is created.
-        assert any(call.args[0]["name"] == "vector_index" for call in coll.add_index.call_args_list)
-
-    @pytest.mark.asyncio
-    async def test_legacy_idx_embedding_orphan_pruned_when_idempotent(self):
-        """An old-helper-name `idx_embedding_*` orphan co-existing with canonical `vector_index` is pruned."""
-        existing = [
-            {
-                "name": "vector_index",
-                "type": "vector",
-                "fields": ["embedding"],
-                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1},
-            },
-            {
-                "name": "idx_embedding_1024",
-                "type": "vector",
-                "fields": ["embedding"],
-                "params": {"dimension": 1024, "metric": "cosine", "nLists": 1},
-            },
-        ]
-        coll = _make_collection(sample_embedding=[0.1] * 1024, existing_indexes=existing)
-        write_log = AsyncMock()
-
-        await ensure_vector_index(
-            coll,
-            metric="cosine",
-            n_lists=1,
-            file_id="file-1",
-            write_ingestion_log=write_log,
-        )
-        coll.delete_index.assert_called_once_with("idx_embedding_1024")
-        coll.add_index.assert_not_called()
 
 
 class TestReadIndexParams:

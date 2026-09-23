@@ -300,8 +300,9 @@ async def ensure_vector_index(
             span.set_attribute("dataprep.index_action", "skip")
 
             existing = collection.indexes()
-            # Only the canonical `vector_index` is treated as the live index —
-            # any `idx_embedding_*` orphans are picked up by the prune below.
+            # The canonical `vector_index` is the langchain-arangodb default
+            # (`ArangoVector.vector_index_name`) and the only index the
+            # retriever queries.
             vec_idx = next(
                 (
                     i
@@ -310,24 +311,6 @@ async def ensure_vector_index(
                 ),
                 None,
             )
-            # Prune any pre-existing `idx_embedding_<dim>` orphans (the name an
-            # earlier version of this helper used). After the rename to the
-            # langchain-arangodb default `vector_index`, these would otherwise
-            # linger alongside the canonical index and confuse the retriever.
-            idx_embedding_orphans = [
-                i
-                for i in existing
-                if i.get("name", "").startswith("idx_embedding_")
-                and i.get("type") == "vector"
-                and field in i.get("fields", [])
-            ]
-
-            def _prune_orphans():
-                # Orphans always carry the `idx_embedding_` prefix, distinct
-                # from the canonical `vector_index` we manage — safe to drop
-                # unconditionally.
-                for orphan in idx_embedding_orphans:
-                    collection.delete_index(orphan["name"])
 
             def _build_index():
                 return {
@@ -338,7 +321,6 @@ async def ensure_vector_index(
                 }
 
             if vec_idx is None:
-                _prune_orphans()
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "create")
                 if write_ingestion_log and file_id:
@@ -354,7 +336,6 @@ async def ensure_vector_index(
             existing_dim = vec_idx.get("params", {}).get("dimension")
             if existing_dim != dim:
                 collection.delete_index(vec_idx["name"])
-                _prune_orphans()
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "recreate")
                 if write_ingestion_log and file_id:
@@ -375,7 +356,6 @@ async def ensure_vector_index(
                 # Metric/nLists are structural — ArangoDB cannot patch them in
                 # place on an existing vector index; drop + recreate.
                 collection.delete_index(vec_idx["name"])
-                _prune_orphans()
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "recreate")
                 if write_ingestion_log and file_id:
@@ -389,8 +369,7 @@ async def ensure_vector_index(
                         f"want={metric}/{n_lists}).",
                     )
                 return desired_name
-            # Idempotent no-op. Still prune any orphan `idx_embedding_*` if it coexists.
-            _prune_orphans()
+            # Idempotent no-op.
             return vec_idx["name"]
         except Exception as e:
             if write_ingestion_log and file_id:

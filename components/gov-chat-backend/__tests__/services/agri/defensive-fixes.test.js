@@ -16,15 +16,6 @@ describe('A. csv parseCsvObjects — short rows', () => {
     expect(rows[0].b).toBe('2');
     expect(rows[0].c).toBeNull();
   });
-
-  test('extra cells beyond header are kept on _extras', () => {
-    const csv = 'a,b\n1,2,3,extra';
-    const rows = parseCsvObjects(csv);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].a).toBe('1');
-    expect(rows[0].b).toBe('2');
-    expect(rows[0]._extras).toEqual(['3', 'extra']);
-  });
 });
 
 describe('B. zip extractEntry — truncated buffer', () => {

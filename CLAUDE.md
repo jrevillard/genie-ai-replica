@@ -396,4 +396,9 @@ Backend routes are organized by domain:
 - `govstack@10.0.0.100` — GitLab runner (CPU). `govstack@10.0.0.110` — GPU API node + 2nd runner, UFW was disabled to unblock docker socket-proxy. `govstack@10.0.0.102` — `release/el-salvador` deployed stack.
 - SSH key auth works; `sudo` needs interactive password (cannot `sudo` non-interactively). Wrap remote calls with `timeout N ssh -o ConnectTimeout=8 govstack@<ip> '...'`.
 
+### El Salvador dev workflow
+- All dev work for el-salvador happens on `dev/el-salvador` (reset from `release/el-salvador` at each cycle). Permanent Draft MR `dev/el-salvador` → `release/el-salvador` (NEVER MERGE) keeps CI alive.
+- After live validation, cherry-pick to main via MR, then rebase `release/el-salvador` onto main.
+- Full pattern: `.claude/rules/EL-SALVADOR-WORKFLOW.md`
+
 <!-- headroom:learn:end -->

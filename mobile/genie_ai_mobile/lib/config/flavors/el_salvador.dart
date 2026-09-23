@@ -12,7 +12,12 @@ final config = KeycloakConfig(
   realm: 'genie',
   clientId: 'genie-mobile-el-salvador',
   redirectScheme: 'sv.gov.agrogenio',
-  backendUrl: 'https://mvp.ai.assembly.govstack.global/api',
+  // backendUrl is the ORIGIN ONLY. The OpenAPI client builds paths like
+  // "$basePath$path" where $path starts with "/api/..." (e.g. "/api/queries"),
+  // and the chat stream does "$streamBaseUrl/api/queries/stream". Including
+  // "/api" here produced "…/api/api/..." and every chat, folder and
+  // service-category call 404'd on the deployment.
+  backendUrl: 'https://mvp.ai.assembly.govstack.global',
   allowInsecureConnections: false,
   // El Salvador serves English + Spanish only (all 14 locale files stay in source).
   supportedLocaleCodes: ['en', 'es'],

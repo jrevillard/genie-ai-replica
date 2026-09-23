@@ -1554,15 +1554,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         variant: DsButtonVariant.ghost,
                         overrideFg: tokens.fg,
                         onPressed: () {
-                          // M28: clearing a Quick Help chip and clearing a
-                          // sidebar chip are both "drop the context filter"
-                          // but go through different setters so the UI state
-                          // stays consistent (sidebar button highlight, etc.).
-                          if (_activeQuickHelpId != null) {
-                            clearQuickHelpContext();
-                          } else {
-                            setCategoryContext("", "");
-                          }
+                          // M28 (with race-window fix): clear BOTH sources
+                          // of context state so neither stale filter leaks
+                          // into the next typed message. The Quick Help
+                          // press path keeps the two sources mutually
+                          // exclusive today, but a future flow (or a
+                          // partially-cleared session-load) could leave
+                          // one set without the other.
+                          clearQuickHelpContext();
+                          setCategoryContext("", "");
                         },
                       ),
                     ],

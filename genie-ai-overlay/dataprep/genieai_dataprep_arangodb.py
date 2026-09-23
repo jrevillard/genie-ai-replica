@@ -223,6 +223,204 @@ def _build_vllm_client() -> tuple[AsyncOpenAI, str]:
     return client, model
 
 
+async def ensure_vector_index(
+    collection,
+    *,
+    metric: str = "cosine",
+    n_lists: int = 1,
+    field: str = "embedding",
+    graph_name: str | None = None,
+    file_id: str | None = None,
+    write_ingestion_log=None,
+) -> str | None:
+    """Idempotent, dim/metric/nLists-aware vector-index creation. Never raises.
+
+    Closes the gap where langchain-arangodb would lazy-create an index with
+    nLists=1 (defeats ANN) and silently skip dim-staleness when the embedder
+    dimension changes (bge-base 768 -> bge-large 1024). See issue #1002.
+
+    Decision matrix:
+      - no vector index on `field`                     -> create at current dim
+      - index exists, dim differs                      -> delete + recreate
+      - index exists, dim matches, metric/nLists drift -> delete + recreate
+      - index exists, dim + metric + nLists match      -> no-op (idempotent)
+      - collection is empty                            -> INFO log, return None
+      - sample document lacks valid embedding          -> ERROR log, return None
+      - any add_index / delete_index exception         -> ERROR log, return None
+
+    Note: `metric` is normalized to lowercase here (langchain-arangodb stores
+    it lowercase). Pass either case; the helper reconciles.
+
+    Note: this helper manages the index under the canonical langchain-arangodb
+    name `vector_index` (its default `ArangoVector.vector_index_name`), so the
+    retriever queries the SAME index the dataprep maintains. Older deployments
+    that shipped the previous fix's `idx_embedding_<dim>` name are pruned as
+    orphans so only `vector_index` remains.
+
+    Known limitation: on heterogeneous-dim collections (partial bge-base→bge-large
+    migration in progress), `collection.random()` may sample an outlier dim and
+    flap the index across consecutive ingests. Workaround: complete the partial
+    migration (re-ingest all old docs) before relying on auto-recreation. The
+    common case — homogeneous-dim collections — is unaffected.
+    """
+    # Normalize metric at the helper boundary — matches langchain-arangodb's
+    # internal DISTANCE_MAPPING (lowercase). Accepts both casings from callers.
+    metric = metric.lower() if isinstance(metric, str) else metric
+
+    with with_span(
+        "dataprep.ensure_vector_index",
+        attributes={"dataprep.graph_name": graph_name or ""},
+    ) as span:
+        try:
+            if collection.count() == 0:
+                if write_ingestion_log and file_id:
+                    await _safe_log(
+                        write_ingestion_log,
+                        file_id,
+                        "INFO",
+                        "VectorIndex",
+                        "Empty collection; skipping index ensure.",
+                    )
+                return None
+            sample = collection.random()
+            emb = sample.get(field)
+            if not isinstance(emb, list) or len(emb) == 0:
+                if write_ingestion_log and file_id:
+                    await _safe_log(
+                        write_ingestion_log,
+                        file_id,
+                        "ERROR",
+                        "VectorIndex",
+                        f"Sampled document lacks a valid `{field}` list; skipping.",
+                    )
+                return None
+            dim = len(emb)
+            desired_name = "vector_index"
+            span.set_attribute("dataprep.index_dim", dim)
+            span.set_attribute("dataprep.index_action", "skip")
+
+            existing = collection.indexes()
+            # The canonical `vector_index` is the langchain-arangodb default
+            # (`ArangoVector.vector_index_name`) and the only index the
+            # retriever queries.
+            vec_idx = next(
+                (
+                    i
+                    for i in existing
+                    if i.get("name") == desired_name and i.get("type") == "vector" and field in i.get("fields", [])
+                ),
+                None,
+            )
+
+            def _build_index():
+                return {
+                    "name": desired_name,
+                    "type": "vector",
+                    "fields": [field],
+                    "params": {"dimension": dim, "metric": metric, "nLists": n_lists},
+                }
+
+            if vec_idx is None:
+                collection.add_index(_build_index())
+                span.set_attribute("dataprep.index_action", "create")
+                if write_ingestion_log and file_id:
+                    await _safe_log(
+                        write_ingestion_log,
+                        file_id,
+                        "INFO",
+                        "VectorIndex",
+                        f"Created {desired_name} (dim={dim}, metric={metric}, nLists={n_lists}).",
+                    )
+                return desired_name
+
+            existing_dim = vec_idx.get("params", {}).get("dimension")
+            if existing_dim != dim:
+                collection.delete_index(vec_idx["name"])
+                collection.add_index(_build_index())
+                span.set_attribute("dataprep.index_action", "recreate")
+                if write_ingestion_log and file_id:
+                    await _safe_log(
+                        write_ingestion_log,
+                        file_id,
+                        "INFO",
+                        "VectorIndex",
+                        f"Recreated index for dim {existing_dim} -> {dim} (name={desired_name}).",
+                    )
+                return desired_name
+
+            params = vec_idx.get("params", {})
+            existing_metric = (
+                (params.get("metric") or "").lower() if isinstance(params.get("metric"), str) else params.get("metric")
+            )
+            if existing_metric != metric or params.get("nLists") != n_lists:
+                # Metric/nLists are structural — ArangoDB cannot patch them in
+                # place on an existing vector index; drop + recreate.
+                collection.delete_index(vec_idx["name"])
+                collection.add_index(_build_index())
+                span.set_attribute("dataprep.index_action", "recreate")
+                if write_ingestion_log and file_id:
+                    await _safe_log(
+                        write_ingestion_log,
+                        file_id,
+                        "INFO",
+                        "VectorIndex",
+                        f"Recreated index '{vec_idx['name']}' -> '{desired_name}' "
+                        f"(metric/nLists drift: have={existing_metric}/{params.get('nLists')} "
+                        f"want={metric}/{n_lists}).",
+                    )
+                return desired_name
+            # Idempotent no-op.
+            return vec_idx["name"]
+        except Exception as e:
+            if write_ingestion_log and file_id:
+                await _safe_log(
+                    write_ingestion_log,
+                    file_id,
+                    "ERROR",
+                    "VectorIndex",
+                    f"ensure_vector_index failed: {type(e).__name__}: {str(e)[:200]}",
+                )
+            return None
+
+
+def _read_index_params():
+    """Read RETRIEVER_ARANGO_{DISTANCE_STRATEGY,NUM_CENTROIDS} defensively.
+
+    Returns (metric, n_lists). On invalid NUM_CENTROIDS, logs a WARNING and
+    falls back to 1 (the legacy default). Never raises — a malformed env var
+    must not crash ingest.
+    """
+    metric = os.getenv("RETRIEVER_ARANGO_DISTANCE_STRATEGY", "COSINE").lower()
+    raw = os.getenv("RETRIEVER_ARANGO_NUM_CENTROIDS", "1")
+    try:
+        n_lists = int(raw)
+    except ValueError:
+        logger.warning(f"Invalid RETRIEVER_ARANGO_NUM_CENTROIDS={raw!r}; falling back to 1.")
+        n_lists = 1
+    return metric, n_lists
+
+
+async def _safe_log(write_ingestion_log, file_id, level, component, message):
+    """Invoke `await _safe_log(write_ingestion_log, ...)` but swallow any exception.
+
+    Critical: the helper must never let a logging failure escape. Otherwise a
+    transient backend HTTP timeout on `_write_ingestion_log` would propagate
+    out of `ensure_vector_index`, into the outer except in
+    `ingest_file_with_guardrail`, triggering `retract_file()` and DELETING
+    already-committed chunks. Visibility loss on logs is acceptable; data
+    loss is not.
+    """
+    if not write_ingestion_log or not file_id:
+        return
+    try:
+        await write_ingestion_log(file_id, level, component, message)
+    except Exception as e:
+        logger.error(
+            f"_write_ingestion_log failed inside ensure_vector_index: "
+            f"{type(e).__name__}: {str(e)[:200]} (message was: {message[:100]})"
+        )
+
+
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
 class GenieArangoDataprep(OpeaArangoDataprep):
     """
@@ -1367,6 +1565,21 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # Wait for all batches to complete
                 if tasks:
                     await asyncio.gather(*tasks)
+
+                # Defensive vector index ensure (post-ingest, idempotent, dim-aware).
+                # Closes the gap where langchain-arangodb would lazy-create an
+                # index with nLists=1 and skip dim-staleness detection on an
+                # embedder dim change (issue #1002). Failures swallowed so they
+                # never block the Ingested status flip below.
+                _metric, _n_lists = _read_index_params()
+                await ensure_vector_index(
+                    self.db.collection(f"{graph_name}_SOURCE"),
+                    metric=_metric,
+                    n_lists=_n_lists,
+                    graph_name=graph_name,
+                    file_id=input.file_id,
+                    write_ingestion_log=self._write_ingestion_log,
+                )
 
                 # 6. Final Status Update
                 await self._update_doc_status(input.file_id, "Ingested", chunk_count=len(chunks))

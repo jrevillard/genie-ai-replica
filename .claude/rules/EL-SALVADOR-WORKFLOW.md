@@ -50,14 +50,64 @@ git checkout dev/el-salvador
 ### 3. Deploy from `dev/el-salvador` for live validation
 
 The image tag is passed explicitly via `--extra-vars`, **not** by
-branch-tracking in `vars.yml` (see `feedback_no_feature_branch_vars_yml.md`):
+branch-tracking in `vars.yml` (see `feedback_no_feature_branch_vars_yml.md`).
+
+There are **two scopes** of tag control:
+
+#### Global tag (`genie_ai_global_tag`)
+
+All 16 images share this tag. Use when validating a full dev branch
+end-to-end.
 
 ```bash
-# Build the image first (GitLab CI on the dev branch)
-# Then deploy with the explicit tag:
 ansible-playbook -i inventory/test.ini deploy.yml \
-  --extra-vars "repo_branch=dev/el-salvador genie_ai_global_tag=<sha-or-tag>"
+  --extra-vars "repo_branch=dev/el-salvador genie_ai_global_tag=dev/el-salvador"
 ```
+
+#### Per-service tag overrides (`image_tag_overrides`)
+
+Pin **specific images** to a different tag while keeping others on
+the global tag. Used when only one or two services need the dev
+build (saves CI time, avoids cross-service regressions).
+
+The override dict keys are the image names defined in
+`deploy/ansible/tasks/deploy-shared-facts.yml`. Example: deploy
+from `release/el-salvador` everywhere but only pin the reranker
+to the dev branch build:
+
+```bash
+ansible-playbook -i inventory/test.ini deploy.yml \
+  --extra-vars "repo_branch=release/el-salvador \
+                genie_ai_global_tag=release-el-salvador \
+                image_tag_overrides={'genie-ai-reranker': 'dev/el-salvador'}"
+```
+
+**Use the branch name as the tag**, not the commit SHA. The
+`.gitlab-ci.yml` `promote` step tags each build with both the
+SHA and the branch name (line ~800:
+`FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"`),
+so the branch-name tag is mutable and always points to the latest
+build of the branch. Redeploy with the same `--extra-vars` after
+each push — the registry tag updates on its own.
+
+When you want to lock a specific validated build, switch to the
+SHA-pinned tag: `image_tag_overrides={'genie-ai-reranker':
+'dev-el-salvador-<sha>'}`. The SHA-pinned tag is immutable; it
+will not move if you push new commits.
+
+The Ansible template (`templates/env.j2`) renders per-service
+`GENIE_AI_<NAME>_IMAGE_TAG` vars, so docker-compose pulls the
+overridden tag for that image only.
+
+#### Image name reference
+
+| Service | `img.name` key |
+|---|---|
+| reranker | `genie-ai-reranker` |
+| chatqna-server | `genie-ai-chatqna-server` |
+
+Full list in `deploy/ansible/tasks/deploy-shared-facts.yml`
+(`genieai_images` set_fact).
 
 Validate on `.102` (RAG eval, smoke tests, etc.) until satisfied.
 

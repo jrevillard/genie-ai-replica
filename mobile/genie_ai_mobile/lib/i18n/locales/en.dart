@@ -1016,6 +1016,8 @@ const Map<String, dynamic> enLocale = {
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":
         "Translation unavailable — this answer may contain untranslated text.",
+    "noDocsMatchingFilter":
+        "The active filter matched no documents. Clear the filter and try again, or rephrase.",
     "sendButton": "Send",
     "fileReceived": "File received successfully.",
     "fileUploadError": "Error uploading file.",

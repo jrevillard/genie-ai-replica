@@ -79,7 +79,7 @@ to the dev branch build:
 ansible-playbook -i inventory/test.ini deploy.yml \
   --extra-vars "repo_branch=release/el-salvador \
                 genie_ai_global_tag=release-el-salvador \
-                image_tag_overrides={'genie-ai-reranker': 'dev/el-salvador'}"
+                image_tag_overrides={'genie-ai-reranker': 'dev-el-salvador'}"
 ```
 
 **Use the branch name as the tag**, not the commit SHA. The

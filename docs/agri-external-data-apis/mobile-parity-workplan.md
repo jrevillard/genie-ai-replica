@@ -370,9 +370,20 @@ jrevillard.
   core, interaction, polish).
 - 2026-09-23 v7: **mobile bug fixes completed** — M28, M30, M31/DW-247
   closed in code, all on top of `release/el-salvador`. Unified release APK
-  (sha256 `8dcee1d3…`) deployed to the emulator (`emulator-5554`) and
-  your phone (`RRCTB06HGEY`); on-device sha256 matches the built APK on
-  both. Stack on each branch:
+  (sha256 `8dcee1d3…`, then `4bc82c2f…` after the URL fix below) deployed to
+  the emulator (`emulator-5554`) and your phone (`RRCTB06HGEY`); on-device
+  sha256 matches the built APK on both.
+
+  **Critical regression caught and fixed:** `release/el-salvador` carried
+  `backendUrl = '...global/api'` (with `/api`), producing `/api/api/...` 404s
+  on every chat call (commit `f5eec9cce` had added a comment saying
+  "ORIGIN ONLY" but did not actually change the value). Fixed in commit
+  `145822b6d` on the M31 stack; fresh APK `4bc82c2f…` reinstalled on both
+  devices. Root cause for finding it: prod logs showed `POST /api/api/queries/stream 404
+  ... Dart/3.10 (dart:io)`, distinguishing mobile from the Vue web client
+  which sent the correct `/api/queries/stream`.
+
+  Stack on each branch:
   - **!422** quickhelp label fallback (eagerly merged into M28)
   - **!427** M25 auth recovery
   - **!428** M32 typed SSE errors (stacked on !427)

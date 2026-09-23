@@ -786,11 +786,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         _isLoading = false;
       });
 
+      // M31 (DW-247): the non-streaming path never reset the Quick Help
+      // filter — the labels silently survived every non-streaming send
+      // and could leak into unrelated typed follow-ups. The chip (M28)
+      // makes the leak visible, but the leak itself is still a defect.
+      // Reset on success so a non-streaming session stays in sync with
+      // the streaming one.
+      clearQuickHelpContext();
+
       widget.onRelatedDocumentsUpdate(_relatedDocuments);
       _scrollToBottom();
       _updateQuickHelpVisibility();
     } catch (e) {
       setState(() => _isLoading = false);
+      // Same reset on failure: an errored non-streaming request still
+      // counts as the request having been made, so leaving the filter
+      // active would leak the same way.
+      clearQuickHelpContext();
       NotificationService.error(tr('chatbot.processingError'));
       debugPrint("[CHATBOT] Send error: $e");
     }

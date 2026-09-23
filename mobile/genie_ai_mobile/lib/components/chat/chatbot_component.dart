@@ -105,6 +105,16 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   // serviceLabels. Set in _quickHelpPressed, cleared after the stream completes.
   // Sidebar tree selections use _selectedCategoryId/_selectedCategoryName instead.
   List<String> _activeServiceLabels = [];
+
+  /// The id of the Quick Help button that produced [_activeServiceLabels]. Used
+  /// to render a visible, removable chip mirroring Vue's `context-panel`
+  /// (`ChatBotComponent.vue:77-88`) so the user can always see what is
+  /// filtering their typed messages and clear it.
+  ///
+  /// M28 — previously this state was invisible, so for buttons whose labels
+  /// do not exist in the corpus (e.g. Pest/Disease), a stale filter silently
+  /// returned zero documents.
+  String? _activeQuickHelpId;
   List<dynamic> _relatedDocuments = [];
 
   // Quick Help Configuration
@@ -320,6 +330,33 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     });
   }
 
+  /// M28: drops the Quick Help context filter so a typed follow-up is no
+  /// longer scoped to that topic. Mirrors Vue's "X" on the context pill.
+  void clearQuickHelpContext() {
+    setState(() {
+      _activeServiceLabels = [];
+      _activeQuickHelpId = null;
+    });
+  }
+
+  /// M28: text for the context bar — uses the Quick Help title when one is
+  /// active, falls back to the sidebar selection, otherwise empty (the bar
+  /// itself is hidden in that case).
+  String _contextBarText() {
+    if (_activeQuickHelpId != null) {
+      final button = _quickHelpButtons.firstWhere(
+        (b) => b['id'] == _activeQuickHelpId,
+        orElse: () => const {},
+      );
+      final title =
+          (button['resolvedTitle'] as String?) ??
+          (button['id'] as String?) ??
+          _activeQuickHelpId!;
+      return '${tr('chatbot.contextPrefix')} $title';
+    }
+    return '${tr('chatbot.contextPrefix')} $_selectedCategoryName';
+  }
+
   Future<void> loadConversation(String conversationId) async {
     if (_isStreaming) return;
     if (_hasUnsavedChanges) {
@@ -413,6 +450,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       _titleController.text = _conversationTitle;
       _messages = [];
       _relatedDocuments = [];
+      // M28: a fresh chat drops the previous Quick Help context so the new
+      // session is unfiltered.
+      _activeServiceLabels = [];
+      _activeQuickHelpId = null;
       if (!keepLoading) _isLoading = false;
     });
     widget.onRelatedDocumentsUpdate([]);
@@ -641,8 +682,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               // NOTE: _activeServiceLabels is NOT cleared here. Quick Help is a
               // persistent mode (parity with web: the selection stays in
               // selectedContextItems until replaced/removed). Follow-up manual
-              // messages in the same Quick Help session remain filtered by the
-              // labels. Cleared only in _quickHelpPressed (re-set) or on context reset.
+              // Filter stays in place for follow-up turns in the same session
+              // (matches Vue's `selectedContextItems` persistence — M28/D1a).
+              // Cleared explicitly via the context-bar chip, on new chat, or
+              // when another Quick Help button is pressed.
 
               if (sources != null && sources!.isNotEmpty) {
                 _relatedDocuments = _mergeUniqueDocs(
@@ -790,6 +833,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       setState(() {
         _showQuickHelpOverlay = false;
         _activeServiceLabels = [];
+        _activeQuickHelpId = null;
         _selectedCategoryId = null;
         _selectedCategoryName = '';
       });
@@ -818,6 +862,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     setState(() {
       _showQuickHelpOverlay = false;
       _activeServiceLabels = labels;
+      // M28: remember which Quick Help button is active so the context-bar
+      // chip can render its title and the user can clear the filter.
+      _activeQuickHelpId = (button['id'] as String?)?.toString();
       // Quick Help is a mode switch: clear any prior sidebar category selection
       // so the request is filtered by the Quick Help labels ONLY (not both).
       _selectedCategoryId = null;
@@ -1466,8 +1513,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         children: [
           Column(
             children: [
-              // Context Bar
-              if (_selectedCategoryName.isNotEmpty)
+              // Context Bar — shows the active filter so the user can always see
+              // what is filtering their typed messages and clear it (M28).
+              // Either a sidebar selection OR an active Quick Help button can
+              // populate this; both should be visible (and clearable) since
+              // they share the same request-context filter slot.
+              if (_selectedCategoryName.isNotEmpty ||
+                  _activeQuickHelpId != null)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -1488,7 +1540,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "${tr('chatbot.contextPrefix')} $_selectedCategoryName",
+                          _contextBarText(),
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: tokens.fg,
@@ -1501,7 +1553,17 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                         icon: Icons.close,
                         variant: DsButtonVariant.ghost,
                         overrideFg: tokens.fg,
-                        onPressed: () => setCategoryContext("", ""),
+                        onPressed: () {
+                          // M28: clearing a Quick Help chip and clearing a
+                          // sidebar chip are both "drop the context filter"
+                          // but go through different setters so the UI state
+                          // stays consistent (sidebar button highlight, etc.).
+                          if (_activeQuickHelpId != null) {
+                            clearQuickHelpContext();
+                          } else {
+                            setCategoryContext("", "");
+                          }
+                        },
                       ),
                     ],
                   ),

@@ -37,8 +37,9 @@ from comps.cores.proto.docarray import LLMParams, RerankerParms, RetrieverParms
 from comps.cores.proto.genieai_api_protocol import (
     ChatCompletionRequest,
 )
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
+from keycloak_token_validator import validate_token
 from langdetect import detect
 from transformers import AutoTokenizer
 
@@ -645,26 +646,25 @@ class GenieUserProfileClient:
     """
 
     def __init__(self):
-        self._token = None
         logger.info(f"GenieUserProfileClient initialized. Backend: {BACKEND_SERVICE_URL}")
 
-    def set_token(self, token: str):
-        self._token = token
-
-    async def get_user_profile(self):
+    async def get_user_profile(self, token: str):
         """
         Fetches the sanitized user profile from the backend for context enrichment.
         Target: GET /api/me/context
         Auth: Bearer token (propagated from backend via Authorization header)
+
+        Args:
+            token (str): Bearer token forwarded on outbound calls.
         """
-        if not self._token:
-            logger.warning("No Bearer token available, skipping profile fetch")
+        if not token:
+            logger.warning("get_user_profile called without token — caller must pass the validated Bearer token.")
             return None
 
         # Construct URL
         url = f"{BACKEND_SERVICE_URL}/api/me/context"
 
-        headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         # Inject W3C traceparent for distributed tracing
         from opentelemetry.propagate import inject
@@ -1421,22 +1421,23 @@ class ChatQnAService:
                 return key
         return None
 
-    async def fetch_file_metadata(self, file_id: str) -> dict:
+    async def fetch_file_metadata(self, file_id: str, token: str) -> dict:
         """
         Fetch metadata for a file by calling the relevant API.
 
         Args:
             file_id (str): The ID of the file to fetch metadata for.
+            token (str): Bearer token forwarded on the outbound call to document-repository.
 
         Returns:
-            dict: A dictionary containing metadata, including labels.
+            dict: A dictionary containing metadata, including labels. None if no token
+            or the call fails.
         """
         if not file_id:
             return {"categoryLabels": None, "serviceLabels": []}
 
-        token = self.user_profile_client._token
         if not token:
-            logger.error("No Bearer token available for document-repository call.")
+            logger.error("fetch_file_metadata called without token — caller must pass the validated Bearer token.")
             return None
 
         file_get_metadata_url = f"{DOC_REPO_URL}/api/files/{file_id}"
@@ -1546,7 +1547,7 @@ class ChatQnAService:
 
         return final_text_response, self_confidence
 
-    async def _assemble_source_documents(self, result_dict: dict) -> tuple[list, float, bool]:
+    async def _assemble_source_documents(self, result_dict: dict, token: str) -> tuple[list, float, bool]:
         """Build the source-document list, confidence, and grounding flag from the graph output.
 
         Source documents reflect the **reranker's verdict**, not the retriever's raw cosine
@@ -1634,7 +1635,7 @@ class ChatQnAService:
             labels = []
             file_name = ""
             if file_id:
-                file_metadata = await self.fetch_file_metadata(file_id)
+                file_metadata = await self.fetch_file_metadata(file_id, token=token)
                 if file_metadata and isinstance(file_metadata, dict):
                     labels = file_metadata["labels"]
                     file_name = file_metadata.get("file_name", "")
@@ -1696,7 +1697,7 @@ class ChatQnAService:
 
         return source_documents_formatted, retrieval_confidence_score, is_grounded
 
-    async def _stream_with_metadata(self, body_iterator, result_dict):
+    async def _stream_with_metadata(self, body_iterator, result_dict, token: str):
         """Forward the LLM token stream, then append a `metadata` SSE event.
 
         The metadata event carries the reranker-grounded source documents, confidence,
@@ -1781,7 +1782,9 @@ class ChatQnAService:
                 yield f"data: {buffer.encode('utf-8')!r}\n\n"
 
         # Compute metadata after tokens so TTFT is unaffected by the doc-metadata fetches.
-        source_documents, retrieval_confidence, is_grounded = await self._assemble_source_documents(result_dict)
+        source_documents, retrieval_confidence, is_grounded = await self._assemble_source_documents(
+            result_dict, token=token
+        )
         _cs = round(
             _display_confidence(retrieval_confidence, self_confidence)
             if LLM_SELF_CONFIDENCE_ENABLED
@@ -2191,38 +2194,41 @@ class ChatQnAService:
         return " ".join(translated_chunks)
 
     async def handle_request(self, request: Request):
-        data = await request.json()
-
-        # Extract and validate propagated Bearer token from Authorization header
+        # Auth gate runs first (before body parse) so unauthenticated requests
+        # cost only a header lookup. Bearer scheme is case-insensitive per RFC 7235.
         authorization = request.headers.get("Authorization")
-        if authorization and authorization.startswith("Bearer "):
-            token_str = authorization[7:]
+        if not authorization:
+            logger.warning("No Authorization header in request — rejecting")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing or malformed Authorization header. All chatqna calls must be authenticated.",
+            )
+        scheme, _, token_str = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token_str.strip():
+            logger.warning("Authorization header is not a Bearer token — rejecting")
+            raise HTTPException(status_code=401, detail="Authorization header must use the Bearer scheme.")
+        token_str = token_str.strip()
 
-            # Defense-in-depth: validate token via JWKS
-            from keycloak_token_validator import validate_token
+        # Validate token signature via Keycloak JWKS.
+        claims = await validate_token(token_str)
+        if claims is None:
+            logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
+            raise HTTPException(status_code=401, detail="Token validation failed")
 
-            claims = await validate_token(token_str)
-            if claims is None:
-                logger.warning("Incoming Bearer token failed JWKS validation — rejecting request")
-                return {"error": "Unauthorized", "message": "Token validation failed"}
-
-            self.user_profile_client.set_token(token_str)
-        else:
-            logger.warning("No Authorization header in request — service-to-service calls will fail")
+        data = await request.json()
 
         # --- LOGGING THE FULL REQUEST FROM THE FRONTEND FOR DEBUGGING---
         logger.debug(f"\n\nFRONTEND PAYLOAD: \n{data}\n\n")
 
-        user_details = {}
+        # Validate the chat body before any outbound enrichment calls so a malformed
+        # payload cannot trigger an HTTP round-trip to the backend.
+        chat_request = ChatCompletionRequest.model_validate(data)
 
+        user_details = {}
         try:
-            user_details = await self.user_profile_client.get_user_profile()
+            user_details = await self.user_profile_client.get_user_profile(token=token_str)
         except Exception as e:
             logger.error(f"USER PROFILE ERROR: {e}")
-
-        # -----------------------------------------------
-
-        chat_request = ChatCompletionRequest.model_validate(data)
 
         # --- LOGGING FOR DEBUGGING CHAT REQUEST ---
         logger.debug(f"Parsed chat request: {chat_request}")
@@ -2537,7 +2543,7 @@ class ChatQnAService:
                 # confidence, is_grounded) is emitted before [DONE]. Without this the
                 # backend would re-run retrieval without the category filter / reranker.
                 return StreamingResponse(
-                    self._stream_with_metadata(response.body_iterator, result_dict),
+                    self._stream_with_metadata(response.body_iterator, result_dict, token=token_str),
                     media_type="text/event-stream",
                 )
 
@@ -2554,7 +2560,7 @@ class ChatQnAService:
         # Assemble source documents + confidence + grounding flag. Reflects the reranker's
         # verdict; not grounded (is_grounded=False) when the reranker found nothing relevant.
         source_documents_formatted, retrieval_confidence, is_grounded = await self._assemble_source_documents(
-            result_dict
+            result_dict, token=token_str
         )
         _conf_score = round(
             _display_confidence(retrieval_confidence, self_confidence)

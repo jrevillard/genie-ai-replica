@@ -113,3 +113,77 @@ async def test_validate_token_expired_signature_returns_none():
         patch("chatqna.keycloak_token_validator.jwt.decode", side_effect=jose_jwt.ExpiredSignatureError("expired")),
     ):
         assert await validate_token("any-token") is None
+
+
+@pytest.mark.asyncio
+async def test_concurrent_fetchers_share_single_http_get(monkeypatch):
+    """When N coroutines call ``_fetch_jwks`` simultaneously and the cache is cold,
+    only ONE HTTP GET should reach Keycloak — the others await the lock and pick
+    up the freshly-cached result. This is the single-flight guarantee."""
+    import asyncio
+
+    from chatqna import keycloak_token_validator as v
+
+    # Cold cache.
+    v._jwks_keys = None
+    v._jwks_fetched_at = 0
+
+    call_count = 0
+    fake_keys = [{"kid": "abc", "kty": "RSA"}]
+
+    class _FakeResp:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"keys": self._payload}
+
+    async def slow_get(self, url):
+        nonlocal call_count
+        call_count += 1
+        # Yield control so the other N-1 coroutines queue up at the lock boundary.
+        await asyncio.sleep(0.01)
+        return _FakeResp(fake_keys)
+
+    monkeypatch.setattr("httpx.AsyncClient.get", slow_get)
+
+    results = await asyncio.gather(*[v._fetch_jwks() for _ in range(20)])
+    assert results.count(fake_keys) == 20
+    assert call_count == 1, f"expected 1 HTTP GET under single-flight, got {call_count}"
+    # Cache populated by the single winner.
+    assert v._jwks_keys == fake_keys
+
+
+@pytest.mark.asyncio
+async def test_expired_cache_triggers_single_refresh():
+    """Once the TTL expires, a subsequent fetcher must refresh exactly once."""
+    import asyncio
+
+    from chatqna import keycloak_token_validator as v
+
+    v._jwks_keys = [{"kid": "old", "kty": "RSA"}]
+    v._jwks_fetched_at = 0.0  # ancient → expired
+
+    new_keys = [{"kid": "new", "kty": "RSA"}]
+    call_count = 0
+
+    class _FakeResp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"keys": new_keys}
+
+    async def slow_get(self, url):
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.01)
+        return _FakeResp()
+
+    with patch("httpx.AsyncClient.get", new=slow_get):
+        results = await asyncio.gather(*[v._fetch_jwks() for _ in range(10)])
+    assert all(r == new_keys for r in results)
+    assert call_count == 1

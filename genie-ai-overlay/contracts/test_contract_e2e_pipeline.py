@@ -128,7 +128,9 @@ def test_streaming_metadata_event_shape(comps):
     events = []
 
     async def _collect():
-        async for event in mod.ChatQnAService._stream_with_metadata(mock_self, mock_body_iterator(), {}):
+        async for event in mod.ChatQnAService._stream_with_metadata(
+            mock_self, mock_body_iterator(), {}, token="test-token"
+        ):
             events.append(event)
 
     asyncio.run(_collect())
@@ -300,7 +302,9 @@ def test_e2e_abstention_ungrounded(comps):
     events = []
 
     async def _collect():
-        async for event in mod.ChatQnAService._stream_with_metadata(mock_self, mock_body_iterator(), {}):
+        async for event in mod.ChatQnAService._stream_with_metadata(
+            mock_self, mock_body_iterator(), {}, token="test-token"
+        ):
             events.append(event)
 
     asyncio.run(_collect())
@@ -348,7 +352,7 @@ def test_e2e_response_schema(comps):
     stream_events = []
 
     async def _collect_stream():
-        async for event in mod.ChatQnAService._stream_with_metadata(mock_self, body(), {}):
+        async for event in mod.ChatQnAService._stream_with_metadata(mock_self, body(), {}, token="test-token"):
             stream_events.append(event)
 
     asyncio.run(_collect_stream())

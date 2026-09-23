@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Default embedding model `bge-base-en-v1.5` → `bge-large-en-v1.5`:** New deployments now use the 1024-dim `BAAI/bge-large-en-v1.5` model by default for better semantic recall on multilingual/agricultural corpora. The smaller `BAAI/bge-base-en-v1.5` (768-dim) remains available as an opt-in override via `embedding_model_id` in `group_vars/<env>/vars.yml` or `EMBEDDING_MODEL_ID` in `.env`. Embedding latency ~3× higher (~10 ms/query vs ~3 ms), VRAM footprint +~0.9 GB (~1.3 GB total), per-chunk storage +1 KB. **Existing deployments that already ingested with bge-base must re-ingest their documents** — querying against mismatched dims silently returns empty results. Re-deploy the GPU node after merging to pick up the new default.
 - **vLLM bump v0.10.0 to v0.29.0 (both services):** Mitigates the persistent CUDA illegal-memory-access crash loop in the chat/labeling vLLM under dataprep labeling load (vllm-project/vllm#23814, #24107 family — closed stale, no documented fix). Both `vllm-llm` and `vllm-translation` images are bumped for version consistency. The `--max_num_seqs` default is also lowered from 64 to 16 (iterative tuning showed no measurable effect on the crash, but kept as defense in depth).
 
+### Security
+
+- **chatqna rejects unauthenticated requests:** `handle_request` now requires a `Bearer` token in the `Authorization` header and validates it against the Keycloak JWKS before reaching any business logic. Missing, malformed, or invalid tokens raise `HTTPException(status_code=401)`. The Bearer scheme is matched case-insensitively per RFC 7235 §2.1. The validated token is threaded as a function argument through `fetch_file_metadata`, `get_user_profile`, `_assemble_source_documents`, and `_stream_with_metadata`; no token state lives on the service instance or `request.state`, so concurrent requests cannot leak each other's tokens on outbound service-to-service calls. The legacy `tests/testing_genieai_chatqna.py` (a manual end-to-end CLI harness with its own copy of the old `set_token`/`_token` API) is removed.
+
 ## [2.1.0] - 2026-08-31
 
 ### Changed

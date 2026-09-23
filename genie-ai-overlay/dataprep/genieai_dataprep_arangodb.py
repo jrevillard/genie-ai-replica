@@ -251,10 +251,11 @@ async def ensure_vector_index(
     Note: `metric` is normalized to lowercase here (langchain-arangodb stores
     it lowercase). Pass either case; the helper reconciles.
 
-    Note: also reconciles the legacy langchain-arangodb index name `vector_index`
-    (its default `ArangoVector.vector_index_name`) — if found alongside
-    `idx_embedding_<dim>`, the legacy one is dropped so only the canonical
-    helper-managed index remains.
+    Note: this helper manages the index under the canonical langchain-arangodb
+    name `vector_index` (its default `ArangoVector.vector_index_name`), so the
+    retriever queries the SAME index the dataprep maintains. Older deployments
+    that shipped the previous fix's `idx_embedding_<dim>` name are pruned as
+    orphans so only `vector_index` remains.
 
     Known limitation: on heterogeneous-dim collections (partial bge-base→bge-large
     migration in progress), `collection.random()` may sample an outlier dim and
@@ -294,18 +295,39 @@ async def ensure_vector_index(
                     )
                 return None
             dim = len(emb)
-            desired_name = f"idx_embedding_{dim}"
+            desired_name = "vector_index"
             span.set_attribute("dataprep.index_dim", dim)
             span.set_attribute("dataprep.index_action", "skip")
 
             existing = collection.indexes()
+            # Only the canonical `vector_index` is treated as the live index —
+            # any `idx_embedding_*` orphans are picked up by the prune below.
             vec_idx = next(
-                (i for i in existing if i.get("type") == "vector" and field in i.get("fields", [])),
+                (
+                    i
+                    for i in existing
+                    if i.get("name") == desired_name and i.get("type") == "vector" and field in i.get("fields", [])
+                ),
                 None,
             )
-            # Drop legacy `vector_index` from langchain-arangodb's lazy auto-create
-            # if it's still around — keeps only the canonical helper-managed index.
-            legacy = next((i for i in existing if i.get("name") == "vector_index"), None)
+            # Prune any pre-existing `idx_embedding_<dim>` orphans (the name an
+            # earlier version of this helper used). After the rename to the
+            # langchain-arangodb default `vector_index`, these would otherwise
+            # linger alongside the canonical index and confuse the retriever.
+            idx_embedding_orphans = [
+                i
+                for i in existing
+                if i.get("name", "").startswith("idx_embedding_")
+                and i.get("type") == "vector"
+                and field in i.get("fields", [])
+            ]
+
+            def _prune_orphans():
+                # Orphans always carry the `idx_embedding_` prefix, distinct
+                # from the canonical `vector_index` we manage — safe to drop
+                # unconditionally.
+                for orphan in idx_embedding_orphans:
+                    collection.delete_index(orphan["name"])
 
             def _build_index():
                 return {
@@ -316,8 +338,7 @@ async def ensure_vector_index(
                 }
 
             if vec_idx is None:
-                if legacy:
-                    collection.delete_index(legacy["name"])
+                _prune_orphans()
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "create")
                 if write_ingestion_log and file_id:
@@ -333,8 +354,7 @@ async def ensure_vector_index(
             existing_dim = vec_idx.get("params", {}).get("dimension")
             if existing_dim != dim:
                 collection.delete_index(vec_idx["name"])
-                if legacy and legacy["name"] != vec_idx["name"]:
-                    collection.delete_index(legacy["name"])
+                _prune_orphans()
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "recreate")
                 if write_ingestion_log and file_id:
@@ -355,8 +375,7 @@ async def ensure_vector_index(
                 # Metric/nLists are structural — ArangoDB cannot patch them in
                 # place on an existing vector index; drop + recreate.
                 collection.delete_index(vec_idx["name"])
-                if legacy and legacy["name"] != vec_idx["name"]:
-                    collection.delete_index(legacy["name"])
+                _prune_orphans()
                 collection.add_index(_build_index())
                 span.set_attribute("dataprep.index_action", "recreate")
                 if write_ingestion_log and file_id:
@@ -370,9 +389,8 @@ async def ensure_vector_index(
                         f"want={metric}/{n_lists}).",
                     )
                 return desired_name
-            # Idempotent no-op. Still drop the legacy `vector_index` if it coexists.
-            if legacy and legacy["name"] != vec_idx["name"]:
-                collection.delete_index(legacy["name"])
+            # Idempotent no-op. Still prune any orphan `idx_embedding_*` if it coexists.
+            _prune_orphans()
             return vec_idx["name"]
         except Exception as e:
             if write_ingestion_log and file_id:
@@ -439,53 +457,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         # Debug Requirement 2: Print environment at startup
         self._log_environment_variables()
-
-        # Defensive vector-index ensure at startup (issue #1002). Non-blocking --
-        # the task reference is stored so the GC cannot cancel it mid-flight, and
-        # a done-callback surfaces any escape failure. On an empty collection
-        # the helper short-circuits with an INFO log. Post-ingest hook in
-        # ingest_file_with_guardrail is the durable safety net.
-        #
-        # OPEA's loader instantiates this component at MODULE IMPORT time
-        # (genieai_dataprep_microservice.py line 69), before uvicorn starts the
-        # FastAPI event loop. asyncio.create_task therefore raises RuntimeError
-        # if called here. Guard with get_running_loop(); if absent, log DEBUG
-        # and rely on the post-ingest hook to run the ensure on the first file.
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            logger.debug(
-                "No running event loop at __init__ (OPEA loader pre-loop); "
-                "startup vector-index ensure deferred to first ingest."
-            )
-            return
-        try:
-            _graph_name = os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
-            _metric, _n_lists = _read_index_params()
-            self._index_ensure_task = asyncio.create_task(
-                ensure_vector_index(
-                    self.db.collection(f"{_graph_name}_SOURCE"),
-                    metric=_metric,
-                    n_lists=_n_lists,
-                    graph_name=_graph_name,
-                )
-            )
-
-            def _log_ensure_result(task):
-                if task.cancelled():
-                    logger.warning("dataprep.ensure_vector_index cancelled at startup")
-                    return
-                exc = task.exception()
-                if exc is not None:
-                    logger.error(
-                        f"dataprep.ensure_vector_index startup task failed: {type(exc).__name__}: {str(exc)[:200]}"
-                    )
-
-            self._index_ensure_task.add_done_callback(_log_ensure_result)
-        except Exception as e:
-            # Only catches synchronous failures (env var parsing, db.collection()).
-            # Async failures inside the task are surfaced via the done-callback above.
-            logger.error(f"Failed to schedule startup vector-index ensure: {type(e).__name__}: {str(e)[:200]}")
 
     def _initialize_client(self):
         """Override the OPEA parent's DB selection with the GENIE convention.

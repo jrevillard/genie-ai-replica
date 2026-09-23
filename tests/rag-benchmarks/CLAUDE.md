@@ -99,7 +99,7 @@ hostname, stack name, and VictoriaTraces service name are **deployment-specific*
 (Swarm replica suffixes are dynamic).
 
 ```bash
-SWARM_NODE=<your swarm node>          # e.g. govstack@<ip>
+SWARM_NODE=<user>@<host>              # SSH target for the swarm node
 STACK=<your stack prefix>             # e.g. genieai-<flavor>
 
 # 1. Sync the eval dir to the swarm node
@@ -111,7 +111,7 @@ ssh $SWARM_NODE 'bash -s' <<EOF
 cd /tmp/rag-eval
 export CHATQNA_CONTAINER=\$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
 export CHATQNA_SERVICE_NAME=genieai-chatqna              # OTel service name (constant across stacks)
-export VICTORIATRACES_SVC=${STACK}_victoriatraces        # <stack>_victoriatraces; hyphenated
+export VICTORIATRACES_SVC=${STACK}_victoriatraces        # Swarm service name (DNS, underscore)
 python3 run_eval.py anchor gold_dataset.json results.json
 EOF
 ```
@@ -357,3 +357,268 @@ Key behaviors:
   retrieved_docs order. Map via `original_index`.
 - **Image `git_sha` label ≠ branch commit.** Verify deployed code by
   `docker exec ... grep` inside the container, not by trusting the tag.
+
+## Semantic path (RAGAS) — operational guide
+
+The anchor path catches retrieval regressions deterministically; the semantic
+path catches what anchor cannot: **the LLM hallucinated, the LLM went
+off-topic, or the retrieved context failed to cover the reference answer
+despite the right chunks being ranked first.** Run both — neither sees the
+other's failures.
+
+### Layout (delta from anchor path)
+
+```
+tests/rag-benchmarks/eval/
+├── xlsx_to_gold.py           # xlsx → gold_dataset.json skeleton (Phase 1)
+├── match_gold_chunks.py      # preview → content_hash via ArangoDB substring (Phase 2, optional)
+├── run_eval.py dump-tuples … # gold_dataset → eval_tuples.json (Phase 3)
+└── run_ragas_eval.py         # eval_tuples → ragas_results.json (Phase 4)
+```
+
+`xlsx_to_gold.py` and `match_gold_chunks.py` are GENERIC (parameterised for any
+benchmark xlsx + any ArangoDB source collection) and live on `main` since MR
+!442. The two-phase gold-building pattern (xlsx first, then chunk matching)
+keeps the corpus-independent parts off the ArangoDB dependency, so you can
+author gold without an ingested corpus.
+
+### Three-phase flow
+
+```
+┌────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+│ Phase 1            │  │ Phase 2 (optional)   │  │ Phase 3              │
+│ xlsx → gold.json   │→ │ match previews →     │→ │ run chatqna, capture │
+│ (no corpus needed) │  │ content_hash + key   │  │ (q, contexts, ans)   │
+└────────────────────┘  └──────────────────────┘  └──────────┬───────────┘
+                                                           │
+                                       ┌───────────────────▼─────────────┐
+                                       │ Phase 4: run_ragas_eval.py       │
+                                       │ judge LLM scores 4 metrics × N  │
+                                       └───────────────────┬─────────────┘
+                                                           │
+                                       ┌───────────────────▼─────────────┐
+                                       │ Phase 5: human analysis         │
+                                       │ OTel + ragas → attribute failure│
+                                       └─────────────────────────────────┘
+```
+
+### Phase 1 — `xlsx_to_gold.py`
+
+Convert a benchmark xlsx to `gold_dataset.json` skeleton. Column mapping is
+fully parameterised via CLI flags (defaults match the El Salvador / generic
+schemas — adjust for any benchmark).
+
+```bash
+python3 -m venv /tmp/xlsx && /tmp/xlsx/bin/pip install openpyxl
+/tmp/xlsx/bin/python3 xlsx_to_gold.py \
+  --input-xlsx benchmark.xlsx \
+  --output-json gold_dataset.json \
+  --source-tag domain=<name>        # extra tag on every entry
+```
+
+Output schema matches `gold_dataset.example.json`: `entries[]` with
+`{id, query, language, difficulty, categoryLabels, serviceLabels,
+reference_answer, expected_chunks[{preview, source_doc}]}`. `content_hash`
+and `chunk_key` are empty here — filled in Phase 2.
+
+**Out-of-scope queries**: cells marked `N/A`, `Out-of-Scope`, `Not applicable`
+become empty `expected_chunks[]`. This is correct semantics: the eval expects
+zero gold chunks retrieved for an unanswerable query. (See xlsx_to_gold.py
+split_passages — matches case-insensitive at cell start.)
+
+### Phase 2 — `match_gold_chunks.py` (optional)
+
+For ANCHOR path only (deterministic chunk-level scoring). Skip if you're only
+running RAGAS — RAGAS only needs `query` + `reference_answer`, not chunk-level
+identity.
+
+Dumps `GRAPH_SOURCE` from ArangoDB, matches each `expected_chunks[].preview`
+against chunk text via the same normaliser as `chunk_identity.normalize`
+(whitespace-collapse, lowercase). Match strategy: **substring** — preview
+appears verbatim inside chunk text (or vice versa for short previews).
+
+Reports `match_status` per entry: `resolved_*`, `ambiguous`, `unresolved`.
+Operator reviews ambiguous cases manually.
+
+```bash
+match_gold_chunks.py --gold-dataset gold.json \
+  --arango-url http://<host>:8529 --arango-db <db> \
+  --arango-user root --arango-password "$ARANGO_PASSWORD" \
+  --graph-source GRAPH_<STACK>_SOURCE
+```
+
+### Phase 3 — dump-tuples (on the swarm node)
+
+The chatqna container lives on the swarm node. Drive each gold query through
+chatqna via internal docker exec (no OIDC, faithful label-filtered retrieval).
+
+```bash
+SWARM=<user>@<host>
+scp tests/rag-benchmarks/eval/run_eval.py $SWARM:/tmp/
+scp tests/rag-benchmarks/eval/{chunk_identity,metrics,arango}.py $SWARM:/tmp/
+scp gold_dataset.json $SWARM:/tmp/
+
+ssh $SWARM bash -s <<EOF
+cd /tmp
+export CHATQNA_CONTAINER=\$(docker ps --format '{{.Names}}' | grep chatqna-xeon-backend-server | head -1)
+export CHATQNA_SERVICE_NAME=genieai-chatqna              # OTel service name
+export VICTORIATRACES_SVC=<STACK>_victoriatraces         # Swarm service name (DNS, underscore)
+export GRAPH_SOURCE=GRAPH_<STACK>_SOURCE
+export ARANGO_URL=http://localhost:8529
+export ARANGO_DB=<STACK_DB>
+export ARANGO_USER=root ARANGO_PASSWORD=\$ARANGO_PASSWORD
+export TRACE_FETCH_TIMEOUT=30
+python3 run_eval.py dump-tuples /tmp/gold_dataset.json /tmp/eval_tuples.json
+EOF
+```
+
+Time budget: ~40 s per query (chatqna roundtrip + VT trace fetch). For 42
+queries ≈ 28 min. To fit a shorter shell timeout, slice `gold.entries[]`
+into N round-robin chunks and run one `dump-tuples` per chunk:
+
+```bash
+python3 -c "
+import json, os
+gold = json.load(open('/tmp/gold_dataset.json'))
+os.makedirs('/tmp/batches', exist_ok=True)
+N = 5  # 42/5 → ~9 queries per batch
+for i in range(N):
+    chunk = dict(gold); chunk['entries'] = gold['entries'][i::N]
+    open(f'/tmp/batches/gold_{i:02d}.json', 'w').write(json.dumps(chunk))
+"
+for f in /tmp/batches/gold_*.json; do
+  python3 run_eval.py dump-tuples "$f" "/tmp/batches/tuples_$(basename "$f" .json).json"
+done
+```
+
+Per-batch outputs can be merged downstream before Phase 4.
+
+Per-query latency is dominated by the **trace fetch** — VT indexing lag on a
+busy node can exceed 60 s. Raise `TRACE_FETCH_TIMEOUT` (default 120) if you
+see "no reranker_selection span — trace missed" warnings.
+
+### Phase 4 — `run_ragas_eval.py`
+
+LLM-judged semantic scoring. Requires `eval_tuples.json` from Phase 3 plus
+a configured judge endpoint. Install once on the eval runner (NOT a repo
+dependency — see the script header):
+
+```bash
+pip install ragas langchain-openai
+```
+
+**Judge config (env vars)** — OpenAI-compatible, model-agnostic. Sovereign
+deployments point this at any local OpenAI-compatible endpoint (vLLM,
+LiteLLM, ollama, etc.). External API keys work too.
+
+| Var | Purpose | Example |
+|-----|---------|---------|
+| `EVAL_JUDGE_BASE_URL` | Judge LLM endpoint | `http://127.0.0.1:3456/v1` (local), `http://<vllm-host>:8000/v1` (sovereign vLLM), `https://api.openai.com/v1` (external) |
+| `EVAL_JUDGE_API_KEY` | Bearer token (use `sk-no-key` for local that ignores auth) | varies |
+| `EVAL_JUDGE_MODEL` | Model id as the endpoint reports it | `ibm-granite/granite-4.1-8b` (sovereign default), `gpt-4o-mini` (external reference) |
+| `EVAL_JUDGE_TEMPERATURE` | Default `0` | `0` |
+| `EVAL_EMBED_BASE_URL` | Embeddings endpoint (default = judge) | optional separate endpoint |
+| `EVAL_EMBED_API_KEY` | Embeddings bearer (default = judge) | optional |
+| `EVAL_EMBED_MODEL` | Embedding model id (required for `answer_relevancy`) | varies |
+
+```bash
+export EVAL_JUDGE_BASE_URL=http://127.0.0.1:3456/v1
+export EVAL_JUDGE_API_KEY=sk-...
+export EVAL_JUDGE_MODEL="<judge-model>"
+python3 run_ragas_eval.py eval_tuples.json ragas_results.json
+```
+
+**Metrics computed**:
+
+| Metric | What it measures | Needs reference_answer? |
+|--------|------------------|--------------------------|
+| `faithfulness` | Is the answer grounded in the retrieved contexts? (LLM-judged, hallucination detector) | No |
+| `context_precision` | Are relevant chunks ranked above irrelevant ones? (LLM-judged ranking quality) | No |
+| `context_recall` | Do the retrieved contexts cover the reference answer? (LLM-judged) | Yes |
+| `answer_relevancy` | Does the answer address the question? (embedding-based) | No |
+
+If your xlsx has `reference_answer` (free — most benchmark schemas do),
+you get all four. Without it, RAGAS runs `context_recall` anyway — but with
+empty references, RAGAS 0.2.x returns `0.0`/`NaN` for the affected rows.
+Populate `reference_answer` per query, or post-filter the report.
+
+### Phase 5 — failure attribution (the why)
+
+RAGAS numbers alone don't tell you WHERE the pipeline broke. Cross-reference
+with OTel traces:
+
+| Failure pattern | Stage | Fix surface |
+|---|---|---|
+| Low `context_recall` + OTel shows long retriever time + correct chunks NOT in candidates | **Embeddings** | Try different embedding model, check model dim matches vector index |
+| Low `context_recall` + gold chunk present in ArangoDB but not in candidates | **Retriever** | Check `` `categoryLabels` `` / `` `serviceLabels` `` filter, vector index rebuild, hybrid score weights |
+| Low `context_recall` + gold in candidates but NOT in top-N selected | **Reranker** | Tune `RERANKER_TOP_N`, `CONTEXT_DECAY_FACTOR`, `MIN_VALUE_THRESHOLD`, or `RERANKING_STRATEGY`. Use `calibrate.py` offline first |
+| Low `context_precision` + good recall | **Reranker** (ranking) | Tune reranker weights / confusion formula |
+| Low `faithfulness` + good contexts | **LLM** | Tighten `CHATQNA_SYSTEM_PROMPT`, lower temperature, swap model |
+| Low `answer_relevancy` + good contexts | **LLM** | System prompt or model-language mismatch |
+
+The VictoriaTraces Trace Explorer (Grafana) renders the full span waterfall —
+combine with `rag.adaptive_breakdown` on the reranker span (when the reranker
+is on the OTel-upgraded image) for per-candidate cost/utility attribution.
+
+### End-to-end timing (42 queries)
+
+| Phase | Time | Repeatable? |
+|-------|------|-------------|
+| 1 — xlsx_to_gold | <1 min | one-time per benchmark |
+| 2 — match_gold_chunks | 1-2 min | one-time (anchor path) |
+| 3 — dump-tuples | ~28 min | per config change |
+| 4 — run_ragas_eval | ~10-15 min | per config change |
+| 5 — analysis | 10-30 min | per run (Claude-driven) |
+
+**Best ROI**: re-run Phases 3 + 4 after any config change. Phase 5 only when
+scores regress.
+
+### Reusing a gold dataset across stacks
+
+The gold dataset is corpus-INDEPENDENT (only depends on benchmark xlsx). To
+eval a different stack, just re-run Phases 3 + 4 with new env vars. The same
+`gold_dataset.json` works for any deployment. Re-run Phase 2 only when the
+corpus has been re-ingested (chunks get new `_key`s, but `content_hash`
+survives — see "Identity" section above).
+
+### Common pitfalls (semantic path)
+
+- **Reasoning-token judge eats the budget**. Models exposing `reasoning_content`
+  (chain-of-thought surface) burn the completion budget on internal
+  reasoning, then emit empty `answer=` → RAGAS scores every metric `0`/`NaN`.
+  Symptom: every metric flatlines while judge `completion_tokens` is
+  non-zero. Mitigations: switch to a non-reasoning judge model, or split
+  reasoning budget from answer budget at the endpoint layer (provider-
+  specific, e.g. OpenAI `o-*` reasoning effort). `run_ragas_eval.py` does
+  not yet expose an `EVAL_JUDGE_MAX_TOKENS` knob — fix at the endpoint
+  until the script grows one.
+- **Judge model must output JSON** when asked. Non-JSON responses silently
+  score 0 for the affected metric. Validate with one query before launching
+  the full eval.
+- **Embedding model missing for answer_relevancy**. `_build_embeddings()`
+  returns `None` when `EVAL_EMBED_MODEL` is unset and `_metrics()` drops
+  `answer_relevancy` from the wanted list — silently, with no warning
+  printed. Always set `EVAL_EMBED_MODEL` (sovereign default: `bge-large` on
+  the project's vector node) to keep the 4th metric and the eval sovereign
+  end-to-end.
+- **Context strings truncated by chatqna's token budget**. If `contexts[i]`
+  looks chopped, chatqna is fitting `prompt + history + max_answer` into
+  `VLLM_MAX_MODEL_LEN - 200` (`genieai_chatqna.py:1012`). Tune via
+  `VLLM_MAX_MODEL_LEN` (model window) or per-request `max_tokens` (smaller
+  → more room for contexts). RAGAS judges the truncated string — bump the
+  model length or drop `max_tokens` before blaming retrieval.
+- **Container name with dynamic replica suffix**. Same as anchor path — never
+  hardcode the chatqna container name, resolve live via `docker ps`.
+
+### What semantic path does NOT catch
+
+- **Retrieval regression on a SPECIFIC chunk** (anchor catches via
+  `content_hash` match). If you suspect a chunk-level regression, re-run
+  the anchor path alongside RAGAS.
+- **Latency regressions** (no metric for that — use the OTel trace
+  waterfall).
+- **Cost regressions** (e.g. embedding model switched to a pricier one
+  without business case). RAGAS doesn't track $.
+
+For latency / cost attribution: the Grafana RAG Pipeline Trace Waterfall
+dashboard + the OTel resource attributes on each span.

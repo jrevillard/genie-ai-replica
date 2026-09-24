@@ -235,15 +235,15 @@ HUGGING_FACE_HUB_TOKEN=
 #                                      #   context ONLY for the embedding — keeps label precision
 #                                      #   while propagating the subject via vectors).
 
-# Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — OPTIONAL, default OFF.
+# Hybrid Retrieval — BM25 + Reciprocal Rank Fusion (Contextual Retrieval Part B) — ON by default, opt-out via env var.
 # When enabled, the retriever runs a lexical (BM25) channel over <GRAPH>_SOURCE.text
 # alongside the dense vector search and fuses the two result sets with weighted
 # Reciprocal Rank Fusion. Recovers exact-match / rare-term / keyword-heavy queries
 # that dense embeddings rank poorly. Both channels read the same `text` field
-# (contextualized by Part A). Opt-in; OFF = true no-op (dense-only, byte-for-byte).
+# (contextualized by Part A). ON by default; OFF = true no-op (dense-only, byte-for-byte). Opt-out via env var.
 # The BM25 ArangoSearch view is created idempotently + lazily per graph_name.
 # See _bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md
-# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-in (default false; OFF = true no-op)
+# RETRIEVER_HYBRID_RETRIEVAL_ENABLED=false  # opt-out (default true; OFF = true no-op)
 # RETRIEVER_HYBRID_RRF_K=60                 # RRF ranking constant (literature standard)
 # RETRIEVER_HYBRID_BM25_CANDIDATES=50       # BM25 candidate fetch depth; fused then cut to top_k
 # RETRIEVER_HYBRID_DENSE_WEIGHT=1.0         # weight on the dense channel's rank contribution

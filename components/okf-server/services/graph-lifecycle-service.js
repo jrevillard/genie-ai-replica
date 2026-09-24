@@ -496,5 +496,6 @@ module.exports = {
   versionedGraphName,
   workingGraphName,
   draftGraphName,
+  graphExists,
   GraphLifecycleError
 };

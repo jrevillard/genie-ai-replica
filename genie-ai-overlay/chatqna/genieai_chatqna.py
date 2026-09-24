@@ -511,6 +511,16 @@ CHATQNA_SYSTEM_PROMPT = _CHATQNA_SYSTEM_PROMPT_BASE + (
 )
 CHATQNA_ENFORCE_ABSTENTION = os.getenv("CHATQNA_ENFORCE_ABSTENTION", "") or "true"
 CHATQNA_ABSTENTION_INSTRUCTIONS = os.getenv("CHATQNA_ABSTENTION_INSTRUCTIONS", "").strip() or None
+# Default fallback when CHATQNA_ABSTENTION_INSTRUCTIONS is unset: instruct
+# the LLM to still surface partial KB content while disclosing the
+# ungrounded origin of any training-data fill-in.
+_DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS = (
+    "\n[No Relevant Documents Found] The knowledge base search did not "
+    "return any high-confidence documents. You may still generate a "
+    "response, but begin by clearly stating that you do not have sufficient "
+    "information from verified source documents and that your response is "
+    "based on general AI training data rather than the knowledge base.\n"
+)
 SENSITIVE_KEYS = set(os.getenv("SENSITIVE_KEYS", "").split(","))
 
 
@@ -1220,11 +1230,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                 abstention_instructions = (
                     CHATQNA_ABSTENTION_INSTRUCTIONS
                     if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
-                    else (
-                        "\n[Returned Documents] The knowledge base search did not "
-                        "return any results. State clearly that you cannot answer "
-                        "based on available information."
-                    )
+                    else _DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
                 )
                 received_prompt += abstention_instructions
 
@@ -1330,10 +1336,7 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             abstention_instructions = (
                 CHATQNA_ABSTENTION_INSTRUCTIONS
                 if CHATQNA_ABSTENTION_INSTRUCTIONS is not None
-                else (
-                    "\n[Retrieved Documents] The knowledge base search did not return any results. "
-                    "State clearly that you cannot answer based on available information."
-                )
+                else _DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
             )
             next_data["inputs"] = initial_query + abstention_instructions
         else:

@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Resolve BMad's five central TOML layers to JSON."""
+"""Resolve BMad's four central TOML layers (project default, global user, project team, project user) to JSON."""
 
 import argparse
 import json
@@ -34,9 +34,17 @@ def extract_key(data, dotted_key: str):
     return current
 
 
+def write_json_stdout(output) -> None:
+    """Pin stdout to UTF-8 — a Windows cp1252 default cannot encode emoji icons."""
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8")
+    sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Resolve BMad central config using five-layer TOML merge."
+        description="Resolve BMad central config using four-layer TOML merge (project default, global user, project team, project user)."
     )
     parser.add_argument(
         "--project-root",
@@ -66,7 +74,7 @@ def main() -> int:
             value = extract_key(merged, key)
             if value is not _MISSING:
                 output[key] = value
-    sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+    write_json_stdout(output)
     return 0
 
 

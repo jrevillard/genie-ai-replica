@@ -402,7 +402,7 @@ Per-chunk LLM document-context prefix → embedding (+ optionally labeling) so c
 | `kc_dataprep_client_id` | `genie-dataprep` | no | Keycloak client ID for dataprep service account |
 | `keycloak_ssl_skip_verify` | `""` | no | Skip SSL verification for Keycloak API calls (set `"true"` for self-signed certs) |
 | `keycloak_password_policy` | — | no | Password policy string (e.g. `length(8) and notUsername`) |
-| `keycloak_theme` | `keycloak` | no | Login theme for Keycloak |
+| `keycloak_theme` | `genie` (compose default) | no | Login theme for all Keycloak auth screens (login, register, password reset — one theme brands them all). Bundled themes: `keycloak` (upstream), `genie` (default brand), `genie-el-salvador` (AgroGenio). **Set explicitly per environment**: `env.j2` omits `KEYCLOAK_THEME` when undefined and docker-compose then defaults the realm to `genie` — an environment created before a custom theme landed silently keeps the generic screens (seen on cloud_deploy/10.0.0.101, fixed in !462) |
 | `keycloak_access_token_lifespan` | — | no | Access token lifespan (e.g. `300` seconds, `5m`) |
 | `keycloak_registration_enabled` | — | no | Enable user self-registration (`true`/`false`) |
 | `keycloak_verify_email` | — | no | Require email verification for new users |

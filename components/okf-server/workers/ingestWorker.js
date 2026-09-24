@@ -28,6 +28,7 @@ const auditService = require('../services/audit-service');
 const { authedAxios } = require('../services/service-token');
 const conceptMetaService = require('../services/concept-meta-service');
 const config = require('../config');
+const graphLifecycle = require('../services/graph-lifecycle-service');
 
 const DEFAULT_INTERVAL_MS = 15000;
 const DEFAULT_SWEEP_INTERVAL_MS = 3600000;
@@ -316,6 +317,58 @@ async function _processOneJob() {
   const db = await getDb();
   const job = await claimNextSerialized(db);
   if (!job) return { outcome: 'idle' };
+
+  // PRE-FLIGHT (2026-09-25, David's directive): jobs are idempotent only when
+  // the graph they target still exists. If a retract (or a manual graph drop)
+  // wiped the graph between the previous claim and this one, we MUST NOT
+  // silently resume partial indexing — the concepts_done counter is a lie
+  // against a missing graph. Two cases:
+  //   graph EXISTS      -> continue from where the job left off (idempotent resume)
+  //   graph MISSING     -> recreate-and-reset: zero out concepts_done on the
+  //                        repo, requeue every meta row for this graph, and
+  //                        FALL THROUGH so dataprep's ensure-graph recreates
+  //                        the collection on the next POST (the original design
+  //                        comment at :746-749 still applies to ensure-graph
+  //                        recovery; we just stop lying about concepts_done).
+  const expectedGraph = job.graph_name || `OKF_${job.repo_id}`;
+  if (!graphLifecycle.graphExists(db, expectedGraph)) {
+    logger.warn('[INGEST-WORKER] graph missing at process time — recreating + resetting drain', {
+      repo_id: job.repo_id,
+      expected_graph: expectedGraph,
+      concept_id: job.concept_id
+    });
+    try {
+      await db.collection('okf_repositories').update(job.repo_id, {
+        'rag_ingestion.concepts_done': 0,
+        'rag_ingestion.last_reset_reason': 'graph_missing_at_resume',
+        'rag_ingestion.last_reset_at': new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    } catch (e) {
+      logger.warn('[INGEST-WORKER] reset concepts_done failed', {
+        repo_id: job.repo_id, err: e.message
+      });
+    }
+    try {
+      await db.query(aql`
+        FOR m IN okf_concepts_meta
+          FILTER m.repo_id == ${job.repo_id} AND m.graph_name == ${expectedGraph}
+          UPDATE m WITH {
+            index_status: 'parsed',
+            worker_claimed_at: null,
+            ingest_attempts: 0,
+            last_error: null
+          } IN okf_concepts_meta
+      `);
+    } catch (e) {
+      logger.warn('[INGEST-WORKER] reset meta rows failed', {
+        repo_id: job.repo_id, expected_graph: expectedGraph, err: e.message
+      });
+    }
+    logger.info('[INGEST-WORKER] reset complete; proceeding with recreate + re-ingest', {
+      repo_id: job.repo_id, expected_graph: expectedGraph
+    });
+  }
 
   return withSpan('okf.ingest.worker.job', async (span) => {
     span.setAttribute('okf.concept_id', job.concept_id);

@@ -112,7 +112,6 @@ workflow:
     - export PATH="$PWD/flutter-sdk/bin:$PATH"
     - flutter --version
     - cd mobile/genie_ai_mobile
-    - cp patrol_test/e2e_secrets.dart.example patrol_test/e2e_secrets.dart
     - flutter pub get
 
 # --- E2E integration base (shared by e2e:integration + scheduled:integration) ---
@@ -323,22 +322,6 @@ workflow:
       kotlin.incremental=true
       kotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=128m
       GRADLE_PROPS
-    - |
-      echo "🔑 Generating e2e_secrets.dart from CI variables..."
-      KC_PWD="${KEYCLOAK_ADMIN_PASSWORD}"
-      cat > patrol_test/e2e_secrets.dart << SECRETS
-      // E2E test secrets — generated from CI variables. DO NOT COMMIT.
-      class E2eSecrets {
-        const E2eSecrets({required this.keycloakAdminPassword});
-        final String keycloakAdminPassword;
-      }
-      const e2eSecrets = E2eSecrets(
-        keycloakAdminPassword: r'$KC_PWD',
-      );
-      SECRETS
-    - |
-      dart pub global activate patrol_cli 4.3.1
-      export PATH="$PATH:$HOME/.pub-cache/bin"
     - |
       EMULATOR_NAME="emulator-${CI_PIPELINE_ID}"
       echo "Starting Android emulator on compose network..."
@@ -2417,7 +2400,7 @@ lint:dart:
   script:
     - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
     - flutter analyze
-    - dart format --output=none --set-exit-if-changed lib/ test/ patrol_test/
+    - dart format --output=none --set-exit-if-changed lib/ test/
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

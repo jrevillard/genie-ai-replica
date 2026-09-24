@@ -86,6 +86,12 @@ android {
             signingConfig = keystorePropertiesFile.exists()
                 ? signingConfigs.release
                 : signingConfigs.debug
+            // R8/ProGuard rules — see proguard-rules.pro for the rationale.
+            // flutter_secure_storage's bundled Tink library references
+            // com.google.errorprone.annotations.* and javax.annotation.*,
+            // which are compile-time-only. Without these rules R8 errors
+            // on the missing classes during `flutter build apk --release`.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
@@ -95,9 +101,12 @@ flutter {
 }
 
 dependencies {
-    // PatrolJUnitRunner is added to main APK by Flutter via debugApi.
-    // We need it in the androidTest APK too — reference the Gradle subproject directly.
-    androidTestImplementation(project(":patrol"))
+    // PatrolJUnitRunner was added to main APK by Flutter via debugApi, but the
+    // Gradle subproject no longer exists (patrol removed from dev_dependencies
+    // because it auto-registered PatrolPlugin in GeneratedPluginRegistrant.java
+    // and broke release builds). Re-add the line below if/when a test that
+    // needs the native runner is in scope.
+    // androidTestImplementation(project(":patrol"))
 
     androidTestImplementation("androidx.test:core:1.5.0")
     androidTestImplementation("androidx.test:rules:1.2.0")

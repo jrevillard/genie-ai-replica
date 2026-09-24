@@ -205,7 +205,7 @@ workflow:
       - docker-compose-logs.txt
 
 # --- Shared: Docker compose network connection + NGINX IP discovery ---
-# Used by .e2e_mobile_base and .e2e_web_base to mutualize networking logic.
+# Used by .e2e_web_base to mutualize networking logic.
 .connect_compose_network: &connect_compose_network
   - |
     COMPOSE_NET=$(docker network ls --filter "label=com.docker.compose.project=ci-${CI_PIPELINE_ID}" --format '{{.Name}}' | head -1)
@@ -231,190 +231,6 @@ workflow:
     else
       echo "WARNING: No nginx container found in compose stack"
     fi
-
-# --- E2E mobile base (shared by patrol:e2e + scheduled:e2e-mobile) ---
-
-.e2e_mobile_base:
-  extends: .flutter_base
-  allow_failure: true
-  tags: [kvm]
-  timeout: 30m
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-  variables:
-    EMULATOR_IMAGE: "us-docker.pkg.dev/android-emulator-268719/images/30-google-x64:30.1.2"
-    EMULATOR_EXTRA_ARGS: "-memory 2048 -no-snapshot"
-  cache:
-    - key: "flutter-sdk-${FLUTTER_VERSION}"
-      paths:
-        - flutter-sdk/
-    - key: "android-sdk-36"
-      paths:
-        - android-sdk/
-    - key:
-        files:
-          - mobile/genie_ai_mobile/android/gradle-wrapper.properties
-          - mobile/genie_ai_mobile/pubspec.lock
-        prefix: gradle-build
-      paths:
-        - mobile/genie_ai_mobile/android/.gradle/
-        - mobile/genie_ai_mobile/build/
-  before_script:
-    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git xz-utils adb docker.io python3 default-jdk-headless unzip socat
-    - |
-      if [ ! -d "flutter-sdk/bin" ]; then
-        echo "Installing Flutter ${FLUTTER_VERSION}..."
-        curl -fsSL "${FLUTTER_ARCHIVE}" | tar -xJ
-        mv flutter flutter-sdk
-      fi
-    - git config --global --add safe.directory "$PWD/flutter-sdk"
-    - export PATH="$PWD/flutter-sdk/bin:$PATH"
-    - flutter --version
-    - cd mobile/genie_ai_mobile
-    - flutter pub get
-  script:
-    - |
-      for var in KEYCLOAK_ADMIN_PASSWORD KC_MOBILE_CLIENT_ID KC_MOBILE_REDIRECT_SCHEME; do
-        eval "val=\${$var:-}"
-        if [ -z "$val" ]; then
-          echo "ERROR: Missing CI variable: $var"
-          echo "Set it in Settings > CI/CD > Variables"
-          exit 1
-        fi
-      done
-    - |
-      export JAVA_HOME=$(readlink -f $(which java) | sed 's:/bin/java::')
-      echo "JAVA_HOME=$JAVA_HOME"
-      if [ ! -d "${CI_PROJECT_DIR}/android-sdk/cmdline-tools/latest/bin" ]; then
-        echo "Installing Android SDK command-line tools..."
-        ANDROID_SDK="${CI_PROJECT_DIR}/android-sdk"
-        mkdir -p "$ANDROID_SDK/cmdline-tools"
-        cd /tmp
-        curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdline-tools.zip
-        unzip -q cmdline-tools.zip
-        mv cmdline-tools "$ANDROID_SDK/cmdline-tools/latest"
-        rm -f cmdline-tools.zip
-        cd "${CI_PROJECT_DIR}/mobile/genie_ai_mobile"
-      else
-        echo "Android SDK command-line tools cached"
-      fi
-      export ANDROID_HOME="${CI_PROJECT_DIR}/android-sdk"
-      export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-      echo "sdkmanager at: $(which sdkmanager)"
-      yes | sdkmanager --licenses || true
-      echo "Installing Android SDK components..."
-      sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
-      echo "Android SDK ready"
-    - *connect_compose_network
-    - export PATH="$PATH:$PUB_CACHE/bin:${CI_PROJECT_DIR}/android-sdk/cmdline-tools/latest/bin:${CI_PROJECT_DIR}/android-sdk/platform-tools"
-    - export ANDROID_HOME="${CI_PROJECT_DIR}/android-sdk"
-    - export GRADLE_OPTS="-Xmx1024m -XX:+HeapDumpOnOutOfMemoryError"
-    - |
-      cat > "${CI_PROJECT_DIR}/mobile/genie_ai_mobile/android/gradle.properties" << 'GRADLE_PROPS'
-      org.gradle.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m -XX:+HeapDumpOnOutOfMemoryError
-      org.gradle.workers.max=2
-      android.useAndroidX=true
-      android.enableJetifier=false
-      org.gradle.daemon=false
-      kotlin.incremental=true
-      kotlin.daemon.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=128m
-      GRADLE_PROPS
-    - |
-      EMULATOR_NAME="emulator-${CI_PIPELINE_ID}"
-      echo "Starting Android emulator on compose network..."
-      docker run -d --name "$EMULATOR_NAME" \
-        --device /dev/kvm \
-        --network "$COMPOSE_NET" \
-        --tmpfs /root:mode=1777 \
-        -e EMULATOR_ARGS="$EMULATOR_EXTRA_ARGS" \
-        "$EMULATOR_IMAGE"
-      EMULATOR_IP=$(docker inspect "$EMULATOR_NAME" --format "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}" | awk '{print $1}')
-      EMULATOR_ADDR="${EMULATOR_IP}:5555"
-      echo "Emulator at $EMULATOR_ADDR"
-      for i in $(seq 1 60); do
-        EMU_STATUS=$(docker inspect "$EMULATOR_NAME" --format '{{.State.Status}}' 2>/dev/null || echo "gone")
-        if [ "$EMU_STATUS" = "exited" ] || [ "$EMU_STATUS" = "dead" ] || [ "$EMU_STATUS" = "gone" ]; then
-          echo "Emulator container crashed (status: $EMU_STATUS)"
-          docker logs "$EMULATOR_NAME" --tail 50 2>&1 || true
-          exit 1
-        fi
-        if adb connect "$EMULATOR_ADDR" 2>/dev/null && adb -s "$EMULATOR_ADDR" shell getprop sys.boot_completed 2>/dev/null | grep -q 1; then
-          echo "Emulator ready"
-          break
-        fi
-        echo "Waiting for emulator... ($i/60)"
-        sleep 5
-      done
-      adb -s "$EMULATOR_ADDR" shell getprop sys.boot_completed | grep -q 1 || {
-        echo "Emulator failed to boot"
-        docker inspect "$EMULATOR_NAME" --format '{{.State.Status}} (exit code: {{.State.ExitCode}})' 2>/dev/null || true
-        docker logs "$EMULATOR_NAME" --tail 50 2>&1 || true
-        exit 1
-      }
-    - |
-      if [ -z "$NGINX_IP" ]; then
-        echo "❌ Cannot set up port forwarding — NGINX_IP not discovered"
-        exit 1
-      fi
-      echo "🔗 Setting up port forwarding: emulator:8443 → CI runner:18443 → nginx (${NGINX_IP}):443"
-      socat TCP-LISTEN:18443,fork,reuseaddr TCP:${NGINX_IP}:443 &
-      SOCAT_PID=$!
-      sleep 1
-      if ! kill -0 "$SOCAT_PID" 2>/dev/null; then
-        echo "❌ socat failed to start — cannot forward traffic to nginx"
-        exit 1
-      fi
-      echo "✅ socat forwarding 0.0.0.0:18443 → ${NGINX_IP}:443"
-      SOCAT_TEST=$(curl -sk -o /dev/null -w "%{http_code}" https://localhost:18443/auth/realms/genie 2>/dev/null || echo "000")
-      echo "socat → nginx test: HTTP ${SOCAT_TEST}"
-      adb disconnect "${EMULATOR_ADDR}" 2>/dev/null || true
-      sleep 1
-      adb connect "${EMULATOR_ADDR}"
-      adb -s "${EMULATOR_ADDR}" reverse tcp:8443 tcp:18443
-      echo "✅ adb reverse: emulator 127.0.0.1:8443 → host:18443"
-      adb -s "${EMULATOR_ADDR}" reverse --list
-    - |
-      export ADB_DEVICE="$EMULATOR_ADDR"
-      echo "ADB_DEVICE=$ADB_DEVICE"
-
-      adb -s "$ADB_DEVICE" shell getprop sys.boot_completed 2>/dev/null | grep -q 1 || {
-        echo "❌ Device $ADB_DEVICE not online"
-        exit 1
-      }
-      echo "✅ Device $ADB_DEVICE online and verified"
-
-      adb -s "$ADB_DEVICE" reverse tcp:8443 tcp:18443 2>/dev/null || {
-        echo "⚠️  adb reverse failed — reconnecting..."
-        adb disconnect "$ADB_DEVICE" 2>/dev/null || true
-        sleep 1
-        adb connect "$ADB_DEVICE"
-        adb -s "$ADB_DEVICE" reverse tcp:8443 tcp:18443
-      }
-      echo "✅ adb reverse re-confirmed before tests"
-      adb -s "$ADB_DEVICE" reverse --list
-
-      export CI_NGINX_URL="https://${NGINX_IP}"
-      export ADB_DEVICE="$ADB_DEVICE"
-      export EXTRA_DART_DEFINES=$'E2E_KEYCLOAK_URL=https://127.0.0.1:8443/auth\nE2E_REALM=genie\nE2E_CLIENT_ID=genie-mobile-e2e\nE2E_REDIRECT_SCHEME=com.itu.genieai.e2e\nE2E_BACKEND_URL=https://127.0.0.1:8443'
-      cd "$CI_PROJECT_DIR"
-
-      # Delegate test execution to patrol-wrapper.sh
-      # (keepalive is managed internally — auto-stops after 5 min, during Gradle build only)
-      ./mobile/genie_ai_mobile/patrol-wrapper.sh --flavor e2e -d "$ADB_DEVICE"
-      exit $?
-  after_script:
-    - mkdir -p e2e-logs
-    - docker inspect "emulator-${CI_PIPELINE_ID}" > e2e-logs/emulator-status.json 2>&1 || true
-    - docker logs "emulator-${CI_PIPELINE_ID}" > e2e-logs/emulator.log 2>&1 || true
-    - docker rm -f "emulator-${CI_PIPELINE_ID}" 2>/dev/null || true
-  artifacts:
-    when: always
-    expire_in: 2 days
-    paths:
-      - e2e-logs/
 
 # --- E2E web base (shared by e2e:playwright + scheduled:e2e-web) ---
 
@@ -2410,6 +2226,36 @@ lint:dart:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
+# Compile-verification for the Patrol E2E suite (patrol_test/).
+# patrol is deliberately NOT a dev_dependency in pubspec.yaml: its Android
+# wiring is debug-only, so a committed dependency breaks
+# `flutter build apk --release` (see commit e80ff6855). The suite is excluded
+# from the default `flutter analyze` (analysis_options.yaml) and compiled
+# here instead: patrol is injected into the CI workspace only, the exclude
+# is stripped, and the suite is analyzed + format-checked. Workspace
+# mutations (pub add, sed, secrets copy) are never committed.
+# Runtime E2E execution is tracked separately (see the restoration issue).
+lint:dart:patrol:
+  extends: .flutter_base
+  stage: lint
+  script:
+    - export PATH="$PWD/../../flutter-sdk/bin:$PATH"
+    - cp patrol_test/e2e_secrets.dart.example patrol_test/e2e_secrets.dart
+    - sed -i '/patrol_test\/\*\*/d' analysis_options.yaml
+    - flutter pub add "dev:patrol:4.5.0"
+    - flutter analyze patrol_test
+    - dart format --output=none --set-exit-if-changed patrol_test/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "mobile/genie_ai_mobile/patrol_test/**/*"
+        - "mobile/genie_ai_mobile/analysis_options.yaml"
+        - "mobile/genie_ai_mobile/pubspec.yaml"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
 # Cross-validates OIDC redirect scheme consistency across all 4 config layers:
 # Dart flavor configs, Android build.gradle, iOS XCConfig, and env template.
 # Pure text parsing — no Flutter/Dart/Gradle/Xcode toolchain required.
@@ -2679,17 +2525,7 @@ e2e:integration:
         - components/gov-chat-backend/**/*
         - .gitlab-ci.yml
 
-patrol:e2e:
-  extends: .e2e_mobile_base
-  stage: e2e
-  resource_group: e2e-runner
-  needs: [e2e:integration, lint:dart, test:flutter]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"'
-      changes:
-        - mobile/genie_ai_mobile/**/*
-
-# Playwright E2E — runs on merge trains (same pattern as patrol:e2e)
+# Playwright E2E — runs on merge trains
 e2e:playwright:
   extends: .e2e_web_base
   stage: e2e
@@ -2893,19 +2729,6 @@ config:changelog:
 scheduled:integration:
   extends: .e2e_integration_base
   stage: scheduled
-  resource_group: e2e-runner
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: on_success
-
-# Mobile E2E tests (Patrol) — shared logic with patrol:e2e via .e2e_mobile_base
-# Depends on scheduled:integration (running Docker stack)
-# Uses Google's official Android emulator via Docker (requires KVM)
-# Networking: socat + adb reverse routes emulator's 127.0.0.1:8443 → nginx:443
-scheduled:e2e-mobile:
-  extends: .e2e_mobile_base
-  stage: scheduled
-  needs: [scheduled:integration]
   resource_group: e2e-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"

@@ -1,0 +1,667 @@
+{
+  "_doc": "Auto-generated from RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx (sheet 'Test Dataset') by xlsx_to_gold.py. expected_chunks[].content_hash and chunk_key are filled by match_gold_chunks.py AFTER the corpus is ingested into ArangoDB. Schema matches gold_dataset.example.json.",
+  "source_xlsx": "/home/jerome/Téléchargements/RAG_Evaluation_Test_Dataset_El_Salvador_updated.xlsx",
+  "source_sheet": "Test Dataset",
+  "generated_at": "2026-09-23T11:01:16+00:00",
+  "n_entries": 42,
+  "n_skipped_no_query": 0,
+  "entries": [
+    {
+      "id": "Q01",
+      "query": "I am storing tomato seeds for an extended period before planting. What humidity level should I store them at, and what is the minimum germination percentage expected for quality seed?",
+      "language": "en",
+      "difficulty": "Simple Fact-Finding",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Tomato seeds stored for prolonged periods should be kept at a humidity level of 5.5%. A quality seed must have a minimum germination rate of at least 95%.",
+      "expected_chunks": [
+        {
+          "preview": "If stored for prolonged periods, it is recommended to do so at a humidity of 5.5%. A quality seed should have at least 95% germination.",
+          "source_doc": "Bulletin Centa Tomato.md (Section III. Botanical Aspects - Seed)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q02",
+      "query": "How does the iron and zinc content in the CENTA Ferromás bean variety compare to traditional varieties like Rojo de Seda and CENTA Pipil?",
+      "language": "en",
+      "difficulty": "Simple Fact-Finding",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA Ferromás contains 80–81 ppm of iron and 35 ppm of zinc. By comparison, CENTA Pipil contains 56–58 ppm of iron and 32 ppm of zinc, while Rojo de Seda contains 46–47 ppm of iron and 30 ppm of zinc. Thus, CENTA Ferromás offers substantially higher iron and zinc levels than these traditional varieties.",
+      "expected_chunks": [
+        {
+          "preview": "CENTA PIPIL contains 56-58 ppm iron and 32 ppm zinc. ROJO DE SEDA contains 46-47 ppm iron and 30 ppm zinc. CENTA FERROMÁS contains 80-81 ppm iron and 35 ppm zinc.",
+          "source_doc": "Boletin Centa_frijol ferromas.md (Agronomic and Nutritional Characteristics)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q03",
+      "query": "What is the sampling damage threshold that requires control action for Fall Armyworm (Spodoptera frugiperda) in maize, and what biological control agents can be used against it?",
+      "language": "en",
+      "difficulty": "Simple Fact-Finding",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Control measures must be implemented if sampling reveals 5% damage from seedling emergence up to the eight-leaf stage. Recommended biological control agents include egg parasitoids such as Trichogramma sp. and larval parasitoids like Apanteles sp., alongside egg predators (Geocoris spp., Orius sp.) and larval predators (Nabis sp., Zelus sp., Chrysopa sp., Polistes sp., Polybia sp.).",
+      "expected_chunks": [
+        {
+          "preview": "Take 5 random points of 20 plants each and determine the percentage of damage. If the sampling result indicates that there is 5% damage from the emergence of seedlings to eight leaves, control should be implemented.\nBiological control: Trichogramma sp. (egg parasitoid), Apanteles sp. (larval parasitoid); Geocoris spp., Orius sp. (egg predators), Nabis sp., Zelus sp., Crysopa sp., Polistes sp., Polybia sp. (larval predators).",
+          "source_doc": "GUIA TECNICA MAIZ.md (Section X. Insect Pests of Maize - Fall Armyworm)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q04",
+      "query": "I am planning my tomato crop layout in El Salvador. How should I adjust the row spacing and plant density between the rainy season and the dry season?",
+      "language": "en",
+      "difficulty": "Medium Scenario",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "In the rainy season, the recommended spacing is 1.50 m between rows and 0.50 m between plants, resulting in a density of 9,334 plants per manzana. In the dry (summer) season, row spacing should be narrowed to 1.20 m by 0.50 m between plants, increasing the density to 11,667 plants per manzana.",
+      "expected_chunks": [
+        {
+          "preview": "The recommended spacing is 1.50 m between rows and 0.50 m between plants in the rainy season, obtaining a planting density of 9,334 plants per manzana, and 1.20 x 0.50 m in the dry season, 11,667 plants per manzana.",
+          "source_doc": "Bulletin Centa Tomato.md (Section X. Cultural Practices - Planting Density)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q05",
+      "query": "I want to store my harvested grain in a metal silo. How can I ensure the silo is properly sealed against leaks before and after filling, and how do I test for pressure leaks?",
+      "language": "en",
+      "difficulty": "Medium Scenario",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Before filling, check the silo for light leaks or pour water inside to detect leak points, which can be patched using tin, silicone, tar, sealing tape, or putty. Lids should be sealed with rubber strips or wide adhesive tape, and seam grooves filled with silicone or putty. After filling and sealing, a smell of tablets (such as phosphine) indicates a leak; you can confirm pressure retention by inflating the silo slightly and listening for a hiss after three minutes with the outlet closed.",
+      "expected_chunks": [
+        {
+          "preview": "Rubber strips (e.g., from tires) or wide adhesive tape can seal lids, and silicone or putty can fill grooves in seams. Before filling, check for light leaks or pour water in to find leak points (patchable with tin, silicone, tar, sealing tape, or putty); after filling and sealing, a smell of tablets indicates a leak, and inflating the silo slightly and listening for a hiss after three minutes with the outlet closed can confirm pressure retention.",
+          "source_doc": "General-Agriculture-Best-Practices.md (Section 5. Grain Storage and Postharvest Handling)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q06",
+      "query": "My farm experiences mid-season dry spells and high temperatures. Compare the CENTA Drought and CENTA Ferromás bean varieties regarding heat/drought tolerance, maturity days, and disease reaction to decide which is better suited for limited moisture.",
+      "language": "en",
+      "difficulty": "Medium Synthesis",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA Drought is specifically adapted for limited moisture and high temperatures. It matures in 65 days (flowering in 33–35 days) and is resistant to both yellow mosaic virus and common mosaic virus. In contrast, CENTA Ferromás takes 70–72 days to mature (flowering in 38–40 days), is resistant to common mosaic and tolerant to yellow mosaic, but is susceptible to high temperatures and limited moisture. Therefore, CENTA Drought is the superior choice for drought-prone conditions.",
+      "expected_chunks": [
+        {
+          "preview": "Its main attribute is tolerance to moderate drought and high temperatures. ... Days to flowering: 33-35; Days to physiological maturity: 65; Reaction to yellow mosaic virus: Resistant; Reaction to common mosaic virus: Resistant; High temperatures: Tolerant; Limited moisture: Tolerant\nCENTA Ferromas... flowering at 38-40 days; physiological maturity at 70-72 days; resistant to the common mosaic virus; tolerant to the yellow mosaic virus; susceptible to downy mildew, anthracnose, high temperatures and limited humidity.",
+          "source_doc": "Boletin Centa_frijol sequia.md and Guia Centa_Frijol.md / Boletin Centa_frijol ferromas.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q07",
+      "query": "I noticed two pests in my bean crop: nocturnal slugs eating irregular holes in leaves, and tiny whiteflies on leaf undersides. What non-chemical control methods are recommended for each, and what are their critical sampling thresholds?",
+      "language": "en",
+      "difficulty": "Medium Comparative",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Slugs (Sarasinula plebeia): Cultural control involves removing broadleaf weeds and host plants, destroying crop residues, ensuring good drainage, and using traps to manually collect and destroy slugs. Critical threshold: 1 slug per m² in the first planting, and 1 slug per 2 m² in the second planting.\nWhiteflies (Bemisia tabaci): Cultural control includes removing virus-infected plants, eliminating weeds and host crops, avoiding dry-season planting, using live barriers of corn or sorghum, and planting resistant varieties. Critical threshold: Zero tolerance — control must begin at the first sighting of a single whitefly.",
+      "expected_chunks": [
+        {
+          "preview": "Slugs: Critical level: One slug per square meter in the first planting, and one slug per two square meters in the second planting. Cultural: Remove weeds, especially broadleaf weeds, and other host plants... Destroy crop residue. Maintain good drainage. Manual: Use traps to manually collect and destroy slugs.\nWhiteflies: Critical level: Manage zero tolerance due to its role as a vector for many viral diseases. Take control measures as soon as a single whitefly is found in the crop... Cultural: Remove plants with viruses, weeds, and cucumber, tomato, soybean, tobacco, and cotton plants... Use live barriers of corn or sorghum.",
+          "source_doc": "PRINCIPALES PLAGAS DEL FRIJOL IICA.md (Sections 2 & 12) and Guia Centa_Frijol.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q08",
+      "query": "I am an extension officer advising two farmers: Farmer A operates in a humid coastal area with heavy historical losses from Corn Stunt ('weevil'/achaparramiento transmitted by Dalbulus maidis). Farmer B is in a rural community seeking to combat child malnutrition through biofortified crops. Which maize variety should I recommend to each, and why?",
+      "language": "en",
+      "difficulty": "Hard Synthesis",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "For Farmer A: Recommend CENTA Santa Rosa. It is a free-pollinating variety adapted to coastal areas (0–30 masl) with a history of Corn Stunt, possessing excellent resistance to the disease.\nFor Farmer B: Recommend CENTA CS. It is a biofortified white synthetic maize variety with High Protein Quality (HPP). It contains 10.34% protein, double the essential amino acid tryptophan compared to common maize (0.09% vs 0.04%), and a Protein Quality Index of 0.89 (exceeding the 0.80 biofortification threshold).",
+      "expected_chunks": [
+        {
+          "preview": "The disease commonly known as corn stunt ('weevil') causes significant losses in maize cultivation in the coastal area of El Salvador... transmitted by the corn leafhopper, Dalbulus maidis... CENTA SANTA ROSA... Reaction to corn stunt ('weevil'): resistant... Resistance to corn stunt ('weevil'): excellent.\ncommon maize contains 10.23% protein, 0.04% tryptophan and a Protein Quality Index of 0.4; the CENTA-CS variety contains 10.34% protein, 0.09% tryptophan and a Protein Quality Index of 0.89... according to CIMMYT, for maize to be considered biofortified (high-protein), the Protein Quality Index must be superior to 0.80.",
+          "source_doc": "Boletin Centa_maiz -santa rosa.md, Boletin Centa_maiz -CS.md, and GUIA TECNICA MAIZ.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q09",
+      "query": "If a farmer cannot conduct a soil test, what are the basic standard fertilization schedules recommended by CENTA for maize versus beans in El Salvador, specifying the timing, formulas, and application rates for the 1st and 2nd applications?",
+      "language": "en",
+      "difficulty": "Hard Synthesis",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Maize Schedule: 1st Application at planting or within 8 days: 4 qq/ha of Formula 15-15-15 or 16-20-0. 2nd Application at 22–30 days: 4.4 qq/ha of Ammonium Sulfate (21% N) incorporated 5–10 cm from the plant.\nBean Schedule: 1st Application at planting or within 8 days: 2 qq/ha of Formula 18-46-0 (or 4 qq/ha of 15-15-15). 2nd Application at 30 days: 1 bag/ha (150 lb/ha) of Urea.",
+      "expected_chunks": [
+        {
+          "preview": "First fertilization: at planting or 8 days after planting. Recommended formulas: Formula 15-15-15, 4 quintals per hectare (qq/ha) (259 kg/ha), or Formula 16-20-0, 4 qq/ha (259 kg/ha). Second fertilization: 22-30 days after planting, applying Ammonium Sulfate (21% N), 4.4 qq/ha (286 kg/ha).\nIf a soil analysis is not possible, the following two basic fertilizations are recommended: The first, at planting or no later than 8 days after, incorporating 2 qq/hectare (or 4 qq/hectare) of the 18-46-0 formula, or 15-15-15. The second, 30 days after planting, with a bag of Urea (150 lb/hectare).",
+          "source_doc": "Boletin-recomeda fertil maiz-160625.md and Boletin-recomend fert frijol.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q10",
+      "query": "In my tomato field during a hot, rainy spell, I see two problems: some plants show sudden wilting with reddish-brown stem tissue, while others have watery brown spots on leaves with white fungal growth on the underside. How can I perform a field diagnosis for each, and what cultural and chemical controls are recommended?",
+      "language": "en",
+      "difficulty": "Hard Diagnostic",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Problem 1 (Bacterial Wilt / Ralstonia solanacearum): Perform a glass water test: cut a 7 cm stem section and suspend it in water for 10–20 minutes; a whitish thread (bacterial ooze) confirms Ralstonia. Cultural: rotate with non-solanaceous crops (grasses), disinfect tools, apply lime, remove infected plants. Chemical: Agri-mycin 16.5 WP (0.35 kg/ha).\nProblem 2 (Late Blight / Phytophthora infestans): Identified by irregular watery spots turning brown with white mycelium on the leaf underside. Cultural: phytosanitary pruning, crop rotation, mulch. Chemical: Preventive Copper oxychloride (2.0–3.6 kg/ha) or Fosetyl-Al; Curative Copper hydroxide (1.4–1.8 kg/ha) or Consento 45 SC.",
+      "expected_chunks": [
+        {
+          "preview": "A rapid field diagnosis can be performed by cutting a portion of the stem about 7cm in length, then introducing it into a glass container containing water... after that time, a whitish thread is observed, which is the bacterial ooze.\nCultural control: Rotation of crops other than solanaceous plants, preferably with grasses. Disinfection of agricultural equipment... Lime amendments... Removal of diseased plants.\nOn the leaves, at the beginning of the damage, irregular spots with a watery appearance on the edges are observed... whitish mycelium develops on the underside of the leaf... Cultural control: Perform phytosanitary pruning and elimination of diseased leaves... Use of mulch to avoid splashing... Chemical control: Preventive. Copper oxychloride... Curative. Copper hydroxide... Fenamidone + Mancozeb...",
+          "source_doc": "Bulletin Centa Tomato.md (Section XVII. Disease Management)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q11",
+      "query": "I am selecting a bean variety for planting in El Salvador. Compare CENTA Tacuba and CENTA EAC in terms of grain color, growth habit, days to physiological maturity, potential yield, and disease reaction (specifically rust and common bacteriosis).",
+      "language": "en",
+      "difficulty": "Medium Comparative",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA Tacuba: Bright black grain, Type II A growth habit (bushy), 65 days to maturity, 35 qq/ha potential yield. Resistant to common and yellow mosaic; tolerant to rust, anthracnose, downy mildew, and common bacteriosis.\nCENTA EAC: Light red grain, Type II B growth habit (upright/climbing), 67 days to maturity, 36 qq/ha potential yield. Resistant to common and yellow mosaic; tolerant to anthracnose and downy mildew; susceptible to rust and susceptible to common bacteriosis.",
+      "expected_chunks": [
+        {
+          "preview": "CENTA EAC: light red grain; growth habit type II B; flowering at 35 days; physiological maturity at 67 days; 20 pods per plant; 6-8 grains per pod; 100-seed weight of 26-27 g; potential yield of 36 qq/ha... resistant to the common mosaic virus and the yellow mosaic virus; susceptible to rust; tolerant to downy mildew, anthracnose, high temperatures and limited humidity; susceptible to common bacteriosis.\nCENTA Tacuba: bright black grain; growth habit type II A; flowering at 35 days; physiological maturity at 65 days; 21 pods per plant; 6 grains per pod; 100-seed weight of 21 g; potential yield of 35 qq/ha... resistant to the common mosaic virus and the yellow mosaic virus; tolerant to rust, downy mildew, anthracnose, common bacteriosis, high temperatures and limited humidity.",
+          "source_doc": "Technical Guide for Bean Cultivation — CENTA (2018) (Section V)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q12",
+      "query": "What is the synthetic yellow maize variety CENTA ASG, what are its key quantitative and qualitative agronomic traits, and how did its yield performance compare to traditional control varieties during validation trials in El Salvador?",
+      "language": "en",
+      "difficulty": "Medium Variety Profile",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA ASG is a synthetic yellow maize variety developed for grain production and limited humidity tolerance. Quantitative traits: 55 days to flowering, 115 days to physiological maturity, 247 cm plant height, 133 cm ear height, 14 rows per ear. Qualitative traits: good drought resistance, weed tolerance, bright yellow semi-crystalline grain. Validation yield: In 2016 nationwide trials across 21 locations, CENTA ASG averaged 83 qq/mz compared to 56 qq/mz for local control varieties (+33% yield advantage).",
+      "expected_chunks": [
+        {
+          "preview": "During 2016, it was evaluated in 21 validation plots at the national level, where it outperformed the traditional varieties used as controls by 33% in grain yield... Average: CENTA ASG 83 qq/mz versus 56 qq/mz for the traditional varieties.\nDays to flowering: minimum 54, maximum 56, average 55. Days to physiological maturity: minimum 110, maximum 120, average 115. Plant height: minimum 242 cm, maximum 252 cm, average 247 cm... Drought resistance: good. Weed resistance: tolerant. Grain color and type: bright yellow, semi-crystalline.",
+          "source_doc": "Boletin Centa_maiz -ASG.md (Sections III, V)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q13",
+      "query": "Compare CENTA Chaparrastique and CENTA Ferromás bean varieties regarding disease reaction (yellow mosaic virus, rust, downy mildew, anthracnose) and environmental stress tolerance (high temperatures and limited moisture).",
+      "language": "en",
+      "difficulty": "Medium Comparative",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA Chaparrastique: Resistant to common mosaic and yellow mosaic; tolerant to rust and downy mildew; susceptible to anthracnose, high temperatures, and limited moisture.\nCENTA Ferromás: Resistant to common mosaic; tolerant to yellow mosaic and common bacteriosis; slightly tolerant to rust; susceptible to downy mildew, anthracnose, high temperatures, and limited moisture.",
+      "expected_chunks": [
+        {
+          "preview": "CENTA Chaparrastique: resistant to the common mosaic virus and the yellow mosaic virus; tolerant to rust, downy mildew and common bacteriosis; susceptible to anthracnose, high temperatures and limited humidity.\nCENTA Ferromas: resistant to the common mosaic virus; tolerant to the yellow mosaic virus and common bacteriosis; slightly tolerant to rust; susceptible to downy mildew, anthracnose, high temperatures and limited humidity.",
+          "source_doc": "Technical Guide for Bean Cultivation — CENTA (2018) (Section V)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q14",
+      "query": "What are the main agronomic characteristics of the maize variety CENTA SANTA ROSA, including its vegetative cycle, height, yield potential, and recommended seeding rate?",
+      "language": "en",
+      "difficulty": "Simple Variety Profile",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA SANTA ROSA is a free-pollinating white maize variety. Vegetative cycle: 90–95 days; male flowering: 45–50 days; plant height: 245–250 cm; ear height: 120–130 cm; reaction to Corn Stunt ('weevil'): resistant (excellent); potential yield: 60 qq/hectare. Recommended seeding rate: 20–25 lb/manzana.",
+      "expected_chunks": [
+        {
+          "preview": "Type of variety: free-pollination. Vegetative cycle: 90-95 days. Days to male flowering: 45-50. Plant height: 245-250 cm. Height of stalk: 120-130 cm. Reaction to corn stunt ('weevil'): resistant. Appearance of stalk: strong. Ear cover: excellent. Grain color and type: semi-dwarf. Resistance to corn stunt ('weevil'): excellent. Potential yield: 60 qq/hectare.\n20-25 pounds of seed per manzana is recommended.",
+          "source_doc": "Boletin Centa_maiz -santa rosa.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q15",
+      "query": "Compare CENTA San Andrés and CENTA Pipil bean varieties in terms of grain color, growth habit, days to flowering and physiological maturity, and adaptation range.",
+      "language": "en",
+      "difficulty": "Medium Comparative",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA San Andrés: Bright red grain, Type II A growth habit (bushy), 32 days to flowering, 68 days to physiological maturity, adaptation altitude from 100 to 1,000 masl.\nCENTA Pipil: Dark reddish-brown grain, Type II B growth habit (upright/climbing), 34 days to flowering, 70 days to physiological maturity, adaptation altitude from 50 to 1,000 masl.",
+      "expected_chunks": [
+        {
+          "preview": "CENTA San Andrés: bright red grain; growth habit type II A; flowering at 32 days; physiological maturity at 68 days; 23 pods per plant; 6 grains per pod; 100-seed weight of 28 g; potential yield of 35 qq/ha; altitude adaptation from 100 to 1,000 meters above sea level...\nCENTA Pipil: dark reddish-brown grain; growth habit type II B; flowering at 34 days; physiological maturity at 70 days; 23 pods per plant; 6 grains per pod; 100-seed weight of 25 g; potential yield of 35 qq/ha; altitude adaptation from 50 to 1,000 meters above sea level...",
+          "source_doc": "Technical Guide for Bean Cultivation — CENTA (2018) (Section V)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q16",
+      "query": "What were the national tomato production statistics in El Salvador for the 2014-2015 agricultural cycle (area planted, production volume, apparent national demand, import volume, and import dollar value), and how many hectares of planting are required to cover this demand?",
+      "language": "en",
+      "difficulty": "Hard Data / Statistics",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Area Planted: 1,060 manzanas; National Production: 19,396,600 kg; Apparent National Demand: 109,554,703 kg; Import Volume: 90,158,103 kg; Import Value: $12,165,670.00 USD. Area required to cover apparent demand: ~3,990 hectares.",
+      "expected_chunks": [
+        {
+          "preview": "The agricultural statistics yearbook 2014-2015 reported the planting of tomatoes in an area of 1,060 manzanas nationwide, with a production volume of 19,396,600 kg, which means that this production does not cover the apparent demand (109,554,703 kg); having to import around 90,158,103 kilograms with a value of $12,165,670.00. To cover the apparent demand, it is required to plant around 3,990 ha - 1 hectares.",
+          "source_doc": "Bulletin Centa Tomato.md (Section II. Generalities - Importance)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q17",
+      "query": "What is the annual per capita consumption of maize in urban versus rural areas of El Salvador according to FAO data, and what were the total planted area, total production volume, and average yield per hectare recorded for the 2016-2017 agricultural cycle?",
+      "language": "en",
+      "difficulty": "Hard Data / Statistics",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Per Capita Consumption: 80.51 kg/year in urban areas and 127 kg/year in rural areas (95% used for human consumption). 2016–2017 Cycle: Planted area of 433,603 hectares (303,522 manzanas), total production of 20,316,389 quintals, and average yield of 46.9 quintals per hectare.",
+      "expected_chunks": [
+        {
+          "preview": "According to FAO, per capita consumption is approximately 80.51 kilograms in urban areas and 127 kilograms in rural areas, making it the highest consumption in the Central American region. 95% of the production is destined for human consumption.\nAccording to the General Directorate of Agricultural Economy, during the 2016-2017 agricultural cycle, the area planted with maize was 433,603 hectares (303,522 manzanas) with a production of 20,316,389 quintals, with an average yield of 46.9 quintals per hectare.",
+          "source_doc": "Corn (Zea mays L.) — Technical Guide (Section I. Introduction)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q18",
+      "query": "According to DGEA - MAG statistics, what is the annual per capita consumption of beans in El Salvador, and what were the total planted area, national production, and average productivity per hectare reported for the 2016-2017 agricultural cycle?",
+      "language": "en",
+      "difficulty": "Hard Data / Statistics",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Annual per capita bean consumption is approximately 17.32 kilograms per person. In the 2016–2017 agricultural cycle, DGEA - MAG reported a total planted area of 177,498 hectares, a national production of 2.6 million quintals, and an average productivity of 15.0 qq/ha.",
+      "expected_chunks": [
+        {
+          "preview": "In El Salvador, bean cultivation is part of food security, as the consumption of beans provides protein, fiber, and minerals. Each resident in our country consumes approximately 17.32 kilograms per year. According to the DGEA - MAG, in the 2016-2017 agricultural cycle, 177,498 hectares of beans were planted, with a production of 2.6 million quintals and a productivity of 15.0 qq/ha.",
+          "source_doc": "Technical Guide for Bean Cultivation — CENTA (2018) (Section I. Introduction)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q19",
+      "query": "What are the specific chemical fertilizer application timings, formulas, and dosage rates recommended for open-field tomato production, and what physiological disorder occurs on the fruit from localized calcium deficiency?",
+      "language": "en",
+      "difficulty": "Medium Crop Management",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Fertilizer Schedule: At transplanting apply 130 kg/ha formula 18-46-0, 130 kg/ha 0-20-0, and 130 kg/ha muriate of potash; at flowering apply 195 kg/ha ammonium sulfate; during fruit development apply 162 kg/ha urea; at start of harvest apply 162 kg/ha ammonium sulfate. Apply foliar Calcium/Boron every 7 days.\nCalcium Deficiency: Causes Blossom End Rot (pudrición apical), where breaker-stage fruits develop sunken, hard black tissue at the base.",
+      "expected_chunks": [
+        {
+          "preview": "At transplanting: apply 130 kg/ha of formula 18-46-0, 130 kg/ha of 0-20-0, and 130 kg/ha of muriate of potash; at flowering: apply 195 kg/ha of ammonium sulfate; during fruit development: apply 162 kg/ha of urea. At the start of harvest: apply 162 kg/ha of ammonium sulfate. Apply foliar fertilizers every 7 days that include Calcium and Boron.\nBlossom end rot is due to a localized calcium deficiency; fruits in the breaker stage show sunken and hard tissue at the base, and their color changes from green to black.",
+          "source_doc": "Bulletin Centa Tomato.md (Sections XI. Fertilization, Calcium)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q20",
+      "query": "How does the whitefly (Bemisia tabaci) transmit geminiviruses in tomato crops regarding virus acquisition and inoculation feeding periods, and what specific chemical insecticide products and doses are recommended for its control?",
+      "language": "en",
+      "difficulty": "Hard Pest Management",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Vector Dynamics: Whiteflies transmit geminiviruses by feeding for an acquisition period of 2–24 hours, followed by a feeding-inoculation period of 2–3 days. Symptoms appear within 21 days.\nChemical Control: Imidacloprid (Confidor 70 WG) at 0.21–0.35 kg/ha, Amitraz (Mitac 20 EC) at 2.5–4.0 l/ha, Thiamethoxam (Actara 25 WG) at 250–400 g/ha, or Pimetrozine (Chess 50 WG) at 250–300 g/ha.",
+      "expected_chunks": [
+        {
+          "preview": "It is responsible for transmitting geminiviruses; these are located in the phloem and for them to be transmitted, the vector must go through a feeding period of 2-24 hours (virus acquisition), then through a feeding-inoculation period of 2-3 days.\nSome of the chemical products recommended for the control of whitefly are: Imidacloprid (Confidor 70 WG) 0.21-0.35 kg/ha. Amitraz (Mitac 20 EC) 2.5-4.0 l/ha. Thiamethoxam (Actara 25 WG) (green band) 250-400 g/ha. Pimetrozine, Pyridine Azomethine (Chess 50 WG) 250 to 300 g/ha.",
+          "source_doc": "Bulletin Centa Tomato.md (Section XVI. Pest Management)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q21",
+      "query": "¿Cuáles son los principales insectos plaga del suelo que atacan al cultivo de maíz en El Salvador y cuáles son las dosis recomendadas para el tratamiento químico de la semilla antes de la siembra?",
+      "language": "es",
+      "difficulty": "Medium Scenario",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Los principales insectos plaga del suelo en el cultivo de maíz son la gallina ciega (chorontoco, gusano blanco o larva de Phyllophaga sp.), el gusano alambre y el gusano cortador, los cuales dañan las raíces y la base del tallo.\nPara la prevención mediante curasemillas, se recomienda tratar la semilla con:\n1. Tiametoxan 35 FS a dosis de 100 cc por cada 25 libras de semilla (o 100 cc/qq).\n2. Imidacloprid 70 WS a dosis de 48 g por cada 25 libras de semilla (o 96 g/qq).",
+      "expected_chunks": [
+        {
+          "preview": "The most important soil pests in corn, in terms of economic impact, are the following:\nBlind beetle (also known as chorontoco, caterpillar, white worm) and wireworm: they feed on the roots and the base of the stem, causing wilting and death of the plant.\nCorn earworm: it damages the grains near germination, and the roots of the seedlings bend and die.\nControl: treat the seed with insecticides such as Tiametoxan 35 FS at a dose of 100 cc per 25 pounds of seed, or Imidacloprid 70 WS at a dose of 48 g per 25 pounds of seed.",
+          "source_doc": "Insects that are Pests of Corn (Soil Pests)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q22",
+      "query": "¿Cuáles son las principales características agronómicas de la variedad de frijol CENTA CPC (días a floración, madurez fisiológica, hábito de crecimiento, color de grano y rendimiento promedio) y a qué enfermedades presenta resistencia?",
+      "language": "es",
+      "difficulty": "Medium Variety Profile",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "La variedad de frijol CENTA CPC presenta las siguientes características:\n- Hábito de crecimiento: Tipo II B (arbustivo indeterminado corto).\n- Días a floración: 33 días.\n- Madurez fisiológica: 68 días.\n- Color de grano: Rojo claro brillante.\n- Rendimiento promedio: 35 qq/mz (1,600 kg/ha).\n- Reacción a enfermedades: Es resistente al virus del mosaico común y al virus del mosaico amarillo; y es tolerante a la roya común, mancha angular y bacteriosis común.",
+      "expected_chunks": [
+        {
+          "preview": "The growth habit of CENTA-CPC is type IIB (short, indeterminate bush) with 33 days to flowering and 68 days to physiological maturity; with an average yield of 1,600 kg/ha (35 qq/mz).\nCENTA-CPC is resistant to yellow mosaic virus and common mosaic virus; tolerant to common rust, angular leaf spot, and common bacterial blight, and tolerant to drought and high temperatures.\nThe seed is a bright, light red color with an average of 23 pods per plant and 7 grains per pod.",
+          "source_doc": "About CENTA-CPC bean variety & Technical Guide for Bean Cultivation — CENTA (2018)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q23",
+      "query": "¿Cómo se prepara el caldo sulfocálcico en la finca, contra qué plagas y enfermedades es eficaz, cuáles son las dosis recomendadas y qué restricciones de aplicación deben respetarse?",
+      "language": "es",
+      "difficulty": "Hard Organic Inputs",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Preparación: Se hierve agua y se añade azufre y cal, agitando durante una hora hasta que la mezcla cambie de amarillo a rojo ladrillo.\nEficacia: Fungicida y acaricida orgánico eficaz contra oídio, mildiu, botritis, ácaros y trips.\nDosis: 0.5 L por bomba de 18 L en hortalizas; 2 L por bomba de 17 L en frutales; 0.75 L por bomba de 18 L contra ácaros/trips.\nRestricciones: No aplicar en cucurbitáceas ni en frijol durante la floración, ni mezclar con agua contaminada con tierra.",
+      "expected_chunks": [
+        {
+          "preview": "Sulfocalcic broth (calcium polysulfide, from lime + sulfur boiled in water): a natural, organic-farming-permitted fungicide/acaricide effective against powdery mildew, downy mildew, botrytis, mites, and thrips. It is prepared by boiling water, adding sulfur then lime, and stirring for about an hour until the mixture turns from yellow to brick red; it can be stored over a year in sealed, dark containers. Typical doses: 0.5 L per 18-L backpack sprayer for vegetable fungal diseases, 2 L per 17-L sprayer for fruit crops, and 0.75 L per 18-L sprayer for mites/thrips. It should not be applied to cucurbits or to flowering beans, and should not be mixed with soil-contaminated water. Sediment left over can double as a pruning wound sealant.",
+          "source_doc": "General Agriculture Best Practices (Section 3) & CALDO-SULFOCALCICO.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q24",
+      "query": "¿Qué función cumplen los Microorganismos Eficientes (EM) en la restauración de la salud del suelo y cuáles son los indicadores de un proceso de fermentación exitoso versus uno fallido al prepararlos de forma líquida?",
+      "language": "es",
+      "difficulty": "Medium Bio-inputs",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Función: Descomponen la materia orgánica, fijan nitrógeno atmosférico, suprimen patógenos, incrementan la disponibilidad de nutrientes y degradan toxinas/pesticidas.\nIndicadores de Fermentación:\n- Éxito en sólido: Capa blanca en la superficie y olor a fermentación alcohólica (25-30 días).\n- Éxito en líquido: Olor a fermentado agradable y color ámbar translúcido brillante.\n- Falla: Olor a pudrición/pobreza y color azul-violáceo (debe descartarse).",
+      "expected_chunks": [
+        {
+          "preview": "These organisms decompose organic matter and waste, fix atmospheric nitrogen, suppress harmful microorganisms, increase nutrient availability through recycling, degrade some toxins including pesticide residues... Solid microorganism cultures are first prepared (success is indicated by a white surface layer and an alcoholic fermentation smell 25–30 days later, with no insects or bad odor)... Correctly fermented liquid has a fermented smell and a bright, translucent amber color (a rotten smell and blue-violet color indicate failure); it is used for rapid decomposition of crop residue in the field, production of organic fertilizers, and plant disease control.",
+          "source_doc": "General Agriculture Best Practices (Section 1) & Reproducción de Microorganismos Eficientes.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q25",
+      "query": "¿Cuáles son las leguminosas más recomendadas para abonos verdes y cultivos de cobertura, qué beneficios aportan a la fertilización del suelo y en qué momento fenológico se deben cortar e incorporar?",
+      "language": "es",
+      "difficulty": "Hard Soil Management",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Especies recomendadas: Crotalaria, Mucuna, Canavalia, Gandul y Dolichos.\nBeneficios: Forman nódulos radiculares con bacterias que fijan nitrógeno atmosférico, aumentan la retención de humedad, protegen el suelo contra la erosión, suprimen malezas e incorporan abundante materia orgánica.\nMomento de corte: Se deben cortar e incorporar durante la etapa de floración (aproximadamente a los 90–100 días de la siembra), cuando la biomasa alcanza su máximo contenido de nutrientes.",
+      "expected_chunks": [
+        {
+          "preview": "Green manures are fast-growing, adaptable plants — most commonly legumes such as Crotalaria, Mucuna, Canavalia, gandul (pigeon pea), and Dolichos — grown specifically to protect and rebuild soil. Legume green manures form root nodules that host nitrogen-fixing bacteria, pulling nitrogen from the air and making it available to the crops planted afterward... For maximum nutrient content, cut the plant at flowering, roughly 90–100 days after planting, and use the biomass as surface mulch or incorporate it into the soil...",
+          "source_doc": "General Agriculture Best Practices (Section 1) & Abonos-verdes.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q26",
+      "query": "¿Cómo se compara el valor nutricional y los efectos físicos del vermicompost (humus de lombriz) frente al estiércol bovino crudo, y cuánta materia orgánica aporta?",
+      "language": "es",
+      "difficulty": "Medium Soil Fertility",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Comparación Nutricional: A igual peso, el vermicompost de lombriz (Eisenia foetida) aporta aproximadamente 4 veces más nitrógeno, 25 veces más fósforo y 2.5 veces más potasio que el estiércol vacuno crudo. Una tonelada de vermicompost equivale a 10 toneladas de estiércol crudo.\nEfectos Físicos: Mejora la estructura del suelo (afloja suelos compactos y aglutina arenosos), aumenta la porosidad y la capacidad de retención de agua en un 5–30%, reduce la frecuencia de riego y contiene una biocarga beneficiosa de ~20 mil millones de bacterias por gramo.",
+      "expected_chunks": [
+        {
+          "preview": "Compared to raw cow manure of the same weight, vermicompost supplies roughly four times the nitrogen, twenty-five times the phosphorus, and two-and-a-half times the potassium, and one ton of vermicompost is considered equivalent to about ten tons of manure from cattle, poultry, or pigs... Physically, it improves soil structure — loosening compacted soils and binding sandy ones — increasing porosity, water/air circulation, and water retention capacity by 5–30%... Biologically... carries a very high beneficial bacterial load (around 20 billion bacteria per gram)...",
+          "source_doc": "General Agriculture Best Practices (Section 1) & VERMICULTURA.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q27",
+      "query": "¿Cuál es la diferencia entre el oscurecimiento enzimático y la reacción de Maillard durante el deshidratado de frutas, y cómo se previene el endurecimiento superficial (case hardening)?",
+      "language": "es",
+      "difficulty": "Hard Postharvest Processing",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Oscurecimiento Enzimático: Causado por la enzima polifenol oxidasa al reaccionar con el oxígeno en frutas cortadas; se previene con blanqueado térmico, acidificación (ácido cítrico) o antioxidantes (bisulfito de sodio).\nReacción de Maillard (No enzimático): Producido por exceso de calor sobre los azúcares al final del secado; se previene reduciendo la temperatura del deshidratador en la fase final.\nEndurecimiento Superficial (Case Hardening): Ocurre por secado muy agresivo al inicio, creando una costra dura exterior que atrapa humedad interna. Se evita controlando la temperatura inicial y el flujo de aire.",
+      "expected_chunks": [
+        {
+          "preview": "Enzymatic browning (from polyphenol oxidase reacting with oxygen once fruit tissue is cut) can be minimized by heat treatment (blanching), acidification (citric acid), antioxidants (sodium bisulfite, ascorbic acid)... Non-enzymatic (Maillard) browning from excess heat mainly affects high-sugar fruits, especially near the end of drying... so drying temperature should be reduced as the process nears completion. 'Case hardening' — a hard, sealed outer layer that traps moisture inside and later allows fungal growth — results from drying too aggressively (too much heat/airflow) at the start before the surface has properly dried from the inside out; once formed it can only be corrected by cutting the piece to expose a fresh surface.",
+          "source_doc": "General Agriculture Best Practices (Section 8) & Guía de Deshidratado de Frutas"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q28",
+      "query": "¿Qué diferencia existe entre frutas climatéricas y no climatéricas en el proceso de maduración artificial, y cuál es el procedimiento general para la aplicación de etefón en bodegas?",
+      "language": "es",
+      "difficulty": "Medium Postharvest Handling",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Diferencia: Las frutas climatéricas (guineo, plátano, tomate, mango, papaya, aguacate) continúan madurando tras la cosecha y responden al gas etileno. Las no climatéricas (cítricos, sandía, marañón, carambola) solo maduran en la planta.\nProcedimiento de Etefón: Las frutas en madurez fisiológica se colocan en un espacio cerrado a 20-25 °C y alta humedad. Se aplica etefón con una base alcalina (hidróxido de sodio) para liberar gas etileno a una concentración de ~100 ppm durante 24-48 horas, seguido de ventilación.",
+      "expected_chunks": [
+        {
+          "preview": "Climacteric fruits that respond to induced ripening include bananas/plantains, guava, mango, melon, papaya, avocado, sapote, custard apple (anona), and tomato; non-climacteric fruits, which only ripen while still on the plant and do not respond usefully to ethylene treatment, include citrus, marañón (cashew apple), carambola, rambutan, and watermelon... Practically, fruit is exposed to ethylene (or ethephon, a liquid that releases ethylene) in an enclosed space... at 20–25°C with high humidity... For large-scale/room-level application, ethephon plus a sodium hydroxide base generates ethylene gas in situ... dosing is calculated to reach about 100 ppm ethylene based on room volume.",
+          "source_doc": "General Agriculture Best Practices (Section 7) & Boletín Maduración Artificial de Frutas"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q29",
+      "query": "¿Cuál es el nivel crítico de muestreo para la plaga de la gallina ciega (Phyllophaga spp.) en el cultivo de frijol y qué medidas de control cultural y biológico se recomiendan?",
+      "language": "es",
+      "difficulty": "Hard Pest Management",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Nivel Crítico: 1 larva por cada 3 muestras de suelo de 30 × 30 cm y 20 cm de profundidad.\nControl Cultural: Eliminar gramíneas/zacates hospederos antes de la siembra; realizar arado profundo para exponer larvas y pupas al sol, aves y depredadores.\nControl Biológico: Aplicación de hongos entomopatógenos como Metarhizium anisopliae y Beauveria bassiana.",
+      "expected_chunks": [
+        {
+          "preview": "Phyllophaga spp. (Coleoptera: Scarabaeidae): Blind Beetle, White Worm, Dung Beetle...\nCritical level: One larva per three soil samples of 30 × 30 cm and 20 cm deep.\nCultural: In soils where there were grasslands or soils severely infested, remove grassy weeds... Deep plowing of the soil buries and exposes the larvae and pupae to the sun, birds and other predators.\nBiological: Fungi such as Metarhizium and Beauveria effectively control this pest.",
+          "source_doc": "PRINCIPALES PLAGAS DEL FRIJOL IICA.md (Section 1) & Technical Guide for Bean Cultivation — CENTA (2018)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q30",
+      "query": "¿Qué hongos integran el complejo de la 'Mancha de Asfalto' en el cultivo de maíz, qué condiciones ambientales favorecen su desarrollo y qué síntomas característicos producen en las hojas y mazorcas?",
+      "language": "es",
+      "difficulty": "Hard Disease Management",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Complejo Fúngico: Formado por Phyllachora maydis, Monographella maydis y Coniothyrium phyllachorae.\nCondiciones Favoables: Climas tropicales húmedos con temperaturas entre 17 y 22 °C, humedad relativa superior al 75% y rocío nocturno prolongado.\nSíntomas: Inicia con pequeñas manchas negras brillantes y abultadas (P. maydis); luego M. maydis produce un halo necrótico que da aspecto de follaje 'quemado'. Las mazorcas pierden peso y los granos quedan vanos y flojos.",
+      "expected_chunks": [
+        {
+          "preview": "Asphalt mold (Phyllachora maydis, Monographella maydis, and Coniothyrium phyllachorae): This disease is found in relatively humid tropical areas. It is favored by temperatures between 17 and 22°C, with a relative humidity above 75%, and high humidity on the leaves during the night and morning... The disease begins with Phyllachora maydis, with small, shiny, black, and swollen, oval or circular spots... Monographella maydis is responsible for the most damage, causing the foliage to appear burned... The ears affected by the disease lose weight, and the kernels become shrunken and loose.",
+          "source_doc": "GUIA TECNICA MAIZ.md (Section XII. Maize Diseases)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q31",
+      "query": "How is biochar produced, at what application rates should it be applied for broad-acre whole-field incorporation versus localized planting holes, and how does pyrolysis temperature affect seedling germination?",
+      "language": "en",
+      "difficulty": "Medium Biochar Amendment",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Production: Biochar is produced through pyrolysis (thermal decomposition in low oxygen) of organic waste.\nApplication Rates: Broad-acre incorporation requires 200–400 g/m² tilled into the top 30 cm. For planting holes (tomatoes, watermelon), apply 80–100 g mixed with basal fertilizer per hole.\nPyrolysis Temperature Effect: Biochar produced at lower temperatures (240–300°C) improves seed germination (up to 50% application rate), whereas biochar produced at high temperatures (600–700°C) tends to inhibit germination at high concentrations.",
+      "expected_chunks": [
+        {
+          "preview": "Biochar is a stable, carbon-rich solid produced by pyrolysis of plant or animal waste... for whole-field incorporation, mix biochar thoroughly into the soil during plowing... at a rate of 200–400 g/m²; for planting holes... mix 80–100 g of biochar with basal fertilizer per hole... pyrolysis temperature strongly affects outcomes — bamboo biochar produced at 240–300°C improved maize seed germination at a 50% application rate, while biochar from 600–700°C tended to inhibit germination...",
+          "source_doc": "General Agriculture Best Practices (Section 1) & Producción y uso del biocarbón"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q32",
+      "query": "In CENTA postharvest trial evaluations comparing 4-month storage of grain at 15% moisture, how did standard polypropylene sacks perform compared to special hermetic laminated bags in terms of live insect counts and odor development?",
+      "language": "en",
+      "difficulty": "Hard Postharvest Evaluation",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Standard Polypropylene Sacks: Contained approximately 16,000 live insects per quintal and developed a strong fungal/musty odor after 4 months.\nHermetic Laminated Bags: Contained only 12 live insects per quintal, exhibited no fungal odor, and preserved high seed germination rates.",
+      "expected_chunks": [
+        {
+          "preview": "CENTA trials comparing storage types over 4 months at 15% grain moisture found ordinary sacks held about 16,000 live insects per quintal (with a fungal smell), standard bags held about 10,000, while special hermetic bags held only about 12 live insects per quintal with no fungal smell — also better preserving seed germination power.",
+          "source_doc": "General Agriculture Best Practices (Section 5) & Boletin-almacenamiento-hermetico-de-granos-en-bolsas.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q33",
+      "query": "What specific damage symptoms are caused by the Stem Borer (Diatraea spp.) in young maize plants versus older reproductive plants, and how should systemic insecticides be targeted during field application?",
+      "language": "en",
+      "difficulty": "Medium Maize Pest Control",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Young Plants (<30 days): Larvae bore into stems causing wilting, stunting, and easily detachable tassels upon emergence.\nOlder Plants: Causes lodging/toppling and bores into developing ears causing 'dead heart' and fungal stem rot.\nTargeted Application: Apply a systemic insecticide directly into the whorl (cogollo) using a backpack sprayer with a slightly open nozzle to deliver a stream rather than a mist.",
+      "expected_chunks": [
+        {
+          "preview": "The larvae bore into the stems of the plants, causing them to wilt and die, or to develop stunted growth and deformities. When plants are attacked in the first 30 days of the crop, they exhibit wilting and, when the tassel emerges, it easily detaches... When the pest attacks at a later stage... it can cause the plants to topple over. It can also bore into the ears, causing what is known as a 'dead heart.'\nControl: When the damage is identified, an insecticide with a systemic action can be applied to the whorl of the plant using a backpack sprayer with a nozzle that is slightly open, so that the insecticide does not come out as a mist but as a small stream.",
+          "source_doc": "GUIA TECNICA MAIZ.md (Section X. Insect Pests of Maize - Stem Borer)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q34",
+      "query": "According to CENTA technical guidelines, what is the total water requirement (in mm) for the entire common bean crop cycle, and which specific phenological stages require the highest volume of water in the vegetative and reproductive phases?",
+      "language": "en",
+      "difficulty": "Hard Crop Physiology",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Total Cycle Requirement: 228 mm (85.7 mm vegetative phase, 143.2 mm reproductive phase).\nVegetative Phase Peak: Stages V3 and V4 (First and Third Trifoliate Leaf) require 63.3 mm total.\nReproductive Phase Peak: Stages R5 (Pre-Flowering) and R8 (Pod Filling) require 92.6 mm total. Peak daily water consumption occurs at R6 (Flowering) at 4.25 mm/day.",
+      "expected_chunks": [
+        {
+          "preview": "The total water requirement during the bean crop cycle is 228 mm, of which approximately 85.7 mm corresponds to the vegetative phase and 143.2 mm to the reproductive phase... Within the vegetative phase, the V3 and V4 stages require the greatest amount of water (63.3 mm); while within the reproductive phase, the R5 and R8 stages require the greatest volume of water (92.6 mm).",
+          "source_doc": "Technical Guide for Bean Cultivation — CENTA (2018) (Section IV. Climate and Soil Requirements)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q35",
+      "query": "How are stock solutions A and B formulated and applied for the daily fertigation of tomato seedlings in tray seedbeds during the germination stage up to 15 days after sowing?",
+      "language": "en",
+      "difficulty": "Hard Seedling Management",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Stock Solution A: 79 g Calcium Nitrate per liter of water (or alternative 97 g/L).\nStock Solution B: 20 g 0-0-60, 20 g Magnesium Sulfate, and 1.5 g Fetrilon Combi per liter of water (or alternative 30 g 0-0-60, 10 g MAP, 20 g Magnesium Sulfate, 1.5 g Fetrilon Combi).\nApplication: Applied daily along with irrigation water during the first 15 days post-sowing.",
+      "expected_chunks": [
+        {
+          "preview": "Stock solution for the germination stage up to 15 days after sowing:\nStock Solution A: 79 g of Calcium Nitrate per liter of water.\nStock Solution B: 20 g of formula 0-0-60; 20 g of Magnesium Sulfate; 1.5 g of Fetrilon Combi, per liter of water.\nThe following can also be applied:\nStock solution A: 97 g of Calcium Nitrate per liter of water.\nStock solution B: 30 g of formula 0-0-60; 10 g of Monoammonium Phosphate; 20 g of Magnesium Sulfate; 1.5 g Fetrilon combi, per liter of water.",
+          "source_doc": "Bulletin Centa Tomato.md (Section IX. Sowing - Fertilization)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q36",
+      "query": "¿Cuáles son las recomendaciones técnicas del CENTA para el manejo de la fertilización y la poda de mantenimiento en el cultivo de mango (Mangifera indica) en El Salvador?",
+      "language": "es",
+      "difficulty": "Out-of-Scope / Unanswerable",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Las fuentes proporcionadas en la base de conocimientos no contienen información sobre el cultivo de mango (Mangifera indica), sus requerimientos de fertilización ni sus prácticas de poda. La base de datos técnica está enfocada exclusivamente en maíz, frijol común, tomate, poscosecha y prácticas de manejo de suelo. No es posible responder a esta consulta con la documentación disponible.",
+      "expected_chunks": [],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q37",
+      "query": "¿Cuáles son las características agronómicas y el rendimiento promedio del híbrido de maíz blanco CENTA H-59 en las zonas bajas de El Salvador?",
+      "language": "es",
+      "difficulty": "Out-of-Scope / Unanswerable",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Las fuentes de información provistas no contienen datos sobre la variedad o híbrido de maíz 'CENTA H-59'. Los documentos de la base de conocimientos únicamente cubren las variedades de maíz CENTA ASG (maíz amarillo sintético), CENTA CS (maíz blanco biofortificado) y CENTA Santa Rosa (variedad de libre polinización resistente al achaparramiento), además de la Guía Técnica General de Maíz. Por lo tanto, no hay información para responder sobre las características o rendimiento del híbrido CENTA H-59.",
+      "expected_chunks": [],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q38",
+      "query": "What are the recommended temperature and humidity conditions for long-term cold storage of seed potatoes (Solanum tuberosum) to prevent tuber sprouting?",
+      "language": "en",
+      "difficulty": "Out-of-Scope / Unanswerable",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "The provided source collection does not contain any information regarding potato (Solanum tuberosum) cultivation, seed potato storage, sprouting prevention, or cold storage parameters. The knowledge base is restricted to maize, common beans, tomatoes, fruit dehydration/ripening, and general soil management. Consequently, this inquiry cannot be answered using the available documents.",
+      "expected_chunks": [],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q39",
+      "query": "What is the best bean variety for a farmer operating in a dry corridor region characterized by high temperatures, mid-season dry spells (canícula), and high prevalence of Yellow Mosaic Virus, and how does it compare to CENTA Ferromás?",
+      "language": "es",
+      "difficulty": "Hard Multi-Source Synthesis",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "The best bean variety for high temperatures, mid-season dry spells (canícula), and Yellow Mosaic Virus prevalence is CENTA Drought (CENTA Sequía).\n- CENTA Drought: Specifically bred for limited moisture and heat tolerance, maturing in 65 days with complete resistance to Yellow Mosaic Virus and Common Mosaic Virus.\n- CENTA Ferromás: While offering high biofortified iron (80–81 ppm) and zinc (35 ppm), it is susceptible to limited moisture and high temperatures, only tolerant to Yellow Mosaic Virus, and takes 70–72 days to mature. Therefore, CENTA Drought is superior for severe drought conditions, whereas CENTA Ferromás is better suited for non-drought areas where nutritional biofortification is prioritized.",
+      "expected_chunks": [
+        {
+          "preview": "Its main attribute is tolerance to moderate drought and high temperatures... Reaction to yellow mosaic virus: Resistant; Reaction to common mosaic virus: Resistant; High temperatures: Tolerant; Limited moisture: Tolerant.\nCENTA Ferromas: resistant to the common mosaic virus; tolerant to the yellow mosaic virus... susceptible to downy mildew, anthracnose, high temperatures and limited humidity.",
+          "source_doc": "Boletin Centa_frijol sequia.md & Guia Centa_Frijol.md / Boletin Centa_frijol ferromas.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q40",
+      "query": "Compare las tres variedades de maíz desarrolladas por el CENTA (CENTA ASG, CENTA CS y CENTA Santa Rosa) en cuanto a tipo/color de grano, propósito principal, días a madurez fisiológica, rendimiento promedio y resistencia a problemas climáticos o sanitarios.",
+      "language": "es",
+      "difficulty": "Hard Multi-Source Synthesis",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "CENTA ASG: Grano amarillo semi-cristalino; diseñado para grano comercial y alimento animal en el corredor seco; madurez fisiológica de 110–120 días; rendimiento promedio de 83 qq/mz; buena resistencia a sequía.\nCENTA CS: Grano blanco con Calidad Proteica Superior (HPP) (10.34% proteína, 0.09% triptófano, índice 0.89); diseñado para combatir la desnutrición infantil; madurez de 95 días (o 110–115d); rendimiento promedio de 83.1 qq/mz; tolerante a sequía y acame.\nCENTA Santa Rosa: Grano blanco de libre polinización; diseñado para siembras tardías en zonas costeras (0–30 msnm); madurez de 90–95 días; rendimiento de 60 qq/ha; resistencia excelente al achaparramiento del maíz ('tora' / Dalbulus maidis).",
+      "expected_chunks": [
+        {
+          "preview": "CENTA-ASG... synthetic yellow maize... average yield 83 qq/mz... drought resistance: good. Days to physiological maturity: 110-120 (avg 115).\nCENTA-CS... High Protein Quality (HPP)... 10.34% protein, 0.09% tryptophan... average yield 83.1 qq/mz... reaction to drought: tolerant. Days to physiological maturity: 95.\nCENTA SANTA ROSA... free-pollination variety... reaction to corn stunt ('weevil'): resistant... physiological maturity: 90 to 95 days. Potential yield: 60 qq/hectare.",
+          "source_doc": "Boletin Centa_maiz -ASG.md, Boletin Centa_maiz -CS.md, & Boletin Centa_maiz -santa rosa.md"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q41",
+      "query": "¿Cuáles son las prácticas generales recomendadas para la conservación del suelo, la incorporación de materia orgánica y la preparación de abonos orgánicos como el lombricompost y el bocashi según las buenas prácticas agrícolas?",
+      "language": "es",
+      "difficulty": "Medium General Best Practices",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Prácticas de Conservación: No quemar rastrojos e incorporarlos al suelo como cobertura viva o muerta para prevenir erosión y conservar humedad.\nAbonos Orgánicos:\n1. Lombricompost (Humus de lombriz): Producido por la lombriz roja californiana (Eisenia foetida); aporta 4x más N, 25x más P y 2.5x más K que el estiércol vacuno crudo, mejorando la retención de agua y la biocarga bacteriana.\n2. Bocashi: Abono fermentado aeróbico de origen japonés (a base de gallinaza, semolina de arroz, carbón y melaza) que estabiliza nutrientes en 15–25 días y aporta materia orgánica resistente al lavado.",
+      "expected_chunks": [
+        {
+          "preview": "Soil health and restoration: Incorporating crop residues, green manures, vermicomposting, and biochar restores biological activity and organic matter... Vermicomposting using Eisenia foetida produces humus rich in humic acids and beneficial microbes... Bocashi provides rapidly accessible nutrients through aerobic fermentation.",
+          "source_doc": "General Agriculture Best Practices (Section 1. Soil Health)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    },
+    {
+      "id": "Q42",
+      "query": "¿En qué consiste el Manejo Integrado de Plagas (MIP) en la agricultura sostenible y cuáles son las principales alternativas ecológicas o biológicas recomendadas antes de recurrir al control químico?",
+      "language": "es",
+      "difficulty": "Medium General Best Practices",
+      "categoryLabels": [],
+      "serviceLabels": [],
+      "reference_answer": "Manejo Integrado de Plagas (MIP): Estrategia sostenible que combina controles culturales, mecánicos, biológicos y ecológicos para mantener las plagas por debajo del umbral económico.\nAlternativas Recomendadas:\n1. Cultural: Rotación con gramíneas, siembra de barreras vivas (maíz/sorgo), eliminación de malezas hospederas y mulching.\n2. Biológico: Parasitoides (Trichogramma, Apanteles), hongos entomopatógenos (Beauveria bassiana, Metarhizium anisopliae) y antagonistas (Trichoderma).\n3. Insumos Botánicos y Minerales: Caldo sulfocálcico (acaricida/fungicida), caldo bordelés y extractos de neem, ajo o chile (Achihol).",
+      "expected_chunks": [
+        {
+          "preview": "Integrated Pest Management (IPM): Prioritizes cultural practices, biological control (Trichogramma, Beauveria bassiana, Metarhizium), and botanical/minerals extracts (sulfocalcic broth, neem) before applying synthetic chemical pesticides.",
+          "source_doc": "General Agriculture Best Practices (Section 3. Biological Pest and Disease Control)"
+        }
+      ],
+      "domain": "agriculture-el-salvador"
+    }
+  ]
+}

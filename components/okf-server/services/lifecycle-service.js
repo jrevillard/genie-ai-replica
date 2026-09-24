@@ -643,6 +643,40 @@ async function transition(repoId, action, actor) {
       },
       updated_at: nowIso()
     });
+    // MARK BUNDLE ZIP AS RETRACTED (2026-09-25, David's directive): when the
+    // repo goes out of service, the bundle zip in doc-repo MUST be marked
+    // Retracted too — otherwise it stays at dataprep.status='Ingested' and
+    // remains queryable / downloadable / re-importable. Best-effort, non-fatal:
+    // the retract already succeeded; a doc-repo hiccup never undoes that.
+    try {
+      const { authedAxios } = require('./service-token');
+      const docRepoConfig = require('../config');
+      const resp = await authedAxios.get(
+        `${docRepoConfig.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repoId)}&is_bundle=true&limit=1`,
+        { timeout: 5000 }
+      );
+      const rd = resp && resp.data;
+      const items = Array.isArray(rd)
+        ? rd
+        : (rd && (rd.data || rd.items || rd.files)) || [];
+      const bundle = items[0];
+      if (bundle && bundle.file_id) {
+        await authedAxios.patch(
+          `${docRepoConfig.documentRepository.url}/api/files/${encodeURIComponent(bundle.file_id)}/status`,
+          { dataprep: { status: 'Retracted', retract_date: nowIso() } },
+          { timeout: 10000 }
+        );
+        logger.info('[OKF-LIFECYCLE] bundle zip marked Retracted', {
+          repo_id: repoId,
+          file_id: bundle.file_id
+        });
+      }
+    } catch (bundleErr) {
+      logger.warn('[OKF-LIFECYCLE] bundle-mark-Retracted failed (non-fatal)', {
+        repo_id: repoId,
+        err: bundleErr && bundleErr.message
+      });
+    }
     await audit('repo.retract', repoId, actor, {
       retracted_version: repo.ingested_version || null,
       graph_name: repo.ingested_graph_name || null,

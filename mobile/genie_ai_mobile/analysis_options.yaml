@@ -13,6 +13,12 @@ analyzer:
   exclude:
     - flutter_appauth/**
     - openapi_client/**
+    # Patrol E2E suite — patrol is deliberately NOT a dev_dependency:
+    # its Android wiring is debug-only, so a committed dependency breaks
+    # `flutter build apk --release` (package pl.leancode.patrol does not
+    # exist — see e80ff6855). The suite is compile-verified by the CI job
+    # `lint:dart:patrol`, which injects patrol at runtime before analyzing.
+    - patrol_test/**
 
 linter:
   # The lint rules applied to this project can be customized in the

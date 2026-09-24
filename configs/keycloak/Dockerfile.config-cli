@@ -5,8 +5,13 @@ FROM adorsys/keycloak-config-cli:6.5.0-26
 # is rebuilt. Pull published security fixes at build time instead — the
 # monthly rebuild then picks them up automatically (perl, p11-kit, libc6...).
 USER root
-RUN apt-get update && \
-    apt-get upgrade -y && \
+# --fix-missing + retries: Ubuntu occasionally serves an index that references
+# a pool .deb already rotated out (index/pool skew on security.ubuntu.com —
+# seen 2026-09-24 with libexpat1 2.6.1-2ubuntu0.6, hard 404 on every fresh
+# build for ~1h). apt then skips that one package instead of failing the
+# whole image build; the skipped bump is picked up by the next rebuild.
+RUN apt-get update -o Acquire::Retries=5 && \
+    apt-get upgrade -y --fix-missing -o Acquire::Retries=5 && \
     rm -rf /var/lib/apt/lists/*
 USER 65534
 

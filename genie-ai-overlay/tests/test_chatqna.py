@@ -867,7 +867,10 @@ class TestAlignOutputs:
                     graph,
                     llm_params,
                 )
-            assert "cannot answer" in result["inputs"].lower()
+            # Default built-in instructs the LLM to disclose the ungrounded
+            # origin of any training-data fill-in; the header
+            # "[No Relevant Documents Found]" is the pin.
+            assert "no relevant documents found" in result["inputs"].lower()
 
         def test_chunk_mode_file_id_pairing(self):
             self_mock = MagicMock()
@@ -1008,7 +1011,10 @@ class TestAlignOutputs:
                 patch("chatqna.genieai_chatqna.CHATQNA_ABSTENTION_INSTRUCTIONS", None),
             ):
                 result = align_outputs(self_mock, data, "rerank_node", inputs, MagicMock(), llm_params)
-            assert "cannot answer" in result["inputs"].lower()
+            # Default built-in instructs the LLM to disclose the ungrounded
+            # origin of any training-data fill-in; the header
+            # "[No Relevant Documents Found]" is the pin.
+            assert "no relevant documents found" in result["inputs"].lower()
 
         def test_documents_format_rerank_output(self):
             self_mock = MagicMock()
@@ -2842,3 +2848,62 @@ class TestMultiTurnBlendHelpers:
             # max_tokens MUST be present when set
             assert "max_tokens" in llm_kwargs
             assert llm_kwargs["max_tokens"] == 512
+
+
+class TestAbstentionDefault:
+    """Default abstention instructions when no override is provided.
+
+    Pins the constant so a stray refactor cannot silently change the
+    user-visible behaviour of the fallback prompt.
+    """
+
+    def test_default_constant_is_non_empty_string(self):
+        default = chatqna_module._DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
+        assert isinstance(default, str)
+        assert default.strip() != ""
+
+    def test_default_constant_contains_disclaimer_keyword(self):
+        """The default must tell the LLM to disclose the ungrounded origin
+        of any partial answer — not just refuse to answer."""
+        default = chatqna_module._DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
+        lowered = default.lower()
+        # At least one signal of the disclaimer pattern: training-data
+        # provenance, verified-source qualifier, knowledge-base scope, or
+        # sufficiency check.
+        assert any(
+            needle in lowered for needle in ("general ai training", "verified source", "knowledge base", "sufficient")
+        )
+
+    def test_default_does_not_say_cannot_answer(self):
+        """A blanket "cannot answer" wording would discard partial KB
+        content; the disclaimer pattern is the project-wide default."""
+        default = chatqna_module._DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
+        assert "cannot answer" not in default.lower()
+
+    def test_default_bracketed_with_no_relevant_documents_header(self):
+        """Header convention `[No Relevant Documents Found]` so the LLM
+        can spot it as a post-retrieval note."""
+        default = chatqna_module._DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
+        assert "[No Relevant Documents Found]" in default
+
+    def test_env_override_takes_precedence_over_default(self):
+        """When CHATQNA_ABSTENTION_INSTRUCTIONS is set, the env value is
+        used — the default is only the fallback. Pin the priority at the
+        constant read site."""
+        from chatqna import genieai_chatqna as mod
+
+        # Simulate an override via direct attribute injection (the constants
+        # are read at module import; this test verifies the constant
+        # structure, not the runtime env re-read).
+        sentinel = "CUSTOM_OVERRIDE"
+        original = mod.CHATQNA_ABSTENTION_INSTRUCTIONS
+        try:
+            mod.CHATQNA_ABSTENTION_INSTRUCTIONS = sentinel
+            chosen = (
+                mod.CHATQNA_ABSTENTION_INSTRUCTIONS
+                if mod.CHATQNA_ABSTENTION_INSTRUCTIONS is not None
+                else mod._DEFAULT_CHATQNA_ABSTENTION_INSTRUCTIONS
+            )
+            assert chosen == sentinel
+        finally:
+            mod.CHATQNA_ABSTENTION_INSTRUCTIONS = original

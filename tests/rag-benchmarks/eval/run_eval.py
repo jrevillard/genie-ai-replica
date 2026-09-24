@@ -54,7 +54,7 @@ VICTORIATRACES_SVC = os.getenv("VICTORIATRACES_SVC", "victoriatraces")
 CHATQNA_URL = os.getenv("CHATQNA_URL", "http://localhost:8888/v1/chatqna")
 CHATQNA_SERVICE_NAME = os.getenv("CHATQNA_SERVICE_NAME", "genieai-chatqna")
 GRAPH_SOURCE = os.getenv("GRAPH_SOURCE", "GRAPH_TEST_SOURCE")
-TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "text")
+TEXT_FIELD = os.getenv("ARANGO_TEXT_FIELD", "chunk_text")
 TRACE_FLUSH_WAIT = float(os.getenv("TRACE_FLUSH_WAIT", "5"))
 TRACE_FETCH_TIMEOUT = float(os.getenv("TRACE_FETCH_TIMEOUT", "120"))
 
@@ -264,6 +264,7 @@ def score_anchor(
         "gold_hashes": gold,  # content hashes used for scoring
         "selected_hashes": sel,
         "candidate_hashes": cand,
+        "expected_chunks": entry.get("expected_chunks", []),  # passage_id lives here
         "adaptive_breakdown": adaptive_breakdown or [],
     }
     if trace_found:
@@ -275,7 +276,36 @@ def score_anchor(
         )
         if cand:
             row["retrieval_recall"] = metrics.retrieval_recall(gold, cand)
+        # Passage-level recall: a passage (verbatim preview) counts as retrieved
+        # only when ALL its chunks are in `selected`. Chunks without a passage_id
+        # (older gold sets) each count as their own single-chunk passage.
+        row["passage_recall"], row["n_passages"], row["passages_retrieved"] = (
+            _passage_recall(entry.get("expected_chunks", []), sel)
+        )
     return row
+
+
+def _passage_recall(expected_chunks: list[dict], selected_hashes: list[str]) -> tuple[float, int, int]:
+    """Group gold chunks by passage_id; a passage is retrieved iff every chunk hash is in `selected`.
+
+    For pre-refactor gold (no passage_id on chunks), each chunk is treated as its
+    own single-chunk passage — i.e. equivalent to chunk-level recall for that
+    chunk. Returns (passage_recall, n_passages, passages_retrieved).
+    """
+    by_passage: dict[str, set[str]] = {}
+    for c in expected_chunks:
+        if not c.get("chunk_key"):
+            continue
+        ch = c.get("content_hash")
+        if not ch:
+            continue
+        pid = c.get("passage_id") or f"{c.get('chunk_key')}#singleton"
+        by_passage.setdefault(pid, set()).add(ch)
+    if not by_passage:
+        return 0.0, 0, 0
+    sel_set = set(selected_hashes)
+    retrieved = sum(1 for chunks in by_passage.values() if chunks.issubset(sel_set))
+    return retrieved / len(by_passage), len(by_passage), retrieved
 
 
 def make_tuple(entry, sel_hashes, hash_to_text, answer) -> dict:
@@ -342,6 +372,15 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
     else:
         scored = [r for r in rows if r.get("trace_found")]
         agg = metrics.aggregate(scored)
+        # Aggregate passage-level metrics across queries (only queries that
+        # actually had gold passages; queries with all-unresolved gold are
+        # excluded from the denominator to avoid skewing toward zero).
+        p_recalls = [r["passage_recall"] for r in scored if r.get("n_passages")]
+        total_passages = sum(r.get("n_passages", 0) for r in scored)
+        retrieved_passages = sum(r.get("passages_retrieved", 0) for r in scored)
+        agg["passage_recall"] = sum(p_recalls) / len(p_recalls) if p_recalls else 0.0
+        agg["total_passages"] = total_passages
+        agg["retrieved_passages"] = retrieved_passages
         report = {
             "per_query": rows,
             "aggregate": agg,
@@ -357,9 +396,15 @@ def main(mode: str, gold_path: str, out_path: str) -> None:
             "complete_recall",
             "noise",
             "retrieval_recall",
+            "passage_recall",
         ):
             if k in agg:
                 print(f"  {k:20s} {agg[k]:.3f}", file=sys.stderr)
+        if agg.get("total_passages"):
+            print(
+                f"  retrieved_passages   {agg['retrieved_passages']}/{agg['total_passages']}",
+                file=sys.stderr,
+            )
         if missed:
             print(
                 f"  {missed} trace(s) missed and excluded — see per_query[].trace_found",

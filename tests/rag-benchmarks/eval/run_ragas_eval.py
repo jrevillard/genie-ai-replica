@@ -46,12 +46,21 @@ def _build_judge():
 
     if not (JUDGE_BASE_URL and JUDGE_MODEL):
         sys.exit("Set EVAL_JUDGE_BASE_URL and EVAL_JUDGE_MODEL (OpenAI-compatible).")
+    # Sovereign vLLM fronts nginx with a self-signed cert — bypass SSL verify
+    # on BOTH sync and async OpenAI clients (RAGAS uses the async path
+    # internally; without verify=False on http_async_client, calls fail with
+    # httpx2.ConnectError: CERTIFICATE_VERIFY_FAILED → OpenAIConnectionError).
+    import httpx
+    sync_client = httpx.Client(verify=False)
+    async_client = httpx.AsyncClient(verify=False)
     llm = LangchainLLMWrapper(
         ChatOpenAI(
             base_url=JUDGE_BASE_URL,
             api_key=JUDGE_API_KEY,
             model=JUDGE_MODEL,
             temperature=JUDGE_TEMPERATURE,
+            http_client=sync_client,
+            http_async_client=async_client,
         )
     )
     return llm
@@ -63,8 +72,17 @@ def _build_embeddings():
 
     if not EMBED_MODEL:
         return None  # answer_relevancy will be skipped
+    import httpx
+    sync_client = httpx.Client(verify=False)
+    async_client = httpx.AsyncClient(verify=False)
     return LangchainEmbeddingsWrapper(
-        OpenAIEmbeddings(base_url=EMBED_BASE_URL, api_key=EMBED_API_KEY, model=EMBED_MODEL)
+        OpenAIEmbeddings(
+            base_url=EMBED_BASE_URL,
+            api_key=EMBED_API_KEY,
+            model=EMBED_MODEL,
+            http_client=sync_client,
+            http_async_client=async_client,
+        )
     )
 
 

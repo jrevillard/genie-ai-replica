@@ -124,6 +124,32 @@ EOF
 | `CHATQNA_SERVICE_NAME` | OTel service name chatqna reports | `genieai-chatqna` — constant across stacks (the OTel SDK ignores the swarm stack prefix) |
 | `VICTORIATRACES_SVC` | VictoriaTraces service DNS name inside the overlay | `<stack>_victoriatraces` (hyphenated, matching the swarm service name) |
 
+### Quick start: the wrapper script
+
+For stack-agnostic anchor runs that handle ROPC enable/disable, container
+discovery, and VT trace timeouts automatically, use the wrapper:
+
+```bash
+# On the swarm node, with the .env already in place at /opt/<stack>/.env:
+ssh $SWARM_NODE bash -s <<'EOF'
+export EVAL_KC_URL=https://kc.example.com/auth
+export KEYCLOAK_ADMIN_PASSWORD=...
+export ARANGO_DB=<db_name>
+export ARANGO_PASSWORD=...
+
+scripts/run_anchor_with_cleanup.sh gold_dataset.json results.json
+EOF
+```
+
+The wrapper:
+1. Gets a master admin token from `KEYCLOAK_ADMIN_PASSWORD`
+2. Temporarily enables `directAccessGrantsEnabled` on the OIDC client
+3. Runs `run_eval.py anchor` with all env vars set
+4. **Always** disables ROPC again on exit (signal-safe `trap` on EXIT/INT/TERM) — leaving ROPC enabled in prod is a security vulnerability
+
+All other env vars (`CHATQNA_CONTAINER`, `VICTORIATRACES_SVC`, etc.) have
+defaults or resolve live from the Swarm state.
+
 ### Observability must be ON
 
 The eval needs spans (VictoriaTraces). If `ENABLE_OBSERVABILITY != 1`, every

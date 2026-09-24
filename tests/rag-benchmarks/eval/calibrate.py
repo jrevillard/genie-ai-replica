@@ -149,6 +149,9 @@ def score_combo(report, factor, conf_fn, threshold):
     """
     recalls = []
     precisions = []
+    passage_recalls = []  # passage-level recall across queries
+    n_passages_total = 0
+    n_passages_retrieved = 0
     n_empty = 0
     n_selected_total = 0
     n_unmappable = 0
@@ -182,10 +185,29 @@ def score_combo(report, factor, conf_fn, threshold):
             continue
         recalls.append(metrics.recall(gold, sel_hashes))
         precisions.append(metrics.precision(gold, sel_hashes))
+        # Passage-level recall: group gold chunks by passage_id, check subset
+        # membership in the replay's selected _keys. A passage counts only when
+        # ALL its chunks are selected. Chunk identity is the raw _key (matches
+        # sel_hashes above); pre-refactor gold without passage_id falls back to
+        # one singleton passage per chunk.
+        expected_chunks = row.get("expected_chunks") or []
+        passage_groups: dict[str, set[str]] = {}
+        for c in expected_chunks:
+            ck = c.get("chunk_key")
+            if not ck:
+                continue
+            pid = c.get("passage_id") or f"{ck}#singleton"
+            passage_groups.setdefault(pid, set()).add(ck)
+        if passage_groups:
+            sel_set = set(sel_hashes)
+            retrieved = sum(1 for chunks in passage_groups.values() if chunks.issubset(sel_set))
+            passage_recalls.append(retrieved / len(passage_groups))
+            n_passages_total += len(passage_groups)
+            n_passages_retrieved += retrieved
     if not recalls:
         return None
     n = len(recalls)
-    return {
+    out = {
         "n": n,
         "recall": sum(recalls) / n,
         "precision": sum(precisions) / n,
@@ -193,6 +215,11 @@ def score_combo(report, factor, conf_fn, threshold):
         "empty_queries": n_empty,
         "unmappable": n_unmappable,
     }
+    if passage_recalls:
+        out["passage_recall"] = sum(passage_recalls) / len(passage_recalls)
+        out["total_passages"] = n_passages_total
+        out["retrieved_passages"] = n_passages_retrieved
+    return out
 
 
 def f1(m):

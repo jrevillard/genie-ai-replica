@@ -37,7 +37,8 @@ jest.mock('../services/concept-meta-service', () => ({
   countByIndexStatus: jest.fn(mockCountByIndexStatusFromStore)
 }));
 jest.mock('../services/graph-lifecycle-service', () => ({
-  promoteGraph: jest.fn(async (repo) => 'OKF_' + (repo.repo_id || 'test') + '_v1')
+  promoteGraph: jest.fn(async (repo) => 'OKF_' + (repo.repo_id || 'test') + '_v1'),
+  graphExists: jest.fn(async () => true)
 }));
 jest.mock('../services/audit-service', () => ({
   writeAudit: jest.fn().mockResolvedValue(null)

@@ -21,7 +21,7 @@ const dbService = require('../shared-lib/db-connection-service');
 const auditService = require('./audit-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
-const { workingGraphName } = require('./graph-lifecycle-service');
+const { workingGraphName, slugFor } = require('./graph-lifecycle-service');
 
 const GRAPH_SUFFIXES = ['_SOURCE', '_ENTITY', '_HAS_SOURCE', '_LINKS_TO'];
 const NOT_FOUND = (err) =>
@@ -66,6 +66,37 @@ async function dropRepoGraphsForRepo(repo_id) {
   if (candidates.size === 0) {
     logger.info('Graph teardown skipped (no OKF per-repo graph)', { repo_id });
     return [];
+  }
+  // ORPHAN SWEEP (2026-09-25, David's directive): retract must delete the
+  // serving graph for THIS repo. The candidates above only cover graph_name /
+  // ingested_graph_name / computed workingGraphName — but a mid-drain retract
+  // can leave behind draft graphs (e.g. OKF_<slug>_v{N+1} from the requeue path)
+  // that aren't stamped on the repo doc yet. Sweep ALL OKF_<slug>_* graphs to
+  // catch them. Footgun guard (OKF_ prefix) preserved.
+  if (repo && repo.name) {
+    let slug = '';
+    try {
+      slug = slugFor(repo.name);
+    } catch {
+      /* best-effort */
+    }
+    if (slug) {
+      const prefix = `OKF_${slug}_`;
+      try {
+        const orphans = await db.query(
+          aql`FOR c IN @@collections FILTER STARTS_WITH(c.name, ${prefix}) RETURN c.name`,
+          { '@collections': '_collections' }
+        );
+        for (const orphanName of await orphans.all()) {
+          if (orphanName === '_collections') continue;
+          candidates.add(orphanName);
+        }
+      } catch (err) {
+        logger.warn('Graph teardown: orphan sweep query failed', {
+          repo_id, prefix, error: err.message
+        });
+      }
+    }
   }
   const dropped = [];
   for (const graph of candidates) {

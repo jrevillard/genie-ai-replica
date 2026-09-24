@@ -319,17 +319,20 @@ async function _processOneJob() {
   if (!job) return { outcome: 'idle' };
 
   // PRE-FLIGHT (2026-09-25, David's directive): jobs are idempotent only when
-  // the graph they target still exists. If a retract (or a manual graph drop)
-  // wiped the graph between the previous claim and this one, we MUST NOT
-  // silently resume partial indexing — the concepts_done counter is a lie
-  // against a missing graph. Two cases:
-  //   graph EXISTS      -> continue from where the job left off (idempotent resume)
-  //   graph MISSING     -> recreate-and-reset: zero out concepts_done on the
-  //                        repo, requeue every meta row for this graph, and
-  //                        FALL THROUGH so dataprep's ensure-graph recreates
-  //                        the collection on the next POST (the original design
-  //                        comment at :746-749 still applies to ensure-graph
-  //                        recovery; we just stop lying about concepts_done).
+  // the graph they target is in a consistent state. Two failure modes:
+  //   (a) GRAPH MISSING — retract (or a manual graph drop) wiped the graph
+  //       between the previous claim and this one. concepts_done is a lie
+  //       against an absent graph.
+  //   (b) GRAPH EXISTS BUT UNDERPOPULATED — dataprep's ensure-graph on the
+  //       first POST of a new drain recreates an empty collection, then the
+  //       worker sees "graph exists" and resumes against a stale concepts_done
+  //       count from the prior drain (live-caught 2026-09-25: 442 claimed,
+  //       3+27 docs in graph). Same liar.
+  // Both modes reset the repo's concepts_done + requeue the meta rows, then
+  // FALL THROUGH so the next POST ingests this concept into the (re)created
+  // graph (case a) or the partial graph (case b). The original dead-letter
+  // design comment at :746-749 is preserved for unrelated GRAPH-GONE
+  // dead-lettering — this pre-flight is the JOB-CLAIM-TIME analogue.
   const expectedGraph = job.graph_name || `OKF_${job.repo_id}`;
   if (!graphLifecycle.graphExists(db, expectedGraph)) {
     logger.warn('[INGEST-WORKER] graph missing at process time — recreating + resetting drain', {
@@ -368,6 +371,57 @@ async function _processOneJob() {
     logger.info('[INGEST-WORKER] reset complete; proceeding with recreate + re-ingest', {
       repo_id: job.repo_id, expected_graph: expectedGraph
     });
+  } else {
+    // GRAPH-EXISTS BUT UNDERPOPULATED (live-caught 2026-09-25, David's
+    // directive): if concepts_done claims N but the graph has fewer docs,
+    // the count is a lie (typically because dataprep's ensure-graph on a
+    // fresh drain recreated an empty collection while the meta-row count
+    // survived from the prior drain). Same fix as the missing-graph branch:
+    // reset the repo + meta rows and fall through.
+    try {
+      const repoDoc = await db.collection('okf_repositories').document(job.repo_id).catch(() => null);
+      const claimedDone = (repoDoc && repoDoc.rag_ingestion && repoDoc.rag_ingestion.concepts_done) || 0;
+      if (claimedDone > 0) {
+        const srcCount = await db.collection(`${expectedGraph}_SOURCE`).count().catch(() => -1);
+        const entCount = await db.collection(`${expectedGraph}_ENTITY`).count().catch(() => -1);
+        // Any -1 here means the collection doesn't exist; graphExists() above
+        // already filtered that, so a real count is >= 0. The guard is the
+        // presence of a single indexable doc (SOURCE or ENTITY) vs the claim.
+        const actualContent = (srcCount >= 0 ? srcCount : 0) + (entCount >= 0 ? entCount : 0);
+        if (actualContent < claimedDone) {
+          logger.warn('[INGEST-WORKER] graph underpopulated vs concepts_done — resetting drain', {
+            repo_id: job.repo_id,
+            expected_graph: expectedGraph,
+            claimed_done: claimedDone,
+            actual_src_count: srcCount,
+            actual_entity_count: entCount
+          });
+          await db.collection('okf_repositories').update(job.repo_id, {
+            'rag_ingestion.concepts_done': 0,
+            'rag_ingestion.last_reset_reason': 'graph_underpopulated_vs_claim',
+            'rag_ingestion.last_reset_at': new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          await db.query(aql`
+            FOR m IN okf_concepts_meta
+              FILTER m.repo_id == ${job.repo_id} AND m.graph_name == ${expectedGraph}
+              UPDATE m WITH {
+                index_status: 'parsed',
+                worker_claimed_at: null,
+                ingest_attempts: 0,
+                last_error: null
+              } IN okf_concepts_meta
+          `);
+          logger.info('[INGEST-WORKER] underpopulated reset complete; re-ingesting from scratch', {
+            repo_id: job.repo_id, expected_graph: expectedGraph
+          });
+        }
+      }
+    } catch (e) {
+      logger.warn('[INGEST-WORKER] underpopulated check failed (non-fatal)', {
+        repo_id: job.repo_id, err: e.message
+      });
+    }
   }
 
   return withSpan('okf.ingest.worker.job', async (span) => {

@@ -210,7 +210,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     if (welcomeConfig != null) {
       return resolveConfigText(welcomeConfig, _currentLocale);
     }
-    return tr('chatbot.welcomeMessage');
+    return tr('welcomeMessage');
   }
 
   Future<void> _loadQuickHelpConfig() async {

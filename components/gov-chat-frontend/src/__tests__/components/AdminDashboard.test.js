@@ -96,7 +96,20 @@ jest.mock('../../services/databaseOperationsService', () => ({
 
 jest.mock('../../services/documentFileService', () => ({
   getFiles: jest.fn().mockResolvedValue([]),
-  ingestMultipleFiles: jest.fn().mockResolvedValue({})
+  // Defaults to the all-success 207 shape so existing tests still pass. Individual
+  // tests override this to exercise partial-failure and all-failure paths.
+  ingestMultipleFiles: jest.fn().mockResolvedValue({
+    success: true,
+    successCount: 2,
+    failureCount: 0,
+    results: []
+  }),
+  retractMultipleFiles: jest.fn().mockResolvedValue({
+    success: true,
+    successCount: 2,
+    failureCount: 0,
+    results: []
+  })
 }));
 
 const mockNotificationSuccess = jest.fn();
@@ -829,16 +842,18 @@ describe('AdminDashboard', () => {
 
     it('returns false when selected documents contain ingested status', () => {
       const wrapper = createAdminDashboardWrapper();
-      wrapper.vm.documents = [{ _key: 'doc-1', dataprep: { status: 'ingested' } }];
-      wrapper.vm.selectedDocuments = ['doc-1'];
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
       expect(wrapper.vm.showIngestButton).toBe(false);
     });
 
     it('returns true when selected documents are not ingested', () => {
       const wrapper = createAdminDashboardWrapper();
-      wrapper.vm.documents = [{ _key: 'doc-1', dataprep: { status: 'ready' } }];
-      wrapper.vm.selectedDocuments = ['doc-1'];
+      wrapper.vm.documents = [{ _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'ready' } }];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
       expect(wrapper.vm.showIngestButton).toBe(true);
     });
@@ -846,10 +861,10 @@ describe('AdminDashboard', () => {
     it('returns false when any selected document has ingested status', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: 'doc-1', dataprep: { status: 'ready' } },
-        { _key: 'doc-2', dataprep: { status: 'ingested' } }
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'ready' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'ingested' } }
       ];
-      wrapper.vm.selectedDocuments = ['doc-1', 'doc-2'];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
 
       expect(wrapper.vm.showIngestButton).toBe(false);
     });
@@ -857,8 +872,24 @@ describe('AdminDashboard', () => {
     it('returns false when selected document has Title-Case ingested status (#832)', () => {
       // Regression for #832: dataprep.status persisted as 'Ingested' (Title Case).
       const wrapper = createAdminDashboardWrapper();
-      wrapper.vm.documents = [{ _key: 'doc-1', dataprep: { status: 'Ingested' } }];
-      wrapper.vm.selectedDocuments = ['doc-1'];
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'Ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
+
+      expect(wrapper.vm.showIngestButton).toBe(false);
+    });
+
+    it('regression: filter must look up by file_id, NOT ArangoDB _key (cross-key shape)', () => {
+      // Real-world shape: _key (ArangoDB internal) != file_id (semantic).
+      // Pre-fix the filter used doc._key, but selectedDocuments carries file_ids,
+      // so the lookup silently fails and the button stays visible for an
+      // already-ingested file. This test would have caught that secondary bug.
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'Ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8'];
 
       expect(wrapper.vm.showIngestButton).toBe(false);
     });
@@ -1268,8 +1299,8 @@ describe('AdminDashboard', () => {
     it('selects all filtered documents when checked', () => {
       const wrapper = createAdminDashboardWrapper();
       wrapper.vm.documents = [
-        { _key: 'doc-1', dataprep: { status: 'ready' } },
-        { _key: 'doc-2', dataprep: { status: 'pending' } }
+        { _key: 'doc-1', file_id: 'doc-1', dataprep: { status: 'ready' } },
+        { _key: 'doc-2', file_id: 'doc-2', dataprep: { status: 'pending' } }
       ];
       wrapper.vm.selectAllDocuments({ target: { checked: true } });
       expect(wrapper.vm.selectedDocuments).toEqual(['doc-1', 'doc-2']);
@@ -1340,6 +1371,219 @@ describe('AdminDashboard', () => {
       wrapper.vm.cancelHierarchyForm();
 
       expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Regression: batch ingest/retract must send file_id (not ArangoDB _key)
+  // -----------------------------------------------------------------------
+  describe('handleBatchAction sends file_id (not _key) to the API', () => {
+    const documentFileService = require('../../services/documentFileService');
+
+    it('ingest: passes file_id values to documentFileService.ingestMultipleFiles', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      // Real-world shape: ArangoDB _key + semantic file_id are different.
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
+
+      await wrapper.vm.handleBatchAction('ingest');
+
+      // Auto-confirm the dialog
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      // Drain microtasks + finally
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.ingestMultipleFiles).toHaveBeenCalledWith([
+        '1774623200119_e9887fa8',
+        '1774620171830_9589f57b'
+      ]);
+    });
+
+    it('retract: passes file_id values to documentFileService.retractMultipleFiles', async () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'Ingested' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'Ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
+
+      await wrapper.vm.handleBatchAction('retract');
+
+      expect(wrapper.vm.confirmDialogState.visible).toBe(true);
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(documentFileService.retractMultipleFiles).toHaveBeenCalledWith([
+        '1774623200119_e9887fa8',
+        '1774620171830_9589f57b'
+      ]);
+    });
+
+    it('ingest all-failure: keeps failed selections, error toast, real failureCount', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      documentFileService.ingestMultipleFiles.mockResolvedValueOnce({
+        success: false,
+        successCount: 0,
+        failureCount: 2,
+        results: [
+          { fileId: '1774623200119_e9887fa8', success: false, error: 'File metadata not found' },
+          { fileId: '1774620171830_9589f57b', success: false, error: 'File metadata not found' }
+        ]
+      });
+
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
+
+      await wrapper.vm.handleBatchAction('ingest');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(wrapper.vm.selectedDocuments).toEqual(['1774623200119_e9887fa8', '1774620171830_9589f57b']);
+      // showNotification emits via eventBus with {message, type, duration}
+      const errEvent = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'error');
+      expect(errEvent).toBeTruthy();
+      expect(errEvent[1].message).toMatch(/failed/i);
+    });
+
+    it('ingest partial-failure: keeps only failed selections, warning toast', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      documentFileService.ingestMultipleFiles.mockResolvedValueOnce({
+        success: true,
+        successCount: 1,
+        failureCount: 1,
+        results: [
+          { fileId: '1774623200119_e9887fa8', success: true },
+          { fileId: '1774620171830_9589f57b', success: false, error: 'File has already been ingested' }
+        ]
+      });
+
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'Ingested' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
+
+      await wrapper.vm.handleBatchAction('ingest');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(wrapper.vm.selectedDocuments).toEqual(['1774620171830_9589f57b']);
+      const warnEvent = mockEventBusEmit.mock.calls.find(
+        (c) => c[0] === 'notification:show' && c[1].type === 'warning'
+      );
+      expect(warnEvent).toBeTruthy();
+    });
+
+    it('ingest all-success: clears selection, success toast', async () => {
+      const documentFileService = require('../../services/documentFileService');
+      documentFileService.ingestMultipleFiles.mockResolvedValueOnce({
+        success: true,
+        successCount: 2,
+        failureCount: 0,
+        results: [
+          { fileId: '1774623200119_e9887fa8', success: true },
+          { fileId: '1774620171830_9589f57b', success: true }
+        ]
+      });
+
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['1774623200119_e9887fa8', '1774620171830_9589f57b'];
+
+      await wrapper.vm.handleBatchAction('ingest');
+      await wrapper.vm.confirmDialogState.onConfirm();
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(wrapper.vm.selectedDocuments).toEqual([]);
+      const okEvent = mockEventBusEmit.mock.calls.find((c) => c[0] === 'notification:show' && c[1].type === 'success');
+      expect(okEvent).toBeTruthy();
+      expect(okEvent[1].message).toMatch(/2/);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Source-level regression: checkbox :value must be file_id, NOT _key
+  // Verifies the actual template binding by string-matching the source.
+  // A DOM-level test is brittle here because the AdminDashboard multi-tab
+  // layout requires activeTab init + loadDocuments() to render the table.
+  // -----------------------------------------------------------------------
+  describe('checkbox :value binding (source-level)', () => {
+    it('checkbox template binds to doc.file_id, not doc._key', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const source = fs.readFileSync(path.resolve(__dirname, '../../components/AdminDashboard.vue'), 'utf8');
+      // Find the row-level checkbox v-model + value binding.
+      // Asserts the file_id binding is present and the _key binding is gone.
+      const checkboxLineRegex = /<input[^>]*v-model="selectedDocuments"[^>]*>/;
+      const match = source.match(checkboxLineRegex);
+      expect(match).toBeTruthy();
+      expect(match[0]).toMatch(/:value="doc\.file_id"/);
+      expect(match[0]).not.toMatch(/:value="doc\._key"/);
+    });
+  });
+
+  describe('selectAllDocuments uses file_id', () => {
+    it('populates selectedDocuments with file_id (not _key) on select-all', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { _key: '39933124', file_id: '1774623200119_e9887fa8', dataprep: { status: 'retracted' } },
+        { _key: '39933120', file_id: '1774620171830_9589f57b', dataprep: { status: 'Ingested' } }
+      ];
+
+      wrapper.vm.selectAllDocuments({ target: { checked: true } });
+
+      expect(wrapper.vm.selectedDocuments).toEqual(['1774623200119_e9887fa8', '1774620171830_9589f57b']);
+    });
+  });
+
+  describe('showRetractButton computed', () => {
+    it('returns false when no documents are selected', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.selectedDocuments = [];
+      expect(wrapper.vm.showRetractButton).toBe(false);
+    });
+
+    it('returns false when selected documents contain retracted status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ file_id: 'f1', dataprep: { status: 'retracted' } }];
+      wrapper.vm.selectedDocuments = ['f1'];
+      expect(wrapper.vm.showRetractButton).toBe(false);
+    });
+
+    it('returns false when selected documents contain Title-Case Retracted status', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ file_id: 'f1', dataprep: { status: 'Retracted' } }];
+      wrapper.vm.selectedDocuments = ['f1'];
+      expect(wrapper.vm.showRetractButton).toBe(false);
+    });
+
+    it('returns true when selected documents are all ingested', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [{ file_id: 'f1', dataprep: { status: 'Ingested' } }];
+      wrapper.vm.selectedDocuments = ['f1'];
+      expect(wrapper.vm.showRetractButton).toBe(true);
+    });
+
+    it('returns false when ANY selected document is retracted', () => {
+      const wrapper = createAdminDashboardWrapper();
+      wrapper.vm.documents = [
+        { file_id: 'f1', dataprep: { status: 'Ingested' } },
+        { file_id: 'f2', dataprep: { status: 'retracted' } }
+      ];
+      wrapper.vm.selectedDocuments = ['f1', 'f2'];
+      expect(wrapper.vm.showRetractButton).toBe(false);
     });
   });
 });

@@ -714,9 +714,40 @@ router.post('/:fileId/retract', authorizeRole(['Admin']), fileController.retract
  *     tags: [Files]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [fileIds]
+ *             properties:
+ *               fileIds:
+ *                 type: array
+ *                 items: { type: string }
+ *                 minItems: 1
+ *                 maxItems: 50
  *     responses:
- *       '200':
- *         description: Files ingested successfully
+ *       '207':
+ *         description: Multi-status — partial success possible; check successCount and per-file results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, description: 'true if at least one file succeeded' }
+ *                 successCount: { type: integer }
+ *                 failureCount: { type: integer }
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       fileId: { type: string }
+ *                       success: { type: boolean }
+ *                       error: { type: string, description: 'present only when success=false' }
+ *       '400':
+ *         description: Validation error (e.g. fileIds missing, empty, or &gt; 50)
  *       '401':
  *         description: Unauthorized
  *       '403':
@@ -732,9 +763,40 @@ router.post('/ingest', authorizeRole(['Admin']), fileController.ingestMultipleFi
  *     tags: [Files]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [fileIds]
+ *             properties:
+ *               fileIds:
+ *                 type: array
+ *                 items: { type: string }
+ *                 minItems: 1
+ *                 maxItems: 50
  *     responses:
- *       '200':
- *         description: Files retracted successfully
+ *       '207':
+ *         description: Multi-status — partial success possible; check successCount and per-file results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, description: 'true if at least one file succeeded' }
+ *                 successCount: { type: integer }
+ *                 failureCount: { type: integer }
+ *                 results:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       fileId: { type: string }
+ *                       success: { type: boolean }
+ *                       error: { type: string, description: 'present only when success=false' }
+ *       '400':
+ *         description: Validation error (e.g. fileIds missing, empty, or &gt; 50)
  *       '401':
  *         description: Unauthorized
  *       '403':

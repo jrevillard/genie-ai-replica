@@ -286,6 +286,14 @@ async function _settleIngest(db, repo, actor) {
           ).all()
         : [];
     const total = doneCount + failedCount + parsedCount;
+    // WS3 (David, 2026-09-25): classify the settle outcome per version:
+    //   completed      — all concepts indexed (parsed=0, failed=0)
+    //   partial-failed — some indexed, some dead-lettered (parsed=0, failed>0)
+    //   failed         — concepts still pending or partial drain (parsed>0)
+    // The Versions menu surfaces this per row alongside the bundle download
+    // link; failed/partial-failed zips are RETAINED (live-forever policy)
+    // so the operator can re-import or diagnose.
+    const ingestStatus = parsedCount > 0 ? 'failed' : failedCount > 0 ? 'partial-failed' : 'completed';
     await db.collection(REPOS).update(repo.repo_id, {
       rag_ingestion: {
         status: parsedCount > 0 ? 'failed' : failedCount > 0 ? 'failed' : 'completed',
@@ -297,6 +305,22 @@ async function _settleIngest(db, repo, actor) {
         failed_concepts: failedRows
       }
     });
+    // Write the per-version ingest outcome to the version manifest so the
+    // Versions menu can show status alongside the bundle download link.
+    try {
+      const versionService = require('./version-service');
+      await versionService.updateVersionIngestStatus(repo.repo_id, repo.version || 0, {
+        ingest_status: ingestStatus,
+        concepts_indexed: doneCount,
+        concepts_failed: failedCount
+      });
+    } catch (verErr) {
+      logger.warn('Settle: version manifest ingest_status update failed (non-fatal)', {
+        repo_id: repo.repo_id,
+        version: repo.version,
+        error: verErr && verErr.message
+      });
+    }
   } catch (err) {
     logger.warn('Settle: rag_ingestion finalize failed (non-fatal — serving flags are set)', {
       repo_id: repo.repo_id,
@@ -450,8 +474,38 @@ async function transition(repoId, action, actor) {
         throw exportErr;
       }
       logger.info('[OKF-PUBLISH] step=exported', { repo_id: repoId, file_id: bundle.file_id });
+      // WS3 (David, 2026-09-25): bundles live forever per the live-forever
+      // policy — replace the single-slot `bundle` with an append-only
+      // `bundles` array. Existing entries are preserved. The worker's
+      // bundle cache (repo_id → file_id) is re-pointed at the most-recent
+      // zip; older zips remain queryable via the Versions menu.
+      // Read existing bundles first (publish is a single-writer path —
+      // route's requireRepoScope + publish gate), then write the merge.
+      const existingBundles = (
+        await db.query(
+          'FOR r IN okf_repositories FILTER r._key == @rid RETURN r.bundles',
+          { rid: repoId }
+        )
+      ).all();
+      const prevBundles = (existingBundles && existingBundles[0]) || [];
       await db.collection(REPOS).update(repoId, {
         lifecycle_state: spec.to,
+        // APPEND the new bundle entry; never overwrite.
+        bundles: [
+          ...prevBundles,
+          {
+            file_id: bundle.file_id || null,
+            file_name: bundle.file_name,
+            bundle_version: bundle.bundle_version,
+            stored_at: bundle.stored_at,
+            ingest_status: null,
+            concepts_indexed: 0,
+            concepts_failed: 0,
+            settled_at: null
+          }
+        ],
+        // Keep the legacy single-slot field populated too — the worker's
+        // getBundleFileId + the ingest guard at :532 read repo.bundle.file_id.
         bundle: {
           file_id: bundle.file_id || null,
           file_name: bundle.file_name,

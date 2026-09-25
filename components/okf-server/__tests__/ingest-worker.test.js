@@ -145,8 +145,15 @@ describe('ingestWorker._processOneJob (content-only — claim a parsed meta row 
     const res = await worker._processOneJob();
     expect(res.outcome).toBe('ingested');
     expect(res.chunks).toBe(2);
-    // The POST targets DATAPREP directly (content-only — no doc-repo files doc).
-    const [url, body] = authedAxios.post.mock.calls[0];
+    // WS5 (David, 2026-09-25): the worker always retracts BEFORE the POST
+    // (idempotent re-ingest). The first authedAxios.post is the retract, the
+    // second is the ingest. The ingest POST targets DATAPREP directly
+    // (content-only — no doc-repo files doc).
+    const ingestCall = authedAxios.post.mock.calls.find((c) =>
+      String(c[0]).includes('/v1/dataprep/ingest_file')
+    );
+    expect(ingestCall).toBeDefined();
+    const [url, body] = ingestCall;
     expect(url).toBe('http://dataprep-arango-service:5000/v1/dataprep/ingest_file');
     expect(body).toMatchObject({
       fileId: 'bad_concept',
@@ -407,7 +414,11 @@ describe('directive (David, 2026-09-04): failures reach the ingestion log; orpha
       }
     ]);
     authedAxios.post.mockReset();
-    authedAxios.post.mockRejectedValueOnce(new Error('ECONNREFUSED')); // the dataprep kick
+    // WS5 (David, 2026-09-25): always-retract-before-POST adds a retract
+    // call. The retract is idempotent — let it succeed — then the actual
+    // dataprep kick is what fails.
+    authedAxios.post.mockResolvedValueOnce({ status: 200 }); // the pre-POST retract succeeds
+    authedAxios.post.mockRejectedValueOnce(new Error('ECONNREFUSED')); // the dataprep kick fails
     authedAxios.post.mockResolvedValue({ status: 200 }); // the mirror POSTs
     authedAxios.get.mockReset();
     authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-1' }] } });

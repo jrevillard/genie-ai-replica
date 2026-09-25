@@ -879,6 +879,99 @@ describe('FileDetailsDialog', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 4e.5 — WS4 (David, 2026-09-25): bundle zip UI protection. Server-side
+  // WS2 (fileController.deleteFile) returns 403 BUNDLE_PROTECTED for Admin
+  // callers; this section locks down the UI equivalent so Delete + Retract
+  // are absent for bundle docs, and the OKF lifecycle badge is shown.
+  // -------------------------------------------------------------------------
+  describe('4e.5 — Bundle zip UI protection', () => {
+    it('hides the Delete button when is_bundle=true', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isBundle).toBe(true);
+      // The Delete button has v-if="!isBundle" — check the rendered DOM
+      // via the component's $refs / template compilation.
+      expect(wrapper.findAll('button').filter((b) => b.text().includes('Delete')).length).toBe(0);
+    });
+
+    it('suppresses the mainAction (no Retract button) when is_bundle=true', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      // WS4: bundle zips cannot be Retracted from the document management
+      // tab — OKF lifecycle owns their state. mainAction returns {} so no
+      // primary button is shown.
+      expect(wrapper.vm.isBundle).toBe(true);
+      expect(wrapper.vm.mainAction).toEqual({});
+    });
+
+    it('shows the OKF lifecycle badge for bundle docs', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: true,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      const badges = wrapper.findAll('.okf-file-bundle-badge');
+      expect(badges.length).toBe(1);
+      expect(badges.at(0).text()).toContain('managed by OKF lifecycle');
+    });
+
+    it('keeps Delete + Retract available for non-bundle docs (regression)', async () => {
+      mockGetFileMetadata.mockResolvedValue(createMockFile({
+        is_bundle: false,
+        dataprep: { status: 'Ingested' }
+      }));
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      wrapper.vm.file = createMockFile({
+        is_bundle: false,
+        dataprep: { status: 'Ingested' }
+      });
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.isBundle).toBe(false);
+      // Non-bundle Ingested file: Delete button shown + mainAction is Retract.
+      expect(wrapper.findAll('button').filter((b) => b.text().includes('Delete')).length).toBeGreaterThan(0);
+      expect(wrapper.vm.mainAction.text).toContain('Retract');
+      expect(wrapper.findAll('.okf-file-bundle-badge').length).toBe(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 4f — canViewInternalFile, isMetadataEditable computed properties
   // -------------------------------------------------------------------------
   describe('4f — Computed properties', () => {

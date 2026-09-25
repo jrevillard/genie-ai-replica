@@ -43,6 +43,54 @@ the validation cycle (Path 2 or Path 3). At cycle end, after the
 validated commits have flowed to `main` (Path 2) or to `release/el-salvador`
 (Path 3), dev/el-salvador is reset for the next cycle.
 
+## Pre-reset safety check (mandatory before any cycle-start reset)
+
+Resetting `dev/el-salvador` and force-pushing the local branch to
+`origin/dev/el-salvador` is **destructive**: it discards every local
+commit on the worktree branch. Before running the cycle-start reset, an
+agent (human or AI) MUST verify that nothing currently in use will be
+lost. Run all five checks; if ANY of them is dirty, **stop and surface**
+to the user — do not reset.
+
+1. **Worktree clean**: `git status` reports `nothing to commit, working
+   tree clean`. Uncommitted edits, staged but uncommitted files, or
+   untracked-but-intentional files block the reset.
+
+2. **No in-flight deploy** on `.102`: confirm `repo_branch` in
+   `deploy/ansible/group_vars/itu_rtx_el_salvador/vars.yml` is **not**
+   `dev/el-salvador` AND that no service on `.102` is currently tagged
+   with a `dev-el-salvador` image. SSH reachability is not a guarantee
+   here — only the absence of an in-flight deploy is.
+
+3. **No active pipeline on `origin/dev/el-salvador`**: query GitLab for
+   pipelines referencing the branch (status: running or pending). A
+   still-running pipeline that builds or scans against `dev/el-salvador`
+   will read the branch state at fetch time — pushing during it can
+   either change the input mid-build or break artifact attribution.
+
+4. **No open MR with source branch = `dev/el-salvador`**: any MR whose
+   source is `dev/el-salvador` depends on the branch SHA. Force-pushing
+   orphan's that MR's source.
+
+5. **`origin/dev/el-salvador` is not ahead of the local worktree HEAD in
+   a way the user has not acknowledged**: if the remote has commits the
+   local worktree does not (e.g. commits pushed from another machine
+   mid-cycle), the reset drops them silently. Surface the divergence and
+   ask the user whether to keep, drop, or merge before proceeding.
+
+If all five checks pass, the cycle-start reset is safe:
+
+```
+git reset --hard origin/release/el-salvador
+git push --force-with-lease origin dev/el-salvador
+```
+
+If any check fails, **surface the conflict** (what is dirty, what would
+be lost, what the user-visible blast radius is) and wait for an explicit
+go-ahead. The `force-with-lease` guard still catches a remote race, but
+it does NOT catch a stale local worktree or an in-flight deploy — only
+the five checks above do.
+
 ## The three paths
 
 The distinction is the **validation venue** and the **destination branch**,

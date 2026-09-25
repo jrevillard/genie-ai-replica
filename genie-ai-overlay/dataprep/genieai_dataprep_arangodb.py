@@ -35,7 +35,11 @@ from comps.dataprep.src.utils import get_separators
 from fastapi import HTTPException
 from langchain_arangodb import ArangoGraph
 from langchain_core.documents import Document
-from langchain_text_splitters import HTMLHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    HTMLHeaderTextSplitter,
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
 from numpy import dot
 from numpy.linalg import norm
 from openai import AsyncOpenAI
@@ -652,6 +656,55 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         if path.endswith(".html"):
             text_splitter = HTMLHeaderTextSplitter(headers_to_split_on=[("h1", "H1"), ("h2", "H2")])
+        elif path.endswith(".md"):
+            # Section-aware markdown chunking: split on H1-H4 headers, then cap
+            # each section at chunk_size with intra-section overlap. The
+            # section path is prepended to each chunk so the LLM labeler (and
+            # any downstream retrieval) sees the heading context.
+            md_splitter = MarkdownHeaderTextSplitter(
+                headers_to_split_on=[
+                    ("#", "Header 1"),
+                    ("##", "Header 2"),
+                    ("###", "Header 3"),
+                    ("####", "Header 4"),
+                ],
+                strip_headers=True,
+            )
+            char_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=doc_path.chunk_size,
+                chunk_overlap=doc_path.chunk_overlap,
+                add_start_index=True,
+                separators=get_separators(),
+            )
+
+            def _split_md(text: str) -> list[str]:
+                if not text:
+                    return []
+                md_docs = md_splitter.split_text(text)
+                docs = char_splitter.split_documents(md_docs)
+                out = []
+                for d in docs:
+                    # Filter to str values: add_start_index on the char splitter
+                    # injects an int offset into Document.metadata, which would
+                    # crash a naive " > ".join(...) prefix.
+                    header_parts = [v for v in d.metadata.values() if isinstance(v, str)]
+                    path_label = " > ".join(header_parts) if header_parts else ""
+                    if path_label:
+                        out.append(f"## {path_label}\n\n{d.page_content}")
+                    else:
+                        out.append(d.page_content)
+                return out
+
+            with tracer.start_as_current_span("dataprep.chunking") as span:
+                if isinstance(content, list):
+                    plain_chunks = []
+                    for item in content:
+                        plain_chunks.extend(_split_md(str(item)))
+                else:
+                    plain_chunks = _split_md(content)
+                valid_chunks = [c for c in plain_chunks if is_valid_content(c)]
+                span.set_attribute("dataprep.chunk_count", len(valid_chunks))
+            return valid_chunks
         else:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=doc_path.chunk_size,

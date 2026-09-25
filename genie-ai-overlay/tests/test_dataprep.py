@@ -280,6 +280,226 @@ class TestLoadAndChunk:
 
         assert result == ["item1", "item2"]
 
+    @pytest.mark.asyncio
+    async def test_md_uses_markdown_header_splitter_with_h1_to_h4(self):
+        """MD files use MarkdownHeaderTextSplitter with H1-H4 + strip_headers=True."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "README.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        md_doc = MagicMock(page_content="Section content", metadata={"Header 1": "Intro", "Header 2": "History"})
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = [md_doc]
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = [md_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(
+                dp_module,
+                "document_loader",
+                new_callable=AsyncMock,
+                return_value="# Intro\n\n## History\n\nBody",
+            ),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter) as md_cls,
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            await dp._load_and_chunk(doc_path)
+
+        headers_call = md_cls.call_args.kwargs["headers_to_split_on"]
+        assert [h[0] for h in headers_call] == ["#", "##", "###", "####"]
+        assert md_cls.call_args.kwargs["strip_headers"] is True
+
+    @pytest.mark.asyncio
+    async def test_md_propagates_section_metadata_as_prefix(self):
+        """Section path joined with ' > ' is prepended to chunk content for labelling."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "guide.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        md_doc = MagicMock(page_content="Body text", metadata={"Header 1": "A", "Header 2": "B", "Header 3": "C"})
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = [md_doc]
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = [md_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value="# A\n## B\n### C\nBody"),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        assert len(result) == 1
+        assert result[0].startswith("## A > B > C\n\n")
+        assert "Body text" in result[0]
+
+    @pytest.mark.asyncio
+    async def test_md_ignores_non_string_metadata_values(self):
+        """start_index (int) injected by add_start_index is excluded from section prefix."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "doc.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        # Real RecursiveCharacterTextSplitter(add_start_index=True) appends an
+        # int offset to Document.metadata; the prefix must skip non-str values
+        # to avoid TypeError on " > ".join().
+        md_doc = MagicMock(
+            page_content="Body",
+            metadata={"Header 1": "Intro", "start_index": 42},
+        )
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = [md_doc]
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = [md_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value="# Intro\nBody"),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        assert result == ["## Intro\n\nBody"]
+
+    @pytest.mark.asyncio
+    async def test_md_no_section_metadata_omits_prefix(self):
+        """Chunk without metadata (bare paragraph) gets no section prefix."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "notes.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        md_doc = MagicMock(page_content="Just prose", metadata={})
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = [md_doc]
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = [md_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value="Just prose"),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        assert result == ["Just prose"]
+
+    @pytest.mark.asyncio
+    async def test_md_recursive_char_splitter_uses_doc_path_config(self):
+        """RecursiveCharacterTextSplitter receives chunk_size/chunk_overlap from doc_path."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "doc.md"
+        doc_path.chunk_size = 800
+        doc_path.chunk_overlap = 80
+
+        md_doc = MagicMock(page_content="x", metadata={"Header 1": "A"})
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = [md_doc]
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = [md_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value="# A\nx"),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter) as char_cls,
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            await dp._load_and_chunk(doc_path)
+
+        assert char_cls.call_args.kwargs["chunk_size"] == 800
+        assert char_cls.call_args.kwargs["chunk_overlap"] == 80
+
+    @pytest.mark.asyncio
+    async def test_md_uses_split_documents_not_split_text(self):
+        """RecursiveCharacterTextSplitter called via split_documents (preserves metadata + overlap)."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "doc.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        md_doc = MagicMock(page_content="y", metadata={"Header 1": "A"})
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = [md_doc]
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = [md_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value="# A\ny"),
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            await dp._load_and_chunk(doc_path)
+
+        char_splitter.split_documents.assert_called_once()
+        char_splitter.split_text.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_md_filters_invalid_content(self):
+        """Invalid chunks (per is_valid_content) are filtered out."""
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "doc.md"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        md_docs = [
+            MagicMock(page_content="valid", metadata={"Header 1": "A"}),
+            MagicMock(page_content="no", metadata={"Header 1": "A"}),
+        ]
+        md_splitter = MagicMock()
+        md_splitter.split_text.return_value = md_docs
+        char_splitter = MagicMock()
+        char_splitter.split_documents.return_value = md_docs
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "opea"),
+            patch.object(dp_module, "document_loader", new_callable=AsyncMock, return_value="# A\nvalid\nno"),
+            patch.object(dp_module, "is_valid_content", side_effect=lambda c: len(c) > 10),
+            patch.object(dp_module, "MarkdownHeaderTextSplitter", return_value=md_splitter),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=char_splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        # Only "valid" survives (is_valid_content: len>5); "no" is dropped
+        assert len(result) == 1
+        assert result[0].startswith("## A\n\n")
+        assert "valid" in result[0]
+        assert "no" not in [r.replace("## A\n\n", "") for r in result]
+
 
 # ---------------------------------------------------------------------------
 # TestApplyLabels

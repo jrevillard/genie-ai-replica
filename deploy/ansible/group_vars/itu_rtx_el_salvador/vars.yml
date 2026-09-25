@@ -101,8 +101,12 @@ retriever_arango_score_threshold: "0.2"
 
 # Chunking configuration. Values are character counts — dataprep uses LangChain's
 # RecursiveCharacterTextSplitter, which measures chunk length in characters.
-# 2000 chars ≈ 500 tokens and 300 chars ≈ 75 tokens for the embedding tokenizer.
-dataprep_chunk_size_md: 2000
+# 1400 pairs with the new section-aware MD chunking path (request from
+# R. Chestnov per !397 follow-up): each H1-H4 section is now capped at this
+# size with intra-section overlap, so 1400 chars ≈ 350 tokens keeps sections
+# tight enough for accurate LLM labelling without losing the heading context
+# that the section-path prefix provides.
+dataprep_chunk_size_md: 1400
 dataprep_chunk_overlap: 300
 # embedding_model_id and vllm_* overrides intentionally omitted here: the
 # canonical defaults from deploy/ansible/group_vars/all.yml apply (bge-large

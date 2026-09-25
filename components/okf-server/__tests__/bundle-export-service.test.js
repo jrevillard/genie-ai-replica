@@ -86,7 +86,7 @@ describe('bundleFileName — the visible repo+version link', () => {
   });
 });
 
-describe('exportBundle — store + supersede contract', () => {
+describe('exportBundle — store + live-forever contract (WS3, David, 2026-09-25)', () => {
   test('stores the zip (is_bundle + bundle_version), patches Ingested, returns the link', async () => {
     seedMeta('index', { is_index: true, frontmatter: { type: 'index', title: 'Index' } });
     seedMeta('alpha');
@@ -109,6 +109,9 @@ describe('exportBundle — store + supersede contract', () => {
       bundle_version: 1,
       concept_count: 2
     });
+    // WS3: no superseded_file_ids field — the live-forever policy doesn't
+    // delete prior zips; new bundles are appended, never replacing.
+    expect(result.superseded_file_ids).toBeUndefined();
     expect(authedAxios.post).toHaveBeenCalledWith(
       expect.stringContaining('/api/files/ingest-bundle'),
       expect.objectContaining({
@@ -128,13 +131,15 @@ describe('exportBundle — store + supersede contract', () => {
     );
   });
 
-  test('supersedes OLDER bundle docs, keeps the current version', async () => {
+  test('WS3: does NOT call DELETE on prior bundle docs (live-forever)', async () => {
+    // The mock lists 2 prior bundles — under the OLD supersede policy,
+    // exportBundle would issue DELETE for both. Under the new live-forever
+    // policy, NO DELETE call is made.
     authedAxios.get.mockResolvedValueOnce({
       data: {
         data: [
           { file_id: 'file-old-1', bundle_version: 1 },
-          { file_id: 'file-old-2', bundle_version: 2 },
-          { file_id: 'file-cur', bundle_version: 3 }
+          { file_id: 'file-old-2', bundle_version: 2 }
         ]
       }
     });
@@ -143,11 +148,7 @@ describe('exportBundle — store + supersede contract', () => {
       { concept_id: 'index', title: 'Index', frontmatter: { type: 'index' }, body: '# index', is_index: true }
     ]);
     const repo = { repo_id: REPO, name: 'Demo Repo', version: 3, graph_name: `OKF_${REPO}` };
-    const result = await bundleExportService.exportBundle(repo, {});
-    expect(authedAxios.delete).toHaveBeenCalledTimes(2);
-    expect(authedAxios.delete).toHaveBeenCalledWith(expect.stringContaining('/api/files/file-old-1'));
-    expect(authedAxios.delete).toHaveBeenCalledWith(expect.stringContaining('/api/files/file-old-2'));
-    expect(authedAxios.delete).not.toHaveBeenCalledWith(expect.stringContaining('/api/files/file-cur'));
-    expect(result.superseded_file_ids.sort()).toEqual(['file-old-1', 'file-old-2']);
+    await bundleExportService.exportBundle(repo, {});
+    expect(authedAxios.delete).not.toHaveBeenCalled();
   });
 });

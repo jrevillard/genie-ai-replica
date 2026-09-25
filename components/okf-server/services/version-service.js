@@ -430,8 +430,13 @@ async function mintVersion(repo_id, opts = {}, actor) {
 async function listVersions(repo_id) {
   const db = await getDb();
   const cursor = await db.query(
+    // WS3 (David, 2026-09-25): include the per-version bundle tracking fields
+    // (bundle_file_id, bundle_file_name, ingest_status, concepts_indexed,
+    // concepts_failed) so the Versions menu can render a download link per
+    // bundle and the ingest outcome (completed / partial-failed / failed).
+    // Fields are nullable for legacy manifests minted before this commit.
     `FOR v IN ${VERSIONS} FILTER v.repo_id == @repo_id SORT v.bundle_version DESC ` +
-      'RETURN KEEP(v, ["bundle_version", "okf_tag", "trigger", "source_ref", "curator", "minted_at", "concept_count"])',
+      'RETURN KEEP(v, ["bundle_version", "okf_tag", "trigger", "source_ref", "curator", "minted_at", "concept_count", "bundle_file_id", "bundle_file_name", "bundle_stored_at", "ingest_status", "concepts_indexed", "concepts_failed", "settled_at"])',
     { repo_id }
   );
   return cursor.all();
@@ -448,4 +453,102 @@ async function getVersion(repo_id, bundle_version) {
   }
 }
 
-module.exports = { mintVersion, listVersions, getVersion, VersionError, TRIGGERS };
+/**
+ * WS3: link a freshly-uploaded bundle zip to the version manifest it backs.
+ * Called by exportBundle AFTER the doc-repo upload completes. Idempotent —
+ * a re-link overwrites prior fields without changing bundle_version.
+ *
+ * Bundle zips live forever (live-forever policy, see plan §WS3). The version
+ * manifest is the durable record of which file_id backs which version; the
+ * UI's Versions menu uses this to render a download link.
+ *
+ * @param {string} repo_id
+ * @param {number} bundle_version
+ * @param {{file_id: string, file_name: string, stored_at: string}} bundleInfo
+ */
+async function linkBundleToVersion(repo_id, bundle_version, bundleInfo) {
+  if (!repo_id || !bundle_version || !bundleInfo || !bundleInfo.file_id) {
+    throw new VersionError(
+      'LINK_INVALID_INPUT',
+      'linkBundleToVersion requires repo_id, bundle_version, and bundleInfo.file_id',
+      500
+    );
+  }
+  const db = await getDb();
+  const patch = {
+    bundle_file_id: bundleInfo.file_id,
+    bundle_file_name: bundleInfo.file_name || null,
+    bundle_stored_at: bundleInfo.stored_at || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  await db
+    .collection(VERSIONS)
+    .update(`${repo_id}_${bundle_version}`, patch)
+    .catch((err) => {
+      if (!isNotFound(err)) throw err;
+      // Manifest may not exist yet if export ran before mint (shouldn't, but
+      // be defensive — link is best-effort and the bundle still exists in doc-repo)
+      logger.warn('linkBundleToVersion: manifest not found (best-effort)', {
+        repo_id,
+        bundle_version,
+        file_id: bundleInfo.file_id
+      });
+    });
+  recordOp('link_bundle', 'success');
+  logger.info('OKF bundle linked to version', {
+    repo_id,
+    bundle_version,
+    file_id: bundleInfo.file_id
+  });
+}
+
+/**
+ * WS3: write the per-version ingest outcome into the manifest at settle time.
+ * Called by lifecycle._settleIngest AFTER the serving-flags flip.
+ *
+ * @param {string} repo_id
+ * @param {number} bundle_version
+ * @param {{ingest_status: 'completed'|'partial-failed'|'failed', concepts_indexed: number, concepts_failed: number}} outcome
+ */
+async function updateVersionIngestStatus(repo_id, bundle_version, outcome) {
+  if (!repo_id || !bundle_version || !outcome || !outcome.ingest_status) {
+    return; // best-effort; no throw
+  }
+  const db = await getDb();
+  const patch = {
+    ingest_status: outcome.ingest_status,
+    concepts_indexed: outcome.concepts_indexed || 0,
+    concepts_failed: outcome.concepts_failed || 0,
+    settled_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  await db
+    .collection(VERSIONS)
+    .update(`${repo_id}_${bundle_version}`, patch)
+    .catch((err) => {
+      if (!isNotFound(err)) throw err;
+      logger.warn('updateVersionIngestStatus: manifest not found (best-effort)', {
+        repo_id,
+        bundle_version,
+        ingest_status: outcome.ingest_status
+      });
+    });
+  recordOp('update_ingest_status', 'success');
+  logger.info('OKF version ingest status written', {
+    repo_id,
+    bundle_version,
+    ingest_status: outcome.ingest_status,
+    concepts_indexed: outcome.concepts_indexed,
+    concepts_failed: outcome.concepts_failed
+  });
+}
+
+module.exports = {
+  mintVersion,
+  listVersions,
+  getVersion,
+  linkBundleToVersion,
+  updateVersionIngestStatus,
+  VersionError,
+  TRIGGERS
+};

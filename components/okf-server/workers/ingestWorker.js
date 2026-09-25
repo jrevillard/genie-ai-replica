@@ -388,30 +388,36 @@ async function _processOneJob() {
     const conceptId = job.concept_id;
     const fileId = conceptId; // the concept_id is the dataprep fileId (content-keyed)
 
-    // 0. RE-INDEX RETRACT (live-caught 2026-08-23): a MODIFIED concept
-    //    re-entering the queue (last_good_index_at set) still has its OLD
-    //    chunks in the graph — dataprep appends, never replaces, so the
-    //    concept carried duplicate chunk sets (stale bv=null + new bv=1).
-    //    Retract the old chunks first (content-keyed fileId + graph), then
-    //    re-ingest. Best-effort: a retract failure logs and proceeds.
-    if (job.last_good_index_at) {
-      try {
-        await authedAxios.post(
-          `${config.dataprep.url}/v1/dataprep/retract_file`,
-          { fileId, graphName: job.graph_name || `OKF_${job.repo_id}` },
-          { timeout: 30000 }
-        );
+    // 0. ALWAYS RETRACT (WS5, David, 2026-09-25): idempotent re-ingest.
+    //    dataprep "appends, never replaces" — a concept that fails mid-POST
+    //    leaves partial chunks behind; the next attempt's POST without a
+    //    retract would append a duplicate set (live-caught first-failure
+    //    chunk residue). The pre-2026-09 guard key `job.last_good_index_at`
+    //    only fired for re-indexed concepts, missing the FIRST-attempt
+    //    partial-failure case. Always retract — dataprep's retract is a
+    //    no-op when no chunks exist for the fileId (idempotent), so the
+    //    cost is one extra HTTP call per concept on the success path.
+    //    Best-effort: a retract failure logs and proceeds to the POST (the
+    //    existing re-index fallback).
+    try {
+      await authedAxios.post(
+        `${config.dataprep.url}/v1/dataprep/retract_file`,
+        { fileId, graphName: job.graph_name || `OKF_${job.repo_id}` },
+        { timeout: 30000 }
+      );
+      if (job.last_good_index_at) {
         logger.info('Ingest worker: re-index retract done (stale chunks cleared)', { concept_id: conceptId });
-      } catch (err) {
-        logger.warn(`Ingest worker: re-index retract failed (proceeding): [${conceptId}] ${err.message}`);
-        writeBundleIngestionLog(
-          job.repo_id,
-          conceptId,
-          'WARN',
-          'System',
-          'Re-index retract of stale chunks failed (proceeding): ' + err.message
-        );
       }
+    } catch (err) {
+      const intent = job.last_good_index_at ? 're-index retract' : 'pre-POST retract';
+      logger.warn(`Ingest worker: ${intent} failed (proceeding): [${conceptId}] ${err.message}`);
+      writeBundleIngestionLog(
+        job.repo_id,
+        conceptId,
+        'WARN',
+        'System',
+        `${intent} failed (proceeding): ` + err.message
+      );
     }
 
     // 1. POST the concept's markdown DIRECTLY to dataprep (content-only).

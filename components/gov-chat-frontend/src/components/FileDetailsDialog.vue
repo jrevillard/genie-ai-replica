@@ -18,6 +18,12 @@
         <div class="dialog-header">
           <h2 class="dialog-title">
             {{ translate('details.title', 'File Details') }}
+            <!-- WS4 (David, 2026-09-25): explicit badge so the user understands
+              why Delete and Retract are absent — the zip is managed by the
+              OKF repository lifecycle, not by document management. -->
+            <span v-if="isBundle" class="okf-file-bundle-badge">
+              {{ translate('details.bundleBadge', 'managed by OKF lifecycle') }}
+            </span>
           </h2>
           <DsButton
             variant="ghost"
@@ -533,7 +539,16 @@
               {{ translate('okf.crawl.createOkfFromCrawl', 'Create OKF repository from this crawl') }}
             </DsButton>
           </div>
-          <DsButton variant="danger" :disabled="isFileLocked" @click="handleDelete">
+          <!-- WS4 (David, 2026-09-25): bundle zips cannot be deleted from
+            the document management tab — they are owned by the OKF
+            lifecycle (per-version ingest artifact). Server-side WS2 also
+            rejects Admin DELETE with 403 BUNDLE_PROTECTED. -->
+          <DsButton
+            v-if="!isBundle"
+            variant="danger"
+            :disabled="isFileLocked"
+            @click="handleDelete"
+          >
             {{ translate('common.delete', 'Delete') }}
           </DsButton>
           <div class="footer-actions">
@@ -771,8 +786,20 @@ export default {
       const s = this.currentStatus;
       return s === 'ingested' || s === 'ingested with warnings' || s === 'ingesting';
     },
+    // WS4 (David, 2026-09-25): bundle zips are owned by the OKF lifecycle
+    // (the per-version artifact) — the document management tab must NOT
+    // expose Delete OR Retract for them. The backend's WS2 protection
+    // (403 BUNDLE_PROTECTED for Admin callers) is the hard server-side
+    // gate; this flag is the UI equivalent so the buttons disappear.
+    isBundle() {
+      return !!(this.file && this.file.is_bundle === true);
+    },
     mainAction() {
       if (!this.file) return {};
+      // WS4 (David, 2026-09-25): bundle zips cannot be Retracted from the
+      // document management tab — they are OKF per-version artifacts
+      // (the OKF lifecycle owns their state). Show no primary action.
+      if (this.isBundle) return {};
       const status = this.currentStatus;
       const hasLabels = this.editableFile.labels.length > 0;
 
@@ -1988,6 +2015,19 @@ export default {
   font-size: var(--text-lg);
   color: var(--fg);
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.okf-file-bundle-badge {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft, rgba(59, 130, 246, 0.12));
+  color: var(--accent, #3b82f6);
+  border: 1px solid var(--accent, #3b82f6);
+  letter-spacing: 0.02em;
 }
 .dialog-close-btn {
   /* Layout only - styling handled by DsButton */

@@ -682,6 +682,36 @@ class FileController {
         });
       }
 
+      // WS2 (David, 2026-09-25): bundle zips (is_bundle=true) are OKF
+      // per-version ingestion artifacts — they live forever, governed by
+      // the OKF lifecycle (supersede/superseded by minting a new version),
+      // not by doc-repo's document management tab. Only the okf-service
+      // service account may delete them; Admin / steward roles get a
+      // explicit 403 with code=BUNDLE_PROTECTED so the UI can hide the
+      // action entirely. Live-caught 2026-09-25: all 4 ingested repos'
+      // bundle zips were deleted by the hourly ingest sweep because this
+      // protection did not exist; without it the entire ingest pipeline
+      // loses the per-version trace.
+      const callerRoles = (req.user && Array.isArray(req.user.roles)) ? req.user.roles : [];
+      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
+      if (!isOkfService) {
+        let meta = null;
+        try {
+          meta = await metadataService.getMetadataById(fileId);
+        } catch {
+          // metadata fetch failed — fall through (the existing delete handler
+          // will surface any actual error from the deletion path itself)
+        }
+        if (meta && meta.is_bundle === true) {
+          return res.status(403).json({
+            success: false,
+            code: 'BUNDLE_PROTECTED',
+            error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+            message: 'Bundle zip files are owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.'
+          });
+        }
+      }
+
       const deleted = await fileService.deleteFile(fileId);
       if (deleted) {
         res.json({
@@ -739,6 +769,31 @@ class FileController {
         });
       }
       const { fileIds } = value;
+
+      // WS2 (David, 2026-09-25): same bundle protection in batch mode —
+      // a single bundle in the batch fails the WHOLE batch with 403 so
+      // the UI can surface the error clearly (partial-deletion is worse
+      // than no-deletion for the bundle semantics).
+      const callerRoles = (req.user && Array.isArray(req.user.roles)) ? req.user.roles : [];
+      const isOkfService = callerRoles.some((r) => String(r).toLowerCase() === 'okf-service');
+      if (!isOkfService) {
+        for (const fileId of fileIds) {
+          let meta = null;
+          try {
+            meta = await metadataService.getMetadataById(fileId);
+          } catch {
+            // metadata fetch failed — fall through
+          }
+          if (meta && meta.is_bundle === true) {
+            return res.status(403).json({
+              success: false,
+              code: 'BUNDLE_PROTECTED',
+              error: 'Bundle zips are managed by the OKF lifecycle and cannot be deleted from document management',
+              message: `Bundle zip "${fileId}" is owned by the OKF repository lifecycle. Delete is only allowed via the okf-service account.`
+            });
+          }
+        }
+      }
 
       const results = [];
       for (const fileId of fileIds) {

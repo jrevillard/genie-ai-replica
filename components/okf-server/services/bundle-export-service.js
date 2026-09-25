@@ -86,37 +86,16 @@ async function buildBundleZip(repoId) {
   return { buffer: zip.toBuffer(), concept_count: rows.length };
 }
 
-/** List the repo's live bundle docs from doc-repo (is_bundle=true). */
-async function listBundleDocs(repoId) {
-  const resp = await authedAxios.get(
-    `${config.documentRepository.url}/api/files?repo_id=${encodeURIComponent(repoId)}&is_bundle=true&limit=50`
-  );
-  const body = resp && resp.data;
-  return Array.isArray(body) ? body : (body && (body.data || body.items || body.files)) || [];
-}
-
-/** Delete the superseded bundle docs (every bundle whose bundle_version is not
- * the one being exported). Best-effort per doc: one failed delete never blocks
- * the publish — the new zip is still stored and remains the version-current
- * artifact; the leftover is logged for ops. */
-async function supersedeOldBundles(repoId, bundleVersion) {
-  const existing = await listBundleDocs(repoId).catch(() => []);
-  const stale = existing.filter((f) => f && f.file_id && f.bundle_version !== bundleVersion);
-  const deleted = [];
-  for (const doc of stale) {
-    try {
-      await authedAxios.delete(`${config.documentRepository.url}/api/files/${encodeURIComponent(doc.file_id)}`);
-      deleted.push(doc.file_id);
-    } catch (err) {
-      logger.warn('Bundle supersede delete failed (non-fatal)', {
-        repo_id: repoId,
-        file_id: doc.file_id,
-        error: err.message
-      });
-    }
-  }
-  return deleted;
-}
+/** WS3 (David, 2026-09-25): supersedeOldBundles was REMOVED — bundles live
+ * forever. Prior zips remain alongside new ones for version history.
+ * The per-version trace is now the durable record, not the
+ * doc-repository's "current" bundle. See exportBundle's supersede-removal
+ * comment for the full rationale.
+ *
+ * (listBundleDocs helper removed in WS3 — superseded by
+ * versionService.linkBundleToVersion. If a future UI endpoint needs the
+ * raw doc-repo bundle list, see git history for the prior implementation.)
+ */
 
 /**
  * Export the repo's CURRENT version as a bundle zip into the doc-repo.
@@ -141,16 +120,12 @@ async function exportBundle(repo, actor) {
     // SERVING graph the bundle's content becomes at ingest (born-right vN).
     const graphName = versionedGraphName(repo) || `OKF_${repoId}`;
 
-    // Supersede FIRST (the ingest worker's bundle cache must not point at a
-    // deleted doc), then store the new zip.
-    const superseded = await supersedeOldBundles(repoId, bundleVersion);
-    // The worker caches repo_id → bundle file_id forever; after a supersede the
-    // cached id may point at a DELETED doc (ingestion-log mirror would 404).
-    try {
-      require('../workers/ingestWorker').invalidateBundleCache(repoId);
-    } catch {
-      /* worker module absent in some test harnesses — non-fatal */
-    }
+    // WS3 (David, 2026-09-25): bundles LIVE FOREVER. We do NOT delete prior
+    // version zips — the Versions menu needs them for per-version history,
+    // re-import, and audit (ingestion logs are tied to the bundle doc).
+    // Each new publish APPENDS a new bundle alongside the old. The
+    // worker's bundle cache points at the most-recent zip per repo
+    // (the "current" bundle for ingestion logs); we refresh it here.
 
     let fileId;
     try {
@@ -185,6 +160,7 @@ async function exportBundle(repo, actor) {
 
     // The concepts are already indexed (mint gate) — the bundle is born at
     // 'Ingested' (see header). Best-effort: the artifact exists either way.
+    const storedAt = new Date().toISOString();
     if (fileId) {
       try {
         await authedAxios.patch(
@@ -195,27 +171,43 @@ async function exportBundle(repo, actor) {
       } catch {
         logger.warn('Bundle status set to Ingested failed (non-fatal)', { repo_id: repoId, file_id: fileId });
       }
+      // WS3: link this bundle to the version manifest (Versions menu shows
+      // it as a download link per row). Best-effort — the bundle itself
+      // already exists in doc-repo; a failed link just hides the row's link.
+      try {
+        const versionService = require('./version-service');
+        await versionService.linkBundleToVersion(repoId, bundleVersion, {
+          file_id: fileId,
+          file_name: fileName,
+          stored_at: storedAt
+        });
+      } catch (linkErr) {
+        logger.warn('Bundle → version manifest link failed (non-fatal)', {
+          repo_id: repoId,
+          bundle_version: bundleVersion,
+          file_id: fileId,
+          error: linkErr && linkErr.message
+        });
+      }
     }
 
     span.setAttribute('okf.bundle.file_id', fileId || 'none');
     span.setAttribute('okf.bundle.bytes', bundleBytes);
-    logger.info('OKF bundle zip exported', {
+    logger.info('OKF bundle zip exported (live-forever, no supersede)', {
       repo_id: repoId,
       bundle_version: bundleVersion,
       bundle_bytes: bundleBytes,
       file_name: fileName,
       file_id: fileId,
       concepts: concept_count,
-      superseded_count: superseded.length,
       actor: (actor && actor.sub) || 'system'
     });
     return {
       file_id: fileId,
       file_name: fileName,
       bundle_version: bundleVersion,
-      stored_at: new Date().toISOString(),
-      concept_count,
-      superseded_file_ids: superseded
+      stored_at: storedAt,
+      concept_count
     };
   });
 }

@@ -42,6 +42,43 @@
       </template>
       <template #cell-trigger="{ row }">{{ row.trigger }}</template>
       <template #cell-minted="{ row }">{{ shortDate(row.minted_at) }}</template>
+      <!-- WS4 (David, 2026-09-25): per-version bundle download link. The
+        backend (version-service.linkBundleToVersion) records bundle_file_id
+        against the version manifest on each publish; this cell renders a
+        download icon linking to /api/files/{file_id} (doc-repo's auth-gated
+        download endpoint). For legacy manifests minted before WS4, the
+        file_id is null and we show a "missing" badge instead. -->
+      <template #cell-bundle="{ row }">
+        <a
+          v-if="row.bundle_file_id"
+          :href="bundleDownloadUrl(row.bundle_file_id)"
+          class="okf-versions__bundle-link"
+          :title="row.bundle_file_name || row.bundle_file_id"
+          target="_blank"
+          rel="noopener"
+        >
+          <DsPill variant="success">
+            {{ translate('okf.versions.bundleDownload', 'Download zip') }}
+          </DsPill>
+        </a>
+        <DsPill v-else variant="warn">
+          {{ translate('okf.versions.bundleMissing', 'zip missing') }}
+        </DsPill>
+      </template>
+      <!-- Per-version ingest outcome (completed / partial-failed / failed).
+        Null when the version has not been ingested yet. -->
+      <template #cell-ingest="{ row }">
+        <DsPill v-if="row.ingest_status === 'completed'" variant="success">
+          {{ translate('okf.versions.ingestCompleted', 'ingested') }}
+        </DsPill>
+        <DsPill v-else-if="row.ingest_status === 'partial-failed'" variant="warn">
+          {{ translate('okf.versions.ingestPartialFailed', 'partial') }}
+        </DsPill>
+        <DsPill v-else-if="row.ingest_status === 'failed'" variant="danger">
+          {{ translate('okf.versions.ingestFailed', 'failed') }}
+        </DsPill>
+        <span v-else class="okf-versions__not-ingested">—</span>
+      </template>
     </DsTable>
 
     <p v-if="!loading && versions.length === 0" class="okf-versions__empty">
@@ -86,7 +123,11 @@ export default {
         { key: 'trigger', label: this.translate('okf.versions.col.trigger', 'Trigger') },
         { key: 'curator', label: this.translate('okf.versions.col.curator', 'Curator') },
         { key: 'concept_count', label: this.translate('okf.versions.col.concepts', 'Concepts') },
-        { key: 'minted', label: this.translate('okf.versions.col.minted', 'Minted') }
+        { key: 'minted', label: this.translate('okf.versions.col.minted', 'Minted') },
+        // WS4 (David, 2026-09-25): per-version bundle download link.
+        { key: 'bundle', label: this.translate('okf.versions.col.bundle', 'Bundle') },
+        // Per-version ingest outcome (completed / partial-failed / failed).
+        { key: 'ingest', label: this.translate('okf.versions.col.ingest', 'Ingest') }
       ]
     };
   },
@@ -168,6 +209,15 @@ export default {
       } catch {
         return iso || '—';
       }
+    },
+    /** WS4: build the doc-repo download URL for a bundle file. The path is
+     * auth-gated by the existing /api/files/:fileId/download endpoint; the
+     * browser's session cookie (or bearer) carries the auth header. */
+    bundleDownloadUrl(fileId) {
+      // The frontend proxies API calls to /api/* via the Vue/Vite dev proxy
+      // in dev and via Kong in prod — both relative paths work. We embed the
+      // file id directly in the URL (no extra encoding needed — IDs are safe).
+      return `/api/files/${encodeURIComponent(fileId)}/download`;
     }
   }
 };
@@ -195,6 +245,12 @@ export default {
   background: var(--bg);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
+}
+.okf-versions__bundle-link {
+  text-decoration: none;
+}
+.okf-versions__not-ingested {
+  color: var(--muted);
 }
 .okf-versions__empty,
 .okf-versions__error,

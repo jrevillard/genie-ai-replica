@@ -34,9 +34,18 @@ function buildContentDisposition(disposition, filename) {
 // Maximum items allowed in batch fileIds operations
 const MAX_BATCH_SIZE = 50;
 
-// Schema for batch fileIds validation
+// Schema for batch fileIds validation.
+// Reject purely numeric strings up-front: semantic file_ids are timestamped
+// (e.g. `1774623200119_e9887fa8`) while ArangoDB _keys are bare integers.
+// A frontend regression that re-sends _key would otherwise silently hit
+// "not found" instead of triggering a 400 with a diagnostic.
+const fileIdPattern = /^\d+$/;
 const batchFileIdsSchema = Joi.object({
-  fileIds: Joi.array().items(Joi.string().min(1)).min(1).max(MAX_BATCH_SIZE).required()
+  fileIds: Joi.array()
+    .items(Joi.string().min(1).pattern(fileIdPattern, { invert: true }))
+    .min(1)
+    .max(MAX_BATCH_SIZE)
+    .required()
 });
 
 // Schema for file upload validation
@@ -1047,10 +1056,16 @@ class FileController {
           results.push({ fileId, success: false, error: error.message });
         }
       }
-      res.json({ success: true, results });
+      const successCount = results.filter((r) => r.success).length;
+      return res.status(207).json({
+        success: successCount > 0,
+        successCount,
+        failureCount: results.length - successCount,
+        results
+      });
     } catch (error) {
       logger.error('Ingest multiple files error:', error);
-      res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 
@@ -1120,10 +1135,16 @@ class FileController {
           results.push({ fileId, success: false, error: error.message });
         }
       }
-      res.json({ success: true, results });
+      const successCount = results.filter((r) => r.success).length;
+      return res.status(207).json({
+        success: successCount > 0,
+        successCount,
+        failureCount: results.length - successCount,
+        results
+      });
     } catch (error) {
       logger.error('Retract multiple files error:', error);
-      res.status(500).json({ success: false, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
     }
   }
 

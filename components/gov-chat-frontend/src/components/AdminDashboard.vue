@@ -449,6 +449,12 @@
                         ({{ selectedDocuments.length }})
                       </DsButton>
                     </div>
+                    <div v-if="showRetractButton" class="card-actions">
+                      <DsButton variant="secondary" @click="handleBatchAction('retract')">
+                        {{ translate('admin.documents.retractSelected', 'Retract Selected') }}
+                        ({{ selectedDocuments.length }})
+                      </DsButton>
+                    </div>
                   </div>
 
                   <div class="table-container">
@@ -514,7 +520,7 @@
                           @click="viewDocumentDetails(doc.file_id)"
                         >
                           <td @click.stop>
-                            <input v-model="selectedDocuments" type="checkbox" :value="doc._key" />
+                            <input v-model="selectedDocuments" type="checkbox" :value="doc.file_id" />
                           </td>
                           <td class="cell-main">{{ doc.file_name }}</td>
                           <td>
@@ -1847,11 +1853,11 @@ export default {
         return false;
       }
 
-      // 2. Create a Set of selected keys for efficient lookup
+      // 2. Create a Set of selected file_ids for efficient lookup
       const selectedKeys = new Set(this.selectedDocuments);
 
       // 3. Find all the full document objects that are currently selected
-      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc._key));
+      const selectedDocObjects = this.documents.filter((doc) => selectedKeys.has(doc.file_id));
 
       // 4. Check if ANY of the selected documents have the status 'ingested'
       const hasIngestedFile = selectedDocObjects.some(
@@ -1860,6 +1866,26 @@ export default {
 
       // 5. Only show the button if there are selected files AND none of them are ingested
       return !hasIngestedFile;
+    },
+
+    showRetractButton() {
+      // 1. Don't show if no documents are selected
+      if (this.selectedDocuments.length === 0) {
+        return false;
+      }
+
+      // 2. Build a Set of selected file_ids for efficient lookup
+      const selectedIds = new Set(this.selectedDocuments);
+
+      // 3. Find the full document objects that are currently selected
+      const selectedDocObjects = this.documents.filter((doc) => selectedIds.has(doc.file_id));
+
+      // 4. Hide if ANY selected document is already retracted
+      const hasRetractedFile = selectedDocObjects.some(
+        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === 'retracted'
+      );
+
+      return !hasRetractedFile;
     }
   },
   watch: {
@@ -2946,7 +2972,7 @@ export default {
     selectAllDocuments(event) {
       if (event.target.checked) {
         // MODIFICATION: Select based on _key, not file_id
-        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d._key);
+        this.selectedDocuments = this.sortedAndFilteredDocuments.map((d) => d.file_id);
       } else {
         this.selectedDocuments = [];
       }
@@ -2970,26 +2996,58 @@ export default {
             // User confirmed, proceed with batch ingest
             this.isLoading = true; // Use the main dashboard loading overlay
             try {
-              // Call the service with the array of selected document keys
-              await documentFileService.ingestMultipleFiles(this.selectedDocuments);
+              // Call the service with the array of selected document keys.
+              // Backend returns 207 Multi-Status with per-file results; surface them.
+              const res = await documentFileService.ingestMultipleFiles(this.selectedDocuments);
+              const successCount = res?.successCount ?? count;
+              const failureCount = res?.failureCount ?? 0;
+              const failed = (res?.results || []).filter((r) => !r.success);
 
-              this.showNotification(
-                // MODIFIED: Use new i18n key
-                this.translate(
-                  'admin.documents.ingestQueuedSuccess',
-                  `{count} file(s) have been queued for ingestion.`
-                ).replace('{count}', count),
-                'success'
-              );
+              if (failureCount === 0) {
+                this.showNotification(
+                  this.translate(
+                    'admin.documents.ingestQueuedSuccess',
+                    `${successCount} file(s) have been queued for ingestion.`
+                  ).replace('{count}', successCount),
+                  'success'
+                );
+                this.selectedDocuments = [];
+              } else if (successCount === 0) {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate('admin.documents.ingestAllFailed', `All {count} file(s) failed: {detail}`)
+                    .replace('{count}', count)
+                    .replace('{detail}', detail),
+                  'error'
+                );
+                // Keep failed selections so the operator can retry
+                this.selectedDocuments = failed.map((r) => r.fileId);
+              } else {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate(
+                    'admin.documents.ingestPartialFailure',
+                    `{successCount} of {count} ingested. Failed: {detail}`
+                  )
+                    .replace('{successCount}', successCount)
+                    .replace('{count}', count)
+                    .replace('{detail}', detail),
+                  'warning'
+                );
+                // Keep failed selections so the operator can retry
+                this.selectedDocuments = failed.map((r) => r.fileId);
+              }
 
-              // Clear the selection after the action is successful
-              this.selectedDocuments = [];
-
-              // Refresh the document list to show the updated statuses
-              await this.loadDocuments();
+              // Refresh the document list to show the updated statuses.
+              // Isolated from the outer try/catch: a stale-token 401 on reload
+              // must not override the success/partial toast we just set.
+              try {
+                await this.loadDocuments();
+              } catch (reloadErr) {
+                console.warn('Reload after ingest failed (toast already shown):', reloadErr);
+              }
             } catch (error) {
               this.showNotification(
-                // MODIFIED: Use new i18n key
                 this.translate(
                   'admin.documents.ingestQueuedError',
                   'An error occurred during the batch ingestion process.'
@@ -3005,8 +3063,81 @@ export default {
             // User canceled, do nothing
           }
         });
+      } else if (action === 'retract') {
+        const count = this.selectedDocuments.length;
+        this.showConfirmDialog({
+          title: this.translate('admin.documents.confirmRetractTitle', 'Confirm Batch Retraction'),
+          message: this.translate(
+            'admin.documents.confirmRetractSelected',
+            `Are you sure you want to retract ${count} selected file(s)?`
+          ).replace('{count}', count),
+          confirmText: this.translate('admin.documents.retract', 'Retract'),
+          cancelText: this.translate('common.cancel', 'Cancel'),
+          onConfirm: async () => {
+            this.isLoading = true;
+            try {
+              const res = await documentFileService.retractMultipleFiles(this.selectedDocuments);
+              const successCount = res?.successCount ?? count;
+              const failureCount = res?.failureCount ?? 0;
+              const failed = (res?.results || []).filter((r) => !r.success);
+
+              if (failureCount === 0) {
+                this.showNotification(
+                  this.translate(
+                    'admin.documents.retractQueuedSuccess',
+                    `${successCount} file(s) have been queued for retraction.`
+                  ).replace('{count}', successCount),
+                  'success'
+                );
+                this.selectedDocuments = [];
+              } else if (successCount === 0) {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate('admin.documents.retractAllFailed', `All {count} file(s) failed: {detail}`)
+                    .replace('{count}', count)
+                    .replace('{detail}', detail),
+                  'error'
+                );
+                this.selectedDocuments = failed.map((r) => r.fileId);
+              } else {
+                const detail = failed.map((r) => r.error || 'unknown error').join('; ');
+                this.showNotification(
+                  this.translate(
+                    'admin.documents.retractPartialFailure',
+                    `{successCount} of {count} retracted. Failed: {detail}`
+                  )
+                    .replace('{successCount}', successCount)
+                    .replace('{count}', count)
+                    .replace('{detail}', detail),
+                  'warning'
+                );
+                this.selectedDocuments = failed.map((r) => r.fileId);
+              }
+              // Isolate reload from the outer catch (see ingest branch for rationale)
+              try {
+                await this.loadDocuments();
+              } catch (reloadErr) {
+                console.warn('Reload after retract failed (toast already shown):', reloadErr);
+              }
+            } catch (error) {
+              this.showNotification(
+                this.translate(
+                  'admin.documents.retractQueuedError',
+                  'An error occurred during the batch retraction process.'
+                ),
+                'error'
+              );
+              console.error('Batch retract error:', error);
+            } finally {
+              this.isLoading = false;
+            }
+          },
+          onCancel: () => {
+            // User canceled, do nothing
+          }
+        });
       }
-      // You can add 'else if' blocks for other actions like 'retract' or 'delete' here
+      // You can add 'else if' blocks for other actions like 'delete' here
     },
     // --- END: DOCUMENT METHODS ---
 

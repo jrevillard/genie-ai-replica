@@ -371,58 +371,15 @@ async function _processOneJob() {
     logger.info('[INGEST-WORKER] reset complete; proceeding with recreate + re-ingest', {
       repo_id: job.repo_id, expected_graph: expectedGraph
     });
-  } else {
-    // GRAPH-EXISTS BUT UNDERPOPULATED (live-caught 2026-09-25, David's
-    // directive): if concepts_done claims N but the graph has fewer docs,
-    // the count is a lie (typically because dataprep's ensure-graph on a
-    // fresh drain recreated an empty collection while the meta-row count
-    // survived from the prior drain). Same fix as the missing-graph branch:
-    // reset the repo + meta rows and fall through.
-    try {
-      const repoDoc = await db.collection('okf_repositories').document(job.repo_id).catch(() => null);
-      const claimedDone = (repoDoc && repoDoc.rag_ingestion && repoDoc.rag_ingestion.concepts_done) || 0;
-      if (claimedDone > 0) {
-        const srcCount = await db.collection(`${expectedGraph}_SOURCE`).count().catch(() => -1);
-        const entCount = await db.collection(`${expectedGraph}_ENTITY`).count().catch(() => -1);
-        // Any -1 here means the collection doesn't exist; graphExists() above
-        // already filtered that, so a real count is >= 0. The guard is the
-        // presence of a single indexable doc (SOURCE or ENTITY) vs the claim.
-        const actualContent = (srcCount >= 0 ? srcCount : 0) + (entCount >= 0 ? entCount : 0);
-        if (actualContent < claimedDone) {
-          logger.warn('[INGEST-WORKER] graph underpopulated vs concepts_done — resetting drain', {
-            repo_id: job.repo_id,
-            expected_graph: expectedGraph,
-            claimed_done: claimedDone,
-            actual_src_count: srcCount,
-            actual_entity_count: entCount
-          });
-          await db.collection('okf_repositories').update(job.repo_id, {
-            'rag_ingestion.concepts_done': 0,
-            'rag_ingestion.last_reset_reason': 'graph_underpopulated_vs_claim',
-            'rag_ingestion.last_reset_at': new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          await db.query(aql`
-            FOR m IN okf_concepts_meta
-              FILTER m.repo_id == ${job.repo_id} AND m.graph_name == ${expectedGraph}
-              UPDATE m WITH {
-                index_status: 'parsed',
-                worker_claimed_at: null,
-                ingest_attempts: 0,
-                last_error: null
-              } IN okf_concepts_meta
-          `);
-          logger.info('[INGEST-WORKER] underpopulated reset complete; re-ingesting from scratch', {
-            repo_id: job.repo_id, expected_graph: expectedGraph
-          });
-        }
-      }
-    } catch (e) {
-      logger.warn('[INGEST-WORKER] underpopulated check failed (non-fatal)', {
-        repo_id: job.repo_id, err: e.message
-      });
-    }
   }
+  // NOTE: an "underpopulated" pre-flight (graph exists but SOURCE/ENTITY counts
+  // < concepts_done) was attempted here (David's directive, 2026-09-25). It
+  // RACE-CONDITIONED in production: multiple parallel lanes + the timing gap
+  // between dataprep's chunk write and the callback that flips the meta row
+  // produced false-positive resets every few seconds, wiping real progress.
+  // Removed (2026-09-25). The missing-graph branch above catches the user's
+  // actual worry (graph absent); for underpopulated, rely on the existing
+  // settle path's doc-count cross-check (see _settleIngest -> promoteGraph).
 
   return withSpan('okf.ingest.worker.job', async (span) => {
     span.setAttribute('okf.concept_id', job.concept_id);

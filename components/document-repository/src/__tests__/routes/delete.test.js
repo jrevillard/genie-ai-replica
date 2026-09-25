@@ -5,7 +5,12 @@ jest.mock('../../__tests__/__mocks__/shared-lib', () => ({}), { virtual: true })
 jest.mock(
   '../../../shared-lib',
   () => ({
-    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+    logger: {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn()
+    },
     dbService: { getConnection: jest.fn() }
   }),
   { virtual: true }

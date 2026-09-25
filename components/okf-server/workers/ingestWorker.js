@@ -692,6 +692,15 @@ async function _sweepOnce() {
     await db.query(aql`
     FOR f IN files
       FILTER f.repo_id != null AND f.dataprep.status != 'Pending'
+      // WS1 (David, 2026-09-25): bundle zips (is_bundle=true) are NEVER orphans
+      // in the OKF content-only chunking model. They're the per-version
+      // ingestion artifact — they MUST live as long as the version itself
+      // (live-forever policy, see plan §WS3). The pre-2026-09 sweep matched
+      // bundles because bundles are per-repo docs whose file_name does NOT
+      // match any okf_concepts_meta.concept_id (no .md stripping); the only
+      // fix is an explicit is_bundle exclusion. Without this guard the hourly
+      // sweep deleted all 4 ingested repos' bundle zips within ~1h.
+      FILTER (f.is_bundle == null OR f.is_bundle == false)
       FILTER f.uploaded_date != null AND f.uploaded_date != '' AND DATE_TIMESTAMP(f.uploaded_date) < DATE_NOW() - ${graceMs}
       FILTER LENGTH(FOR m IN okf_concepts_meta FILTER m.repo_id == f.repo_id AND m.concept_id == SUBSTRING(f.file_name, 0, LENGTH(f.file_name) - 3) LIMIT 1 RETURN 1) == 0
       LIMIT 10

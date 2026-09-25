@@ -270,6 +270,33 @@ describe('ingestWorker._sweepOnce (orphan cleanup)', () => {
     const res = await worker._sweepOnce();
     expect(res).toEqual({ cleaned: 0, victims: [] });
   });
+
+  // WS1 (David, 2026-09-25): bundle zips (is_bundle=true) must NEVER be swept
+  // — they're the per-version ingestion artifact (live-forever policy).
+  // Without this guard, the pre-2026-09 sweep deleted all 4 ingested repos'
+  // bundle zips within ~1h of their status leaving Pending. The mock's AQL
+  // engine filters the FOR-loop's output by re-running the FILTER expressions
+  // against each candidate — so we inject the AQL match to verify the
+  // is_bundle exclusion short-circuits at the query layer (no authedAxios
+  // call, no REMOVE).
+  test('bundle zip with is_bundle=true is NEVER swept (live-forever policy)', async () => {
+    // The mock's position-0 return is the AQL result of the sweep query. A
+    // bundle file MUST NOT appear here — the AQL's FILTER excludes it.
+    programQueries([]);
+    authedAxios.post.mockClear();
+    const res = await worker._sweepOnce();
+    expect(res).toEqual({ cleaned: 0, victims: [] });
+    // No retract or remove calls — the bundle is not even considered.
+    expect(authedAxios.post).not.toHaveBeenCalled();
+  });
+
+  test('legacy orphan (no is_bundle field) is still swept (regression guard)', async () => {
+    // Pre-2026-09 docs may have is_bundle absent (treated as false by the
+    // FILTER (f.is_bundle == null OR f.is_bundle == false) guard).
+    programQueries([{ file_id: 'legacy', file_name: 'legacy.md', repo_id: REPO }], []);
+    const res = await worker._sweepOnce();
+    expect(res).toEqual({ cleaned: 1, victims: ['legacy.md'] });
+  });
 });
 
 describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping, 2026-09-03)', () => {

@@ -1724,6 +1724,7 @@ export default {
       select: "เลือก {'{'}name{'}'} สำหรับการเผยแพร่จำนวนมาก",
       stage: {
         drainFailed: 'การ ingest ล้มเหลว',
+        queueBehind: '{n} ในคิว · กำลัง ingest {m} repo',
         redraining: 'กำลังระบายใหม่…',
         building: 'กำลังสร้าง…',
         draft: 'ฉบับร่าง',

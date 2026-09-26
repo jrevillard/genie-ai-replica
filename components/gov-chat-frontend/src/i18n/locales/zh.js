@@ -1706,6 +1706,7 @@ export default {
       select: "选择 {'{'}name{'}'} 进行批量发布",
       stage: {
         drainFailed: 'Ingest 失败',
+        queueBehind: '{n} 个排队中 · 正在从 {m} 个仓库摄取',
         redraining: '重新排出…',
         building: '构建中…',
         draft: '草稿',

@@ -1725,6 +1725,7 @@ export default {
       select: "تحديد {'{'}name{'}'} للنشر المجمع",
       stage: {
         drainFailed: 'فشلت عملية ingest',
+        queueBehind: '{n} في قائمة الانتظار · يجري الاستيعاب من {m} مستودع/مستودعات',
         redraining: 'إعادة استنزاف…',
         building: 'يبني…',
         draft: 'مسودة',

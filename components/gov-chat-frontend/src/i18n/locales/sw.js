@@ -1732,6 +1732,7 @@ export default {
       select: "Chagua {'{'}name{'}'} kwa uchapishaji wa pamoja",
       stage: {
         drainFailed: 'Ingest imeshindwa',
+        queueBehind: '{n} kwenye foleni · ingest katika {m} repo(s)',
         redraining: 'Inakamua tena…',
         building: 'Inajenga…',
         draft: 'Rasimu',

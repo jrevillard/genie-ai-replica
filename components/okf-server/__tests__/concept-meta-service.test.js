@@ -677,3 +677,44 @@ describe('listConceptsMeta pagination (live-500 regression 2026-09-12)', () => {
     await expect(conceptMeta.listConceptsMeta('r1')).resolves.toEqual(rows);
   });
 });
+
+// ── Review fix #9 (#1020): a content change must be claimable NOW ──
+describe('patchConceptMeta — stale park cleared on content change', () => {
+  it('a hash change resets to parsed AND clears next_attempt_after + the claim', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'r1|concepts/parked',
+      repo_id: 'r1',
+      concept_id: 'concepts/parked',
+      content_hash: 'oldhash',
+      index_status: 'parsed',
+      next_attempt_after: new Date(Date.now() + 3600000).toISOString(), // parked §5.5/§5.9
+      worker_claimed_at: '2026-09-26T00:00:00.000Z'
+    });
+    await conceptMeta.patchConceptMeta('r1', 'concepts/parked', {
+      body: '# changed body',
+      frontmatter: { title: 'Parked', type: 'service' }
+    });
+    const doc = await mockDb.collection('okf_concepts_meta').document('r1|concepts/parked');
+    expect(doc.index_status).toBe('parsed'); // re-index path
+    expect(doc.next_attempt_after).toBeNull(); // claimable NOW (was parked +1h)
+    expect(doc.worker_claimed_at).toBeNull(); // no stale claim toward the reaper
+  });
+
+  it('an UNCHANGED body (frontmatter-only edit) leaves the park untouched', async () => {
+    const parked = new Date(Date.now() + 3600000).toISOString();
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'r1|concepts/untouched',
+      repo_id: 'r1',
+      concept_id: 'concepts/untouched',
+      content_hash: conceptMeta.contentHash('# unchanged'),
+      index_status: 'parsed',
+      next_attempt_after: parked
+    });
+    await conceptMeta.patchConceptMeta('r1', 'concepts/untouched', {
+      body: '# unchanged',
+      frontmatter: { title: 'Unchanged', type: 'service' }
+    });
+    const doc = await mockDb.collection('okf_concepts_meta').document('r1|concepts/untouched');
+    expect(doc.next_attempt_after).toBe(parked); // park still governs
+  });
+});

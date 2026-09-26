@@ -372,8 +372,18 @@ async def ingest_file_from_repo(payload: DocRepoIngestPayload):
             _slot_owner_task.append(task)  # register for the synchronous-release guard
             active_ingestion_tasks[payload.fileId] = task
 
-            # Ensure the task is removed from the registry upon completion (success or failure)
-            task.add_done_callback(lambda t: active_ingestion_tasks.pop(payload.fileId, None))
+            # Ensure the task is removed from the registry upon completion (success or failure).
+            # REVIEW FIX #11 (#1020): pop only if the registry STILL points at THIS
+            # task — a re-kick overwrites the entry with a newer task, and the OLD
+            # task's completion callback would otherwise delete the NEW task's
+            # registration (task_status then reports dead for a live task, and the
+            # OKF worker's probe-defer logic retracts running work; kill_ingest
+            # would 404 or cancel the wrong task).
+            task.add_done_callback(
+                lambda t, _fid=payload.fileId, _me=task: (
+                    active_ingestion_tasks.pop(_fid) if active_ingestion_tasks.get(_fid) is _me else None
+                )
+            )
 
             statistics_dict["opea_service@dataprep"].append_latency(time.time() - start, None)
 

@@ -140,6 +140,32 @@ function jobWindowMs(job) {
 function claimStaleMs() {
   return ADAPTIVE_WINDOWS() ? windowMaxMs() : JOB_TIMEOUT_MS();
 }
+/** §5.9 liveness probe — is dataprep actively running this fileId's
+ * ingestion task? False on ANY failure (dead/unknown/transport = safe to
+ * reclaim: the kick path re-parks under §5.5 when dataprep is unreachable). */
+async function dataprepTaskAlive(fileId) {
+  try {
+    const probe = await authedAxios.post(
+      `${config.dataprep.url}/v1/dataprep/task_status`,
+      { fileId },
+      { timeout: 10000 }
+    );
+    return !!(probe.data && probe.data.alive);
+  } catch (err) {
+    logger.warn('Ingest worker: task liveness probe failed — treating task as dead', {
+      file_id: fileId,
+      error: err.message
+    });
+    return false;
+  }
+}
+/** REVIEW FIX #5: the stuck-parsed reaper's claim-age grace must cover the
+ * LONGEST legitimate in-flight wait — in adaptive mode that is the max
+ * window (6 h), not the flat 1 h, or live chunk-heavy concepts get
+ * dead-lettered mid-flight. */
+function reapGraceMs() {
+  return Math.max(safeIntOrZero('OKF_INGEST_WORKER_REAP_GRACE_MS', 3600000), ADAPTIVE_WINDOWS() ? windowMaxMs() : 0);
+}
 
 /** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
  * variable 0 is a legitimate value (sweep immediately / test) — use
@@ -162,6 +188,26 @@ async function getDb() {
 function markdownFor(input) {
   return matter.stringify(input.body || '', input.frontmatter || {});
 }
+
+// Fields both claim strategies project onto the job row (single source of
+// truth — the literal lists had already drifted once: ingest_attempts and
+// next_attempt_after were missing from production KEEP while tests injected
+// them into programmed rows, making the §5.5 backoff exponent flat at 2^0).
+const CLAIM_KEEP_FIELDS = [
+  'repo_id',
+  'concept_id',
+  'graph_name',
+  'frontmatter',
+  'body',
+  'ingest_labels',
+  'bundle_version',
+  'updated_at',
+  'last_good_index_at',
+  'reindex_retry',
+  'chunk_count',
+  'ingest_attempts',
+  'next_attempt_after'
+];
 
 /** Oldest concept awaiting chunking: an okf_concepts_meta row at
  * index_status='parsed' (the orchestrator left it parsed; 'rejected' concepts
@@ -201,7 +247,7 @@ async function claimNextJob(db) {
       FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
       SORT m.updated_at ASC
       LIMIT 1
-      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry', 'chunk_count'])
+      RETURN KEEP(m, ${CLAIM_KEEP_FIELDS})
   `)
   ).all();
   if (!rows[0]) return null;
@@ -261,15 +307,21 @@ async function claimNextJobFair(db) {
       )
       // Repo selection: least in-flight first, oldest head as tiebreak,
       // per-repo cap (${cap} = 0 → unlimited). depth = the repo's whole
-      // parsed backlog (observability, spec §5.7).
+      // parsed backlog (observability, spec §5.7). claimable = rows this
+      // lane could actually take RIGHT NOW — REVIEW FIX #7: without it a
+      // repo whose every parsed row is in-flight can win the pick and then
+      // yield cand == null, idling ALL lanes while other armed repos have
+      // claimable rows (self-inflicted starvation in the fairness strategy).
       LET pick = FIRST(
         FOR m IN okf_concepts_meta
           FILTER m.index_status == 'parsed' AND m.repo_id IN armed
           FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
           COLLECT r = m.repo_id AGGREGATE
             inFlight = SUM((m.worker_claimed_at != null && DATE_TIMESTAMP(m.worker_claimed_at) >= timeout) ? 1 : 0),
+            claimable = SUM((m.worker_claimed_at == null || DATE_TIMESTAMP(m.worker_claimed_at) < timeout) ? 1 : 0),
             oldest = MIN(m.updated_at),
             depth = COUNT()
+          FILTER claimable > 0
           FILTER ${cap} <= 0 OR inFlight < ${cap}
           SORT inFlight ASC, oldest ASC
           LIMIT 1
@@ -292,7 +344,7 @@ async function claimNextJobFair(db) {
         ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
       } IN okf_concepts_meta
       RETURN {
-        job: KEEP(NEW, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry', 'chunk_count']),
+        job: KEEP(NEW, ${CLAIM_KEEP_FIELDS}),
         repo_in_flight: pick.in_flight,
         repo_queue_depth: pick.queue_depth,
         claim_wait_ms: DATE_NOW() - DATE_TIMESTAMP(NEW.updated_at)
@@ -560,31 +612,49 @@ async function _processOneJob() {
   // G-2 fix (#1022): graphExists is ASYNC — the pre-2026-09-26 code omitted the
   // await, so `!Promise` was always false and this entire reset branch was dead
   // code in production (the jest stub `async () => true` masked it).
-  if (!(await graphLifecycle.graphExists(db, expectedGraph))) {
-    logger.warn('[INGEST-WORKER] graph missing at process time — recreating + resetting drain', {
+  //
+  // REVIEW FIX #2 (2026-09-26): the await alone made the reset fire on the
+  // ROUTINE fresh-drain path — a repo's graph collections do not exist until
+  // dataprep's first kick creates them (and retract drops them before every
+  // re-drain), so with N lanes the sibling lanes all saw "graph missing",
+  // nulled EACH OTHER's fresh claims, zeroed ingest_attempts, and re-claimed
+  // rows already kicked → the duplicate-kick/WS5-retract storm the dedupe
+  // guard exists to prevent. The reset is therefore gated on PROGRESS
+  // EVIDENCE: a missing graph is the NORMAL state while rag_ingestion has
+  // recorded nothing done yet, and is a LIE only once concepts_done > 0
+  // (chunks live in that graph — no graph, no chunks). Exactly David's
+  // original "concepts_done is a lie against an absent graph" framing.
+  const repoDoc = await db
+    .collection('okf_repositories')
+    .document(job.repo_id)
+    .catch(() => null);
+  const hasProgress = !!(repoDoc && repoDoc.rag_ingestion && Number(repoDoc.rag_ingestion.concepts_done) > 0);
+  const graphMissing = !(await graphLifecycle.graphExists(db, expectedGraph));
+  if (graphMissing && hasProgress) {
+    logger.warn('[INGEST-WORKER] graph missing mid-drain with recorded progress — resetting drain', {
       repo_id: job.repo_id,
       expected_graph: expectedGraph,
-      concept_id: job.concept_id
+      concept_id: job.concept_id,
+      concepts_done: repoDoc.rag_ingestion.concepts_done
     });
+    // REVIEW FIX #14: the reset's record write is a FUSED conditional MERGE
+    // (same shape as _refreshRagIngestion) — the old unguarded JS
+    // read-modify-write could straddle a settle/retract teardown and
+    // overwrite the terminal/cancelled record from a stale snapshot. A
+    // disarmed repo matches ZERO rows → nothing is written; the meta
+    // requeue below is then skipped with it.
     try {
-      // G-3 fix (#1023): dotted keys ('rag_ingestion.concepts_done') are stored
-      // as FLAT attributes, never nested paths — the exact gotcha documented in
-      // _refreshRagIngestion below (:156-161). Read-modify-write the nested
-      // object so the reset actually reaches the record the dashboard reads.
-      const current = await db
-        .collection('okf_repositories')
-        .document(job.repo_id)
-        .catch(() => null);
-      if (current) {
-        await db.collection('okf_repositories').update(job.repo_id, {
-          rag_ingestion: Object.assign({}, current.rag_ingestion || {}, {
-            concepts_done: 0,
-            last_reset_reason: 'graph_missing_at_resume',
-            last_reset_at: new Date().toISOString()
-          }),
-          updated_at: new Date().toISOString()
-        });
-      }
+      await db.query(aql`
+        FOR r IN okf_repositories
+          FILTER r._key == ${job.repo_id} AND r.rag_drain_active == true
+          UPDATE r WITH {
+            rag_ingestion: MERGE(r.rag_ingestion || {}, {
+              concepts_done: 0,
+              last_reset_reason: 'graph_missing_at_resume',
+              last_reset_at: DATE_ISO8601(DATE_NOW())
+            })
+          } IN okf_repositories
+      `);
     } catch (e) {
       logger.warn('[INGEST-WORKER] reset concepts_done failed', {
         repo_id: job.repo_id,
@@ -614,6 +684,50 @@ async function _processOneJob() {
       repo_id: job.repo_id,
       expected_graph: expectedGraph
     });
+  } else if (graphMissing) {
+    // Fresh drain (or re-drain after retract): no recorded progress — the
+    // absent graph is EXPECTED until dataprep's first kick ensure-graphs it.
+    // Proceed WITHOUT any reset (the review's routine-path fix).
+    logger.debug('[INGEST-WORKER] graph not yet created (fresh drain) — proceeding without reset', {
+      repo_id: job.repo_id,
+      expected_graph: expectedGraph,
+      concept_id: job.concept_id
+    });
+  }
+
+  // REVIEW FIX #8: a row whose park (§5.5 backoff / §5.9 defer) just expired
+  // must be liveness-probed BEFORE the WS5 retract — retract_file deletes a
+  // STILL-RUNNING task's in-flight chunks without cancelling it, and the
+  // re-kick would then fight the live task (429 ping-pong, corrupted
+  // output). Alive → extend the park one window, no retract, no re-kick;
+  // the task's own callback owns the transition. Dead/unknown → fall
+  // through to the normal reclaim path. (Skipped right after a reset — the
+  // drain is restarting from zero and a re-kick is the point.)
+  if (job.next_attempt_after && !graphMissing) {
+    if (await dataprepTaskAlive(job.concept_id)) {
+      const extendMs = jobWindowMs(job);
+      try {
+        await conceptMetaService.upsertConceptMeta(
+          job.repo_id,
+          { concept_id: job.concept_id, repo_id: job.repo_id },
+          {
+            patch: {
+              worker_claimed_at: null,
+              next_attempt_after: new Date(Date.now() + extendMs).toISOString()
+            }
+          }
+        );
+      } catch {
+        /* best-effort */
+      }
+      recordJob('deferred', job.repo_id);
+      logger.info('Ingest worker: expired park re-probed ALIVE — extending defer (no retract/re-kick)', {
+        repo_id: job.repo_id,
+        concept_id: job.concept_id,
+        extend_ms: extendMs
+      });
+      return { outcome: 'deferred', concept_id: job.concept_id };
+    }
   }
   // NOTE: an "underpopulated" pre-flight (graph exists but SOURCE/ENTITY counts
   // < concepts_done) was attempted here (David's directive, 2026-09-25). It
@@ -723,9 +837,14 @@ async function _processOneJob() {
       // concept next cycle — a poison concept must never starve the queue
       // head-of-line. The row stays 'parsed' and is retried on a later cycle.
       try {
-        // §5.5 kick backoff: transport failure = dataprep unreachable — park
-        // the row when backoff is enabled (disabled by default: null → no-op).
-        const parked = nextAttemptAfter(job.ingest_attempts);
+        // §5.5 kick backoff — REVIEW FIX #3: axios THROWS on every real 4xx/
+        // 5xx (default validateStatus), so this catch sees BOTH. Park only a
+        // real 5xx (dataprep failing) or a transport error (no response at
+        // all); a 4xx is a deterministic rejection — prompt retry preserves
+        // the reaper's attempt accounting for it (the "5xx-only" gate in the
+        // non-200 branch below is for non-throwing 2xx-shaped bodies only).
+        const errStatus = err && err.response && err.response.status;
+        const parked = errStatus == null || errStatus >= 500 ? nextAttemptAfter(job.ingest_attempts) : null;
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
@@ -838,20 +957,7 @@ async function _processOneJob() {
         // WS5-retract the paid in-flight work.
         let taskAlive = false;
         if (ADAPTIVE_WINDOWS()) {
-          try {
-            const probe = await authedAxios.post(
-              `${config.dataprep.url}/v1/dataprep/task_status`,
-              { fileId },
-              { timeout: 10000 }
-            );
-            taskAlive = !!(probe.data && probe.data.alive);
-          } catch (probeErr) {
-            logger.warn('Ingest worker: task liveness probe failed — treating task as dead', {
-              repo_id: job.repo_id,
-              concept_id: conceptId,
-              error: probeErr.message
-            });
-          }
+          taskAlive = await dataprepTaskAlive(fileId);
         }
         if (taskAlive) {
           // DEFER (spec §5.9): park the row for another window, clear the
@@ -1075,7 +1181,7 @@ async function _sweepOnce() {
  */
 async function _reapStuckParsed() {
   const db = await getDb();
-  const graceMs = safeIntOrZero('OKF_INGEST_WORKER_REAP_GRACE_MS', 3600000);
+  const graceMs = reapGraceMs();
   const maxClaims = Math.max(1, safeIntOrZero('OKF_INGEST_WORKER_MAX_CLAIMS', 8));
   const stuck = await (
     await db.query(aql`
@@ -1310,8 +1416,11 @@ function start() {
     // §5.9 LOCKSTEP: in adaptive mode a lane's cycle legitimately spans the
     // largest window (the lane cannot know the claimed job's size before
     // claiming) — the flat cycle cap must never force-release a lane whose
-    // job is still inside its window (desync → overlap risk).
-    Math.max(safeInt('OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS', 1800000), ADAPTIVE_WINDOWS() ? windowMaxMs() : 0);
+    // job is still inside its window (desync → overlap risk). REVIEW FIX
+    // #15: +60 s margin for the pre-wait phases (claim + pre-flight +
+    // retract/kick POSTs) so the cycle cap cannot fire BEFORE the wait
+    // window of a max-window concept expires.
+    Math.max(safeInt('OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS', 1800000), ADAPTIVE_WINDOWS() ? windowMaxMs() + 60000 : 0);
   _drainTimers = [];
   for (let lane = 0; lane < lanes; lane++) {
     const poll = async () => {
@@ -1390,5 +1499,6 @@ module.exports = {
   claimNextJob,
   getBundleFileId,
   invalidateBundleCache,
-  jobWindowMs
+  jobWindowMs,
+  reapGraceMs
 };

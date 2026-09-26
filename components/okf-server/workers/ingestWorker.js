@@ -55,6 +55,13 @@ let _sweeping = false;
 const enabled = () => (process.env.OKF_INGEST_WORKER_ENABLED || 'true').toLowerCase() !== 'false';
 const intervalMs = () => safeInt('OKF_INGEST_WORKER_INTERVAL_MS', DEFAULT_INTERVAL_MS);
 const sweepIntervalMs = () => safeInt('OKF_INGEST_WORKER_SWEEP_INTERVAL_MS', DEFAULT_SWEEP_INTERVAL_MS);
+// Claim strategy (spec #1020 §5.8 — defaults are today's behavior):
+//   'fifo' = global oldest-first (the pre-2026-09-26 path, byte-for-byte);
+//   'fair' = least in-flight repo first, oldest head as tiebreak (§5.2).
+const claimStrategy = () => ((process.env.OKF_CLAIM_STRATEGY || 'fifo').toLowerCase() === 'fair' ? 'fair' : 'fifo');
+// Per-repo in-flight cap (spec §5.3). 0 = unlimited (today). Only consulted
+// by the fair strategy — fifo has no per-repo notion.
+const repoIngestCap = () => safeIntOrZero('OKF_REPO_INGEST_CAP', 0);
 
 /** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
  * variable 0 is a legitimate value (sweep immediately / test) — use
@@ -110,6 +117,10 @@ async function claimNextJob(db) {
       // in-flight on another lane — never double-claim it. A STALE claim
       // (past the drain window) belongs to a dead lane and is reclaimable.
       FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${JOB_TIMEOUT_MS()}
+      // Kick-backoff gate (spec #1020 §5.5): a row parked by a 5xx backoff is
+      // not claimable until its next_attempt_after. Inert until the first
+      // backoff write (all rows have the field null/absent).
+      FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
       SORT m.updated_at ASC
       LIMIT 1
       RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry'])
@@ -137,6 +148,107 @@ async function _stampClaim(db, repoId, conceptId) {
     );
   } catch (err) {
     logger.warn('Ingest worker: claim stamp failed (non-fatal)', { concept_id: conceptId, error: err.message });
+  }
+}
+
+/** FAIR CLAIM (spec #1020 §5.2, strategy OKF_CLAIM_STRATEGY=fair) — the
+ * cross-repo-starvation remediation. One FUSED statement does repo selection,
+ * row selection AND the claim stamp as a single all-or-nothing transaction:
+ *
+ *   1. Repo pick: least IN-FLIGHT first (claimed rows within the job window),
+ *      oldest head as tiebreak — a newly armed small repo is picked as soon as
+ *      any big repo's in-flight count exceeds it. Per-repo cap enforced here
+ *      (OKF_REPO_INGEST_CAP, 0 = unlimited).
+ *   2. Row pick: the repo's oldest CLAIMABLE parsed row (unclaimed / stale
+ *      claim / backoff expired).
+ *   3. Claim stamp in the same statement.
+ *
+ * ATOMICITY (§5.1): one AQL query = one implicit transaction. On the RocksDB
+ * engine a concurrent write to the same document raises error 1200 which
+ * ABORTS THE LOSER'S ENTIRE QUERY (nothing written) — so the read+write here
+ * is a correct CAS across processes; the loser retries on a fresh snapshot.
+ * This is what makes multi-worker scale-out safe (the in-process mutex stays,
+ * redundant-but-harmless in this mode). */
+async function claimNextJobFair(db) {
+  const cap = repoIngestCap();
+  const run = async () => {
+    const rows = await (
+      await db.query(aql`
+      LET timeout = DATE_NOW() - ${JOB_TIMEOUT_MS()}
+      // WORKFLOW GATE (same as fifo): only repos whose RAG drain is armed.
+      LET armed = (
+        FOR r IN okf_repositories
+          FILTER r.rag_drain_active == true AND r.deleted_at == null
+          RETURN r.repo_id
+      )
+      // Repo selection: least in-flight first, oldest head as tiebreak,
+      // per-repo cap (${cap} = 0 → unlimited). depth = the repo's whole
+      // parsed backlog (observability, spec §5.7).
+      LET pick = FIRST(
+        FOR m IN okf_concepts_meta
+          FILTER m.index_status == 'parsed' AND m.repo_id IN armed
+          FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
+          COLLECT r = m.repo_id AGGREGATE
+            inFlight = SUM((m.worker_claimed_at != null && DATE_TIMESTAMP(m.worker_claimed_at) >= timeout) ? 1 : 0),
+            oldest = MIN(m.updated_at),
+            depth = COUNT()
+          FILTER ${cap} <= 0 OR inFlight < ${cap}
+          SORT inFlight ASC, oldest ASC
+          LIMIT 1
+          RETURN { repo: r, in_flight: inFlight, queue_depth: depth }
+      )
+      FILTER pick != null
+      // Row claim inside the winning repo: oldest claimable row.
+      LET cand = FIRST(
+        FOR m IN okf_concepts_meta
+          FILTER m.repo_id == pick.repo AND m.index_status == 'parsed'
+          FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < timeout
+          FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
+          SORT m.updated_at ASC
+          LIMIT 1
+          RETURN m
+      )
+      FILTER cand != null
+      UPDATE cand WITH {
+        worker_claimed_at: DATE_ISO8601(DATE_NOW()),
+        ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
+      } IN okf_concepts_meta
+      RETURN {
+        job: KEEP(NEW, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry']),
+        repo_in_flight: pick.in_flight,
+        repo_queue_depth: pick.queue_depth,
+        claim_wait_ms: DATE_NOW() - DATE_TIMESTAMP(NEW.updated_at)
+      }
+    `)
+    ).all();
+    return rows[0] || null;
+  };
+  try {
+    const out = await run();
+    if (!out) return null;
+    logger.info('Ingest worker: fair claim', {
+      strategy: 'fair',
+      repo_id: out.job.repo_id,
+      concept_id: out.job.concept_id,
+      repo_in_flight: out.repo_in_flight,
+      repo_queue_depth: out.repo_queue_depth,
+      claim_wait_ms: out.claim_wait_ms
+    });
+    return out.job;
+  } catch (err) {
+    if (err && err.errorNum === 1200) {
+      // Write-write conflict: another WORKER claimed the same head row between
+      // our snapshot and the UPDATE. Nothing was written (the loser's whole
+      // query aborted) — retry once on the fresh snapshot; a second collision
+      // waits for the next poll (another lane's cycle will have advanced the
+      // queue by then).
+      logger.warn('Ingest worker: fair claim write-conflict (1200) — retrying on fresh snapshot', {
+        error: err.message
+      });
+      const out = await run();
+      return out ? out.job : null;
+    }
+    throw err;
   }
 }
 
@@ -364,7 +476,8 @@ async function _processOneJob() {
       }
     } catch (e) {
       logger.warn('[INGEST-WORKER] reset concepts_done failed', {
-        repo_id: job.repo_id, err: e.message
+        repo_id: job.repo_id,
+        err: e.message
       });
     }
     try {
@@ -380,11 +493,14 @@ async function _processOneJob() {
       `);
     } catch (e) {
       logger.warn('[INGEST-WORKER] reset meta rows failed', {
-        repo_id: job.repo_id, expected_graph: expectedGraph, err: e.message
+        repo_id: job.repo_id,
+        expected_graph: expectedGraph,
+        err: e.message
       });
     }
     logger.info('[INGEST-WORKER] reset complete; proceeding with recreate + re-ingest', {
-      repo_id: job.repo_id, expected_graph: expectedGraph
+      repo_id: job.repo_id,
+      expected_graph: expectedGraph
     });
   }
   // NOTE: an "underpopulated" pre-flight (graph exists but SOURCE/ENTITY counts
@@ -983,10 +1099,12 @@ function laneCount() {
 /** In-process claim mutex (Node is single-threaded): the claim READ + STAMP
  * must complete for one lane before the next lane claims, or two lanes could
  * pick the same row. One okf-server container is assumed (multi-process
- * deployments would need a DB-side atomic claim). */
+ * deployments would need a DB-side atomic claim — the `fair` strategy's fused
+ * statement IS that claim; the mutex stays as a cheap belt-and-braces that
+ * also keeps `fifo` single-container-safe). */
 let _claimChain = Promise.resolve();
 function claimNextSerialized(db) {
-  const run = _claimChain.then(() => claimNextJob(db));
+  const run = _claimChain.then(() => (claimStrategy() === 'fair' ? claimNextJobFair(db) : claimNextJob(db)));
   _claimChain = run.then(
     () => undefined,
     () => undefined
@@ -1003,7 +1121,9 @@ function start() {
   logger.info('Ingest worker starting', {
     interval_ms: intervalMs(),
     sweep_interval_ms: sweepIntervalMs(),
-    lanes
+    lanes,
+    claim_strategy: claimStrategy(),
+    repo_ingest_cap: repoIngestCap()
   });
   // One self-scheduling loop per lane; a lane busy draining simply misses
   // ticks (its timer fires only after its cycle settles). POLL-CYCLE TIMEOUT

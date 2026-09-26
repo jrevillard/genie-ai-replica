@@ -270,28 +270,27 @@ async function _refreshRagIngestion(db, repoId) {
       // 'rag_ingestion.concepts_done' is stored as a FLAT attribute with that
       // exact name, NOT as a nested path. Every progress refresh was landing
       // in invisible flat attributes while the nested record the dashboard
-      // reads stayed at concepts_done: 0. Patch the nested object instead.
-      const current = await db
-        .collection('okf_repositories')
-        .document(repoId)
-        .catch(() => null);
-      // RETRACT RACE GUARD (live 2026-09-15, Bali): a drain cancelled by a
-      // mid-drain retract (the wedge-recovery escape) must never be
-      // resurrected by a late progress write from a concept still in flight —
-      // this refresh overwrote the honest 'cancelled' record with 'draining'
-      // and the dashboard chip lied ("Ingesting") while nothing was running.
-      // The settle path below already refuses disarmed repos; the progress
-      // path must refuse them too — a disarmed repo's record belongs to its
-      // teardown.
-      if (!current || current.rag_drain_active !== true) return;
-      await db.collection('okf_repositories').update(repoId, {
-        rag_ingestion: Object.assign({}, (current && current.rag_ingestion) || {}, {
-          status: 'draining',
-          concepts_done: indexed,
-          concepts_total: indexed + parsed + failed,
-          error: null
-        })
-      });
+      // reads stayed at concepts_done: 0. MERGE the nested object server-side.
+      //
+      // FUSED CHECK+WRITE (spec #1020 §5.4 race 3): the previous shape was
+      // document-read → JS guard → update — a TOCTOU gap where a mid-drain
+      // retract could disarm the repo between the read and the write, and
+      // this late refresh then resurrected 'draining' over the honest
+      // 'cancelled' record (the documented Bali wedge). One conditional
+      // statement checks rag_drain_active AND writes in the same transaction:
+      // a disarmed repo matches ZERO rows → nothing is written, ever.
+      await db.query(aql`
+      FOR r IN okf_repositories
+        FILTER r._key == ${repoId} AND r.rag_drain_active == true
+        UPDATE r WITH {
+          rag_ingestion: MERGE(r.rag_ingestion || {}, {
+            status: 'draining',
+            concepts_done: ${indexed},
+            concepts_total: ${indexed + parsed + failed},
+            error: null
+          })
+        } IN okf_repositories
+      `);
       return;
     }
     // No parsed rows — the drain reached its end state. SETTLE UNCONDITIONALLY

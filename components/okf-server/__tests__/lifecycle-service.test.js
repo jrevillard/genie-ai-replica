@@ -464,6 +464,35 @@ describe('ingest / retract — the serving flag', () => {
     expect(mockDb._stores.okf_repositories[REPO].ingested_at).toBe('2026-08-28T09:00:00Z');
   });
 
+  // Spec #1020 §5.4 race 2: the settle CAS serializes concurrent settlers
+  // (worker reconcile + finishing job; future multi-worker). The first query
+  // of the settle flow IS the lease claim — a not-acquired result must
+  // de-escalate to a delegated success, never a spurious route error.
+  test('settle CAS: a held lease delegates the immediate settle to the concurrent settler', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 }
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // lease NOT acquired
+    const res = await lifecycleService.transition(REPO, 'ingest', {});
+    expect(res).toMatchObject({ ok: true, settle_delegated: true });
+    // The lease holder owns the settle — this caller must NOT have settled.
+    expect(mockDb._stores.okf_repositories[REPO].ingested_at).toBeUndefined();
+  });
+
+  test('the settle flip RELEASES the lease (settle_claimed_at cleared)', async () => {
+    seedRepo({
+      lifecycle_state: 'publish',
+      version: 1,
+      bundle: { file_id: 'f1', file_name: 'demo-v1.zip', bundle_version: 1 }
+    });
+    await lifecycleService.transition(REPO, 'ingest', {});
+    const repo = mockDb._stores.okf_repositories[REPO];
+    expect(repo.ingested_at).toBeTruthy(); // the settle completed
+    expect(repo.settle_claimed_at).toBeNull(); // and the lease is released
+  });
+
   test('retract: publish+serving → retracted (a pulled repo stays VISIBLE)', async () => {
     seedRepo({
       lifecycle_state: 'publish',

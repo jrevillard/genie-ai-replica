@@ -1755,6 +1755,11 @@ export default {
       },
       title: 'Lipolokelo',
       topics: 'lihlooho',
+      unpublish: {
+        title: 'Fetola hape',
+        body: "Seno se emisa ho fana ka {name} ho li-agent tsa RAG hangata. Sephutheli sa bundle zip se kentsoeng tsopele le nalane ya lidiphutheloana di lula; polokelo e khutla ho “E hlahlobitsoa” hore u lokise. Hatisa hape ebe o Ingest ho fana hape.",
+        confirm: 'Fetola hape'
+      },
       lane: {
         draft: 'Kenya',
         in_review: 'Ho hlahloba',
@@ -2024,7 +2029,7 @@ export default {
           col: {
             name: 'Lebitso',
             status: 'Boemo',
-            topics: 'Lihlooho'
+            topics: 'Lihlooho',
           },
           status: {
             ready: 'E lokile'
@@ -2344,7 +2349,8 @@ export default {
       approve: 'Lumeletsana',
       publish: 'Phatlalatsa',
       ingest: 'Ho ja',
-      retract: 'Khutlisetsa morao'
+      retract: 'Khutlisetsa morao',
+      unpublish: 'Fetola hape'
     }
   }
 };

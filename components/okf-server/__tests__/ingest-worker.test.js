@@ -65,14 +65,28 @@ const REPO = '99999999-9999-4999-8999-999999999999';
 
 /** Program the mock db.query sequence (the worker queries by position:
  * 1st = claim read, then terminal polls; sweep = orphan query + per-orphan removes).
- * The CLAIM STAMP query is detected by shape (UPDATE + worker_claimed_at) and
- * skipped positionally — it consumes no programmed result. */
+ * UNPOSITIONED side-writes are detected by shape and consume no programmed
+ * result: the claim stamp (UPDATE m WITH + worker_claimed_at), the settle CAS
+ * (UPDATE r WITH + settle_claimed_at — reports the lease ACQUIRED), and the
+ * fused rag_ingestion progress write (UPDATE r WITH + rag_ingestion).
+ * Raw-string queries (lifecycle-service style) are matched by typeof. */
+function queryText(q) {
+  if (typeof q === 'string') return q;
+  return q && q.query ? String(q.query) : '';
+}
+
 function programQueries(...results) {
   let i = 0;
   mockDb.query.mockImplementation(async (q) => {
-    const text = q && q.query ? String(q.query) : '';
+    const text = queryText(q);
     if (text.includes('UPDATE m WITH') && text.includes('worker_claimed_at')) {
       return { all: async () => [] }; // claim stamp — unpositioned side-write
+    }
+    if (text.includes('UPDATE r WITH') && text.includes('settle_claimed_at')) {
+      return { all: async () => [{ _key: 'settle-lease' }] }; // settle CAS — lease acquired
+    }
+    if (text.includes('UPDATE r WITH') && text.includes('rag_ingestion')) {
+      return { all: async () => [] }; // fused progress write — unpositioned side-write
     }
     const r = results[Math.min(i, results.length - 1)];
     i += 1;
@@ -632,47 +646,41 @@ describe('ingestWorker._refreshRagIngestion — the wedge contract', () => {
 describe('ingestWorker._refreshRagIngestion — nested-record contract (0/997 card bug)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  test('drain progress patches the NESTED rag_ingestion — never flat dotted keys', async () => {
+  test('drain progress is a FUSED conditional write — disarm guard + nested MERGE server-side', async () => {
     conceptMeta.countByIndexStatus = jest
       .fn()
       .mockResolvedValueOnce(600) // parsed
       .mockResolvedValueOnce(294) // indexed
       .mockResolvedValueOnce(36); // failed
-    mockDb.collection('okf_repositories').save({
-      _key: 'uk',
-      repo_id: 'uk',
-      rag_drain_active: true,
-      rag_ingestion: {
-        status: 'draining',
-        requested_at: '2026-09-12T06:23:05.841Z',
-        finished_at: null,
-        concepts_total: 997,
-        concepts_done: 0,
-        error: null,
-        failed_concepts: []
-      }
-    });
     await worker._refreshRagIngestion(mockDb, 'uk');
-    expect(mockDb.collection('okf_repositories').update).toHaveBeenCalledTimes(1);
-    const patch = mockDb.collection('okf_repositories').update.mock.calls[0][1];
-    expect(patch.rag_ingestion).toEqual(
-      expect.objectContaining({
-        status: 'draining',
-        concepts_done: 294,
-        concepts_total: 930,
-        error: null,
-        requested_at: '2026-09-12T06:23:05.841Z' // unlisted keys survive the merge
-      })
-    );
-    // THE REGRESSION: the patch carries NO flat dotted attribute names.
-    expect(Object.keys(patch).some((k) => k.includes('.'))).toBe(false);
+    // Spec #1020 §5.4 race 3: check + write are ONE statement — the old
+    // read-then-write TOCTOU let a late refresh resurrect 'draining' over an
+    // honest 'cancelled' record after a mid-drain retract (Bali wedge).
+    const writes = mockDb.query.mock.calls
+      .map((c) => c[0])
+      .filter((q) => queryText(q).includes('UPDATE r WITH') && queryText(q).includes('rag_ingestion'));
+    expect(writes).toHaveLength(1);
+    const text = queryText(writes[0]);
+    // The disarm guard lives INSIDE the statement (a disarmed repo matches
+    // zero rows — nothing is written, ever).
+    expect(text).toContain('rag_drain_active == true');
+    // Nested MERGE server-side — never flat dotted keys (the 0/997 card).
+    expect(text).toContain('MERGE(');
+    expect(text).not.toContain("'rag_ingestion.");
+    // The counts ride as binds: indexed=294 done, 600+294+36=930 total.
+    const binds = Object.values((writes[0] && writes[0].bindVars) || {});
+    expect(binds).toContain('uk');
+    expect(binds).toContain(294);
+    expect(binds).toContain(930);
+    // NO read-modify-write: collection().update must stay untouched.
+    expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
   });
 
   // Live 2026-09-15 (Bali-wikipedia-LLM): a concept still in flight during a
   // mid-drain retract came back, and the progress refresh overwrote the
   // honest 'cancelled' record with 'draining' — the dashboard chip showed
-  // "Ingesting" in the retracted lane while nothing was running. The settle
-  // path already refuses disarmed repos; the progress path must too.
+  // "Ingesting" in the retracted lane while nothing was running. The fused
+  // write's disarm guard (asserted above) is what makes that impossible.
   test('a DISARMED repo (drain cancelled by retract) is never refreshed back to draining', async () => {
     conceptMeta.countByIndexStatus = jest
       .fn()
@@ -693,6 +701,12 @@ describe('ingestWorker._refreshRagIngestion — nested-record contract (0/997 ca
       }
     });
     await worker._refreshRagIngestion(mockDb, 'bali');
+    // The issued statement carries the server-side guard — the mock cannot
+    // execute AQL, so the contract pinned here is the FILTER itself.
+    const guard = mockDb.query.mock.calls
+      .map((c) => queryText(c[0]))
+      .some((t) => t.includes('rag_drain_active == true'));
+    expect(guard).toBe(true);
     expect(mockDb.collection('okf_repositories').update).not.toHaveBeenCalled();
     const doc = mockDb._stores.okf_repositories['bali'];
     expect(doc.rag_ingestion.status).toBe('cancelled'); // honest record survives

@@ -1758,7 +1758,7 @@ export default {
       topics: 'Themen',
       unpublish: {
         title: 'Veröffentlichung zurückziehen',
-        body: "Dies stoppt sofort die Bereitstellung von {name} für RAG-Agenten. Die veröffentlichte Bundle-Zip und der Versionsverlauf bleiben erhalten; das Repository kehrt zur Überprüfung zurück, damit Sie es korrigieren können. Veröffentlichen Sie erneut und führen Sie Ingest aus, um es wieder bereitzustellen.",
+        body: 'Dies stoppt sofort die Bereitstellung von {name} für RAG-Agenten. Die veröffentlichte Bundle-Zip und der Versionsverlauf bleiben erhalten; das Repository kehrt zur Überprüfung zurück, damit Sie es korrigieren können. Veröffentlichen Sie erneut und führen Sie Ingest aus, um es wieder bereitzustellen.',
         confirm: 'Veröffentlichung zurückziehen'
       },
       lane: {
@@ -2033,7 +2033,7 @@ export default {
           col: {
             name: 'Name',
             status: 'Status',
-            topics: 'Themen',
+            topics: 'Themen'
           },
           status: {
             ready: 'Bereit'

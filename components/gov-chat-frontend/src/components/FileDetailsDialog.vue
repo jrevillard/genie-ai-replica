@@ -543,12 +543,7 @@
             the document management tab — they are owned by the OKF
             lifecycle (per-version ingest artifact). Server-side WS2 also
             rejects Admin DELETE with 403 BUNDLE_PROTECTED. -->
-          <DsButton
-            v-if="!isBundle"
-            variant="danger"
-            :disabled="isFileLocked"
-            @click="handleDelete"
-          >
+          <DsButton v-if="!isBundle" variant="danger" :disabled="isFileLocked" @click="handleDelete">
             {{ translate('common.delete', 'Delete') }}
           </DsButton>
           <div class="footer-actions">

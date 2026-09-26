@@ -56,6 +56,12 @@ variables:
     .claude/**,
     _bmad/**,
     update_quickhelp.js
+  # gemnasium-python crashes (exit 1, no report) resolving the PEP-723
+  # inline-dependency headers of the BMAD tooling scripts in _bmad/scripts —
+  # agent-framework tooling, never shipped (same rationale as SAST above).
+  # The job is allow_failure, but its red ⚠ badge kept the pipeline list
+  # from ever reading green (pipeline 9877, 2026-09-26).
+  DS_EXCLUDED_PATHS: "_bmad/**"
 
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:

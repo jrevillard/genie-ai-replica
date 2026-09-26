@@ -1,6 +1,6 @@
 # Spec: Fair, Parallel OKF Repo Ingestion — Remediation for Cross-Repo Starvation
 
-- **Status**: IMPLEMENTED on `feat/okf-ingest-fairness` (commits e848e8c…9eb565d, 2026-09-26). Defaults unchanged (`fifo`, backoff off, cap 0, adaptive off) — rollout per §8. Deviations: `last_kick_error` not added (duplicates `last_worker_error`); dashboard chip renders only when >1 repo is armed (single-repo noise); spec §7 items 7-9 (multi-worker chaos + live soak) run against the live stack, not jest.
+- **Status**: IMPLEMENTED on `feat/okf-ingest-fairness` (commits e848e8c…9eb565d, 2026-09-26), then **hardened by the max-effort code review** (15 findings; 14 fixed same day — see §12). Defaults unchanged (`fifo`, backoff off, cap 0, adaptive off) — rollout per §8. Deviations: `last_kick_error` not added (duplicates `last_worker_error`); dashboard chip renders only when >1 repo is armed (single-repo noise); spec §7 items 7-9 (multi-worker chaos + live soak) run against the live stack, not jest.
 - **Date**: 2026-09-26
 - **Author**: Engineering (AI-assisted), from the 2026-09-25/26 starvation incident
 - **Scope**: OKF repo ingestion (okf-server ingest worker + claim path). **The legacy shared-graph (`GRAPH`) single-file, file-locked ingestion path is OUT OF SCOPE and MUST NOT be modified.**
@@ -376,3 +376,57 @@ The incident's concrete bugs are filed as standalone issues (fix together with t
 true load unit. Any capacity planning or ETA math for OKF drains should key on
 **chunks**, not concepts; and the G-10 timeout-restart churn compounds the tail on
 chunk-heavy corpora.
+
+## 12. Review-hardening round (2026-09-26, max-effort code review)
+
+Fifteen findings; fourteen fixed in the same-day hardening commit. The two
+stand-outs are exactly the class the review exists to catch:
+
+- **#1 CRITICAL — settle CAS UPDATE had no RETURN clause.** AQL
+  data-modification queries return rows only via `RETURN NEW/OLD` — `.all()`
+  was always `[]`, so on real ArangoDB every settle would read "lease not
+  acquired" and **no drain would ever settle**. The arango-mock fabricated a
+  matched row for that query shape and every test stayed green (the same
+  stub-masked-production pattern as G-2). Fixed: `RETURN 1` makes
+  `.all().length` the matched-row count.
+- **#2 — the awakened G-2 reset fired on the routine fresh-drain path.** A
+  repo's graph does not exist until dataprep's first kick (and retract drops
+  it before every re-drain), so with N lanes every sibling lane saw "graph
+  missing", nulled each other's claims, and re-claimed kicked rows → the
+  duplicate-kick/WS5-retract storm. Fixed: the reset now requires PROGRESS
+  EVIDENCE (`rag_ingestion.concepts_done > 0`) — a missing graph is normal
+  until work has been recorded, and a lie only once it has.
+
+Also fixed: #3 4xx kicks no longer parked (the catch path now gates on
+response status — axios throws on every real 4xx/5xx, so the old "5xx-only"
+gate in the non-throwing branch was dead code); #4 `ingest_attempts` +
+`next_attempt_after` joined the shared claim projection (the backoff
+exponential was flat at 2^0 — tests had injected the field the production
+KEEP omitted); #5 the reaper's claim-age grace covers the max adaptive
+window; #7 the fair pick skips repos with zero claimable rows (`claimable
+= SUM(...)` aggregate — no more all-lanes-idle when the winning repo is
+fully in-flight); #8 an expired park is liveness-probed at claim time
+before the WS5 retract (a still-running task is deferred again, never
+retracted); #9 a content change clears a stale park + claim (an edited
+concept was invisible up to one window); #10 a lost settle lease is a
+delegated success ONLY when `ingested_at` proves a settler completed —
+else an honest 409 `SETTLE_BUSY`; #11 dataprep's task-registry done-callback
+pops only its OWN registration (an old task's completion no longer deletes
+a re-kicked task's entry — the probe now stays truthful); #12 both
+lifecycle "complete fresh record" writes null `queue` (deep-merge leak);
+#13 the settle lease is released if the flags flip throws; #14 the reset's
+record write is the fused conditional MERGE (no JS read-modify-write); #15
+the lane cycle cap gains a 60 s margin over the max window.
+
+**Not fixed, by analysis (#6)**: the calibration finding is arithmetically
+right (sub-240-chunk concepts clamp to the 30-min floor) but its conclusion
+overreaches — the 17 observed timeout loops were all ~0.5–1.7k-chunk pages,
+well past the floor, so adaptive mode engages exactly for the victims.
+Sub-240-chunk concepts keeping today's window is the intended default-safe
+behavior; operators tune `OKF_JOB_WINDOW_FLOOR_MS` / `SEC_PER_CHUNK_MS`
+after the §8 soak calibration.
+
+Cleanup notes below the correctness cap (follow-ups, not blockers): the
+claim-filter triplication across strategies, the 5-round-trip refresh, the
+fair full-COLLECT scan per claim, the mock's string-sniffed CAS stub,
+`settleLeaseMs` vs `parsePositiveInt`, stale `_repoQueueDepth` gauge entries.

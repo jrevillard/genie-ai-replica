@@ -1743,6 +1743,7 @@ export default {
       select: "Selecionar {'{'}name{'}'} para publicação em lote",
       stage: {
         drainFailed: 'Falha em ingest',
+        queueBehind: '{n} na fila · ingest em {m} repo(s)',
         redraining: 'Re-drenando…',
         building: 'Construindo…',
         draft: 'Rascunho',

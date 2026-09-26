@@ -869,6 +869,9 @@ describe('ingestWorker._refreshRagIngestion — nested-record contract (0/997 ca
     // Nested MERGE server-side — never flat dotted keys (the 0/997 card).
     expect(text).toContain('MERGE(');
     expect(text).not.toContain("'rag_ingestion.");
+    // §5.7 queue context: the key is ALWAYS written (null when the aggregate
+    // failed — no stale leakage between drains).
+    expect(text).toContain('queue:');
     // The counts ride as binds: indexed=294 done, 600+294+36=930 total.
     const binds = Object.values((writes[0] && writes[0].bindVars) || {});
     expect(binds).toContain('uk');

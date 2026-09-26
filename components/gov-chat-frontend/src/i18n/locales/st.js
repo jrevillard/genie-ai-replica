@@ -1744,6 +1744,7 @@ export default {
       select: "Khetha {'{'}name{'}'} bakeng sa phatlalatso e kholo",
       stage: {
         drainFailed: 'Ingest e hlolehile',
+        queueBehind: '{n} ka moleng · ingest ho {m} repo(s)',
         redraining: 'Re-draining…',
         building: 'Kaho…',
         draft: 'Draft',

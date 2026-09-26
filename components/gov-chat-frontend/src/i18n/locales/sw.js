@@ -1745,7 +1745,7 @@ export default {
       topics: 'mada',
       unpublish: {
         title: 'Sitisha uchapishaji',
-        body: "Hii inaacha mara moja kutoa {name} kwa ajenti za RAG. Faili la bundle zip lililochapishwa na historia ya matoleo hubakizwa; hifadhi inarudi kwenye hali ya “Inapitiwa” ili urekebishe. Chapisha tena na Ingest ili kutoa tena.",
+        body: 'Hii inaacha mara moja kutoa {name} kwa ajenti za RAG. Faili la bundle zip lililochapishwa na historia ya matoleo hubakizwa; hifadhi inarudi kwenye hali ya “Inapitiwa” ili urekebishe. Chapisha tena na Ingest ili kutoa tena.',
         confirm: 'Sitisha uchapishaji'
       },
       lane: {
@@ -2016,7 +2016,7 @@ export default {
           col: {
             name: 'Jina',
             status: 'Hali',
-            topics: 'Mada',
+            topics: 'Mada'
           },
           status: {
             ready: 'Tayari'

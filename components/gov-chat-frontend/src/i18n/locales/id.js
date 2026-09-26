@@ -1750,7 +1750,7 @@ export default {
       topics: 'topik',
       unpublish: {
         title: 'Batalkan publikasi',
-        body: "Ini segera berhenti menyajikan {name} kepada agen RAG. Zip bundle yang dipublikasikan dan riwayat versi tetap disimpan; repositori kembali ke status \"Dalam Tinjauan\" agar Anda dapat memperbaikinya. Publikasikan lagi dan lakukan Ingest untuk menyajikannya kembali.",
+        body: 'Ini segera berhenti menyajikan {name} kepada agen RAG. Zip bundle yang dipublikasikan dan riwayat versi tetap disimpan; repositori kembali ke status "Dalam Tinjauan" agar Anda dapat memperbaikinya. Publikasikan lagi dan lakukan Ingest untuk menyajikannya kembali.',
         confirm: 'Batalkan publikasi'
       },
       lane: {
@@ -2020,7 +2020,7 @@ export default {
           col: {
             name: 'Nama',
             status: 'Status',
-            topics: 'Topik',
+            topics: 'Topik'
           },
           status: {
             ready: 'Siap'

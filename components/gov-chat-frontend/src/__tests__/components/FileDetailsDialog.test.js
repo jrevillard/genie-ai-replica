@@ -886,10 +886,12 @@ describe('FileDetailsDialog', () => {
   // -------------------------------------------------------------------------
   describe('4e.5 — Bundle zip UI protection', () => {
     it('hides the Delete button when is_bundle=true', async () => {
-      mockGetFileMetadata.mockResolvedValue(createMockFile({
-        is_bundle: true,
-        dataprep: { status: 'Ingested' }
-      }));
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: true,
+          dataprep: { status: 'Ingested' }
+        })
+      );
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
@@ -907,10 +909,12 @@ describe('FileDetailsDialog', () => {
     });
 
     it('suppresses the mainAction (no Retract button) when is_bundle=true', async () => {
-      mockGetFileMetadata.mockResolvedValue(createMockFile({
-        is_bundle: true,
-        dataprep: { status: 'Ingested' }
-      }));
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: true,
+          dataprep: { status: 'Ingested' }
+        })
+      );
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
@@ -929,10 +933,12 @@ describe('FileDetailsDialog', () => {
     });
 
     it('shows the OKF lifecycle badge for bundle docs', async () => {
-      mockGetFileMetadata.mockResolvedValue(createMockFile({
-        is_bundle: true,
-        dataprep: { status: 'Ingested' }
-      }));
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: true,
+          dataprep: { status: 'Ingested' }
+        })
+      );
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();
@@ -949,10 +955,12 @@ describe('FileDetailsDialog', () => {
     });
 
     it('keeps Delete + Retract available for non-bundle docs (regression)', async () => {
-      mockGetFileMetadata.mockResolvedValue(createMockFile({
-        is_bundle: false,
-        dataprep: { status: 'Ingested' }
-      }));
+      mockGetFileMetadata.mockResolvedValue(
+        createMockFile({
+          is_bundle: false,
+          dataprep: { status: 'Ingested' }
+        })
+      );
       const wrapper = createFileDetailsDialogWrapper();
       await wrapper.vm.$nextTick();
       await wrapper.vm.$nextTick();

@@ -83,6 +83,37 @@ function nextAttemptAfter(attempts) {
   const delay = Math.floor(exp * (1 + Math.random() * 0.25));
   return new Date(Date.now() + delay).toISOString();
 }
+// Size-adaptive job windows (spec #1020 §5.9, G-10). The flat 30-min window
+// structurally aborts chunk-heavy concepts whose pipeline exceeds it — and
+// WS5's next-kick retract then DESTROYS the paid in-flight work, restarting
+// the concept from zero (measured: 17 timeout loops in 16 h on Indonesia's
+// ~155-chunks/concept corpus, zero on the UK's ~10-chunk corpus). Adaptive
+// mode (default OFF) scales the wait window with the concept's estimated
+// chunk count instead; expiry becomes a liveness PROBE, not a kill.
+const ADAPTIVE_WINDOWS = () => (process.env.OKF_JOB_WINDOW_ADAPTIVE || 'false').toLowerCase() === 'true';
+const windowFloorMs = () => safeInt('OKF_JOB_WINDOW_FLOOR_MS', 1800000);
+const windowMaxMs = () => safeInt('OKF_JOB_WINDOW_MAX_MS', 21600000);
+const windowMsPerChunk = () => safeInt('OKF_JOB_WINDOW_SEC_PER_CHUNK_MS', 5000);
+// Nominal dataprep chunk size (chars) for the bytes→chunks estimate; the
+// real chunk_count from a prior attempt takes precedence when present.
+const CHUNK_SIZE_ESTIMATE_CHARS = 500;
+/** The wait window for ONE concept: adaptive = clamp(FLOOR, MAX,
+ * estChunks × MS_PER_CHUNK × 1.5); flat = today's JOB_TIMEOUT_MS. */
+function jobWindowMs(job) {
+  if (!ADAPTIVE_WINDOWS()) return JOB_TIMEOUT_MS();
+  const bodyLen = job && typeof job.body === 'string' ? job.body.length : 0;
+  const estChunks = job && job.chunk_count > 0 ? job.chunk_count : Math.ceil(bodyLen / CHUNK_SIZE_ESTIMATE_CHARS);
+  const raw = Math.ceil(estChunks * windowMsPerChunk() * 1.5);
+  return Math.max(windowFloorMs(), Math.min(windowMaxMs(), raw));
+}
+/** Claim-staleness cutoff for BOTH claim strategies: how old an in-flight
+ * claim must be before the row is considered dead-lane-reclaimable. In
+ * adaptive mode this must scale with the LARGEST window — otherwise the
+ * FIFO/fair scans would reclaim (and WS5-retract) a legitimately running
+ * big concept at the flat 30-min mark. */
+function claimStaleMs() {
+  return ADAPTIVE_WINDOWS() ? windowMaxMs() : JOB_TIMEOUT_MS();
+}
 
 /** NaN-safe env int (the 2.9.1 maxConceptsFromEnv lesson). For the GRACE
  * variable 0 is a legitimate value (sweep immediately / test) — use
@@ -137,14 +168,14 @@ async function claimNextJob(db) {
       // Lanes claim in parallel: a row claimed within the last JOB_TIMEOUT is
       // in-flight on another lane — never double-claim it. A STALE claim
       // (past the drain window) belongs to a dead lane and is reclaimable.
-      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${JOB_TIMEOUT_MS()}
+      FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - ${claimStaleMs()}
       // Kick-backoff gate (spec #1020 §5.5): a row parked by a 5xx backoff is
       // not claimable until its next_attempt_after. Inert until the first
       // backoff write (all rows have the field null/absent).
       FILTER m.next_attempt_after == null OR DATE_TIMESTAMP(m.next_attempt_after) <= DATE_NOW()
       SORT m.updated_at ASC
       LIMIT 1
-      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry'])
+      RETURN KEEP(m, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry', 'chunk_count'])
   `)
   ).all();
   if (!rows[0]) return null;
@@ -195,7 +226,7 @@ async function claimNextJobFair(db) {
   const run = async () => {
     const rows = await (
       await db.query(aql`
-      LET timeout = DATE_NOW() - ${JOB_TIMEOUT_MS()}
+      LET timeout = DATE_NOW() - ${claimStaleMs()}
       // WORKFLOW GATE (same as fifo): only repos whose RAG drain is armed.
       LET armed = (
         FOR r IN okf_repositories
@@ -235,7 +266,7 @@ async function claimNextJobFair(db) {
         ingest_attempts: (cand.ingest_attempts == null ? 0 : cand.ingest_attempts) + 1
       } IN okf_concepts_meta
       RETURN {
-        job: KEEP(NEW, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry']),
+        job: KEEP(NEW, ['repo_id', 'concept_id', 'graph_name', 'frontmatter', 'body', 'ingest_labels', 'bundle_version', 'updated_at', 'last_good_index_at', 'reindex_retry', 'chunk_count']),
         repo_in_flight: pick.in_flight,
         repo_queue_depth: pick.queue_depth,
         claim_wait_ms: DATE_NOW() - DATE_TIMESTAMP(NEW.updated_at)
@@ -355,9 +386,11 @@ async function _refreshRagIngestion(db, repoId) {
 
 /** Terminal-state poll of ONE concept — the okf-server concept-status callback
  * (dataprep → okf-server) transitions the meta row to 'indexed' | 'failed'.
- * The worker waits for that; a vanished/retracted concept is 'vanished'. */
-async function waitForTerminal(db, repoId, conceptId) {
-  const deadline = Date.now() + JOB_TIMEOUT_MS();
+ * The worker waits for that; a vanished/retracted concept is 'vanished'.
+ * windowMs = the concept's wait window (§5.9: size-adaptive, default the
+ * flat JOB_TIMEOUT_MS). */
+async function waitForTerminal(db, repoId, conceptId, windowMs) {
+  const deadline = Date.now() + (windowMs || JOB_TIMEOUT_MS());
   for (;;) {
     await new Promise((r) => setTimeout(r, JOB_POLL_MS()));
     const rows = await (
@@ -697,7 +730,8 @@ async function _processOneJob() {
 
     // 2. Wait for the concept's terminal state — the okf-server concept-status
     //    callback (dataprep → okf-server) transitions the meta row to indexed|failed.
-    const terminal = await waitForTerminal(db, job.repo_id, conceptId);
+    const window = jobWindowMs(job);
+    const terminal = await waitForTerminal(db, job.repo_id, conceptId, window);
     const durationMs = Date.now() - startedAt;
     span.setAttribute('okf.ingest.worker.outcome', terminal.status);
     span.setAttribute('okf.ingest.worker.duration_ms', durationMs);
@@ -740,8 +774,60 @@ async function _processOneJob() {
             last_error: null
           };
         }
-        // Genuine timeout (dataprep never flipped the row) — release the
-        // claim so the row is reclaimable for the next cycle.
+        // Genuine timeout (dataprep never flipped the row). §5.9 expiry =
+        // PROBE, not kill: in adaptive mode ask dataprep whether the
+        // ingestion task is still alive before letting the next cycle
+        // WS5-retract the paid in-flight work.
+        let taskAlive = false;
+        if (ADAPTIVE_WINDOWS()) {
+          try {
+            const probe = await authedAxios.post(
+              `${config.dataprep.url}/v1/dataprep/task_status`,
+              { fileId },
+              { timeout: 10000 }
+            );
+            taskAlive = !!(probe.data && probe.data.alive);
+          } catch (probeErr) {
+            logger.warn('Ingest worker: task liveness probe failed — treating task as dead', {
+              repo_id: job.repo_id,
+              concept_id: conceptId,
+              error: probeErr.message
+            });
+          }
+        }
+        if (taskAlive) {
+          // DEFER (spec §5.9): park the row for another window, clear the
+          // claim, and re-kick NOTHING — the in-flight run's callback flips
+          // the row out of 'parsed' on its own (the dedupe guard above
+          // already accepts that outcome). WS5's retract is never reached
+          // while the park holds, so no live work is destroyed. If the task
+          // dies anyway, the park expires after one window and the drain
+          // resumes — the reaper's attempt ceiling still bounds total churn.
+          try {
+            await conceptMetaService.upsertConceptMeta(
+              job.repo_id,
+              { concept_id: conceptId, repo_id: job.repo_id },
+              {
+                patch: {
+                  worker_claimed_at: null,
+                  next_attempt_after: new Date(Date.now() + window).toISOString()
+                }
+              }
+            );
+          } catch {
+            /* best-effort */
+          }
+          recordJob('deferred');
+          logger.info('Ingest worker: window expired but dataprep task ALIVE — deferred, no retract/re-kick', {
+            repo_id: job.repo_id,
+            concept_id: conceptId,
+            window_ms: window
+          });
+          return { outcome: 'deferred', concept_id: conceptId };
+        }
+        // Dead/unknown task (or adaptive off) — release the claim so the row
+        // is reclaimable for the next cycle. The next kick's WS5 retract is
+        // then CORRECT: nothing alive to destroy.
         await conceptMetaService.upsertConceptMeta(
           job.repo_id,
           { concept_id: conceptId, repo_id: job.repo_id },
@@ -795,7 +881,7 @@ async function _processOneJob() {
         conceptId,
         'WARN',
         'System',
-        `Concept ingestion timed out (${JOB_TIMEOUT_MS() / 1000}s)`
+        `Concept ingestion timed out (${Math.round(window / 1000)}s window)`
       );
     }
     auditService
@@ -1162,7 +1248,12 @@ function start() {
   // against OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS (default 30 min = 2x
   // JOB_TIMEOUT_MS); on timeout, log loudly + release any claim the cycle
   // owned + re-schedule. The next cycle's claim reaper clears the stale row.
-  const cycleTimeoutMs = () => safeInt('OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS', 1800000);
+  const cycleTimeoutMs = () =>
+    // §5.9 LOCKSTEP: in adaptive mode a lane's cycle legitimately spans the
+    // largest window (the lane cannot know the claimed job's size before
+    // claiming) — the flat cycle cap must never force-release a lane whose
+    // job is still inside its window (desync → overlap risk).
+    Math.max(safeInt('OKF_INGEST_WORKER_CYCLE_TIMEOUT_MS', 1800000), ADAPTIVE_WINDOWS() ? windowMaxMs() : 0);
   _drainTimers = [];
   for (let lane = 0; lane < lanes; lane++) {
     const poll = async () => {
@@ -1238,5 +1329,6 @@ module.exports = {
   _refreshRagIngestion,
   claimNextJob,
   getBundleFileId,
-  invalidateBundleCache
+  invalidateBundleCache,
+  jobWindowMs
 };

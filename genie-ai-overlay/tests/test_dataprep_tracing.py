@@ -339,3 +339,48 @@ class TestDataprepComponentSpan:
             mock_propagate.inject = MagicMock()
             asyncio.run(dp_arangodb_module.GenieArangoDataprep._update_doc_status(mock_self, "file-123", "Processing"))
             mock_propagate.inject.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Test: ingestion task liveness probe (spec #1020 §5.9 — task_status)
+# ---------------------------------------------------------------------------
+
+
+class TestTaskStatusEndpoint:
+    """The OKF worker's size-adaptive window expiry probes this endpoint
+    before touching a timed-out concept: alive → defer (no re-kick, no
+    retract of in-flight work); dead/unknown → safe reclaim."""
+
+    @pytest.mark.asyncio
+    async def test_running_task_reports_alive_true(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        payload = DocRepoRetractPayload(fileId="probe-1")
+        mock_task = MagicMock()
+        mock_task.done.return_value = False
+        with patch.object(dps, "active_ingestion_tasks", {"probe-1": mock_task}):
+            result = await dps.ingestion_task_status(payload)
+        assert result["success"] is True
+        assert result["status"] == 200
+        assert result["fileId"] == "probe-1"
+        assert result["alive"] is True
+
+    @pytest.mark.asyncio
+    async def test_finished_task_reports_alive_false(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        payload = DocRepoRetractPayload(fileId="probe-2")
+        mock_task = MagicMock()
+        mock_task.done.return_value = True
+        with patch.object(dps, "active_ingestion_tasks", {"probe-2": mock_task}):
+            result = await dps.ingestion_task_status(payload)
+        assert result["alive"] is False
+
+    @pytest.mark.asyncio
+    async def test_unknown_file_reports_alive_false(self):
+        import dataprep.genieai_dataprep_microservice as dps
+
+        payload = DocRepoRetractPayload(fileId="probe-3")
+        with patch.object(dps, "active_ingestion_tasks", {}):
+            result = await dps.ingestion_task_status(payload)
+        assert result["alive"] is False
